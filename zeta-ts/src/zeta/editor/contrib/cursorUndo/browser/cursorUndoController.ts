@@ -30,7 +30,7 @@ export class CursorUndoController extends Disposable {
 		if (!isCursorUndoChord(event, this.targetOperatingSystem)) return;
 		if (!this.selections.undoCursorOperation()) return;
 		stopEvent(event);
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 }
 

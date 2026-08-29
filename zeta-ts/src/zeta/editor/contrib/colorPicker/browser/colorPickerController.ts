@@ -5,7 +5,7 @@ import { Disposable, MutableDisposable, type IDisposable } from '../../../../bas
 import { localize } from '../../../../nls.js';
 import { createEditorEditCommand } from '../../../common/commands/editorCommand.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
-import { type TextPosition } from '../../../common/core/text.js';
+import { Position } from '../../../common/core/position.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { type EditorViewport } from '../../../browser/view.js';
 import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
@@ -72,7 +72,7 @@ export class ColorPickerController extends Disposable {
 		this._register(viewport.onDidChangeLayout(() => this.close(false)));
 	}
 
-	async showAtPosition(position: TextPosition, focus = true): Promise<void> {
+	async showAtPosition(position: Position, focus = true): Promise<void> {
 		this.documentColorRequest?.abort();
 		const request = this.documentColorRequest = new AbortController();
 		try {
@@ -105,7 +105,7 @@ export class ColorPickerController extends Disposable {
 		}
 		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c') return;
 		stopEvent(event);
-		void this.showAtPosition(this.selections.selections.primary.active);
+		void this.showAtPosition(this.selections.selections.primary.getPosition());
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
@@ -144,7 +144,7 @@ export class ColorPickerController extends Disposable {
 		const model = new ColorPickerModel(data.information.color);
 		this.widget.hide();
 		this.model.value = model;
-		this.widget.show(model, this.widgetPosition(data.information.range.start), focus);
+		this.widget.show(model, this.widgetPosition(data.information.range.getStartPosition()), focus);
 		await this.loadPresentations(model, data.information.color);
 	}
 
@@ -180,7 +180,7 @@ export class ColorPickerController extends Disposable {
 		const edits = [
 			presentation.textEdit ?? { range: data.information.range, text: presentation.label },
 			...(presentation.additionalTextEdits ?? []),
-		].sort((left, right) => left.range.start.compareTo(right.range.start) || left.range.end.compareTo(right.range.end));
+		].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()) || Position.compare(left.range.getEndPosition(), right.range.getEndPosition()));
 		try {
 			const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edits);
 			if (command) this.selections.execute(command);
@@ -190,7 +190,7 @@ export class ColorPickerController extends Disposable {
 		}
 	}
 
-	private widgetPosition(position: TextPosition): { readonly left: number; readonly top: number } {
+	private widgetPosition(position: Position): { readonly left: number; readonly top: number } {
 		const coordinates = this.viewport.getPositionContentCoordinates(position);
 		const scroll = this.viewport.viewportLayout.scrollPosition;
 		const layout = this.viewport.currentLayout.viewportSize;

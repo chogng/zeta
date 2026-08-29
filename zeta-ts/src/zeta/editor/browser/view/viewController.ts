@@ -13,8 +13,10 @@ import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
 import { type CursorsController } from '../../common/cursor/cursor.js';
 import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
-import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
-import { type TextModelChange } from '../../common/core/text.js';
+import { Selection } from '../../common/core/selection.js';
+import { type Position } from '../../common/core/position.js';
+import { SelectionSet } from '../../common/cursor/selectionSet.js';
+import { type TextModelChange } from '../../common/core/textChange.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
 import { type LanguageConfigurationSource } from '../../common/languages/languageConfiguration.js';
 import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '../../common/languages/languageLexicalContext.js';
@@ -41,9 +43,9 @@ export interface EditorLanguageTypeCommand {
 /** Optional language-aware editing seam implemented by editor contributions. */
 export interface EditorLanguageEditingAdapter extends IDisposable {
 	readonly textModel: TextModel;
-	createTypeCommand(selections: TextSelectionSet, text: string): EditorLanguageTypeCommand | undefined;
-	createEnterCommand(selections: TextSelectionSet): EditorEditCommand | undefined;
-	createBackspaceCommand(selections: TextSelectionSet): EditorEditCommand | undefined;
+	createTypeCommand(selections: SelectionSet, text: string): EditorLanguageTypeCommand | undefined;
+	createEnterCommand(selections: SelectionSet): EditorEditCommand | undefined;
+	createBackspaceCommand(selections: SelectionSet): EditorEditCommand | undefined;
 }
 
 /** A native text update that can be consumed by an editor contribution before model routing. */
@@ -114,7 +116,7 @@ export class ViewController extends Disposable {
 	}
 
 	get hasExpandedSelections(): boolean {
-		return this.selectionController.selections.selections.some(selection => !selection.collapsed);
+		return this.selectionController.selections.selections.some(selection => !selection.isEmpty());
 	}
 
 	registerCommandTransformer(transformer: EditorCommandTransformer): IDisposable {
@@ -199,7 +201,7 @@ export class ViewController extends Disposable {
 		this.revealPrimary();
 	}
 
-	private executeType(selections: TextSelectionSet, text: string, inputType: string): TextModelChange | undefined {
+	private executeType(selections: SelectionSet, text: string, inputType: string): TextModelChange | undefined {
 		const languageTypeCommand = this.languageEditing?.createTypeCommand(selections, text);
 		const insertedText = languageTypeCommand?.insertedText === false ? undefined : text;
 		const command = languageTypeCommand?.command ?? (this.overtype
@@ -208,18 +210,18 @@ export class ViewController extends Disposable {
 		return this.execute(command, inputType, insertedText, languageTypeCommand?.afterExecute);
 	}
 
-	private executeEnter(selections: TextSelectionSet, inputType: string, text = '\n'): TextModelChange | undefined {
+	private executeEnter(selections: SelectionSet, inputType: string, text = '\n'): TextModelChange | undefined {
 		const command = this.languageEditing?.createEnterCommand(selections) ?? TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text);
 		return this.execute(command, inputType);
 	}
 
-	private selectionsForTextUpdate(update: EditContextTextUpdate): TextSelectionSet {
+	private selectionsForTextUpdate(update: EditContextTextUpdate): SelectionSet {
 		const current = this.selectionController.selections;
 		const primary = current.primary;
-		const primaryStart = this.viewport.textModel.offsetAt(primary.range.start);
-		const primaryEnd = this.viewport.textModel.offsetAt(primary.range.end);
+		const primaryStart = this.viewport.textModel.offsetAt(primary.getStartPosition());
+		const primaryEnd = this.viewport.textModel.offsetAt(primary.getEndPosition());
 		if (primaryStart === update.previousSelectionStart && primaryEnd === update.previousSelectionEnd) return current;
-		return TextSelectionSet.single(TextSelection.from(
+		return SelectionSet.single(Selection.fromPositions(
 			this.viewport.textModel.positionAt(update.updateRangeStart),
 			this.viewport.textModel.positionAt(update.updateRangeEnd),
 		));
@@ -237,7 +239,7 @@ export class ViewController extends Disposable {
 	}
 
 	private revealPrimary(): void {
-		this.viewport.revealPosition(this.selectionController.selections.primary.active);
+		this.viewport.revealPosition(this.selectionController.selections.primary.getPosition());
 	}
 
 	private get currentWordPattern(): RegExp | undefined {
@@ -305,8 +307,8 @@ export class LanguageEditingAdapter extends Disposable implements EditorLanguage
 		this.autoClosingTracker = this._register(new LanguageAutoClosingTracker(textModel, selections));
 	}
 
-	createTypeCommand(selections: TextSelectionSet, text: string): EditorLanguageTypeCommand | undefined {
-		const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.active), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
+	createTypeCommand(selections: SelectionSet, text: string): EditorLanguageTypeCommand | undefined {
+		const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.getPosition()), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
 		if (!result) return undefined;
 		return Object.freeze({
 			command: result.command,
@@ -317,15 +319,15 @@ export class LanguageEditingAdapter extends Disposable implements EditorLanguage
 		});
 	}
 
-	createEnterCommand(selections: TextSelectionSet): EditorEditCommand {
-		return createLanguageEnterCommand(this.textModel, selections, this.configurationAt(selections.primary.active), { indentation: this.indentation, lexicalContext: this.lexicalContext });
+	createEnterCommand(selections: SelectionSet): EditorEditCommand {
+		return createLanguageEnterCommand(this.textModel, selections, this.configurationAt(selections.primary.getPosition()), { indentation: this.indentation, lexicalContext: this.lexicalContext });
 	}
 
-	createBackspaceCommand(selections: TextSelectionSet): EditorEditCommand | undefined {
-		return createLanguagePairBackspaceCommand(this.textModel, selections, this.configurationAt(selections.primary.active), this.autoClosingTracker);
+	createBackspaceCommand(selections: SelectionSet): EditorEditCommand | undefined {
+		return createLanguagePairBackspaceCommand(this.textModel, selections, this.configurationAt(selections.primary.getPosition()), this.autoClosingTracker);
 	}
 
-	private configurationAt(position: TextSelectionSet["primary"]["active"]) {
+	private configurationAt(position: Position) {
 		return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
 	}
 }
@@ -464,7 +466,7 @@ export class KeyboardNavigationController extends Disposable {
 			this.preferredColumns = result.preferredColumns;
 			this.preferredVisualHorizontalOffsets = undefined;
 		}
-		this.viewport.revealPosition(result.selections.primary.active);
+		this.viewport.revealPosition(result.selections.primary.getPosition());
 	}
 }
 

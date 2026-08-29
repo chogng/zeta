@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { TextDecorationChangeReason, TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
 
-const position = TextPosition.at;
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
 	startColumn: number,
 	endColumn: number,
-): TextRange => TextRange.from(
+): Range => Range.fromPositions(
 	position(0, startColumn),
 	position(0, endColumn),
 );
@@ -110,7 +111,7 @@ test("TextDecorationCollection reports tracked range movement", () => {
 test("TextDecorationCollection exposes tracked ranges before change listeners finish", () => {
 	using model = new TextModel("abc");
 	let decorations: TextDecorationCollection<string>;
-	let observedRange: TextRange | undefined;
+	let observedRange: Range | undefined;
 	using earlyListener = model.onDidChange(() => {
 		observedRange = decorations.decorations[0]?.range;
 	});
@@ -145,7 +146,7 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 			metadata: "valid",
 		},
 		{
-			range: TextRange.emptyAt(position(2, 0)),
+			range: Range.fromPositions(position(2, 0)),
 			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 			metadata: "invalid",
 		},

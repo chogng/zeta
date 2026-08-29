@@ -4,7 +4,7 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { TextRange } from "../../../../editor/common/core/range.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import { MarkerSeverity, type Marker } from "../../../../platform/markers/common/markers.js";
 import { type IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
@@ -222,8 +222,13 @@ function comparePositions(left: Marker["range"]["start"], right: Marker["range"]
 	return left.lineIndex - right.lineIndex || left.columnIndex - right.columnIndex;
 }
 
-function toEditorRange(range: Marker["range"]): TextRange {
-	return TextRange.from(range.start, range.end);
+function toEditorRange(range: Marker["range"]): Range {
+	return new Range(
+		range.start.lineIndex + 1,
+		range.start.columnIndex + 1,
+		range.end.lineIndex + 1,
+		range.end.columnIndex + 1,
+	);
 }
 
 function resourceName(resource: URI): string {

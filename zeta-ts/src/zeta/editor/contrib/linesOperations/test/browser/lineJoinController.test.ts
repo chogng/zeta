@@ -4,8 +4,9 @@ import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -29,7 +30,7 @@ test("Join-lines shortcut runs locally and leaves unrelated chords alone", () =>
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("first\n  second");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -51,7 +52,7 @@ test("Join-lines uses Command+J on macOS", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("first\nsecond");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

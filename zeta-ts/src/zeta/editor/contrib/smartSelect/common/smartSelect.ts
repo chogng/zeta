@@ -1,34 +1,35 @@
-import { TextSelection } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { WordOperations } from "../../../common/cursor/cursorWordOperations.js";
 
 /** Expands one selection through word, parser, enclosing-pair, line, and document scopes. */
-export function expandSmartSelection(model: TextModel, selection: TextSelection, wordPattern?: RegExp, syntaxRanges: readonly TextRange[] = []): TextSelection {
-	const current = selection.range;
+export function expandSmartSelection(model: TextModel, selection: Selection, wordPattern?: RegExp, syntaxRanges: readonly Range[] = []): Selection {
+	const current = selection;
 	const next = expandRange(model, current, wordPattern, syntaxRanges);
-	return TextSelection.fromRange(next, selection.direction);
+	return Selection.fromRange(next, selection.getDirection());
 }
 
-function expandRange(model: TextModel, range: TextRange, wordPattern: RegExp | undefined, syntaxRanges: readonly TextRange[]): TextRange {
-	if (range.empty) return WordOperations.getWordSelectionRange(model, range.start, wordPattern);
+function expandRange(model: TextModel, range: Range, wordPattern: RegExp | undefined, syntaxRanges: readonly Range[]): Range {
+	if (range.isEmpty()) return WordOperations.getWordSelectionRange(model, range.getStartPosition(), wordPattern);
 	const structural = smallestStrictlyContainingRange(model, range, syntaxRanges);
 	if (structural) return structural;
 	const enclosing = findEnclosingPair(model, range);
-	if (enclosing && !enclosing.equals(range)) return enclosing;
-	const lineStart = TextPosition.at(range.start.lineIndex, 0);
-	const lineEnd = TextPosition.at(range.end.lineIndex, model.getLineContent(range.end.lineIndex).length);
-	const lineRange = TextRange.from(lineStart, lineEnd);
-	if (!lineRange.equals(range)) return lineRange;
-	return TextRange.from(TextPosition.at(0, 0), TextPosition.at(model.lineCount - 1, model.getLineContent(model.lineCount - 1).length));
+	if (enclosing && !enclosing.equalsRange(range)) return enclosing;
+	const lineStart = new Position(range.startLineNumber, 1);
+	const lineEnd = new Position(range.endLineNumber, model.getLineContent(range.endLineNumber).length + 1);
+	const lineRange = Range.fromPositions(lineStart, lineEnd);
+	if (!lineRange.equalsRange(range)) return lineRange;
+	return Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((model.lineCount - 1) + 1, (model.getLineContent((model.lineCount - 1) + 1).length) + 1));
 }
 
-function smallestStrictlyContainingRange(model: TextModel, current: TextRange, ranges: readonly TextRange[]): TextRange | undefined {
-	let best: TextRange | undefined;
+function smallestStrictlyContainingRange(model: TextModel, current: Range, ranges: readonly Range[]): Range | undefined {
+	let best: Range | undefined;
 	let bestLength = Number.POSITIVE_INFINITY;
 	for (const candidate of ranges) {
-		if (candidate.equals(current) || !candidate.containsRange(current)) continue;
-		const length = model.offsetAt(candidate.end) - model.offsetAt(candidate.start);
+		if (candidate.equalsRange(current) || !candidate.containsRange(current)) continue;
+		const length = model.offsetAt(candidate.getEndPosition()) - model.offsetAt(candidate.getStartPosition());
 		if (length < bestLength) {
 			best = candidate;
 			bestLength = length;
@@ -37,19 +38,24 @@ function smallestStrictlyContainingRange(model: TextModel, current: TextRange, r
 	return best;
 }
 
-function findEnclosingPair(model: TextModel, range: TextRange): TextRange | undefined {
+function findEnclosingPair(model: TextModel, range: Range): Range | undefined {
 	const pairs: readonly [string, string][] = [["(", ")"], ["[", "]"], ["{", "}"], ["\"", "\""], ["'", "'"]];
-	const startOffset = model.offsetAt(range.start);
-	const endOffset = model.offsetAt(range.end);
+	const startOffset = model.offsetAt(range.getStartPosition());
+	const endOffset = model.offsetAt(range.getEndPosition());
 	const text = model.getText();
-	let best: TextRange | undefined;
+	let best: Range | undefined;
+	let bestLength = Number.POSITIVE_INFINITY;
 	for (const [open, close] of pairs) {
 		let openOffset = text.lastIndexOf(open, Math.max(0, startOffset - 1));
 		while (openOffset >= 0) {
 			const closeOffset = text.indexOf(close, Math.max(openOffset + open.length, endOffset));
 			if (closeOffset < 0) break;
-			const candidate = TextRange.from(model.positionAt(openOffset), model.positionAt(closeOffset + close.length));
-			if (candidate.containsRange(range) && (!best || candidate.length.lineCount < best.length.lineCount || candidate.length.columnCount < best.length.columnCount)) best = candidate;
+			const candidate = Range.fromPositions(model.positionAt(openOffset), model.positionAt(closeOffset + close.length));
+			const candidateLength = closeOffset + close.length - openOffset;
+			if (candidate.containsRange(range) && candidateLength < bestLength) {
+				best = candidate;
+				bestLength = candidateLength;
+			}
 			openOffset = text.lastIndexOf(open, openOffset - 1);
 		}
 	}

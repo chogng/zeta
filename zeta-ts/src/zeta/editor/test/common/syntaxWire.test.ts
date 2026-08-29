@@ -9,7 +9,8 @@ import { type LanguageLexicalCacheUpdate } from "../../common/languages/language
 import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Token and diagnostic lanes share one structured-clone incremental document mirror", async () => {
@@ -35,7 +36,7 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 	assert.equal(outcomes.tokens.status, LanguageRequestStatus.Applied);
 	assert.equal(outcomes.diagnostics.status, LanguageRequestStatus.Applied);
 	assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["keyword", "variable", "operator", "number"]);
-	assert.equal(service.tokens.result!.value.tokens[0]!.range instanceof TextRange, true);
+	assert.equal(service.tokens.result!.value.tokens[0]!.range instanceof Range, true);
 	const initialMessages = clientPort.sentMessages as WireMessage[];
 	assert.deepEqual(initialMessages.map(message => message.kind), ["request", "request"]);
 	assert.equal(initialMessages[0]!.lane, "tokens");
@@ -50,7 +51,7 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 	}]);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, model.getText().length)),
+		range: Range.fromPositions(new Position((0) + 1, (model.getText().length) + 1)),
 		text: "\nreturn value;",
 	}]);
 	assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
@@ -60,7 +61,7 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 	assert.equal(messages[2]!.previousVersion, 1);
 	assert.equal(messages[3]!.snapshot?.kind, "reference");
 	assert.equal(messages[3]!.resultBaseRequestId, 1);
-	assert.deepEqual(service.tokens.result!.value.tokens.filter(token => token.range.start.lineIndex === 1).map(token => token.tokenType), ["keyword", "variable"]);
+	assert.deepEqual(service.tokens.result!.value.tokens.filter(token => token.range.startLineNumber === 2).map(token => token.tokenType), ["keyword", "variable"]);
 	const incrementalResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
 	assert.equal(incrementalResponse?.result?.kind, "delta");
 	assert.equal(incrementalResponse?.result?.baseRequestId, 1);

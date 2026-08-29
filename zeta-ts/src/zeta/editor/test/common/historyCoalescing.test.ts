@@ -2,23 +2,26 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorCommandHistoryMode } from '../../common/commands/editorEditCommand.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextEditHistoryGroup, TextPosition, TextRange } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
+import { TextEditHistoryGroup } from "../../common/core/editOperation.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-const position = TextPosition.at;
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
 	startColumn: number,
 	endColumn: number,
-): TextRange => TextRange.from(
+): Range => Range.fromPositions(
 	position(0, startColumn),
 	position(0, endColumn),
 );
 const cursors = (
 	offsets: readonly number[],
 	primaryIndex = 0,
-): TextSelectionSet => TextSelectionSet.withPrimary(
-	offsets.map(offset => TextSelection.collapsedAt(
+): SelectionSet => SelectionSet.withPrimary(
+	offsets.map(offset => Selection.fromPositions(
 		position(0, offset),
 	)),
 	primaryIndex,
@@ -26,8 +29,8 @@ const cursors = (
 const selections = (
 	offsets: readonly (readonly [number, number])[],
 	primaryIndex = 0,
-): TextSelectionSet => TextSelectionSet.withPrimary(
-	offsets.map(([anchorOffset, activeOffset]) => TextSelection.from(
+): SelectionSet => SelectionSet.withPrimary(
+	offsets.map(([anchorOffset, activeOffset]) => Selection.fromPositions(
 		position(0, anchorOffset),
 		position(0, activeOffset),
 	)),
@@ -42,7 +45,7 @@ test("TextModel coalesces consecutive adjacent insertions", () => {
 	for (const character of "abc") {
 		const end = model.positionAt(model.getText().length);
 		const change = model.applyEdits(
-			[{ range: TextRange.emptyAt(end), text: character }],
+			[{ range: Range.fromPositions(end), text: character }],
 			{ historyGroup },
 		);
 		transactionIds.push(change?.transactionId ?? -1);

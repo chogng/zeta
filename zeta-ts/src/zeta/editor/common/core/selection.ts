@@ -1,126 +1,220 @@
-import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
-import { IPosition, TextPosition } from "./position.js";
-import { TextRange } from "./range.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
+import { IPosition, Position } from './position.js';
+import { Range } from './range.js';
+
+/**
+ * A selection in the editor.
+ * The selection is a range that has an orientation.
+ */
 export interface ISelection {
-	readonly anchor: IPosition;
-	readonly active: IPosition;
-}
-
-export enum SelectionDirection {
-	Forward = "forward",
-	Backward = "backward",
-}
-
-/**
- * One immutable selection with an anchor and an active cursor position.
- */
-export class TextSelection {
-	private readonly orderedRange: TextRange;
-
-	private constructor(
-		readonly anchor: TextPosition,
-		readonly active: TextPosition,
-	) {
-		this.orderedRange = anchor.compareTo(active) <= 0
-			? TextRange.from(anchor, active)
-			: TextRange.from(active, anchor);
-		Object.freeze(this);
-	}
-
-	static from(
-		anchor: IPosition,
-		active: IPosition,
-	): TextSelection {
-		return new TextSelection(TextPosition.lift(anchor), TextPosition.lift(active));
-	}
-
-	static collapsedAt(position: IPosition): TextSelection {
-		const lifted = TextPosition.lift(position);
-		return new TextSelection(lifted, lifted);
-	}
-
-	static fromRange(range: TextRange, direction: SelectionDirection): TextSelection {
-		return direction === SelectionDirection.Forward
-			? new TextSelection(range.start, range.end)
-			: new TextSelection(range.end, range.start);
-	}
-
-	get range(): TextRange {
-		return this.orderedRange;
-	}
-
-	get direction(): SelectionDirection {
-		return this.anchor.compareTo(this.active) <= 0
-			? SelectionDirection.Forward
-			: SelectionDirection.Backward;
-	}
-
-	get collapsed(): boolean {
-		return this.anchor.compareTo(this.active) === 0;
-	}
-
-	static selectionsEqual(left: ISelection, right: ISelection): boolean { return TextPosition.equals(left.anchor, right.anchor) && TextPosition.equals(left.active, right.active); }
-	static selectionsArrEqual(left: readonly ISelection[] | undefined, right: readonly ISelection[] | undefined): boolean { return left === right || Boolean(left && right && left.length === right.length && left.every((selection, index) => TextSelection.selectionsEqual(selection, right[index]!))); }
-	static liftSelection(selection: ISelection): TextSelection { return TextSelection.from(selection.anchor, selection.active); }
-	static isISelection(value: unknown): value is ISelection { return Boolean(value && typeof value === "object" && TextPosition.isIPosition((value as ISelection).anchor) && TextPosition.isIPosition((value as ISelection).active)); }
-	static createWithDirection(start: IPosition, end: IPosition, direction: SelectionDirection): TextSelection { return TextSelection.fromRange(TextRange.from(start, end), direction); }
-	equals(other: ISelection): boolean { return TextSelection.selectionsEqual(this, other); }
-	equalsSelection(other: ISelection): boolean { return this.equals(other); }
-	getPosition(): TextPosition { return this.active; }
-	getSelectionStart(): TextPosition { return this.range.start; }
-	setAnchor(anchor: IPosition): TextSelection { return new TextSelection(TextPosition.lift(anchor), this.active); }
-	setActive(active: IPosition): TextSelection { return new TextSelection(this.anchor, TextPosition.lift(active)); }
-	setStartPosition(position: IPosition): TextSelection { return this.direction === SelectionDirection.Forward ? new TextSelection(TextPosition.lift(position), this.active) : new TextSelection(this.anchor, TextPosition.lift(position)); }
-	setEndPosition(position: IPosition): TextSelection { return this.direction === SelectionDirection.Forward ? new TextSelection(this.anchor, TextPosition.lift(position)) : new TextSelection(TextPosition.lift(position), this.active); }
-	toString(): string { return `[${this.anchor.toString()} -> ${this.active.toString()}]`; }
+	/**
+	 * The line number on which the selection has started.
+	 */
+	readonly selectionStartLineNumber: number;
+	/**
+	 * The column on `selectionStartLineNumber` where the selection has started.
+	 */
+	readonly selectionStartColumn: number;
+	/**
+	 * The line number on which the selection has ended.
+	 */
+	readonly positionLineNumber: number;
+	/**
+	 * The column on `positionLineNumber` where the selection has ended.
+	 */
+	readonly positionColumn: number;
 }
 
 /**
- * An immutable non-empty multi-selection set with one explicit primary item.
+ * The direction of a selection.
  */
-export class TextSelectionSet {
-	private constructor(
-		readonly selections: readonly TextSelection[],
-		readonly primaryIndex: number,
-	) {
-		Object.freeze(this);
+export const enum SelectionDirection {
+	/**
+	 * The selection starts above where it ends.
+	 */
+	LTR,
+	/**
+	 * The selection starts below where it ends.
+	 */
+	RTL
+}
+
+/**
+ * A selection in the editor.
+ * The selection is a range that has an orientation.
+ */
+export class Selection extends Range {
+	/**
+	 * The line number on which the selection has started.
+	 */
+	public readonly selectionStartLineNumber: number;
+	/**
+	 * The column on `selectionStartLineNumber` where the selection has started.
+	 */
+	public readonly selectionStartColumn: number;
+	/**
+	 * The line number on which the selection has ended.
+	 */
+	public readonly positionLineNumber: number;
+	/**
+	 * The column on `positionLineNumber` where the selection has ended.
+	 */
+	public readonly positionColumn: number;
+
+	constructor(selectionStartLineNumber: number, selectionStartColumn: number, positionLineNumber: number, positionColumn: number) {
+		super(selectionStartLineNumber, selectionStartColumn, positionLineNumber, positionColumn);
+		this.selectionStartLineNumber = selectionStartLineNumber;
+		this.selectionStartColumn = selectionStartColumn;
+		this.positionLineNumber = positionLineNumber;
+		this.positionColumn = positionColumn;
 	}
 
-	static single(selection: TextSelection): TextSelectionSet {
-		return new TextSelectionSet(Object.freeze([selection]), 0);
+	/**
+	 * Transform to a human-readable representation.
+	 */
+	public override toString(): string {
+		return '[' + this.selectionStartLineNumber + ',' + this.selectionStartColumn + ' -> ' + this.positionLineNumber + ',' + this.positionColumn + ']';
 	}
 
-	static withPrimary(
-		selections: readonly TextSelection[],
-		primaryIndex: number,
-	): TextSelectionSet {
-		if (selections.length === 0) {
-			throw new RangeError("TextSelectionSet must not be empty");
-		}
-		if (
-			!isNonNegativeSafeInteger(primaryIndex) ||
-			primaryIndex >= selections.length
-		) {
-			throw new RangeError(
-				`primaryIndex must be between 0 and ${selections.length - 1}`,
-			);
-		}
-		return new TextSelectionSet(
-			Object.freeze([...selections]),
-			primaryIndex,
+	/**
+	 * Test if equals other selection.
+	 */
+	public equalsSelection(other: ISelection): boolean {
+		return (
+			Selection.selectionsEqual(this, other)
 		);
 	}
 
-	get primary(): TextSelection {
-		return this.selections[this.primaryIndex];
+	/**
+	 * Test if the two selections are equal.
+	 */
+	public static selectionsEqual(a: ISelection, b: ISelection): boolean {
+		return (
+			a.selectionStartLineNumber === b.selectionStartLineNumber &&
+			a.selectionStartColumn === b.selectionStartColumn &&
+			a.positionLineNumber === b.positionLineNumber &&
+			a.positionColumn === b.positionColumn
+		);
 	}
 
-	equals(other: TextSelectionSet): boolean {
-		return this.primaryIndex === other.primaryIndex && this.selections.length === other.selections.length && this.selections.every((selection, index) => selection.equals(other.selections[index]!));
+	/**
+	 * Get directions (LTR or RTL).
+	 */
+	public getDirection(): SelectionDirection {
+		if (this.selectionStartLineNumber === this.startLineNumber && this.selectionStartColumn === this.startColumn) {
+			return SelectionDirection.LTR;
+		}
+		return SelectionDirection.RTL;
 	}
 
-	map(mapper: (selection: TextSelection, index: number) => TextSelection): TextSelectionSet {
-		return TextSelectionSet.withPrimary(this.selections.map(mapper), this.primaryIndex);
+	/**
+	 * Create a new selection with a different `positionLineNumber` and `positionColumn`.
+	 */
+	public override setEndPosition(endLineNumber: number, endColumn: number): Selection {
+		if (this.getDirection() === SelectionDirection.LTR) {
+			return new Selection(this.startLineNumber, this.startColumn, endLineNumber, endColumn);
+		}
+		return new Selection(endLineNumber, endColumn, this.startLineNumber, this.startColumn);
+	}
+
+	/**
+	 * Get the position at `positionLineNumber` and `positionColumn`.
+	 */
+	public getPosition(): Position {
+		return new Position(this.positionLineNumber, this.positionColumn);
+	}
+
+	/**
+	 * Get the position at the start of the selection.
+	*/
+	public getSelectionStart(): Position {
+		return new Position(this.selectionStartLineNumber, this.selectionStartColumn);
+	}
+
+	/**
+	 * Create a new selection with a different `selectionStartLineNumber` and `selectionStartColumn`.
+	 */
+	public override setStartPosition(startLineNumber: number, startColumn: number): Selection {
+		if (this.getDirection() === SelectionDirection.LTR) {
+			return new Selection(startLineNumber, startColumn, this.endLineNumber, this.endColumn);
+		}
+		return new Selection(this.endLineNumber, this.endColumn, startLineNumber, startColumn);
+	}
+
+	// ----
+
+	/**
+	 * Create a `Selection` from one or two positions
+	 */
+	public static override fromPositions(start: IPosition, end: IPosition = start): Selection {
+		return new Selection(start.lineNumber, start.column, end.lineNumber, end.column);
+	}
+
+	/**
+	 * Creates a `Selection` from a range, given a direction.
+	 */
+	public static fromRange(range: Range, direction: SelectionDirection): Selection {
+		if (direction === SelectionDirection.LTR) {
+			return new Selection(range.startLineNumber, range.startColumn, range.endLineNumber, range.endColumn);
+		} else {
+			return new Selection(range.endLineNumber, range.endColumn, range.startLineNumber, range.startColumn);
+		}
+	}
+
+	/**
+	 * Create a `Selection` from an `ISelection`.
+	 */
+	public static liftSelection(sel: ISelection): Selection {
+		return new Selection(sel.selectionStartLineNumber, sel.selectionStartColumn, sel.positionLineNumber, sel.positionColumn);
+	}
+
+	/**
+	 * `a` equals `b`.
+	 */
+	public static selectionsArrEqual(a: ISelection[], b: ISelection[]): boolean {
+		if (a && !b || !a && b) {
+			return false;
+		}
+		if (!a && !b) {
+			return true;
+		}
+		if (a.length !== b.length) {
+			return false;
+		}
+		for (let i = 0, len = a.length; i < len; i++) {
+			if (!this.selectionsEqual(a[i], b[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Test if `obj` is an `ISelection`.
+	 */
+	public static isISelection(obj: unknown): obj is ISelection {
+		return (
+			!!obj
+			&& (typeof (obj as ISelection).selectionStartLineNumber === 'number')
+			&& (typeof (obj as ISelection).selectionStartColumn === 'number')
+			&& (typeof (obj as ISelection).positionLineNumber === 'number')
+			&& (typeof (obj as ISelection).positionColumn === 'number')
+		);
+	}
+
+	/**
+	 * Create with a direction.
+	 */
+	public static createWithDirection(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number, direction: SelectionDirection): Selection {
+
+		if (direction === SelectionDirection.LTR) {
+			return new Selection(startLineNumber, startColumn, endLineNumber, endColumn);
+		}
+
+		return new Selection(endLineNumber, endColumn, startLineNumber, startColumn);
 	}
 }

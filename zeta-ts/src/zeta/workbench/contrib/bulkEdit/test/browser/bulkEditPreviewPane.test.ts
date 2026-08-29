@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type BulkEditPreviewModel } from "../../common/bulkEdit.js";
 
@@ -13,8 +14,8 @@ test("bulk edit preview applies only the selected valid entries", async () => {
 	const second = URI.file("C:\\workspace\\second.ts");
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
-			{ kind: "textDocument", resource: first, edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "one" }] },
-			{ kind: "textDocument", resource: second, edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "two" }] },
+			{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "one" }] },
+			{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "two" }] },
 		],
 	};
 	const model: BulkEditPreviewModel = {
@@ -80,8 +81,8 @@ test("bulk edit preview keeps resource operations linked to dependent text edits
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
 			{ kind: "create", resource: created, existing: "error" },
-			{ kind: "textDocument", resource: created, edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "created" }] },
-			{ kind: "textDocument", resource: independent, edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "independent" }] },
+			{ kind: "textDocument", resource: created, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "created" }] },
+			{ kind: "textDocument", resource: independent, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "independent" }] },
 		],
 	};
 	const model: BulkEditPreviewModel = {

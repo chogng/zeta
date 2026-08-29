@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { TextRange } from "../../common/core/text.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type EditorViewportLineSource } from "../../common/viewModel.js";
 import { EditorViewportChangeReason, ViewLayout } from "../../common/viewLayout/viewLayout.js";
@@ -227,7 +227,7 @@ test("Model line changes update layout and clamp scrolling", () => {
 	const end = model.positionAt(model.createSnapshot().length);
 
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(0), end),
+		range: Range.fromPositions(model.positionAt(0), end),
 		text: "a\nb",
 	}]);
 
@@ -272,7 +272,7 @@ test("Same-line model changes still advance the viewport model version", () => {
 	});
 
 	model.applyEdits([{
-		range: TextRange.from(
+		range: Range.fromPositions(
 			model.positionAt(1),
 			model.positionAt(2),
 		),
@@ -410,7 +410,7 @@ test("Viewport disposal releases its listener without owning the model", () => {
 
 	viewport.dispose();
 	model.applyEdits([{
-		range: TextRange.from(
+		range: Range.fromPositions(
 			model.positionAt(1),
 			model.positionAt(1),
 		),

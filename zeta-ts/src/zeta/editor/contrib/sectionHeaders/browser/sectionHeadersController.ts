@@ -1,6 +1,5 @@
 import "./media/sectionHeaders.css";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { TextPosition } from "../../../common/core/text.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 import { findSectionHeaders, type FindSectionHeaderOptions } from "../../../common/services/findSectionHeaders.js";
@@ -29,8 +28,8 @@ export class SectionHeadersController extends Disposable {
 		const headers = new Map(findSectionHeaders(this.model, {
 			...this.options,
 			foldingMarkers: configuration.foldingMarkers,
-		}).filter(header => !header.shouldBeInComments || this.lexicalContext.getTokenTypeAt(TextPosition.at(header.range.start.lineIndex, header.range.start.columnIndex)) === "comment")
-			.map(header => [header.range.start.lineIndex, header]));
+		}).filter(header => !header.shouldBeInComments || this.lexicalContext.getTokenTypeAt(header.range.getStartPosition()) === "comment")
+			.map(header => [header.range.startLineNumber - 1, header]));
 		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-line")]) {
 			const logicalLineIndex = Number(line.dataset.logicalLineIndex);
 			const header = headers.get(logicalLineIndex);

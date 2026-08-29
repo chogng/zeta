@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { type LanguageWorkspaceSymbol } from "../../../../../editor/common/languages/workspaceSymbols.js";
 import { type IFileService } from "../../../../../platform/files/common/files.js";
 import { type IEditorService } from "../../../../services/editor/common/editorService.js";
@@ -12,7 +13,7 @@ import { acceptWorkspaceSymbol } from "../../browser/workspaceSymbolNavigation.j
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 
 const resource = URI.file("/workspace/src/main.rs");
-const range = TextRange.from(TextPosition.at(2, 4), TextPosition.at(2, 8));
+const range = Range.fromPositions(new Position((2) + 1, (4) + 1), new Position((2) + 1, (8) + 1));
 
 test("workspace symbol acceptance refreshes instead of opening a stale local result", async () => {
 	const events = acceptanceEvents("current");

@@ -4,7 +4,8 @@ import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../../../../../editor/common/services/textResourceStore.js";
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
 import { type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
@@ -21,8 +22,8 @@ test("workspace edits preflight every document before mutating and persist close
 	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
 
 	await service.apply({ entries: [
-		{ kind: "textDocument", resource: first, edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "one" }] },
-		{ kind: "textDocument", resource: second, edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "two" }] },
+		{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "one" }] },
+		{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "two" }] },
 	] });
 
 	assert.equal(store.text(first), "one");
@@ -39,7 +40,7 @@ test("workspace edits keep open working copies dirty instead of saving behind th
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 	const registration = workingCopies.register(workingCopy(reference));
 
-	await service.apply({ entries: [{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "!" }] }] });
+	await service.apply({ entries: [{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] }] });
 
 	assert.equal(reference.model.getText(), "alpha!");
 	assert.equal(reference.isDirty, true);
@@ -58,8 +59,8 @@ test("workspace edit preflight rejects stale or invalid edits without changing a
 	const reference = await models.acquire({ resource: first }, new AbortController().signal);
 
 	await assert.rejects(service.apply({ entries: [
-		{ kind: "textDocument", resource: first, version: reference.model.version, edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "!" }] },
-		{ kind: "textDocument", resource: second, edits: [{ range: TextRange.emptyAt(TextPosition.at(4, 0)), text: "invalid" }] },
+		{ kind: "textDocument", resource: first, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
+		{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((4) + 1, (0) + 1)), text: "invalid" }] },
 	] }), /outside|line/i);
 
 	assert.equal(reference.model.getText(), "alpha");
@@ -77,8 +78,8 @@ test("workspace edit preflight rejects a changed target content baseline atomica
 	using service = new BrowserWorkspaceEditService(models, workingCopies, new MemoryFileService([[first, "first"], [second, "changed"]]));
 
 	await assert.rejects(service.apply({ entries: [
-		{ kind: "textDocument", resource: first, expectedText: "first", edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "!" }] },
-		{ kind: "textDocument", resource: second, expectedText: "second", edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 6)), text: "!" }] },
+		{ kind: "textDocument", resource: first, expectedText: "first", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
+		{ kind: "textDocument", resource: second, expectedText: "second", edits: [{ range: Range.fromPositions(new Position((0) + 1, (6) + 1)), text: "!" }] },
 	] }), /content.*stale/);
 	assert.equal(store.text(first), "first");
 	assert.equal(store.text(second), "changed");
@@ -94,7 +95,7 @@ test("workspace edit applies create then text edit in protocol order", async () 
 
 	await service.apply({ entries: [
 		{ kind: "create", resource: created, existing: "error" },
-		{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "export const ready = true;" }] },
+		{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "export const ready = true;" }] },
 	] });
 
 	assert.equal(files.has(created), true);

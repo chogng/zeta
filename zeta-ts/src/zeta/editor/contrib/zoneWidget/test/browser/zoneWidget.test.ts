@@ -3,7 +3,8 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type ZoneWidgetEditor, type ZoneWidgetOptions } from '../../browser/zoneWidget.js';
 
@@ -35,12 +36,12 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 200, height: 40 });
-	const revealedRanges: TextRange[] = [];
+	const revealedRanges: Range[] = [];
 	const editor: ZoneWidgetEditor = {
 		viewport,
 		revealRange: range => {
 			revealedRanges.push(range);
-			viewport.revealPosition(range.start);
+			viewport.revealPosition(range.getStartPosition());
 		},
 	};
 	using widget = new TestZoneWidget(editor, {
@@ -52,7 +53,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	});
 	widget.create();
 
-	widget.show(TextPosition.at(1, 2), 2);
+	widget.show(new Position((1) + 1, (2) + 1), 2);
 
 	assert.deepEqual({
 		position: widget.position,
@@ -66,7 +67,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		arrowColor: widget.domNode.style.getPropertyValue('--stanza-zone-widget-arrow-color'),
 		revealedRanges,
 	}, {
-		position: TextPosition.at(1, 2),
+		position: new Position((1) + 1, (2) + 1),
 		parent: requiredElement(viewport.element, '.stanza-editor-view-zones'),
 		top: '40px',
 		height: '40px',
@@ -75,7 +76,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		layout: { heightInPixels: 22, widthInPixels: 200 },
 		frameColor: '#123456',
 		arrowColor: '#654321',
-		revealedRanges: [TextRange.emptyAt(TextPosition.at(1, 2))],
+		revealedRanges: [Range.fromPositions(new Position((1) + 1, (2) + 1))],
 	});
 	viewport.setLineHeight(30);
 	assert.deepEqual({ height: widget.domNode.style.height, layout: widget.layouts.at(-1) }, {
@@ -84,13 +85,13 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	});
 	viewport.setLineHeight(20);
 
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: 'new\n' }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'new\n' }]);
 	assert.deepEqual({ position: widget.position, top: widget.domNode.style.top }, {
-		position: TextPosition.at(2, 2),
+		position: new Position((2) + 1, (2) + 1),
 		top: '60px',
 	});
 
-	widget.updatePositionAndHeight(TextPosition.at(0, 1), 1);
+	widget.updatePositionAndHeight(new Position((0) + 1, (1) + 1), 1);
 	assert.deepEqual({
 		position: widget.position,
 		top: widget.domNode.style.top,
@@ -98,7 +99,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		contentHeight: viewport.viewportLayout.contentSize.height,
 		layout: widget.layouts.at(-1),
 	}, {
-		position: TextPosition.at(0, 1),
+		position: new Position((0) + 1, (1) + 1),
 		top: '20px',
 		height: '20px',
 		contentHeight: 100,
@@ -147,7 +148,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 		keepEditorSelection: true,
 	});
 	widget.create();
-	widget.show(TextPosition.at(0, 0), 6);
+	widget.show(new Position((0) + 1, (0) + 1), 6);
 
 	const sash = requiredElement<HTMLElement>(widget.domNode, '.zeta-sash-horizontal');
 	assert.deepEqual({
@@ -185,10 +186,10 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 	});
 	viewport.layout({ width: 100, height: 40 });
 	viewport.setLineWrapping(EditorLineWrapping.On);
-	const anchor = TextPosition.at(0, 18);
+	const anchor = new Position((0) + 1, (18) + 1);
 	const visualLineIndex = viewport.getVisualLineProjection().visualLineIndexAt(anchor);
 	assert.ok(visualLineIndex > 0);
-	const editor: ZoneWidgetEditor = { viewport, revealRange: range => viewport.revealPosition(range.start) };
+	const editor: ZoneWidgetEditor = { viewport, revealRange: range => viewport.revealPosition(range.getStartPosition()) };
 	using widget = new TestZoneWidget(editor, { showFrame: false, showArrow: false, keepEditorSelection: true });
 	widget.create();
 

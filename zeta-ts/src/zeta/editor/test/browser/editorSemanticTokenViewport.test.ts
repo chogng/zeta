@@ -8,7 +8,8 @@ import { SemanticTokensStylingService } from '../../common/services/semanticToke
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -98,7 +99,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
 	}]);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
 	assert.equal(store.result, undefined);
@@ -180,7 +181,7 @@ test("Viewport rejects cross-model token sources and owns none of their common s
 	acceptTokens(store, model, 1, [token(0, 0, 5, "keyword")]);
 	assert.equal(index.getLineTokens(0).length, 1);
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
 		text: "!",
 	}]);
 	assert.equal(model.getText(), "alpha!");
@@ -234,9 +235,9 @@ function acceptTokens(
 
 function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageToken {
 	return {
-		range: TextRange.from(
-			TextPosition.at(lineIndex, startColumn),
-			TextPosition.at(lineIndex, endColumn),
+		range: Range.fromPositions(
+			new Position((lineIndex) + 1, (startColumn) + 1),
+			new Position((lineIndex) + 1, (endColumn) + 1),
 		),
 		tokenType,
 		modifiers: [],

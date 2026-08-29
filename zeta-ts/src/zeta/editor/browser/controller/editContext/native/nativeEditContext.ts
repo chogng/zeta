@@ -3,11 +3,14 @@ import "./nativeEditContext.css";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
-import { type EditContextCharacterBounds, type EditContextCompositionEvent, EditContext, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from "../editContext.js";
-import { normalizeTextLineEndings } from "../../../../common/core/text.js";
+import { AbstractEditContext, type EditContextCharacterBounds, type EditContextCompositionEvent, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from "../editContext.js";
+import { type Position } from "../../../../common/core/position.js";
+import { normalizeTextLineEndings } from "../../../../common/core/textChange.js";
+import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
 import { editContextAddDisposableListener, FocusTracker, MAX_CHARACTER_BOUNDS_REQUEST_LENGTH, clampOffset, createNativeTextWindow, isFiniteOffset, isNativeTextUpdateEvent, isValidOffset } from "./nativeEditContextUtils.js";
 import { NativeEditContextRegistry } from "./nativeEditContextRegistry.js";
+import { ScreenReaderSupport } from './screenReaderSupport.js';
 
 /** Minimal local declaration because TypeScript's DOM library does not yet expose EditContext. */
 export interface NativeEditContextObject extends EventTarget {
@@ -57,8 +60,8 @@ export interface NativeTextFormatUpdateEvent extends globalThis.Event {
 }
 
 /** Native EditContext adapter used when the browser exposes the API. */
-export class NativeEditContext extends EditContext {
-	readonly element: HTMLElement;
+export class NativeEditContext extends AbstractEditContext {
+	readonly domNode: HTMLElement;
 	readonly textArea = undefined;
 	readonly nativeContext: NativeEditContextObject;
 	private readonly imeTextArea: HTMLTextAreaElement;
@@ -88,8 +91,10 @@ export class NativeEditContext extends EditContext {
 	private pendingHighSurrogate: NativeTextUpdateEvent | undefined;
 	private compositionPosition: EditContextPosition | undefined;
 	private lastPosition: EditContextPosition | undefined;
-	private readonly characterBoundsProvider: ((modelOffset: number) => EditContextCharacterBounds | undefined) | undefined;
+	private lastRenderPosition: Position | null = null;
+	private readonly characterBoundsProvider: (modelOffset: number) => EditContextCharacterBounds | undefined;
 	private readonly focusTracker: FocusTracker;
+	private readonly screenReaderSupport: ScreenReaderSupport;
 	private focused = false;
 	private imeFallbackFocused = false;
 
@@ -107,7 +112,7 @@ export class NativeEditContext extends EditContext {
 
 	constructor(
 		private readonly container: HTMLElement,
-		options: EditContextOptions = {},
+		options: EditContextOptions,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -129,10 +134,10 @@ export class NativeEditContext extends EditContext {
 		) {
 			throw new Error("The native EditContext implementation is incomplete");
 		}
-		this.element = element;
+		this.domNode = element;
 		this.nativeContext = nativeContext;
-		this.readOnlyState = options.readOnly ?? false;
-		if (options.characterBoundsProvider !== undefined && typeof options.characterBoundsProvider !== "function") {
+		this.readOnlyState = options.readOnly;
+		if (typeof options.characterBoundsProvider !== "function") {
 			throw new TypeError("Native EditContext character bounds provider must be a function");
 		}
 		this.characterBoundsProvider = options.characterBoundsProvider;
@@ -140,7 +145,7 @@ export class NativeEditContext extends EditContext {
 		this.imeTextArea = imeTextArea;
 		element.className = "stanza-editor-input stanza-native-edit-context";
 		element.tabIndex = -1;
-		element.dir = options.textDirection ?? "auto";
+		element.dir = options.textDirection;
 		element.setAttribute("role", "textbox");
 		element.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor input");
 		element.setAttribute("aria-multiline", "true");
@@ -155,7 +160,7 @@ export class NativeEditContext extends EditContext {
 		imeTextArea.readOnly = true;
 		imeTextArea.setAttribute("aria-hidden", "true");
 		(element as NativeEditContextElement).editContext = nativeContext;
-		if (options.ownerId !== undefined) this._register(NativeEditContextRegistry.register(options.ownerId, this));
+		this._register(NativeEditContextRegistry.register(options.ownerId, this));
 		this._register(NativeEditContextRegistry.register(element, this));
 		container.append(element);
 		container.append(imeTextArea);
@@ -164,6 +169,21 @@ export class NativeEditContext extends EditContext {
 			(element as NativeEditContextElement).editContext = undefined;
 			element.remove();
 			imeTextArea.remove();
+		}));
+		const compositionController = this.initializeController(options);
+		this.screenReaderSupport = this._register(new ScreenReaderSupport({
+			element,
+			model: options.viewport.textModel,
+			viewport: options.viewport,
+			selectionController: options.selectionController,
+			onDidFocus: this.onDidFocus,
+			onDidBlur: this.onDidBlur,
+			accessibilityService: options.accessibilityService,
+			renderRichContent: options.renderRichScreenReaderContent,
+			accessibilityPageSize: options.accessibilityPageSize,
+			semanticTokenSource: options.semanticTokenSource,
+			bracketColorizationSource: options.bracketColorizationSource,
+			isComposing: () => compositionController.composing,
 		}));
 	}
 
@@ -185,7 +205,7 @@ export class NativeEditContext extends EditContext {
 		if (this.connected) return;
 		this.connected = true;
 		this._register(addDisposableListener<KeyboardEvent>(
-			this.element,
+			this.domNode,
 			"keydown",
 			event => this.keydownEmitter.fire(event),
 		));
@@ -195,7 +215,7 @@ export class NativeEditContext extends EditContext {
 			event => this.keydownEmitter.fire(event),
 		));
 		this._register(addDisposableListener(this.imeTextArea, "blur", () => {
-			if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.element) {
+			if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.domNode) {
 				this.imeFallbackFocused = false;
 				this.focusTracker.resume();
 				this.handleElementBlur();
@@ -203,7 +223,7 @@ export class NativeEditContext extends EditContext {
 		}));
 		this._register(IME.onDidChange(enabled => this.handleImeStateChange(enabled)));
 		this._register(addDisposableListener<InputEvent>(
-			this.element,
+			this.domNode,
 			"beforeinput",
 			event => {
 				if (this.readOnlyState && isEditingInputType(event.inputType)) {
@@ -232,23 +252,23 @@ export class NativeEditContext extends EditContext {
 			},
 		));
 		this._register(addDisposableListener<InputEvent>(
-			this.element,
+			this.domNode,
 			"input",
 			event => this.inputEmitter.fire(event),
 		));
-		this._register(addDisposableListener(this.element, "select", () => this.selectEmitter.fire(undefined)));
+		this._register(addDisposableListener(this.domNode, "select", () => this.selectEmitter.fire(undefined)));
 		this._register(addDisposableListener<ClipboardEvent>(
-			this.element,
+			this.domNode,
 			"copy",
 			event => this.fireWillCopy(event, false),
 		));
 		this._register(addDisposableListener<ClipboardEvent>(
-			this.element,
+			this.domNode,
 			"cut",
 			event => this.fireWillCopy(event, true),
 		));
 		this._register(addDisposableListener<ClipboardEvent>(
-			this.element,
+			this.domNode,
 			"paste",
 			event => this.fireWillPaste(event),
 		));
@@ -297,6 +317,30 @@ export class NativeEditContext extends EditContext {
 		this.focusTracker.focus();
 	}
 
+	isFocused(): boolean {
+		return this.focused;
+	}
+
+	refreshFocusState(): void {
+		if (this.imeFallbackFocused) {
+			this.handleElementFocusChange(this.imeTextArea.ownerDocument.activeElement === this.imeTextArea);
+			return;
+		}
+		this.focusTracker.refreshFocusState();
+	}
+
+	setAriaOptions(options: IEditorAriaOptions): void {
+		this.screenReaderSupport.setAriaOptions(options);
+	}
+
+	getLastRenderData(): Position | null {
+		return this.lastRenderPosition;
+	}
+
+	writeScreenReaderContent(reason: string): void {
+		this.screenReaderSupport.writeScreenReaderContent(reason);
+	}
+
 	private handleElementFocusChange(focused: boolean): void {
 		if (!focused) {
 			this.composing = false;
@@ -341,6 +385,7 @@ export class NativeEditContext extends EditContext {
 
 	syncState(state: EditContextState): void {
 		if (this.composing) return;
+		this.lastRenderPosition = state.position;
 		const text = normalizeTextLineEndings(state.text);
 		const selectionStart = clampOffset(Math.min(state.selectionStart, state.selectionEnd), text.length);
 		const selectionEnd = clampOffset(Math.max(state.selectionStart, state.selectionEnd), text.length);
@@ -368,8 +413,8 @@ export class NativeEditContext extends EditContext {
 
 	setReadOnly(readOnly: boolean): void {
 		this.readOnlyState = readOnly;
-		this.element.setAttribute("aria-readonly", String(readOnly));
-		this.element.setAttribute("aria-autocomplete", readOnly ? "none" : "both");
+		this.domNode.setAttribute("aria-readonly", String(readOnly));
+		this.domNode.setAttribute("aria-autocomplete", readOnly ? "none" : "both");
 		if (readOnly) this.restoreNativeState();
 	}
 
@@ -386,15 +431,15 @@ export class NativeEditContext extends EditContext {
 		this.pendingHighSurrogate = undefined;
 		this.compositionStartOffset = Math.min(this.shadowSelectionStart, this.shadowSelectionEnd);
 		this.compositionEndOffset = Math.max(this.shadowSelectionStart, this.shadowSelectionEnd);
-		this.element.classList.add("ime-input");
+		this.domNode.classList.add("ime-input");
 	}
 
 	positionComposition(position: EditContextPosition): void {
 		this.compositionPosition = position;
 		this.lastPosition = position;
-		this.element.style.left = `${position.left}px`;
-		this.element.style.top = `${position.top}px`;
-		this.element.style.height = `${position.height}px`;
+		this.domNode.style.left = `${position.left}px`;
+		this.domNode.style.top = `${position.top}px`;
+		this.domNode.style.height = `${position.height}px`;
 		this.updateBounds(position);
 	}
 
@@ -402,10 +447,10 @@ export class NativeEditContext extends EditContext {
 		this.composing = false;
 		this.pendingHighSurrogate = undefined;
 		this.compositionPosition = undefined;
-		this.element.classList.remove("ime-input");
-		this.element.style.left = "";
-		this.element.style.top = "";
-		this.element.style.height = "";
+		this.domNode.classList.remove("ime-input");
+		this.domNode.style.left = "";
+		this.domNode.style.top = "";
+		this.domNode.style.height = "";
 	}
 
 	private handleTextUpdate(event: NativeTextUpdateEvent): void {
@@ -599,7 +644,7 @@ export class NativeEditContext extends EditContext {
 	}
 
 	private createBounds(position: EditContextPosition, width = Math.max(1, position.height / 2)): DOMRect | undefined {
-		const Rect = this.element.ownerDocument.defaultView?.DOMRect;
+		const Rect = this.domNode.ownerDocument.defaultView?.DOMRect;
 		if (typeof Rect !== "function") return undefined;
 		const parentBounds = this.container.getBoundingClientRect();
 		return new Rect(

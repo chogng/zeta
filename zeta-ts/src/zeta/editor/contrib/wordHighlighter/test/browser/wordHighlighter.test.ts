@@ -4,8 +4,10 @@ import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
-import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { DocumentHighlightKind } from '../../../../common/languages/documentHighlights.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
@@ -39,8 +41,8 @@ test('Word highlighter uses the textual provider for complete Unicode words', as
 	await settleHighlights();
 
 	assert.deepEqual(decorationRanges(harness.decorations), [
-		TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)),
-		TextRange.from(TextPosition.at(0, 13), TextPosition.at(0, 17)),
+		Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
+		Range.fromPositions(new Position((0) + 1, (13) + 1), new Position((0) + 1, (17) + 1)),
 	]);
 });
 
@@ -50,8 +52,8 @@ test('Word highlighter prefers semantic providers and renders read and write kin
 	using semanticProvider = languages.documentHighlightProvider.register({
 		languageIds: ['typescript'],
 		provideDocumentHighlights: () => [
-			{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)), kind: DocumentHighlightKind.Read },
-			{ range: TextRange.from(TextPosition.at(0, 5), TextPosition.at(0, 9)), kind: DocumentHighlightKind.Write },
+			{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)), kind: DocumentHighlightKind.Read },
+			{ range: Range.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (9) + 1)), kind: DocumentHighlightKind.Write },
 		],
 	});
 	using harness = createHarness('item item', languages, URI.parse('file:///semantic.ts'), 'singleFile');
@@ -92,7 +94,7 @@ test('Word highlighter cancels a stale provider request when the selection chang
 
 	harness.controller.restoreViewState(true);
 	await new Promise(resolve => setTimeout(resolve, 1));
-	harness.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 6))));
+	harness.selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (6) + 1))));
 	await settleHighlights();
 
 	assert.equal(aborted, true);
@@ -111,16 +113,16 @@ test('Word highlighter obeys the off mode and navigates existing highlights', as
 	enabled.controller.restoreViewState(true);
 	await settleHighlights();
 	enabled.controller.moveNext();
-	assert.deepEqual(enabled.selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 5)));
+	assert.deepEqual(enabled.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
 	enabled.controller.moveBack();
-	assert.deepEqual(enabled.selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 0)));
+	assert.deepEqual(enabled.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 });
 
 function createHarness(text: string, languages: LanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile'): EditorHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
-	const selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	const selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
 	const viewport = new EditorViewport({
 		container,
@@ -168,7 +170,7 @@ class EditorHarness implements Disposable {
 	}
 }
 
-function decorationRanges(decorations: TextDecorationCollection<DocumentHighlightKind | undefined>): readonly TextRange[] {
+function decorationRanges(decorations: TextDecorationCollection<DocumentHighlightKind | undefined>): readonly Range[] {
 	return decorations.decorations.map(decoration => decoration.range);
 }
 

@@ -2,7 +2,7 @@ import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { type TextSelectionOffsets } from "../../../../common/commands/editorEditCommand.js";
-import { normalizeTextLineEndings } from "../../../../common/core/text.js";
+import { normalizeTextLineEndings } from "../../../../common/core/textChange.js";
 import { type EditContextCompositionEvent } from "../editContext.js";
 import { type ITextAreaWrapper, TextAreaState } from "./textAreaEditContextState.js";
 
@@ -27,6 +27,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	private readonly cutEmitter = this._register(new Emitter<ClipboardEvent>());
 	private readonly pasteEmitter = this._register(new Emitter<ClipboardEvent>());
 	private connected = false;
+	private focused = false;
 	private selectionChangeIgnoredUntil = 0;
 	private _textAreaState = TextAreaState.EMPTY;
 
@@ -56,8 +57,8 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
-		this._register(addDisposableListener(this.element, "focus", () => this.focusEmitter.fire(undefined)));
-		this._register(addDisposableListener(this.element, "blur", () => this.blurEmitter.fire(undefined)));
+		this._register(addDisposableListener(this.element, "focus", () => this.setFocused(true)));
+		this._register(addDisposableListener(this.element, "blur", () => this.setFocused(false)));
 		this._register(addDisposableListener<CompositionEvent>(
 			this.element,
 			"compositionstart",
@@ -102,6 +103,15 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 
 	focus(): void {
 		this.element.focus({ preventScroll: true });
+		this.refreshFocusState();
+	}
+
+	isFocused(): boolean {
+		return this.focused;
+	}
+
+	refreshFocusState(): void {
+		this.setFocused(this.hasFocus());
 	}
 
 	clear(): void {
@@ -141,8 +151,17 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		void reason;
 	}
 
+	private setFocused(focused: boolean): void {
+		if (this.focused === focused) return;
+		this.focused = focused;
+		(focused ? this.focusEmitter : this.blurEmitter).fire(undefined);
+	}
+
 	hasFocus(): boolean {
-		return this.element.ownerDocument.activeElement === this.element;
+		if (!this.element.isConnected) return false;
+		const root = this.element.getRootNode() as Document | ShadowRoot;
+		const activeElement = 'activeElement' in root ? root.activeElement : this.element.ownerDocument.activeElement;
+		return activeElement === this.element;
 	}
 
 	setIgnoreSelectionChangeTime(_reason: string): void {

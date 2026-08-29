@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../base/common/lifecycle.js";
-import { TextRange } from "../../common/core/text.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("TextModel snapshots remain immutable across edits and disposal", () => {
@@ -9,7 +9,7 @@ test("TextModel snapshots remain immutable across edits and disposal", () => {
 	const snapshot = model.createSnapshot();
 
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(0), model.positionAt(5)),
+		range: Range.fromPositions(model.positionAt(0), model.positionAt(5)),
 		text: "ALPHA",
 	}]);
 	model.undo();
@@ -47,7 +47,7 @@ test("TextModel bounds history by transaction count", () => {
 	for (const character of "abc") {
 		const end = model.positionAt(model.getText().length);
 		model.applyEdits([{
-			range: TextRange.emptyAt(end),
+			range: Range.fromPositions(end),
 			text: character,
 		}]);
 	}
@@ -77,7 +77,7 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 		},
 	});
 	replacement.applyEdits([{
-		range: TextRange.from(
+		range: Range.fromPositions(
 			replacement.positionAt(0),
 			replacement.positionAt(6),
 		),
@@ -98,7 +98,7 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 		},
 	});
 	insertion.applyEdits([{
-		range: TextRange.emptyAt(insertion.positionAt(0)),
+		range: Range.fromPositions(insertion.positionAt(0)),
 		text: "abcdef",
 	}]);
 	assert.equal(insertion.canUndo, true);
@@ -139,12 +139,12 @@ test("TextModel compaction remains transparent to snapshots and history", () => 
 	const retainedText = insertedText.slice(-10_000);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(0)),
+		range: Range.fromPositions(model.positionAt(0)),
 		text: insertedText,
 	}]);
 	const snapshot = model.createSnapshot();
 	model.applyEdits([{
-		range: TextRange.from(
+		range: Range.fromPositions(
 			model.positionAt(0),
 			model.positionAt(insertedText.length - retainedText.length),
 		),
@@ -186,12 +186,12 @@ test("TextModel defers reclaiming piece-tree storage through product-owned maint
 	const insertedText = "0123456789".repeat(10_000);
 	const retainedText = insertedText.slice(-10_000);
 	model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(0)),
+		range: Range.fromPositions(model.positionAt(0)),
 		text: insertedText,
 	}]);
 	const snapshot = model.createSnapshot();
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(0), model.positionAt(insertedText.length - retainedText.length)),
+		range: Range.fromPositions(model.positionAt(0), model.positionAt(insertedText.length - retainedText.length)),
 		text: "",
 	}]);
 
@@ -221,9 +221,9 @@ test("TextModel cancels queued maintenance when disposed", () => {
 		},
 	});
 	const insertedText = "0123456789".repeat(10_000);
-	model.applyEdits([{ range: TextRange.emptyAt(model.positionAt(0)), text: insertedText }]);
+	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0)), text: insertedText }]);
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(0), model.positionAt(90_000)),
+		range: Range.fromPositions(model.positionAt(0), model.positionAt(90_000)),
 		text: "",
 	}]);
 

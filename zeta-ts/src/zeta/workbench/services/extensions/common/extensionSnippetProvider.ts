@@ -1,7 +1,8 @@
 import { parseLanguageCompletionSnippet } from "../../../../editor/contrib/snippet/common/snippetParser.js";
 import { LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
-import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
 
 export interface ExtensionSnippetDefinition {
 	readonly name: string;
@@ -52,12 +53,12 @@ export function createExtensionSnippetProvider(id: string, languageId: string, s
 		languageIds: Object.freeze([languageId]),
 		provideCompletions: (request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined => {
 			signal.throwIfAborted();
-			const line = request.snapshot.getText().split("\n")[request.position.lineIndex];
-			if (line === undefined || request.position.columnIndex > line.length) throw new RangeError("Snippet completion position is outside its snapshot");
-			const prefix = readPrefix(line, request.position.columnIndex);
+			const line = request.snapshot.getText().split("\n")[request.position.lineNumber - 1];
+			if (line === undefined || request.position.column < 1 || request.position.column > line.length + 1) throw new RangeError("Snippet completion position is outside its snapshot");
+			const prefix = readPrefix(line, request.position.column - 1);
 			if (prefix.length === 0) return undefined;
-			const range = TextRange.from(
-				TextPosition.at(request.position.lineIndex, request.position.columnIndex - prefix.length),
+			const range = Range.fromPositions(
+				new Position(request.position.lineNumber, request.position.column - prefix.length),
 				request.position,
 			);
 			const items = completableSnippets

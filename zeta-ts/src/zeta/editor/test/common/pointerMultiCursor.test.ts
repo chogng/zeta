@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CursorMoveCommands, PointerMultiCursorModifier, type PointerModifierState } from "../../common/cursor/cursorMoveCommands.js";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
 
 test("Pointer multi-cursor modifiers require their exact configured chord", () => {
 	const state = (
@@ -43,24 +44,24 @@ test("Pointer multi-cursor combination adds, toggles, and deduplicates", () => {
 	const first = caret(0, 1);
 	const second = caret(1, 2);
 	const third = caret(2, 3);
-	const base = TextSelectionSet.withPrimary([first, second], 1);
+	const base = SelectionSet.withPrimary([first, second], 1);
 
 	assert.deepEqual(
 		CursorMoveCommands.combinePointerSelection(base, third, undefined),
-		TextSelectionSet.withPrimary([first, second, third], 2),
+		SelectionSet.withPrimary([first, second, third], 2),
 	);
 	assert.deepEqual(
 		CursorMoveCommands.combinePointerSelection(base, first, 0),
-		TextSelectionSet.single(second),
+		SelectionSet.single(second),
 	);
 	assert.equal(
-		CursorMoveCommands.combinePointerSelection(TextSelectionSet.single(first), first, 0)
+		CursorMoveCommands.combinePointerSelection(SelectionSet.single(first), first, 0)
 			.selections.length,
 		1,
 	);
 	assert.deepEqual(
 		CursorMoveCommands.combinePointerSelection(base, second, 0),
-		TextSelectionSet.single(second),
+		SelectionSet.single(second),
 	);
 });
 
@@ -68,15 +69,15 @@ test("Pointer multi-cursor combination replaces overlapping ranges", () => {
 	const first = caret(0, 1);
 	const inside = caret(1, 2);
 	const outside = caret(2, 3);
-	const active = TextSelection.from(
-		TextPosition.at(0, 0),
-		TextPosition.at(1, 4),
+	const active = Selection.fromPositions(
+		new Position((0) + 1, (0) + 1),
+		new Position((1) + 1, (4) + 1),
 	);
-	const base = TextSelectionSet.withPrimary([first, inside, outside], 2);
+	const base = SelectionSet.withPrimary([first, inside, outside], 2);
 
 	assert.deepEqual(
 		CursorMoveCommands.combinePointerSelection(base, active, undefined),
-		TextSelectionSet.withPrimary([outside, active], 1),
+		SelectionSet.withPrimary([outside, active], 1),
 	);
 	assert.throws(
 		() => CursorMoveCommands.combinePointerSelection(base, active, 3),
@@ -84,6 +85,6 @@ test("Pointer multi-cursor combination replaces overlapping ranges", () => {
 	);
 });
 
-function caret(lineIndex: number, columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex));
+function caret(lineIndex: number, columnIndex: number): Selection {
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }

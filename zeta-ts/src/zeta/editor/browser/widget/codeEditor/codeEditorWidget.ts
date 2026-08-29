@@ -2,8 +2,10 @@ import { isHTMLElement } from "../../../../base/browser/dom.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, type TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { type Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from '../../editorBrowser.js';
@@ -160,18 +162,18 @@ export class CodeEditorWidget extends Disposable {
 		this.viewport.textModel.reset(value);
 	}
 
-	revealRange(range: TextRange): void {
-		this.viewport.textModel.offsetAt(range.start);
-		this.viewport.textModel.offsetAt(range.end);
-		this.selectionController.setSelections(TextSelectionSet.single(TextSelection.from(range.start, range.end)));
-		this.viewport.revealPosition(range.start);
+	revealRange(range: Range): void {
+		this.viewport.textModel.offsetAt(range.getStartPosition());
+		this.viewport.textModel.offsetAt(range.getEndPosition());
+		this.selectionController.setSelections(SelectionSet.single(Selection.fromPositions(range.getStartPosition(), range.getEndPosition())));
+		this.viewport.revealPosition(range.getStartPosition());
 	}
 
 	saveViewState(): CodeEditorViewState {
 		return Object.freeze({
 			selections: Object.freeze(this.selectionController.selections.selections.map(selection => Object.freeze({
-				anchor: Object.freeze({ lineIndex: selection.anchor.lineIndex, columnIndex: selection.anchor.columnIndex }),
-				active: Object.freeze({ lineIndex: selection.active.lineIndex, columnIndex: selection.active.columnIndex }),
+				anchor: Object.freeze({ lineIndex: selection.selectionStartLineNumber - 1, columnIndex: selection.selectionStartColumn - 1 }),
+				active: Object.freeze({ lineIndex: selection.positionLineNumber - 1, columnIndex: selection.positionColumn - 1 }),
 			}))),
 			primarySelectionIndex: this.selectionController.selections.primaryIndex,
 			scrollPosition: Object.freeze({ ...this.viewport.currentLayout.scrollPosition }),
@@ -180,13 +182,13 @@ export class CodeEditorWidget extends Disposable {
 
 	restoreViewState(state: CodeEditorViewState): void {
 		const selections = state.selections.map(selection => {
-			const anchor = TextPosition.at(selection.anchor.lineIndex, selection.anchor.columnIndex);
-			const active = TextPosition.at(selection.active.lineIndex, selection.active.columnIndex);
+			const anchor = new Position((selection.anchor.lineIndex) + 1, (selection.anchor.columnIndex) + 1);
+			const active = new Position((selection.active.lineIndex) + 1, (selection.active.columnIndex) + 1);
 			this.viewport.textModel.offsetAt(anchor);
 			this.viewport.textModel.offsetAt(active);
-			return TextSelection.from(anchor, active);
+			return Selection.fromPositions(anchor, active);
 		});
-		this.selectionController.setSelections(TextSelectionSet.withPrimary(selections, state.primarySelectionIndex));
+		this.selectionController.setSelections(SelectionSet.withPrimary(selections, state.primarySelectionIndex));
 		this.viewport.scrollTo(state.scrollPosition);
 	}
 

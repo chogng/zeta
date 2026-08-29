@@ -1,17 +1,19 @@
-import { type TextPosition, type TextRange, type TextEdit } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
+import { type Range } from "../../../common/core/range.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
 import { type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 
 export interface LanguageInlineCompletionItem {
 	readonly insertText: string;
-	readonly range?: TextRange;
+	readonly range?: Range;
 	readonly filterText?: string;
 	readonly commandId?: string;
 	readonly additionalTextEdits?: readonly TextEdit[];
 }
 
 export interface LanguageInlineCompletionsRequest extends LanguageFeatureRequest {
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly triggerKind: "automatic" | "explicit";
 }
 

@@ -6,7 +6,8 @@ import { SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, Synt
 import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Syntax service selects one token provider and merges diagnostic providers", async () => {
@@ -116,7 +117,7 @@ test("Syntax provider synchronization failures do not block healthy request lane
 	using worker = new SyntaxProviderWorker(registry, (providerId, operation) => errors.push({ providerId, operation }));
 	const previousVersion = model.version;
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
 		text: "!",
 	}]);
 	worker.synchronizeDocument({
@@ -152,7 +153,7 @@ test("Model changes cancel both syntax lanes before either store can publish sta
 	assert.deepEqual(started, [SYNTAX_TOKEN_LANE, SYNTAX_DIAGNOSTIC_LANE]);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
 		text: "!",
 	}]);
 	const outcomes = await pending;
@@ -174,19 +175,19 @@ test("Lexical syntax provider emits deterministic baseline tokens and bracket di
 	await service.requestAll("typescript");
 
 	assert.deepEqual(service.tokens.result!.value.tokens.map(token => [
-		token.range.start.lineIndex,
-		token.range.start.columnIndex,
-		token.range.end.columnIndex,
+		token.range.getStartPosition().lineNumber,
+		token.range.getStartPosition().column,
+		token.range.getEndPosition().column,
 		token.tokenType,
 	]), [
-		[0, 0, 5, "keyword"],
-		[0, 6, 11, "variable"],
-		[0, 12, 13, "operator"],
-		[0, 14, 15, "number"],
-		[0, 16, 17, "operator"],
-		[0, 18, 19, "number"],
-		[1, 0, 2, "keyword"],
-		[1, 4, 9, "variable"],
+		[1, 1, 6, "keyword"],
+		[1, 7, 12, "variable"],
+		[1, 13, 14, "operator"],
+		[1, 15, 16, "number"],
+		[1, 17, 18, "operator"],
+		[1, 19, 20, "number"],
+		[2, 1, 3, "keyword"],
+		[2, 5, 10, "variable"],
 	]);
 	assert.deepEqual(service.diagnostics.result!.value.diagnostics.map(diagnostic => diagnostic.message), [
 		"Unexpected closing bracket ']'",
@@ -283,7 +284,7 @@ function provider(
 function tokenResult(tokenType: string): LanguageTokenResult {
 	return {
 		tokens: [{
-			range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 			tokenType,
 			modifiers: [],
 		}],
@@ -293,7 +294,7 @@ function tokenResult(tokenType: string): LanguageTokenResult {
 function diagnosticResult(message: string): LanguageDiagnosticResult {
 	return {
 		diagnostics: [{
-			range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 			severity: LanguageDiagnosticSeverity.Warning,
 			message,
 			source: "test",

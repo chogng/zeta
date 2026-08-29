@@ -5,7 +5,9 @@ import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelection
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/documentSymbols.js";
 import { type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/folding.js";
 import { type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest } from "../../../../editor/contrib/smartSelect/common/selectionRanges.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
+import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { type SyntaxProvider, type SyntaxProviderRequest } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -61,7 +63,7 @@ class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolP
 		return result ? projectAppServerSyntaxFoldingRanges(result, request.snapshot) : Object.freeze([]);
 	}
 
-	async provideSelectionRanges(request: LanguageSelectionRangeRequest, signal: AbortSignal): Promise<readonly TextRange[]> {
+	async provideSelectionRanges(request: LanguageSelectionRangeRequest, signal: AbortSignal): Promise<readonly Range[]> {
 		const language = syntaxLanguageForEditorLanguage(request.languageId);
 		if (!language || request.ranges.length === 0) return Object.freeze([]);
 		const text = request.snapshot.getText();
@@ -70,7 +72,10 @@ class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolP
 			language,
 			revision: request.snapshot.version,
 			text,
-			ranges: request.ranges.map(range => ({ start: range.start, end: range.end })),
+			ranges: request.ranges.map(range => ({
+				start: { lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 },
+				end: { lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 },
+			})),
 		}), signal, "App Server syntax selection request was cancelled");
 		return projectAppServerSyntaxSelectionRanges(result, request.snapshot);
 	}
@@ -133,19 +138,19 @@ export function projectAppServerSyntaxTokens(result: SyntaxAnalyzeResult, snapsh
 function overlayToken(tokens: LanguageToken[], incoming: LanguageToken): void {
 	const retained: LanguageToken[] = [];
 	for (const token of tokens) {
-		if (token.range.end.compareTo(incoming.range.start) <= 0 || incoming.range.end.compareTo(token.range.start) <= 0) {
+		if (Position.compare(token.range.getEndPosition(), incoming.range.getStartPosition()) <= 0 || Position.compare(incoming.range.getEndPosition(), token.range.getStartPosition()) <= 0) {
 			retained.push(token);
 			continue;
 		}
-		if (token.range.start.compareTo(incoming.range.start) < 0) retained.push(tokenWithRange(token, TextRange.from(token.range.start, incoming.range.start)));
-		if (incoming.range.end.compareTo(token.range.end) < 0) retained.push(tokenWithRange(token, TextRange.from(incoming.range.end, token.range.end)));
+		if (Position.compare(token.range.getStartPosition(), incoming.range.getStartPosition()) < 0) retained.push(tokenWithRange(token, Range.fromPositions(token.range.getStartPosition(), incoming.range.getStartPosition())));
+		if (Position.compare(incoming.range.getEndPosition(), token.range.getEndPosition()) < 0) retained.push(tokenWithRange(token, Range.fromPositions(incoming.range.getEndPosition(), token.range.getEndPosition())));
 	}
 	retained.push(incoming);
-	retained.sort((left, right) => left.range.start.compareTo(right.range.start) || left.range.end.compareTo(right.range.end));
+	retained.sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()) || Position.compare(left.range.getEndPosition(), right.range.getEndPosition()));
 	tokens.splice(0, tokens.length, ...retained);
 }
 
-function tokenWithRange(token: LanguageToken, range: TextRange): LanguageToken {
+function tokenWithRange(token: LanguageToken, range: Range): LanguageToken {
 	return Object.freeze({
 		range,
 		tokenType: token.tokenType,
@@ -170,7 +175,7 @@ export function projectAppServerSyntaxSymbols(result: SyntaxAnalyzeResult, snaps
 	return Object.freeze(result.symbols.map(symbol => projectAppServerSyntaxSymbol(symbol, lines)));
 }
 
-export function projectAppServerSyntaxSelectionRanges(result: SyntaxSelectionRangesResult, snapshot: TextSnapshot): readonly TextRange[] {
+export function projectAppServerSyntaxSelectionRanges(result: SyntaxSelectionRangesResult, snapshot: TextSnapshot): readonly Range[] {
 	assertMatchingRevision(result, snapshot);
 	const lines = snapshotLines(snapshot);
 	return Object.freeze(result.ranges.map(selection => projectRange(selection.range, lines)));
@@ -232,27 +237,27 @@ function syntaxTokenType(token: SyntaxToken): string {
 	}
 }
 
-function projectSingleLineRanges(range: SyntaxToken["range"], lines: readonly string[]): readonly TextRange[] {
+function projectSingleLineRanges(range: SyntaxToken["range"], lines: readonly string[]): readonly Range[] {
 	const projected = projectRange(range, lines);
-	if (projected.empty) return Object.freeze([]);
-	const ranges: TextRange[] = [];
-	for (let lineIndex = projected.start.lineIndex; lineIndex <= projected.end.lineIndex; lineIndex += 1) {
-		const startColumn = lineIndex === projected.start.lineIndex ? projected.start.columnIndex : 0;
-		const endColumn = lineIndex === projected.end.lineIndex ? projected.end.columnIndex : lines[lineIndex]!.length;
-		if (endColumn > startColumn) ranges.push(TextRange.from(TextPosition.at(lineIndex, startColumn), TextPosition.at(lineIndex, endColumn)));
+	if (projected.isEmpty()) return Object.freeze([]);
+	const ranges: Range[] = [];
+	for (let lineNumber = projected.startLineNumber; lineNumber <= projected.endLineNumber; lineNumber += 1) {
+		const startColumn = lineNumber === projected.startLineNumber ? projected.startColumn : 1;
+		const endColumn = lineNumber === projected.endLineNumber ? projected.endColumn : lines[lineNumber - 1]!.length + 1;
+		if (endColumn > startColumn) ranges.push(new Range(lineNumber, startColumn, lineNumber, endColumn));
 	}
 	return Object.freeze(ranges);
 }
 
-function projectRange(range: SyntaxToken["range"], lines: readonly string[]): TextRange {
-	return TextRange.from(projectPosition(range.start, lines), projectPosition(range.end, lines));
+function projectRange(range: SyntaxToken["range"], lines: readonly string[]): Range {
+	return Range.fromPositions(projectPosition(range.start, lines), projectPosition(range.end, lines));
 }
 
-function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number }, lines: readonly string[]): TextPosition {
+function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number }, lines: readonly string[]): Position {
 	if (!Number.isSafeInteger(position.lineIndex) || !Number.isSafeInteger(position.columnIndex) || position.lineIndex < 0 || position.columnIndex < 0 || position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
 		throw new RangeError("App Server syntax range is outside its editor snapshot");
 	}
-	return TextPosition.at(position.lineIndex, position.columnIndex);
+	return new Position((position.lineIndex) + 1, (position.columnIndex) + 1);
 }
 
 function snapshotLines(snapshot: TextSnapshot): readonly string[] {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { RGBA8 } from '../../../../common/core/misc/rgba.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
@@ -37,7 +38,7 @@ test('explicit providers suppress the default provider in auto mode and retain p
 	using registration = providers.register({
 		languageIds: ['typescript'],
 		provideDocumentColors: () => [{
-			range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, model.getLineContent(0).length)),
+			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (model.getLineContent((0) + 1).length) + 1)),
 			color: new RGBA8(1, 2, 3, 255),
 		}],
 		provideColorPresentations: request => [{ label: 'provider-color', textEdit: { range: request.range, text: 'provider-color' } }],

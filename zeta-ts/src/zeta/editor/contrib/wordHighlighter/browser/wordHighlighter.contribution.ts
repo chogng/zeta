@@ -6,8 +6,10 @@ import { CancellationTokenSource, type CancellationToken } from '../../../../bas
 import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type EditorView } from '../../../browser/view.js';
 import { createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
-import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
-import { type TextPosition, type TextRange } from '../../../common/core/text.js';
+import { Selection } from '../../../common/core/selection.js';
+import { SelectionSet } from '../../../common/cursor/selectionSet.js';
+import { Position } from '../../../common/core/position.js';
+import { type Range } from '../../../common/core/range.js';
 import { CursorChangeReason, type CursorStateChangedEvent, type CursorsController } from '../../../common/cursor/cursor.js';
 import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type DocumentHighlightRequest, type DocumentHighlightTarget, type MultiDocumentHighlightProvider } from '../../../common/languages/documentHighlights.js';
@@ -203,17 +205,17 @@ class WordHighlighter extends Disposable {
 		}
 	}
 
-	private highlightPosition(): TextPosition | undefined {
+	private highlightPosition(): Position | undefined {
 		if (this.selections.selections.selections.length !== 1) return undefined;
 		const selection = this.selections.selections.primary;
-		if (!selectionFitsModel(this.textModel, selection.range) || selection.range.start.lineIndex !== selection.range.end.lineIndex) return undefined;
-		const range = WordOperations.getWordSelectionRange(this.textModel, selection.range.start, this.currentWordPattern);
-		if (range.empty || range.start.compareTo(selection.range.start) > 0 || range.end.compareTo(selection.range.end) < 0) return undefined;
-		return selection.range.start;
+		if (!selectionFitsModel(this.textModel, selection) || selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return undefined;
+		const range = WordOperations.getWordSelectionRange(this.textModel, selection.getStartPosition(), this.currentWordPattern);
+		if (range.isEmpty() || Position.compare(range.getStartPosition(), selection.getStartPosition()) > 0 || Position.compare(range.getEndPosition(), selection.getEndPosition()) < 0) return undefined;
+		return selection.getStartPosition();
 	}
 
 	private replaceHighlights(highlights: readonly DocumentHighlight[]): void {
-		const key = highlights.map(highlight => `${this.textModel.offsetAt(highlight.range.start)}-${this.textModel.offsetAt(highlight.range.end)}:${highlight.kind ?? ''}`).join(',');
+		const key = highlights.map(highlight => `${this.textModel.offsetAt(highlight.range.getStartPosition())}-${this.textModel.offsetAt(highlight.range.getEndPosition())}:${highlight.kind ?? ''}`).join(',');
 		if (key === this.lastDecorationKey) return;
 		this.lastDecorationKey = key;
 		this.decorations.replaceAll(highlights.map(highlight => ({
@@ -224,16 +226,16 @@ class WordHighlighter extends Disposable {
 	}
 
 	private move(direction: 1 | -1): boolean {
-		const ranges = [...this.decorations.decorations].map(decoration => decoration.range).sort((left, right) => left.start.compareTo(right.start));
+		const ranges = [...this.decorations.decorations].map(decoration => decoration.range).sort((left, right) => Position.compare(left.getStartPosition(), right.getStartPosition()));
 		if (ranges.length === 0) return false;
-		const activeOffset = this.textModel.offsetAt(this.selections.selections.primary.active);
-		const currentIndex = ranges.findIndex(range => this.textModel.offsetAt(range.start) <= activeOffset && this.textModel.offsetAt(range.end) >= activeOffset);
+		const activeOffset = this.textModel.offsetAt(this.selections.selections.primary.getPosition());
+		const currentIndex = ranges.findIndex(range => this.textModel.offsetAt(range.getStartPosition()) <= activeOffset && this.textModel.offsetAt(range.getEndPosition()) >= activeOffset);
 		const nextIndex = direction === 1 ? (currentIndex + 1) % ranges.length : (currentIndex - 1 + ranges.length) % ranges.length;
 		const destination = ranges[nextIndex]!;
 		this.changingSelection = true;
 		try {
-			this.selections.setCursorSelections(TextSelectionSet.single(TextSelection.collapsedAt(destination.start)));
-			this.view.revealPosition(destination.start);
+			this.selections.setCursorSelections(SelectionSet.single(Selection.fromPositions(destination.getStartPosition())));
+			this.view.revealPosition(destination.getStartPosition());
 		} finally {
 			this.changingSelection = false;
 		}
@@ -249,7 +251,7 @@ class WordHighlighter extends Disposable {
 	}
 }
 
-export async function getOccurrencesAtPosition(registry: LanguageFeatureProviderRegistry<DocumentHighlightProvider>, model: DocumentHighlightTarget, position: TextPosition, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+export async function getOccurrencesAtPosition(registry: LanguageFeatureProviderRegistry<DocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 	const request = createDocumentHighlightRequest(model, position);
 	for (const provider of orderedProviders(registry, model.languageId)) {
 		if (!isDocumentHighlightRequestCurrent(request, token)) return new ResourceMap();
@@ -263,7 +265,7 @@ export async function getOccurrencesAtPosition(registry: LanguageFeatureProvider
 	return new ResourceMap();
 }
 
-export async function getOccurrencesAcrossMultipleModels(registry: LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: TextPosition, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[]): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+export async function getOccurrencesAcrossMultipleModels(registry: LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[]): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 	const targets = Object.freeze([model, ...otherModels]);
 	const request = createDocumentHighlightRequest(model, position);
 	for (const provider of orderedProviders(registry, model.languageId)) {
@@ -275,7 +277,7 @@ export async function getOccurrencesAcrossMultipleModels(registry: LanguageFeatu
 	return new ResourceMap();
 }
 
-function createDocumentHighlightRequest(model: DocumentHighlightTarget, position: TextPosition): DocumentHighlightRequest {
+function createDocumentHighlightRequest(model: DocumentHighlightTarget, position: Position): DocumentHighlightRequest {
 	return Object.freeze({ ...model, position });
 }
 
@@ -304,8 +306,8 @@ function normalizeHighlights(model: TextModel, highlights: readonly DocumentHigh
 	if (!Array.isArray(highlights)) throw new TypeError('Document highlights must be an array');
 	return Object.freeze(highlights.map(highlight => {
 		if (!highlight || typeof highlight !== 'object' || !highlight.range) throw new TypeError('Document highlight must contain a range');
-		model.offsetAt(highlight.range.start);
-		model.offsetAt(highlight.range.end);
+		model.offsetAt(highlight.range.getStartPosition());
+		model.offsetAt(highlight.range.getEndPosition());
 		if (highlight.kind !== undefined && !Object.values(DocumentHighlightKind).includes(highlight.kind)) throw new TypeError('Document highlight kind is invalid');
 		return Object.freeze({ range: highlight.range, ...(highlight.kind ? { kind: highlight.kind } : {}) });
 	}));
@@ -339,7 +341,7 @@ class WordHighlightCoordinator {
 		}, 0);
 	}
 
-	async provide(source: WordHighlighter, position: TextPosition, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+	async provide(source: WordHighlighter, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 		const targets = source.highlightMode === 'multiFile'
 			? [...this.controllers].filter(controller => controller.highlightMode === 'multiFile').map(controller => controller.createTarget())
 			: [source.createTarget()];
@@ -380,12 +382,12 @@ function validateControllerDependencies(view: EditorView, selections: CursorsCon
 	if (options.onError !== undefined && typeof options.onError !== 'function') throw new TypeError('Word highlighter error handler must be a function');
 }
 
-function selectionFitsModel(model: WordHighlighter['textModel'], range: TextRange): boolean {
-	return positionFitsModel(model, range.start.lineIndex, range.start.columnIndex) && positionFitsModel(model, range.end.lineIndex, range.end.columnIndex);
+function selectionFitsModel(model: WordHighlighter['textModel'], range: Range): boolean {
+	return positionFitsModel(model, range.getStartPosition().lineNumber, range.getStartPosition().column) && positionFitsModel(model, range.getEndPosition().lineNumber, range.getEndPosition().column);
 }
 
-function positionFitsModel(model: WordHighlighter['textModel'], lineIndex: number, columnIndex: number): boolean {
-	return Number.isSafeInteger(lineIndex) && Number.isSafeInteger(columnIndex) && lineIndex >= 0 && columnIndex >= 0 && lineIndex < model.lineCount && columnIndex <= model.getLineLength(lineIndex);
+function positionFitsModel(model: WordHighlighter['textModel'], lineNumber: number, column: number): boolean {
+	return Number.isSafeInteger(lineNumber) && Number.isSafeInteger(column) && lineNumber >= 1 && column >= 1 && lineNumber <= model.lineCount && column <= model.getLineLength(lineNumber) + 1;
 }
 
 export class WordHighlighterContribution extends Disposable {

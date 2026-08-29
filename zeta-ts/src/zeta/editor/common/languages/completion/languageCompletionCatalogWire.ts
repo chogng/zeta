@@ -12,7 +12,7 @@ import { languageCompletionWireCodec } from "./languageCompletionWire.js";
 import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
 import { LanguageWorkerWireClient, type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from "../languageWorkerWire.js";
 import { type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "./languageCompletions.js";
-import { type TextModelChange } from "../../core/text.js";
+import { type TextModelChange } from "../../core/textChange.js";
 
 const CATALOG_PROTOCOL = "zeta.language.completion-provider-catalog";
 const CATALOG_PROTOCOL_VERSION = 1;

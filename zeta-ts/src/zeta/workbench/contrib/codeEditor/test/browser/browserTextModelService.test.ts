@@ -4,7 +4,8 @@ import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../../services/textmodelResolver/browser/browserTextModelService.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModelConflictError } from "../../../../../editor/common/services/resolverService.js";
 import { type IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
@@ -21,7 +22,7 @@ test("Stanza text model service shares one model and preserves edits across pane
 	assert.equal(first.model.getText(), "bootstrap");
 	assert.equal(textFiles.resolveCount, 1);
 	first.model.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 9)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (9) + 1)),
 		text: "edited",
 	}]);
 	assert.equal(second.model.getText(), "edited");
@@ -50,7 +51,7 @@ test('Stanza text model service restores undo and redo after the final reference
 	const textFiles = new TestTextFileService('alpha');
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	let reference = await models.acquire({ resource }, new AbortController().signal);
-	reference.model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: '!' }]);
+	reference.model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }]);
 	await reference.save(new AbortController().signal);
 	const releasedModel = reference.model;
 	reference.dispose();
@@ -75,7 +76,7 @@ test('Stanza text model service drops retained history when persisted content ch
 	const textFiles = new TestTextFileService('alpha');
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const first = await models.acquire({ resource }, new AbortController().signal);
-	first.model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: '!' }]);
+	first.model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }]);
 	await first.save(new AbortController().signal);
 	first.dispose();
 	textFiles.setText('external');
@@ -94,7 +95,7 @@ test("Stanza text model references track dirty content, save snapshots, and expl
 	using listener = reference.onDidChangeDirty(() => dirtyChanges += 1);
 
 	reference.model.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
 		text: "saved",
 	}]);
 	assert.equal(reference.isDirty, true);
@@ -106,7 +107,7 @@ test("Stanza text model references track dirty content, save snapshots, and expl
 	assert.equal(dirtyChanges, 2);
 
 	reference.model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
 		text: " locally",
 	}]);
 	assert.equal(reference.isDirty, true);
@@ -140,7 +141,7 @@ test("Stanza text model save tolerates its final reference closing before I/O co
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
 	reference.model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "edited ",
 	}]);
 	const saving = reference.save(new AbortController().signal);
@@ -155,7 +156,7 @@ test("Stanza text model preserves the source CRLF convention when saving", async
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
 	assert.equal(reference.model.getText(), "first\nsecond");
 	reference.model.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 		text: "saved",
 	}]);
 
@@ -168,7 +169,7 @@ test("Stanza text model refuses to overwrite externally changed content", async 
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
 	reference.model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "local ",
 	}]);
 	textFiles.setText("external change");
@@ -197,7 +198,7 @@ test("Stanza text model reloads clean external changes and marks dirty models co
 	assert.equal(reference.hasExternalChange, false);
 
 	reference.model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "local ",
 	}]);
 	textFiles.setText("external dirty");

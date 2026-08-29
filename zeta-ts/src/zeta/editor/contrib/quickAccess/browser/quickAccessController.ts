@@ -5,7 +5,8 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../common/gotoLocation.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
@@ -70,8 +71,8 @@ export class GotoLineController extends Disposable {
 		if (!this.visible) this.initialScrollPosition = this.viewport.viewportLayout.scrollPosition;
 		this.element.hidden = false;
 		this.element.classList.add("visible");
-		const current = this.selections.selections.primary.active;
-		this.input.value = `${current.lineIndex + 1}:${current.columnIndex + 1}`;
+		const current = this.selections.selections.primary.getPosition();
+		this.input.value = `${current.lineNumber}:${current.column}`;
 		this.position();
 		this.preview();
 		this.input.focus({ preventScroll: true });
@@ -106,7 +107,7 @@ export class GotoLineController extends Disposable {
 		const result = this.readResult();
 		if (result.kind !== "location") return;
 		stopEvent(event);
-		this.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(result.location.position)));
+		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(result.location.position)));
 		this.viewport.revealPosition(result.location.position);
 		this.initialScrollPosition = undefined;
 		this.close();

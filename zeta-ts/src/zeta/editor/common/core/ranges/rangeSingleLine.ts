@@ -1,22 +1,15 @@
-import { TextPosition } from "../position.js";
-import { TextRange } from "../range.js";
+import { Range } from "../range.js";
 import { ColumnRange } from "./columnRange.js";
 
 export class RangeSingleLine {
-	static fromRange(range: TextRange): RangeSingleLine | undefined {
-		if (range.start.lineIndex !== range.end.lineIndex) return undefined;
-		return new RangeSingleLine(range.start.lineIndex, new ColumnRange(range.start.columnIndex, range.end.columnIndex));
+	static fromRange(range: Range): RangeSingleLine | undefined {
+		if (range.startLineNumber !== range.endLineNumber) return undefined;
+		return new RangeSingleLine(range.startLineNumber, new ColumnRange(range.startColumn, range.endColumn));
 	}
 
-	constructor(readonly lineIndex: number, readonly columnRange: ColumnRange) {}
+	constructor(readonly lineNumber: number, readonly columnRange: ColumnRange) {}
 
-	toRange(): TextRange {
-		const start = rangePosition(this.lineIndex, this.columnRange.startColumnIndex);
-		const end = rangePosition(this.lineIndex, this.columnRange.endColumnIndexExclusive);
-		return TextRange.from(start, end);
+	toRange(): Range {
+		return new Range(this.lineNumber, this.columnRange.startColumn, this.lineNumber, this.columnRange.endColumnExclusive);
 	}
-}
-
-function rangePosition(lineIndex: number, columnIndex: number) {
-	return TextPosition.at(lineIndex, columnIndex);
 }

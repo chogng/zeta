@@ -1,7 +1,9 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { LanguageRequestCancellationReason, LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerResultSettler, type VersionedLanguageResult } from "../../common/languages/languageRequestCoordinator.js";
-import { TextPosition, TextRange, type TextModelChange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
+import { type TextModelChange } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 type TestLane = "diagnostics" | "tokens";
@@ -197,7 +199,7 @@ test("Model changes cancel every captured language version", async () => {
 		applied.push(result.value);
 	});
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "!",
 	}]);
 	assert.equal(worker.requests.every(request => request.signal.aborted), true);
@@ -229,7 +231,7 @@ test("Model synchronization failure discards the worker and recovers from a full
 	const first = coordinator.runLatest("tokens", { label: "old" }, () => assert.fail("Old result must not apply"));
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "!",
 	}]);
 
@@ -435,7 +437,7 @@ test("Result confirmation occurs only after the renderer application gate", asyn
 
 	const cancelled = coordinator.runLatest("tokens", { label: "cancelled" }, () => assert.fail("Cancelled result must not apply"));
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 4)),
+		range: Range.fromPositions(new Position((0) + 1, (4) + 1)),
 		text: "!",
 	}]);
 	worker.requests[1]!.completion.resolve({ label: "cancelled", text: "text" });

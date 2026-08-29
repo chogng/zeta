@@ -1,6 +1,8 @@
 import { type URI } from '../../../base/common/uri.js';
 import { type CancellationToken } from '../../../base/common/cancellation.js';
-import { type TextPosition, type TextRange, type TextSnapshot } from '../core/text.js';
+import { type Position } from '../core/position.js';
+import { type Range } from '../core/range.js';
+import { type TextSnapshot } from '../core/textChange.js';
 import { type TextModel } from '../model/textModel.js';
 import { type LanguageFeatureProviderMetadata } from '../languageFeatureRegistry.js';
 
@@ -11,7 +13,7 @@ export enum DocumentHighlightKind {
 }
 
 export interface DocumentHighlight {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly kind?: DocumentHighlightKind;
 }
 
@@ -20,7 +22,7 @@ export interface DocumentHighlightRequest {
 	readonly model: TextModel;
 	readonly snapshot: TextSnapshot;
 	readonly languageId: string;
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly wordPattern?: RegExp;
 }
 

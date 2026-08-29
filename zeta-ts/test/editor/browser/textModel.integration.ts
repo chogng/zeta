@@ -5,8 +5,9 @@ import { CodeEditorPane } from "../../../src/zeta/workbench/contrib/codeEditor/b
 import { LanguageConfigurationService } from "../../../src/zeta/editor/common/services/languageConfigurationService.js";
 import { LanguageFeaturesService } from "../../../src/zeta/editor/common/services/languageFeaturesService.js";
 import { LanguageService } from "../../../src/zeta/editor/common/services/languageService.js";
-import { TextPosition } from "../../../src/zeta/editor/common/core/text.js";
-import { TextSelection, TextSelectionSet } from "../../../src/zeta/editor/common/core/selection.js";
+import { Position } from "../../../src/zeta/editor/common/core/position.js";
+import { Selection } from "../../../src/zeta/editor/common/core/selection.js";
+import { SelectionSet } from "../../../src/zeta/editor/common/cursor/selectionSet.js";
 import { BrowserTextResourceStore } from "../../../src/zeta/workbench/contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerSyntaxProviders } from "../../../src/zeta/workbench/services/language/browser/appServerSyntaxProviders.js";
 import { WorkbenchLanguageFeatures } from "../../../src/zeta/workbench/services/language/browser/workbenchLanguageFeatures.js";
@@ -92,11 +93,11 @@ window.zetaTextModelIntegration = {
 	save: () => pane.save(),
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
-	setCursors: (positions, primaryIndex = 0) => requiredEditorPart().selections.setCursorSelections(TextSelectionSet.withPrimary(
-		positions.map(position => TextSelection.collapsedAt(TextPosition.at(position.lineIndex, position.columnIndex))),
+	setCursors: (positions, primaryIndex = 0) => requiredEditorPart().selections.setCursorSelections(SelectionSet.withPrimary(
+		positions.map(position => Selection.fromPositions(new Position(position.lineIndex + 1, position.columnIndex + 1))),
 		primaryIndex,
 	)),
-	revealPosition: (lineIndex, columnIndex) => requiredEditorPart().view.revealPosition(TextPosition.at(lineIndex, columnIndex)),
+	revealPosition: (lineIndex, columnIndex) => requiredEditorPart().view.revealPosition(new Position(lineIndex + 1, columnIndex + 1)),
 	dispose: () => disposables.dispose(),
 };
 

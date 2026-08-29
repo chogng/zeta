@@ -56,7 +56,7 @@ export class LineOperationsController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if (event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
-			const hasRange = this.selections.selections.selections.some(selection => !selection.collapsed);
+			const hasRange = this.selections.selections.selections.some(selection => !selection.isEmpty());
 			if (event.shiftKey || hasRange) {
 				stopEvent(event);
 				const direction = event.shiftKey ? EditorLineIndentDirection.Outdent : EditorLineIndentDirection.Indent;
@@ -67,7 +67,7 @@ export class LineOperationsController extends Disposable {
 					this.indentation,
 				);
 				this.executeCommand(direction === EditorLineIndentDirection.Outdent ? EditorLineOperationCommandId.outdent : EditorLineOperationCommandId.indent, () => this.selections.execute(command));
-				this.viewport.revealPosition(this.selections.selections.primary.active);
+				this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 			}
 			return;
 		}
@@ -78,7 +78,7 @@ export class LineOperationsController extends Disposable {
 				this.selections.selections,
 			);
 			this.executeCommand(EditorLineOperationCommandId.delete, () => this.selections.execute(command));
-			this.viewport.revealPosition(this.selections.selections.primary.active);
+			this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 			return;
 		}
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key === "Enter") {
@@ -90,7 +90,7 @@ export class LineOperationsController extends Disposable {
 				direction,
 			);
 			this.executeCommand(direction === EditorLineInsertDirection.Before ? EditorLineOperationCommandId.insertBefore : EditorLineOperationCommandId.insertAfter, () => this.selections.execute(command));
-			this.viewport.revealPosition(this.selections.selections.primary.active);
+			this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 			return;
 		}
 		if (!event.altKey) return;
@@ -109,7 +109,7 @@ export class LineOperationsController extends Disposable {
 				moveDirection,
 			);
 			this.executeCommand(moveDirection === EditorLineMoveDirection.Up ? EditorLineOperationCommandId.moveUp : EditorLineOperationCommandId.moveDown, () => this.selections.execute(command));
-			this.viewport.revealPosition(this.selections.selections.primary.active);
+			this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 			return;
 		}
 		const duplicateDirection = resolveStanzaDuplicateLineDirection(event, this.targetOperatingSystem);
@@ -121,7 +121,7 @@ export class LineOperationsController extends Disposable {
 			duplicateDirection,
 		);
 		this.executeCommand(duplicateDirection === EditorLineDuplicateDirection.Up ? EditorLineOperationCommandId.copyUp : EditorLineOperationCommandId.copyDown, () => this.selections.execute(command));
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 }
 

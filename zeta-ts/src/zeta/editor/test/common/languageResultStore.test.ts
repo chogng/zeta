@@ -3,11 +3,12 @@ import test from "node:test";
 import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore } from "../../common/languages/languageResultStore.js";
 import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, createLanguageTokenStore, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-const position = TextPosition.at;
-const range = (lineIndex: number, startColumn: number, endColumn: number): TextRange => TextRange.from(
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
+const range = (lineIndex: number, startColumn: number, endColumn: number): Range => Range.fromPositions(
 	position(lineIndex, startColumn),
 	position(lineIndex, endColumn),
 );
@@ -54,7 +55,7 @@ test("Language token stores freeze current-version results and invalidate on edi
 	}]);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(position(0, 0)),
+		range: Range.fromPositions(position(0, 0)),
 		text: "// ",
 	}]);
 	assert.equal(store.result, undefined);
@@ -181,7 +182,7 @@ test("Language diagnostics validate atomically while allowing points and overlap
 				source: "parser",
 			},
 			{
-				range: TextRange.emptyAt(position(0, 1)),
+				range: Range.fromPositions(position(0, 1)),
 				severity: LanguageDiagnosticSeverity.Hint,
 				message: "overlapping point",
 				code: "hint-code",
@@ -201,7 +202,7 @@ test("Language diagnostics validate atomically while allowing points and overlap
 	const invalidResults: LanguageDiagnosticResult[] = [
 		{
 			diagnostics: [{
-				range: TextRange.emptyAt(position(2, 0)),
+				range: Range.fromPositions(position(2, 0)),
 				severity: LanguageDiagnosticSeverity.Error,
 				message: "outside",
 			}],
@@ -262,7 +263,7 @@ test("Language tokens reject ambiguous spans without replacing prior state", () 
 		tokenResult(1, 1, "empty"),
 		{
 			tokens: [{
-				range: TextRange.from(position(0, 1), position(1, 1)),
+				range: Range.fromPositions(position(0, 1), position(1, 1)),
 				tokenType: "string",
 				modifiers: [],
 			}],
@@ -314,7 +315,7 @@ test("Model mutation during normalization cannot publish the captured version", 
 		value => {
 			if (mutate) {
 				model.applyEdits([{
-					range: TextRange.emptyAt(position(0, 1)),
+					range: Range.fromPositions(position(0, 1)),
 					text: "!",
 				}]);
 			}

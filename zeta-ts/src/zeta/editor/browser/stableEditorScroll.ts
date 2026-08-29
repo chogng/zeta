@@ -1,5 +1,5 @@
 import { type CursorsController } from '../common/cursor/cursor.js';
-import { TextPosition } from '../common/core/position.js';
+import { Position } from '../common/core/position.js';
 import { EditorViewport } from './view.js';
 
 /** A viewport host accepted by stable-scroll helpers. */
@@ -18,9 +18,9 @@ type StableEditor = EditorViewport | StableEditorScrollTarget;
 export class StableEditorScrollState {
 	private readonly initialScrollTop: number;
 	private readonly initialContentHeight: number;
-	private readonly visiblePosition: TextPosition | undefined;
+	private readonly visiblePosition: Position | undefined;
 	private readonly visiblePositionScrollDelta: number;
-	private readonly cursorPosition: TextPosition | undefined;
+	private readonly cursorPosition: Position | undefined;
 	private readonly selectionController: CursorsController | undefined;
 
 	public static capture(
@@ -30,7 +30,7 @@ export class StableEditorScrollState {
 		const viewport = resolveViewport(editor);
 		const layout = viewport.currentLayout;
 		const selections = resolveSelections(editor, selectionController);
-		const cursorPosition = selections?.selections.primary.active;
+		const cursorPosition = selections?.selections.primary.getPosition();
 		if (layout.scrollPosition.top === 0) {
 			return new StableEditorScrollState(
 				layout.scrollPosition.top,
@@ -54,7 +54,7 @@ export class StableEditorScrollState {
 			);
 		}
 
-		const visiblePosition = TextPosition.at(visibleLine.logicalLineIndex, visibleLine.startColumn);
+		const visiblePosition = new Position((visibleLine.logicalLineIndex) + 1, (visibleLine.startColumn) + 1);
 		const visiblePositionTop = viewport.getPositionContentCoordinates(visiblePosition).top;
 		return new StableEditorScrollState(
 			layout.scrollPosition.top,
@@ -69,9 +69,9 @@ export class StableEditorScrollState {
 	private constructor(
 		initialScrollTop: number,
 		initialContentHeight: number,
-		visiblePosition: TextPosition | undefined,
+		visiblePosition: Position | undefined,
 		visiblePositionScrollDelta: number,
-		cursorPosition: TextPosition | undefined,
+		cursorPosition: Position | undefined,
 		selectionController: CursorsController | undefined,
 	) {
 		this.initialScrollTop = initialScrollTop;
@@ -121,7 +121,7 @@ export class StableEditorScrollState {
 
 		const initialCursorPosition = this.cursorPosition;
 		const selections = selectionController ?? this.selectionController ?? resolveSelections(editor);
-		const currentCursorPosition = selections?.selections.primary.active;
+		const currentCursorPosition = selections?.selections.primary.getPosition();
 		if (!initialCursorPosition || !currentCursorPosition) return;
 
 		const initialTop = viewport.getPositionContentCoordinates(clampPosition(viewport, initialCursorPosition)).top;
@@ -137,7 +137,7 @@ export class StableEditorScrollState {
 export class StableEditorBottomScrollState {
 	private readonly initialScrollTop: number;
 	private readonly initialContentHeight: number;
-	private readonly visiblePosition: TextPosition | undefined;
+	private readonly visiblePosition: Position | undefined;
 	private readonly visiblePositionScrollDelta: number;
 
 	public static capture(editor: StableEditor): StableEditorBottomScrollState {
@@ -155,7 +155,7 @@ export class StableEditorBottomScrollState {
 			);
 		}
 
-		const visiblePosition = TextPosition.at(visibleLine.logicalLineIndex, visibleLine.startColumn);
+		const visiblePosition = new Position((visibleLine.logicalLineIndex) + 1, (visibleLine.startColumn) + 1);
 		const coordinates = viewport.getPositionContentCoordinates(visiblePosition);
 		return new StableEditorBottomScrollState(
 			layout.scrollPosition.top,
@@ -168,7 +168,7 @@ export class StableEditorBottomScrollState {
 	private constructor(
 		initialScrollTop: number,
 		initialContentHeight: number,
-		visiblePosition: TextPosition | undefined,
+		visiblePosition: Position | undefined,
 		visiblePositionScrollDelta: number,
 	) {
 		this.initialScrollTop = initialScrollTop;
@@ -213,8 +213,8 @@ function resolveSelections(
 	return undefined;
 }
 
-function clampPosition(viewport: EditorViewport, position: TextPosition): TextPosition {
+function clampPosition(viewport: EditorViewport, position: Position): Position {
 	const model = viewport.textModel;
-	const lineIndex = Math.min(position.lineIndex, model.lineCount - 1);
-	return TextPosition.at(lineIndex, Math.min(position.columnIndex, model.getLineLength(lineIndex)));
+	const lineNumber = Math.min(Math.max(position.lineNumber, 1), model.lineCount);
+	return new Position(lineNumber, Math.min(Math.max(position.column, 1), model.getLineLength(lineNumber) + 1));
 }

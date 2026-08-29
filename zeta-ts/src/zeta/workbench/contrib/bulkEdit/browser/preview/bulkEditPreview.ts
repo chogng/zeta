@@ -2,7 +2,7 @@ import { throwIfCancelled } from "../../../../../base/common/cancellation.js";
 import { getErrorMessage, isCancellationError } from "../../../../../base/common/errors.js";
 import { type URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../../platform/files/common/files.js";
-import { normalizeTextLineEndings } from "../../../../../editor/common/core/text.js";
+import { normalizeTextLineEndings } from "../../../../../editor/common/core/textChange.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type ITextModelService } from "../../../../../editor/common/services/resolverService.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";

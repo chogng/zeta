@@ -3,8 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type ClipboardControllerOptions } from "../../browser/clipboardController.js";
 import { type IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -137,7 +138,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one two\nthree four");
-	const copiedSelections = TextSelectionSet.withPrimary([
+	const copiedSelections = SelectionSet.withPrimary([
 		selection(0, 0, 0, 3),
 		selection(1, 0, 1, 5),
 	], 1);
@@ -173,7 +174,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 		},
 	);
 
-	const pasteTargets = TextSelectionSet.withPrimary([
+	const pasteTargets = SelectionSet.withPrimary([
 		selection(0, 4, 0, 7),
 		selection(1, 6, 1, 10),
 	], 1);
@@ -186,7 +187,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 		selections: selections.selections,
 	}, {
 		text: "one one\nthree three",
-		selections: TextSelectionSet.withPrimary([
+		selections: SelectionSet.withPrimary([
 			caret(0, 7),
 			caret(1, 11),
 		], 1),
@@ -220,7 +221,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 	using model = new TextModel("a b");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.withPrimary([caret(0, 0), caret(0, 2)], 0),
+		SelectionSet.withPrimary([caret(0, 0), caret(0, 2)], 0),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -249,13 +250,13 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 		selections: selections.selections,
 	}, {
 		text: "X\nYa X\nYb",
-		selections: TextSelectionSet.withPrimary([
+		selections: SelectionSet.withPrimary([
 			caret(1, 1),
 			caret(2, 1),
 		], 0),
 	});
 
-	selections.setSelections(TextSelectionSet.single(caret(0, 0)));
+	selections.setSelections(SelectionSet.single(caret(0, 0)));
 	const emptyData = new MemoryClipboardData();
 	const emptyCopy = clipboardEvent(dom.window, "copy", emptyData);
 	input.element.dispatchEvent(emptyCopy);
@@ -281,7 +282,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 	using model = new TextModel("one\ntwo\nthree");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.withPrimary([caret(0, 1), caret(2, 2)], 1),
+		SelectionSet.withPrimary([caret(0, 1), caret(2, 2)], 1),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -311,7 +312,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 		},
 	);
 
-	const targets = TextSelectionSet.withPrimary([
+	const targets = SelectionSet.withPrimary([
 		caret(0, 2),
 		caret(1, 1),
 	], 1);
@@ -322,7 +323,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 		selections: selections.selections,
 	}, {
 		text: "one\none\nthree\ntwo\nthree",
-		selections: TextSelectionSet.withPrimary([
+		selections: SelectionSet.withPrimary([
 			caret(1, 2),
 			caret(3, 1),
 		], 1),
@@ -337,7 +338,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 		selections: targets,
 	});
 
-	selections.setSelections(TextSelectionSet.single(caret(1, 2)));
+	selections.setSelections(SelectionSet.single(caret(1, 2)));
 	const cutData = new MemoryClipboardData();
 	input.element.dispatchEvent(clipboardEvent(dom.window, "cut", cutData));
 	assert.deepEqual({
@@ -362,7 +363,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 	using model = new TextModel("a\nb");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.withPrimary([
+		SelectionSet.withPrimary([
 			caret(0, 1),
 			selection(1, 0, 1, 1),
 		], 1),
@@ -386,7 +387,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 		[EditorClipboardPasteMode.Line, EditorClipboardPasteMode.Selection],
 	);
 
-	selections.setSelections(TextSelectionSet.withPrimary([
+	selections.setSelections(SelectionSet.withPrimary([
 		caret(0, 0),
 		caret(1, 0),
 	], 1));
@@ -396,7 +397,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 		selections: selections.selections,
 	}, {
 		text: "a\na\nbb",
-		selections: TextSelectionSet.withPrimary([
+		selections: SelectionSet.withPrimary([
 			caret(1, 0),
 			caret(2, 1),
 		], 1),
@@ -412,7 +413,7 @@ test("Empty-selection clipboard policy may explicitly preserve browser behavior"
 	using model = new TextModel("abc");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(caret(0, 1)),
+		SelectionSet.single(caret(0, 1)),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -441,7 +442,7 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("if (a < b && c > d) {}");
-	using selections = new CursorsController(model, TextSelectionSet.single(selection(0, 0, 0, model.getLineContent(0).length)));
+	using selections = new CursorsController(model, SelectionSet.single(selection(0, 0, 0, model.getLineContent((0) + 1).length)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -456,7 +457,7 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
 	input.element.dispatchEvent(clipboardEvent(dom.window, "copy", copied));
 	assert.equal(copied.getData(EDITOR_HTML_CLIPBOARD_MIME), "<pre><code>if (a &lt; b &amp;&amp; c &gt; d) {}</code></pre>");
 
-	selections.setSelections(TextSelectionSet.single(caret(0, model.getLineContent(0).length)));
+	selections.setSelections(SelectionSet.single(caret(0, model.getLineContent((0) + 1).length)));
 	const external = new MemoryClipboardData();
 	external.setData(EDITOR_HTML_CLIPBOARD_MIME, "<div>first &amp; second</div><div><strong>third</strong><br>fourth</div><script>ignored()</script>");
 	const paste = clipboardEvent(dom.window, "paste", external);
@@ -473,7 +474,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 	assert.ok(container);
 	dom.window.document.documentElement.style.setProperty("--zeta-editor-token-keyword-foreground", "rgb(1, 2, 3)");
 	using model = new TextModel("const value\nnext");
-	using selections = new CursorsController(model, TextSelectionSet.single(selection(0, 0, 1, model.getLineContent(1).length)));
+	using selections = new CursorsController(model, SelectionSet.single(selection(0, 0, 1, model.getLineContent((1) + 1).length)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -513,7 +514,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 		'<pre><code><span class="stanza-editor-token token-keyword" style="color: rgb(1, 2, 3)">const</span> value\n<span class="stanza-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span></code></pre>',
 	);
 
-	selections.setSelections(TextSelectionSet.single(caret(1, 2)));
+	selections.setSelections(SelectionSet.single(caret(1, 2)));
 	const lineCopied = new MemoryClipboardData();
 	input.element.dispatchEvent(clipboardEvent(dom.window, "copy", lineCopied));
 	assert.equal(
@@ -529,7 +530,7 @@ test('Clipboard reads system text only for an empty event transfer', async () =>
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one");
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 3)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -549,17 +550,17 @@ test('Clipboard reads system text only for an empty event transfer', async () =>
 	await flushPromises();
 	assert.equal(model.getText(), "one two");
 
-	selections.setSelections(TextSelectionSet.single(caret(0, 0)));
+	selections.setSelections(SelectionSet.single(caret(0, 0)));
 	input.element.dispatchEvent(clipboardEvent(dom.window, "paste", new MemoryClipboardData()));
 	assert.equal(clipboardService.readRequestCount, 2);
-	selections.setSelections(TextSelectionSet.single(caret(0, 1)));
+	selections.setSelections(SelectionSet.single(caret(0, 1)));
 	clipboardService.resolveRead(1, 'ignored');
 	await flushPromises();
 	assert.equal(model.getText(), "one two");
 
 	const nativeText = new MemoryClipboardData();
 	nativeText.setData("text/plain", "!");
-	selections.setSelections(TextSelectionSet.single(caret(0, model.getLineContent(0).length)));
+	selections.setSelections(SelectionSet.single(caret(0, model.getLineContent((0) + 1).length)));
 	input.element.dispatchEvent(clipboardEvent(dom.window, "paste", nativeText));
 	assert.equal(clipboardService.readRequestCount, 2);
 	assert.equal(model.getText(), "one two!");
@@ -572,7 +573,7 @@ test('Clipboard owns URI-list and bounded text-file paste', async () => {
 	const container = dom.window.document.querySelector('main');
 	assert.ok(container);
 	using model = new TextModel('one');
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 3)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections);
@@ -599,7 +600,7 @@ test('Clipboard writes system text and delays cut until it succeeds', async () =
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one");
-	using selections = new CursorsController(model, TextSelectionSet.single(selection(0, 0, 0, 3)));
+	using selections = new CursorsController(model, SelectionSet.single(selection(0, 0, 0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const clipboardService = new DeferredClipboardService();
 	using input = new EditorView(viewport, selections);
@@ -630,7 +631,7 @@ test("Clipboard preserves an active IME composition by rejecting mutable clipboa
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one");
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 3)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -680,15 +681,15 @@ function compositionEvent(targetWindow: typeof browserEnvironment.window, type: 
 	return event;
 }
 
-function selection(startLine: number, startColumn: number, endLine: number, endColumn: number): TextSelection {
-	return TextSelection.from(
-		TextPosition.at(startLine, startColumn),
-		TextPosition.at(endLine, endColumn),
+function selection(startLine: number, startColumn: number, endLine: number, endColumn: number): Selection {
+	return Selection.fromPositions(
+		new Position((startLine) + 1, (startColumn) + 1),
+		new Position((endLine) + 1, (endColumn) + 1),
 	);
 }
 
-function caret(lineIndex: number, columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex));
+function caret(lineIndex: number, columnIndex: number): Selection {
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }
 
 async function flushPromises(): Promise<void> {

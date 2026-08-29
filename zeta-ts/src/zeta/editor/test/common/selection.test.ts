@@ -1,55 +1,57 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SelectionDirection, TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { SelectionDirection, Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 
-test("TextSelection preserves anchor direction and ordered range", () => {
-	const start = TextPosition.at(1, 2);
-	const end = TextPosition.at(3, 4);
-	const forward = TextSelection.from(start, end);
-	const backward = TextSelection.from(end, start);
-	const collapsed = TextSelection.collapsedAt(start);
+test("Selection preserves anchor direction and ordered range", () => {
+	const start = new Position((1) + 1, (2) + 1);
+	const end = new Position((3) + 1, (4) + 1);
+	const forward = Selection.fromPositions(start, end);
+	const backward = Selection.fromPositions(end, start);
+	const collapsed = Selection.fromPositions(start);
 
 	assert.deepEqual({
 		forward: {
-			direction: forward.direction,
-			range: forward.range,
-			collapsed: forward.collapsed,
+			direction: forward.getDirection(),
+			range: new Range(forward.startLineNumber, forward.startColumn, forward.endLineNumber, forward.endColumn),
+			collapsed: forward.isEmpty(),
 		},
 		backward: {
-			direction: backward.direction,
-			range: backward.range,
-			collapsed: backward.collapsed,
+			direction: backward.getDirection(),
+			range: new Range(backward.startLineNumber, backward.startColumn, backward.endLineNumber, backward.endColumn),
+			collapsed: backward.isEmpty(),
 		},
 		collapsed: {
-			direction: collapsed.direction,
-			range: collapsed.range,
-			collapsed: collapsed.collapsed,
+			direction: collapsed.getDirection(),
+			range: new Range(collapsed.startLineNumber, collapsed.startColumn, collapsed.endLineNumber, collapsed.endColumn),
+			collapsed: collapsed.isEmpty(),
 		},
 	}, {
 		forward: {
-			direction: SelectionDirection.Forward,
-			range: TextRange.from(start, end),
+			direction: SelectionDirection.LTR,
+			range: Range.fromPositions(start, end),
 			collapsed: false,
 		},
 		backward: {
-			direction: SelectionDirection.Backward,
-			range: TextRange.from(start, end),
+			direction: SelectionDirection.RTL,
+			range: Range.fromPositions(start, end),
 			collapsed: false,
 		},
 		collapsed: {
-			direction: SelectionDirection.Forward,
-			range: TextRange.emptyAt(start),
+			direction: SelectionDirection.LTR,
+			range: Range.fromPositions(start),
 			collapsed: true,
 		},
 	});
 });
 
-test("TextSelectionSet owns immutable multi-cursor order and primary", () => {
-	const first = TextSelection.collapsedAt(TextPosition.at(0, 1));
-	const second = TextSelection.collapsedAt(TextPosition.at(2, 3));
+test("SelectionSet owns immutable multi-cursor order and primary", () => {
+	const first = Selection.fromPositions(new Position((0) + 1, (1) + 1));
+	const second = Selection.fromPositions(new Position((2) + 1, (3) + 1));
 	const selections = [first, second];
-	const set = TextSelectionSet.withPrimary(selections, 1);
+	const set = SelectionSet.withPrimary(selections, 1);
 	selections.reverse();
 
 	assert.deepEqual({
@@ -63,13 +65,13 @@ test("TextSelectionSet owns immutable multi-cursor order and primary", () => {
 		selections: [first, second],
 		primary: second,
 	});
-	assert.equal(TextSelectionSet.single(first).primary, first);
+	assert.equal(SelectionSet.single(first).primary, first);
 	assert.throws(
-		() => TextSelectionSet.withPrimary([], 0),
+		() => SelectionSet.withPrimary([], 0),
 		/must not be empty/,
 	);
 	assert.throws(
-		() => TextSelectionSet.withPrimary([first], 1),
+		() => SelectionSet.withPrimary([first], 1),
 		/primaryIndex/,
 	);
 });

@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type TextRange } from "../../../common/core/text.js";
+import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -11,8 +11,8 @@ export interface LanguageDocumentSymbol {
 	readonly name: string;
 	readonly detail?: string;
 	readonly kind: LanguageSymbolKind;
-	readonly range: TextRange;
-	readonly selectionRange: TextRange;
+	readonly range: Range;
+	readonly selectionRange: Range;
 	readonly children?: readonly LanguageDocumentSymbol[];
 }
 

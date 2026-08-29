@@ -4,7 +4,9 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorLineRange } from '../../../common/viewModel.js';
-import { type TextModelChange, type TextPosition, type TextRange } from '../../../common/core/text.js';
+import { type Position } from '../../../common/core/position.js';
+import { type Range } from '../../../common/core/range.js';
+import { type TextModelChange } from '../../../common/core/textChange.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
@@ -70,23 +72,23 @@ export class ViewLines extends Disposable {
 		this.layer.render(viewportData);
 	}
 
-	public linesVisibleRangesForRange(range: TextRange, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined {
-		this.model.offsetAt(range.start);
-		this.model.offsetAt(range.end);
+	public linesVisibleRangesForRange(range: Range, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined {
+		this.model.offsetAt(range.getStartPosition());
+		this.model.offsetAt(range.getEndPosition());
 		const projection = this.readVisualProjection();
 		if (projection.modelVersion !== this.model.version) return undefined;
 		const result: EditorLineVisibleRange[] = [];
 		let intersectsRenderedLine = false;
 		for (const [visualLineIndex, renderedLine] of this.layer.renderedLines) {
 			const visualLine = projection.lineAt(visualLineIndex);
-			if (!visualLine || visualLine.logicalLineIndex < range.start.lineIndex || visualLine.logicalLineIndex > range.end.lineIndex) continue;
-			const startColumn = visualLine.logicalLineIndex === range.start.lineIndex
-				? Math.max(visualLine.startColumn, range.start.columnIndex)
+			if (!visualLine || visualLine.logicalLineIndex < range.startLineNumber - 1 || visualLine.logicalLineIndex > range.endLineNumber - 1) continue;
+			const startColumn = visualLine.logicalLineIndex === range.startLineNumber - 1
+				? Math.max(visualLine.startColumn, range.startColumn - 1)
 				: visualLine.startColumn;
-			const endColumn = visualLine.logicalLineIndex === range.end.lineIndex
-				? Math.min(visualLine.endColumn, range.end.columnIndex)
+			const endColumn = visualLine.logicalLineIndex === range.endLineNumber - 1
+				? Math.min(visualLine.endColumn, range.endColumn - 1)
 				: visualLine.endColumn;
-			const includesNewLine = includeNewLines && visualLine.lastForLogicalLine && visualLine.logicalLineIndex < range.end.lineIndex;
+			const includesNewLine = includeNewLines && visualLine.lastForLogicalLine && visualLine.logicalLineIndex < range.endLineNumber - 1;
 			if (endColumn < startColumn || (endColumn === startColumn && !includesNewLine)) continue;
 			intersectsRenderedLine = true;
 			const startOffset = startColumn - visualLine.startColumn;
@@ -110,7 +112,7 @@ export class ViewLines extends Disposable {
 		return intersectsRenderedLine ? Object.freeze(result) : undefined;
 	}
 
-	public visibleRangeForPosition(position: TextPosition): EditorVisiblePosition | undefined {
+	public visibleRangeForPosition(position: Position): EditorVisiblePosition | undefined {
 		this.model.offsetAt(position);
 		const projection = this.readVisualProjection();
 		if (projection.modelVersion !== this.model.version) return undefined;
@@ -118,7 +120,7 @@ export class ViewLines extends Disposable {
 		const visualLine = projection.lineAt(visualLineIndex);
 		const renderedLine = this.layer.renderedLines.get(visualLineIndex);
 		if (!visualLine || !renderedLine) return undefined;
-		const offset = position.columnIndex - visualLine.startColumn;
+		const offset = position.column - 1 - visualLine.startColumn;
 		if (!renderedLine.hasTextOffset(offset)) return undefined;
 		const left = renderedLine.getCaretLeft(offset);
 		return left === undefined ? undefined : Object.freeze({ visualLineIndex, left, isRightToLeft: renderedLine.isRightToLeft() });
@@ -139,7 +141,7 @@ export class ViewLines extends Disposable {
 	}
 
 	private projectLineText(line: ViewLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
-		const fullText = this.model.getLineContent(visualLine.logicalLineIndex);
+		const fullText = this.model.getLineContent((visualLine.logicalLineIndex) + 1);
 		const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
 		const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
 		line.renderText(
@@ -394,7 +396,7 @@ export class LineWidthIndex extends Disposable {
 
 	private measure(lineIndex: number): number {
 		const width = this.measurer.measureLineWidth(
-			this.model.getLineContent(lineIndex),
+			this.model.getLineContent((lineIndex) + 1),
 		);
 		if (!Number.isFinite(width) || width < 0) {
 			throw new RangeError("Stanza line width must be finite and non-negative");
@@ -442,13 +444,13 @@ function groupAffectedLines(
 ): AffectedLineGroup[] {
 	const effects = change.changes
 		.map((contentChange) => ({
-			oldStartLineIndex: contentChange.range.start.lineIndex,
-			oldEndLineIndex: contentChange.range.end.lineIndex,
+			oldStartLineIndex: contentChange.range.startLineNumber - 1,
+			oldEndLineIndex: contentChange.range.endLineNumber - 1,
 			lineDelta:
 				lineFeedCount(contentChange.text) -
 				(
-					contentChange.range.end.lineIndex -
-					contentChange.range.start.lineIndex
+					contentChange.range.getEndPosition().lineNumber -
+					contentChange.range.getStartPosition().lineNumber
 				),
 		}))
 		.sort((left, right) =>

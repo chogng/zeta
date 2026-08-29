@@ -47,8 +47,8 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 			renderSegment(
 				fragment,
 				segmentText,
-				startPosition.lineIndex,
-				startPosition.columnIndex,
+				startPosition.lineNumber - 1,
+				startPosition.column - 1,
 				this.options,
 			);
 		}

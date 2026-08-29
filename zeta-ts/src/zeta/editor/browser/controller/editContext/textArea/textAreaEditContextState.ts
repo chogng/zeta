@@ -1,5 +1,6 @@
 import { commonPrefixLength, commonSuffixLength } from '../../../../../base/common/strings.js';
-import { type TextRange, type TextPosition } from '../../../../common/core/text.js';
+import { type Position } from '../../../../common/core/position.js';
+import { type Range } from '../../../../common/core/range.js';
 import { type ISimpleScreenReaderContentState } from '../screenReaderUtils.js';
 
 export const _debugComposition = false;
@@ -31,7 +32,7 @@ export class TextAreaState {
 		/** Direction-aware selection end inside value. */
 		readonly selectionEnd: number,
 		/** The editor range represented by the selected content, if any. */
-		readonly selection: TextRange | null,
+		readonly selection: Range | null,
 		/** Visible line count before the selection in the projected textarea value. */
 		readonly newlineCountBeforeSelection: number | undefined,
 	) {}
@@ -74,21 +75,21 @@ export class TextAreaState {
 		if (select) textArea.setSelectionRange(reason, this.selectionStart, this.selectionEnd);
 	}
 
-	deduceEditorPosition(offset: number): [TextPosition | null, number, number] {
+	deduceEditorPosition(offset: number): [Position | null, number, number] {
 		if (offset <= this.selectionStart) {
-			return this.finishDeduceEditorPosition(this.selection?.start ?? null, this.value.substring(offset, this.selectionStart), -1);
+			return this.finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, this.value.substring(offset, this.selectionStart), -1);
 		}
 		if (offset >= this.selectionEnd) {
-			return this.finishDeduceEditorPosition(this.selection?.end ?? null, this.value.substring(this.selectionEnd, offset), 1);
+			return this.finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(this.selectionEnd, offset), 1);
 		}
 		const textBeforeOffset = this.value.substring(this.selectionStart, offset);
 		if (!textBeforeOffset.includes(String.fromCharCode(8230))) {
-			return this.finishDeduceEditorPosition(this.selection?.start ?? null, textBeforeOffset, 1);
+			return this.finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, textBeforeOffset, 1);
 		}
-		return this.finishDeduceEditorPosition(this.selection?.end ?? null, this.value.substring(offset, this.selectionEnd), -1);
+		return this.finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(offset, this.selectionEnd), -1);
 	}
 
-	private finishDeduceEditorPosition(anchor: TextPosition | null, deltaText: string, signum: number): [TextPosition | null, number, number] {
+	private finishDeduceEditorPosition(anchor: Position | null, deltaText: string, signum: number): [Position | null, number, number] {
 		let lineFeedCount = 0;
 		for (const character of deltaText) {
 			if (character === '\n') lineFeedCount += 1;
@@ -169,7 +170,7 @@ export class TextAreaState {
 			state.value,
 			state.selectionStart,
 			state.selectionEnd,
-			state.selection.range,
+			state.selection,
 			state.newlineCountBeforeSelection,
 		);
 	}

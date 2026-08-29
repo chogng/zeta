@@ -1,4 +1,4 @@
-import { type TextSnapshot } from "../core/text.js";
+import { type TextSnapshot } from "../core/textChange.js";
 import { type TextModel } from "../model/textModel.js";
 
 /** Common immutable request context passed to a language feature provider. */

@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
 
-const position = TextPosition.at;
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
 	startColumn: number,
 	endColumn: number,
-): TextRange => TextRange.from(
+): Range => Range.fromPositions(
 	position(0, startColumn),
 	position(0, endColumn),
 );
@@ -157,7 +158,7 @@ test("TrackedRange validates model positions and disposal", () => {
 	const model = new TextModel("abc");
 	assert.throws(
 		() => model.trackRange(
-			TextRange.emptyAt(position(1, 0)),
+			Range.fromPositions(position(1, 0)),
 			TrackedRangeStickiness.NeverGrowsAtEdges,
 		),
 		/lineIndex/,

@@ -8,7 +8,7 @@ import type { ServerNotification } from "../../../../../../../generated/app-serv
 import { AppServerExtensionService } from "../../browser/appServerExtensionService.js";
 import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from "../../common/extensionService.js";
 import { parseJsonc } from "../../common/jsonc.js";
-import { parseExtensionSnippetFile } from "../../common/extensionSnippetProvider.js";
+import { createExtensionSnippetProvider, parseExtensionSnippetFile } from "../../common/extensionSnippetProvider.js";
 import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
 import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
 import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapterFactory.js";
@@ -18,6 +18,10 @@ import { TextMateGrammarService } from "../../../textMate/common/textMateGrammar
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { URI } from "../../../../../base/common/uri.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
+import { LanguageCompletionTriggerKind } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { TextModel } from "../../../../../editor/common/model/textModel.js";
 
 const descriptorManifest = JSON.stringify({
 	name: "demo",
@@ -38,6 +42,25 @@ const descriptor: ExtensionDescriptor = Object.freeze({
 	manifestJson: descriptorManifest,
 	manifestSha256: digestText(descriptorManifest),
 	packageSha256: `sha256:${"b".repeat(64)}`,
+});
+
+test("extension snippets use one-based editor positions and ranges", async () => {
+	const provider = createExtensionSnippetProvider("zeta.demo.snippets", "typescript", [{
+		name: "log",
+		prefixes: ["log"],
+		body: "console.log($1)",
+	}]);
+	using model = new TextModel("first line\n  lo");
+	const position = new Position(2, 5);
+	const result = await provider.provideCompletions({
+		requestId: 1,
+		languageId: "typescript",
+		position,
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: model.createSnapshot(),
+	}, new AbortController().signal);
+
+	assert.deepEqual(result?.items[0]?.range, new Range(2, 3, 2, 5));
 });
 
 test("parses TextMate grammar contributions and normalizes package-relative paths", () => {

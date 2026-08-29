@@ -1,95 +1,184 @@
-import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
+/**
+ * A position in the editor. This interface is suitable for serialization.
+ */
 export interface IPosition {
-	readonly lineIndex: number;
-	readonly columnIndex: number;
+	/**
+	 * line number (starts at 1)
+	 */
+	readonly lineNumber: number;
+	/**
+	 * column (the first character in a line is between column 1 and column 2)
+	 */
+	readonly column: number;
 }
 
 /**
- * A zero-based position in normalized UTF-16 text.
- *
- * `lineIndex` and `columnIndex` are explicit about their indexing convention.
- * Columns count UTF-16 code units, matching JavaScript string offsets and DOM
- * selection APIs.
+ * A position in the editor.
  */
-export class TextPosition {
-	private constructor(
-		readonly lineIndex: number,
-		readonly columnIndex: number,
-	) {
-		Object.freeze(this);
+export class Position {
+	/**
+	 * line number (starts at 1)
+	 */
+	public readonly lineNumber: number;
+	/**
+	 * column (the first character in a line is between column 1 and column 2)
+	 */
+	public readonly column: number;
+
+	constructor(lineNumber: number, column: number) {
+		this.lineNumber = lineNumber;
+		this.column = column;
 	}
 
-	static at(lineIndex: number, columnIndex: number): TextPosition {
-		assertIndex(lineIndex, "lineIndex");
-		assertIndex(columnIndex, "columnIndex");
-		return new TextPosition(lineIndex, columnIndex);
+	/**
+	 * Create a new position from this position.
+	 *
+	 * @param newLineNumber new line number
+	 * @param newColumn new column
+	 */
+	with(newLineNumber: number = this.lineNumber, newColumn: number = this.column): Position {
+		if (newLineNumber === this.lineNumber && newColumn === this.column) {
+			return this;
+		} else {
+			return new Position(newLineNumber, newColumn);
+		}
 	}
 
-	static lift(position: IPosition): TextPosition { return position instanceof TextPosition ? position : TextPosition.at(position.lineIndex, position.columnIndex); }
-
-	static isIPosition(value: unknown): value is IPosition {
-		if (!value || typeof value !== "object") return false;
-		const position = value as Partial<IPosition>;
-		return typeof position.lineIndex === "number" && typeof position.columnIndex === "number";
+	/**
+	 * Derive a new position from this position.
+	 *
+	 * @param deltaLineNumber line number delta
+	 * @param deltaColumn column delta
+	 */
+	delta(deltaLineNumber: number = 0, deltaColumn: number = 0): Position {
+		return this.with(Math.max(1, this.lineNumber + deltaLineNumber), Math.max(1, this.column + deltaColumn));
 	}
 
-	static equals(left: IPosition | undefined, right: IPosition | undefined): boolean {
-		return left === right || Boolean(left && right && TextPosition.compare(left, right) === 0);
+	/**
+	 * Test if this position equals other position
+	 */
+	public equals(other: IPosition): boolean {
+		return Position.equals(this, other);
 	}
 
-	static compare(left: IPosition, right: IPosition): number {
-		return left.lineIndex - right.lineIndex || left.columnIndex - right.columnIndex;
-	}
-
-	compareTo(other: IPosition): number {
-		return this.lineIndex - other.lineIndex ||
-			this.columnIndex - other.columnIndex;
-	}
-
-	with(lineIndex = this.lineIndex, columnIndex = this.columnIndex): TextPosition {
-		if (lineIndex === this.lineIndex && columnIndex === this.columnIndex) return this;
-		return TextPosition.at(lineIndex, columnIndex);
-	}
-
-	delta(lineDelta = 0, columnDelta = 0): TextPosition {
-		return TextPosition.at(
-			Math.max(0, this.lineIndex + lineDelta),
-			Math.max(0, this.columnIndex + columnDelta),
+	/**
+	 * Test if position `a` equals position `b`
+	 */
+	public static equals(a: IPosition | null, b: IPosition | null): boolean {
+		if (!a && !b) {
+			return true;
+		}
+		return (
+			!!a &&
+			!!b &&
+			a.lineNumber === b.lineNumber &&
+			a.column === b.column
 		);
 	}
 
-	clone(): TextPosition { return this; }
-
-	equals(other: IPosition): boolean {
-		return this.compareTo(other) === 0;
+	/**
+	 * Test if this position is before other position.
+	 * If the two positions are equal, the result will be false.
+	 */
+	public isBefore(other: IPosition): boolean {
+		return Position.isBefore(this, other);
 	}
 
-	isBefore(other: IPosition): boolean {
-		return this.compareTo(other) < 0;
+	/**
+	 * Test if position `a` is before position `b`.
+	 * If the two positions are equal, the result will be false.
+	 */
+	public static isBefore(a: IPosition, b: IPosition): boolean {
+		if (a.lineNumber < b.lineNumber) {
+			return true;
+		}
+		if (b.lineNumber < a.lineNumber) {
+			return false;
+		}
+		return a.column < b.column;
 	}
 
-	isBeforeOrEqual(other: IPosition): boolean {
-		return this.compareTo(other) <= 0;
+	/**
+	 * Test if this position is before other position.
+	 * If the two positions are equal, the result will be true.
+	 */
+	public isBeforeOrEqual(other: IPosition): boolean {
+		return Position.isBeforeOrEqual(this, other);
 	}
 
-	isAfter(other: IPosition): boolean {
-		return this.compareTo(other) > 0;
+	/**
+	 * Test if position `a` is before position `b`.
+	 * If the two positions are equal, the result will be true.
+	 */
+	public static isBeforeOrEqual(a: IPosition, b: IPosition): boolean {
+		if (a.lineNumber < b.lineNumber) {
+			return true;
+		}
+		if (b.lineNumber < a.lineNumber) {
+			return false;
+		}
+		return a.column <= b.column;
 	}
 
-	isAfterOrEqual(other: IPosition): boolean {
-		return this.compareTo(other) >= 0;
+	/**
+	 * A function that compares positions, useful for sorting
+	 */
+	public static compare(a: IPosition, b: IPosition): number {
+		const aLineNumber = a.lineNumber | 0;
+		const bLineNumber = b.lineNumber | 0;
+
+		if (aLineNumber === bLineNumber) {
+			const aColumn = a.column | 0;
+			const bColumn = b.column | 0;
+			return aColumn - bColumn;
+		}
+
+		return aLineNumber - bLineNumber;
 	}
 
-	toString(): string {
-		return `(${this.lineIndex},${this.columnIndex})`;
+	/**
+	 * Clone this position.
+	 */
+	public clone(): Position {
+		return new Position(this.lineNumber, this.column);
 	}
 
-	toJSON(): IPosition { return { lineIndex: this.lineIndex, columnIndex: this.columnIndex }; }
-}
+	/**
+	 * Convert to a human-readable representation.
+	 */
+	public toString(): string {
+		return '(' + this.lineNumber + ',' + this.column + ')';
+	}
 
-function assertIndex(value: number, name: string): void {
-	if (!isNonNegativeSafeInteger(value)) {
-		throw new RangeError(`${name} must be a non-negative safe integer`);
+	// ---
+
+	/**
+	 * Create a `Position` from an `IPosition`.
+	 */
+	public static lift(pos: IPosition): Position {
+		return new Position(pos.lineNumber, pos.column);
+	}
+
+	/**
+	 * Test if `obj` is an `IPosition`.
+	 */
+	public static isIPosition(obj: unknown): obj is IPosition {
+		return (
+			!!obj
+			&& (typeof (obj as IPosition).lineNumber === 'number')
+			&& (typeof (obj as IPosition).column === 'number')
+		);
+	}
+
+	public toJSON(): IPosition {
+		return {
+			lineNumber: this.lineNumber,
+			column: this.column
+		};
 	}
 }

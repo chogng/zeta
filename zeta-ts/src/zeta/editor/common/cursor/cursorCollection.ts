@@ -1,7 +1,10 @@
+import { Position } from "../core/position.js";
 import { type TextSelectionOffsets } from '../commands/editorEditCommand.js';
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
-import { TextSelection, TextSelectionSet } from '../core/selection.js';
-import { normalizeTextLineEndings, type TextEdit } from '../core/text.js';
+import { Selection } from '../core/selection.js';
+import { SelectionSet } from './selectionSet.js';
+import { normalizeTextLineEndings } from '../core/textChange.js';
+import { type TextEdit } from '../core/editOperation.js';
 import { TextModel } from '../model/textModel.js';
 import { Cursor } from './oneCursor.js';
 
@@ -10,16 +13,16 @@ export class CursorCollection extends Disposable {
 	private cursors: Cursor[] = [];
 	private primaryIndex = 0;
 
-	constructor(private readonly model: TextModel, selections: TextSelectionSet) {
+	constructor(private readonly model: TextModel, selections: SelectionSet) {
 		super();
 		this.setSelections(selections);
 	}
 
-	public getSelections(): TextSelectionSet {
-		return TextSelectionSet.withPrimary(this.cursors.map(cursor => cursor.selection), this.primaryIndex);
+	public getSelections(): SelectionSet {
+		return SelectionSet.withPrimary(this.cursors.map(cursor => cursor.selection), this.primaryIndex);
 	}
 
-	public setSelections(selections: TextSelectionSet): void {
+	public setSelections(selections: SelectionSet): void {
 		CursorCollection.validateSelectionSet(this.model, selections);
 		this.resources.clear();
 		this.cursors = selections.selections.map(selection => {
@@ -33,16 +36,16 @@ export class CursorCollection extends Disposable {
 	public static calculateResultLength(model: TextModel, edits: readonly TextEdit[]): number {
 		let length = model.createSnapshot().length;
 		for (const edit of edits) {
-			const startOffset = model.offsetAt(edit.range.start);
-			const endOffset = model.offsetAt(edit.range.end);
+			const startOffset = model.offsetAt(edit.range.getStartPosition());
+			const endOffset = model.offsetAt(edit.range.getEndPosition());
 			length += normalizeTextLineEndings(edit.text).length - (endOffset - startOffset);
 		}
 		return length;
 	}
 
-	public static selectionSetFromOffsets(model: TextModel, selections: readonly TextSelectionOffsets[], primarySelectionIndex: number): TextSelectionSet {
-		return TextSelectionSet.withPrimary(
-			selections.map(selection => TextSelection.from(
+	public static selectionSetFromOffsets(model: TextModel, selections: readonly TextSelectionOffsets[], primarySelectionIndex: number): SelectionSet {
+		return SelectionSet.withPrimary(
+			selections.map(selection => Selection.fromPositions(
 				model.positionAt(selection.anchorOffset),
 				model.positionAt(selection.activeOffset),
 			)),
@@ -61,19 +64,19 @@ export class CursorCollection extends Disposable {
 		}
 	}
 
-	public static validateSelectionSet(model: TextModel, selections: TextSelectionSet): void {
+	public static validateSelectionSet(model: TextModel, selections: SelectionSet): void {
 		for (const selection of selections.selections) {
-			model.offsetAt(selection.anchor);
-			model.offsetAt(selection.active);
+			model.offsetAt(selection.getSelectionStart());
+			model.offsetAt(selection.getPosition());
 		}
 	}
 
-	public static selectionsEqual(left: TextSelectionSet, right: TextSelectionSet): boolean {
+	public static selectionsEqual(left: SelectionSet, right: SelectionSet): boolean {
 		return left.primaryIndex === right.primaryIndex &&
 			left.selections.length === right.selections.length &&
 			left.selections.every((selection, index) => {
 				const other = right.selections[index]!;
-				return selection.anchor.compareTo(other.anchor) === 0 && selection.active.compareTo(other.active) === 0;
+				return Position.compare(selection.getSelectionStart(), other.getSelectionStart()) === 0 && Position.compare(selection.getPosition(), other.getPosition()) === 0;
 			});
 	}
 }

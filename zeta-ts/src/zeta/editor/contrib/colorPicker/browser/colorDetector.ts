@@ -1,6 +1,6 @@
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { MutableDisposable, Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { type TextPosition } from '../../../common/core/text.js';
+import { type Position } from '../../../common/core/position.js';
 import { type TextDecorationId, TextDecorationCollection, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
@@ -51,7 +51,7 @@ export class ColorDetector extends Disposable {
 		return this.detectedCount > this.options.limit;
 	}
 
-	findAtPosition(position: TextPosition): ColorData | undefined {
+	findAtPosition(position: Position): ColorData | undefined {
 		const decoration = this.decorations.decorations.find(candidate => candidate.range.containsPosition(position));
 		return decoration ? colorDataAtCurrentRange(decoration) : undefined;
 	}
@@ -105,7 +105,7 @@ function colorToHex8(color: { readonly r: number; readonly g: number; readonly b
 
 function colorDataAtCurrentRange(decoration: TextDecorationSnapshot<ColorData>): ColorData {
 	const data = decoration.metadata;
-	if (data.information.range.equals(decoration.range)) return data;
+	if (data.information.range.equalsRange(decoration.range)) return data;
 	return Object.freeze({
 		provider: data.provider,
 		information: Object.freeze({ color: data.information.color, range: decoration.range }),

@@ -1,4 +1,4 @@
-import { TextPosition } from "../core/text.js";
+import { Position } from "../core/position.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorScrollPosition } from "../viewModel.js";
@@ -40,7 +40,7 @@ export enum EditorHitTargetKind {
 
 export interface EditorHitTarget {
 	readonly kind: EditorHitTargetKind;
-	readonly position: TextPosition;
+	readonly position: Position;
 }
 
 /** @internal */
@@ -73,14 +73,14 @@ export function hitTestStanzaEditorPoint(
 		return target(
 			EditorHitTargetKind.AfterLines,
 			lastLineIndex,
-			model.getLineContent(lastLineIndex).length,
+			model.getLineContent((lastLineIndex) + 1).length,
 		);
 	}
 	if (point.left < metrics.gutterWidth) {
 		return target(EditorHitTargetKind.Gutter, lineIndex, 0);
 	}
 
-	const line = model.getLineContent(lineIndex);
+	const line = model.getLineContent((lineIndex) + 1);
 	const textOffset =
 		point.left + layout.scrollPosition.left - metrics.textLeft;
 	if (textOffset < 0 || line.length === 0) {
@@ -124,13 +124,13 @@ export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: Edi
 	const visualLineIndex = metrics.getLineIndexAtVerticalOffset?.(contentTop + (metrics.paddingTop ?? 0)) ?? Math.floor(contentTop / layout.lineHeight);
 	if (visualLineIndex >= projection.visualLineCount) {
 		const logicalLineIndex = model.lineCount - 1;
-		return target(EditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent(logicalLineIndex).length);
+		return target(EditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent((logicalLineIndex) + 1).length);
 	}
 	const visualLine = projection.lineAt(visualLineIndex)!;
 	if (point.left < metrics.gutterWidth) {
 		return target(EditorHitTargetKind.Gutter, visualLine.logicalLineIndex, 0);
 	}
-	const fullLine = model.getLineContent(visualLine.logicalLineIndex);
+	const fullLine = model.getLineContent((visualLine.logicalLineIndex) + 1);
 	const text = fullLine.slice(visualLine.startColumn, visualLine.endColumn);
 	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft - (visualLine.wrappedTextIndentWidth ?? 0);
 	if (textOffset < 0 || text.length === 0) {
@@ -177,7 +177,7 @@ function target(
 ): EditorHitTarget {
 	return Object.freeze({
 		kind,
-		position: TextPosition.at(lineIndex, columnIndex),
+		position: new Position((lineIndex) + 1, (columnIndex) + 1),
 	});
 }
 

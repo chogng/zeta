@@ -3,8 +3,9 @@ import { isCancellationError } from "../../../../base/common/errors.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextRange, type TextSnapshot } from "../../../common/core/text.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Range } from "../../../common/core/range.js";
+import { type TextSnapshot } from "../../../common/core/textChange.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { expandSmartSelection } from "../common/smartSelect.js";
@@ -12,7 +13,7 @@ import { SelectionRangeService } from "../common/selectionRanges.js";
 
 /** Routes the editor smart-select shortcut into the DOM-free range expansion policy. */
 export class SmartSelectController extends Disposable {
-	private readonly history: TextSelectionSet[] = [];
+	private readonly history: SelectionSet[] = [];
 	private request: AbortController | undefined;
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
@@ -32,7 +33,7 @@ export class SmartSelectController extends Disposable {
 			const before = this.selections.selections;
 			this.request?.abort();
 			this.request = undefined;
-			if (before.selections.every(selection => selection.collapsed)) {
+			if (before.selections.every(selection => selection.isEmpty())) {
 				this.commitExpansion(before, this.viewport.textModel.createSnapshot(), []);
 				return;
 			}
@@ -45,13 +46,13 @@ export class SmartSelectController extends Disposable {
 			this.request = undefined;
 			const previous = this.history.pop();
 			if (previous) this.selections.setSelections(previous);
-			this.viewport.revealPosition(this.selections.selections.primary.active);
+			this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 		}
 	}
 
-	private async expand(request: AbortController, before: TextSelectionSet, snapshot: TextSnapshot): Promise<void> {
+	private async expand(request: AbortController, before: SelectionSet, snapshot: TextSnapshot): Promise<void> {
 		try {
-			const syntaxRanges = await this.selectionRanges.provideSelectionRanges(this.languageId, before.selections.map(selection => selection.range), request.signal);
+			const syntaxRanges = await this.selectionRanges.provideSelectionRanges(this.languageId, before.selections.map(selection => selection), request.signal);
 			if (request.signal.aborted || this.request !== request) return;
 			this.commitExpansion(before, snapshot, syntaxRanges);
 		} catch (error) {
@@ -64,11 +65,11 @@ export class SmartSelectController extends Disposable {
 		}
 	}
 
-	private commitExpansion(before: TextSelectionSet, snapshot: TextSnapshot, syntaxRanges: readonly TextRange[]): void {
+	private commitExpansion(before: SelectionSet, snapshot: TextSnapshot, syntaxRanges: readonly Range[]): void {
 		if (this.viewport.textModel.version !== snapshot.version || !this.selections.selections.equals(before)) return;
 		this.history.push(before);
 		this.selections.setSelections(before.map(selection => expandSmartSelection(this.viewport.textModel, selection, this.wordPattern?.(), syntaxRanges)));
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 }
 

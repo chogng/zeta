@@ -1,4 +1,5 @@
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageCompletionItemKind } from "../../../../../editor/common/languages/completion/languageCompletions.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import type { SkillSelectorCatalog } from "../../common/skillSelectors.js";
@@ -11,15 +12,15 @@ export function createStanzaChatSkillCompletionProvider(catalog: SkillSelectorCa
 		languageIds: Object.freeze([CHAT_INPUT_LANGUAGE_ID]),
 		triggerCharacters: Object.freeze(["$"]),
 		provideCompletions: (request: LanguageCompletionProviderRequest) => {
-			const line = request.snapshot.getText().split("\n")[request.position.lineIndex] ?? "";
-			const token = activeSkillToken(line, request.position.columnIndex);
+			const line = request.snapshot.getText().split("\n")[request.position.lineNumber - 1] ?? "";
+			const token = activeSkillToken(line, request.position.column - 1);
 			if (!token) {
 				return emptyCompletionResult();
 			}
 			const matches = catalog.matching(token.query);
-			const range = TextRange.from(
-				TextPosition.at(request.position.lineIndex, token.startColumn),
-				TextPosition.at(request.position.lineIndex, token.endColumn),
+			const range = Range.fromPositions(
+				new Position(request.position.lineNumber, token.startColumn + 1),
+				new Position(request.position.lineNumber, token.endColumn + 1),
 			);
 			return Object.freeze({
 				items: Object.freeze(matches.map((skill, index) => Object.freeze({

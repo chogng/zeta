@@ -6,8 +6,9 @@ import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -31,7 +32,7 @@ test("Go-to-bracket shortcut uses the shared structural bracket index", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("(value)");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
@@ -44,7 +45,7 @@ test("Go-to-bracket shortcut uses the shared structural bracket index", () => {
 	const jump = keydown(dom.window, "\\", { ctrlKey: true, shiftKey: true });
 	input.dispatchEvent(jump);
 	assert.equal(jump.defaultPrevented, true);
-	assert.deepEqual(selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 6)));
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (6) + 1)));
 
 	dom.window.close();
 });
@@ -54,7 +55,7 @@ test("Bracket navigation controller rejects cross-model wiring and unrelated cho
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("()");
 	using other = new TextModel("()");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using otherLexical = new LanguageLexicalContextIndex(other, "typescript", configurations);

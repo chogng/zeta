@@ -10,8 +10,8 @@ export function createDiffEditorRow(ownerDocument: Document, row: LineDiffRow, m
 	element.style.height = `${lineHeight}px`;
 	element.style.lineHeight = `${lineHeight}px`;
 	element.append(
-		createDiffCell(ownerDocument, 'original', row.kind, row.originalLineIndex, row.originalLineIndex === undefined ? undefined : model.original.getLineContent(row.originalLineIndex), row.originalChanges, showInlineChanges),
-		createDiffCell(ownerDocument, 'modified', row.kind, row.modifiedLineIndex, row.modifiedLineIndex === undefined ? undefined : model.modified.getLineContent(row.modifiedLineIndex), row.modifiedChanges, showInlineChanges),
+		createDiffCell(ownerDocument, 'original', row.kind, row.originalLineIndex, row.originalLineIndex === undefined ? undefined : model.original.getLineContent((row.originalLineIndex) + 1), row.originalChanges, showInlineChanges),
+		createDiffCell(ownerDocument, 'modified', row.kind, row.modifiedLineIndex, row.modifiedLineIndex === undefined ? undefined : model.modified.getLineContent((row.modifiedLineIndex) + 1), row.modifiedChanges, showInlineChanges),
 	);
 	return element;
 }

@@ -1,32 +1,33 @@
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from './cursorMoveOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
-import { TextSelectionSet } from "../core/selection.js";
-import { TextPosition, TextRange } from "../core/text.js";
+import { SelectionSet } from "./selectionSet.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextWordSegments } from "../core/textSegmentation.js";
 
 /** Deletes each selection or the preceding editor word segment. */
 export class WordOperations {
-	public static deleteWordLeft(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
+	public static deleteWordLeft(model: TextModel, selections: SelectionSet, wordPattern?: RegExp): EditorEditCommand {
 		return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordLeft, EditorCommandHistoryMode.CoalesceBackspace, wordPattern);
 	}
 
 /** Deletes each selection or the following editor word segment. */
-	public static deleteWordRight(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
+	public static deleteWordRight(model: TextModel, selections: SelectionSet, wordPattern?: RegExp): EditorEditCommand {
 		return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordRight, EditorCommandHistoryMode.CoalesceDelete, wordPattern);
 	}
 
-	public static getWordSelectionRange(model: TextModel, position: TextPosition, wordPattern?: RegExp): TextRange {
+	public static getWordSelectionRange(model: TextModel, position: Position, wordPattern?: RegExp): Range {
 		model.offsetAt(position);
-		const line = model.getLineContent(position.lineIndex);
-		if (line.length === 0) return TextRange.emptyAt(position);
-		const probe = position.columnIndex === line.length ? line.length - 1 : position.columnIndex;
+		const line = model.getLineContent(position.lineNumber);
+		if (line.length === 0) return Range.fromPositions(position);
+		const probe = position.column === line.length + 1 ? line.length - 1 : position.column - 1;
 		const patternRange = wordPatternRange(line, probe, wordPattern);
-		if (patternRange) return TextRange.from(TextPosition.at(position.lineIndex, patternRange.start), TextPosition.at(position.lineIndex, patternRange.end));
+		if (patternRange) return Range.fromPositions(new Position(position.lineNumber, patternRange.start + 1), new Position(position.lineNumber, patternRange.end + 1));
 		const segment = getTextWordSegments(line).find(candidate => probe >= candidate.start && probe < candidate.end);
 		if (!segment) throw new RangeError('Word-selection probe is outside the line');
-		return TextRange.from(TextPosition.at(position.lineIndex, segment.start), TextPosition.at(position.lineIndex, segment.end));
+		return Range.fromPositions(new Position(position.lineNumber, segment.start + 1), new Position(position.lineNumber, segment.end + 1));
 	}
 
 	public static getTextWordRanges(text: string, wordPattern?: RegExp): readonly { readonly start: number; readonly end: number }[] {
@@ -35,25 +36,25 @@ export class WordOperations {
 	}
 }
 
-function createDeleteWordCommand(model: TextModel, selections: TextSelectionSet, navigation: EditorCursorNavigationCommand, historyMode: EditorCommandHistoryMode, wordPattern: RegExp | undefined): EditorEditCommand {
+function createDeleteWordCommand(model: TextModel, selections: SelectionSet, navigation: EditorCursorNavigationCommand, historyMode: EditorCommandHistoryMode, wordPattern: RegExp | undefined): EditorEditCommand {
 	return TypeWithoutInterceptorsOperation.getEdits(
 		model,
 		selections,
 		selections.selections.map(selection => {
-			const range = selection.collapsed
-				? MoveOperations.navigate(model, TextSelectionSet.single(selection), {
+			const range = selection.isEmpty()
+				? MoveOperations.navigate(model, SelectionSet.single(selection), {
 					command: navigation,
 					mode: EditorCursorNavigationMode.Extend,
 					...(wordPattern ? { wordPattern } : {}),
-				}).selections.primary.range
-				: selection.range;
+				}).selections.primary
+				: selection;
 			return emptySelectionEdit(range);
 		}),
 		historyMode,
 	);
 }
 
-function emptySelectionEdit(range: TextRange): SelectionEdit {
+function emptySelectionEdit(range: Range): SelectionEdit {
 	return {
 		range,
 		text: "",

@@ -4,7 +4,7 @@ import { BracketColorizationSource } from "../../browser/bracketColorizationPres
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
-import { TextRange } from "../../../../common/core/text.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Bracket colorization follows lexical nesting and excludes brackets in strings", () => {
@@ -33,7 +33,7 @@ test("Bracket colorization invalidates its cached nesting after model edits", ()
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	const colors = new BracketColorizationSource(bracketPairs);
 	assert.deepEqual(colors.getLineBrackets(1), [{ startColumn: 0, endColumn: 1, level: 1 }]);
-	model.applyEdits([{ range: TextRange.emptyAt(model.positionAt(0)), text: "{\n" }]);
+	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0)), text: "{\n" }]);
 	assert.deepEqual(colors.getLineBrackets(2), [{ startColumn: 0, endColumn: 1, level: 2 }]);
 });
 
@@ -47,8 +47,8 @@ test('Bracket guide projection remains available when bracket colors are disable
 
 	assert.deepEqual(guides.getLineBrackets(0), []);
 	assert.deepEqual(guides.getBracketGuides(1, 1), [{
-		opening: TextRange.from(model.positionAt(0), model.positionAt(1)),
-		closing: TextRange.from(model.positionAt(model.getText().length - 1), model.positionAt(model.getText().length)),
+		opening: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
+		closing: Range.fromPositions(model.positionAt(model.getText().length - 1), model.positionAt(model.getText().length)),
 		level: 1,
 	}]);
 });

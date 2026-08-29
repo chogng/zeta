@@ -43,10 +43,10 @@ function projectStanzaDiagnosticMarginDecorations(
 	const diagnosticsByLine = new Map<number, ResolvedDecoration[]>();
 	for (const decoration of decorations) {
 		if (!DIAGNOSTIC_PRESENTATION_PRIORITY.has(decoration.presentation)) continue;
-		const startLineIndex = decoration.range.start.lineIndex;
-		const endLineIndex = decoration.range.end.columnIndex === 0 && decoration.range.end.lineIndex > startLineIndex
-			? decoration.range.end.lineIndex - 1
-			: decoration.range.end.lineIndex;
+		const startLineIndex = decoration.range.startLineNumber - 1;
+		const endLineIndex = decoration.range.endColumn === 1 && decoration.range.endLineNumber - 1 > startLineIndex
+			? decoration.range.endLineNumber - 2
+			: decoration.range.endLineNumber - 1;
 		for (let lineIndex = startLineIndex; lineIndex <= endLineIndex; lineIndex += 1) {
 			const lineDiagnostics = diagnosticsByLine.get(lineIndex) ?? [];
 			lineDiagnostics.push(decoration);

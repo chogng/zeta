@@ -15,15 +15,15 @@ test('Debug breakpoints project semantic glyph-margin decorations', () => {
 	using decorations = new DebugBreakpointDecorationProvider(debug as unknown as IDebugService, resource, model);
 
 	assert.deepEqual(decorations.glyphMarginLanes, [{ owner: 'debug-breakpoint', lane: GlyphMarginLane.Left }]);
-	assert.deepEqual(decorationState(decorations), [{ lineIndex: 1, iconId: 'breakpoint', pressed: true }]);
+	assert.deepEqual(decorationState(decorations), [{ lineNumber: 2, iconId: 'breakpoint', pressed: true }]);
 
 	debug.setBreakpoints([{ id: 'second', resource, lineNumber: 3, enabled: false, verified: false }]);
-	assert.deepEqual(decorationState(decorations), [{ lineIndex: 2, iconId: 'breakpoint', pressed: true }]);
+	assert.deepEqual(decorationState(decorations), [{ lineNumber: 3, iconId: 'breakpoint', pressed: true }]);
 });
 
 function decorationState(provider: DebugBreakpointDecorationProvider): readonly unknown[] {
 	return provider.decorations.map(decoration => ({
-		lineIndex: decoration.range.start.lineIndex,
+		lineNumber: decoration.range.getStartPosition().lineNumber,
 		iconId: decoration.glyphMargin?.icon?.id,
 		pressed: decoration.glyphMargin?.pressed,
 	}));

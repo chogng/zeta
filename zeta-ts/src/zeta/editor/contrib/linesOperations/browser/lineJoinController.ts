@@ -43,7 +43,7 @@ export class LineJoinController extends Disposable {
 		if (!isStanzaJoinLinesChord(event, this.targetOperatingSystem)) return;
 		stopEvent(event);
 		this.executeCommand(JoinLinesCommandId, () => this.selections.execute(createJoinLinesCommand(this.viewport.textModel, this.selections.selections)));
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 }
 

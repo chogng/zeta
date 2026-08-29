@@ -3,7 +3,8 @@ import test from "node:test";
 import { type DiffComputationRequest, type IDiffComputationService } from "../../../../common/diff/diffComputationService.js";
 import { DiffModel } from "../../../../common/diff/diffModel.js";
 import { LineDiffKind, type LineDiff } from "../../../../common/diff/lineDiff.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("DiffModel publishes only version-pinned computation results", async () => {
@@ -15,7 +16,7 @@ test("DiffModel publishes only version-pinned computation results", async () => 
 	assert.equal(model.state.kind, "loading");
 	const first = computationService.takeRequest();
 	original.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 6)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (6) + 1)),
 		text: "current",
 	}]);
 	const second = computationService.takeRequest();

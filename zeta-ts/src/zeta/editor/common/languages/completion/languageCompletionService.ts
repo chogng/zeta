@@ -6,7 +6,7 @@ import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult, type LanguageCompletionResultNormalizer } from "./languageCompletions.js";
 import { assertLanguageCompletionRequest, createLanguageCompletionTriggerCharacterContext, languageCompletionProviderMatches, LanguageCompletionProviderRegistry, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type RegisteredLanguageCompletionProvider } from "./languageCompletionProviders.js";
 import { assertLanguageId } from "../languageId.js";
-import { type TextPosition } from "../../core/text.js";
+import { type Position } from "../../core/position.js";
 import { type TextModel } from "../../model/textModel.js";
 import { URI } from "../../../../base/common/uri.js";
 
@@ -114,7 +114,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		return this.catalog.providers.some(provider => languageCompletionProviderMatches(provider, languageId, context));
 	}
 
-	async requestTriggerCharacter(languageId: string, position: TextPosition, triggerCharacter: string, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome | undefined> {
+	async requestTriggerCharacter(languageId: string, position: Position, triggerCharacter: string, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome | undefined> {
 		const context = createLanguageCompletionTriggerCharacterContext(triggerCharacter);
 		const modelVersion = this.model.version;
 		this.model.offsetAt(position);
@@ -134,7 +134,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		return this.request(languageId, position, context, options);
 	}
 
-	request(languageId: string, position: TextPosition, context: LanguageCompletionRequest["context"], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
+	request(languageId: string, position: Position, context: LanguageCompletionRequest["context"], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
 		const request = Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), position, context });
 		assertLanguageCompletionRequest(request);
 		this.model.offsetAt(position);
@@ -361,7 +361,7 @@ interface CompletionResolutionCache {
 	readonly items: ReadonlyMap<string, CompletionResolutionEntry>;
 }
 
-function mergeProviderResults(position: TextPosition, batches: readonly (ProviderBatch | undefined)[]): LanguageCompletionResult {
+function mergeProviderResults(position: Position, batches: readonly (ProviderBatch | undefined)[]): LanguageCompletionResult {
 	const items: LanguageCompletionItem[] = [];
 	let hasPreselection = false;
 	let isIncomplete = false;

@@ -3,7 +3,8 @@ import test from "node:test";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserBulkEditService } from "../../browser/bulkEditService.js";
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../../../../services/language/common/workspaceEditService.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 
 test("bulk edits apply directly for a single entry", async () => {
@@ -85,7 +86,7 @@ function textEdit(name: string, text: string): LanguageWorkspaceEdit {
 		entries: [{
 			kind: "textDocument",
 			resource: URI.file(`C:\\workspace\\${name}`),
-			edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text }],
+			edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text }],
 		}],
 	};
 }

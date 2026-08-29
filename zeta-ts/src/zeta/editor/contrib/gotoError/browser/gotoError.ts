@@ -3,8 +3,10 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { type Range } from "../../../common/core/range.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Moves the primary selection through current-version diagnostics with F8. */
@@ -23,14 +25,14 @@ export class DiagnosticNavigationController extends Disposable {
 		const diagnostics = this.diagnostics.decorations;
 		if (diagnostics.length === 0) return;
 		stopEvent(event);
-		const active = this.selections.selections.primary.active;
+		const active = this.selections.selections.primary.getPosition();
 		const direction = event.shiftKey ? -1 : 1;
 		const index = direction > 0
-			? diagnostics.findIndex(diagnostic => diagnostic.range.start.compareTo(active) > 0)
+			? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0)
 			: findPreviousDiagnostic(diagnostics, active);
 		const target = diagnostics[index === -1 ? (direction > 0 ? 0 : diagnostics.length - 1) : index]!;
-		this.selections.setSelections(TextSelectionSet.single(TextSelection.from(target.range.start, target.range.end)));
-		this.viewport.revealPosition(target.range.start);
+		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition())));
+		this.viewport.revealPosition(target.range.getStartPosition());
 		this.viewport.announceAccessibilityStatus(describeDiagnostic(target.metadata));
 	}
 }
@@ -41,9 +43,9 @@ function describeDiagnostic(diagnostic: LanguageDiagnostic): string {
 	return `${prefix}: ${diagnostic.message}`;
 }
 
-function findPreviousDiagnostic(diagnostics: readonly { readonly range: { readonly end: TextPosition } }[], active: TextPosition): number {
+function findPreviousDiagnostic(diagnostics: readonly { readonly range: Range }[], active: Position): number {
 	for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
-		if (diagnostics[index]!.range.end.compareTo(active) < 0) return index;
+		if (Position.compare(diagnostics[index]!.range.getEndPosition(), active) < 0) return index;
 	}
 	return -1;
 }

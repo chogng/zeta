@@ -2,7 +2,8 @@ import { DisposableStore, type IDisposable, toDisposable } from '../../../../bas
 import { LRUCache } from '../../../../base/common/map.js';
 import { URI } from '../../../../base/common/uri.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { TextPosition, TextRange } from '../../../common/core/text.js';
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import { type LanguageCodeLensProvider } from '../common/codelens.js';
 import { CodeLensModel, type CodeLensItem } from './codelens.js';
 
@@ -66,7 +67,7 @@ class CodeLensCache {
 	private store(storageService: IStorageService): void {
 		const serialized: Record<string, SerializedCacheEntry> = Object.create(null);
 		for (const [key, entry] of this.entries) {
-			const lines = new Set(entry.model.lenses.map(item => item.symbol.range.start.lineIndex));
+			const lines = new Set(entry.model.lenses.map(item => item.symbol.range.getStartPosition().lineNumber));
 			serialized[key] = { lineCount: entry.lineCount, lines: [...lines].sort((left, right) => left - right) };
 		}
 		storageService.store(StorageKey, JSON.stringify(serialized), StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -85,7 +86,7 @@ export function bindCodeLensCacheStorage(storageService: IStorageService): IDisp
 	return codeLensCache.bindStorage(storageService);
 }
 
-function createCachedItem(range: TextRange, title: string | undefined): CodeLensItem {
+function createCachedItem(range: Range, title: string | undefined): CodeLensItem {
 	return Object.freeze({
 		symbol: Object.freeze({
 			range,
@@ -111,8 +112,8 @@ function deserialize(raw: string): ReadonlyMap<string, CacheEntry> {
 		} catch {
 			continue;
 		}
-		const lines = [...new Set(candidate.lines)].filter(line => line < candidate.lineCount).sort((left, right) => left - right);
-		const lenses = lines.map(line => createCachedItem(TextRange.emptyAt(TextPosition.at(line, 0)), undefined));
+		const lines = [...new Set(candidate.lines)].filter(line => line <= candidate.lineCount).sort((left, right) => left - right);
+		const lenses = lines.map(line => createCachedItem(Range.fromPositions(new Position(line, 1)), undefined));
 		result.set(key, { lineCount: candidate.lineCount, model: new CodeLensModel(lenses) });
 	}
 	return result;
@@ -120,7 +121,7 @@ function deserialize(raw: string): ReadonlyMap<string, CacheEntry> {
 
 function isSerializedCacheEntry(value: unknown): value is SerializedCacheEntry {
 	if (!isRecord(value) || !Number.isSafeInteger(value.lineCount) || (value.lineCount as number) < 1 || !Array.isArray(value.lines)) return false;
-	return value.lines.every(line => Number.isSafeInteger(line) && line >= 0);
+	return value.lines.every(line => Number.isSafeInteger(line) && line >= 1);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

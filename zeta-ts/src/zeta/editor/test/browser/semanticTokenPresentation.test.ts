@@ -8,7 +8,8 @@ import { SemanticTokensStylingService } from '../../common/services/semanticToke
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Default resolver maps only Stanza's explicit semantic vocabulary", () => {
@@ -186,9 +187,9 @@ test("Invalid semantic line input fails before replacing existing DOM", () => {
 
 function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string, modifiers: readonly string[] = []): LanguageToken {
 	return {
-		range: TextRange.from(
-			TextPosition.at(lineIndex, startColumn),
-			TextPosition.at(lineIndex, endColumn),
+		range: Range.fromPositions(
+			new Position((lineIndex) + 1, (startColumn) + 1),
+			new Position((lineIndex) + 1, (endColumn) + 1),
 		),
 		tokenType,
 		modifiers,

@@ -36,6 +36,6 @@ export class BracketEditingController extends Disposable {
 		if (!command) return;
 		stopEvent(event);
 		this.executeCommand(RemoveBracketsCommandId, () => this.selections.execute(command));
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 }

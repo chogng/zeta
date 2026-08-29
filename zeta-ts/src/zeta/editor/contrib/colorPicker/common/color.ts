@@ -1,13 +1,14 @@
 import { type Event } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { type TextEdit, TextRange } from '../../../common/core/text.js';
+import { Range } from '../../../common/core/range.js';
+import { type TextEdit } from '../../../common/core/editOperation.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from '../../../common/languageFeatureRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
 export interface LanguageColorInformation {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly color: RGBA8;
 }
 
@@ -23,7 +24,7 @@ export interface LanguageColorRequest extends LanguageFeatureRequest {
 
 export interface LanguageColorPresentationRequest extends LanguageFeatureRequest {
 	readonly color: RGBA8;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly resource?: URI;
 }
 
@@ -107,8 +108,8 @@ export class ColorService {
 
 	private normalizeColors(values: readonly LanguageColorInformation[], provider: LanguageColorProvider): readonly ColorData[] {
 		return values.map(value => {
-			this.model.offsetAt(value.range.start);
-			this.model.offsetAt(value.range.end);
+			this.model.offsetAt(value.range.getStartPosition());
+			this.model.offsetAt(value.range.getEndPosition());
 			if (!(value.color instanceof RGBA8)) throw new TypeError('Language color provider must return RGBA8 values');
 			return Object.freeze({
 				information: Object.freeze({ range: value.range, color: value.color }),
@@ -131,7 +132,7 @@ export class DefaultDocumentColorProvider implements LanguageColorProvider {
 			const value = parseColorLiteral(match[0]);
 			if (!value || match.index === undefined) continue;
 			colors.push(Object.freeze({
-				range: TextRange.from(request.model.positionAt(match.index), request.model.positionAt(match.index + match[0].length)),
+				range: Range.fromPositions(request.model.positionAt(match.index), request.model.positionAt(match.index + match[0].length)),
 				color: value,
 			}));
 		}
@@ -257,7 +258,7 @@ function parseNumber(value: string): number {
 	return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/iu.test(value) ? Number(value) : Number.NaN;
 }
 
-function createColorPresentations(range: TextRange, color: RGBA8): readonly LanguageColorPresentation[] {
+function createColorPresentations(range: Range, color: RGBA8): readonly LanguageColorPresentation[] {
 	const alpha = rounded(color.a / 255, 3);
 	const rgb = color.a === 255 ? `rgb(${color.r}, ${color.g}, ${color.b})` : `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
 	const [hue, saturation, lightness] = rgbToHsl(color);

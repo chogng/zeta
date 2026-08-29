@@ -1,30 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TextSelection } from '../../../../common/core/selection.js';
-import { TextPosition } from '../../../../common/core/text.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { contentOffsetAtModelOffset, modelOffsetAtContentOffset, SimplePagedScreenReaderStrategy } from '../../../../browser/controller/editContext/screenReaderUtils.js';
 import { TextAreaState, type ITextAreaWrapper } from '../../../../browser/controller/editContext/textArea/textAreaEditContextState.js';
 
 test('screen-reader pages preserve endpoint text and model mappings', () => {
 	using model = new TextModel('zero\none\ntwo\nthree');
-	const selection = TextSelection.from(
-		TextPosition.at(0, 2),
-		TextPosition.at(3, 3),
+	const selection = Selection.fromPositions(
+		new Position((0) + 1, (2) + 1),
+		new Position((3) + 1, (3) + 1),
 	);
 	const state = new SimplePagedScreenReaderStrategy().fromEditorSelection(model, selection, 1, false);
 
 	assert.equal(state.value, 'zero\n…three');
-	assert.equal(modelOffsetAtContentOffset(state, state.selectionStart), model.offsetAt(selection.range.start));
-	assert.equal(modelOffsetAtContentOffset(state, state.selectionEnd, 'end'), model.offsetAt(selection.range.end));
-	const omittedOffset = model.offsetAt(TextPosition.at(2, 0));
+	assert.equal(modelOffsetAtContentOffset(state, state.selectionStart), model.offsetAt(selection.getStartPosition()));
+	assert.equal(modelOffsetAtContentOffset(state, state.selectionEnd, 'end'), model.offsetAt(selection.getEndPosition()));
+	const omittedOffset = model.offsetAt(new Position((2) + 1, (0) + 1));
 	assert.equal(
 		modelOffsetAtContentOffset(state, contentOffsetAtModelOffset(state, omittedOffset, 'start'), 'start'),
-		model.offsetAt(TextPosition.at(1, 0)),
+		model.offsetAt(new Position((1) + 1, (0) + 1)),
 	);
 	assert.equal(
 		modelOffsetAtContentOffset(state, contentOffsetAtModelOffset(state, omittedOffset, 'end'), 'end'),
-		model.offsetAt(TextPosition.at(3, 0)),
+		model.offsetAt(new Position((3) + 1, (0) + 1)),
 	);
 
 });

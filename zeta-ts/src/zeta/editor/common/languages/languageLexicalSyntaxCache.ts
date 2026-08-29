@@ -4,7 +4,9 @@ import { createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfi
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { LanguageLexicalLineScanner, type LanguageLexicalLineResult, type LanguageLexicalMultilineEvent, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "./languageResults.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../core/text.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
+import { type TextSnapshot } from "../core/textChange.js";
 
 export interface LanguageLexicalCacheUpdate {
 	readonly modelVersion: number;
@@ -31,7 +33,7 @@ interface LanguageLexicalDocumentSyntax {
 interface OpenPosition {
 	readonly token: string;
 	readonly matchingToken: string;
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly endColumn: number;
 }
 
@@ -152,7 +154,7 @@ function aggregateResults(lineResults: readonly LanguageLexicalLineResult[]): { 
 	const tokens: LanguageToken[] = [];
 	const diagnostics: LanguageDiagnostic[] = [];
 	const brackets: OpenPosition[] = [];
-	let multiline: { readonly kind: LanguageLexicalMultilineEvent["lexicalKind"]; readonly position: TextPosition; readonly endColumn: number } | undefined;
+	let multiline: { readonly kind: LanguageLexicalMultilineEvent["lexicalKind"]; readonly position: Position; readonly endColumn: number } | undefined;
 	for (let lineIndex = 0; lineIndex < lineResults.length; lineIndex += 1) {
 		const result = lineResults[lineIndex]!;
 		for (const token of result.tokens) {
@@ -169,7 +171,7 @@ function aggregateResults(lineResults: readonly LanguageLexicalLineResult[]): { 
 			}
 			if (event.kind === "multiline") {
 				if (event.action === "open") {
-					multiline = { kind: event.lexicalKind, position: TextPosition.at(lineIndex, event.columnIndex), endColumn: event.endColumn };
+					multiline = { kind: event.lexicalKind, position: new Position((lineIndex) + 1, (event.columnIndex) + 1), endColumn: event.endColumn };
 				} else {
 					multiline = undefined;
 				}
@@ -179,7 +181,7 @@ function aggregateResults(lineResults: readonly LanguageLexicalLineResult[]): { 
 				brackets.push({
 					token: event.token,
 					matchingToken: event.matchingToken,
-					position: TextPosition.at(lineIndex, event.startColumn),
+					position: new Position((lineIndex) + 1, (event.startColumn) + 1),
 					endColumn: event.endColumn,
 				});
 				continue;
@@ -193,10 +195,10 @@ function aggregateResults(lineResults: readonly LanguageLexicalLineResult[]): { 
 		}
 	}
 	if (multiline) {
-		diagnostics.push(diagnostic(TextRange.from(multiline.position, TextPosition.at(multiline.position.lineIndex, multiline.endColumn)), LanguageDiagnosticSeverity.Warning, unterminatedMultilineMessage(multiline.kind)));
+		diagnostics.push(diagnostic(Range.fromPositions(multiline.position, new Position(multiline.position.lineNumber, multiline.endColumn + 1)), LanguageDiagnosticSeverity.Warning, unterminatedMultilineMessage(multiline.kind)));
 	}
 	for (const opener of brackets) {
-		diagnostics.push(diagnostic(TextRange.from(opener.position, TextPosition.at(opener.position.lineIndex, opener.endColumn)), LanguageDiagnosticSeverity.Warning, `Unclosed bracket '${opener.token}'`));
+		diagnostics.push(diagnostic(Range.fromPositions(opener.position, new Position(opener.position.lineNumber, opener.endColumn + 1)), LanguageDiagnosticSeverity.Warning, `Unclosed bracket '${opener.token}'`));
 	}
 	return {
 		tokens: Object.freeze({ tokens: Object.freeze(tokens) }),
@@ -213,10 +215,10 @@ function unterminatedMultilineMessage(kind: LanguageLexicalMultilineEvent["lexic
 const defaultConfigurationSource = createBuiltinLanguageConfigurationSource();
 const DEFAULT_SCANNER = createLanguageLexicalLineScanner("typescript", defaultConfigurationSource.getLanguageConfiguration("typescript"));
 
-function lineRange(lineIndex: number, startColumn: number, endColumn: number): TextRange {
-	return TextRange.from(TextPosition.at(lineIndex, startColumn), TextPosition.at(lineIndex, endColumn));
+function lineRange(lineIndex: number, startColumn: number, endColumn: number): Range {
+	return Range.fromPositions(new Position((lineIndex) + 1, (startColumn) + 1), new Position((lineIndex) + 1, (endColumn) + 1));
 }
 
-function diagnostic(range: TextRange, severity: LanguageDiagnosticSeverity, message: string): LanguageDiagnostic {
+function diagnostic(range: Range, severity: LanguageDiagnosticSeverity, message: string): LanguageDiagnostic {
 	return Object.freeze({ range, severity, message, source: "language.lexical" });
 }

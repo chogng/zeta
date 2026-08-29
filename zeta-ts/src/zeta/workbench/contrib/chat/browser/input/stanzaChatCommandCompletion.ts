@@ -1,6 +1,7 @@
 import { LanguageCompletionItemKind } from "../../../../../editor/common/languages/completion/languageCompletions.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { type SlashCommandCatalog } from "../../common/slashCommands.js";
 
 export const CHAT_INPUT_LANGUAGE_ID = "zeta-chat-input";
@@ -12,13 +13,13 @@ export function createStanzaChatCommandCompletionProvider(catalog: SlashCommandC
 		languageIds: Object.freeze([CHAT_INPUT_LANGUAGE_ID]),
 		triggerCharacters: Object.freeze(["/"]),
 		provideCompletions: (request: LanguageCompletionProviderRequest) => {
-			if (request.position.lineIndex !== 0) return undefined;
+			if (request.position.lineNumber !== 1) return undefined;
 			const line = request.snapshot.getText().split("\n", 1)[0] ?? "";
-			const prefix = line.slice(0, request.position.columnIndex);
+			const prefix = line.slice(0, request.position.column - 1);
 			if (!prefix.startsWith("/") || /\s/.test(prefix)) return emptyCompletionResult();
 			const query = prefix.slice(1);
 			const matches = catalog.matching(query);
-			const range = TextRange.from(TextPosition.at(0, 0), request.position);
+			const range = Range.fromPositions(new Position(1, 1), request.position);
 			return Object.freeze({
 				items: Object.freeze(matches.map((command, index) => Object.freeze({
 					id: command.name,

@@ -13,7 +13,8 @@ import { LanguageCompletionItemKind } from "../../common/languages/completion/la
 import { createLanguageWordCompletionProvider } from "../../common/languages/completion/languageWordCompletionProvider.js";
 import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Module wire publishes availability and controls Worker-local providers", async () => {
@@ -86,7 +87,7 @@ test("Required modules activate before the first completion request crosses the 
 		snapshot,
 		payload: Object.freeze({
 			languageId: "typescript",
-			position: TextPosition.at(1, "const connection = con".length),
+			position: new Position((1) + 1, ("const connection = con".length) + 1),
 			context: createLanguageCompletionInvokeContext(),
 		}),
 	});
@@ -129,7 +130,7 @@ test("Required-module failure discards the prewarmed Worker before the next trig
 			});
 		},
 	});
-	const position = TextPosition.at(0, model.getText().length);
+	const position = new Position((0) + 1, (model.getText().length) + 1);
 
 	await assert.rejects(
 		service.requestTriggerCharacter("typescript", position, "."),
@@ -156,7 +157,7 @@ test("Deferred completion details and cancellation cross the shared Worker port"
 				id: "console",
 				label: "console",
 				kind: LanguageCompletionItemKind.Variable,
-				range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 				insertText: "console",
 				resolveData: { symbol: "console" },
 			}],
@@ -182,7 +183,7 @@ test("Deferred completion details and cancellation cross the shared Worker port"
 	using service = new LanguageCompletionService(model, localProviders, {
 		workerFactory: () => new LanguageCompletionCatalogWorkerClient(clientPort),
 	});
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	const result = service.results.result!;
 	const target = {
 		completionRequestId: result.requestId,
@@ -260,7 +261,7 @@ function triggerProvider(): LanguageCompletionProvider {
 				id: "member",
 				label: "member",
 				kind: LanguageCompletionItemKind.Property,
-				range: TextRange.emptyAt(request.position),
+				range: Range.fromPositions(request.position),
 				insertText: "member",
 			}],
 			isIncomplete: false,

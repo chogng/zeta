@@ -1,5 +1,5 @@
 import { Disposable } from '../../../base/common/lifecycle.js';
-import { type TextPosition } from '../../common/core/text.js';
+import { type Position } from '../../common/core/position.js';
 import { LanguageFeatureProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../common/languages/languageFeatureRequest.js';
 import { type TextModel } from '../../common/model/textModel.js';
@@ -11,7 +11,7 @@ export class InlineCompletionsService extends Disposable {
 		super();
 	}
 
-	public async provideInlineCompletions(languageId: string, position: TextPosition, triggerKind: LanguageInlineCompletionsRequest['triggerKind'], signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageInlineCompletionItem[]> {
+	public async provideInlineCompletions(languageId: string, position: Position, triggerKind: LanguageInlineCompletionsRequest['triggerKind'], signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageInlineCompletionItem[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), position, triggerKind };
 		const result: LanguageInlineCompletionItem[] = [];
 		for (const provider of this.providers.getProviders(languageId)) {

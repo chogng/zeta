@@ -1,5 +1,5 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextRange } from "../../../common/core/text.js";
+import { type Range } from "../../../common/core/range.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
@@ -20,7 +20,7 @@ export interface LanguageCodeAction {
 
 export interface LanguageCodeActionRequest extends LanguageFeatureRequest {
 	readonly resource: URI;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly diagnostics: readonly LanguageDiagnostic[];
 	readonly only?: readonly string[];
 }
@@ -36,7 +36,7 @@ export class CodeActionService extends Disposable {
 		super();
 	}
 
-	async provideCodeActions(languageId: string, range: TextRange, diagnostics: readonly LanguageDiagnostic[] = [], only?: readonly string[], signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageCodeAction[]> {
+	async provideCodeActions(languageId: string, range: Range, diagnostics: readonly LanguageDiagnostic[] = [], only?: readonly string[], signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageCodeAction[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, range, diagnostics, ...(only ? { only } : {}) };
 		const result: LanguageCodeAction[] = [];
 		for (const provider of this.providers.getProviders(languageId)) {
@@ -48,7 +48,7 @@ export class CodeActionService extends Disposable {
 		return Object.freeze(result);
 	}
 
-	async resolveCodeAction(languageId: string, range: TextRange, action: LanguageCodeAction, diagnostics: readonly LanguageDiagnostic[] = [], signal: AbortSignal = new AbortController().signal): Promise<LanguageCodeAction> {
+	async resolveCodeAction(languageId: string, range: Range, action: LanguageCodeAction, diagnostics: readonly LanguageDiagnostic[] = [], signal: AbortSignal = new AbortController().signal): Promise<LanguageCodeAction> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, range, diagnostics };
 		for (const provider of this.providers.getProviders(languageId)) {
 			if (!provider.resolveCodeAction) continue;

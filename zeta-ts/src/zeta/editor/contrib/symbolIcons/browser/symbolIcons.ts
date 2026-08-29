@@ -1,6 +1,6 @@
 import "./symbolIcons.css";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { TextRange } from "../../../common/core/text.js";
+import { Range } from "../../../common/core/range.js";
 import { TextDecorationCollection, type TextDecorationId } from "../../../common/model/decorationCollection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
@@ -69,11 +69,12 @@ export class SymbolIconsController extends Disposable implements OwnedDecoration
 			this.decorationIds = this.collection.deltaDecorations(
 				this.decorationIds,
 				flatten(symbols).flatMap(symbol => {
-					const lineIndex = symbol.selectionRange.start.lineIndex;
+					const lineNumber = symbol.selectionRange.startLineNumber;
+					const lineIndex = lineNumber - 1;
 					if (seenLines.has(lineIndex)) return [];
 					seenLines.add(lineIndex);
 					return [{
-						range: TextRange.emptyAt({ lineIndex, columnIndex: 0 }),
+						range: Range.fromPositions({ lineNumber, column: 1 }),
 						stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 						metadata: Object.freeze({
 							kind: symbol.kind,

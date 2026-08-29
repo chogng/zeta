@@ -9,8 +9,10 @@ import { LanguageCompletionSessionController } from "../../common/suggestModel.j
 import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionItemKind } from "../../../../common/languages/completion/languageCompletions.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
 import { LanguageEditingAdapter } from "../../../../browser/view/viewController.js";
@@ -81,7 +83,7 @@ test("A registered trigger character requests after the text transaction", async
 			: undefined,
 		".",
 	);
-	assert.equal(requests[0]!.position.compareTo(TextPosition.at(0, 4)), 0);
+	assert.equal(Position.compare(requests[0]!.position, new Position((0) + 1, (4) + 1)), 0);
 	assert.equal(requests[0]!.snapshot.getText(), "obj.");
 });
 
@@ -102,7 +104,7 @@ test("An auto-closed trigger character requests from the caret inside its pair",
 
 	assert.equal(fixture.model.getText(), "call()");
 	assert.equal(requests.length, 1);
-	assert.equal(requests[0]!.position.compareTo(TextPosition.at(0, 5)), 0);
+	assert.equal(Position.compare(requests[0]!.position, new Position((0) + 1, (5) + 1)), 0);
 	assert.equal(requests[0]!.snapshot.getText(), "call()");
 });
 
@@ -127,7 +129,7 @@ test("Typing after an incomplete result retriggers all providers at the new vers
 		LanguageCompletionTriggerKind.Invoke,
 		LanguageCompletionTriggerKind.IncompleteRefresh,
 	]);
-	assert.equal(requests[1]!.position.compareTo(TextPosition.at(0, 4)), 0);
+	assert.equal(Position.compare(requests[1]!.position, new Position((0) + 1, (4) + 1)), 0);
 	assert.equal(requests[1]!.snapshot.getText(), "cont");
 	assert.equal(fixture.session.state!.selectedItem.label, "continue");
 });
@@ -163,7 +165,7 @@ test("Completion request wiring rejects a same-model session from another servic
 	using model = new TextModel("con");
 	using firstService = new LanguageCompletionService(model, registry);
 	using secondService = new LanguageCompletionService(model, registry);
-	using selections = controllerAt(model, TextPosition.at(0, 3));
+	using selections = controllerAt(model, new Position((0) + 1, (3) + 1));
 	using session = new LanguageCompletionSessionController(firstService.results, selections);
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	using viewport = new EditorViewport({
@@ -194,7 +196,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	const registration = registry.register(provider);
 	const model = new TextModel(text);
 	const service = new LanguageCompletionService(model, registry);
-	const selections = controllerAt(model, TextPosition.at(0, text.length));
+	const selections = controllerAt(model, new Position((0) + 1, (text.length) + 1));
 	const session = new LanguageCompletionSessionController(service.results, selections);
 	const configurations = new LanguageConfigurationRegistry();
 	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
@@ -241,8 +243,8 @@ function completionResult(request: LanguageCompletionProviderRequest, label: str
 			id: label,
 			label,
 			kind: LanguageCompletionItemKind.Keyword,
-			range: TextRange.from(
-				TextPosition.at(request.position.lineIndex, 0),
+			range: Range.fromPositions(
+				new Position(request.position.lineNumber, 1),
 				request.position,
 			),
 			insertText: label,
@@ -251,10 +253,10 @@ function completionResult(request: LanguageCompletionProviderRequest, label: str
 	};
 }
 
-function controllerAt(model: TextModel, position: TextPosition): CursorsController {
+function controllerAt(model: TextModel, position: Position): CursorsController {
 	return new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(position)),
+		SelectionSet.single(Selection.fromPositions(position)),
 	);
 }
 

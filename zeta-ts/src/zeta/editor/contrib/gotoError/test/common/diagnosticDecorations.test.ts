@@ -4,13 +4,14 @@ import { TextDecorationChangeReason } from "../../../../common/model/decorationC
 import { LanguageDiagnosticDecorationBridge } from "../../common/diagnosticDecorations.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
 import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 
-const position = TextPosition.at;
-const range = (lineIndex: number, startColumn: number, endColumn: number): TextRange => TextRange.from(
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
+const range = (lineIndex: number, startColumn: number, endColumn: number): Range => Range.fromPositions(
 	position(lineIndex, startColumn),
 	position(lineIndex, endColumn),
 );
@@ -64,7 +65,7 @@ test("Model edits clear diagnostics before decoration ranges can drift", () => {
 	using listener = bridge.decorations.onDidChange(event => events.push(event));
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(position(0, 0)),
+		range: Range.fromPositions(position(0, 0)),
 		text: "X",
 	}]);
 
@@ -90,7 +91,7 @@ test("Diagnostic bridge merges only current external diagnostics and removes dup
 	acceptDiagnostics(store, model, 1, [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, "shared")]);
 
 	assert.equal(bridge.decorations.decorations.length, 1);
-	model.applyEdits([{ range: TextRange.emptyAt(position(0, 3)), text: "d" }]);
+	model.applyEdits([{ range: Range.fromPositions(position(0, 3)), text: "d" }]);
 	assert.equal(bridge.decorations.decorations.length, 0);
 
 	external = { resource, revision: model.version, diagnostics: [diagnostic(range(0, 1, 2), LanguageDiagnosticSeverity.Warning, "fresh")] };
@@ -131,7 +132,7 @@ function acceptDiagnostics(
 }
 
 function diagnostic(
-	diagnosticRange: TextRange,
+	diagnosticRange: Range,
 	severity: LanguageDiagnosticSeverity,
 	message: string,
 ): LanguageDiagnostic {

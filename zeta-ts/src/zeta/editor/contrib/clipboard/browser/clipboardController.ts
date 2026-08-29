@@ -7,11 +7,13 @@ import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type TextSelection, type TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from '../../../common/core/text.js';
+import { type Selection } from "../../../common/core/selection.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { EditContext } from "../../../browser/controller/editContext/editContext.js";
+import { AbstractEditContext } from "../../../browser/controller/editContext/editContext.js";
 import { createClipboardCopyEvent, createClipboardPasteEvent, readEditorClipboardText, type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewparts/viewLines/viewLine.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
@@ -36,7 +38,7 @@ export enum EditorClipboardPasteMode {
 
 interface EditorClipboardEntry {
 	readonly text: string;
-	readonly sourceRange: TextRange;
+	readonly sourceRange: Range;
 	readonly pasteMode: EditorClipboardPasteMode;
 }
 
@@ -77,15 +79,15 @@ export class ClipboardController extends Disposable {
 	private asynchronousPasteRequest = 0;
 
 	constructor(
-		target: EditContext | HTMLElement,
+		target: AbstractEditContext | HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selectionController: CursorsController,
 		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
 	) {
 		super();
-		const editContext = target instanceof EditContext ? target : undefined;
-		if (target instanceof EditContext) this.element = target.element;
+		const editContext = target instanceof AbstractEditContext ? target : undefined;
+		if (target instanceof AbstractEditContext) this.element = target.domNode;
 		else this.element = target;
 		if (viewport.textModel !== selectionController.textModel) {
 			this.dispose();
@@ -316,42 +318,42 @@ export class ClipboardController extends Disposable {
 			(this.element as HTMLTextAreaElement).value = "";
 		}
 		this.viewport.revealPosition(
-			this.selectionController.selections.primary.active,
+			this.selectionController.selections.primary.getPosition(),
 		);
 	}
 }
 
-function getEditorClipboardEntries(model: TextModel, selections: TextSelectionSet, policy: EditorEmptySelectionClipboardPolicy): readonly EditorClipboardEntry[] {
+function getEditorClipboardEntries(model: TextModel, selections: SelectionSet, policy: EditorEmptySelectionClipboardPolicy): readonly EditorClipboardEntry[] {
 	if (!Object.values(EditorEmptySelectionClipboardPolicy).includes(policy)) {
 		throw new TypeError('Unknown editor empty-selection clipboard policy');
 	}
 	return Object.freeze(selections.selections.map(selection => createClipboardEntry(model, selection, policy)));
 }
 
-function createClipboardEntry(model: TextModel, selection: TextSelection, policy: EditorEmptySelectionClipboardPolicy): EditorClipboardEntry {
-	if (!selection.collapsed) {
+function createClipboardEntry(model: TextModel, selection: Selection, policy: EditorEmptySelectionClipboardPolicy): EditorClipboardEntry {
+	if (!selection.isEmpty()) {
 		return Object.freeze({
-			text: model.getTextInRange(selection.range),
-			sourceRange: selection.range,
+			text: model.getTextInRange(selection),
+			sourceRange: selection,
 			pasteMode: EditorClipboardPasteMode.Selection,
 		});
 	}
 	if (policy === EditorEmptySelectionClipboardPolicy.Ignore) {
 		return Object.freeze({
 			text: '',
-			sourceRange: selection.range,
+			sourceRange: selection,
 			pasteMode: EditorClipboardPasteMode.Selection,
 		});
 	}
-	const lineIndex = selection.active.lineIndex;
-	if (lineIndex + 1 < model.lineCount) {
-		const sourceRange = TextRange.from(TextPosition.at(lineIndex, 0), TextPosition.at(lineIndex + 1, 0));
+	const lineNumber = selection.positionLineNumber;
+	if (lineNumber < model.lineCount) {
+		const sourceRange = Range.fromPositions(new Position(lineNumber, 1), new Position(lineNumber + 1, 1));
 		return Object.freeze({ text: model.getTextInRange(sourceRange), sourceRange, pasteMode: EditorClipboardPasteMode.Line });
 	}
-	const lineText = model.getLineContent(lineIndex);
-	const sourceRange = lineIndex === 0
-		? TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, lineText.length))
-		: TextRange.from(TextPosition.at(lineIndex - 1, model.getLineContent(lineIndex - 1).length), TextPosition.at(lineIndex, lineText.length));
+	const lineText = model.getLineContent(lineNumber);
+	const sourceRange = lineNumber === 1
+		? Range.fromPositions(new Position(1, 1), new Position(1, lineText.length + 1))
+		: Range.fromPositions(new Position(lineNumber - 1, model.getLineContent(lineNumber - 1).length + 1), new Position(lineNumber, lineText.length + 1));
 	return Object.freeze({ text: `${lineText}\n`, sourceRange, pasteMode: EditorClipboardPasteMode.Line });
 }
 
@@ -419,10 +421,10 @@ function renderClipboardEntry(entry: EditorClipboardEntry, tokens: SemanticToken
 	if (!tokens) return escapeHtml(entry.text);
 	try {
 		const model = tokens.textModel;
-		const endOffset = model.offsetAt(entry.sourceRange.end);
+		const endOffset = model.offsetAt(entry.sourceRange.getEndPosition());
 		const exactStartOffset = endOffset - entry.text.length;
 		if (exactStartOffset >= 0 && model.getText().slice(exactStartOffset, endOffset) === entry.text) {
-			return renderTokenizedRange(tokens, model.positionAt(exactStartOffset), entry.sourceRange.end, ownerDocument);
+			return renderTokenizedRange(tokens, model.positionAt(exactStartOffset), entry.sourceRange.getEndPosition(), ownerDocument);
 		}
 		if (entry.pasteMode !== EditorClipboardPasteMode.Line || !entry.text.endsWith('\n')) return escapeHtml(entry.text);
 		const lineText = entry.text.slice(0, -1);
@@ -435,16 +437,16 @@ function renderClipboardEntry(entry: EditorClipboardEntry, tokens: SemanticToken
 	}
 }
 
-function renderTokenizedRange(tokens: SemanticTokenSource, start: TextPosition, end: TextPosition, ownerDocument: Document): string {
+function renderTokenizedRange(tokens: SemanticTokenSource, start: Position, end: Position, ownerDocument: Document): string {
 	const parts: string[] = [];
 	const model = tokens.textModel;
 	const colors = resolveTokenColors(ownerDocument);
-	for (let lineIndex = start.lineIndex; lineIndex <= end.lineIndex; lineIndex += 1) {
-		const lineText = model.getLineContent(lineIndex);
-		const startColumn = lineIndex === start.lineIndex ? start.columnIndex : 0;
-		const endColumn = lineIndex === end.lineIndex ? end.columnIndex : lineText.length;
-		parts.push(renderTokenizedLine(lineText, startColumn, endColumn, tokens.getLineTokens(lineIndex), colors));
-		if (lineIndex < end.lineIndex) parts.push('\n');
+	for (let lineNumber = start.lineNumber; lineNumber <= end.lineNumber; lineNumber += 1) {
+		const lineText = model.getLineContent(lineNumber);
+		const startColumn = lineNumber === start.lineNumber ? start.column - 1 : 0;
+		const endColumn = lineNumber === end.lineNumber ? end.column - 1 : lineText.length;
+		parts.push(renderTokenizedLine(lineText, startColumn, endColumn, tokens.getLineTokens(lineNumber - 1), colors));
+		if (lineNumber < end.lineNumber) parts.push('\n');
 	}
 	return parts.join('');
 }
@@ -504,15 +506,15 @@ function readUriList(value: string): string | undefined {
 	return entries.length > 0 ? entries.join('\n') : undefined;
 }
 
-function createMetadataPasteCommand(model: TextModel, selections: TextSelectionSet, data: EditorClipboardPasteData): EditorEditCommand {
+function createMetadataPasteCommand(model: TextModel, selections: SelectionSet, data: EditorClipboardPasteData): EditorEditCommand {
 	return data.modes.every(mode => mode === EditorClipboardPasteMode.Line) &&
 		canPasteCompleteLines(selections)
 		? TypeOperations.linePaste(model, selections, data.texts)
 		: TypeOperations.distributedPaste(model, selections, data.texts);
 }
 
-function canPasteCompleteLines(selections: TextSelectionSet): boolean {
-	return selections.selections.every(selection => selection.collapsed);
+function canPasteCompleteLines(selections: SelectionSet): boolean {
+	return selections.selections.every(selection => selection.isEmpty());
 }
 
 function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | undefined): EditorEmptySelectionClipboardPolicy {
@@ -523,12 +525,12 @@ function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | 
 	return resolved;
 }
 
-function selectionSetsEqual(left: TextSelectionSet, right: TextSelectionSet): boolean {
+function selectionSetsEqual(left: SelectionSet, right: SelectionSet): boolean {
 	return left.primaryIndex === right.primaryIndex &&
 		left.selections.length === right.selections.length &&
 		left.selections.every((selection, index) => {
 			const expected = right.selections[index]!;
-			return selection.anchor.compareTo(expected.anchor) === 0 &&
-				selection.active.compareTo(expected.active) === 0;
+			return Position.compare(selection.getSelectionStart(), expected.getSelectionStart()) === 0 &&
+				Position.compare(selection.getPosition(), expected.getPosition()) === 0;
 		});
 }

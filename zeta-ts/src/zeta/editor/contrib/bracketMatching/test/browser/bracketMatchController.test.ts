@@ -8,8 +8,9 @@ import { LanguageConfigurationRegistry } from "../../../../common/languages/lang
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -35,8 +36,8 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	using registration = configurations.register("typescript", {
 		brackets: [{ open: "(", close: ")" }, { open: "{", close: "}" }],
 	});
-	using selections = new CursorsController(model, TextSelectionSet.single(
-		TextSelection.collapsedAt(TextPosition.at(0, 17)),
+	using selections = new CursorsController(model, SelectionSet.single(
+		Selection.fromPositions(new Position((0) + 1, (17) + 1)),
 	));
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
@@ -70,8 +71,8 @@ test("Bracket match controller projects current pairs and clears them for a rang
 		width: "10px",
 	}]);
 
-	selections.setSelections(TextSelectionSet.single(
-		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
+	selections.setSelections(SelectionSet.single(
+		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
 	));
 	assert.equal(viewport.element.querySelectorAll(".bracket-match").length, 0);
 	dom.window.close();
@@ -83,7 +84,7 @@ test("Bracket match controller distinguishes near, always, and never modes", () 
 	using registration = configurations.register("typescript", { brackets: [{ open: "{", close: "}" }] });
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1))));
 
 	using nearDecorations = new TextDecorationCollection<void>(model);
 	using near = new BracketMatchController(selections, bracketPairs, nearDecorations, "near");

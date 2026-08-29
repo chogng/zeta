@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { CursorsController } from '../../common/cursor/cursor.js';
-import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
-import { TextPosition } from '../../common/core/text.js';
+import { Selection } from '../../common/core/selection.js';
+import { SelectionSet } from '../../common/cursor/selectionSet.js';
+import { Position } from '../../common/core/position.js';
 import { TextModel } from '../../common/model/textModel.js';
 import type { TextMeasurer } from '../../browser/config/fontMeasurements.js';
 
@@ -32,7 +33,7 @@ test('EditorView gives its input context a stable owner id and releases it', () 
 	using model = new TextModel('alpha');
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 	);
 	using view = new EditorView({
 		container,
@@ -59,7 +60,7 @@ test('EditorView refreshes minimap canvas dimensions when the window pixel ratio
 	using model = new TextModel('alpha\nbeta');
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 	);
 	using view = new EditorView({
 		container,

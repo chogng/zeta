@@ -1,4 +1,6 @@
-import { TextRange, type TextPosition, type TextSnapshot } from "../core/text.js";
+import { type Position } from "../core/position.js";
+import { Range } from "../core/range.js";
+import { type TextSnapshot } from "../core/textChange.js";
 import { VersionedLanguageResultStore } from "./languageResultStore.js";
 import { type TextModel } from "../model/textModel.js";
 
@@ -17,7 +19,7 @@ export enum LanguageDiagnosticSeverity {
 export type LanguageDiagnosticCode = string | number;
 
 export interface LanguageDiagnostic {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly severity: LanguageDiagnosticSeverity;
 	readonly message: string;
 	readonly code?: LanguageDiagnosticCode;
@@ -40,7 +42,7 @@ export function createLanguageDiagnosticSnapshotNormalizer(snapshot: TextSnapsho
 	return value => normalizeLanguageDiagnosticResult(value, range => assertSnapshotRange(lines, range, "Language diagnostic"));
 }
 
-function normalizeLanguageDiagnosticResult(value: LanguageDiagnosticResult, validateRange: (range: TextRange) => void): LanguageDiagnosticResult {
+function normalizeLanguageDiagnosticResult(value: LanguageDiagnosticResult, validateRange: (range: Range) => void): LanguageDiagnosticResult {
 	if (typeof value !== "object" || value === null || !Array.isArray(value.diagnostics)) {
 		throw new TypeError("Language diagnostic result must contain a diagnostics array");
 	}
@@ -68,20 +70,20 @@ function normalizeLanguageDiagnosticResult(value: LanguageDiagnosticResult, vali
 	return Object.freeze({ diagnostics: Object.freeze(diagnostics) });
 }
 
-function assertModelRange(model: TextModel, range: TextRange, owner: string): void {
-	if (!(range instanceof TextRange)) throw new TypeError(`${owner} range must be a TextRange`);
-	model.offsetAt(range.start);
-	model.offsetAt(range.end);
+function assertModelRange(model: TextModel, range: Range, owner: string): void {
+	if (!(range instanceof Range)) throw new TypeError(`${owner} range must be a Range`);
+	model.offsetAt(range.getStartPosition());
+	model.offsetAt(range.getEndPosition());
 }
 
-function assertSnapshotRange(lines: readonly string[], range: TextRange, owner: string): void {
-	if (!(range instanceof TextRange)) throw new TypeError(`${owner} range must be a TextRange`);
-	assertSnapshotPosition(lines, range.start, owner);
-	assertSnapshotPosition(lines, range.end, owner);
+function assertSnapshotRange(lines: readonly string[], range: Range, owner: string): void {
+	if (!(range instanceof Range)) throw new TypeError(`${owner} range must be a Range`);
+	assertSnapshotPosition(lines, range.getStartPosition(), owner);
+	assertSnapshotPosition(lines, range.getEndPosition(), owner);
 }
 
-function assertSnapshotPosition(lines: readonly string[], position: TextPosition, owner: string): void {
-	if (position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
+function assertSnapshotPosition(lines: readonly string[], position: Position, owner: string): void {
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
 		throw new RangeError(`${owner} range is outside its snapshot`);
 	}
 }

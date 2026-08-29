@@ -4,8 +4,9 @@ import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -31,7 +32,7 @@ const { FindController } = await import("../../browser/findController.js");
 test.after(() => browserEnvironment.window.close());
 
 test("find opens from the editor shortcut, highlights matches, navigates, and restores focus", () => {
-	const fixture = createFixture("alpha beta alpha", TextPosition.at(0, 0), TextPosition.at(0, 5));
+	const fixture = createFixture("alpha beta alpha", new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1));
 	using resources = fixture;
 
 	const open = keyboardEvent(fixture.dom.window, "f", { ctrlKey: true });
@@ -45,8 +46,8 @@ test("find opens from the editor shortcut, highlights matches, navigates, and re
 	assert.equal(fixture.dom.window.document.activeElement, fixture.find.searchInput);
 
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
-	assert.deepEqual(fixture.selections.selections.primary.range.start, TextPosition.at(0, 11));
-	assert.deepEqual(fixture.selections.selections.primary.range.end, TextPosition.at(0, 16));
+	assert.deepEqual(fixture.selections.selections.primary.getStartPosition(), new Position((0) + 1, (11) + 1));
+	assert.deepEqual(fixture.selections.selections.primary.getEndPosition(), new Position((0) + 1, (16) + 1));
 	assert.equal(fixture.find.element.querySelector(".stanza-editor-find-result")?.textContent, "2 of 2");
 
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Escape"));
@@ -80,7 +81,7 @@ test("find options project checked classes and report invalid regular expression
 });
 
 test("find in selection keeps the opening scope through match navigation and supports Alt+L", () => {
-	const fixture = createFixture("alpha beta alpha beta alpha", TextPosition.at(0, 6), TextPosition.at(0, 16));
+	const fixture = createFixture("alpha beta alpha beta alpha", new Position((0) + 1, (6) + 1), new Position((0) + 1, (16) + 1));
 	using resources = fixture;
 	fixture.find.open();
 	setInputValue(fixture.find.searchInput, "alpha");
@@ -93,8 +94,8 @@ test("find in selection keeps the opening scope through match navigation and sup
 	assert.equal(findInSelection.classList.contains("checked"), true);
 	assert.equal(findInSelection.getAttribute("aria-pressed"), "true");
 	assert.equal(fixture.decorations.size, 1);
-	assert.deepEqual(fixture.selections.selections.primary.range.start, TextPosition.at(0, 11));
-	assert.deepEqual(fixture.selections.selections.primary.range.end, TextPosition.at(0, 16));
+	assert.deepEqual(fixture.selections.selections.primary.getStartPosition(), new Position((0) + 1, (11) + 1));
+	assert.deepEqual(fixture.selections.selections.primary.getEndPosition(), new Position((0) + 1, (16) + 1));
 
 	const toggle = keyboardEvent(fixture.dom.window, "l", { altKey: true });
 	fixture.find.searchInput.dispatchEvent(toggle);
@@ -104,7 +105,7 @@ test("find in selection keeps the opening scope through match navigation and sup
 });
 
 test("find in selection restricts replace all to its tracked opening scope", () => {
-	const fixture = createFixture("alpha beta alpha beta alpha", TextPosition.at(0, 6), TextPosition.at(0, 16));
+	const fixture = createFixture("alpha beta alpha beta alpha", new Position((0) + 1, (6) + 1), new Position((0) + 1, (16) + 1));
 	using resources = fixture;
 	fixture.find.open({ showReplace: true });
 	setInputValue(fixture.find.searchInput, "alpha");
@@ -118,7 +119,7 @@ test("find in selection restricts replace all to its tracked opening scope", () 
 });
 
 test("configured find defaults seed toggles, selection scope, and non-looping navigation", () => {
-	const fixture = createFixture("Alpha beta Alpha", TextPosition.at(0, 0), TextPosition.at(0, 5), {
+	const fixture = createFixture("Alpha beta Alpha", new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1), {
 		seedSearchStringFromSelection: false,
 		autoFindInSelection: true,
 		loop: false,
@@ -136,8 +137,8 @@ test("configured find defaults seed toggles, selection scope, and non-looping na
 	setInputValue(fixture.find.searchInput, "Alpha");
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
 	fixture.find.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
-	assert.deepEqual(fixture.selections.selections.primary.range.start, TextPosition.at(0, 0));
-	assert.deepEqual(fixture.selections.selections.primary.range.end, TextPosition.at(0, 5));
+	assert.deepEqual(fixture.selections.selections.primary.getStartPosition(), new Position((0) + 1, (0) + 1));
+	assert.deepEqual(fixture.selections.selections.primary.getEndPosition(), new Position((0) + 1, (5) + 1));
 });
 
 test("replace current and replace all use isolated undo transactions", () => {
@@ -173,11 +174,11 @@ interface Fixture extends Disposable {
 	readonly find: InstanceType<typeof FindController>;
 }
 
-function createFixture(text: string, anchor = TextPosition.at(0, 0), active = anchor, options?: ConstructorParameters<typeof FindController>[4]): Fixture {
+function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: ConstructorParameters<typeof FindController>[4]): Fixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const model = new TextModel(text);
-	const selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(anchor, active)));
+	const selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(anchor, active)));
 	const decorations = new TextDecorationCollection<void>(model);
 	const viewport = new EditorViewport({
 		container,

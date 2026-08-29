@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { ColorService, type LanguageColorProvider } from '../../common/color.js';
@@ -78,8 +79,8 @@ test('color detector returns the tracked range before its debounced provider ref
 	detector.refresh();
 	await waitFor(() => detector.totalColorCount === 1);
 
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: 'x' }]);
-	const data = detector.findAtPosition(TextPosition.at(0, 2));
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'x' }]);
+	const data = detector.findAtPosition(new Position((0) + 1, (2) + 1));
 
 	assert.ok(data);
 	assert.equal(model.getTextInRange(data.information.range), '#f00');

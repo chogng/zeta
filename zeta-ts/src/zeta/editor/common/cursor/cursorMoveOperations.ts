@@ -1,6 +1,7 @@
 import { clamp } from "../../../base/common/numbers.js";
-import { TextSelection, TextSelectionSet } from "../core/selection.js";
-import { TextPosition } from "../core/text.js";
+import { Selection } from "../core/selection.js";
+import { SelectionSet } from "./selectionSet.js";
+import { Position } from "../core/position.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextGraphemeBoundaries, getTextWordSegments } from '../core/textSegmentation.js';
 import { AtomicTabMoveOperations, Direction } from './cursorAtomicMoveOperations.js';
@@ -35,7 +36,7 @@ export interface EditorCursorNavigationRequest {
 }
 
 export interface EditorCursorNavigationResult {
-	readonly selections: TextSelectionSet;
+	readonly selections: SelectionSet;
 	readonly preferredColumns: readonly number[] | undefined;
 }
 
@@ -46,7 +47,7 @@ export interface EditorCursorNavigationResult {
  * duplicate results coalesce while preserving the primary selection mapping.
  */
 export class MoveOperations {
-	public static navigate(model: TextModel, selections: TextSelectionSet, request: EditorCursorNavigationRequest): EditorCursorNavigationResult {
+	public static navigate(model: TextModel, selections: SelectionSet, request: EditorCursorNavigationRequest): EditorCursorNavigationResult {
 		validateRequest(model, selections, request);
 		const vertical = isVerticalCommand(request.command);
 		const preferredColumns = vertical
@@ -64,8 +65,8 @@ export class MoveOperations {
 				request.atomicTabSize,
 			);
 			return request.mode === EditorCursorNavigationMode.Extend
-				? TextSelection.from(selection.anchor, target)
-				: TextSelection.collapsedAt(target);
+				? Selection.fromPositions(selection.getSelectionStart(), target)
+				: Selection.fromPositions(target);
 		});
 		return normalizeResult(
 			navigated,
@@ -74,48 +75,48 @@ export class MoveOperations {
 		);
 	}
 
-	public static leftPosition(model: TextModel, position: TextPosition, atomicTabSize?: number): TextPosition {
-		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineIndex), position.columnIndex, atomicTabSize, Direction.Left);
-		if (atomicColumn >= 0) return TextPosition.at(position.lineIndex, atomicColumn);
+	public static leftPosition(model: TextModel, position: Position, atomicTabSize?: number): Position {
+		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineNumber), position.column - 1, atomicTabSize, Direction.Left);
+		if (atomicColumn >= 0) return new Position(position.lineNumber, atomicColumn + 1);
 		return previousCharacter(model, position);
 	}
 
-	public static rightPosition(model: TextModel, position: TextPosition, atomicTabSize?: number): TextPosition {
-		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineIndex), position.columnIndex, atomicTabSize, Direction.Right);
-		if (atomicColumn >= 0) return TextPosition.at(position.lineIndex, atomicColumn);
+	public static rightPosition(model: TextModel, position: Position, atomicTabSize?: number): Position {
+		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineNumber), position.column - 1, atomicTabSize, Direction.Right);
+		if (atomicColumn >= 0) return new Position(position.lineNumber, atomicColumn + 1);
 		return nextCharacter(model, position);
 	}
 }
 
 function navigationTarget(
 	model: TextModel,
-	selection: TextSelection,
+	selection: Selection,
 	command: EditorCursorNavigationCommand,
 	pageLineCount: number,
 	preferredColumn: number | undefined,
 	mode: EditorCursorNavigationMode,
 	wordPattern: RegExp | undefined,
 	requestAtomicTabSize: number | undefined,
-): TextPosition {
+): Position {
 	if (
 		mode === EditorCursorNavigationMode.Move &&
-		!selection.collapsed
+		!selection.isEmpty()
 	) {
 		if (
 			command === EditorCursorNavigationCommand.CharacterLeft ||
 			command === EditorCursorNavigationCommand.WordLeft
 		) {
-			return selection.range.start;
+			return selection.getStartPosition();
 		}
 		if (
 			command === EditorCursorNavigationCommand.CharacterRight ||
 			command === EditorCursorNavigationCommand.WordRight
 		) {
-			return selection.range.end;
+			return selection.getEndPosition();
 		}
 	}
 
-	const active = selection.active;
+	const active = selection.getPosition();
 	switch (command) {
 		case EditorCursorNavigationCommand.CharacterLeft:
 			return MoveOperations.leftPosition(model, active, requestAtomicTabSize);
@@ -134,119 +135,98 @@ function navigationTarget(
 		case EditorCursorNavigationCommand.PageDown:
 			return verticalTarget(model, active, pageLineCount, preferredColumn);
 		case EditorCursorNavigationCommand.LineStart:
-			return TextPosition.at(active.lineIndex, 0);
+			return new Position(active.lineNumber, 1);
 		case EditorCursorNavigationCommand.LineEnd:
-			return TextPosition.at(
-				active.lineIndex,
-				model.getLineContent(active.lineIndex).length,
-			);
+			return new Position(active.lineNumber, model.getLineContent(active.lineNumber).length + 1);
 		case EditorCursorNavigationCommand.DocumentStart:
-			return TextPosition.at(0, 0);
+			return new Position((0) + 1, (0) + 1);
 		case EditorCursorNavigationCommand.DocumentEnd: {
 			const lineIndex = model.lineCount - 1;
-			return TextPosition.at(
-				lineIndex,
-				model.getLineContent(lineIndex).length,
-			);
+			return new Position((lineIndex) + 1, (model.getLineContent((lineIndex) + 1).length) + 1);
 		}
 	}
 }
 
-function previousCharacter(model: TextModel, position: TextPosition): TextPosition {
-	if (position.columnIndex === 0) {
-		if (position.lineIndex === 0) return position;
-		const lineIndex = position.lineIndex - 1;
-		return TextPosition.at(
-			lineIndex,
-			model.getLineContent(lineIndex).length,
-		);
+function previousCharacter(model: TextModel, position: Position): Position {
+	if (position.column === 1) {
+		if (position.lineNumber === 1) return position;
+		const previousLineNumber = position.lineNumber - 1;
+		return new Position(previousLineNumber, model.getLineContent(previousLineNumber).length + 1);
 	}
 	const boundaries = getTextGraphemeBoundaries(
-		model.getLineContent(position.lineIndex),
+		model.getLineContent(position.lineNumber),
 	);
-	return TextPosition.at(
-		position.lineIndex,
-		previousBoundary(boundaries, position.columnIndex),
-	);
+	return new Position(position.lineNumber, previousBoundary(boundaries, position.column - 1) + 1);
 }
 
-function nextCharacter(model: TextModel, position: TextPosition): TextPosition {
-	const line = model.getLineContent(position.lineIndex);
-	if (position.columnIndex === line.length) {
-		return position.lineIndex + 1 < model.lineCount
-			? TextPosition.at(position.lineIndex + 1, 0)
+function nextCharacter(model: TextModel, position: Position): Position {
+	const line = model.getLineContent(position.lineNumber);
+	if (position.column === line.length + 1) {
+		return position.lineNumber < model.lineCount
+			? new Position(position.lineNumber + 1, 1)
 			: position;
 	}
-	return TextPosition.at(
-		position.lineIndex,
-		nextBoundary(getTextGraphemeBoundaries(line), position.columnIndex),
-	);
+	return new Position(position.lineNumber, nextBoundary(getTextGraphemeBoundaries(line), position.column - 1) + 1);
 }
 
-function previousWord(model: TextModel, position: TextPosition, wordPattern: RegExp | undefined): TextPosition {
-	for (let lineIndex = position.lineIndex; lineIndex >= 0; lineIndex -= 1) {
-		const limit = lineIndex === position.lineIndex
-			? position.columnIndex
+function previousWord(model: TextModel, position: Position, wordPattern: RegExp | undefined): Position {
+	for (let lineNumber = position.lineNumber; lineNumber >= 1; lineNumber -= 1) {
+		const limit = lineNumber === position.lineNumber
+			? position.column - 1
 			: Number.POSITIVE_INFINITY;
-		const segments = getTextWordRanges(model.getLineContent(lineIndex), wordPattern);
+		const segments = getTextWordRanges(model.getLineContent(lineNumber), wordPattern);
 		for (let index = segments.length - 1; index >= 0; index -= 1) {
 			const segment = segments[index]!;
 			if (segment.start < limit) {
-				return TextPosition.at(lineIndex, segment.start);
+				return new Position(lineNumber, segment.start + 1);
 			}
 		}
 	}
-	return TextPosition.at(0, 0);
+	return new Position((0) + 1, (0) + 1);
 }
 
-function nextWord(model: TextModel, position: TextPosition, wordPattern: RegExp | undefined): TextPosition {
+function nextWord(model: TextModel, position: Position, wordPattern: RegExp | undefined): Position {
 	for (
-		let lineIndex = position.lineIndex;
-		lineIndex < model.lineCount;
-		lineIndex += 1
+		let lineNumber = position.lineNumber;
+		lineNumber <= model.lineCount;
+		lineNumber += 1
 	) {
-		const limit = lineIndex === position.lineIndex
-			? position.columnIndex
+		const limit = lineNumber === position.lineNumber
+			? position.column - 1
 			: -1;
-		for (const segment of getTextWordRanges(model.getLineContent(lineIndex), wordPattern)) {
+		for (const segment of getTextWordRanges(model.getLineContent(lineNumber), wordPattern)) {
 			if (segment.start > limit) {
-				return TextPosition.at(lineIndex, segment.start);
+				return new Position(lineNumber, segment.start + 1);
 			}
 		}
 	}
 	const lineIndex = model.lineCount - 1;
-	return TextPosition.at(
-		lineIndex,
-		model.getLineContent(lineIndex).length,
-	);
+	return new Position((lineIndex) + 1, (model.getLineContent((lineIndex) + 1).length) + 1);
 }
 
-function verticalTarget(model: TextModel, position: TextPosition, lineDelta: number, preferredColumn: number | undefined): TextPosition {
-	const lineIndex = clamp(
-		position.lineIndex + lineDelta,
-		0,
-		model.lineCount - 1,
+function verticalTarget(model: TextModel, position: Position, lineDelta: number, preferredColumn: number | undefined): Position {
+	const lineNumber = clamp(
+		position.lineNumber + lineDelta,
+		1,
+		model.lineCount,
 	);
-	if (lineIndex === position.lineIndex) return position;
-	const line = model.getLineContent(lineIndex);
-	const column = Math.min(preferredColumn ?? position.columnIndex, line.length);
-	return TextPosition.at(
-		lineIndex,
-		boundaryAtOrBefore(getTextGraphemeBoundaries(line), column),
-	);
+	if (lineNumber === position.lineNumber) return position;
+	const line = model.getLineContent(lineNumber);
+	const column = Math.min(preferredColumn ?? position.column, line.length + 1);
+	return new Position(lineNumber, boundaryAtOrBefore(getTextGraphemeBoundaries(line), column - 1) + 1);
 }
 
-function resolvePreferredColumns(selections: TextSelectionSet, preferredColumns: readonly number[] | undefined): readonly number[] {
+function resolvePreferredColumns(selections: SelectionSet, preferredColumns: readonly number[] | undefined): readonly number[] {
 	if (preferredColumns?.length === selections.selections.length) {
 		return Object.freeze([...preferredColumns]);
 	}
 	return Object.freeze(
-		selections.selections.map(selection => selection.active.columnIndex),
+		selections.selections.map(selection => selection.getPosition().column),
 	);
 }
 
-function normalizeResult(selections: readonly TextSelection[], primaryIndex: number, preferredColumns: readonly number[] | undefined): EditorCursorNavigationResult {
-	const normalized: TextSelection[] = [];
+function normalizeResult(selections: readonly Selection[], primaryIndex: number, preferredColumns: readonly number[] | undefined): EditorCursorNavigationResult {
+	const normalized: Selection[] = [];
 	const normalizedColumns: number[] = [];
 	const sourceToNormalized: number[] = [];
 	for (let index = 0; index < selections.length; index += 1) {
@@ -264,7 +244,7 @@ function normalizeResult(selections: readonly TextSelection[], primaryIndex: num
 		sourceToNormalized.push(targetIndex);
 	}
 	return Object.freeze({
-		selections: TextSelectionSet.withPrimary(
+		selections: SelectionSet.withPrimary(
 			normalized,
 			sourceToNormalized[primaryIndex]!,
 		),
@@ -274,7 +254,7 @@ function normalizeResult(selections: readonly TextSelection[], primaryIndex: num
 	});
 }
 
-function validateRequest(model: TextModel, selections: TextSelectionSet, request: EditorCursorNavigationRequest): void {
+function validateRequest(model: TextModel, selections: SelectionSet, request: EditorCursorNavigationRequest): void {
 	if (!Object.values(EditorCursorNavigationCommand).includes(request.command)) {
 		throw new TypeError("Unknown editor cursor navigation command");
 	}
@@ -295,7 +275,7 @@ function validateRequest(model: TextModel, selections: TextSelectionSet, request
 		(
 			request.preferredColumns.length !== selections.selections.length ||
 			request.preferredColumns.some(column =>
-				!Number.isSafeInteger(column) || column < 0
+				!Number.isSafeInteger(column) || column < 1
 			)
 		)
 	) {
@@ -305,8 +285,8 @@ function validateRequest(model: TextModel, selections: TextSelectionSet, request
 		throw new RangeError('atomicTabSize must be a positive safe integer');
 	}
 	for (const selection of selections.selections) {
-		model.offsetAt(selection.anchor);
-		model.offsetAt(selection.active);
+		model.offsetAt(selection.getSelectionStart());
+		model.offsetAt(selection.getPosition());
 	}
 }
 
@@ -336,9 +316,9 @@ function boundaryAtOrBefore(boundaries: readonly number[], column: number): numb
 	return 0;
 }
 
-function selectionsEqual(left: TextSelection, right: TextSelection): boolean {
-	return left.anchor.compareTo(right.anchor) === 0 &&
-		left.active.compareTo(right.active) === 0;
+function selectionsEqual(left: Selection, right: Selection): boolean {
+	return Position.compare(left.getSelectionStart(), right.getSelectionStart()) === 0 &&
+		Position.compare(left.getPosition(), right.getPosition()) === 0;
 }
 
 function getTextWordRanges(text: string, wordPattern: RegExp | undefined): readonly { readonly start: number; readonly end: number }[] {

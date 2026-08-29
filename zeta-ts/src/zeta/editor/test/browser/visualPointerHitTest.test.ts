@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { hitTestStanzaVisualEditorPoint, EditorHitTargetKind } from "../../common/viewModel/pointerHitTest.js";
@@ -19,15 +19,15 @@ test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 
 
 	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 52, top: 25 }, metrics, measurer), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(0, 3),
+		position: new Position((0) + 1, (3) + 1),
 	});
 	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 100, top: 45 }, metrics, measurer), {
 		kind: EditorHitTargetKind.EmptyContent,
-		position: TextPosition.at(0, 6),
+		position: new Position((0) + 1, (6) + 1),
 	});
 	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 10, top: 65 }, metrics, measurer), {
 		kind: EditorHitTargetKind.Gutter,
-		position: TextPosition.at(1, 0),
+		position: new Position((1) + 1, (0) + 1),
 	});
 });
 
@@ -44,11 +44,11 @@ test("visual hit testing treats wrapped continuation indentation as empty conten
 
 	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 55, top: 25 }, metrics, measurer), {
 		kind: EditorHitTargetKind.EmptyContent,
-		position: TextPosition.at(0, 2),
+		position: new Position((0) + 1, (2) + 1),
 	});
 	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 66, top: 25 }, metrics, measurer), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(0, 3),
+		position: new Position((0) + 1, (3) + 1),
 	});
 });
 

@@ -55,6 +55,6 @@ export class OccurrenceSelectionController extends Disposable {
 
 	private setSelections(next: ReturnType<typeof selectAllOccurrences>): void {
 		this.selections.setCursorSelections(next);
-		this.viewport.revealPosition(next.primary.active);
+		this.viewport.revealPosition(next.primary.getPosition());
 	}
 }

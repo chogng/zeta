@@ -5,8 +5,9 @@ import { registerEditorContribution } from '../../../browser/editorExtensions.js
 import { type EditorViewport } from '../../../browser/view.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TypeOperations } from '../../../common/cursor/cursorTypeOperations.js';
-import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
-import { type TextPosition } from '../../../common/core/text.js';
+import { Selection } from '../../../common/core/selection.js';
+import { SelectionSet } from '../../../common/cursor/selectionSet.js';
+import { type Position } from '../../../common/core/position.js';
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from './textFileTransfer.js';
 
 /** Owns text and text-file drop operations for one editor. */
@@ -44,11 +45,11 @@ export class TextDropController extends Disposable {
 		}
 		stopEvent(event);
 		this.viewport.element.focus({ preventScroll: true });
-		this.selections.execute(TypeOperations.paste(this.viewport.textModel, TextSelectionSet.single(TextSelection.collapsedAt(target.position)), text));
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.selections.execute(TypeOperations.paste(this.viewport.textModel, SelectionSet.single(Selection.fromPositions(target.position)), text));
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 
-	private dropTextFile(event: DragEvent, position: TextPosition): void {
+	private dropTextFile(event: DragEvent, position: Position): void {
 		const file = selectTextFileTransfer(event.dataTransfer?.files ?? []);
 		if (!file) return;
 		const model = this.viewport.textModel;
@@ -58,8 +59,8 @@ export class TextDropController extends Disposable {
 		this.viewport.element.focus({ preventScroll: true });
 		void file.text().then(text => {
 			if (this.isDisposed || request !== this.asynchronousDropRequest || text.length > TEXT_FILE_TRANSFER_MAX_BYTES || model.version !== expectedVersion) return;
-			this.selections.execute(TypeOperations.paste(model, TextSelectionSet.single(TextSelection.collapsedAt(position)), text));
-			this.viewport.revealPosition(this.selections.selections.primary.active);
+			this.selections.execute(TypeOperations.paste(model, SelectionSet.single(Selection.fromPositions(position)), text));
+			this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 		}).catch(() => {
 			// The supplied file could not be decoded as text.
 		});

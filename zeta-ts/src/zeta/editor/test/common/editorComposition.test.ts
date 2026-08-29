@@ -2,22 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { IME } from "../../../base/common/ime.js";
 import { CursorsController } from "../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextModelChangeReason, TextPosition, TextRange } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
+import { TextModelChangeReason } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-const position = TextPosition.at;
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
 	startColumn: number,
 	endColumn: number,
-): TextRange => TextRange.from(
+): Range => Range.fromPositions(
 	position(0, startColumn),
 	position(0, endColumn),
 );
 const selection = (
 	anchorOffset: number,
 	activeOffset: number,
-): TextSelectionSet => TextSelectionSet.single(TextSelection.from(
+): SelectionSet => SelectionSet.single(Selection.fromPositions(
 	position(0, anchorOffset),
 	position(0, activeOffset),
 ));
@@ -89,7 +92,7 @@ test("Composition exposes only its active provisional model range", () => {
 	using model = new TextModel("a\nbc");
 	using controller = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.from(
+		SelectionSet.single(Selection.fromPositions(
 			position(1, 1),
 			position(1, 2),
 		)),
@@ -97,7 +100,7 @@ test("Composition exposes only its active provisional model range", () => {
 	const composition = controller.beginComposition();
 	assert.deepEqual(
 		composition.currentRange,
-		TextRange.from(position(1, 1), position(1, 2)),
+		Range.fromPositions(position(1, 1), position(1, 2)),
 	);
 
 	composition.update({
@@ -109,7 +112,7 @@ test("Composition exposes only its active provisional model range", () => {
 		range: composition.currentRange,
 	}, {
 		text: "a\nbx\ny",
-		range: TextRange.from(position(1, 1), position(2, 1)),
+		range: Range.fromPositions(position(1, 1), position(2, 1)),
 	});
 
 	composition.commit();
@@ -308,7 +311,7 @@ test("Reentrant model edits invalidate composition before update returns", () =>
 		nestedEditApplied = true;
 		const end = model.positionAt(model.getText().length);
 		model.applyEdits([{
-			range: TextRange.emptyAt(end),
+			range: Range.fromPositions(end),
 			text: "!",
 		}]);
 	});
@@ -358,9 +361,9 @@ test("Composition rejects ambiguous ownership and invalid relative offsets", () 
 
 	using multiController = new CursorsController(
 		model,
-		TextSelectionSet.withPrimary([
-			TextSelection.collapsedAt(position(0, 0)),
-			TextSelection.collapsedAt(position(0, 2)),
+		SelectionSet.withPrimary([
+			Selection.fromPositions(position(0, 0)),
+			Selection.fromPositions(position(0, 2)),
 		], 0),
 	);
 	assert.throws(

@@ -3,8 +3,10 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -49,8 +51,8 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 	using model = new TextModel("abcd\nefgh\nijkl\nmnop");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(
-			TextSelection.collapsedAt(TextPosition.at(0, 0)),
+		SelectionSet.single(
+			Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		),
 	);
 	using viewport = new EditorViewport({
@@ -83,8 +85,8 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		{ pointerId: 1 },
 	));
 	assert.equal(click.defaultPrevented, true);
-	assert.deepEqual(selections.selections.primary, TextSelection.collapsedAt(
-		TextPosition.at(1, 1),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((1) + 1, (1) + 1),
 	));
 	assert.deepEqual([...captured], []);
 
@@ -102,9 +104,9 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		105,
 		{ pointerId: 2, shiftKey: true },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(1, 1),
-		TextPosition.at(2, 2),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((1) + 1, (1) + 1),
+		new Position((2) + 1, (2) + 1),
 	));
 
 	viewport.element.dispatchEvent(pointerEvent(
@@ -121,8 +123,8 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		105,
 		{ pointerId: 99 },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.collapsedAt(
-		TextPosition.at(0, 1),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (1) + 1),
 	));
 	dom.window.dispatchEvent(pointerEvent(
 		dom.window,
@@ -131,9 +133,9 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		105,
 		{ pointerId: 3 },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 1),
-		TextPosition.at(2, 3),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (1) + 1),
+		new Position((2) + 1, (3) + 1),
 	));
 	dom.window.dispatchEvent(pointerEvent(
 		dom.window,
@@ -150,9 +152,9 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		75,
 		{ pointerId: 4 },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(1, 0),
-		TextPosition.at(2, 0),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((1) + 1, (0) + 1),
+		new Position((2) + 1, (0) + 1),
 	));
 	dom.window.dispatchEvent(pointerEvent(
 		dom.window,
@@ -161,9 +163,9 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		115,
 		{ pointerId: 4 },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(1, 0),
-		TextPosition.at(3, 4),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((1) + 1, (0) + 1),
+		new Position((3) + 1, (4) + 1),
 	));
 	dom.window.dispatchEvent(pointerEvent(
 		dom.window,
@@ -187,9 +189,9 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		55,
 		{ pointerId: 5 },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(3, 0),
-		TextPosition.at(0, 0),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((3) + 1, (0) + 1),
+		new Position((0) + 1, (0) + 1),
 	));
 	dom.window.dispatchEvent(pointerEvent(
 		dom.window,
@@ -209,9 +211,9 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 	assert.equal(selections.selections, cancelledSelection);
 	assert.deepEqual([...captured], []);
 
-	selections.setSelections(TextSelectionSet.single(TextSelection.from(
-		TextPosition.at(1, 2),
-		TextPosition.at(1, 2),
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(
+		new Position((1) + 1, (2) + 1),
+		new Position((1) + 1, (2) + 1),
 	)));
 	viewport.element.dispatchEvent(pointerEvent(
 		dom.window,
@@ -227,9 +229,9 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 		95,
 		{ pointerId: 6, shiftKey: true },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(1, 2),
-		TextPosition.at(3, 0),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((1) + 1, (2) + 1),
+		new Position((3) + 1, (0) + 1),
 	));
 
 	pointer.dispose();
@@ -254,8 +256,8 @@ test("Pointer and viewport selection wiring rejects different text models", () =
 	using otherModel = new TextModel("beta");
 	using selections = new CursorsController(
 		otherModel,
-		TextSelectionSet.single(
-			TextSelection.collapsedAt(TextPosition.at(0, 0)),
+		SelectionSet.single(
+			Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		),
 	);
 	assert.throws(() => new EditorViewport({
@@ -278,7 +280,7 @@ test("Pointer and viewport selection wiring rejects different text models", () =
 		/must share one text model/,
 	);
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
 		text: " editor",
 	}]);
 	assert.equal(model.getText(), "alpha editor");
@@ -291,7 +293,7 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abcdef\nab\n12345\nxy");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -324,11 +326,11 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
 		shiftKey: true,
 	}));
 
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
-		TextSelection.from(TextPosition.at(0, 2), TextPosition.at(0, 6)),
-		TextSelection.from(TextPosition.at(1, 2), TextPosition.at(1, 2)),
-		TextSelection.from(TextPosition.at(2, 2), TextPosition.at(2, 5)),
-		TextSelection.from(TextPosition.at(3, 2), TextPosition.at(3, 2)),
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((0) + 1, (6) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (2) + 1), new Position((1) + 1, (2) + 1)),
+		Selection.fromPositions(new Position((2) + 1, (2) + 1), new Position((2) + 1, (5) + 1)),
+		Selection.fromPositions(new Position((3) + 1, (2) + 1), new Position((3) + 1, (2) + 1)),
 	], 0));
 	assert.deepEqual([...captured], []);
 	dom.window.close();
@@ -341,8 +343,8 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 	using model = new TextModel("abc\ndef");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(
-			TextSelection.collapsedAt(TextPosition.at(0, 0)),
+		SelectionSet.single(
+			Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		),
 	);
 	using viewport = new EditorViewport({
@@ -375,7 +377,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 		{ pointerId: 8 },
 	));
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
 	dom.window.dispatchEvent(pointerEvent(
@@ -385,9 +387,9 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 		75,
 		{ pointerId: 8 },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 2),
-		TextPosition.at(1, 2),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (2) + 1),
+		new Position((1) + 1, (2) + 1),
 	));
 	assert.deepEqual([...captured], [8]);
 

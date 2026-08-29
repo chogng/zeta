@@ -2,7 +2,7 @@ import "./decorations.css";
 import { type Icon } from '../../../../base/common/icon.js';
 import { type Event, Emitter } from "../../../../base/common/event.js";
 import { type IDisposable } from '../../../../base/common/lifecycle.js';
-import { type TextRange } from '../../../common/core/text.js';
+import { type Range } from '../../../common/core/range.js';
 import { type TextDecorationCollection, type TextDecorationId, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 import { EmptyRangeRendering, createStanzaRangeRectangles } from '../../../common/viewModel/rangeGeometry.js';
@@ -107,7 +107,7 @@ export interface DecorationPresentationResolution {
 
 export interface ResolvedDecoration {
 	readonly id: TextDecorationId;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly presentation: DecorationPresentation;
 	readonly hoverText?: string;
 	readonly color?: string;
@@ -190,7 +190,7 @@ export function createStanzaDecorationSource<TMetadata>(
 				const glyphMargin = normalizeGlyphMarginPresentation(details?.glyphMargin, glyphMarginLanes);
 				const overviewRuler = normalizeOptionalBoolean(details?.overviewRuler, "overview ruler visibility");
 				const minimap = normalizeOptionalBoolean(details?.minimap, "minimap visibility");
-				if (blockDecoration?.isAfterEnd && !decoration.range.empty) {
+				if (blockDecoration?.isAfterEnd && !decoration.range.isEmpty()) {
 					throw new TypeError("Stanza block decoration isAfterEnd requires an empty range");
 				}
 				resolved.push(Object.freeze({
@@ -479,7 +479,7 @@ export class DecorationLineIndex {
 	constructor(decorations: readonly ResolvedDecoration[]) {
 		this.root = buildIntervalTree(decorations.map((decoration, order) => Object.freeze({
 			decoration,
-			startLineIndex: decoration.range.start.lineIndex,
+			startLineIndex: decoration.range.startLineNumber - 1,
 			endLineIndex: lastCoveredLineIndex(decoration),
 			order,
 		})).sort(compareIntervals));
@@ -527,9 +527,9 @@ function compareIntervals(left: DecorationInterval, right: DecorationInterval): 
 }
 
 function lastCoveredLineIndex(decoration: ResolvedDecoration): number {
-	const { start, end } = decoration.range;
-	if (decoration.range.empty || end.columnIndex > 0 || end.lineIndex === start.lineIndex) return end.lineIndex;
-	return end.lineIndex - 1;
+	const { startLineNumber, endLineNumber, endColumn } = decoration.range;
+	if (decoration.range.isEmpty() || endColumn > 1 || endLineNumber === startLineNumber) return endLineNumber - 1;
+	return endLineNumber - 2;
 }
 
 export class DecorationsOverlay extends DynamicViewOverlay {
@@ -648,8 +648,8 @@ export function createStanzaDiagnosticOverviewMarkers(decorations: readonly Reso
 	const byLine = new Map<number, ResolvedDecoration[]>();
 	for (const decoration of decorations) {
 		if (!DIAGNOSTIC_PRESENTATION_PRIORITY.has(decoration.presentation)) continue;
-		const startLineIndex = decoration.range.start.lineIndex;
-		const endLineIndex = decoration.range.end.columnIndex === 0 && decoration.range.end.lineIndex > startLineIndex ? decoration.range.end.lineIndex - 1 : decoration.range.end.lineIndex;
+		const startLineIndex = decoration.range.startLineNumber - 1;
+		const endLineIndex = decoration.range.endColumn === 1 && decoration.range.endLineNumber - 1 > startLineIndex ? decoration.range.endLineNumber - 2 : decoration.range.endLineNumber - 1;
 		for (let lineIndex = startLineIndex; lineIndex <= endLineIndex; lineIndex += 1) {
 			const line = byLine.get(lineIndex) ?? [];
 			line.push(decoration);
@@ -684,7 +684,7 @@ function createStanzaDiffOverviewMarkers(decorations: readonly ResolvedDecoratio
 	for (const decoration of decorations) {
 		if (!DIFF_PRESENTATIONS.has(decoration.presentation)) continue;
 		const presentation = decoration.presentation as DiffOverviewMarker['presentation'];
-		const lineIndex = decoration.range.start.lineIndex;
+		const lineIndex = decoration.range.startLineNumber - 1;
 		const previous = markers.at(-1);
 		if (previous && previous.endLineIndexExclusive === lineIndex && previous.presentation === presentation && previous.hoverText === decoration.hoverText) {
 			markers[markers.length - 1] = Object.freeze({ ...previous, endLineIndexExclusive: lineIndex + 1 });

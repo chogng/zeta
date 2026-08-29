@@ -2,7 +2,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { type TextRange } from "../../../common/core/text.js";
+import { type Range } from "../../../common/core/range.js";
 import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
 
 /** Projects current collapsed-cursor bracket matches into caller-owned decorations. */
@@ -32,11 +32,11 @@ export class BracketMatchController extends Disposable {
 			this.decorations.replaceAll([]);
 			return;
 		}
-		const ranges = new Map<string, TextRange>();
+		const ranges = new Map<string, Range>();
 		for (const selection of this.selections.selections.selections) {
-			if (!selection.collapsed) continue;
-			const match = this.bracketPairs.matchBracket(selection.active)
-				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.active) : undefined);
+			if (!selection.isEmpty()) continue;
+			const match = this.bracketPairs.matchBracket(selection.getPosition())
+				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
 			if (!match) continue;
 			ranges.set(rangeKey(match.opening), match.opening);
 			ranges.set(rangeKey(match.closing), match.closing);
@@ -49,6 +49,6 @@ export class BracketMatchController extends Disposable {
 	}
 }
 
-function rangeKey(range: { readonly start: { readonly lineIndex: number; readonly columnIndex: number }; readonly end: { readonly lineIndex: number; readonly columnIndex: number } }): string {
-	return `${range.start.lineIndex}:${range.start.columnIndex}-${range.end.lineIndex}:${range.end.columnIndex}`;
+function rangeKey(range: Range): string {
+	return `${range.startLineNumber}:${range.startColumn}-${range.endLineNumber}:${range.endColumn}`;
 }

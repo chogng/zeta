@@ -3,8 +3,9 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { autorun } from '../../../base/common/observable.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
-import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
-import { TextPosition } from '../../common/core/text.js';
+import { Selection } from '../../common/core/selection.js';
+import { SelectionSet } from '../../common/cursor/selectionSet.js';
+import { Position } from '../../common/core/position.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -31,7 +32,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha');
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 
@@ -48,8 +49,8 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	assert.equal(observableEditor.value.get(), 'beta');
 	assert.equal(observableEditor.valueIsEmpty.get(), false);
 
-	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
-	assert.equal(observableEditor.cursorPosition.get().columnIndex, 2);
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
+	assert.equal(observableEditor.cursorPosition.get().column, 3);
 
 	observableEditor.value.set('');
 	assert.equal(model.getText(), '');
@@ -60,6 +61,26 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	assert.equal(observableEditor.layoutInfoWidth.get(), 320);
 	assert.equal(observableEditor.layoutInfoHeight.get(), 80);
 	assert.equal(observableEditor.domNode.get(), editor.element);
+
+	dom.window.close();
+});
+
+test('observable code editor line APIs use one-based line numbers', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using model = new TextModel('alpha\nbeta');
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position(1, 1))));
+	using editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 });
+	using observableEditor = observableCodeEditor(editor);
+	editor.layout({ width: 320, height: 80 });
+
+	assert.equal(observableEditor.observeLineHeightForLine(1).get(), 20);
+	assert.equal(observableEditor.observeLineHeightForLine(2).get(), 20);
+	assert.ok(observableEditor.observeTopForLineNumber(1).get() < observableEditor.observeTopForLineNumber(2).get());
+	assert.ok(observableEditor.observeBottomForLineNumber(1).get() <= observableEditor.observeTopForLineNumber(2).get());
+	assert.doesNotThrow(() => observableEditor.getWidthOfLine(1));
+	assert.throws(() => observableEditor.getWidthOfLine(0), /Line number/);
 
 	dom.window.close();
 });

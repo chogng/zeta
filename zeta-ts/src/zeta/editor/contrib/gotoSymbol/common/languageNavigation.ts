@@ -1,6 +1,7 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type TextPosition, TextRange } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -8,14 +9,14 @@ import { type TextModel } from "../../../common/model/textModel.js";
 /** One source or target position returned by a cross-resource language feature. */
 export interface LanguageLocation {
 	readonly resource: URI;
-	readonly range: TextRange;
+	readonly range: Range;
 	/** The narrower symbol-name range to select after opening the target. */
-	readonly selectionRange?: TextRange;
+	readonly selectionRange?: Range;
 }
 
 export interface LanguageLocationRequest extends LanguageFeatureRequest {
 	readonly resource: URI;
-	readonly position: TextPosition;
+	readonly position: Position;
 }
 
 export interface LanguageReferenceRequest extends LanguageLocationRequest {
@@ -56,28 +57,28 @@ export class LanguageNavigationService extends Disposable {
 		super();
 	}
 
-	provideDefinition(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
+	provideDefinition(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
 		return this.collect(languageId, position, signal, this.providers.definitions, (provider, request) => provider.provideDefinition(request, signal));
 	}
 
-	provideDeclaration(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
+	provideDeclaration(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
 		return this.collect(languageId, position, signal, this.providers.declarations, (provider, request) => provider.provideDeclaration(request, signal));
 	}
 
-	provideImplementation(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
+	provideImplementation(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
 		return this.collect(languageId, position, signal, this.providers.implementations, (provider, request) => provider.provideImplementation(request, signal));
 	}
 
-	provideTypeDefinition(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
+	provideTypeDefinition(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
 		return this.collect(languageId, position, signal, this.providers.typeDefinitions, (provider, request) => provider.provideTypeDefinition(request, signal));
 	}
 
-	async provideReferences(languageId: string, position: TextPosition, includeDeclaration: boolean, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
+	async provideReferences(languageId: string, position: Position, includeDeclaration: boolean, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLocation[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position, includeDeclaration };
 		return this.collectRequest(languageId, request, this.providers.references, (provider) => provider.provideReferences(request, signal));
 	}
 
-	private async collect<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, position: TextPosition, signal: AbortSignal, registry: LanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider, request: LanguageLocationRequest) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
+	private async collect<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, position: Position, signal: AbortSignal, registry: LanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider, request: LanguageLocationRequest) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };
 		return this.collectRequest(languageId, request, registry, provider => provide(provider, request));
 	}
@@ -96,8 +97,8 @@ export class LanguageNavigationService extends Disposable {
 
 function normalizeLanguageLocation(location: LanguageLocation): LanguageLocation {
 	if (!location || typeof location !== "object" || !location.resource || !(location.range instanceof Object)) throw new TypeError("Language location requires a resource and range");
-	const range = TextRange.from(location.range.start, location.range.end);
-	const selectionRange = location.selectionRange ? TextRange.from(location.selectionRange.start, location.selectionRange.end) : undefined;
+	const range = Range.fromPositions(location.range.getStartPosition(), location.range.getEndPosition());
+	const selectionRange = location.selectionRange ? Range.fromPositions(location.selectionRange.getStartPosition(), location.selectionRange.getEndPosition()) : undefined;
 	if (selectionRange && !range.containsRange(selectionRange)) throw new RangeError("Language location selection must be contained by its target range");
 	return Object.freeze({ resource: location.resource, range, ...(selectionRange ? { selectionRange } : {}) });
 }
@@ -107,7 +108,7 @@ function deduplicateLocations(locations: readonly LanguageLocation[]): readonly 
 	const result: LanguageLocation[] = [];
 	for (const location of locations) {
 		const selection = location.selectionRange ?? location.range;
-		const key = `${location.resource.toString()}\u0000${location.range.start.lineIndex}:${location.range.start.columnIndex}:${location.range.end.lineIndex}:${location.range.end.columnIndex}:${selection.start.lineIndex}:${selection.start.columnIndex}:${selection.end.lineIndex}:${selection.end.columnIndex}`;
+		const key = `${location.resource.toString()}\u0000${location.range.getStartPosition().lineNumber}:${location.range.getStartPosition().column}:${location.range.getEndPosition().lineNumber}:${location.range.getEndPosition().column}:${selection.getStartPosition().lineNumber}:${selection.getStartPosition().column}:${selection.getEndPosition().lineNumber}:${selection.getEndPosition().column}`;
 		if (keys.has(key)) continue;
 		keys.add(key);
 		result.push(location);

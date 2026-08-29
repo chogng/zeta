@@ -3,7 +3,7 @@ import { Disposable, toDisposable, type IDisposable } from "../../../../base/com
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
 import { type LanguageWorkerDocumentSynchronization } from '../../services/textModelSync/textModelSync.protocol.js';
-import { type TextSnapshot } from "../../core/text.js";
+import { type TextSnapshot } from "../../core/textChange.js";
 
 export interface SyntaxRequest {
 	readonly languageId: string;

@@ -13,7 +13,8 @@ import {
 } from "../../../../../../base/common/keybindings.js";
 import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../../editor/common/core/range.js";
 import type { LanguageLocation } from "../../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import type {
 	CommandId,
@@ -337,13 +338,13 @@ test("EditorPart opens cross-resource language targets and reveals their selecti
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	await editor.openEditor(input("C:\\project\\main.ts"));
 	const target = URI.file("C:\\project\\target.ts");
-	const range = TextRange.from(TextPosition.at(4, 1), TextPosition.at(4, 8));
+	const range = Range.fromPositions(new Position((4) + 1, (1) + 1), new Position((4) + 1, (8) + 1));
 
 	await openLocation!({ resource: target, range });
 
 	assert.equal(editor.activeInput?.resource.toString(), target.toString());
 	assert.deepEqual(panes[1]?.revealedRanges, [range]);
-	const narrower = TextRange.from(TextPosition.at(4, 3), TextPosition.at(4, 7));
+	const narrower = Range.fromPositions(new Position((4) + 1, (3) + 1), new Position((4) + 1, (7) + 1));
 	await openLocation!({ resource: target, range, selectionRange: narrower });
 	assert.deepEqual(panes[1]?.revealedRanges, [range, narrower]);
 	editor.dispose();
@@ -1214,7 +1215,7 @@ class TestEditorPane extends Disposable implements IEditorPane {
 	dimension: IDimension | undefined;
 	focusCount = 0;
 	saveCount = 0;
-	readonly revealedRanges: TextRange[] = [];
+	readonly revealedRanges: Range[] = [];
 	get disposed(): boolean { return this.isDisposed; }
 
 	constructor(readonly id: string, readonly workingCopy?: IWorkingCopy) {
@@ -1253,7 +1254,7 @@ class TestEditorPane extends Disposable implements IEditorPane {
 		this.focusCount += 1;
 	}
 
-	revealRange(range: TextRange): void {
+	revealRange(range: Range): void {
 		this.revealedRanges.push(range);
 	}
 

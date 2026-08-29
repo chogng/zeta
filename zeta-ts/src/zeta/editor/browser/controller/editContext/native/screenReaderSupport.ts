@@ -4,14 +4,16 @@ import { type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
 import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
 import { type CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../view.js";
 import { RichScreenReaderContent } from "./screenReaderContentRich.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 import { createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, screenReaderLineOffsetAtModelOffset, type NativeScreenReaderContent } from "./screenReaderUtils.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewparts/viewLines/viewLine.js";
+import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 
 export interface NativeScreenReaderSupportOptions {
 	readonly element: HTMLElement;
@@ -65,8 +67,6 @@ export class ScreenReaderSupport extends Disposable {
 		this._register(addDisposableListener(options.element, "cut", () => this.onWillCut()));
 		this._register(addDisposableListener(options.element, "paste", () => this.onWillPaste()));
 		this._register(addDisposableListener(options.element.ownerDocument, "selectionchange", () => this.acceptDomSelection()));
-		this._register(options.model.onDidChange(() => this.scheduleSynchronization()));
-		this._register(options.selectionController.onDidChange(() => this.scheduleSynchronization()));
 		this._register(options.viewport.onDidChangeLayout(() => this.layoutContent()));
 		if (options.semanticTokenSource) {
 			this._register(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
@@ -89,7 +89,20 @@ export class ScreenReaderSupport extends Disposable {
 		this.content.setIgnoreSelectionChange();
 	}
 
-	writeScreenReaderContent(): void {
+	setAriaOptions(options: IEditorAriaOptions): void {
+		if (options.activeDescendant) {
+			this.options.element.setAttribute('aria-haspopup', 'true');
+			this.options.element.setAttribute('aria-autocomplete', 'list');
+			this.options.element.setAttribute('aria-activedescendant', options.activeDescendant);
+		} else {
+			this.options.element.setAttribute('aria-haspopup', 'false');
+			this.options.element.setAttribute('aria-autocomplete', 'both');
+			this.options.element.removeAttribute('aria-activedescendant');
+		}
+		if (options.role) this.options.element.setAttribute('role', options.role);
+	}
+
+	writeScreenReaderContent(_reason?: string): void {
 		this.synchronize();
 	}
 
@@ -146,7 +159,7 @@ export class ScreenReaderSupport extends Disposable {
 
 		const viewportLayout = this.options.viewport.currentLayout;
 		const selection = this.options.selectionController.selections.primary;
-		const position = this.options.viewport.getPositionContentCoordinates(selection.active);
+		const position = this.options.viewport.getPositionContentCoordinates(selection.getPosition());
 		const scrollPosition = viewportLayout.scrollPosition;
 		const viewportWidth = viewportLayout.viewportSize.width;
 		const viewportHeight = viewportLayout.viewportSize.height;
@@ -155,7 +168,7 @@ export class ScreenReaderSupport extends Disposable {
 			position.left <= scrollPosition.left + viewportWidth &&
 			position.top >= scrollPosition.top &&
 			position.top <= scrollPosition.top + viewportHeight;
-		const textLeft = this.options.viewport.getPositionContentCoordinates(TextPosition.at(0, 0)).left;
+		const textLeft = this.options.viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1)).left;
 		const desiredLeft = cursorVisible ? textLeft - scrollPosition.left : 0;
 		const desiredTop = cursorVisible ? position.top - scrollPosition.top : 0;
 		const lineHeight = Math.max(1, position.height);
@@ -168,7 +181,7 @@ export class ScreenReaderSupport extends Disposable {
 			width: Math.max(1, viewportWidth),
 			height: lineHeight,
 			lineHeight,
-			scrollTop: screenReaderLineOffsetAtModelOffset(state, this.options.model.offsetAt(selection.active)) * lineHeight,
+			scrollTop: screenReaderLineOffsetAtModelOffset(state, this.options.model.offsetAt(selection.getPosition())) * lineHeight,
 		});
 	}
 
@@ -194,8 +207,8 @@ export class ScreenReaderSupport extends Disposable {
 		const anchor = model.positionAt(domSelection.anchorOffset);
 		const active = model.positionAt(domSelection.activeOffset);
 		const current = this.options.selectionController.selections.primary;
-		if (current.anchor.equals(anchor) && current.active.equals(active)) return;
-		this.options.selectionController.setSelections(TextSelectionSet.single(TextSelection.from(anchor, active)));
+		if (current.getSelectionStart().equals(anchor) && current.getPosition().equals(active)) return;
+		this.options.selectionController.setSelections(SelectionSet.single(Selection.fromPositions(anchor, active)));
 		this.options.viewport.revealPosition(active);
 	}
 }

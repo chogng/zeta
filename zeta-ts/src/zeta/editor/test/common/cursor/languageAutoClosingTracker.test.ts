@@ -5,45 +5,48 @@ import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoC
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type LanguagePairTypeCommand } from "../../../common/cursor/languagePairEditing.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange, type TextModelChange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
+import { type TextModelChange } from "../../../common/core/textChange.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
 	using model = new TextModel("x");
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(1)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(1)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
 	executeAndRecord(selections, tracker, createLanguagePairTypeCommand(model, selections.selections, "(", configuration)!);
 
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "pre" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "pre" }]);
 	assert.deepEqual(selections.selections.primary, caret(5));
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 5), ")"), true);
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (5) + 1), ")"), true);
 
-	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 5), TextPosition.at(0, 6)), text: "]" }]);
-	assert.equal(tracker.canOvertype(selections.selections.primary.active, ")"), false);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (6) + 1)), text: "]" }]);
+	assert.equal(tracker.canOvertype(selections.selections.primary.getPosition(), ")"), false);
 });
 
 test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 	using model = new TextModel("");
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
 	executeAndRecord(selections, tracker, createLanguagePairTypeCommand(model, selections.selections, "(", configuration)!);
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 1), ")"), true);
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (1) + 1), ")"), true);
 
-	selections.setSelections(TextSelectionSet.single(caret(0)));
-	selections.setSelections(TextSelectionSet.single(caret(1)));
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 1), ")"), false);
+	selections.setSelections(SelectionSet.single(caret(0)));
+	selections.setSelections(SelectionSet.single(caret(1)));
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (1) + 1), ")"), false);
 });
 
 test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	using model = new TextModel("()");
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(1)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(1)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -54,30 +57,30 @@ test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	selections.execute(closing.command);
 	assert.equal(model.getText(), "())");
 
-	selections.setSelections(TextSelectionSet.single(caret(1)));
+	selections.setSelections(SelectionSet.single(caret(1)));
 	assert.equal(createLanguagePairBackspaceCommand(model, selections.selections, configuration, tracker), undefined);
 });
 
 test("Multi-selection auto-closing entries retain independent ownership", () => {
 	using model = new TextModel("a b");
-	using selections = new CursorsController(model, TextSelectionSet.withPrimary([caret(1), caret(3)], 0));
+	using selections = new CursorsController(model, SelectionSet.withPrimary([caret(1), caret(3)], 0));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
 	executeAndRecord(selections, tracker, createLanguagePairTypeCommand(model, selections.selections, "(", configuration)!);
 	assert.equal(model.getText(), "a() b()");
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 2), ")"), true);
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 6), ")"), true);
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (2) + 1), ")"), true);
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (6) + 1), ")"), true);
 
-	selections.setSelections(TextSelectionSet.single(caret(2)));
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 2), ")"), true);
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 6), ")"), false);
+	selections.setSelections(SelectionSet.single(caret(2)));
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (2) + 1), ")"), true);
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (6) + 1), ")"), false);
 });
 
 test("Undo removes provenance and redo does not invent it again", () => {
 	using model = new TextModel("");
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -88,13 +91,13 @@ test("Undo removes provenance and redo does not invent it again", () => {
 	assert.equal(model.getText(), "");
 	selections.redo();
 	assert.equal(model.getText(), "()");
-	assert.equal(tracker.canOvertype(TextPosition.at(0, 1), ")"), false);
+	assert.equal(tracker.canOvertype(new Position((0) + 1, (1) + 1), ")"), false);
 	assert.equal(createLanguagePairBackspaceCommand(model, selections.selections, configuration, tracker), undefined);
 });
 
 test("Stale recording is ignored and disposal leaves borrowed dependencies alive", () => {
 	using model = new TextModel("");
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const tracker = new LanguageAutoClosingTracker(model, selections);
@@ -102,13 +105,13 @@ test("Stale recording is ignored and disposal leaves borrowed dependencies alive
 	const command = createLanguagePairTypeCommand(model, selections.selections, "(", configuration)!;
 	const change = selections.execute(command.command);
 	assert.ok(change);
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "x" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "x" }]);
 	tracker.record(command.autoClosingActions, change.version);
-	assert.equal(tracker.canOvertype(selections.selections.primary.active, ")"), false);
+	assert.equal(tracker.canOvertype(selections.selections.primary.getPosition(), ")"), false);
 
 	tracker.dispose();
-	assert.throws(() => tracker.canOvertype(TextPosition.at(0, 2), ")"), ReferenceError);
-	selections.setSelections(TextSelectionSet.single(caret(0)));
+	assert.throws(() => tracker.canOvertype(new Position((0) + 1, (2) + 1), ")"), ReferenceError);
+	selections.setSelections(SelectionSet.single(caret(0)));
 	assert.equal(model.getText(), "x()");
 });
 
@@ -119,6 +122,6 @@ function executeAndRecord(selections: CursorsController, tracker: LanguageAutoCl
 	return change;
 }
 
-function caret(columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(0, columnIndex));
+function caret(columnIndex: number): Selection {
+	return Selection.fromPositions(new Position((0) + 1, (columnIndex) + 1));
 }

@@ -41,7 +41,7 @@ export class LineCommentController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key !== "/") return;
-		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections.primary.active) ?? this.options.languageId;
+		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections.primary.getPosition()) ?? this.options.languageId;
 		const lineComment = this.options.configurations.getLanguageConfiguration(languageId).comments.lineComment;
 		if (!lineComment) return;
 		stopEvent(event);
@@ -54,7 +54,7 @@ export class LineCommentController extends Disposable {
 			},
 		);
 		this.executeCommand(ToggleLineCommentCommandId, () => this.selections.execute(command));
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 }
 

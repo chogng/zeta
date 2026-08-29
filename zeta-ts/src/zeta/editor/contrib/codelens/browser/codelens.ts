@@ -76,8 +76,8 @@ function createRequest(context: Pick<CodeLensRequestContext, 'model' | 'language
 
 function normalizeLanguageCodeLens(model: TextModel, lens: LanguageCodeLens): LanguageCodeLens {
 	if (!lens || typeof lens !== 'object') throw new TypeError('Code lens must be an object');
-	model.offsetAt(lens.range.start);
-	model.offsetAt(lens.range.end);
+	model.offsetAt(lens.range.getStartPosition());
+	model.offsetAt(lens.range.getEndPosition());
 	const command = lens.command;
 	if (command && (typeof command.id !== 'string' || command.id.trim().length === 0 || typeof command.title !== 'string' || command.title.trim().length === 0)) {
 		throw new TypeError('Code lens command must provide a non-empty ID and title');
@@ -96,9 +96,9 @@ function normalizeLanguageCodeLens(model: TextModel, lens: LanguageCodeLens): La
 }
 
 function compareCodeLensItems(left: CodeLensItem, right: CodeLensItem, providerRanks: ReadonlyMap<LanguageCodeLensProvider, number>): number {
-	const lineComparison = left.symbol.range.start.lineIndex - right.symbol.range.start.lineIndex;
+	const lineComparison = left.symbol.range.getStartPosition().lineNumber - right.symbol.range.getStartPosition().lineNumber;
 	if (lineComparison !== 0) return lineComparison;
 	const providerComparison = providerRanks.get(left.provider)! - providerRanks.get(right.provider)!;
 	if (providerComparison !== 0) return providerComparison;
-	return left.symbol.range.start.columnIndex - right.symbol.range.start.columnIndex;
+	return left.symbol.range.getStartPosition().column - right.symbol.range.getStartPosition().column;
 }

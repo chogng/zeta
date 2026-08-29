@@ -1,6 +1,6 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { type URI } from "../../../base/common/uri.js";
-import { type TextRange } from "../core/text.js";
+import { type Range } from "../core/range.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../languageFeatureRegistry.js";
 
 export type LanguageWorkspaceSymbolKind = string | number;
@@ -9,7 +9,7 @@ export interface LanguageWorkspaceSymbol {
 	readonly name: string;
 	readonly kind: LanguageWorkspaceSymbolKind;
 	readonly resource: URI;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly containerName?: string;
 	readonly data?: unknown;
 }
@@ -54,7 +54,7 @@ function mergeWorkspaceSymbols(providerResults: readonly (readonly LanguageWorks
 	const merged: LanguageWorkspaceSymbol[] = [];
 	for (const symbols of providerResults) {
 		for (const symbol of symbols ?? []) {
-			const key = `${symbol.resource.toString()}\0${symbol.name}\0${symbol.range.start.lineIndex}:${symbol.range.start.columnIndex}`;
+			const key = `${symbol.resource.toString()}\0${symbol.name}\0${symbol.range.getStartPosition().lineNumber}:${symbol.range.getStartPosition().column}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
 			merged.push(symbol);

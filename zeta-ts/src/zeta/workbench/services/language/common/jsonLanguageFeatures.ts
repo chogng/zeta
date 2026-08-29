@@ -2,7 +2,9 @@ import { applyEdits } from '../../../../base/common/jsonEdit.js';
 import { format, type FormattingOptions } from '../../../../base/common/jsonFormatter.js';
 import { getJsonNodePath, parseJsonDocument, JsonTokenKind, type JsonDocument, type JsonObjectNode, type JsonPropertyNode, type JsonValueNode } from '../../../../base/common/json.js';
 import { jsonSchemaAtPath, type JsonSchema } from '../../../../base/common/jsonSchema.js';
-import { TextPosition, TextRange, type TextEdit } from '../../../../editor/common/core/text.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import { type TextEdit } from '../../../../editor/common/core/editOperation.js';
 import { LanguageCompletionItemKind } from '../../../../editor/common/languages/completion/languageCompletions.js';
 import type { LanguageCompletionProvider, LanguageCompletionProviderItem, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from '../../../../editor/common/languages/completion/languageCompletionProviders.js';
 import type { LanguageFormattingProvider, LanguageFormattingRequest } from '../../../../editor/contrib/format/common/formatCommands.js';
@@ -13,7 +15,7 @@ const jsonLanguageIds = Object.freeze(['json', 'jsonc']);
 
 interface JsonPropertyCompletionContext {
 	readonly object: JsonObjectNode;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly currentProperty: JsonPropertyNode | undefined;
 	readonly append: string;
 }
@@ -87,10 +89,10 @@ export function createJsonFormattingProvider(): LanguageFormattingProvider {
 	});
 }
 
-function emptyDocumentCompletions(schema: JsonSchema, position: TextPosition): LanguageCompletionProviderResult | undefined {
+function emptyDocumentCompletions(schema: JsonSchema, position: Position): LanguageCompletionProviderResult | undefined {
 	const properties = Object.entries(schema.properties ?? {});
 	if (properties.length === 0) return undefined;
-	const range = TextRange.from(position, position);
+	const range = Range.fromPositions(position, position);
 	const items = properties.map(([key, propertySchema], index) => propertyCompletionItem(key, propertySchema, range, index, '{\n\t', '\n}'));
 	return Object.freeze({ items: Object.freeze(items), isIncomplete: false });
 }
@@ -125,7 +127,7 @@ function propertyCompletions(document: JsonDocument, rootSchema: JsonSchema, con
 	return items.length === 0 ? undefined : Object.freeze({ items: Object.freeze(items), isIncomplete: false });
 }
 
-function propertyCompletionItem(key: string, schema: JsonSchema, range: TextRange, index: number, prepend: string, append: string): LanguageCompletionProviderItem {
+function propertyCompletionItem(key: string, schema: JsonSchema, range: Range, index: number, prepend: string, append: string): LanguageCompletionProviderItem {
 	return Object.freeze({
 		id: `property-${index}`,
 		label: key,
@@ -179,7 +181,7 @@ function valueCompletions(source: string, document: JsonDocument, rootSchema: Js
 	if (!schema) return undefined;
 	const values = completionValues(schema);
 	if (values.length === 0) return undefined;
-	let range: TextRange;
+	let range: Range;
 	if (match.property.valueNode && offset >= match.property.valueNode.offset && offset <= match.property.valueNode.offset + match.property.valueNode.length) {
 		range = rangeFromOffsets(source, match.property.valueNode.offset, match.property.valueNode.offset + match.property.valueNode.length);
 	} else {
@@ -284,22 +286,22 @@ function jsonParseOptions(languageId: string): { readonly allowComments: boolean
 	return { allowComments: languageId === 'jsonc', allowTrailingComma: languageId === 'jsonc' };
 }
 
-function offsetAt(source: string, position: TextPosition): number {
+function offsetAt(source: string, position: Position): number {
 	const lines = source.split('\n');
-	if (position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) throw new RangeError('JSON language position is outside the document');
-	let offset = position.columnIndex;
-	for (let index = 0; index < position.lineIndex; index += 1) offset += lines[index]!.length + 1;
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) throw new RangeError('JSON language position is outside the document');
+	let offset = position.column - 1;
+	for (let lineIndex = 0; lineIndex < position.lineNumber - 1; lineIndex += 1) offset += lines[lineIndex]!.length + 1;
 	return offset;
 }
 
-function positionAt(source: string, offset: number): TextPosition {
+function positionAt(source: string, offset: number): Position {
 	if (!Number.isSafeInteger(offset) || offset < 0 || offset > source.length) throw new RangeError('JSON source offset is outside the document');
 	const before = source.slice(0, offset);
 	const lineIndex = (before.match(/\n/gu) ?? []).length;
 	const lineStart = before.lastIndexOf('\n') + 1;
-	return TextPosition.at(lineIndex, offset - lineStart);
+	return new Position((lineIndex) + 1, (offset - lineStart) + 1);
 }
 
-function rangeFromOffsets(source: string, start: number, end: number): TextRange {
-	return TextRange.from(positionAt(source, start), positionAt(source, end));
+function rangeFromOffsets(source: string, start: number, end: number): Range {
+	return Range.fromPositions(positionAt(source, start), positionAt(source, end));
 }

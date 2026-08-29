@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { LanguageLexicalSyntaxCache, type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalSyntaxCache.js";
-import { TextRange } from "../../common/core/text.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical token and diagnostic lanes share one versioned cache", () => {
@@ -21,7 +21,7 @@ test("Lexical token and diagnostic lanes share one versioned cache", () => {
 	}]);
 
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(25), model.positionAt(31)),
+		range: Range.fromPositions(model.positionAt(25), model.positionAt(31)),
 		text: "answer",
 	}]);
 	cache.getDiagnostics(model.createSnapshot(), signal);
@@ -43,7 +43,7 @@ test("Lexical multiline state propagates only until the cached suffix converges"
 	cache.getTokens(model.createSnapshot(), signal);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(0)),
+		range: Range.fromPositions(model.positionAt(0)),
 		text: "/* ",
 	}]);
 	const tokens = cache.getTokens(model.createSnapshot(), signal);
@@ -55,8 +55,8 @@ test("Lexical multiline state propagates only until the cached suffix converges"
 		scannedLineCount: 3,
 		reusedLineCount: 1,
 	});
-	assert.deepEqual(tokens.tokens.filter(token => token.range.start.lineIndex === 1).map(token => token.tokenType), ["comment"]);
-	assert.deepEqual(tokens.tokens.filter(token => token.range.start.lineIndex === 2).map(token => token.tokenType), ["comment", "keyword", "variable", "operator", "number"]);
+	assert.deepEqual(tokens.tokens.filter(token => token.range.getStartPosition().lineNumber === 1).map(token => token.tokenType), ["comment"]);
+	assert.deepEqual(tokens.tokens.filter(token => token.range.startLineNumber === 3).map(token => token.tokenType), ["comment", "keyword", "variable", "operator", "number"]);
 	assert.deepEqual(diagnostics.diagnostics, []);
 });
 
@@ -71,7 +71,7 @@ test("Lexical incremental analysis respects a large-document scan budget", () =>
 	const line = 517;
 	const lineStart = lines.slice(0, line).reduce((offset, value) => offset + value.length + 1, 0);
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(lineStart + 6), model.positionAt(lineStart + 11)),
+		range: Range.fromPositions(model.positionAt(lineStart + 6), model.positionAt(lineStart + 11)),
 		text: "item",
 	}]);
 	cache.getTokens(model.createSnapshot(), signal);
@@ -93,7 +93,7 @@ test("Lexical incremental results stay equal to a fresh full-scan oracle", () =>
 		const startOffset = randomInteger(length + 1);
 		const removedLength = Math.min(randomInteger(4), length - startOffset);
 		model.applyEdits([{
-			range: TextRange.from(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
+			range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
 			text: insertions[randomInteger(insertions.length)]!,
 		}]);
 		const snapshot = model.createSnapshot();
@@ -112,10 +112,10 @@ test("Lexical incremental results stay equal to a fresh full-scan oracle", () =>
 
 function serializeTokens(tokens: ReturnType<LanguageLexicalSyntaxCache["getTokens"]>["tokens"]): readonly unknown[] {
 	return tokens.map(token => [
-		token.range.start.lineIndex,
-		token.range.start.columnIndex,
-		token.range.end.lineIndex,
-		token.range.end.columnIndex,
+		token.range.getStartPosition().lineNumber,
+		token.range.getStartPosition().column,
+		token.range.getEndPosition().lineNumber,
+		token.range.getEndPosition().column,
 		token.tokenType,
 		token.modifiers,
 	]);
@@ -123,10 +123,10 @@ function serializeTokens(tokens: ReturnType<LanguageLexicalSyntaxCache["getToken
 
 function serializeDiagnostics(diagnostics: ReturnType<LanguageLexicalSyntaxCache["getDiagnostics"]>["diagnostics"]): readonly unknown[] {
 	return diagnostics.map(diagnostic => [
-		diagnostic.range.start.lineIndex,
-		diagnostic.range.start.columnIndex,
-		diagnostic.range.end.lineIndex,
-		diagnostic.range.end.columnIndex,
+		diagnostic.range.getStartPosition().lineNumber,
+		diagnostic.range.getStartPosition().column,
+		diagnostic.range.getEndPosition().lineNumber,
+		diagnostic.range.getEndPosition().column,
 		diagnostic.severity,
 		diagnostic.message,
 		diagnostic.source,

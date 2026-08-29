@@ -1,11 +1,11 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
 import { type EditorHitTarget } from "../../../common/viewModel/pointerHitTest.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
-export interface ContextMenuRequest { readonly position: TextPosition; readonly target: EditorHitTarget | undefined; readonly clientX: number; readonly clientY: number; }
+export interface ContextMenuRequest { readonly position: Position; readonly target: EditorHitTarget | undefined; readonly clientX: number; readonly clientY: number; }
 
 /** Delegates context-menu composition to the host while keeping editor hit testing local. */
 export class ContextMenuController extends Disposable {

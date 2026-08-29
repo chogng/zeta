@@ -1,6 +1,8 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange, type TextEdit } from "../../../common/core/text.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { MoveOperations } from '../../../common/cursor/cursorMoveOperations.js';
 
@@ -18,10 +20,10 @@ interface TransposeOperation {
  * line end swaps the two preceding graphemes. Crossing a physical-line start
  * treats its preceding line break as the left unit, matching VS Code.
  */
-export function createTransposeCharactersCommand(model: TextModel, selections: TextSelectionSet): EditorEditCommand | undefined {
+export function createTransposeCharactersCommand(model: TextModel, selections: SelectionSet): EditorEditCommand | undefined {
 	const candidates = selections.selections.flatMap((selection, selectionIndex) => {
-		if (!selection.collapsed) return [];
-		const operation = createTransposeOperation(model, selection.active, selectionIndex);
+		if (!selection.isEmpty()) return [];
+		const operation = createTransposeOperation(model, selection.getPosition(), selectionIndex);
 		return operation ? [operation] : [];
 	});
 	const operations = selectNonOverlappingOperations(candidates, selections.primaryIndex);
@@ -31,9 +33,9 @@ export function createTransposeCharactersCommand(model: TextModel, selections: T
 		edits: Object.freeze(operations.map(operation => operation.edit)),
 		selectionsAfter: Object.freeze(selections.selections.map((selection, selectionIndex) => {
 			const operation = operationBySelection.get(selectionIndex);
-			const activeOffset = operation?.endOffset ?? model.offsetAt(selection.active);
+			const activeOffset = operation?.endOffset ?? model.offsetAt(selection.getPosition());
 			return Object.freeze({
-				anchorOffset: operation ? activeOffset : model.offsetAt(selection.anchor),
+				anchorOffset: operation ? activeOffset : model.offsetAt(selection.getSelectionStart()),
 				activeOffset,
 			});
 		})),
@@ -42,15 +44,15 @@ export function createTransposeCharactersCommand(model: TextModel, selections: T
 	});
 }
 
-function createTransposeOperation(model: TextModel, position: TextPosition, selectionIndex: number): TransposeOperation | undefined {
-	const line = model.getLineContent(position.lineIndex);
-	const end = position.columnIndex === line.length ? position : MoveOperations.rightPosition(model, position);
+function createTransposeOperation(model: TextModel, position: Position, selectionIndex: number): TransposeOperation | undefined {
+	const line = model.getLineContent(position.lineNumber);
+	const end = position.column === line.length + 1 ? position : MoveOperations.rightPosition(model, position);
 	const middle = MoveOperations.leftPosition(model, end);
 	const begin = MoveOperations.leftPosition(model, middle);
-	if (begin.compareTo(middle) === 0 || middle.compareTo(end) === 0) return undefined;
-	const range = TextRange.from(begin, end);
-	const left = model.getTextInRange(TextRange.from(begin, middle));
-	const right = model.getTextInRange(TextRange.from(middle, end));
+	if (Position.compare(begin, middle) === 0 || Position.compare(middle, end) === 0) return undefined;
+	const range = Range.fromPositions(begin, end);
+	const left = model.getTextInRange(Range.fromPositions(begin, middle));
+	const right = model.getTextInRange(Range.fromPositions(middle, end));
 	return Object.freeze({
 		selectionIndex,
 		startOffset: model.offsetAt(begin),
@@ -75,4 +77,3 @@ function selectNonOverlappingOperations(candidates: readonly TransposeOperation[
 	}
 	return Object.freeze(selected.sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset));
 }
-

@@ -1,10 +1,11 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextPosition, type TextRange } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
+import { type Range } from "../../../common/core/range.js";
 import { type LanguageDocumentSymbol, DocumentSymbolService } from "../../documentSymbols/common/documentSymbols.js";
 
 export interface LanguageSymbolMatch {
 	readonly symbol: LanguageDocumentSymbol;
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly score: number;
 }
 
@@ -22,9 +23,9 @@ export class GotoSymbolService extends Disposable {
 		for (const symbol of flattenSymbols(symbols)) {
 			const score = symbol.name.toLocaleLowerCase().includes(normalizedQuery) ? symbol.name.toLocaleLowerCase() === normalizedQuery ? 2 : 1 : 0;
 			if (normalizedQuery.length > 0 && score === 0) continue;
-			matches.push(Object.freeze({ symbol, position: symbol.selectionRange.start, score }));
+			matches.push(Object.freeze({ symbol, position: symbol.selectionRange.getStartPosition(), score }));
 		}
-		matches.sort((left, right) => right.score - left.score || left.position.compareTo(right.position));
+		matches.sort((left, right) => right.score - left.score || Position.compare(left.position, right.position));
 		return Object.freeze(matches);
 	}
 }

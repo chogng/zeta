@@ -4,7 +4,7 @@ import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDom
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
 import { CursorChangeReason, type CursorsController } from '../../../common/cursor/cursor.js';
-import { type TextRange } from '../../../common/core/text.js';
+import { type Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';
 import { type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
@@ -64,7 +64,7 @@ export class ViewCursors extends DynamicViewOverlay {
 		this._register(toDisposable(() => this.compositionRange?.dispose()));
 	}
 
-	public setCompositionRange(range: TextRange | undefined): void {
+	public setCompositionRange(range: Range | undefined): void {
 		const next = range ? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges) : undefined;
 		this.compositionRange?.dispose();
 		this.compositionRange = next;
@@ -154,7 +154,7 @@ export class ViewCursors extends DynamicViewOverlay {
 			const plurality = cursorPlurality(selectionIndex, this.cursors.length, selections.primaryIndex);
 			const cursor = this.cursors[selectionIndex]!;
 			cursor.setPlurality(plurality);
-			cursor.onCursorPositionChanged(selections.selections[selectionIndex]!.active, pauseMovementAnimation);
+			cursor.onCursorPositionChanged(selections.selections[selectionIndex]!.getPosition(), pauseMovementAnimation);
 		}
 	}
 
@@ -181,7 +181,7 @@ function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
 	}
 }
 
-function projectStanzaCompositionOverlay(context: EditorOverlayContext, range: TextRange | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
+function projectStanzaCompositionOverlay(context: EditorOverlayContext, range: Range | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
 	if (!range) return;
 	const rectangles = context.linesVisibleRangesForRange(range, false)
 		?? createStanzaVisualRangeRectangles(context.model, [{ range, value: undefined }], context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);

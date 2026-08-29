@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TextPosition, TextRange } from '../../common/core/text.js';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
 import { createLineDocumentSnapshot, type LineSemanticAttributes } from '../../common/model/lineDocument.js';
 import { TextModel } from '../../common/model/textModel.js';
 
@@ -108,7 +109,7 @@ test('TextModel preserves logical line identity through edits and history withou
 	const initialSnapshot = model.lineDocument;
 	assert.equal(model.lineDocument, initialSnapshot);
 
-	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 1)), text: 'X\nY' }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (1) + 1)), text: 'X\nY' }]);
 	assert.notEqual(model.lineDocument, initialSnapshot);
 	assert.equal(initialSnapshot.getText(), 'a\nb');
 	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'inserted:1', 'second']);
@@ -121,9 +122,9 @@ test('TextModel preserves logical line identity through edits and history withou
 	model.redo();
 	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'inserted:1', 'second']);
 
-	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 2), TextPosition.at(1, 0)), text: '' }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (2) + 1), new Position((1) + 1, (0) + 1)), text: '' }]);
 	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'second']);
 	assert.equal(model.getText(), 'aXY\nb');
-	assert.deepEqual(model.linePointAt(TextPosition.at(1, 1)), { lineId: 'second', offset: 1 });
-	assert.deepEqual(model.textPositionAt({ lineId: 'second', offset: 1 }), TextPosition.at(1, 1));
+	assert.deepEqual(model.linePointAt(new Position((1) + 1, (1) + 1)), { lineId: 'second', offset: 1 });
+	assert.deepEqual(model.textPositionAt({ lineId: 'second', offset: 1 }), new Position((1) + 1, (1) + 1));
 });

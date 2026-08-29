@@ -1,9 +1,9 @@
-import { TextPosition } from '../../../../editor/common/core/text.js';
+import { Position } from '../../../../editor/common/core/position.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { JsonTokenKind, scanJson, type JsonToken } from '../../../../base/common/json.js';
 
 export interface InsertSnippetResult {
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly prepend: string;
 	readonly append: string;
 }
@@ -16,7 +16,7 @@ const enum InsertionState {
 
 /** Finds a structurally safe insertion point for an object snippet in a JSONC array. */
 export class SmartSnippetInserter {
-	public static insertSnippet(model: TextModel, desiredPosition: TextPosition): InsertSnippetResult {
+	public static insertSnippet(model: TextModel, desiredPosition: Position): InsertSnippetResult {
 		const source = model.getText();
 		const desiredOffset = model.offsetAt(desiredPosition);
 		const tokens = scanJson(source, { allowComments: true, allowTrailingComma: true }).tokens;

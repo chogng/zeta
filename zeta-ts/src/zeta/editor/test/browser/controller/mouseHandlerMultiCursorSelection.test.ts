@@ -4,8 +4,10 @@ import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { PointerMultiCursorModifier } from "../../../common/cursor/cursorMoveCommands.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -46,7 +48,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 	using model = new TextModel("abcd\nefgh\nijkl");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(caret(0, 1)),
+		SelectionSet.single(caret(0, 1)),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -61,7 +63,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 	using pointer = new MouseHandler(viewport, selections);
 
 	click(dom.window, viewport.element, 1, 158, 75, { altKey: true });
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
 		caret(0, 1),
 		caret(1, 2),
 	], 1));
@@ -69,26 +71,26 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 	click(dom.window, viewport.element, 2, 148, 55, { altKey: true });
 	assert.deepEqual(
 		selections.selections,
-		TextSelectionSet.single(caret(1, 2)),
+		SelectionSet.single(caret(1, 2)),
 	);
 
 	click(dom.window, viewport.element, 3, 158, 75, { altKey: true });
 	assert.deepEqual(
 		selections.selections,
-		TextSelectionSet.single(caret(1, 2)),
+		SelectionSet.single(caret(1, 2)),
 	);
 
-	selections.setSelections(TextSelectionSet.single(caret(0, 0)));
+	selections.setSelections(SelectionSet.single(caret(0, 0)));
 	click(dom.window, viewport.element, 4, 158, 75, {
 		altKey: true,
 		detail: 2,
 	});
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
 		caret(0, 0),
-		TextSelection.from(TextPosition.at(1, 0), TextPosition.at(1, 4)),
+		Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)),
 	], 1));
 
-	selections.setSelections(TextSelectionSet.withPrimary([
+	selections.setSelections(SelectionSet.withPrimary([
 		caret(0, 1),
 		caret(1, 2),
 	], 1));
@@ -100,7 +102,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 		{ pointerId: 5, altKey: true },
 	));
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
 	dom.window.dispatchEvent(pointerEvent(
@@ -110,10 +112,10 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 		95,
 		{ pointerId: 5, altKey: true },
 	));
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
 		caret(0, 2),
 		caret(1, 2),
-		TextSelection.from(TextPosition.at(2, 1), TextPosition.at(2, 3)),
+		Selection.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)),
 	], 2));
 	dom.window.dispatchEvent(pointerEvent(
 		dom.window,
@@ -127,8 +129,8 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 		altKey: true,
 		shiftKey: true,
 	});
-	assert.deepEqual(selections.selections, TextSelectionSet.single(
-		TextSelection.from(TextPosition.at(2, 1), TextPosition.at(0, 3)),
+	assert.deepEqual(selections.selections, SelectionSet.single(
+		Selection.fromPositions(new Position((2) + 1, (1) + 1), new Position((0) + 1, (3) + 1)),
 	));
 
 	dom.window.close();
@@ -141,7 +143,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 	using model = new TextModel("abcd\nefgh\nijkl");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(caret(0, 0)),
+		SelectionSet.single(caret(0, 0)),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -159,7 +161,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 
 	click(dom.window, viewport.element, 6, 158, 55, { ctrlKey: true });
 	click(dom.window, viewport.element, 7, 148, 75, { metaKey: true });
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
 		caret(0, 0),
 		caret(0, 2),
 		caret(1, 1),
@@ -168,7 +170,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 	click(dom.window, viewport.element, 8, 148, 95, { altKey: true });
 	assert.deepEqual(
 		selections.selections,
-		TextSelectionSet.single(caret(2, 1)),
+		SelectionSet.single(caret(2, 1)),
 	);
 	assert.throws(
 		() => new MouseHandler(viewport, selections, {
@@ -240,8 +242,8 @@ function pointerEvent(
 	return event as unknown as PointerEvent;
 }
 
-function caret(lineIndex: number, columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex));
+function caret(lineIndex: number, columnIndex: number): Selection {
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }
 
 function editorBounds(): DOMRect {

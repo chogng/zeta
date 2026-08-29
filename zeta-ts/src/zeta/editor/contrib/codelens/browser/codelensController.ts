@@ -136,16 +136,16 @@ export class CodeLensContribution extends Disposable {
 		const groups = groupCodeLensItems(items);
 		const currentWidgets = new Map(this.widgets);
 		try {
-			for (const lineIndex of [...this.widgets.keys()]) {
-				if (!groups.has(lineIndex)) this.widgets.deleteAndDispose(lineIndex);
+			for (const lineNumber of [...this.widgets.keys()]) {
+				if (!groups.has(lineNumber)) this.widgets.deleteAndDispose(lineNumber);
 			}
-			for (const [lineIndex, lineItems] of groups) {
-				const current = currentWidgets.get(lineIndex);
+			for (const [lineNumber, lineItems] of groups) {
+				const current = currentWidgets.get(lineNumber);
 				if (current) {
 					current.updateCodeLensItems(lineItems);
 					continue;
 				}
-				this.widgets.set(lineIndex, new CodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
+				this.widgets.set(lineNumber, new CodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
 			}
 		} finally {
 			scrollState.restore(this.viewport);
@@ -155,7 +155,7 @@ export class CodeLensContribution extends Disposable {
 	private clearWidgets(): void {
 		const scrollState = StableEditorScrollState.capture(this.viewport);
 		try {
-			for (const lineIndex of [...this.widgets.keys()]) this.widgets.deleteAndDispose(lineIndex);
+			for (const lineNumber of [...this.widgets.keys()]) this.widgets.deleteAndDispose(lineNumber);
 		} finally {
 			scrollState.restore(this.viewport);
 		}
@@ -226,10 +226,10 @@ export class CodeLensContribution extends Disposable {
 function groupCodeLensItems(items: readonly CodeLensItem[]): ReadonlyMap<number, readonly CodeLensItem[]> {
 	const groups = new Map<number, CodeLensItem[]>();
 	for (const item of items) {
-		const lineIndex = item.symbol.range.start.lineIndex;
-		const group = groups.get(lineIndex);
+		const lineNumber = item.symbol.range.getStartPosition().lineNumber;
+		const group = groups.get(lineNumber);
 		if (group) group.push(item);
-		else groups.set(lineIndex, [item]);
+		else groups.set(lineNumber, [item]);
 	}
 	return groups;
 }

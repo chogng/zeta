@@ -1,7 +1,8 @@
+import { Position } from "../../../common/core/position.js";
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type EditorView } from '../../../browser/view.js';
-import { type TextSelection } from '../../../common/core/selection.js';
-import { type TextRange } from '../../../common/core/text.js';
+import { type Selection } from '../../../common/core/selection.js';
+import { type Range } from '../../../common/core/range.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
@@ -55,7 +56,7 @@ export class SelectionHighlighter extends Disposable {
 	private update(): void {
 		const ranges = this.findRanges();
 		const hasSemanticHighlights = this.occurrenceHighlights && this.languageFeaturesService.documentHighlightProvider.getProviders(this.languageId).length > 0;
-		const key = `${hasSemanticHighlights}:${ranges.map(range => `${this.selections.textModel.offsetAt(range.start)}-${this.selections.textModel.offsetAt(range.end)}`).join(',')}`;
+		const key = `${hasSemanticHighlights}:${ranges.map(range => `${this.selections.textModel.offsetAt(range.getStartPosition())}-${this.selections.textModel.offsetAt(range.getEndPosition())}`).join(',')}`;
 		if (key === this.lastKey) return;
 		this.lastKey = key;
 		this.decorations.replaceAll(ranges.map(range => ({
@@ -65,26 +66,26 @@ export class SelectionHighlighter extends Disposable {
 		})));
 	}
 
-	private findRanges(): readonly TextRange[] {
+	private findRanges(): readonly Range[] {
 		if (!this.enabled) return Object.freeze([]);
 		const selected = this.selections.selections.selections;
-		if (selected.some(selection => selection.collapsed)) return Object.freeze([]);
+		if (selected.some(selection => selection.isEmpty())) return Object.freeze([]);
 		const source = selected[this.selections.selections.primaryIndex]!;
-		if (!this.multiline && source.range.start.lineIndex !== source.range.end.lineIndex) return Object.freeze([]);
-		const text = this.selections.textModel.getTextInRange(source.range);
+		if (!this.multiline && source.getStartPosition().lineNumber !== source.getEndPosition().lineNumber) return Object.freeze([]);
+		const text = this.selections.textModel.getTextInRange(source);
 		if (!text || /^\s+$/u.test(text) || (this.maxLength > 0 && text.length > this.maxLength)) return Object.freeze([]);
 		if (!selectionsContainSameText(this.selections, selected, text)) return Object.freeze([]);
 		const wordPattern = this.wordPattern?.();
-		const wordRange = WordOperations.getWordSelectionRange(this.selections.textModel, source.range.start, wordPattern);
-		const wholeWord = rangesEqual(wordRange, source.range);
+		const wordRange = WordOperations.getWordSelectionRange(this.selections.textModel, source.getStartPosition(), wordPattern);
+		const wholeWord = rangesEqual(wordRange, source);
 		const matches = findTextMatches(this.selections.textModel, {
 			pattern: text,
 			matchCase: true,
 			wholeWord: wholeWord && !wordPattern,
 		}, { resultLimit: MAX_SELECTION_HIGHLIGHTS });
 		return Object.freeze(matches.flatMap(match => {
-			if (selected.some(selection => rangesIntersect(this.selections, match.range, selection.range))) return [];
-			if (wholeWord && wordPattern && !rangesEqual(WordOperations.getWordSelectionRange(this.selections.textModel, match.range.start, wordPattern), match.range)) return [];
+			if (selected.some(selection => rangesIntersect(this.selections, match.range, selection))) return [];
+			if (wholeWord && wordPattern && !rangesEqual(WordOperations.getWordSelectionRange(this.selections.textModel, match.range.getStartPosition(), wordPattern), match.range)) return [];
 			return [match.range];
 		}));
 	}
@@ -100,18 +101,18 @@ function validateSelectionHighlighter(view: EditorView, selections: CursorsContr
 	if (options.wordPattern !== undefined && typeof options.wordPattern !== 'function') throw new TypeError('Selection highlighter word pattern resolver must be a function');
 }
 
-function selectionsContainSameText(controller: CursorsController, selections: readonly TextSelection[], text: string): boolean {
-	return selections.every(selection => controller.textModel.getTextInRange(selection.range) === text);
+function selectionsContainSameText(controller: CursorsController, selections: readonly Selection[], text: string): boolean {
+	return selections.every(selection => controller.textModel.getTextInRange(selection) === text);
 }
 
-function rangesIntersect(controller: CursorsController, left: TextRange, right: TextRange): boolean {
-	const leftStart = controller.textModel.offsetAt(left.start);
-	const leftEnd = controller.textModel.offsetAt(left.end);
-	const rightStart = controller.textModel.offsetAt(right.start);
-	const rightEnd = controller.textModel.offsetAt(right.end);
+function rangesIntersect(controller: CursorsController, left: Range, right: Range): boolean {
+	const leftStart = controller.textModel.offsetAt(left.getStartPosition());
+	const leftEnd = controller.textModel.offsetAt(left.getEndPosition());
+	const rightStart = controller.textModel.offsetAt(right.getStartPosition());
+	const rightEnd = controller.textModel.offsetAt(right.getEndPosition());
 	return leftStart < rightEnd && rightStart < leftEnd;
 }
 
-function rangesEqual(left: TextRange, right: TextRange): boolean {
-	return left.start.compareTo(right.start) === 0 && left.end.compareTo(right.end) === 0;
+function rangesEqual(left: Range, right: Range): boolean {
+	return Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 && Position.compare(left.getEndPosition(), right.getEndPosition()) === 0;
 }

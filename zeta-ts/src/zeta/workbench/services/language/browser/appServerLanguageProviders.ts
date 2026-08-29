@@ -1,7 +1,8 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
@@ -197,7 +198,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	provideOutgoingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly LanguageCallHierarchyEntry[]> { return this.followCallHierarchy("outgoingCalls", request, signal); }
 	provideSupertypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly LanguageHierarchyItem[]> { return this.followTypeHierarchy("supertypes", request, signal); }
 	provideSubtypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly LanguageHierarchyItem[]> { return this.followTypeHierarchy("subtypes", request, signal); }
-	async prepareRename(request: LanguageRenameRequest, signal: AbortSignal): Promise<{ readonly range: TextRange; readonly placeholder: string } | undefined> {
+	async prepareRename(request: LanguageRenameRequest, signal: AbortSignal): Promise<{ readonly range: Range; readonly placeholder: string } | undefined> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return undefined;
@@ -271,7 +272,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		const result = await this.api.inlayHints({ document, range: dtoRange(request.range) }, { signal });
 		if (result.revision !== request.snapshot.version) return Object.freeze([]);
 		return Object.freeze(result.hints.map(hint => Object.freeze({
-			position: TextPosition.at(hint.position.lineIndex, hint.position.columnIndex),
+			position: new Position((hint.position.lineIndex) + 1, (hint.position.columnIndex) + 1),
 			label: hint.label,
 			kind: hint.kind,
 			...(hint.tooltip ? { tooltip: hint.tooltip } : {}),
@@ -389,10 +390,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		if (!document) return Object.freeze([]);
 		const result = await this.api.locations({
 			document,
-			position: {
-				lineIndex: request.position.lineIndex,
-				columnIndex: request.position.columnIndex,
-			},
+			position: dtoPosition(request.position),
 			kind,
 			includeDeclaration,
 		}, { signal });
@@ -453,7 +451,7 @@ class AppServerWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvide
 		return Object.freeze(responses.flat().flatMap(({ root, symbol }) => {
 			const resource = workspaceResource(root, symbol.path);
 			const symbolRange = range(symbol.range);
-			const key = `${resource.toString()}\0${symbol.name}\0${symbolRange.start.lineIndex}:${symbolRange.start.columnIndex}`;
+			const key = `${resource.toString()}\0${symbol.name}\0${symbolRange.getStartPosition().lineNumber}:${symbolRange.getStartPosition().column}`;
 			if (seen.has(key)) return [];
 			seen.add(key);
 			return [Object.freeze({ name: symbol.name, kind: symbol.symbolKind, resource, range: symbolRange, ...(symbol.containerName ? { containerName: symbol.containerName } : {}) })];
@@ -544,7 +542,7 @@ function completionKind(kind: LanguageCompletionItemKindDto): LanguageCompletion
 	}
 }
 
-function dtoPosition(position: TextPosition): { readonly lineIndex: number; readonly columnIndex: number } { return { lineIndex: position.lineIndex, columnIndex: position.columnIndex }; }
+function dtoPosition(position: Position): { readonly lineIndex: number; readonly columnIndex: number } { return { lineIndex: position.lineNumber - 1, columnIndex: position.column - 1 }; }
 
 function hierarchyItem(root: LanguageWorkspaceRoot, item: LanguageHierarchyItemDto): LanguageHierarchyItem {
 	return Object.freeze({ name: item.name, symbolKind: item.symbolKind, ...(item.detail ? { detail: item.detail } : {}), resource: workspaceResource(root, item.path), range: range(item.range), selectionRange: range(item.selectionRange), ...(item.data === undefined ? {} : { data: item.data }) });
@@ -554,7 +552,7 @@ function hierarchyItemDto(root: LanguageWorkspaceRoot, item: LanguageHierarchyIt
 	return { name: item.name, symbolKind: item.symbolKind, detail: item.detail ?? null, path: workspaceRelativePath(root.uri, item.resource), range: dtoRange(item.range), selectionRange: dtoRange(item.selectionRange), data: item.data };
 }
 
-function dtoRange(value: TextRange) { return { start: dtoPosition(value.start), end: dtoPosition(value.end) }; }
+function dtoRange(value: Range) { return { start: dtoPosition(value.getStartPosition()), end: dtoPosition(value.getEndPosition()) }; }
 
 function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageWorkspaceEditDto) {
 	return Object.freeze({ entries: Object.freeze(edit.entries.map(entry => {
@@ -610,6 +608,6 @@ function workspaceResource(root: LanguageWorkspaceRoot, relativePath: string): U
 	return resource;
 }
 
-function range(value: { readonly start: { readonly lineIndex: number; readonly columnIndex: number }; readonly end: { readonly lineIndex: number; readonly columnIndex: number } }): TextRange {
-	return TextRange.from(TextPosition.at(value.start.lineIndex, value.start.columnIndex), TextPosition.at(value.end.lineIndex, value.end.columnIndex));
+function range(value: { readonly start: { readonly lineIndex: number; readonly columnIndex: number }; readonly end: { readonly lineIndex: number; readonly columnIndex: number } }): Range {
+	return Range.fromPositions(new Position((value.start.lineIndex) + 1, (value.start.columnIndex) + 1), new Position((value.end.lineIndex) + 1, (value.end.columnIndex) + 1));
 }

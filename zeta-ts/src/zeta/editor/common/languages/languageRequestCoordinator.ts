@@ -1,5 +1,5 @@
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type TextModelChange, type TextSnapshot } from "../core/text.js";
+import { type TextModelChange, type TextSnapshot } from "../core/textChange.js";
 import { type TextModel } from "../model/textModel.js";
 
 /** One immutable worker invocation against a captured model version. */

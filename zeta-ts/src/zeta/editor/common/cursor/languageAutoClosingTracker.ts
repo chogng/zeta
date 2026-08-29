@@ -2,7 +2,8 @@ import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type CursorsController } from "./cursor.js";
 import { type LanguageCharacterPair } from "../languages/languageConfiguration.js";
 import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from "./languagePairEditing.js";
-import { TextPosition, TextRange } from "../core/text.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../model/trackedRange.js";
 
@@ -56,37 +57,37 @@ export class LanguageAutoClosingTracker extends Disposable implements LanguageAu
 		this.pruneInvalidEntries();
 	}
 
-	canOvertype(position: TextPosition, close: string): boolean {
+	canOvertype(position: Position, close: string): boolean {
 		this.assertNotDisposed();
 		if (typeof close !== "string" || close.length === 0) return false;
 		this.pruneInvalidEntries();
 		return this.entries.some(entry => {
 			if (entry.close !== close) return false;
 			const range = entry.closeRange.range;
-			return range.start.compareTo(position) === 0;
+			return Position.compare(range.getStartPosition(), position) === 0;
 		});
 	}
 
-	canDeletePair(position: TextPosition, pair: LanguageCharacterPair): boolean {
+	canDeletePair(position: Position, pair: LanguageCharacterPair): boolean {
 		this.assertNotDisposed();
 		this.pruneInvalidEntries();
 		return this.entries.some(entry => {
 			if (entry.open !== pair.open || entry.close !== pair.close) return false;
 			const enclosing = entry.enclosingRange.range;
 			const closer = entry.closeRange.range;
-			if (closer.start.compareTo(position) !== 0) return false;
-			return this.model.offsetAt(closer.start) - this.model.offsetAt(enclosing.start) === entry.open.length;
+			if (Position.compare(closer.getStartPosition(), position) !== 0) return false;
+			return this.model.offsetAt(closer.getStartPosition()) - this.model.offsetAt(enclosing.getStartPosition()) === entry.open.length;
 		});
 	}
 
 	private createEntry(action: LanguageAutoClosingAction): AutoClosingEntry {
 		const enclosingRange = this.model.trackRange(
-			TextRange.from(this.model.positionAt(action.enclosingStartOffset), this.model.positionAt(action.closeEndOffset)),
+			Range.fromPositions(this.model.positionAt(action.enclosingStartOffset), this.model.positionAt(action.closeEndOffset)),
 			TrackedRangeStickiness.NeverGrowsAtEdges,
 		);
 		try {
 			const closeRange = this.model.trackRange(
-				TextRange.from(this.model.positionAt(action.closeStartOffset), this.model.positionAt(action.closeEndOffset)),
+				Range.fromPositions(this.model.positionAt(action.closeStartOffset), this.model.positionAt(action.closeEndOffset)),
 				TrackedRangeStickiness.NeverGrowsAtEdges,
 			);
 			return { open: action.open, close: action.close, enclosingRange, closeRange };
@@ -109,18 +110,18 @@ export class LanguageAutoClosingTracker extends Disposable implements LanguageAu
 	private isEntryValid(entry: AutoClosingEntry): boolean {
 		const enclosing = entry.enclosingRange.range;
 		const closer = entry.closeRange.range;
-		if (enclosing.start.lineIndex !== enclosing.end.lineIndex || closer.start.lineIndex !== closer.end.lineIndex) return false;
-		const enclosingStart = this.model.offsetAt(enclosing.start);
-		const enclosingEnd = this.model.offsetAt(enclosing.end);
-		const closeStart = this.model.offsetAt(closer.start);
-		const closeEnd = this.model.offsetAt(closer.end);
+		if (enclosing.getStartPosition().lineNumber !== enclosing.getEndPosition().lineNumber || closer.getStartPosition().lineNumber !== closer.getEndPosition().lineNumber) return false;
+		const enclosingStart = this.model.offsetAt(enclosing.getStartPosition());
+		const enclosingEnd = this.model.offsetAt(enclosing.getEndPosition());
+		const closeStart = this.model.offsetAt(closer.getStartPosition());
+		const closeEnd = this.model.offsetAt(closer.getEndPosition());
 		if (closeEnd !== enclosingEnd || closeStart < enclosingStart + entry.open.length) return false;
 		if (this.model.getTextInRange(closer) !== entry.close) return false;
 		const openEnd = this.model.positionAt(enclosingStart + entry.open.length);
-		if (this.model.getTextInRange(TextRange.from(enclosing.start, openEnd)) !== entry.open) return false;
+		if (this.model.getTextInRange(Range.fromPositions(enclosing.getStartPosition(), openEnd)) !== entry.open) return false;
 		return this.selections.selections.selections.some(selection => (
-			selection.range.start.compareTo(enclosing.start) > 0 &&
-			selection.range.end.compareTo(enclosing.end) < 0
+			Position.compare(selection.getStartPosition(), enclosing.getStartPosition()) > 0 &&
+			Position.compare(selection.getEndPosition(), enclosing.getEndPosition()) < 0
 		));
 	}
 
@@ -142,7 +143,7 @@ function assertAction(model: TextModel, action: LanguageAutoClosingAction): void
 	if (action.enclosingStartOffset + action.open.length !== action.closeStartOffset || action.closeStartOffset + action.close.length !== action.closeEndOffset) {
 		throw new RangeError("Auto-closing action offsets must describe one empty pair");
 	}
-	const range = TextRange.from(model.positionAt(action.enclosingStartOffset), model.positionAt(action.closeEndOffset));
+	const range = Range.fromPositions(model.positionAt(action.enclosingStartOffset), model.positionAt(action.closeEndOffset));
 	if (model.getTextInRange(range) !== action.open + action.close) {
 		throw new Error("Auto-closing action does not match the committed model text");
 	}

@@ -1,21 +1,22 @@
-import { TextSelection, TextSelectionSet } from '../core/selection.js';
-import { TextPosition } from '../core/text.js';
+import { Selection } from '../core/selection.js';
+import { SelectionSet } from './selectionSet.js';
+import { Position } from '../core/position.js';
 import { type TextModel } from '../model/textModel.js';
 
 export class ColumnSelection {
-	public static columnSelect(model: TextModel, anchor: TextPosition, active: TextPosition): TextSelectionSet {
+	public static columnSelect(model: TextModel, anchor: Position, active: Position): SelectionSet {
 		model.offsetAt(anchor);
 		model.offsetAt(active);
-		const firstLineIndex = Math.min(anchor.lineIndex, active.lineIndex);
-		const lastLineIndex = Math.max(anchor.lineIndex, active.lineIndex);
-		const selections = Array.from({ length: lastLineIndex - firstLineIndex + 1 }, (_, offset) => {
-			const lineIndex = firstLineIndex + offset;
-			const lineLength = model.getLineContent(lineIndex).length;
-			return TextSelection.from(
-				TextPosition.at(lineIndex, Math.min(anchor.columnIndex, lineLength)),
-				TextPosition.at(lineIndex, Math.min(active.columnIndex, lineLength)),
+		const firstLineNumber = Math.min(anchor.lineNumber, active.lineNumber);
+		const lastLineNumber = Math.max(anchor.lineNumber, active.lineNumber);
+		const selections = Array.from({ length: lastLineNumber - firstLineNumber + 1 }, (_, offset) => {
+			const lineNumber = firstLineNumber + offset;
+			const maxColumn = model.getLineContent(lineNumber).length + 1;
+			return Selection.fromPositions(
+				new Position(lineNumber, Math.min(anchor.column, maxColumn)),
+				new Position(lineNumber, Math.min(active.column, maxColumn)),
 			);
 		});
-		return TextSelectionSet.withPrimary(selections, active.lineIndex - firstLineIndex);
+		return SelectionSet.withPrimary(selections, active.lineNumber - firstLineNumber);
 	}
 }

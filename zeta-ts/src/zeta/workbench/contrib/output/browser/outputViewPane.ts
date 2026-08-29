@@ -7,8 +7,8 @@ import type { Icon } from "../../../../base/common/icon.js";
 import { MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { URI } from "../../../../base/common/uri.js";
-import { TextPosition } from "../../../../editor/common/core/text.js";
-import { TextRange } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
@@ -133,8 +133,8 @@ export class OutputViewPane extends ViewPane {
 			anchor.textContent = link.label;
 			anchor.title = `Open ${link.resource.toString()}`;
 			anchor.dataset.resource = link.resource.toString();
-			anchor.dataset.line = String(link.selection.start.lineIndex);
-			anchor.dataset.column = String(link.selection.start.columnIndex);
+			anchor.dataset.line = String(link.selection.getStartPosition().lineNumber);
+			anchor.dataset.column = String(link.selection.getStartPosition().column);
 			row.append(anchor);
 			offset = link.endIndex;
 		}
@@ -156,7 +156,7 @@ export class OutputViewPane extends ViewPane {
 		stopEvent(event);
 		const line = Number.parseInt(target.dataset.line ?? "0", 10);
 		const column = Number.parseInt(target.dataset.column ?? "0", 10);
-		const selection = TextRange.emptyAt(TextPosition.at(Number.isSafeInteger(line) ? line : 0, Number.isSafeInteger(column) ? column : 0));
+		const selection = Range.fromPositions(new Position((Number.isSafeInteger(line) ? line : 0) + 1, (Number.isSafeInteger(column) ? column : 0) + 1));
 		void this.editorService.openEditor({ resource: URI.parse(resourceValue) }, { selection });
 	}
 

@@ -3,8 +3,9 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { type TextMeasurer } from '../../browser/config/fontMeasurements.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
-import { TextPosition } from '../../common/core/position.js';
-import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
+import { Position } from '../../common/core/position.js';
+import { Selection } from '../../common/core/selection.js';
+import { SelectionSet } from '../../common/cursor/selectionSet.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -51,10 +52,7 @@ test('StableEditorScrollState preserves the first visible row offset', () => {
 		initialLayout.visibleLines.startLineIndex,
 	);
 	assert.ok(initialVisibleLine);
-	const anchor = TextPosition.at(
-		initialVisibleLine.logicalLineIndex,
-		initialVisibleLine.startColumn,
-	);
+	const anchor = new Position((initialVisibleLine.logicalLineIndex) + 1, (initialVisibleLine.startColumn) + 1);
 	const initialAnchorTop = viewport.getPositionContentCoordinates(anchor).top;
 	const initialDelta = initialLayout.scrollPosition.top - initialAnchorTop;
 	const initialLeft = initialLayout.scrollPosition.left;
@@ -99,10 +97,7 @@ test('StableEditorBottomScrollState preserves the last visible row offset', () =
 		initialLayout.visibleLines.endLineIndexExclusive - 1,
 	);
 	assert.ok(initialVisibleLine);
-	const anchor = TextPosition.at(
-		initialVisibleLine.logicalLineIndex,
-		initialVisibleLine.startColumn,
-	);
+	const anchor = new Position((initialVisibleLine.logicalLineIndex) + 1, (initialVisibleLine.startColumn) + 1);
 	const initialCoordinates = viewport.getPositionContentCoordinates(anchor);
 	const initialDelta = initialCoordinates.top + initialCoordinates.height - initialLayout.scrollPosition.top;
 
@@ -134,7 +129,7 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 	].join('\n'));
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 0))),
+		SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (0) + 1))),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -147,8 +142,8 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 	viewport.scrollTo({ left: 0, top: 40 });
 
 	const state = StableEditorScrollState.capture({ viewport, selections });
-	selections.setSelections(TextSelectionSet.single(
-		TextSelection.collapsedAt(TextPosition.at(4, 0)),
+	selections.setSelections(SelectionSet.single(
+		Selection.fromPositions(new Position((4) + 1, (0) + 1)),
 	));
 	viewport.setLineHeight(30);
 	state.restoreRelativeVerticalPositionOfCursor({ viewport, selections });

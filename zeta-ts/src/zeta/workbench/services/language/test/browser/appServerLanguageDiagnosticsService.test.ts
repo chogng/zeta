@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -31,12 +32,12 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
 	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error", message: "broken", code: "E1", source: "fixture" }] } });
 	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]!.message, "broken");
 	using publisher = service.createPublisher(resource);
-	publisher.update(1, [{ range: TextRange.from(TextPosition.at(0, 3), TextPosition.at(0, 7)), severity: LanguageDiagnosticSeverity.Error, message: "broken", code: "E1", source: "fixture" }]);
+	publisher.update(1, [{ range: Range.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (7) + 1)), severity: LanguageDiagnosticSeverity.Error, message: "broken", code: "E1", source: "fixture" }]);
 	assert.equal(service.getDiagnostics(resource)?.diagnostics.length, 1);
 	assert.equal(service.getAllDiagnostics().length, 1);
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "// " }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "// " }]);
 	assert.equal(service.getDiagnostics(resource)?.revision, 1);
-	publisher.update(2, [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)), severity: LanguageDiagnosticSeverity.Warning, message: "local warning", source: "syntax" }]);
+	publisher.update(2, [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)), severity: LanguageDiagnosticSeverity.Warning, message: "local warning", source: "syntax" }]);
 	assert.equal(service.getDiagnostics(resource)?.revision, 2);
 	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]!.message, "local warning");
 
@@ -217,7 +218,7 @@ test("App Server diagnostics service gates Editor synchronization on Workspace T
 	await tick();
 	await tick();
 	const synchronizedBeforeEdit = api.synchronized.length;
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "// " }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "// " }]);
 	await new Promise(resolve => setTimeout(resolve, 200));
 	assert.equal(api.synchronized.length, synchronizedBeforeEdit);
 });

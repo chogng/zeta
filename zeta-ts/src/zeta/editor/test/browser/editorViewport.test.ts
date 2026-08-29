@@ -11,8 +11,10 @@ import { CursorsController } from "../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { WrappingIndent } from "../../common/config/editorOptions.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { PositionAffinity } from '../../common/model.js';
@@ -157,7 +159,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 		},
 	});
 	using model = new TextModel("abc אבג");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -172,7 +174,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 		configurable: true,
 		value: () => testRectangle(100, 0, 300),
 	});
-	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 3))));
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1))));
 
 	const selectionRow = requiredPartRow(viewport.element, "stanza-editor-line-selections", 0);
 	const selectionElements = [...selectionRow.querySelectorAll<HTMLElement>(".stanza-editor-selection")];
@@ -181,7 +183,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 		{ left: "50px", width: "20px" },
 	]);
 	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-caret").style.left, "34px");
-	assert.equal(viewport.getPositionContentCoordinates(TextPosition.at(0, 3)).left, 35);
+	assert.equal(viewport.getPositionContentCoordinates(new Position((0) + 1, (3) + 1)).left, 35);
 	dom.window.close();
 });
 
@@ -203,7 +205,7 @@ test("EditorViewport selection geometry includes selected newlines on empty line
 		},
 	});
 	using model = new TextModel("alpha\n\nomega");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -225,7 +227,7 @@ test("EditorViewport selection geometry includes selected newlines on empty line
 		value: () => [testRectangle(130, 0, 0)],
 	});
 
-	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(2, 0))));
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1))));
 
 	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-selection")].map(element => ({
 		lineIndex: element.parentElement?.dataset.lineIndex,
@@ -260,7 +262,7 @@ test("EditorViewport resolves RTL pointer hits from the browser caret position",
 
 	assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 170, clientY: 10 }), {
 		kind: "text",
-		position: TextPosition.at(0, 5),
+		position: new Position((0) + 1, (5) + 1),
 	});
 	dom.window.close();
 });
@@ -269,17 +271,17 @@ test("EditorViewport announces cursor and selection changes through its live reg
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha\nbeta");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
 
 	const status = requiredElement(viewport.element, ".stanza-editor-accessibility-status");
 	assert.equal(status.getAttribute("aria-live"), "polite");
 	assert.equal(status.textContent, "Line 1, column 1");
-	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 1), TextPosition.at(1, 4))));
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (1) + 1), new Position((1) + 1, (4) + 1))));
 	assert.equal(status.textContent, "Line 2, column 5, 3 characters selected");
-	selections.setSelections(TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(0, 2)),
-		TextSelection.from(TextPosition.at(1, 0), TextPosition.at(1, 2)),
+	selections.setSelections(SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (2) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (2) + 1)),
 	], 1));
 	assert.equal(status.textContent, "2 selections, 2 characters selected; primary at Line 2, column 3");
 	dom.window.close();
@@ -391,7 +393,7 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using embeddedViewport = new EditorViewport({
 		container,
 		model,
@@ -592,12 +594,12 @@ test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to log
 		}],
 	);
 	assert.deepEqual(
-		viewport.getPositionContentCoordinates(TextPosition.at(0, 3)),
+		viewport.getPositionContentCoordinates(new Position((0) + 1, (3) + 1)),
 		{ left: 68, top: 20, height: 20 },
 	);
 	assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 70, clientY: 25 }), {
 		kind: "text",
-		position: TextPosition.at(0, 3),
+		position: new Position((0) + 1, (3) + 1),
 	});
 
 	viewport.layout({ width: 110, height: 40 });
@@ -678,7 +680,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
 		number: "4",
 		text: "after",
 	}]);
-	assert.deepEqual(viewport.getPositionContentCoordinates(TextPosition.at(1, 0)), {
+	assert.deepEqual(viewport.getPositionContentCoordinates(new Position((1) + 1, (0) + 1)), {
 		left: 76,
 		top: 0,
 		height: 20,
@@ -719,7 +721,7 @@ test("Editor gutter orders generic glyphs, line numbers, folding controls, then 
 	using model = new TextModel("header\nbody\nend");
 	using glyphs = new TextDecorationCollection<string>(model);
 	glyphs.add({
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "generic",
 	});
@@ -756,7 +758,7 @@ test("Editor gutter orders generic glyphs, line numbers, folding controls, then 
 	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-glyph-margin").style.left, "0px");
 	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-fold-toggle").dataset.decorationOwner, "folding");
 	assert.equal(viewport.element.querySelector(".stanza-editor-decoration.line-decoration"), null);
-	assert.deepEqual(viewport.getPositionContentCoordinates(TextPosition.at(0, 0)), {
+	assert.deepEqual(viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1)), {
 		left: 76,
 		top: 0,
 		height: 20,
@@ -804,9 +806,9 @@ test("Model edits refresh visible rows and clamp a shrinking document", () => {
 	const line20 = requiredLine(viewport.element, 20);
 
 	model.applyEdits([{
-		range: TextRange.from(
-			TextPosition.at(20, 0),
-			TextPosition.at(20, model.getLineContent(20).length),
+		range: Range.fromPositions(
+			new Position((20) + 1, (0) + 1),
+			new Position((20) + 1, (model.getLineContent((20) + 1).length) + 1),
 		),
 		text: "changed line",
 	}]);
@@ -817,7 +819,7 @@ test("Model edits refresh visible rows and clamp a shrinking document", () => {
 
 	const snapshot = model.createSnapshot();
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(0), model.positionAt(snapshot.length)),
+		range: Range.fromPositions(model.positionAt(0), model.positionAt(snapshot.length)),
 		text: "first\nsecond",
 	}]);
 
@@ -838,12 +840,12 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	using model = new TextModel("abcd\nefgh\nij");
 	using controller = new CursorsController(
 		model,
-		TextSelectionSet.withPrimary([
-			TextSelection.from(
-				TextPosition.at(1, 3),
-				TextPosition.at(0, 1),
+		SelectionSet.withPrimary([
+			Selection.fromPositions(
+				new Position((1) + 1, (3) + 1),
+				new Position((0) + 1, (1) + 1),
 			),
-			TextSelection.collapsedAt(TextPosition.at(2, 1)),
+			Selection.fromPositions(new Position((2) + 1, (1) + 1)),
 		], 0),
 	);
 	using viewport = new EditorViewport({
@@ -892,8 +894,8 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		true,
 	);
 
-	controller.setSelections(TextSelectionSet.single(
-		TextSelection.collapsedAt(TextPosition.at(1, 2)),
+	controller.setSelections(SelectionSet.single(
+		Selection.fromPositions(new Position((1) + 1, (2) + 1)),
 	));
 
 	assert.equal(
@@ -914,11 +916,11 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	assert.equal(requiredPartRow(viewport.element, "stanza-editor-current-line-highlight", 1).classList.contains("active"), true);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X\n",
 	}]);
 
-	assert.equal(controller.selections.primary.active.lineIndex, 2);
+	assert.equal(controller.selections.primary.getPosition().lineNumber, 3);
 	assert.equal(
 		viewport.element.querySelector<HTMLElement>('.stanza-editor-caret[data-selection-index="0"]')?.style.left,
 		"77px",
@@ -970,7 +972,7 @@ test('EditorViewport places RTL block cursors over their following glyph or trai
 		},
 	});
 	using model = new TextModel('讗');
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -989,9 +991,9 @@ test('EditorViewport places RTL block cursors over their following glyph or trai
 	});
 	const caret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
 	assert.equal(caret.getAttribute('aria-hidden'), 'true');
-	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	const overGlyph = { left: caret.style.left, width: caret.style.width, text: caret.textContent };
-	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 
 	assert.deepEqual({ overGlyph, afterLine: { left: caret.style.left, width: caret.style.width, text: caret.textContent } }, {
 		overGlyph: { left: '20px', width: '8px', text: '讗' },
@@ -1004,13 +1006,13 @@ test('EditorViewport renders active bracket and indentation guides from the stru
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('{\n    value\n}\ntail');
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 4))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (4) + 1))));
 	const bracketSource: BracketColorizationSource = {
 		textModel: model,
 		getLineBrackets: () => Object.freeze([]),
 		getBracketGuides: () => Object.freeze([Object.freeze({
-			opening: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
-			closing: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 1)),
+			opening: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
+			closing: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
 			level: 1,
 		})]),
 	};
@@ -1042,9 +1044,9 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta\ngamma');
-	using controller = new CursorsController(model, TextSelectionSet.withPrimary([
-		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
-		TextSelection.collapsedAt(TextPosition.at(2, 1)),
+	using controller = new CursorsController(model, SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
+		Selection.fromPositions(new Position((2) + 1, (1) + 1)),
 	], 1));
 	using viewport = new EditorViewport({
 		container,
@@ -1075,9 +1077,9 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 		assert.equal(row.classList.contains('focus-only'), true);
 	}
 
-	controller.setSelections(TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(0, 2)),
-		TextSelection.collapsedAt(TextPosition.at(2, 1)),
+	controller.setSelections(SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (2) + 1)),
+		Selection.fromPositions(new Position((2) + 1, (1) + 1)),
 	], 1));
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 0).classList.contains('highlight-line'), true);
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 2).classList.contains('highlight-line'), true);
@@ -1088,7 +1090,7 @@ test('EditorViewport matches line and thin-underline cursor geometry', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('abc');
-	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1135,7 +1137,7 @@ test('EditorViewport normalizes a block cursor to the complete containing graphe
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a😊b');
-	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
+	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1148,7 +1150,7 @@ test('EditorViewport normalizes a block cursor to the complete containing graphe
 	viewport.layout({ width: 200, height: 40 });
 	const caret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
 	const insideGrapheme = { left: caret.style.left, width: caret.style.width, text: caret.textContent };
-	controller.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	controller.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 
 	assert.deepEqual({ insideGrapheme, atGraphemeStart: { left: caret.style.left, width: caret.style.width, text: caret.textContent } }, {
 		insideGrapheme: { left: '64px', width: '8px', text: '😊' },
@@ -1161,7 +1163,7 @@ test('EditorViewport gives every cursor one shared blinking animation', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha;\nbeta;');
-	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 5))));
+	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (5) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1174,9 +1176,9 @@ test('EditorViewport gives every cursor one shared blinking animation', () => {
 	const cursorsLayer = requiredElement(viewport.element, '.stanza-editor-cursors-layer');
 	const blinkingAnimation = { currentTime: 600 };
 	Object.defineProperty(cursorsLayer, 'getAnimations', { value: () => [blinkingAnimation] });
-	controller.setSelections(TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(0, 5)),
-		TextSelection.collapsedAt(TextPosition.at(1, 4)),
+	controller.setSelections(SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (5) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (4) + 1)),
 	], 1));
 
 	assert.deepEqual({
@@ -1196,7 +1198,7 @@ test('EditorViewport animates stable explicit cursor movement and pauses cursor-
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
-	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1211,11 +1213,11 @@ test('EditorViewport animates stable explicit cursor movement and pauses cursor-
 	const firstCaret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
 	const initial = { top: firstCaret.style.top, transitionProperty: firstCaret.style.transitionProperty };
 
-	controller.setCursorSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 0))));
+	controller.setCursorSelections(SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (0) + 1))));
 	const moved = { top: firstCaret.style.top, transitionProperty: firstCaret.style.transitionProperty };
-	controller.setCursorSelections(TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(0, 0)),
-		TextSelection.collapsedAt(TextPosition.at(1, 0)),
+	controller.setCursorSelections(SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (0) + 1)),
 	], 1));
 
 	assert.deepEqual({
@@ -1243,7 +1245,7 @@ test('EditorViewport snaps line cursors to physical pixels', () => {
 	Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 1.25 });
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('abc');
-	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1283,7 +1285,7 @@ test('EditorViewport keeps token font styling on characters redrawn inside curso
 		get lines() { return Object.freeze([Object.freeze({ lineIndex: 0, tokens })]); },
 		getLineTokens: () => tokens,
 	};
-	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1330,9 +1332,9 @@ test('EditorViewport sizes block cursors from contextual tab advances', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a\tb\nabcd\tb');
-	using controller = new CursorsController(model, TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(0, 1)),
-		TextSelection.collapsedAt(TextPosition.at(1, 4)),
+	using controller = new CursorsController(model, SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (1) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (4) + 1)),
 	], 0));
 	using viewport = new EditorViewport({
 		container,
@@ -1403,19 +1405,19 @@ test("Line width indexing updates only affected model line groups", () => {
 	assert.equal(viewport.element.scrollLeft, 80);
 
 	model.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
 		text: "",
 	}, {
-		range: TextRange.from(TextPosition.at(0, 4), TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (4) + 1), new Position((0) + 1, (5) + 1)),
 		text: "",
 	}]);
 
-	assert.equal(model.getLineContent(0), "bcdf");
+	assert.equal(model.getLineContent((0) + 1), "bcdf");
 	assert.equal(viewport.viewportLayout.contentSize.width, 110);
 	assert.equal(viewport.element.scrollLeft, 60);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(1, 2)),
+		range: Range.fromPositions(new Position((1) + 1, (2) + 1)),
 		text: "\n0123456789",
 	}]);
 
@@ -1430,7 +1432,7 @@ test("Font metric refresh rebuilds authoritative horizontal width", () => {
 	const container = requiredElement(dom.window.document, "main");
 	const measurer = fixedTextMeasurer(10, 20);
 	using model = new TextModel("xxxx");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1468,7 +1470,7 @@ test("Viewport disposal removes DOM without owning the text model", () => {
 	viewport.dispose();
 	assert.equal(container.childElementCount, 0);
 	model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(5)),
+		range: Range.fromPositions(model.positionAt(5)),
 		text: " editor",
 	}]);
 	assert.equal(model.getText(), "alpha editor");
@@ -1483,7 +1485,7 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 	viewport.layout({ width: 300, height: 100 });
 	const contentDomNode = h(dom.window.document, 'div');
-	let contentPosition: IContentWidgetPosition = { position: { lineIndex: 0, columnIndex: 1 }, preference: [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW] };
+	let contentPosition: IContentWidgetPosition = { position: { lineNumber: 1, column: 2 }, preference: [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW] };
 	let renderedPosition: ContentWidgetPositionPreference | null = null;
 	const contentWidget = {
 		getId: () => 'content',
@@ -1509,7 +1511,7 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 	assert.equal(renderedPosition, ContentWidgetPositionPreference.BELOW);
 	assert.equal(overlayDomNode.parentElement?.className, 'stanza-editor-overlay-widgets');
 	assert.equal(overlayDomNode.style.display, 'block');
-	contentPosition = { position: { lineIndex: 0, columnIndex: 0 }, preference: [ContentWidgetPositionPreference.EXACT], positionAffinity: PositionAffinity.LeftOfInjectedText };
+	contentPosition = { position: { lineNumber: 1, column: 1 }, preference: [ContentWidgetPositionPreference.EXACT], positionAffinity: PositionAffinity.LeftOfInjectedText };
 	viewport.layoutContentWidget(contentWidget);
 	assert.equal(contentDomNode.style.top, '0px');
 	assert.equal(contentDomNode.style.left, '0px');
@@ -1525,7 +1527,7 @@ test('EditorViewport renders relative, interval, and custom line numbers', () =>
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel(lines(12).join('\n'));
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(5, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((5) + 1, (0) + 1))));
 	using relative = new EditorViewport({
 		container,
 		model,
@@ -1671,7 +1673,7 @@ test('EditorViewport preserves focused overflow content widgets off screen and s
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), fixedOverflowWidgets: true });
 	viewport.layout({ width: 300, height: 20 });
 	const contentDomNode = h(dom.window.document, 'button');
-	let position: IContentWidgetPosition = { position: TextPosition.at(0, 1), preference: [ContentWidgetPositionPreference.EXACT] };
+	let position: IContentWidgetPosition = { position: new Position((0) + 1, (1) + 1), preference: [ContentWidgetPositionPreference.EXACT] };
 	let renderedPosition: ContentWidgetPositionPreference | null = null;
 	const contentWidget = {
 		allowEditorOverflow: true,
@@ -1692,7 +1694,7 @@ test('EditorViewport preserves focused overflow content widgets off screen and s
 	assert.equal(mouseDown.defaultPrevented, true);
 
 	contentDomNode.focus();
-	position = { position: TextPosition.at(1, 0), preference: [ContentWidgetPositionPreference.BELOW] };
+	position = { position: new Position((1) + 1, (0) + 1), preference: [ContentWidgetPositionPreference.BELOW] };
 	viewport.layoutContentWidget(contentWidget);
 	assert.equal(contentDomNode.style.top, '-1000px');
 	assert.equal(contentDomNode.style.visibility, 'inherit');
@@ -1720,7 +1722,7 @@ test('EditorViewport limits selection whitespace to the current selections', () 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a b c');
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 2))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1734,7 +1736,7 @@ test('EditorViewport limits selection whitespace to the current selections', () 
 	const firstMarker = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-whitespace');
 	const firstLeft = firstMarker.style.left;
 	assert.equal(viewport.element.querySelectorAll('.stanza-editor-whitespace').length, 1);
-	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 3), TextPosition.at(0, 4))));
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (4) + 1))));
 	const secondMarker = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-whitespace');
 	assert.equal(viewport.element.querySelectorAll('.stanza-editor-whitespace').length, 1);
 	assert.notEqual(secondMarker.style.left, firstLeft);

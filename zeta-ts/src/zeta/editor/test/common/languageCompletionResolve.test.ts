@@ -4,7 +4,8 @@ import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeConte
 import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from "../../common/languages/completion/languageCompletions.js";
 import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion service resolves deferred details against the exact provider item", async () => {
@@ -24,7 +25,7 @@ test("Completion service resolves deferred details against the exact provider it
 	}));
 	using service = new LanguageCompletionService(model, registry);
 
-	const outcome = await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	const outcome = await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	const result = service.results.result!;
 	const item = result.value.items[0]!;
@@ -53,10 +54,10 @@ test("Resolve requests reject stale results and removed providers", async () => 
 	using service = new LanguageCompletionService(model, registry, {
 		onProviderError: () => undefined,
 	});
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	const first = service.results.result!;
 
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	await assert.rejects(
 		service.resolveCompletionItem(resolveRequest(first.requestId, first.modelVersion), new AbortController().signal),
 		/not the current deferred item/,
@@ -81,7 +82,7 @@ test("Resolve output cannot mutate completion edit identity", async () => {
 	using service = new LanguageCompletionService(model, registry, {
 		onProviderError: (providerId, error) => errors.push({ providerId, error }),
 	});
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	const result = service.results.result!;
 
 	await assert.rejects(
@@ -92,7 +93,7 @@ test("Resolve output cannot mutate completion edit identity", async () => {
 	assert.equal(result.value.items[0]!.insertText, "console");
 	assert.equal(errors[0]!.providerId, "stanza.test");
 	assert.match((errors[0]!.error as Error).message, /unsupported field/);
-	assert.equal((await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
+	assert.equal((await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 });
 
 test("Provider output cannot forge deferred-details capability", async () => {
@@ -106,7 +107,7 @@ test("Provider output cannot forge deferred-details capability", async () => {
 				id: "console",
 				label: "console",
 				kind: LanguageCompletionItemKind.Variable,
-				range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 				insertText: "console",
 				hasDeferredDetails: true,
 			} as never],
@@ -115,7 +116,7 @@ test("Provider output cannot forge deferred-details capability", async () => {
 	});
 	using service = new LanguageCompletionService(model, registry);
 
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 
 	assert.equal(service.results.result!.value.items[0]!.hasDeferredDetails, undefined);
 });
@@ -132,7 +133,7 @@ function provider(options: {
 				id: "console",
 				label: "console",
 				kind: LanguageCompletionItemKind.Variable,
-				range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 				insertText: "console",
 				resolveData: options.resolveData,
 			}],

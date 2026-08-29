@@ -2,7 +2,8 @@ import { type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from '../../../../editor/browser/viewparts/decorations/decorations.js';
-import { TextPosition, TextRange } from '../../../../editor/common/core/text.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import { LineDiffKind, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { TextDecorationCollection } from '../../../../editor/common/model/decorationCollection.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
@@ -82,7 +83,7 @@ export class QuickDiffDecorator extends Disposable implements OwnedDecorationSou
 			}
 		}
 		this.collection.replaceAll(Object.freeze([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => Object.freeze({
-			range: TextRange.from(TextPosition.at(lineIndex, 0), TextPosition.at(lineIndex, this.model.getLineLength(lineIndex))),
+			range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
 			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 			metadata,
 		}))));

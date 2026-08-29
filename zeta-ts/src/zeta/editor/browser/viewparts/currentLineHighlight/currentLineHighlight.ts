@@ -23,8 +23,8 @@ export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
 			return;
 		}
 		const selections = this.selectionController?.selections.selections ?? [];
-		const activeLineIndexes = new Set(selections.map(selection => selection.active.lineIndex));
-		const selectionIsEmpty = selections.every(selection => selection.range.empty);
+		const activeLineIndexes = new Set(selections.map(selection => selection.getPosition().lineNumber - 1));
+		const selectionIsEmpty = selections.every(selection => selection.isEmpty());
 		for (const [visualLineIndex, row] of this.rows.render(context)) {
 			const isActive = activeLineIndexes.has(overlay.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex ?? -1);
 			const highlightsLine = selectionIsEmpty && (overlay.renderLineHighlight === 'line' || overlay.renderLineHighlight === 'all');

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorFoldingModel } from "../../browser/foldingModel.js";
 import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Folding model tracks line boundaries across edits and removes deleted ranges", () => {
@@ -10,7 +11,7 @@ test("Folding model tracks line boundaries across edits and removes deleted rang
 	using folding = new EditorFoldingModel(model);
 	folding.setRanges([{ startLineIndex: 1, endLineIndex: 3, collapsed: true }]);
 
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "new\n" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "new\n" }]);
 	assert.deepEqual(folding.regions, [{
 		startLineIndex: 2,
 		endLineIndex: 4,
@@ -18,7 +19,7 @@ test("Folding model tracks line boundaries across edits and removes deleted rang
 		source: EditorFoldingRangeSource.Provider,
 	}]);
 
-	model.applyEdits([{ range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(5, 0)), text: "" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((5) + 1, (0) + 1)), text: "" }]);
 	assert.deepEqual(folding.regions, []);
 });
 

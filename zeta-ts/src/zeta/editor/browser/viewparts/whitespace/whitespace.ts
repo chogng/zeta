@@ -1,7 +1,8 @@
 import './whitespace.css';
 import { h, reset } from '../../../../base/browser/dom.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
-import { TextPosition, TextRange } from '../../../common/core/text.js';
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
@@ -40,7 +41,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 			if (!visualLine) {
 				continue;
 			}
-			const text = this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, visualLine.endColumn);
+			const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
 			const trailingStart = text.search(/\s*$/u);
 			for (let index = 0; index < text.length; index += 1) {
 				const character = text[index];
@@ -67,7 +68,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 
 	private isSelected(lineIndex: number, columnIndex: number): boolean {
 		if (!this.selectionController) return false;
-		const characterRange = TextRange.from(TextPosition.at(lineIndex, columnIndex), TextPosition.at(lineIndex, columnIndex + 1));
-		return this.selectionController.selections.selections.some(selection => selection.range.intersects(characterRange));
+		const characterRange = Range.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1), new Position((lineIndex) + 1, (columnIndex + 1) + 1));
+		return this.selectionController.selections.selections.some(selection => Range.areIntersecting(selection, characterRange));
 	}
 }

@@ -1,7 +1,8 @@
 import { addDisposableListener, stopEvent } from "../../base/browser/dom.js";
 import { type IDisposable } from "../../base/common/lifecycle.js";
 import { type CursorsController } from "../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
+import { Selection } from "../common/core/selection.js";
+import { SelectionSet } from "../common/cursor/selectionSet.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { registerEditorContribution } from "./editorExtensions.js";
 import { type EditorViewport } from "./view.js";
@@ -22,7 +23,7 @@ export function selectAll(context: CoreTextEditorCommandContext): void {
 		throw new TypeError("Editor core command dependencies must share one text model");
 	}
 	const end = context.model.positionAt(context.model.createSnapshot().length);
-	context.selections.setSelections(TextSelectionSet.single(TextSelection.from(context.model.positionAt(0), end)));
+	context.selections.setSelections(SelectionSet.single(Selection.fromPositions(context.model.positionAt(0), end)));
 	context.viewport.revealPosition(end);
 }
 

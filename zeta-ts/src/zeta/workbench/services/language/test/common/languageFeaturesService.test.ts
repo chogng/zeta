@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import { URI } from '../../../../../base/common/uri.js';
-import { TextPosition } from '../../../../../editor/common/core/text.js';
+import { Position } from '../../../../../editor/common/core/position.js';
 import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
 import { LanguageRequestStatus } from '../../../../../editor/common/languages/languageRequestCoordinator.js';
 import { SyntaxService } from '../../../../../editor/common/languages/syntax/syntaxService.js';
@@ -34,11 +34,11 @@ test('Language features service atomically owns a replaceable cross-kind provide
 	using hover = new HoverService(model, languageFeatures.hoverProvider);
 	const registration = languageFeatures.registerProviderBatch({ hovers: [{ providerId: 'host.first', languageIds: ['typescript'], provideHover: () => ({ contents: ['first'] }) }] });
 
-	assert.deepEqual(await hover.provideHover('typescript', TextPosition.at(0, 1)), { contents: ['first'] });
+	assert.deepEqual(await hover.provideHover('typescript', new Position((0) + 1, (1) + 1)), { contents: ['first'] });
 	registration.replace({ hovers: [{ providerId: 'host.second', languageIds: ['typescript'], provideHover: () => ({ contents: ['second'] }) }] });
-	assert.deepEqual(await hover.provideHover('typescript', TextPosition.at(0, 1)), { contents: ['second'] });
+	assert.deepEqual(await hover.provideHover('typescript', new Position((0) + 1, (1) + 1)), { contents: ['second'] });
 
 	registration.dispose();
-	assert.equal(await hover.provideHover('typescript', TextPosition.at(0, 1)), undefined);
+	assert.equal(await hover.provideHover('typescript', new Position((0) + 1, (1) + 1)), undefined);
 	assert.throws(() => registration.replace({}), /disposed/);
 });

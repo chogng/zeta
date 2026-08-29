@@ -1,8 +1,8 @@
 import { CharCode } from "../../../../base/common/charCode.js";
 import { LineRange } from "../ranges/lineRange.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
-import { TextPosition } from "../position.js";
-import { TextRange } from "../range.js";
+import { Position } from "../position.js";
+import { Range } from "../range.js";
 
 /**
  * A non-negative text length represented as line breaks plus the final column.
@@ -17,16 +17,16 @@ export class TextLength {
 
 	static lengthDiffNonNegative(start: TextLength, end: TextLength): TextLength { return end.isLessThan(start) ? TextLength.zero : TextLength.betweenLengths(start, end); }
 
-	static betweenPositions(start: TextPosition, end: TextPosition): TextLength {
+	static betweenPositions(start: Position, end: Position): TextLength {
 		if (end.isBefore(start)) throw new RangeError("TextLength end must not precede its start");
-		return start.lineIndex === end.lineIndex
-			? new TextLength(0, end.columnIndex - start.columnIndex)
-			: new TextLength(end.lineIndex - start.lineIndex, end.columnIndex);
+		return start.lineNumber === end.lineNumber
+			? new TextLength(0, end.column - start.column)
+			: new TextLength(end.lineNumber - start.lineNumber, end.column - 1);
 	}
 
-	static ofPosition(position: TextPosition): TextLength { return new TextLength(position.lineIndex, position.columnIndex); }
-	static fromPosition(position: TextPosition): TextLength { return TextLength.ofPosition(position); }
-	static ofRange(range: TextRange): TextLength { return TextLength.betweenPositions(range.start, range.end); }
+	static ofPosition(position: Position): TextLength { return new TextLength(position.lineNumber - 1, position.column - 1); }
+	static fromPosition(position: Position): TextLength { return TextLength.ofPosition(position); }
+	static ofRange(range: Range): TextLength { return TextLength.betweenPositions(range.getStartPosition(), range.getEndPosition()); }
 	static ofText(text: string): TextLength {
 		let lineCount = 0;
 		let columnCount = 0;
@@ -72,15 +72,15 @@ export class TextLength {
 			: new TextLength(this.lineCount + other.lineCount, other.columnCount);
 	}
 
-	addToPosition(position: TextPosition): TextPosition {
+	addToPosition(position: Position): Position {
 		return this.lineCount === 0
-			? TextPosition.at(position.lineIndex, position.columnIndex + this.columnCount)
-			: TextPosition.at(position.lineIndex + this.lineCount, this.columnCount);
+			? new Position(position.lineNumber, position.column + this.columnCount)
+			: new Position(position.lineNumber + this.lineCount, this.columnCount + 1);
 	}
 
-	addToRange(range: TextRange): TextRange { return TextRange.from(this.addToPosition(range.start), this.addToPosition(range.end)); }
-	createRange(start: TextPosition): TextRange { return TextRange.from(start, this.addToPosition(start)); }
-	toRange(): TextRange { return this.createRange(TextPosition.at(0, 0)); }
-	toLineRange(): LineRange { return LineRange.ofLength(0, this.lineCount + 1); }
+	addToRange(range: Range): Range { return Range.fromPositions(this.addToPosition(range.getStartPosition()), this.addToPosition(range.getEndPosition())); }
+	createRange(start: Position): Range { return Range.fromPositions(start, this.addToPosition(start)); }
+	toRange(): Range { return this.createRange(new Position(1, 1)); }
+	toLineRange(): LineRange { return LineRange.ofLength(1, this.lineCount + 1); }
 	toString(): string { return `${this.lineCount},${this.columnCount}`; }
 }

@@ -1,8 +1,9 @@
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Position } from "../../../common/core/position.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
@@ -44,7 +45,7 @@ export class LanguageHierarchyController extends Disposable {
 	private async prepare(kind: HierarchyKind): Promise<void> {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
-		const anchor = this.selections.selections.primary.active;
+		const anchor = this.selections.selections.primary.getPosition();
 		try {
 			const sessions = kind === "call"
 				? (await this.service.prepareCallHierarchy(this.languageId, anchor, request.signal)).map(callSession)
@@ -60,7 +61,7 @@ export class LanguageHierarchyController extends Disposable {
 		}
 	}
 
-	private showSessions(anchor: TextPosition, sessions: readonly HierarchySession[]): void {
+	private showSessions(anchor: Position, sessions: readonly HierarchySession[]): void {
 		this.closePeek();
 		const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${sessions[0]!.kind === "call" ? "Call" : "Type"} Hierarchy`));
 		const body = h(widget.element.ownerDocument, "div");
@@ -135,8 +136,8 @@ export class LanguageHierarchyController extends Disposable {
 	private async open(item: LanguageHierarchyItem): Promise<void> {
 		const location = { resource: item.resource, range: item.range, selectionRange: item.selectionRange };
 		if (item.resource.toString() === this.resource.toString()) {
-			this.selections.setSelections(TextSelectionSet.single(TextSelection.from(item.selectionRange.start, item.selectionRange.end)));
-			this.viewport.revealPosition(item.selectionRange.start);
+			this.selections.setSelections(SelectionSet.single(Selection.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition())));
+			this.viewport.revealPosition(item.selectionRange.getStartPosition());
 			this.input.focus({ preventScroll: true });
 			return;
 		}
@@ -175,5 +176,5 @@ function directionLabel(direction: HierarchyDirection): string {
 		case "subtypes": return "Subtypes";
 	}
 }
-function hierarchyIdentity(item: LanguageHierarchyItem): string { return `${item.resource.toString()}\0${item.selectionRange.start.lineIndex}:${item.selectionRange.start.columnIndex}`; }
+function hierarchyIdentity(item: LanguageHierarchyItem): string { return `${item.resource.toString()}\0${item.selectionRange.getStartPosition().lineNumber}:${item.selectionRange.getStartPosition().column}`; }
 function resourceLabel(resource: URI): string { const path = decodeURIComponent(resource.path); return path.slice(path.lastIndexOf("/") + 1) || resource.toString(); }

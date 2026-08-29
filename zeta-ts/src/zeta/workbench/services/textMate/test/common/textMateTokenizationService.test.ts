@@ -7,7 +7,8 @@ import { type IOnigLib } from "vscode-textmate";
 import { SyntaxProviderRegistry } from "../../../../../editor/common/languages/syntax/syntaxProviders.js";
 import { SyntaxService } from "../../../../../editor/common/languages/syntax/syntaxService.js";
 import { LanguageRequestStatus } from "../../../../../editor/common/languages/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { createTextMateSyntaxProvider, TEXTMATE_SYNTAX_PROVIDER_ID } from "../../common/textMateSyntaxProvider.js";
 import { createTextMateSyntaxModule, TEXTMATE_SYNTAX_MODULE_ID } from "../../common/textMateSyntaxModule.js";
@@ -188,7 +189,7 @@ test("TextMate Syntax provider overrides lexical fallback by explicit priority",
 		id: "fallback.lexical",
 		languageIds: ["demo"],
 		provideTokens: () => ({ tokens: [{
-			range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
+			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
 			tokenType: "variable",
 			modifiers: [],
 		}] }),
@@ -275,16 +276,16 @@ function metadataGrammar(): string {
 
 function project(result: Awaited<ReturnType<TextMateTokenizationService["tokenize"]>>): unknown[] {
 	return (result?.tokens ?? []).map(token => [
-		token.range.start.lineIndex,
-		token.range.start.columnIndex,
-		token.range.end.columnIndex,
+		token.range.getStartPosition().lineNumber,
+		token.range.getStartPosition().column,
+		token.range.getEndPosition().column,
 		token.tokenType,
 	]);
 }
 
 function replaceLine(model: TextModel, lineIndex: number, text: string): void {
 	model.applyEdits([{
-		range: TextRange.from(TextPosition.at(lineIndex, 0), TextPosition.at(lineIndex, model.getLineContent(lineIndex).length)),
+		range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (model.getLineContent((lineIndex) + 1).length) + 1)),
 		text,
 	}]);
 }

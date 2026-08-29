@@ -1,6 +1,7 @@
+import { Position } from "../core/position.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { TextRange } from "../core/text.js";
+import { Range } from "../core/range.js";
 import { TextModel } from "./textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "./trackedRange.js";
 
@@ -11,14 +12,14 @@ export type TextDecorationId = number & {
 };
 
 export interface TextDecorationSpec<TMetadata> {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly stickiness: TrackedRangeStickiness;
 	readonly metadata: TMetadata;
 }
 
 export interface TextDecorationSnapshot<TMetadata> {
 	readonly id: TextDecorationId;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly metadata: TMetadata;
 }
 
@@ -37,7 +38,7 @@ interface DecorationEntry<TMetadata> {
 	readonly id: TextDecorationId;
 	readonly trackedRange: TrackedRange;
 	readonly metadata: TMetadata;
-	lastRange: TextRange;
+	lastRange: Range;
 }
 
 let nextTextDecorationId = 1;
@@ -200,8 +201,8 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 	}
 
 	private validateSpec(spec: TextDecorationSpec<TMetadata>): void {
-		this.model.offsetAt(spec.range.start);
-		this.model.offsetAt(spec.range.end);
+		this.model.offsetAt(spec.range.getStartPosition());
+		this.model.offsetAt(spec.range.getEndPosition());
 	}
 
 	private acceptModelChange(): void {
@@ -242,7 +243,7 @@ function snapshotEntry<TMetadata>(
 	});
 }
 
-function rangesEqual(left: TextRange, right: TextRange): boolean {
-	return left.start.compareTo(right.start) === 0 &&
-		left.end.compareTo(right.end) === 0;
+function rangesEqual(left: Range, right: Range): boolean {
+	return Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 &&
+		Position.compare(left.getEndPosition(), right.getEndPosition()) === 0;
 }

@@ -8,8 +8,9 @@ import { resolveStanzaKeyboardNavigation } from "../../../browser/view/viewContr
 import { ViewUserInputEvents } from "../../../browser/view/viewUserInputEvents.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorMoveOperations.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -127,7 +128,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 	].join("\n"));
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(caret(0, 5)),
+		SelectionSet.single(caret(0, 5)),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -157,7 +158,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 	assert.equal(forwardedKeyDownCount, 2);
 	assert.deepEqual(selections.selections.primary, caret(2, 5));
 
-	selections.setSelections(TextSelectionSet.single(caret(0, 2)));
+	selections.setSelections(SelectionSet.single(caret(0, 2)));
 	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.deepEqual(selections.selections.primary, caret(2, 2));
@@ -169,7 +170,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 	));
 	assert.deepEqual(
 		selections.selections.primary,
-		TextSelection.from(TextPosition.at(2, 2), TextPosition.at(2, 3)),
+		Selection.fromPositions(new Position((2) + 1, (2) + 1), new Position((2) + 1, (3) + 1)),
 	);
 
 	const textKey = keyboardEvent(dom.window, "a");
@@ -177,7 +178,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 	assert.equal(textKey.defaultPrevented, false);
 	assert.deepEqual(
 		selections.selections.primary,
-		TextSelection.from(TextPosition.at(2, 2), TextPosition.at(2, 3)),
+		Selection.fromPositions(new Position((2) + 1, (2) + 1), new Position((2) + 1, (3) + 1)),
 	);
 
 	emitKeyDown(userInputEvents, keyboardEvent(
@@ -207,12 +208,12 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 	assert.deepEqual(selections.selections.primary, caret(0, 0));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 0);
 
-	selections.setSelections(TextSelectionSet.withPrimary([
+	selections.setSelections(SelectionSet.withPrimary([
 		caret(0, 1),
 		caret(1, 1),
 	], 1));
 	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
 		caret(1, 1),
 		caret(2, 1),
 	], 1));
@@ -233,7 +234,7 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 	using model = new TextModel("abcdef\nghij");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(caret(0, 1)),
+		SelectionSet.single(caret(0, 1)),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -263,10 +264,10 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowUp"));
 	assert.deepEqual(selections.selections.primary, caret(0, 5));
 
-	selections.setSelections(TextSelectionSet.single(caret(0, 1)));
+	selections.setSelections(SelectionSet.single(caret(0, 1)));
 	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "PageDown"));
 	assert.deepEqual(selections.selections.primary, caret(0, 5));
-	selections.setSelections(TextSelectionSet.single(caret(0, 1)));
+	selections.setSelections(SelectionSet.single(caret(0, 1)));
 	emitKeyDown(userInputEvents, keyboardEvent(
 		dom.window,
 		"ArrowDown",
@@ -274,7 +275,7 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 	));
 	assert.deepEqual(
 		selections.selections.primary,
-		TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 3)),
+		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (3) + 1)),
 	);
 
 	dom.window.close();
@@ -285,7 +286,7 @@ test('Keyboard controller applies sticky tab stops to indentation movement', () 
 	const container = dom.window.document.querySelector('main');
 	assert.ok(container);
 	using model = new TextModel('        value');
-	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 8)));
+	using selections = new CursorsController(model, SelectionSet.single(caret(0, 8)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const userInputEvents = new ViewUserInputEvents();
 	using keyboard = new KeyboardNavigationController(
@@ -309,11 +310,11 @@ test("Keyboard controller rejects cross-model wiring and invalid OS options", ()
 	using otherModel = new TextModel("beta");
 	using selections = new CursorsController(
 		otherModel,
-		TextSelectionSet.single(caret(0, 0)),
+		SelectionSet.single(caret(0, 0)),
 	);
 	using ownSelections = new CursorsController(
 		model,
-		TextSelectionSet.single(caret(0, 0)),
+		SelectionSet.single(caret(0, 0)),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -381,6 +382,6 @@ function keyboardEvent(
 	}) as unknown as KeyboardEvent;
 }
 
-function caret(lineIndex: number, columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex));
+function caret(lineIndex: number, columnIndex: number): Selection {
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }

@@ -8,5 +8,5 @@ export function buildStickyScrollEntries(model: TextModel, firstVisibleLineIndex
 	if (!Number.isSafeInteger(firstVisibleLineIndex) || firstVisibleLineIndex < 0 || firstVisibleLineIndex >= model.lineCount) throw new RangeError("Sticky scroll visible line is outside the text model");
 	const active = regions.filter(region => region.startLineIndex < firstVisibleLineIndex && region.endLineIndex >= firstVisibleLineIndex).sort((left, right) => left.startLineIndex - right.startLineIndex || right.endLineIndex - left.endLineIndex);
 	const selected = active.slice(Math.max(0, active.length - maxEntries));
-	return Object.freeze(selected.map((region, index) => Object.freeze({ lineIndex: region.startLineIndex, label: region.label ?? model.getLineContent(region.startLineIndex).trim(), depth: index })));
+	return Object.freeze(selected.map((region, index) => Object.freeze({ lineIndex: region.startLineIndex, label: region.label ?? model.getLineContent((region.startLineIndex) + 1).trim(), depth: index })));
 }

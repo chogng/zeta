@@ -1,4 +1,4 @@
-import type { TextSnapshot } from '../../core/text.js';
+import type { TextSnapshot } from '../../core/textChange.js';
 
 export interface LanguageWorkerDocumentChange {
 	readonly rangeOffset: number;

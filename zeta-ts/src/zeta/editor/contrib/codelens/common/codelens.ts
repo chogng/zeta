@@ -1,6 +1,6 @@
 import { type Event } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { type TextRange } from '../../../common/core/text.js';
+import { type Range } from '../../../common/core/range.js';
 import { type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
 import { type LanguageFeatureProviderMetadata } from '../../../common/languageFeatureRegistry.js';
 
@@ -11,7 +11,7 @@ export interface LanguageCodeLensCommand {
 }
 
 export interface LanguageCodeLens {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly command?: LanguageCodeLensCommand;
 	readonly data?: unknown;
 }

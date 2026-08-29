@@ -3,7 +3,8 @@ import test from "node:test";
 import { LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 test("Language bracket pairs resolve nested cross-line configured pairs", () => {
@@ -12,13 +13,13 @@ test("Language bracket pairs resolve nested cross-line configured pairs", () => 
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 
-	assert.deepEqual(bracketPairs.matchBracket(TextPosition.at(0, 17)), {
-		opening: TextRange.from(TextPosition.at(0, 17), TextPosition.at(0, 18)),
-		closing: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 1)),
+	assert.deepEqual(bracketPairs.matchBracket(new Position((0) + 1, (17) + 1)), {
+		opening: Range.fromPositions(new Position((0) + 1, (17) + 1), new Position((0) + 1, (18) + 1)),
+		closing: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
 	});
-	assert.deepEqual(bracketPairs.matchBracket(TextPosition.at(1, 16)), {
-		opening: TextRange.from(TextPosition.at(1, 14), TextPosition.at(1, 15)),
-		closing: TextRange.from(TextPosition.at(1, 16), TextPosition.at(1, 17)),
+	assert.deepEqual(bracketPairs.matchBracket(new Position((1) + 1, (16) + 1)), {
+		opening: Range.fromPositions(new Position((1) + 1, (14) + 1), new Position((1) + 1, (15) + 1)),
+		closing: Range.fromPositions(new Position((1) + 1, (16) + 1), new Position((1) + 1, (17) + 1)),
 	});
 	assert.deepEqual(bracketPairs.getBracketPairsInLineRange(1, 1).map(bracket => bracket.token), ['{', '[', '(']);
 });
@@ -28,17 +29,17 @@ test("Language bracket pairs ignore strings and comments, and invalidate on edit
 	using configurations = bracketConfigurations();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	assert.equal(bracketPairs.matchBracket(TextPosition.at(0, 14)), undefined);
-	assert.equal(bracketPairs.matchBracket(TextPosition.at(0, 21)), undefined);
-	assert.equal(bracketPairs.matchBracket(TextPosition.at(1, 0)), undefined);
+	assert.equal(bracketPairs.matchBracket(new Position((0) + 1, (14) + 1)), undefined);
+	assert.equal(bracketPairs.matchBracket(new Position((0) + 1, (21) + 1)), undefined);
+	assert.equal(bracketPairs.matchBracket(new Position((1) + 1, (0) + 1)), undefined);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(1, 1)),
+		range: Range.fromPositions(new Position((1) + 1, (1) + 1)),
 		text: "\n}",
 	}]);
-	assert.deepEqual(bracketPairs.matchBracket(TextPosition.at(1, 0)), {
-		opening: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 1)),
-		closing: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 1)),
+	assert.deepEqual(bracketPairs.matchBracket(new Position((1) + 1, (0) + 1)), {
+		opening: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (1) + 1)),
+		closing: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
 	});
 });
 
@@ -47,11 +48,11 @@ test("Language bracket pairs expose enclosing, next, and invalid bracket structu
 	using configurations = bracketConfigurations();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	assert.deepEqual(bracketPairs.findEnclosingBrackets(TextPosition.at(0, 3)), {
-		opening: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
-		closing: TextRange.from(TextPosition.at(0, 13), TextPosition.at(0, 14)),
+	assert.deepEqual(bracketPairs.findEnclosingBrackets(new Position((0) + 1, (3) + 1)), {
+		opening: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
+		closing: Range.fromPositions(new Position((0) + 1, (13) + 1), new Position((0) + 1, (14) + 1)),
 	});
-	assert.equal(bracketPairs.findNextBracket(TextPosition.at(0, 8))?.token, "(");
+	assert.equal(bracketPairs.findNextBracket(new Position((0) + 1, (8) + 1))?.token, "(");
 	assert.deepEqual(bracketPairs.getLineBrackets(0).filter(bracket => bracket.isInvalid).map(bracket => bracket.token), ["[", "]"]);
 });
 

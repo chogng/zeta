@@ -1,6 +1,6 @@
 import { escapeRegExpCharacters } from "../../../base/common/strings.js";
-import { TextPosition } from "../core/text.js";
-import { TextRange } from "../core/text.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
 import { getMapForWordSeparators, WordCharacterClass, type WordCharacterClassifier } from '../core/wordCharacterClassifier.js';
 import type { TextModel } from "./textModel.js";
 
@@ -26,14 +26,14 @@ export interface TextSearchQuery {
 
 /** Bounds one search without changing its matching semantics. */
 export interface TextSearchOptions {
-	readonly range?: TextRange;
+	readonly range?: Range;
 	readonly resultLimit?: number;
 }
 
 /** One immutable match in the current TextModel version. */
 export interface TextSearchMatch {
 	readonly modelVersion: number;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly text: string;
 	readonly captures: readonly (string | undefined)[];
 	readonly namedCaptures: Readonly<Record<string, string | undefined>>;
@@ -59,8 +59,8 @@ export function findTextMatches(model: TextModel, query: TextSearchQuery, option
 	if (query.pattern.length === 0 || resultLimit === 0) return Object.freeze([]);
 
 	const snapshot = model.createSnapshot();
-	const startOffset = options.range ? model.offsetAt(options.range.start) : 0;
-	const endOffset = options.range ? model.offsetAt(options.range.end) : snapshot.length;
+	const startOffset = options.range ? model.offsetAt(options.range.getStartPosition()) : 0;
+	const endOffset = options.range ? model.offsetAt(options.range.getEndPosition()) : snapshot.length;
 	const text = snapshot.getTextBetweenOffsets(startOffset, endOffset);
 	const expression = compileQuery(query);
 	const matches: TextSearchMatch[] = [];
@@ -72,7 +72,7 @@ export function findTextMatches(model: TextModel, query: TextSearchQuery, option
 		if (!query.wholeWord || isWholeWordMatch(text, relativeStart, relativeEnd, query.wordSeparators)) {
 			matches.push(Object.freeze({
 				modelVersion: snapshot.version,
-				range: TextRange.from(
+				range: Range.fromPositions(
 					model.positionAt(startOffset + relativeStart),
 					model.positionAt(startOffset + relativeEnd),
 				),
@@ -91,15 +91,15 @@ export function findTextMatches(model: TextModel, query: TextSearchQuery, option
 }
 
 /** Finds the first match at or after `from`, optionally wrapping once at the document end. */
-export function findNextTextMatch(model: TextModel, query: TextSearchQuery, from: TextPosition, wrap = true): TextSearchMatch | undefined {
+export function findNextTextMatch(model: TextModel, query: TextSearchQuery, from: Position, wrap = true): TextSearchMatch | undefined {
 	const documentEnd = model.positionAt(model.createSnapshot().length);
 	const following = findTextMatches(model, query, {
-		range: TextRange.from(from, documentEnd),
+		range: Range.fromPositions(from, documentEnd),
 		resultLimit: 1,
 	})[0];
 	if (following || !wrap || model.offsetAt(from) === 0) return following;
 	return findTextMatches(model, query, {
-		range: TextRange.from(TextPosition.at(0, 0), from),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), from),
 		resultLimit: 1,
 	})[0];
 }

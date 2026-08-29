@@ -2,23 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
 import { CursorChangeReason, CursorsController } from "../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-const position = TextPosition.at;
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
 	startColumn: number,
 	endColumn: number,
-): TextRange => TextRange.from(
+): Range => Range.fromPositions(
 	position(0, startColumn),
 	position(0, endColumn),
 );
 const single = (
 	anchorColumn: number,
 	activeColumn: number,
-): TextSelectionSet => TextSelectionSet.single(
-	TextSelection.from(
+): SelectionSet => SelectionSet.single(
+	Selection.fromPositions(
 		position(0, anchorColumn),
 		position(0, activeColumn),
 	),
@@ -95,14 +97,14 @@ test("Cursor-only selection history restores multi-cursor operations without cha
 	using controller = new CursorsController(model, single(0, 0), { cursorHistoryLimit: 1 });
 	const reasons: CursorChangeReason[] = [];
 	using listener = controller.onDidChange(event => reasons.push(event.reason));
-	const first = TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(position(0, 0)),
-		TextSelection.collapsedAt(position(0, 1)),
+	const first = SelectionSet.withPrimary([
+		Selection.fromPositions(position(0, 0)),
+		Selection.fromPositions(position(0, 1)),
 	], 1);
-	const second = TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(position(0, 0)),
-		TextSelection.collapsedAt(position(0, 1)),
-		TextSelection.collapsedAt(position(0, 2)),
+	const second = SelectionSet.withPrimary([
+		Selection.fromPositions(position(0, 0)),
+		Selection.fromPositions(position(0, 1)),
+		Selection.fromPositions(position(0, 2)),
 	], 2);
 
 	controller.setCursorSelections(first);
@@ -153,29 +155,29 @@ test("CursorsController projects tracked selections before downstream command li
 	using model = new TextModel("const value = 1;\n");
 	using controller = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.from(
-			TextPosition.at(0, 0),
+		SelectionSet.single(Selection.fromPositions(
+			new Position((0) + 1, (0) + 1),
 			model.positionAt(model.length),
 		)),
 	);
-	const observed: TextSelection[] = [];
+	const observed: Selection[] = [];
 	using listener = model.onDidChange(() => {
 		const selection = controller.selections.primary;
 		assert.doesNotThrow(() => {
-			model.offsetAt(selection.anchor);
-			model.offsetAt(selection.active);
+			model.offsetAt(selection.getSelectionStart());
+			model.offsetAt(selection.getPosition());
 		});
 		observed.push(selection);
 	});
 
 	controller.execute({
-		edits: [{ range: TextRange.from(TextPosition.at(0, 0), model.positionAt(model.length)), text: "x" }],
+		edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), model.positionAt(model.length)), text: "x" }],
 		selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
 		primarySelectionIndex: 0,
 	});
 
-	assert.deepEqual(observed, [TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 1))]);
-	assert.deepEqual(controller.selections, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	assert.deepEqual(observed, [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))]);
+	assert.deepEqual(controller.selections, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 });
 
 test("CursorsController releases tracked ranges without taking their model ownership", () => {
@@ -287,7 +289,7 @@ test("CursorsController rejects stale post-command selections", () => {
 	using reentrantListener = model.onDidChange(event => {
 		if (event.version === 2) {
 			model.applyEdits([{
-				range: TextRange.emptyAt(model.positionAt(model.getText().length)),
+				range: Range.fromPositions(model.positionAt(model.getText().length)),
 				text: "Y",
 			}]);
 		}

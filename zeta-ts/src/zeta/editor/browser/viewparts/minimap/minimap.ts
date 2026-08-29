@@ -140,7 +140,7 @@ export class Minimap extends EditorViewPart {
 				: renderLayout.startVisualLineIndex + rowIndex;
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
-			const lineText = this.options.model.getLineContent(visualLine.logicalLineIndex);
+			const lineText = this.options.model.getLineContent((visualLine.logicalLineIndex) + 1);
 			const tokens = this.options.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 			this.renderLine(
 				imageData,

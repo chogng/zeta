@@ -3,7 +3,7 @@ import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorExtensions.js';
-import { TextPosition } from '../../../../editor/common/core/text.js';
+import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekViewWidget.js';
 import { type IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
@@ -30,7 +30,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	showNextChange(): void {
 		const model = this.modelReference?.object;
 		if (!model) return;
-		const lineIndex = this.currentChange?.lineIndex ?? this.context.selections.selections.primary.active.lineIndex;
+		const lineIndex = this.currentChange?.lineIndex ?? this.context.selections.selections.primary.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findNextChange(lineIndex) : model.findNextChange(lineIndex, true);
 		if (change) this.showChange(change);
 		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');
@@ -39,7 +39,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	showPreviousChange(): void {
 		const model = this.modelReference?.object;
 		if (!model) return;
-		const lineIndex = this.currentChange?.lineIndex ?? this.context.selections.selections.primary.active.lineIndex;
+		const lineIndex = this.currentChange?.lineIndex ?? this.context.selections.selections.primary.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findPreviousChange(lineIndex) : model.findPreviousChange(lineIndex, true);
 		if (change) this.showChange(change);
 		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');
@@ -55,7 +55,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 		if (!isHTMLElement(event.target) || !event.target.closest('.zeta-quick-diff-gutter')) return;
 		const target = this.context.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
 		if (!target) return;
-		const change = this.modelReference?.object.findChangeAtLine(target.position.lineIndex);
+		const change = this.modelReference?.object.findChangeAtLine(target.position.lineNumber - 1);
 		if (!change) return;
 		stopEvent(event);
 		this.showChange(change);
@@ -82,7 +82,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 		const model = this.modelReference?.object;
 		if (!model) return;
 		this.currentChange = change;
-		this.context.viewport.revealPosition(TextPosition.at(change.lineIndex, 0));
+		this.context.viewport.revealPosition(new Position((change.lineIndex) + 1, (0) + 1));
 		const index = model.state.changes.indexOf(change);
 		this.view.value = new QuickDiffPeekView(
 			this.context,
@@ -136,7 +136,7 @@ class QuickDiffPeekView extends Disposable {
 		super();
 		const document = context.viewport.element.ownerDocument;
 		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
-		const peek = this._register(new PeekViewWidget(context.viewport, TextPosition.at(change.lineIndex, 0), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
+		const peek = this._register(new PeekViewWidget(context.viewport, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
 		peek.element.classList.add('zeta-quick-diff-peek');
 		const body = h(document, 'div');
 		body.className = 'zeta-quick-diff-peek-body';

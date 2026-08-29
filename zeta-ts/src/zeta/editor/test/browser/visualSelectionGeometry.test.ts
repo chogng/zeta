@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { createStanzaVisualRangeRectangles } from "../../common/viewModel/visualRangeGeometry.js";
@@ -11,7 +13,7 @@ import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 test("visual selection geometry splits one logical range across wrapped fragments", () => {
 	using model = new TextModel("abcdef\ngh");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [2]]);
-	const selections = TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(1, 1)));
+	const selections = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (1) + 1)));
 	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
 		startLineIndex: 0,
 		endLineIndexExclusive: 4,
@@ -34,7 +36,7 @@ test("visual selection geometry splits one logical range across wrapped fragment
 test("visual selection geometry offsets continuation rows by their wrapping indent", () => {
 	using model = new TextModel("abcdef");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
-	const selections = TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 4), TextPosition.at(0, 2)));
+	const selections = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (4) + 1), new Position((0) + 1, (2) + 1)));
 	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
 		startLineIndex: 0,
 		endLineIndexExclusive: 3,
@@ -57,9 +59,9 @@ test("visual selection geometry offsets continuation rows by their wrapping inde
 test("visual range geometry rejects a projection from another model version", () => {
 	using model = new TextModel("abc");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 3)), text: "d" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (3) + 1)), text: "d" }]);
 	assert.throws(() => createStanzaVisualRangeRectangles(model, [{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
 		value: undefined,
 	}], projection, { startLineIndex: 0, endLineIndexExclusive: 1 }, 0, new FixedTextMeasurer()), /current text model projection/);
 });

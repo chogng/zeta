@@ -1,5 +1,5 @@
 import { type Event } from '../../base/common/event.js';
-import { type TextModelChange } from './core/text.js';
+import { type TextModelChange } from './core/textChange.js';
 
 /** A half-open range of visual-line indexes shared by layout and view-model code. */
 export interface EditorLineRange {

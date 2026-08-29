@@ -2,8 +2,9 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Position } from "../../../common/core/position.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { PeekViewWidget } from "../../peekView/browser/peekViewWidget.js";
 import { type LanguageLocation, type LanguageNavigationService } from "../common/languageNavigation.js";
@@ -44,7 +45,7 @@ export class LanguageNavigationController extends Disposable {
 	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
-		const position = this.selections.selections.primary.active;
+		const position = this.selections.selections.primary.getPosition();
 		try {
 			const locations = await this.provide(kind, position, options.includeDeclaration ?? true, request.signal);
 			if (request.signal.aborted) return;
@@ -62,7 +63,7 @@ export class LanguageNavigationController extends Disposable {
 		}
 	}
 
-	private provide(kind: LanguageNavigationKind, position: TextPosition, includeDeclaration: boolean, signal: AbortSignal): Promise<readonly LanguageLocation[]> {
+	private provide(kind: LanguageNavigationKind, position: Position, includeDeclaration: boolean, signal: AbortSignal): Promise<readonly LanguageLocation[]> {
 		switch (kind) {
 			case "definition": return this.service.provideDefinition(this.languageId, position, signal);
 			case "declaration": return this.service.provideDeclaration(this.languageId, position, signal);
@@ -72,7 +73,7 @@ export class LanguageNavigationController extends Disposable {
 		}
 	}
 
-	private showPeek(kind: LanguageNavigationKind, anchor: TextPosition, locations: readonly LanguageLocation[]): void {
+	private showPeek(kind: LanguageNavigationKind, anchor: Position, locations: readonly LanguageLocation[]): void {
 		this.closePeek();
 		const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
 		const list = h(widget.element.ownerDocument, "div");
@@ -84,7 +85,7 @@ export class LanguageNavigationController extends Disposable {
 			button.setAttribute("role", "option");
 			button.className = "stanza-editor-language-location";
 			const selection = location.selectionRange ?? location.range;
-			button.textContent = `${resourceLabel(location.resource)}:${selection.start.lineIndex + 1}:${selection.start.columnIndex + 1}`;
+			button.textContent = `${resourceLabel(location.resource)}:${selection.startLineNumber}:${selection.startColumn}`;
 			this.peek.add(addDisposableListener(button, "click", () => void this.open(location)));
 			list.append(button);
 		}
@@ -104,8 +105,8 @@ export class LanguageNavigationController extends Disposable {
 		this.closePeek();
 		const range = location.selectionRange ?? location.range;
 		if (location.resource.toString() === this.resource.toString()) {
-			this.selections.setSelections(TextSelectionSet.single(TextSelection.from(range.start, range.end)));
-			this.viewport.revealPosition(range.start);
+			this.selections.setSelections(SelectionSet.single(Selection.fromPositions(range.getStartPosition(), range.getEndPosition())));
+			this.viewport.revealPosition(range.getStartPosition());
 			this.input.focus({ preventScroll: true });
 			return;
 		}

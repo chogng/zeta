@@ -1,4 +1,4 @@
-import { type TextEdit } from "../core/text.js";
+import { type TextEdit } from "../core/editOperation.js";
 
 export interface TextSelectionOffsets {
 	readonly anchorOffset: number;

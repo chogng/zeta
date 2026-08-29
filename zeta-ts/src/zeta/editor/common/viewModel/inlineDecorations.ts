@@ -1,4 +1,4 @@
-import { type TextRange } from '../core/text.js';
+import { type Range } from '../core/range.js';
 
 /** Decoration kinds understood by the common line renderer. */
 export enum InlineDecorationType {
@@ -10,7 +10,7 @@ export enum InlineDecorationType {
 
 /** Common decoration input kept independent from browser CSS and DOM. */
 export interface InlineDecoration {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly inlineClassName: string;
 	readonly type: InlineDecorationType;
 }

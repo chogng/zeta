@@ -3,7 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { TextPosition } from '../../../../common/core/text.js';
+import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -33,12 +33,12 @@ test('PeekViewWidget renders inside reserved editor space', () => {
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 240, height: 80 });
-	using widget = new PeekViewWidget(viewport, TextPosition.at(0, 2), '2 definitions');
+	using widget = new PeekViewWidget(viewport, new Position((0) + 1, (2) + 1), '2 definitions');
 	const content = h(dom.window.document, 'button');
 	content.textContent = 'result';
 	widget.setBody(content);
 
-	widget.show(TextPosition.at(0, 2), 2);
+	widget.show(new Position((0) + 1, (2) + 1), 2);
 
 	assert.deepEqual({
 		position: widget.position,
@@ -50,7 +50,7 @@ test('PeekViewWidget renders inside reserved editor space', () => {
 		body: widget.element.querySelector('.stanza-editor-peek-view-body')?.textContent,
 		accessible: widget.element.hasAttribute('aria-hidden'),
 	}, {
-		position: TextPosition.at(0, 2),
+		position: new Position((0) + 1, (2) + 1),
 		parent: requiredElement(viewport.element, '.stanza-editor-view-zones'),
 		top: '20px',
 		height: '40px',

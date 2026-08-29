@@ -390,7 +390,7 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	const firstCodeText = group.content[2]!.content[0]!.content[0]!;
 	const textBeforeEdit = model.getText();
 	model.dispatch(new DocumentTransaction().replaceText(firstCodeText.id, 0, firstCodeText.text!.length, "let value = 2;"));
-	assert.equal(model.getLineContent(3), "let value = 2;");
+	assert.equal(model.getLineContent((3) + 1), "let value = 2;");
 	assert.equal(model.version, 2);
 	assert.equal(textChanges[0]?.reason, "blocks");
 	assert.ok((textChanges[0]?.changes[0]?.rangeOffset ?? 0) > 0);

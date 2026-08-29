@@ -4,7 +4,8 @@ import { type LanguageConfigurationChangeEvent, type LanguageConfigurationSource
 import { assertLanguageId } from "./languageId.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { type LanguageLexicalBracketEvent, type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
-import { type TextModelChange, type TextPosition } from "../core/text.js";
+import { type Position } from "../core/position.js";
+import { type TextModelChange } from "../core/textChange.js";
 import { type TextModel } from "../model/textModel.js";
 import { type LanguageToken } from "../tokens/languageTokens.js";
 
@@ -19,8 +20,8 @@ export interface LanguageLexicalContextSource {
 	readonly textModel: TextModel;
 	readonly languageId: string;
 	getStructuralLineContent(lineIndex: number, startColumn?: number, endColumn?: number): string;
-	getTokenTypeAt(position: TextPosition): string | undefined;
-	getLanguageIdAt(position: TextPosition): string;
+	getTokenTypeAt(position: Position): string | undefined;
+	getLanguageIdAt(position: Position): string;
 	supportsLanguageId(languageId: string): boolean;
 }
 
@@ -66,7 +67,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 	getStructuralLineContent(lineIndex: number, startColumn = 0, endColumn?: number): string {
 		this.assertNotDisposed();
 		assertLineIndex(this.textModel, lineIndex);
-		const line = this.textModel.getLineContent(lineIndex);
+		const line = this.textModel.getLineContent((lineIndex) + 1);
 		const resolvedEnd = endColumn ?? line.length;
 		assertColumnRange(line, startColumn, resolvedEnd);
 		const result = this.ensureLine(lineIndex);
@@ -87,18 +88,20 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 		return content;
 	}
 
-	getTokenTypeAt(position: TextPosition): string | undefined {
+	getTokenTypeAt(position: Position): string | undefined {
 		this.assertNotDisposed();
-		assertLineIndex(this.textModel, position.lineIndex);
-		const line = this.textModel.getLineContent(position.lineIndex);
-		assertColumnRange(line, position.columnIndex, position.columnIndex);
-		const result = this.ensureLine(position.lineIndex);
-		const containing = result.tokens.find(token => token.startColumn <= position.columnIndex && position.columnIndex < token.endColumn);
+		const lineIndex = position.lineNumber - 1;
+		const columnIndex = position.column - 1;
+		assertLineIndex(this.textModel, lineIndex);
+		const line = this.textModel.getLineContent(position.lineNumber);
+		assertColumnRange(line, columnIndex, columnIndex);
+		const result = this.ensureLine(lineIndex);
+		const containing = result.tokens.find(token => token.startColumn <= columnIndex && columnIndex < token.endColumn);
 		if (containing) return containing.tokenType;
-		if (position.columnIndex === line.length && result.outputState === "blockComment") return "comment";
-		if (position.columnIndex === line.length && result.outputState !== "normal" && result.outputState !== "blockComment") return "string";
+		if (columnIndex === line.length && result.outputState === "blockComment") return "comment";
+		if (columnIndex === line.length && result.outputState !== "normal" && result.outputState !== "blockComment") return "string";
 		const last = result.tokens.at(-1);
-		if (position.columnIndex !== line.length || last?.endColumn !== line.length) return undefined;
+		if (columnIndex !== line.length || last?.endColumn !== line.length) return undefined;
 		const lineComment = this.configuration!.comments.lineComment;
 		if (last.tokenType === "comment" && result.inputState !== "blockComment" && lineComment && line.startsWith(lineComment, last.startColumn)) {
 			return "comment";
@@ -109,7 +112,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 		return undefined;
 	}
 
-	getLanguageIdAt(position: TextPosition): string {
+	getLanguageIdAt(position: Position): string {
 		this.textModel.offsetAt(position);
 		return this.languageId;
 	}
@@ -135,7 +138,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 		let state: LanguageLexicalState = this.lineResults.at(-1)?.outputState ?? "normal";
 		while (this.lineResults.length <= lineIndex) {
 			const currentLine = this.lineResults.length;
-			const result = this.scanner!.scan(this.textModel.getLineContent(currentLine), state);
+			const result = this.scanner!.scan(this.textModel.getLineContent((currentLine) + 1), state);
 			this.lineResults.push(result);
 			state = result.outputState;
 		}
@@ -143,7 +146,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 	}
 
 	private acceptModelChange(change: TextModelChange): void {
-		const firstChangedLine = Math.min(...change.changes.map(contentChange => contentChange.range.start.lineIndex));
+		const firstChangedLine = Math.min(...change.changes.map(contentChange => contentChange.range.startLineNumber - 1));
 		this.lineResults.length = Math.min(this.lineResults.length, firstChangedLine);
 		this.changeEmitter.fire();
 	}
@@ -180,26 +183,26 @@ export class TokenAwareLanguageLexicalContext extends Disposable implements Lang
 
 	getStructuralLineContent(lineIndex: number, startColumn = 0, endColumn?: number): string {
 		this.assertNotDisposed();
-		const line = this.textModel.getLineContent(lineIndex);
+		const line = this.textModel.getLineContent((lineIndex) + 1);
 		const resolvedEnd = endColumn ?? line.length;
 		if (this.tokenization.modelVersion !== this.textModel.version) return this.fallback.getStructuralLineContent(lineIndex, startColumn, resolvedEnd);
 		let result = line.slice(startColumn, resolvedEnd);
 		for (const token of this.tokenization.getLineTokens(lineIndex)) {
-			if (!excludedFromStructure(token) || token.range.end.columnIndex <= startColumn || token.range.start.columnIndex >= resolvedEnd) continue;
-			const from = Math.max(startColumn, token.range.start.columnIndex) - startColumn;
-			const to = Math.min(resolvedEnd, token.range.end.columnIndex) - startColumn;
+			if (!excludedFromStructure(token) || token.range.endColumn - 1 <= startColumn || token.range.startColumn - 1 >= resolvedEnd) continue;
+			const from = Math.max(startColumn, token.range.startColumn - 1) - startColumn;
+			const to = Math.min(resolvedEnd, token.range.endColumn - 1) - startColumn;
 			result = result.slice(0, from) + " ".repeat(to - from) + result.slice(to);
 		}
 		return result;
 	}
 
-	getTokenTypeAt(position: TextPosition): string | undefined {
+	getTokenTypeAt(position: Position): string | undefined {
 		this.assertNotDisposed();
 		const token = this.tokenAt(position);
 		return token?.tokenType ?? this.fallback.getTokenTypeAt(position);
 	}
 
-	getLanguageIdAt(position: TextPosition): string {
+	getLanguageIdAt(position: Position): string {
 		this.assertNotDisposed();
 		return this.tokenAt(position)?.languageId ?? this.languageId;
 	}
@@ -215,15 +218,15 @@ export class TokenAwareLanguageLexicalContext extends Disposable implements Lang
 		const tokens = this.tokenization.getLineTokens(lineIndex);
 		const embedded = tokens.filter(token => token.languageId !== undefined && token.languageId !== this.languageId);
 		const events = this.fallback.getStructuralBracketEvents(lineIndex).filter(event => !tokens.some(token => (excludedFromStructure(token) || token.languageId !== undefined && token.languageId !== this.languageId) && contains(token, event.startColumn, event.endColumn)));
-		const line = this.textModel.getLineContent(lineIndex);
+		const line = this.textModel.getLineContent((lineIndex) + 1);
 		for (const token of embedded) {
 			if (excludedFromStructure(token)) continue;
 			const languageId = token.languageId!;
 			const pairs = this.configurations.getLanguageConfiguration(languageId).brackets;
 			const candidates = pairs.flatMap(pair => [{ token: pair.open, matchingToken: pair.close, action: "open" as const }, { token: pair.close, matchingToken: pair.open, action: "close" as const }]).sort((left, right) => right.token.length - left.token.length);
-			let column = token.range.start.columnIndex;
-			while (column < token.range.end.columnIndex) {
-				const candidate = candidates.find(value => line.startsWith(value.token, column) && column + value.token.length <= token.range.end.columnIndex);
+			let column = token.range.startColumn - 1;
+			while (column < token.range.endColumn - 1) {
+				const candidate = candidates.find(value => line.startsWith(value.token, column) && column + value.token.length <= token.range.endColumn - 1);
 				if (!candidate) { column += 1; continue; }
 				events.push(Object.freeze({ kind: "bracket", action: candidate.action, startColumn: column, endColumn: column + candidate.token.length, token: candidate.token, matchingToken: candidate.matchingToken }));
 				column += candidate.token.length;
@@ -232,10 +235,11 @@ export class TokenAwareLanguageLexicalContext extends Disposable implements Lang
 		return Object.freeze(events.sort((left, right) => left.startColumn - right.startColumn || left.endColumn - right.endColumn));
 	}
 
-	private tokenAt(position: TextPosition) {
+	private tokenAt(position: Position) {
 		this.textModel.offsetAt(position);
 		if (this.tokenization.modelVersion !== this.textModel.version) return undefined;
-		return this.tokenization.getLineTokens(position.lineIndex).find(token => token.range.start.columnIndex <= position.columnIndex && position.columnIndex < token.range.end.columnIndex);
+		const columnIndex = position.column - 1;
+		return this.tokenization.getLineTokens(position.lineNumber - 1).find(token => token.range.startColumn - 1 <= columnIndex && columnIndex < token.range.endColumn - 1);
 	}
 }
 
@@ -244,7 +248,7 @@ function excludedFromStructure(token: LanguageToken): boolean {
 }
 
 function contains(token: LanguageToken, startColumn: number, endColumn: number): boolean {
-	return token.range.start.columnIndex <= startColumn && token.range.end.columnIndex >= endColumn;
+	return token.range.startColumn - 1 <= startColumn && token.range.endColumn - 1 >= endColumn;
 }
 
 function structuralBracketTokens(configuration: ResolvedLanguageConfiguration): readonly string[] {

@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createToggleLineCommentCommand } from "../../common/lineCommentCommands.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Toggle line comment inserts after indentation and restores one isolated undo step", () => {
 	using model = new TextModel("  alpha\n\tbeta\n\n gamma");
-	using selections = new CursorsController(model, TextSelectionSet.single(
-		TextSelection.from(TextPosition.at(0, 2), TextPosition.at(3, 1)),
+	using selections = new CursorsController(model, SelectionSet.single(
+		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((3) + 1, (1) + 1)),
 	));
 
 	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
@@ -19,7 +21,7 @@ test("Toggle line comment inserts after indentation and restores one isolated un
 	assert.equal(model.getText(), "  // alpha\n\t// beta\n//\n // gamma");
 	assert.deepEqual(
 		selections.selections.primary,
-		TextSelection.from(TextPosition.at(0, 5), TextPosition.at(3, 4)),
+		Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((3) + 1, (4) + 1)),
 	);
 	selections.undo();
 	assert.equal(model.getText(), "  alpha\n\tbeta\n\n gamma");
@@ -29,8 +31,8 @@ test("Toggle line comment inserts after indentation and restores one isolated un
 
 test("Toggle line comment removes only when all selected content lines are commented", () => {
 	using model = new TextModel("// alpha\n  // beta\n\n// gamma");
-	using selections = new CursorsController(model, TextSelectionSet.single(
-		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(3, 8)),
+	using selections = new CursorsController(model, SelectionSet.single(
+		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((3) + 1, (8) + 1)),
 	));
 
 	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
@@ -39,11 +41,11 @@ test("Toggle line comment removes only when all selected content lines are comme
 	assert.equal(model.getText(), "alpha\n  beta\n\ngamma");
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(1, 0)),
+		range: Range.fromPositions(new Position((1) + 1, (0) + 1)),
 		text: "x",
 	}]);
-	selections.setSelections(TextSelectionSet.single(
-		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(1, 7)),
+	selections.setSelections(SelectionSet.single(
+		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (7) + 1)),
 	));
 	selections.execute(createToggleLineCommentCommand(model, selections.selections, {
 		lineComment: "//",
@@ -54,7 +56,7 @@ test("Toggle line comment removes only when all selected content lines are comme
 
 test("Toggle line comment validates its contract before mutating", () => {
 	using model = new TextModel("alpha");
-	const selections = TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)));
+	const selections = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 	assert.throws(() => createToggleLineCommentCommand(model, selections, {
 		lineComment: "",
 	}), /non-empty/);

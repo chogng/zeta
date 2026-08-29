@@ -1,7 +1,9 @@
 import { getEditorIndentationUnit, resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../../common/core/misc/indentation.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange, type TextEdit } from "../../../common/core/text.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export enum EditorLineIndentDirection {
@@ -17,14 +19,14 @@ interface OffsetEdit {
 }
 
 /** Indents or outdents the union of physical lines touched by the current selections. */
-export function createLineIndentCommand(model: TextModel, selections: TextSelectionSet, direction: EditorLineIndentDirection, options: EditorIndentationOptions = {}): EditorEditCommand {
+export function createLineIndentCommand(model: TextModel, selections: SelectionSet, direction: EditorLineIndentDirection, options: EditorIndentationOptions = {}): EditorEditCommand {
 	if (!Object.values(EditorLineIndentDirection).includes(direction)) {
 		throw new TypeError("Unknown editor line indentation direction");
 	}
 	const indentation = resolveEditorIndentationOptions(options);
 	const lineIndices = selectedLineIndices(selections);
 	const edits = lineIndices.flatMap<OffsetEdit>(lineIndex => {
-		const lineStart = TextPosition.at(lineIndex, 0);
+		const lineStart = new Position((lineIndex) + 1, (0) + 1);
 		const startOffset = model.offsetAt(lineStart);
 		if (direction === EditorLineIndentDirection.Indent) {
 			const text = getEditorIndentationUnit(indentation);
@@ -32,10 +34,10 @@ export function createLineIndentCommand(model: TextModel, selections: TextSelect
 				startOffset,
 				endOffset: startOffset,
 				text,
-				edit: Object.freeze({ range: TextRange.emptyAt(lineStart), text }),
+				edit: Object.freeze({ range: Range.fromPositions(lineStart), text }),
 			}];
 		}
-		const content = model.getLineContent(lineIndex);
+		const content = model.getLineContent((lineIndex) + 1);
 		const removableLength = content.startsWith("\t")
 			? 1
 			: Math.min(indentation.tabSize, /^[ ]*/.exec(content)![0].length);
@@ -45,14 +47,14 @@ export function createLineIndentCommand(model: TextModel, selections: TextSelect
 			endOffset: startOffset + removableLength,
 			text: "",
 			edit: Object.freeze({
-				range: TextRange.from(lineStart, TextPosition.at(lineIndex, removableLength)),
+				range: Range.fromPositions(lineStart, new Position((lineIndex) + 1, (removableLength) + 1)),
 				text: "",
 			}),
 		}];
 	});
 	const selectionsAfter = selections.selections.map(selection => Object.freeze({
-		anchorOffset: mapOffsetThroughEdits(model.offsetAt(selection.anchor), edits),
-		activeOffset: mapOffsetThroughEdits(model.offsetAt(selection.active), edits),
+		anchorOffset: mapOffsetThroughEdits(model.offsetAt(selection.getSelectionStart()), edits),
+		activeOffset: mapOffsetThroughEdits(model.offsetAt(selection.getPosition()), edits),
 	}));
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
@@ -62,15 +64,15 @@ export function createLineIndentCommand(model: TextModel, selections: TextSelect
 	});
 }
 
-function selectedLineIndices(selections: TextSelectionSet): readonly number[] {
+function selectedLineIndices(selections: SelectionSet): readonly number[] {
 	const indices = new Set<number>();
 	for (const selection of selections.selections) {
-		const range = selection.range;
-		let endLineIndex = range.end.lineIndex;
-		if (!selection.collapsed && range.end.columnIndex === 0 && endLineIndex > range.start.lineIndex) {
+		const range = selection;
+		let endLineIndex = range.endLineNumber - 1;
+		if (!selection.isEmpty() && range.endColumn === 1 && endLineIndex > range.startLineNumber - 1) {
 			endLineIndex -= 1;
 		}
-		for (let lineIndex = range.start.lineIndex; lineIndex <= endLineIndex; lineIndex += 1) indices.add(lineIndex);
+		for (let lineIndex = range.startLineNumber - 1; lineIndex <= endLineIndex; lineIndex += 1) indices.add(lineIndex);
 	}
 	return Object.freeze([...indices].sort((left, right) => left - right));
 }

@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { LinkService, type LanguageLink } from "../common/links.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Resolves provider links on demand and delegates opening to the host callback. */
@@ -11,7 +11,7 @@ export class LinksController extends Disposable {
 	private request: AbortController | undefined;
 	private links: readonly LanguageLink[] = [];
 	private activeLink: LanguageLink | undefined;
-	private hoverPosition: TextPosition | undefined;
+	private hoverPosition: Position | undefined;
 
 	constructor(private readonly viewport: EditorViewport, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza link opening failed", error)) {
 		super();

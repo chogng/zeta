@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { findSectionHeaders } from "../../../common/services/findSectionHeaders.js";
 
@@ -14,7 +15,7 @@ test("section headers include named regions but not ordinary foldable lines", ()
 	});
 
 	assert.deepEqual(headers, [{
-		range: TextRange.from(TextPosition.at(0, 10), TextPosition.at(0, 24)),
+		range: Range.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (24) + 1)),
 		text: " Runtime ",
 		hasSeparatorLine: true,
 		shouldBeInComments: false,
@@ -31,9 +32,9 @@ test("section headers collect single-line and multiline MARK matches", () => {
 
 	assert.equal(headers.length, 2);
 	assert.equal(headers[0]?.text, "API");
-	assert.equal(headers[0]?.range.start.lineIndex, 0);
-	assert.equal(headers[1]?.range.start.lineIndex, 1);
-	assert.equal(headers[1]?.range.end.lineIndex, 2);
+	assert.equal(headers[0]?.range.startLineNumber, 1);
+	assert.equal(headers[1]?.range.startLineNumber, 2);
+	assert.equal(headers[1]?.range.endLineNumber, 3);
 });
 
 test("section headers reject invalid MARK expressions", () => {

@@ -4,7 +4,9 @@ import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
 import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from "../../common/languages/syntax/syntaxService.js";
 import { LanguageLexicalSyntaxCache } from "../../common/languages/languageLexicalSyntaxCache.js";
 import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWireProtocol.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
+import { type TextSnapshot } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Syntax wire deltas stay equal to full results across random edits", () => {
@@ -36,7 +38,7 @@ test("Syntax wire deltas stay equal to full results across random edits", () => 
 		const startOffset = randomInteger(length + 1);
 		const removedLength = Math.min(randomInteger(4), length - startOffset);
 		model.applyEdits([{
-			range: TextRange.from(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
+			range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
 			text: insertions[randomInteger(insertions.length)]!,
 		}]);
 	}
@@ -57,7 +59,7 @@ test("Syntax wire rejects missing bases and inconsistent delta metadata", () => 
 	const firstResult = syntaxResult(SYNTAX_TOKEN_LANE, cache, firstSnapshot, signal);
 	const base = Object.freeze({ requestId: 7, snapshot: firstSnapshot, result: firstResult });
 	model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(model.getText().length)),
+		range: Range.fromPositions(model.positionAt(model.getText().length)),
 		text: "\nreturn value;",
 	}]);
 	const snapshot = model.createSnapshot();
@@ -111,7 +113,7 @@ test("Syntax wire bounds a one-line edit independently of document token count",
 	const first = syntaxResult(SYNTAX_TOKEN_LANE, cache, firstSnapshot, signal);
 	const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
 	model.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 		text: "let",
 	}]);
 	const snapshot = model.createSnapshot();
@@ -135,10 +137,10 @@ test("Syntax wire isolates two distant edits into multiple item splices", () => 
 	const first = syntaxResult(SYNTAX_TOKEN_LANE, cache, firstSnapshot, signal);
 	const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
 	model.applyEdits([{
-		range: TextRange.from(TextPosition.at(100, 0), TextPosition.at(100, 5)),
+		range: Range.fromPositions(new Position((100) + 1, (0) + 1), new Position((100) + 1, (5) + 1)),
 		text: "let",
 	}, {
-		range: TextRange.from(TextPosition.at(900, lines[900]!.length - 4), TextPosition.at(900, lines[900]!.length - 1)),
+		range: Range.fromPositions(new Position((900) + 1, (lines[900]!.length - 4) + 1), new Position((900) + 1, (lines[900]!.length - 1) + 1)),
 		text: "901",
 	}]);
 	const snapshot = model.createSnapshot();
@@ -176,8 +178,8 @@ test("Syntax wire multi-splices stay exact across repeated disjoint transactions
 		const firstLine = randomInteger(140) + 1;
 		const secondLine = randomInteger(140) + 159;
 		model.applyEdits([firstLine, secondLine].map(lineIndex => ({
-			range: TextRange.from(TextPosition.at(lineIndex, 0), TextPosition.at(lineIndex, 5)),
-			text: model.getLineContent(lineIndex).startsWith("const") ? "alpha" : "const",
+			range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (5) + 1)),
+			text: model.getLineContent((lineIndex) + 1).startsWith("const") ? "alpha" : "const",
 		})));
 	}
 
@@ -200,7 +202,7 @@ function tokenResult(tokenType: string): SyntaxResult {
 		lane: SYNTAX_TOKEN_LANE,
 		value: Object.freeze({
 			tokens: Object.freeze([Object.freeze({
-				range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 				tokenType,
 				modifiers: Object.freeze([]),
 			})]),
@@ -213,8 +215,8 @@ function serializeResult(result: SyntaxResult): unknown {
 	return {
 		lane: result.lane,
 		items: items.map(item => ({
-			start: [item.range.start.lineIndex, item.range.start.columnIndex],
-			end: [item.range.end.lineIndex, item.range.end.columnIndex],
+			start: [item.range.getStartPosition().lineNumber, item.range.getStartPosition().column],
+			end: [item.range.getEndPosition().lineNumber, item.range.getEndPosition().column],
 			...("tokenType" in item
 				? { tokenType: item.tokenType, modifiers: item.modifiers }
 				: { severity: item.severity, message: item.message, code: item.code, source: item.source }),

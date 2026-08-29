@@ -10,7 +10,7 @@ export function supportsNativeEditContext(container: HTMLElement): boolean {
 	return typeof getNativeEditContextConstructor(container) === "function";
 }
 
-/** Creates the native implementation; fallback selection belongs to the parent factory. */
-export function createNativeEditContext(container: HTMLElement, options: EditContextOptions = {}): NativeEditContext {
+/** Creates the native implementation after the parent selects this browser capability. */
+export function createNativeEditContext(container: HTMLElement, options: EditContextOptions): NativeEditContext {
 	return new NativeEditContext(container, options);
 }

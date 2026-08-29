@@ -55,7 +55,7 @@ export function documentPositionToPoint(document: DocumentNode, schema: Document
 		const next = ranges.find(range => range.start > pos);
 		return next ? { nodeId: next.node.id, offset: 0 } : lastTextPoint(ranges);
 	}
-	let previous: TextRange | undefined;
+	let previous: Range | undefined;
 	for (const range of ranges) {
 		if (range.end >= pos) break;
 		previous = range;
@@ -71,7 +71,7 @@ export function resolveDocumentPosition(document: DocumentNode, schema: Document
 	return Object.freeze({ pos, bias, point, path: normalizedPath, depth: Math.max(0, normalizedPath.length - 1) });
 }
 
-interface TextRange {
+interface Range {
 	readonly node: DocumentNode;
 	readonly start: number;
 	readonly end: number;
@@ -93,7 +93,7 @@ function findPointPosition(node: DocumentNode, schema: DocumentSchema, point: Do
 	return undefined;
 }
 
-function collectTextRanges(node: DocumentNode, schema: DocumentSchema, start: number, ranges: TextRange[]): TextRange[] {
+function collectTextRanges(node: DocumentNode, schema: DocumentSchema, start: number, ranges: Range[]): Range[] {
 	if (node.text !== undefined) {
 		ranges.push({ node, start, end: start + node.text.length });
 		return ranges;
@@ -126,7 +126,7 @@ function validateDocumentPosition(document: DocumentNode, schema: DocumentSchema
 	if (!isNonNegativeSafeInteger(pos) || pos > contentSize) throw new RangeError(`Document position must be between 0 and ${contentSize}`);
 }
 
-function lastTextPoint(ranges: readonly TextRange[]): DocumentPoint {
+function lastTextPoint(ranges: readonly Range[]): DocumentPoint {
 	const range = ranges[ranges.length - 1]!;
 	return { nodeId: range.node.id, offset: range.node.text!.length };
 }

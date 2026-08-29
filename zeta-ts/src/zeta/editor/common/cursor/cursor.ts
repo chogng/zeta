@@ -3,8 +3,10 @@ import { IME } from "../../../base/common/ime.js";
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { CursorCollection } from './cursorCollection.js';
 import { CursorContext } from './cursorContext.js';
-import { TextSelectionSet } from '../core/selection.js';
-import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextRange, type TextModelChange } from '../core/text.js';
+import { SelectionSet } from './selectionSet.js';
+import { Range } from '../core/range.js';
+import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange } from '../core/textChange.js';
+import { TextEditHistoryGroup, TextEditHistoryMergeMode } from '../core/editOperation.js';
 import { TextModel } from "../model/textModel.js";
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../commands/editorEditCommand.js";
 
@@ -20,7 +22,7 @@ export enum CursorChangeReason {
 }
 
 export interface CursorStateChangedEvent {
-	readonly selections: TextSelectionSet;
+	readonly selections: SelectionSet;
 	readonly reason: CursorChangeReason;
 	readonly modelVersion: number;
 }
@@ -45,8 +47,8 @@ interface CompositionHost {
 }
 
 interface SelectionHistoryEntry {
-	readonly before: TextSelectionSet;
-	readonly after: TextSelectionSet;
+	readonly before: SelectionSet;
+	readonly after: SelectionSet;
 }
 
 interface ActiveComposition {
@@ -69,8 +71,8 @@ export class CursorsController extends Disposable {
 	private readonly selectionHistory =
 		new Map<number, SelectionHistoryEntry>();
 	private readonly selectionHistoryOrder: number[] = [];
-	private readonly cursorHistory: TextSelectionSet[] = [];
-	private currentSelections: TextSelectionSet;
+	private readonly cursorHistory: SelectionSet[] = [];
+	private currentSelections: SelectionSet;
 	private activeHistoryGroup: TextEditHistoryGroup | undefined;
 	private activeHistoryMode: EditorCommandHistoryMode | undefined;
 	private activeComposition: ActiveComposition | undefined;
@@ -81,7 +83,7 @@ export class CursorsController extends Disposable {
 
 	constructor(
 		private readonly model: TextModel,
-		initialSelections: TextSelectionSet,
+		initialSelections: SelectionSet,
 		options: CursorsControllerOptions = {},
 	) {
 		super();
@@ -106,7 +108,7 @@ export class CursorsController extends Disposable {
 		}
 	}
 
-	get selections(): TextSelectionSet {
+	get selections(): SelectionSet {
 		this.assertNotDisposed();
 		return this.currentSelections;
 	}
@@ -122,7 +124,7 @@ export class CursorsController extends Disposable {
 		return this.context.readOnly;
 	}
 
-	setSelections(selections: TextSelectionSet): void {
+	setSelections(selections: SelectionSet): void {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("set selections");
 		this.breakHistoryGroup();
@@ -134,7 +136,7 @@ export class CursorsController extends Disposable {
 	}
 
 	/** Records one cursor-only selection transition that `undoCursorOperation` may restore. */
-	setCursorSelections(selections: TextSelectionSet): void {
+	setCursorSelections(selections: SelectionSet): void {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("set cursor selections");
 		this.breakHistoryGroup();
@@ -189,9 +191,9 @@ export class CursorsController extends Disposable {
 		this.breakHistoryGroup();
 		this.cursorHistory.length = 0;
 		const initialSelections = this.currentSelections;
-		const initialRange = initialSelections.primary.range;
-		const startOffset = this.model.offsetAt(initialRange.start);
-		const endOffset = this.model.offsetAt(initialRange.end);
+		const initialRange = initialSelections.primary;
+		const startOffset = this.model.offsetAt(initialRange.getStartPosition());
+		const endOffset = this.model.offsetAt(initialRange.getEndPosition());
 		const state: ActiveComposition = {
 			historyGroup: TextEditHistoryGroup.create(),
 			valid: true,
@@ -385,7 +387,7 @@ export class CursorsController extends Disposable {
 	}
 
 	private installSelections(
-		selections: TextSelectionSet,
+		selections: SelectionSet,
 		reason?: CursorChangeReason,
 	): void {
 		CursorCollection.validateSelectionSet(this.model, selections);
@@ -441,7 +443,7 @@ export class CursorsController extends Disposable {
 		}
 	}
 
-	private rememberCursorSelections(selections: TextSelectionSet): void {
+	private rememberCursorSelections(selections: SelectionSet): void {
 		if (this.context.cursorHistoryLimit === 0) return;
 		this.cursorHistory.push(selections);
 		while (this.cursorHistory.length > this.context.cursorHistoryLimit) this.cursorHistory.shift();
@@ -526,10 +528,10 @@ export class CompositionSession {
 		return !this.closed && this.host.isActive();
 	}
 
-	public get currentRange(): TextRange {
+	public get currentRange(): Range {
 		this.ensureActive();
 		this.host.assertActive();
-		return TextRange.from(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset));
+		return Range.fromPositions(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset));
 	}
 
 	public update(update: CompositionUpdate): TextModelChange | undefined {
@@ -540,7 +542,7 @@ export class CompositionSession {
 		validateRelativeSelection(update.selection, text.length);
 		const change = this.host.apply({
 			edits: [{
-				range: TextRange.from(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset)),
+				range: Range.fromPositions(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset)),
 				text,
 			}],
 			selectionsAfter: [{

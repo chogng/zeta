@@ -12,8 +12,8 @@ export class BracketColorizationSource implements EditorBracketColorizationSourc
 	getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[] {
 		if (!this.colorizeBrackets) return Object.freeze([]);
 		return Object.freeze(this.bracketPairs.getLineBrackets(lineIndex).flatMap(bracket => !bracket.isInvalid ? [Object.freeze({
-			startColumn: bracket.range.start.columnIndex,
-			endColumn: bracket.range.end.columnIndex,
+			startColumn: bracket.range.startColumn - 1,
+			endColumn: bracket.range.endColumn - 1,
 			level: bracket.nestingLevel % 6 + 1,
 		})] : []));
 	}

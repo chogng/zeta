@@ -94,14 +94,14 @@ function resolveStanzaBlockDecorationGeometry(
 	const presentation = decoration.blockDecoration;
 	if (!presentation) return undefined;
 	const projection = context.visualLineProjection;
-	const startVisualLineIndex = firstVisualLineIndex(projection, decoration.range.start.lineIndex);
+	const startVisualLineIndex = firstVisualLineIndex(projection, decoration.range.startLineNumber - 1);
 	if (startVisualLineIndex === undefined) return undefined;
 
 	const lineTop = createLineTopReader(layout);
 	let top: number;
 	let bottom: number;
 	if (presentation.isAfterEnd) {
-		const endVisualLineIndex = lastVisualLineIndex(projection, decoration.range.end.lineIndex);
+		const endVisualLineIndex = lastVisualLineIndex(projection, decoration.range.endLineNumber - 1);
 		if (endVisualLineIndex === undefined) return undefined;
 		top = lineTop(endVisualLineIndex + 1);
 		bottom = top;
@@ -110,7 +110,7 @@ function resolveStanzaBlockDecorationGeometry(
 		const endVisualLineIndex = lastVisualLineIndex(projection, endLogicalLineIndex);
 		if (endVisualLineIndex === undefined) return undefined;
 		top = lineTop(startVisualLineIndex);
-		bottom = decoration.range.empty && !presentation.doesNotCollapse ? top : lineTop(endVisualLineIndex + 1);
+		bottom = decoration.range.isEmpty() && !presentation.doesNotCollapse ? top : lineTop(endVisualLineIndex + 1);
 	}
 
 	const padding = presentation.padding ?? [0, 0, 0, 0];
@@ -125,8 +125,8 @@ function resolveStanzaBlockDecorationGeometry(
 }
 
 function lastLogicalLineIndex(decoration: ResolvedDecoration): number {
-	const { start, end } = decoration.range;
-	return end.columnIndex === 0 && end.lineIndex > start.lineIndex ? end.lineIndex - 1 : end.lineIndex;
+	const { startLineNumber, endLineNumber, endColumn } = decoration.range;
+	return endColumn === 1 && endLineNumber > startLineNumber ? endLineNumber - 2 : endLineNumber - 1;
 }
 
 function firstVisualLineIndex(projection: EditorVisualLineProjection, logicalLineIndex: number): number | undefined {

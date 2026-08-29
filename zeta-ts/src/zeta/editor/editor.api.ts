@@ -26,7 +26,8 @@ export type { TextResourceLanguageInput } from '../platform/language/common/text
 export type { LanguageProviderBatch, LanguageProviderBatchRegistration } from './common/services/languageFeatures.js';
 export type { LanguageConfiguration, LanguageConfigurationRegistrationOptions } from './common/languages/languageConfiguration.js';
 export { RGBA8 } from './common/core/misc/rgba.js';
-export type { TextEdit, TextSnapshot } from './common/core/text.js';
+export type { TextEdit } from './common/core/editOperation.js';
+export type { TextSnapshot } from './common/core/textChange.js';
 export { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from './common/languages/completion/languageCompletions.js';
 export type { LanguageCompletionCommand, LanguageCompletionItem, LanguageCompletionItemDetails, LanguageCompletionResult, LanguageCompletionTextEdit } from './common/languages/completion/languageCompletions.js';
 export { LanguageCompletionTriggerKind } from './common/languages/completion/languageCompletionProviders.js';
@@ -59,13 +60,12 @@ export type { LanguageSelectionRangeProvider, LanguageSelectionRangeRequest } fr
 export type { LanguageSemanticTokensProvider, LanguageSemanticTokensRequest } from './contrib/semanticTokens/common/semanticTokens.js';
 export type { StandaloneServiceOverrides } from "./standalone/browser/standaloneServices.js";
 export type { IStandaloneThemeData } from "./standalone/common/standaloneTheme.js";
-export const TextPosition = baseApi.TextPosition;
+export const Position = baseApi.Position;
 export type { IPosition } from "./common/core/position.js";
-export const TextRange = baseApi.TextRange;
+export const Range = baseApi.Range;
 export type { IRange } from "./common/core/range.js";
-export type { ITextRange } from "./common/core/range.js";
 export const SelectionDirection = baseApi.SelectionDirection;
-export const TextSelection = baseApi.TextSelection;
+export const Selection = baseApi.Selection;
 export type { ISelection } from "./common/core/selection.js";
 export { TextModel } from "./common/model/textModel.js";
 export type { TextEditOptions } from "./common/model/textModel.js";

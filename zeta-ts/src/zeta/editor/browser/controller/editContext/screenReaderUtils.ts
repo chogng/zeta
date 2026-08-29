@@ -1,5 +1,5 @@
-import { TextSelection } from '../../../common/core/selection.js';
-import { TextPosition } from '../../../common/core/text.js';
+import { SelectionDirection, Selection } from '../../../common/core/selection.js';
+import { Position } from '../../../common/core/position.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
 const SCREEN_READER_PAGE_SEPARATOR = String.fromCharCode(8230);
@@ -19,8 +19,8 @@ export interface ISimpleScreenReaderContentState {
 	/** The direction-aware selection offsets used by TextAreaState. */
 	readonly selectionStart: number;
 	readonly selectionEnd: number;
-	readonly selection: TextSelection;
-	readonly startPositionWithinEditor: TextPosition;
+	readonly selection: Selection;
+	readonly startPositionWithinEditor: Position;
 	readonly newlineCountBeforeSelection: number;
 	readonly startOffset: number;
 	readonly endOffset: number;
@@ -28,7 +28,7 @@ export interface ISimpleScreenReaderContentState {
 }
 
 export interface IPagedScreenReaderStrategy<T> {
-	fromEditorSelection(model: TextModel, selection: TextSelection, linesPerPage: number, trimLongText: boolean): T;
+	fromEditorSelection(model: TextModel, selection: Selection, linesPerPage: number, trimLongText: boolean): T;
 }
 
 /**
@@ -37,13 +37,13 @@ export interface IPagedScreenReaderStrategy<T> {
  * ranges are bounded to keep browser text controls responsive.
  */
 export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrategy<ISimpleScreenReaderContentState> {
-	fromEditorSelection(model: TextModel, selection: TextSelection, linesPerPage: number, trimLongText: boolean): ISimpleScreenReaderContentState {
+	fromEditorSelection(model: TextModel, selection: Selection, linesPerPage: number, trimLongText: boolean): ISimpleScreenReaderContentState {
 		const pageSize = normalizePageSize(linesPerPage);
 		const snapshot = model.createSnapshot();
-		const selectionStart = model.offsetAt(selection.range.start);
-		const selectionEnd = model.offsetAt(selection.range.end);
-		const startPage = Math.floor(selection.range.start.lineIndex / pageSize);
-		const endPage = Math.floor(selection.range.end.lineIndex / pageSize);
+		const selectionStart = model.offsetAt(selection.getStartPosition());
+		const selectionEnd = model.offsetAt(selection.getEndPosition());
+		const startPage = Math.floor((selection.startLineNumber - 1) / pageSize);
+		const endPage = Math.floor((selection.endLineNumber - 1) / pageSize);
 		const startPageRange = pageRange(model, startPage, pageSize);
 		const endPageRange = pageRange(model, endPage, pageSize);
 		const selectionRanges = startPage === endPage || startPage + 1 === endPage
@@ -102,10 +102,10 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 		};
 		const orderedSelectionStart = contentOffsetAtModelOffset(mappingState, selectionStart, 'start');
 		const orderedSelectionEnd = contentOffsetAtModelOffset(mappingState, selectionEnd, 'end');
-		const directionAwareSelectionStart = selection.direction === 'backward'
+		const directionAwareSelectionStart = selection.getDirection() === SelectionDirection.RTL
 			? orderedSelectionEnd
 			: orderedSelectionStart;
-		const directionAwareSelectionEnd = selection.direction === 'backward'
+		const directionAwareSelectionEnd = selection.getDirection() === SelectionDirection.RTL
 			? orderedSelectionStart
 			: orderedSelectionEnd;
 		const startPosition = model.positionAt(firstSegment.modelStartOffset);
@@ -178,10 +178,10 @@ export function newlineCount(value: string): number {
 function pageRange(model: TextModel, page: number, linesPerPage: number): { readonly startOffset: number; readonly endOffset: number } {
 	const startLineIndex = page * linesPerPage;
 	const endLineIndex = Math.min(model.lineCount, startLineIndex + linesPerPage);
-	const startOffset = model.offsetAt(TextPosition.at(startLineIndex, 0));
+	const startOffset = model.offsetAt(new Position((startLineIndex) + 1, (0) + 1));
 	const endOffset = endLineIndex === model.lineCount
 		? model.length
-		: model.offsetAt(TextPosition.at(endLineIndex, 0));
+		: model.offsetAt(new Position((endLineIndex) + 1, (0) + 1));
 	return { startOffset, endOffset };
 }
 

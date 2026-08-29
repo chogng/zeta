@@ -12,7 +12,8 @@ import { SyntaxProviderWorker, SyntaxService } from "../../../../../editor/commo
 import { syntaxWireCodec } from "../../../../../editor/common/languages/syntax/syntaxWire.js";
 import { LanguageRequestStatus } from "../../../../../editor/common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../../../../editor/common/languages/languageWorkerWire.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { createTextMateSyntaxModule } from "../../common/textMateSyntaxModule.js";
 import { TextMateSyntaxModuleWorkerClient } from "../../common/textMateSyntaxModuleWorkerClient.js";
@@ -121,7 +122,7 @@ test("Catalog-gated module Worker selects TextMate and falls back dynamically", 
 			languageIds: ["*"],
 			provideTokens: (request: SyntaxProviderRequest) => ({
 				tokens: [{
-					range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, request.snapshot.getText().length)),
+					range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (request.snapshot.getText().length) + 1)),
 					tokenType: "fallback",
 					modifiers: [],
 				}],
@@ -185,7 +186,7 @@ test("Scope themes cross the Syntax Worker boundary and invalidate cached token 
 	themes.replace({ revision: 1, rules: [{ selector: "keyword.control.demo", tokenType: "keyword", modifiers: ["declaration"] }] });
 	assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
 	assert.deepEqual(syntax.tokens.result!.value.tokens[0], {
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
 		tokenType: "keyword",
 		modifiers: ["declaration"],
 	});

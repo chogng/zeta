@@ -30,8 +30,6 @@ the mutable document or undo stack. Browser projection, language services,
 workbench state, and file transport may depend on `core/`, while `core/` must
 not depend on any of them.
 
-`text.ts` is the stable text primitive barrel retained for existing Stanza
-callers. The core has no directory `index.ts` barrels: new code imports the
-focused module that owns the value or operation it consumes. This keeps module
-boundaries explicit and avoids making a broad aggregate dependency part of the
-editor contract.
+Consumers import directly from `position.ts`, `range.ts`, `selection.ts`,
+`editOperation.ts`, `textChange.ts`, and the focused modules under `text/`.
+The core has no aggregate entry that hides those owners.

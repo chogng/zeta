@@ -4,8 +4,9 @@ import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -29,7 +30,7 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (1) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -39,9 +40,9 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 	const addBelow = keydown(dom.window, "ArrowDown", { ctrlKey: true, altKey: true });
 	input.dispatchEvent(addBelow);
 	assert.equal(addBelow.defaultPrevented, true);
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(1, 1)),
-		TextSelection.collapsedAt(TextPosition.at(2, 1)),
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((1) + 1, (1) + 1)),
+		Selection.fromPositions(new Position((2) + 1, (1) + 1)),
 	], 1));
 
 	dom.window.close();
@@ -51,7 +52,7 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(2, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((2) + 1, (0) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -61,9 +62,9 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const addEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
 	input.dispatchEvent(addEnds);
 	assert.equal(addEnds.defaultPrevented, true);
-	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(0, 4)),
-		TextSelection.collapsedAt(TextPosition.at(1, 3)),
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (3) + 1)),
 	], 0));
 
 	dom.window.close();
@@ -73,11 +74,11 @@ test("Multi-cursor chord selection follows platform-specific non-conflicting bin
 	assert.equal(resolveStanzaAdjacentCursorDirection(
 		keydown(browserEnvironment.window, "ArrowUp", { ctrlKey: true, altKey: true }),
 		OperatingSystem.Windows,
-	), "above");
+	), "up");
 	assert.equal(resolveStanzaAdjacentCursorDirection(
 		keydown(browserEnvironment.window, "ArrowDown", { metaKey: true, altKey: true }),
 		OperatingSystem.Macintosh,
-	), "below");
+	), "down");
 	assert.equal(resolveStanzaAdjacentCursorDirection(
 		keydown(browserEnvironment.window, "ArrowUp", { shiftKey: true, altKey: true }),
 		OperatingSystem.Linux,
@@ -85,7 +86,7 @@ test("Multi-cursor chord selection follows platform-specific non-conflicting bin
 	assert.equal(resolveStanzaAdjacentCursorDirection(
 		keydown(browserEnvironment.window, "ArrowUp", { ctrlKey: true, shiftKey: true, altKey: true }),
 		OperatingSystem.Linux,
-	), "above");
+	), "up");
 });
 
 test("Multi-cursor controller rejects cross-model wiring", () => {
@@ -93,8 +94,8 @@ test("Multi-cursor controller rejects cross-model wiring", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one");
 	using other = new TextModel("two");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	using otherSelections = new CursorsController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using otherSelections = new CursorsController(other, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	assert.throws(() => new MultiCursorController(input, viewport, otherSelections), /must share one text model/);

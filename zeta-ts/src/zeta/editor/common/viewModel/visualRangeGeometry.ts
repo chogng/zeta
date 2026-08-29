@@ -1,4 +1,4 @@
-import { type TextRange } from "../core/text.js";
+import { type Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
 import { type EditorLineRange } from "../viewModel.js";
@@ -6,7 +6,7 @@ import { type TextMeasurer } from "./textMeasurer.js";
 import { EmptyRangeRendering } from "./rangeGeometry.js";
 
 export interface VisualRangeGeometryEntry<T> {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly value: T;
 }
 
@@ -25,31 +25,31 @@ export function createStanzaVisualRangeRectangles<T>(model: TextModel, entries: 
 	const rectangles: VisualRangeRectangle<T>[] = [];
 	const newlineWidth = measurer.measureLineWidth(" ");
 	for (const entry of entries) {
-		if (entry.range.empty && emptyRangeRendering === EmptyRangeRendering.RenderAsSpace) {
-			const visualLineIndex = projection.visualLineIndexAt(entry.range.start);
+		if (entry.range.isEmpty() && emptyRangeRendering === EmptyRangeRendering.RenderAsSpace) {
+			const visualLineIndex = projection.visualLineIndexAt(entry.range.getStartPosition());
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine || visualLineIndex < renderLines.startLineIndex || visualLineIndex >= renderLines.endLineIndexExclusive) continue;
-			const logicalText = model.getLineContent(visualLine.logicalLineIndex);
+			const logicalText = model.getLineContent((visualLine.logicalLineIndex) + 1);
 			rectangles.push(Object.freeze({
 				value: entry.value,
 				visualLineIndex,
-				left: textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, entry.range.start.columnIndex)),
+				left: textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, entry.range.startColumn - 1)),
 				width: Math.max(1, newlineWidth),
 			}));
 			continue;
 		}
-		if (entry.range.empty) continue;
+		if (entry.range.isEmpty()) continue;
 		for (let visualLineIndex = renderLines.startLineIndex; visualLineIndex < renderLines.endLineIndexExclusive; visualLineIndex += 1) {
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine || !intersectsLogicalLine(entry.range, visualLine.logicalLineIndex)) continue;
-			const logicalText = model.getLineContent(visualLine.logicalLineIndex);
-			const startsOnLogicalLine = visualLine.logicalLineIndex === entry.range.start.lineIndex;
-			const endsOnLogicalLine = visualLine.logicalLineIndex === entry.range.end.lineIndex;
+			const logicalText = model.getLineContent((visualLine.logicalLineIndex) + 1);
+			const startsOnLogicalLine = visualLine.logicalLineIndex === entry.range.startLineNumber - 1;
+			const endsOnLogicalLine = visualLine.logicalLineIndex === entry.range.endLineNumber - 1;
 			const startColumn = startsOnLogicalLine
-				? Math.max(visualLine.startColumn, entry.range.start.columnIndex)
+				? Math.max(visualLine.startColumn, entry.range.startColumn - 1)
 				: visualLine.startColumn;
 			const endColumn = endsOnLogicalLine
-				? Math.min(visualLine.endColumn, entry.range.end.columnIndex)
+				? Math.min(visualLine.endColumn, entry.range.endColumn - 1)
 				: visualLine.endColumn;
 			if (endColumn < startColumn) continue;
 			if (endsOnLogicalLine && endColumn === 0 && !startsOnLogicalLine) continue;
@@ -69,6 +69,6 @@ export function createStanzaVisualRangeRectangles<T>(model: TextModel, entries: 
 	return Object.freeze(rectangles);
 }
 
-function intersectsLogicalLine(range: TextRange, lineIndex: number): boolean {
-	return lineIndex >= range.start.lineIndex && lineIndex <= range.end.lineIndex;
+function intersectsLogicalLine(range: Range, lineIndex: number): boolean {
+	return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
 }

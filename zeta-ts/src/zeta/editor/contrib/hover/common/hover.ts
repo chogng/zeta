@@ -1,6 +1,7 @@
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextPosition, type TextRange } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
+import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -9,13 +10,13 @@ import { type URI } from "../../../../base/common/uri.js";
 export type LanguageHoverContent = string | { readonly value: string; readonly language?: string };
 
 export interface LanguageHover {
-	readonly range?: TextRange;
+	readonly range?: Range;
 	readonly contents: readonly LanguageHoverContent[];
 }
 
 export interface LanguageHoverRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
-	readonly position: TextPosition;
+	readonly position: Position;
 }
 
 export interface LanguageHoverProvider extends LanguageFeatureProviderMetadata {
@@ -28,7 +29,7 @@ export class HoverService extends Disposable {
 		super();
 	}
 
-	async provideHover(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<LanguageHover | undefined> {
+	async provideHover(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<LanguageHover | undefined> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), position };
 		for (const provider of this.providers.getProviders(languageId)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return undefined;

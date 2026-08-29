@@ -1,9 +1,11 @@
-import { TextPosition, TextRange, type TextSnapshot } from '../core/text.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import { type TextSnapshot } from '../core/textChange.js';
 
 export type UnicodeHighlightKind = 'invisible' | 'bidi' | 'confusable';
 
 export interface UnicodeHighlight {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly kind: UnicodeHighlightKind;
 	readonly character: string;
 }
@@ -21,7 +23,7 @@ export function computeUnicodeHighlights(snapshot: TextSnapshot, signal?: AbortS
 			const kind = classifyCharacter(character, line);
 			if (kind) {
 				result.push(Object.freeze({
-					range: TextRange.from(TextPosition.at(lineIndex, columnIndex), TextPosition.at(lineIndex, endColumnIndex)),
+					range: Range.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1), new Position((lineIndex) + 1, (endColumnIndex) + 1)),
 					kind,
 					character,
 				}));

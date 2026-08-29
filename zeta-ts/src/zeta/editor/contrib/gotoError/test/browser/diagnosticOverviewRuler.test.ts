@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DecorationPresentation, type ResolvedDecoration } from "../../../../browser/viewparts/decorations/decorations.js";
 import { createStanzaDiagnosticOverviewMarkers } from "../../../../browser/viewparts/decorations/decorations.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 
 function diagnostic(startLineIndex: number, endLineIndex: number, presentation: DecorationPresentation, hoverText: string): ResolvedDecoration {
 	return Object.freeze({
 		id: startLineIndex + 1 as ResolvedDecoration["id"],
-		range: TextRange.from(TextPosition.at(startLineIndex, 0), TextPosition.at(endLineIndex, 1)),
+		range: Range.fromPositions(new Position((startLineIndex) + 1, (0) + 1), new Position((endLineIndex) + 1, (1) + 1)),
 		presentation,
 		hoverText,
 	});

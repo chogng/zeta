@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextRange } from "../../common/core/text.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("TextModel replays deterministic history across changing line maps", () => {
@@ -20,7 +20,7 @@ test("TextModel replays deterministic history across changing line maps", () => 
 				? `\r\n${index}`
 				: String.fromCharCode(97 + index % 26);
 		model.applyEdits([{
-			range: TextRange.from(
+			range: Range.fromPositions(
 				model.positionAt(startOffset),
 				model.positionAt(startOffset + deleteLength),
 			),
@@ -42,11 +42,11 @@ test("TextModel replays deterministic history across changing line maps", () => 
 test("TextModel keeps transaction identity across undo and redo", () => {
 	using model = new TextModel("abc");
 	const first = model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(0)),
+		range: Range.fromPositions(model.positionAt(0)),
 		text: "X",
 	}]);
 	const second = model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(2)),
+		range: Range.fromPositions(model.positionAt(2)),
 		text: "Y",
 	}]);
 	const undoSecond = model.undo();

@@ -3,8 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../../base/browser/dom.js";
 import { Emitter } from "../../../../../base/common/event.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
@@ -85,7 +86,7 @@ test("native screen-reader projections preserve empty text, lines, and DOM selec
 	using model = new TextModel("alpha\nbeta");
 	const state = createScreenReaderContentState(
 		model,
-		TextSelection.from(TextPosition.at(0, 2), TextPosition.at(1, 2)),
+		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((1) + 1, (2) + 1)),
 	);
 	using simple = new SimpleScreenReaderContent(host);
 	simple.sync(state);
@@ -126,7 +127,7 @@ test("native screen-reader projections preserve empty text, lines, and DOM selec
 	using emptyModel = new TextModel("");
 	const emptyState = createScreenReaderContentState(
 		emptyModel,
-		TextSelection.collapsedAt(TextPosition.at(0, 0)),
+		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 	);
 	simple.sync(emptyState);
 	assert.equal(simple.element.firstChild?.nodeType, 3);
@@ -138,7 +139,7 @@ test("native screen-reader pages keep endpoint mappings across omitted middle pa
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const host = dom.window.document.querySelector("main")!;
 	using model = new TextModel("zero\none\ntwo\nthree\nfour\nfive\nsix\nseven");
-	const selection = TextSelection.from(TextPosition.at(0, 0), TextPosition.at(7, 5));
+	const selection = Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((7) + 1, (5) + 1));
 	const state = createScreenReaderContentState(model, selection, { pageSize: 2 });
 
 	assert.equal(state.segments.length, 2);
@@ -166,7 +167,7 @@ test("native screen-reader support follows logical EditContext focus through the
 	using model = new TextModel("alpha\nbeta");
 	using selections = new (await import("../../../../common/cursor/cursor.js")).CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))),
+		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))),
 	);
 	using viewport = new EditorViewport({
 		container: host,
@@ -191,6 +192,12 @@ test("native screen-reader support follows logical EditContext focus through the
 		onDidBlur: blur.event,
 		accessibilityService,
 	});
+	support.setAriaOptions({ activeDescendant: 'completion-option' });
+	assert.equal(host.getAttribute('aria-autocomplete'), 'list');
+	assert.equal(host.getAttribute('aria-activedescendant'), 'completion-option');
+	support.setAriaOptions({ activeDescendant: undefined });
+	assert.equal(host.getAttribute('aria-autocomplete'), 'both');
+	assert.equal(host.getAttribute('aria-activedescendant'), null);
 
 	focus.fire();
 	await Promise.resolve();
@@ -211,7 +218,7 @@ test("native screen-reader mirror follows viewport coordinates and scrolls to th
 	using model = new TextModel("zero\none\ntwo\nthree");
 	using selections = new (await import("../../../../common/cursor/cursor.js")).CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(2, 1))),
+		SelectionSet.single(Selection.fromPositions(new Position((2) + 1, (1) + 1))),
 	);
 	using viewport = new EditorViewport({
 		container: host,

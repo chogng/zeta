@@ -1,23 +1,23 @@
 import { findLastIdxMonotonous } from "../../../../base/common/arraysFind.js";
 import { CharCode } from "../../../../base/common/charCode.js";
-import { TextPosition } from "../position.js";
-import { TextRange } from "../range.js";
+import { Position } from "../position.js";
+import { Range } from "../range.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
 import { TextLength } from "./textLength.js";
 
 /** Shared coordinate conversion contract for strings and line-based models. */
 export abstract class PositionOffsetTransformerBase {
-	abstract getOffset(position: TextPosition): number;
-	abstract getPosition(offset: number): TextPosition;
-	abstract getLineLength(lineIndex: number): number;
+	abstract getOffset(position: Position): number;
+	abstract getPosition(offset: number): Position;
+	abstract getLineLength(lineNumber: number): number;
 	abstract readonly textLength: TextLength;
 
-	getOffsetRange(range: TextRange): OffsetRange { return new OffsetRange(this.getOffset(range.start), this.getOffset(range.end)); }
-	getRange(range: OffsetRange): TextRange { return TextRange.from(this.getPosition(range.start), this.getPosition(range.endExclusive)); }
+	getOffsetRange(range: Range): OffsetRange { return new OffsetRange(this.getOffset(range.getStartPosition()), this.getOffset(range.getEndPosition())); }
+	getRange(range: OffsetRange): Range { return Range.fromPositions(this.getPosition(range.start), this.getPosition(range.endExclusive)); }
 	getTextLength(range: OffsetRange): TextLength { return TextLength.ofRange(this.getRange(range)); }
 }
 
-/** Converts zero-based positions and UTF-16 offsets in normalized text. */
+/** Converts one-based editor positions and zero-based UTF-16 offsets in normalized text. */
 export class PositionOffsetTransformer extends PositionOffsetTransformerBase {
 	private readonly lineStarts: readonly number[];
 	private readonly lineEnds: readonly number[];
@@ -42,21 +42,21 @@ export class PositionOffsetTransformer extends PositionOffsetTransformerBase {
 		return new TextLength(lastLine, this.text.length - this.lineStarts[lastLine]);
 	}
 
-	getOffset(position: TextPosition): number {
-		const lineIndex = Math.min(Math.max(position.lineIndex, 0), this.lineStarts.length - 1);
-		const columnIndex = Math.min(Math.max(position.columnIndex, 0), this.getLineLength(lineIndex));
+	getOffset(position: Position): number {
+		const lineIndex = Math.min(Math.max(position.lineNumber - 1, 0), this.lineStarts.length - 1);
+		const columnIndex = Math.min(Math.max(position.column - 1, 0), this.getLineLength(lineIndex + 1));
 		return this.lineStarts[lineIndex] + columnIndex;
 	}
 
-	getPosition(offset: number): TextPosition {
+	getPosition(offset: number): Position {
 		const clampedOffset = Math.min(Math.max(Math.trunc(offset), 0), this.text.length);
 		const lineIndex = Math.max(0, findLastIdxMonotonous(this.lineStarts, start => start <= clampedOffset));
-		return TextPosition.at(lineIndex, Math.min(clampedOffset - this.lineStarts[lineIndex], this.getLineLength(lineIndex)));
+		return new Position(lineIndex + 1, Math.min(clampedOffset - this.lineStarts[lineIndex], this.getLineLength(lineIndex + 1)) + 1);
 	}
 
-	getLineLength(lineIndex: number): number {
-		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.lineStarts.length) throw new RangeError("Invalid line index");
-		return this.lineEnds[lineIndex] - this.lineStarts[lineIndex];
+	getLineLength(lineNumber: number): number {
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || lineNumber > this.lineStarts.length) throw new RangeError("Invalid line number");
+		return this.lineEnds[lineNumber - 1] - this.lineStarts[lineNumber - 1];
 	}
 }
 
@@ -85,21 +85,21 @@ export class LineBasedPositionOffsetTransformer extends PositionOffsetTransforme
 		return new TextLength(lastLineIndex, this.lineLengths[lastLineIndex]);
 	}
 
-	getOffset(position: TextPosition): number {
-		const lineIndex = Math.min(Math.max(position.lineIndex, 0), this.lineLengths.length - 1);
-		const columnIndex = Math.min(Math.max(position.columnIndex, 0), this.lineLengths[lineIndex]);
+	getOffset(position: Position): number {
+		const lineIndex = Math.min(Math.max(position.lineNumber - 1, 0), this.lineLengths.length - 1);
+		const columnIndex = Math.min(Math.max(position.column - 1, 0), this.lineLengths[lineIndex]);
 		return this.lineStarts[lineIndex] + columnIndex;
 	}
 
-	getPosition(offset: number): TextPosition {
+	getPosition(offset: number): Position {
 		const clampedOffset = Math.min(Math.max(Math.trunc(offset), 0), this.textLengthToOffset());
 		const lineIndex = Math.max(0, findLastIdxMonotonous(this.lineStarts, start => start <= clampedOffset));
-		return TextPosition.at(lineIndex, Math.min(clampedOffset - this.lineStarts[lineIndex], this.lineLengths[lineIndex]));
+		return new Position((lineIndex) + 1, (Math.min(clampedOffset - this.lineStarts[lineIndex], this.lineLengths[lineIndex])) + 1);
 	}
 
-	getLineLength(lineIndex: number): number {
-		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.lineLengths.length) throw new RangeError("Invalid line index");
-		return this.lineLengths[lineIndex];
+	getLineLength(lineNumber: number): number {
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || lineNumber > this.lineLengths.length) throw new RangeError("Invalid line number");
+		return this.lineLengths[lineNumber - 1];
 	}
 
 	private textLengthToOffset(): number { return this.lineStarts.at(-1)! + this.lineLengths.at(-1)!; }

@@ -3,7 +3,8 @@ import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTy
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";
 import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
-import { type TextSelection, type TextSelectionSet } from "../core/selection.js";
+import { type Selection } from "../core/selection.js";
+import type { SelectionSet } from "./selectionSet.js";
 import { type TextModel } from "../model/textModel.js";
 
 export interface LanguageEnterCommandOptions {
@@ -12,7 +13,7 @@ export interface LanguageEnterCommandOptions {
 }
 
 /** Creates one language-aware Enter transaction for every current selection. */
-export function createLanguageEnterCommand(model: TextModel, selections: TextSelectionSet, configuration: ResolvedLanguageConfiguration, options: LanguageEnterCommandOptions = {}): EditorEditCommand {
+export function createLanguageEnterCommand(model: TextModel, selections: SelectionSet, configuration: ResolvedLanguageConfiguration, options: LanguageEnterCommandOptions = {}): EditorEditCommand {
 	assertConfiguration(configuration);
 	assertOptions(model, configuration, options);
 	const resolvedIndentation = resolveEditorIndentationOptions(options.indentation);
@@ -20,19 +21,19 @@ export function createLanguageEnterCommand(model: TextModel, selections: TextSel
 	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.BeginCoalescedTyping);
 }
 
-function createEnterEdit(model: TextModel, selection: TextSelection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): SelectionEdit {
-	const startLine = model.getLineContent(selection.range.start.lineIndex);
-	const endLine = model.getLineContent(selection.range.end.lineIndex);
-	const originalBeforeText = startLine.slice(0, selection.range.start.columnIndex);
-	const beforeText = lexicalContext?.getStructuralLineContent(selection.range.start.lineIndex, 0, selection.range.start.columnIndex) ?? originalBeforeText;
-	const afterText = lexicalContext?.getStructuralLineContent(selection.range.end.lineIndex, selection.range.end.columnIndex, endLine.length) ?? endLine.slice(selection.range.end.columnIndex);
-	const previousLineText = selection.range.start.lineIndex > 0
-		? lexicalContext?.getStructuralLineContent(selection.range.start.lineIndex - 1) ?? model.getLineContent(selection.range.start.lineIndex - 1)
+function createEnterEdit(model: TextModel, selection: Selection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): SelectionEdit {
+	const startLine = model.getLineContent(selection.getStartPosition().lineNumber);
+	const endLine = model.getLineContent(selection.getEndPosition().lineNumber);
+	const originalBeforeText = startLine.slice(0, selection.startColumn - 1);
+	const beforeText = lexicalContext?.getStructuralLineContent(selection.startLineNumber - 1, 0, selection.startColumn - 1) ?? originalBeforeText;
+	const afterText = lexicalContext?.getStructuralLineContent(selection.endLineNumber - 1, selection.endColumn - 1, endLine.length) ?? endLine.slice(selection.endColumn - 1);
+	const previousLineText = selection.startLineNumber > 1
+		? lexicalContext?.getStructuralLineContent(selection.startLineNumber - 2) ?? model.getLineContent(selection.startLineNumber - 1)
 		: "";
 	const action = resolveEnterAction(configuration, previousLineText, beforeText, afterText);
 	const insertion = createEnterInsertion(originalBeforeText, action, indentation);
 	return {
-		range: selection.range,
+		range: selection,
 		text: insertion.text,
 		anchorOffsetInText: insertion.caretOffset,
 		activeOffsetInText: insertion.caretOffset,

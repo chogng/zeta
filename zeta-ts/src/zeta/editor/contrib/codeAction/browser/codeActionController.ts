@@ -4,7 +4,7 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { type URI } from "../../../../base/common/uri.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
-import { TextRange } from "../../../common/core/text.js";
+import { Range } from "../../../common/core/range.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -17,7 +17,7 @@ export class CodeActionController extends Disposable {
 	private readonly actionListeners = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 	private actions: readonly LanguageCodeAction[] = [];
-	private actionRange: TextRange | undefined;
+	private actionRange: Range | undefined;
 	private actionDiagnostics: readonly LanguageDiagnostic[] = [];
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
@@ -47,9 +47,9 @@ export class CodeActionController extends Disposable {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
 		try {
-			const range = this.selections.selections.primary.range;
-			const diagnostics = this.diagnostics.decorations.filter(decoration => decoration.range.intersectsOrTouches(range)).map(decoration => decoration.metadata);
-			const actions = await this.service.provideCodeActions(this.languageId, range.empty ? TextRange.emptyAt(range.start) : range, diagnostics, undefined, request.signal);
+			const range = this.selections.selections.primary;
+			const diagnostics = this.diagnostics.decorations.filter(decoration => Range.areIntersectingOrTouching(decoration.range, range)).map(decoration => decoration.metadata);
+			const actions = await this.service.provideCodeActions(this.languageId, range.isEmpty() ? Range.fromPositions(range.getStartPosition()) : range, diagnostics, undefined, request.signal);
 			if (request.signal.aborted || actions.length === 0) {
 				if (!request.signal.aborted) this.viewport.announceAccessibilityStatus("No code actions available.");
 				return;
@@ -74,7 +74,7 @@ export class CodeActionController extends Disposable {
 			this.actionListeners.add(addDisposableListener(button, "click", () => void this.apply(index)));
 			return button;
 		}));
-		const coordinates = this.viewport.getPositionContentCoordinates(this.selections.selections.primary.range.start);
+		const coordinates = this.viewport.getPositionContentCoordinates(this.selections.selections.primary.getStartPosition());
 		this.element.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;
 		this.element.style.top = `${Math.max(8, coordinates.top - this.viewport.viewportLayout.scrollPosition.top + coordinates.height + 4)}px`;
 		this.element.hidden = false;

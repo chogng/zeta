@@ -9,7 +9,7 @@ import { activateRequiredLanguageProviderModules, normalizeRequiredLanguageProvi
 import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultSettler, type LanguageWorkerResultDisposition } from "../languageRequestCoordinator.js";
 import { syntaxWireCodec } from "./syntaxWire.js";
 import { LanguageWorkerWireClient, type LanguageWorkerWireClientPort } from "../languageWorkerWire.js";
-import { type TextModelChange } from "../../core/text.js";
+import { type TextModelChange } from "../../core/textChange.js";
 
 export interface SyntaxModuleWorkerClientOptions {
 	readonly requiredProviderModules?: readonly string[];

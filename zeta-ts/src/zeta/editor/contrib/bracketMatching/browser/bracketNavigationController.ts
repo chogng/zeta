@@ -31,6 +31,6 @@ export class BracketNavigationController extends Disposable {
 		stopEvent(event);
 		const next = jumpToMatchingBrackets(this.bracketPairs, this.selections.selections);
 		this.selections.setSelections(next);
-		this.viewport.revealPosition(next.primary.active);
+		this.viewport.revealPosition(next.primary.getPosition());
 	}
 }

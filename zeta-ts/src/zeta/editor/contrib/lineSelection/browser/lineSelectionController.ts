@@ -15,7 +15,7 @@ export class LineSelectionController extends Disposable {
 			stopEvent(event);
 			const next = expandLineSelections(viewport.textModel, selections.selections);
 			selections.setSelections(next);
-			viewport.revealPosition(next.primary.active);
+			viewport.revealPosition(next.primary.getPosition());
 		}));
 	}
 }

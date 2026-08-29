@@ -3,7 +3,8 @@ import test from "node:test";
 import { DecorationLineIndex } from "../../browser/viewparts/decorations/decorations.js";
 import { DecorationPresentation, type ResolvedDecoration } from "../../browser/viewparts/decorations/decorations.js";
 import { type TextDecorationId } from "../../common/model/decorationCollection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 
 test("Decoration line index resolves visible intervals and preserves source order", () => {
 	const index = new DecorationLineIndex([
@@ -30,7 +31,7 @@ test("Decoration line index validates line queries", () => {
 function decoration(id: number, startLineIndex: number, startColumnIndex: number, endLineIndex: number, endColumnIndex: number): ResolvedDecoration {
 	return Object.freeze({
 		id: id as TextDecorationId,
-		range: TextRange.from(TextPosition.at(startLineIndex, startColumnIndex), TextPosition.at(endLineIndex, endColumnIndex)),
+		range: Range.fromPositions(new Position((startLineIndex) + 1, (startColumnIndex) + 1), new Position((endLineIndex) + 1, (endColumnIndex) + 1)),
 		presentation: DecorationPresentation.ErrorUnderline,
 	});
 }

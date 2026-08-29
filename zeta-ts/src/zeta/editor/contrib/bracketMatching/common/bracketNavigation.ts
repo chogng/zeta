@@ -1,41 +1,42 @@
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type LanguageBracketPair, type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
 
 /** Moves every active cursor to its lexically valid matching bracket when present. */
-export function jumpToMatchingBrackets(bracketPairs: LanguageBracketPairs, selections: TextSelectionSet): TextSelectionSet {
+export function jumpToMatchingBrackets(bracketPairs: LanguageBracketPairs, selections: SelectionSet): SelectionSet {
 	let changed = false;
 	const nextSelections = selections.selections.map(selection => {
-		const match = matchAtOrAfter(bracketPairs, selection.active);
+		const match = matchAtOrAfter(bracketPairs, selection.getPosition());
 		if (!match) return selection;
-		const next = TextSelection.collapsedAt(isAtOpening(match.opening.start, match.opening.end, selection.active)
-			? match.closing.start
-			: match.opening.start);
-		changed ||= next.active.compareTo(selection.active) !== 0 || !selection.collapsed;
+		const next = Selection.fromPositions(isAtOpening(match.opening.getStartPosition(), match.opening.getEndPosition(), selection.getPosition())
+			? match.closing.getStartPosition()
+			: match.opening.getStartPosition());
+		changed ||= Position.compare(next.getPosition(), selection.getPosition()) !== 0 || !selection.isEmpty();
 		return next;
 	});
-	return changed ? TextSelectionSet.withPrimary(nextSelections, selections.primaryIndex) : selections;
+	return changed ? SelectionSet.withPrimary(nextSelections, selections.primaryIndex) : selections;
 }
 
 /** Selects the full configured bracket pair around every active cursor when present. */
-export function selectToMatchingBrackets(bracketPairs: LanguageBracketPairs, selections: TextSelectionSet): TextSelectionSet {
+export function selectToMatchingBrackets(bracketPairs: LanguageBracketPairs, selections: SelectionSet): SelectionSet {
 	let changed = false;
 	const nextSelections = selections.selections.map(selection => {
-		const match = matchAtOrAfter(bracketPairs, selection.active);
+		const match = matchAtOrAfter(bracketPairs, selection.getPosition());
 		if (!match) return selection;
-		const next = TextSelection.from(match.opening.start, match.closing.end);
-		changed ||= next.range.start.compareTo(selection.range.start) !== 0 || next.range.end.compareTo(selection.range.end) !== 0;
+		const next = Selection.fromPositions(match.opening.getStartPosition(), match.closing.getEndPosition());
+		changed ||= Position.compare(next.getStartPosition(), selection.getStartPosition()) !== 0 || Position.compare(next.getEndPosition(), selection.getEndPosition()) !== 0;
 		return next;
 	});
-	return changed ? TextSelectionSet.withPrimary(nextSelections, selections.primaryIndex) : selections;
+	return changed ? SelectionSet.withPrimary(nextSelections, selections.primaryIndex) : selections;
 }
 
-function matchAtOrAfter(bracketPairs: LanguageBracketPairs, position: TextPosition): LanguageBracketPair | undefined {
+function matchAtOrAfter(bracketPairs: LanguageBracketPairs, position: Position): LanguageBracketPair | undefined {
 	return bracketPairs.matchBracket(position)
 		?? bracketPairs.findEnclosingBrackets(position)
 		?? bracketPairs.findNextBracket(position)?.pair;
 }
 
-function isAtOpening(start: TextPosition, end: TextPosition, position: TextPosition): boolean {
-	return position.compareTo(start) >= 0 && position.compareTo(end) <= 0;
+function isAtOpening(start: Position, end: Position, position: Position): boolean {
+	return Position.compare(position, start) >= 0 && Position.compare(position, end) <= 0;
 }

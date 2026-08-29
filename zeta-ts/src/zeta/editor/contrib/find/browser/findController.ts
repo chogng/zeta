@@ -4,8 +4,9 @@ import { Disposable, MutableDisposable, toDisposable } from "../../../../base/co
 import { rot } from "../../../../base/common/numbers.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type TextSearchMatch, type TextSearchQuery } from "../../../common/model/textModelSearch.js";
 import { createReplaceAllTextMatchesCommand, createReplaceTextMatchCommand, resolveTextSearchReplacement } from "../common/textSearchCommands.js";
@@ -279,16 +280,16 @@ export class FindController extends Disposable {
 
 	private findCurrentMatchIndex(): number {
 		if (this.matches.length === 0) return -1;
-		const primaryRange = this.selections.selections.primary.range;
-		const selectionStart = this.model.offsetAt(primaryRange.start);
-		const selectionEnd = this.model.offsetAt(primaryRange.end);
+		const primaryRange = this.selections.selections.primary;
+		const selectionStart = this.model.offsetAt(primaryRange.getStartPosition());
+		const selectionEnd = this.model.offsetAt(primaryRange.getEndPosition());
 		const exact = this.matches.findIndex(match =>
-			this.model.offsetAt(match.range.start) === selectionStart &&
-			this.model.offsetAt(match.range.end) === selectionEnd
+			this.model.offsetAt(match.range.getStartPosition()) === selectionStart &&
+			this.model.offsetAt(match.range.getEndPosition()) === selectionEnd
 		);
 		if (exact >= 0) return exact;
-		const activeOffset = this.model.offsetAt(this.selections.selections.primary.active);
-		const following = this.matches.findIndex(match => this.model.offsetAt(match.range.start) >= activeOffset);
+		const activeOffset = this.model.offsetAt(this.selections.selections.primary.getPosition());
+		const following = this.matches.findIndex(match => this.model.offsetAt(match.range.getStartPosition()) >= activeOffset);
 		return following >= 0 ? following : 0;
 	}
 
@@ -306,8 +307,8 @@ export class FindController extends Disposable {
 		const match = this.matches[index];
 		if (!match) return;
 		this.currentMatchIndex = index;
-		this.selections.setSelections(TextSelectionSet.single(TextSelection.from(match.range.start, match.range.end)));
-		this.viewport.revealPosition(match.range.start);
+		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition())));
+		this.viewport.revealPosition(match.range.getStartPosition());
 		this.projectResultLabel(this.matchesTruncated);
 	}
 
@@ -357,25 +358,25 @@ export class FindController extends Disposable {
 	}
 
 	private setFindInSelection(value: boolean): void {
-		this.findInSelection = value && this.selectionScope.value?.range.empty === false;
+		this.findInSelection = value && this.selectionScope.value?.range.isEmpty() === false;
 		projectToggle(this.findInSelectionButton, this.findInSelection);
 		this.projectFindInSelectionAvailability();
 	}
 
 	private captureSelectionScope(): void {
-		const range = this.selections.selections.primary.range;
-		this.selectionScope.value = range.empty ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
+		const range = this.selections.selections.primary;
+		this.selectionScope.value = range.isEmpty() ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
 		this.projectFindInSelectionAvailability();
 	}
 
 	private projectFindInSelectionAvailability(): void {
-		this.findInSelectionButton.disabled = this.selectionScope.value?.range.empty !== false;
+		this.findInSelectionButton.disabled = this.selectionScope.value?.range.isEmpty() !== false;
 	}
 
-	private get searchRange(): TextRange | undefined {
+	private get searchRange(): Range | undefined {
 		if (!this.findInSelection) return undefined;
 		const range = this.selectionScope.value?.range;
-		if (range && !range.empty) return range;
+		if (range && !range.isEmpty()) return range;
 		this.setFindInSelection(false);
 		return undefined;
 	}
@@ -402,8 +403,8 @@ export class FindController extends Disposable {
 
 	private readSelectedSearchText(): string | undefined {
 		const selection = this.selections.selections.primary;
-		if (selection.collapsed) return undefined;
-		const text = this.model.getTextInRange(selection.range);
+		if (selection.isEmpty()) return undefined;
+		const text = this.model.getTextInRange(selection);
 		return text.length <= 4_096 && !text.includes("\n") ? text : undefined;
 	}
 

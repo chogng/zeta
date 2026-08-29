@@ -1,7 +1,8 @@
 import { clamp } from "../../../base/common/numbers.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorMoveOperations.js";
-import { TextSelection, TextSelectionSet } from "../core/selection.js";
-import { TextPosition } from "../core/text.js";
+import { Selection } from "../core/selection.js";
+import { SelectionSet } from "../cursor/selectionSet.js";
+import { Position } from "../core/position.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
@@ -14,18 +15,18 @@ export interface VisualCursorNavigationRequest {
 }
 
 export interface VisualCursorNavigationResult {
-	readonly selections: TextSelectionSet;
+	readonly selections: SelectionSet;
 	readonly preferredHorizontalOffsets: readonly number[];
 }
 
 /** Browser-provided visual coordinates for layouts whose logical prefix width is not monotonic. */
 export interface VisualCursorGeometry {
-	getHorizontalOffset(position: TextPosition): number | undefined;
-	getNearestPosition(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined;
+	getHorizontalOffset(position: Position): number | undefined;
+	getNearestPosition(visualLineIndex: number, horizontalOffset: number): Position | undefined;
 }
 
 /** Navigates selections by browser-measured wrapped visual rows. */
-export function navigateStanzaVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: VisualCursorGeometry): VisualCursorNavigationResult {
+export function navigateStanzaVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: SelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: VisualCursorGeometry): VisualCursorNavigationResult {
 	validateRequest(model, projection, selections, request, measureTextWidth);
 	const preferredHorizontalOffsets = resolvePreferredHorizontalOffsets(
 		model,
@@ -39,20 +40,20 @@ export function navigateStanzaVisualCursors(model: TextModel, projection: Editor
 		const target = visualVerticalTarget(
 			model,
 			projection,
-			selection.active,
+			selection.getPosition(),
 			lineDelta(request),
 			preferredHorizontalOffsets[index]!,
 			measureTextWidth,
 			geometry,
 		);
 		return request.mode === EditorCursorNavigationMode.Extend
-			? TextSelection.from(selection.anchor, target)
-			: TextSelection.collapsedAt(target);
+			? Selection.fromPositions(selection.getSelectionStart(), target)
+			: Selection.fromPositions(target);
 	});
 	return normalizeResult(navigated, selections.primaryIndex, preferredHorizontalOffsets);
 }
 
-function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProjection, position: TextPosition, lineDelta: number, preferredHorizontalOffset: number, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): TextPosition {
+function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProjection, position: Position, lineDelta: number, preferredHorizontalOffset: number, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): Position {
 	const currentVisualLineIndex = projection.visualLineIndexAt(position);
 	const targetVisualLineIndex = clamp(
 		currentVisualLineIndex + lineDelta,
@@ -62,35 +63,32 @@ function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProj
 	if (targetVisualLineIndex === currentVisualLineIndex) return position;
 	const visualLine = projection.lineAt(targetVisualLineIndex)!;
 	const browserTarget = geometry?.getNearestPosition(targetVisualLineIndex, preferredHorizontalOffset);
-	if (browserTarget && browserTarget.lineIndex === visualLine.logicalLineIndex && browserTarget.columnIndex >= visualLine.startColumn && browserTarget.columnIndex <= visualLine.endColumn) {
+	if (browserTarget && browserTarget.lineNumber - 1 === visualLine.logicalLineIndex && browserTarget.column - 1 >= visualLine.startColumn && browserTarget.column - 1 <= visualLine.endColumn) {
 		return browserTarget;
 	}
-	const text = model.getLineContent(visualLine.logicalLineIndex).slice(
+	const text = model.getLineContent((visualLine.logicalLineIndex) + 1).slice(
 		visualLine.startColumn,
 		visualLine.endColumn,
 	);
 	const textOffset = Math.max(0, preferredHorizontalOffset - (visualLine.wrappedTextIndentWidth ?? 0));
-	return TextPosition.at(
-		visualLine.logicalLineIndex,
-		visualLine.startColumn + nearestCursorColumn(
+	return new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + nearestCursorColumn(
 			text,
 			textOffset,
 			measureTextWidth,
-		),
-	);
+		)) + 1);
 }
 
-function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, preferredHorizontalOffsets: readonly number[] | undefined, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): readonly number[] {
+function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorVisualLineProjection, selections: SelectionSet, preferredHorizontalOffsets: readonly number[] | undefined, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): readonly number[] {
 	if (preferredHorizontalOffsets?.length === selections.selections.length) {
 		return Object.freeze([...preferredHorizontalOffsets]);
 	}
 	return Object.freeze(selections.selections.map(selection => {
 		const visualLine = projection.lineAt(
-			projection.visualLineIndexAt(selection.active),
+			projection.visualLineIndexAt(selection.getPosition()),
 		)!;
-		return geometry?.getHorizontalOffset(selection.active) ?? (visualLine.wrappedTextIndentWidth ?? 0) + measureTextWidth(model.getLineContent(visualLine.logicalLineIndex).slice(
+		return geometry?.getHorizontalOffset(selection.getPosition()) ?? (visualLine.wrappedTextIndentWidth ?? 0) + measureTextWidth(model.getLineContent((visualLine.logicalLineIndex) + 1).slice(
 			visualLine.startColumn,
-			selection.active.columnIndex,
+			selection.getPosition().column - 1,
 		));
 	}));
 }
@@ -127,8 +125,8 @@ function lineDelta(request: VisualCursorNavigationRequest): number {
 	}
 }
 
-function normalizeResult(selections: readonly TextSelection[], primaryIndex: number, preferredHorizontalOffsets: readonly number[]): VisualCursorNavigationResult {
-	const normalized: TextSelection[] = [];
+function normalizeResult(selections: readonly Selection[], primaryIndex: number, preferredHorizontalOffsets: readonly number[]): VisualCursorNavigationResult {
+	const normalized: Selection[] = [];
 	const normalizedOffsets: number[] = [];
 	const sourceToNormalized: number[] = [];
 	for (let index = 0; index < selections.length; index += 1) {
@@ -144,12 +142,12 @@ function normalizeResult(selections: readonly TextSelection[], primaryIndex: num
 		sourceToNormalized.push(targetIndex);
 	}
 	return Object.freeze({
-		selections: TextSelectionSet.withPrimary(normalized, sourceToNormalized[primaryIndex]!),
+		selections: SelectionSet.withPrimary(normalized, sourceToNormalized[primaryIndex]!),
 		preferredHorizontalOffsets: Object.freeze(normalizedOffsets),
 	});
 }
 
-function validateRequest(model: TextModel, projection: EditorVisualLineProjection, selections: TextSelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number): void {
+function validateRequest(model: TextModel, projection: EditorVisualLineProjection, selections: SelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number): void {
 	if (projection.modelVersion !== model.version) {
 		throw new Error("Visual cursor navigation requires the current text model projection");
 	}
@@ -168,7 +166,7 @@ function validateRequest(model: TextModel, projection: EditorVisualLineProjectio
 	if (request.preferredHorizontalOffsets && (request.preferredHorizontalOffsets.length !== selections.selections.length || request.preferredHorizontalOffsets.some(offset => !Number.isFinite(offset) || offset < 0))) {
 		throw new RangeError("Visual cursor navigation preferred horizontal offsets must match selections");
 	}
-	for (const selection of selections.selections) model.offsetAt(selection.active);
+	for (const selection of selections.selections) model.offsetAt(selection.getPosition());
 }
 
 function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is VisualCursorNavigationRequest["command"] {
@@ -178,7 +176,7 @@ function isVisualVerticalCommand(command: EditorCursorNavigationCommand): comman
 		command === EditorCursorNavigationCommand.PageDown;
 }
 
-function selectionsEqual(left: TextSelection, right: TextSelection): boolean {
-	return left.anchor.compareTo(right.anchor) === 0 &&
-		left.active.compareTo(right.active) === 0;
+function selectionsEqual(left: Selection, right: Selection): boolean {
+	return Position.compare(left.getSelectionStart(), right.getSelectionStart()) === 0 &&
+		Position.compare(left.getPosition(), right.getPosition()) === 0;
 }

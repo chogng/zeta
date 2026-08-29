@@ -1,6 +1,8 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextEdit, type TextRange, type TextPosition } from "../../../common/core/text.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
+import { type Position } from "../../../common/core/position.js";
+import { type Range } from "../../../common/core/range.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -16,9 +18,9 @@ export interface LanguageFormattingOptions {
 
 export interface LanguageFormattingRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
-	readonly range?: TextRange;
+	readonly range?: Range;
 	readonly options: LanguageFormattingOptions;
-	readonly position?: TextPosition;
+	readonly position?: Position;
 	readonly ch?: string;
 }
 
@@ -38,11 +40,11 @@ export class FormatService extends Disposable {
 		return this.provide(languageId, { options }, "provideDocumentFormattingEdits", signal);
 	}
 
-	provideRangeFormattingEdits(languageId: string, range: TextRange, options: LanguageFormattingOptions, signal?: AbortSignal): Promise<readonly TextEdit[]> {
+	provideRangeFormattingEdits(languageId: string, range: Range, options: LanguageFormattingOptions, signal?: AbortSignal): Promise<readonly TextEdit[]> {
 		return this.provide(languageId, { range, options }, "provideRangeFormattingEdits", signal);
 	}
 
-	provideOnTypeFormattingEdits(languageId: string, position: TextPosition, ch: string, options: LanguageFormattingOptions, signal?: AbortSignal): Promise<readonly TextEdit[]> {
+	provideOnTypeFormattingEdits(languageId: string, position: Position, ch: string, options: LanguageFormattingOptions, signal?: AbortSignal): Promise<readonly TextEdit[]> {
 		return this.provide(languageId, { position, ch, options }, "provideOnTypeFormattingEdits", signal);
 	}
 
@@ -60,6 +62,6 @@ export class FormatService extends Disposable {
 }
 
 /** Converts current-version formatting edits into the editor's canonical command contract. */
-export function createFormattingCommand(model: TextModel, selections: TextSelectionSet, edits: readonly TextEdit[]): EditorEditCommand | undefined {
+export function createFormattingCommand(model: TextModel, selections: SelectionSet, edits: readonly TextEdit[]): EditorEditCommand | undefined {
 	return createEditorEditCommand(model, selections, edits);
 }

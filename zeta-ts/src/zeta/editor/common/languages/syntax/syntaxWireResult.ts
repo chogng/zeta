@@ -2,7 +2,9 @@ import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type Syntax
 import { createSyntaxItemSplices, type SyntaxItem } from "./syntaxItemDelta.js";
 import { attachLanguageTokenResultDelta, createLanguageDiagnosticSnapshotNormalizer, createLanguageTokenSnapshotNormalizer, type LanguageDiagnostic, type LanguageDiagnosticCode, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "../languageResults.js";
 import { type LanguageWorkerWireResultState } from "../languageWorkerWireProtocol.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../core/text.js";
+import { Position } from "../../core/position.js";
+import { Range } from "../../core/range.js";
+import { type TextSnapshot } from "../../core/textChange.js";
 
 export function encodeSyntaxWireResult(lane: SyntaxLane, result: SyntaxResult, snapshot: TextSnapshot, base: LanguageWorkerWireResultState<SyntaxResult> | undefined): unknown {
 	assertResultLane(lane, result);
@@ -181,31 +183,31 @@ function decodePresentation(value: unknown): NonNullable<LanguageToken["presenta
 }
 
 function shiftItem(lane: SyntaxLane, item: SyntaxWireItem, lineDelta: number): SyntaxWireItem {
-	const range = TextRange.from(
-		TextPosition.at(item.range.start.lineIndex + lineDelta, item.range.start.columnIndex),
-		TextPosition.at(item.range.end.lineIndex + lineDelta, item.range.end.columnIndex),
+	const range = Range.fromPositions(
+		new Position(item.range.startLineNumber + lineDelta, item.range.startColumn),
+		new Position(item.range.endLineNumber + lineDelta, item.range.endColumn),
 	);
 	return lane === SYNTAX_TOKEN_LANE
 		? { ...(item as LanguageToken), range }
 		: { ...(item as LanguageDiagnostic), range };
 }
 
-function encodeRange(range: TextRange, owner: string): unknown {
-	if (!(range instanceof TextRange)) throw new TypeError(`${owner} must be a TextRange`);
+function encodeRange(range: Range, owner: string): unknown {
+	if (!(range instanceof Range)) throw new TypeError(`${owner} must be a Range`);
 	return Object.freeze({
-		start: Object.freeze({ lineIndex: range.start.lineIndex, columnIndex: range.start.columnIndex }),
-		end: Object.freeze({ lineIndex: range.end.lineIndex, columnIndex: range.end.columnIndex }),
+		start: Object.freeze({ lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 }),
+		end: Object.freeze({ lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 }),
 	});
 }
 
-function decodeRange(value: unknown, owner: string): TextRange {
+function decodeRange(value: unknown, owner: string): Range {
 	assertRecord(value, owner);
-	return TextRange.from(decodePosition(value.start, `${owner} start`), decodePosition(value.end, `${owner} end`));
+	return Range.fromPositions(decodePosition(value.start, `${owner} start`), decodePosition(value.end, `${owner} end`));
 }
 
-function decodePosition(value: unknown, owner: string): TextPosition {
+function decodePosition(value: unknown, owner: string): Position {
 	assertRecord(value, owner);
-	return TextPosition.at(decodeNonNegativeSafeInteger(value.lineIndex, `${owner} line index`), decodeNonNegativeSafeInteger(value.columnIndex, `${owner} column index`));
+	return new Position((decodeNonNegativeSafeInteger(value.lineIndex, `${owner} line index`)) + 1, (decodeNonNegativeSafeInteger(value.columnIndex, `${owner} column index`)) + 1);
 }
 
 function decodeDiagnosticCode(value: unknown): LanguageDiagnosticCode | undefined {

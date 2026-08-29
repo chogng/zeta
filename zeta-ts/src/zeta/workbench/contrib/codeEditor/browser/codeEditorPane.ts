@@ -20,7 +20,7 @@ import { type ITextModelService, type TextModelReference } from "../../../../edi
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import { type TextRange } from "../../../../editor/common/core/text.js";
+import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
@@ -36,7 +36,7 @@ export interface EditorPanePart extends IDisposable {
 	layout(dimension: IDimension): void;
 	focus(): void;
 	getValue(): string;
-	revealRange?(range: TextRange): void;
+	revealRange?(range: Range): void;
 	getViewState?(): EditorTextViewState;
 	restoreViewState?(state: EditorTextViewState): void;
 	announceAccessibilityStatus?(message: string): void;
@@ -167,7 +167,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		let workingCopy: EditorWorkingCopy | undefined;
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
-			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageResolver);
+			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent((0) + 1) }, this.options.languageResolver);
 			part = this.createPart({
 				container,
 				input,
@@ -240,7 +240,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		this.statusListener.clear();
 		this.part.value = part;
 		this.workingCopySlot.value = workingCopy;
-		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageResolver);
+		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent((0) + 1) }, this.options.languageResolver);
 		const statusListeners = new DisposableStore();
 		if (part.onDidChange) statusListeners.add(part.onDidChange(() => this.statusChangeEmitter.fire()));
 		statusListeners.add(modelReference.onDidChangeExternalChange(() => {
@@ -308,7 +308,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		await this.workingCopy?.revert(new AbortController().signal);
 	}
 
-	revealRange(range: TextRange): void {
+	revealRange(range: Range): void {
 		this.part.value?.revealRange?.(range);
 	}
 
@@ -325,9 +325,9 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 
 	getStatus(): EditorPaneStatus {
 		const selections = this.part.value?.selections?.selections;
-		const active = selections?.primary.active;
+		const active = selections?.primary.getPosition();
 		return Object.freeze({
-			...(active ? { lineNumber: active.lineIndex + 1, columnNumber: active.columnIndex + 1 } : {}),
+			...(active ? { lineNumber: active.lineNumber, columnNumber: active.column } : {}),
 			...(selections && selections.selections.length > 1 ? { selectionCount: selections.selections.length } : {}),
 			...(this.languageId ? { languageId: this.languageId } : {}),
 			encoding: "UTF-8",

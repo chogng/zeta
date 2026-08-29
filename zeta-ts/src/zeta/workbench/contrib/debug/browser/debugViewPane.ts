@@ -2,7 +2,8 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import { type IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { type IDebugBreakpoint, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugService, type IDebugSession, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../services/debug/common/debugService.js";
@@ -178,16 +179,16 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private async openFrameSource(session: IDebugSession, frame: IDebugStackFrame): Promise<void> {
-		const position = TextPosition.at(Math.max(0, frame.lineNumber - 1), Math.max(0, frame.columnNumber - 1));
+		const position = new Position(Math.max(1, frame.lineNumber), Math.max(1, frame.columnNumber));
 		if (frame.source?.resource) {
-			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection: TextRange.emptyAt(position) });
+			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection: Range.fromPositions(position) });
 			return;
 		}
 		if (frame.source?.sourceReference && frame.source.sourceReference > 0) {
 			const source = await session.source(frame.source);
 			const name = frame.source.name ?? `source-${frame.source.sourceReference}`;
 			const resource = URI.parse(`debug-source://session/${encodeURIComponent(session.id)}/${frame.source.sourceReference}/${encodeURIComponent(name)}`);
-			await this.editor.openEditor({ resource, label: name, contentType: source.mimeType, readOnly: true, initialText: source.content }, { selection: TextRange.emptyAt(position) });
+			await this.editor.openEditor({ resource, label: name, contentType: source.mimeType, readOnly: true, initialText: source.content }, { selection: Range.fromPositions(position) });
 		}
 	}
 
@@ -290,5 +291,5 @@ function breakpointItem(document: Document, breakpoint: IDebugBreakpoint, index:
 function inputForm(document: Document, label: string, action: string): [HTMLFormElement, HTMLInputElement] { const form = h(document, "form"); form.className = "zeta-debug-input-form"; const input = h(document, "input"); input.type = "text"; input.setAttribute("aria-label", label); const submit = h(document, "button"); submit.type = "submit"; submit.textContent = action; form.append(input, submit); return [form, input]; }
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined { const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null; const raw = target?.dataset[dataName]; if (raw === undefined) return undefined; const index = Number(raw); return Number.isSafeInteger(index) && index >= 0 ? index : undefined; }
 function descendantEnd(rows: readonly DebugVariableRow[], index: number, depth: number): number { let end = index + 1; while (end < rows.length && rows[end]!.depth > depth) end += 1; return end; }
-function lineSelection(lineNumber: number): TextRange { return TextRange.emptyAt(TextPosition.at(lineNumber - 1, 0)); }
+function lineSelection(lineNumber: number): Range { return Range.fromPositions(new Position(lineNumber, 1)); }
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }

@@ -3,7 +3,7 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorDomFontInfo } from '../config/domFontInfo.js';
 import { type CursorChangeReason, type CursorsController } from '../../common/cursor/cursor.js';
 import { type InternalGuidesOptions, type TextEditorCursorBlinkingStyle, type TextEditorCursorStyle } from '../../common/config/editorOptions.js';
-import { type TextRange } from '../../common/core/text.js';
+import { type Range } from '../../common/core/range.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../common/services/semanticTokensStyling.js';
 import { type BracketColorizationSource } from '../viewparts/viewLines/viewLine.js';
@@ -130,7 +130,7 @@ export class ViewOverlays extends Disposable {
 		this.viewCursors.renderTokens(context);
 	}
 
-	setCompositionRange(range: TextRange | undefined): void {
+	setCompositionRange(range: Range | undefined): void {
 		this.viewCursors.setCompositionRange(range);
 	}
 

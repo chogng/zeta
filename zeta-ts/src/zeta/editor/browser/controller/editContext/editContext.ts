@@ -6,9 +6,13 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
 import { type CompositionSession } from '../../../common/cursor/cursor.js';
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { normalizeTextLineEndings, type TextPosition } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
+import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
+import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { type IEditorAriaOptions } from '../../editorBrowser.js';
 import { type EditorViewport } from "../../view.js";
 import { type EditorViewTextUpdateEvent, type ViewController } from "../../view/viewController.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewparts/viewLines/viewLine.js';
 import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
 
 /** The state that the browser editing surface mirrors from the common editor. */
@@ -16,6 +20,7 @@ export interface EditContextState {
 	readonly text: string;
 	readonly selectionStart: number;
 	readonly selectionEnd: number;
+	readonly position: Position;
 }
 
 /** A browser text update expressed independently of the concrete input element. */
@@ -59,14 +64,22 @@ export interface EditContextCharacterBounds {
 
 export interface EditContextOptions {
 	readonly ariaLabel?: string;
-	readonly readOnly?: boolean;
-	readonly textDirection?: string;
+	readonly readOnly: boolean;
+	readonly textDirection: string;
 	/** Stable editor-view identity used by host integrations. */
-	readonly ownerId?: string;
+	readonly ownerId: string;
 	/** Resolves model-relative character geometry for native IME requests. */
-	readonly characterBoundsProvider?: (
+	readonly characterBoundsProvider: (
 		modelOffset: number,
 	) => EditContextCharacterBounds | undefined;
+	readonly viewController: ViewController;
+	readonly viewport: EditorViewport;
+	readonly selectionController: CursorsController;
+	readonly accessibilityService?: IAccessibilityService;
+	readonly renderRichScreenReaderContent?: boolean;
+	readonly accessibilityPageSize?: number;
+	readonly semanticTokenSource?: SemanticTokenSource;
+	readonly bracketColorizationSource?: BracketColorizationSource;
 }
 
 /** Content coordinates of the primary editor caret. */
@@ -85,8 +98,8 @@ export interface EditContextPosition {
  * browser. This is the same seam that lets VS Code provide native and
  * textarea edit contexts side by side.
  */
-export abstract class EditContext extends Disposable {
-	abstract readonly element: HTMLElement;
+export abstract class AbstractEditContext extends Disposable {
+	abstract readonly domNode: HTMLElement;
 	abstract readonly textArea: HTMLTextAreaElement | undefined;
 	private readonly willCopyEmitter = this._register(new Emitter<IClipboardCopyEvent>());
 	private readonly willCutEmitter = this._register(new Emitter<IClipboardCopyEvent>());
@@ -94,7 +107,7 @@ export abstract class EditContext extends Disposable {
 	private readonly willBeforeInputEmitter = this._register(new Emitter<InputEvent>());
 	private readonly willTextUpdateEmitter = this._register(new Emitter<EditorViewTextUpdateEvent>());
 	private readonly willKeydownEmitter = this._register(new Emitter<KeyboardEvent>());
-	private inputConnected = false;
+	private compositionControllerValue: CompositionController | undefined;
 	abstract readonly onDidFocus: EditorEvent<void>;
 	abstract readonly onDidBlur: EditorEvent<void>;
 	abstract readonly onDidBeforeInput: EditorEvent<InputEvent>;
@@ -119,6 +132,11 @@ export abstract class EditContext extends Disposable {
 	abstract get readOnly(): boolean;
 	abstract connect(): void;
 	abstract focus(): void;
+	abstract isFocused(): boolean;
+	abstract refreshFocusState(): void;
+	abstract setAriaOptions(options: IEditorAriaOptions): void;
+	abstract getLastRenderData(): Position | null;
+	abstract writeScreenReaderContent(reason: string): void;
 	/** Clears transient browser input after a routed DOM event. */
 	abstract clear(): void;
 	/** Mirrors the common model and primary selection into the browser surface. */
@@ -134,22 +152,23 @@ export abstract class EditContext extends Disposable {
 	/** Updates the read-only state when IME availability changes. */
 	abstract setReadOnly(readOnly: boolean): void;
 
-	/**
-	 * Connects the platform input surface to the existing view command boundary.
-	 *
-	 * VS Code passes its ViewController into each concrete edit-context adapter;
-	 * this shared hook keeps the same ownership model for both Zeta adapters
-	 * without introducing a second input-controller file.
-	 */
-	connectViewController(viewController: ViewController, compositionController: CompositionController): void {
-		if (this.inputConnected) return;
-		this.inputConnected = true;
+	get compositionController(): CompositionController {
+		if (!this.compositionControllerValue) throw new ReferenceError('Edit context controller is not initialized');
+		return this.compositionControllerValue;
+	}
+
+	protected initializeController(options: EditContextOptions): CompositionController {
+		if (this.compositionControllerValue) throw new ReferenceError('Edit context controller is already initialized');
+		const compositionController = this._register(new CompositionController(this, options.viewport, options.selectionController));
+		this.compositionControllerValue = compositionController;
+		const viewController = options.viewController;
 		this._register(this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)));
 		this._register(this.onDidInput(event => {
 			if (!event.isComposing || !compositionController.composing) this.clear();
 		}));
 		this._register(this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)));
 		this._register(this.onDidKeydown(event => this.routeKeydown(event, viewController)));
+		return compositionController;
 	}
 
 	protected fireWillCopy(browserEvent: ClipboardEvent, isCut: boolean): void {
@@ -315,14 +334,14 @@ interface ActiveComposition {
  */
 export class CompositionController extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<boolean>());
-	private readonly input: EditContext;
+	private readonly input: AbstractEditContext;
 	private readonly initialReadOnly: boolean;
 	private activeComposition: ActiveComposition | undefined;
 
 	readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
 	constructor(
-		input: EditContext,
+		input: AbstractEditContext,
 		private readonly viewport: EditorViewport,
 		private readonly selectionController: CursorsController,
 	) {
@@ -380,7 +399,7 @@ export class CompositionController extends Disposable {
 			return;
 		}
 		this.input.prepareComposition();
-		const startPosition = this.selectionController.selections.primary.range.start;
+		const startPosition = this.selectionController.selections.primary.getStartPosition();
 		const session = this.selectionController.beginComposition();
 		this.activeComposition = {
 			session,
@@ -458,7 +477,7 @@ export class CompositionController extends Disposable {
 		active.updated = true;
 		this.viewport.setCompositionRange(active.session.currentRange);
 		this.viewport.revealPosition(
-			this.selectionController.selections.primary.active,
+			this.selectionController.selections.primary.getPosition(),
 		);
 		this.positionInputAtPrimary();
 	}
@@ -479,10 +498,10 @@ export class CompositionController extends Disposable {
 	}
 
 	private positionInputAtPrimary(): void {
-		this.positionInput(this.selectionController.selections.primary.active);
+		this.positionInput(this.selectionController.selections.primary.getPosition());
 	}
 
-	private positionInput(position: TextPosition): void {
+	private positionInput(position: Position): void {
 		const coordinates = this.viewport.getPositionContentCoordinates(position);
 		this.input.positionComposition(coordinates);
 	}
@@ -494,7 +513,7 @@ export class CompositionController extends Disposable {
 
 	private clearPresentation(): boolean {
 		const changed = this.viewport.element.classList.contains("composing") ||
-			this.input.element.classList.contains("ime-input");
+			this.input.domNode.classList.contains("ime-input");
 		this.viewport.element.classList.remove("composing");
 		this.input.clearComposition();
 		this.viewport.setCompositionRange(undefined);

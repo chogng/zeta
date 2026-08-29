@@ -8,8 +8,10 @@ import { LanguageResultAcceptance } from "../../../../common/languages/languageR
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem } from "../../../../common/languages/completion/languageCompletions.js";
 import { LanguageCompletionProviderRegistry } from "../../../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
 
@@ -37,7 +39,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("con");
-	using selections = controllerAt(model, TextPosition.at(0, 3));
+	using selections = controllerAt(model, new Position((0) + 1, (3) + 1));
 	using registry = new LanguageCompletionProviderRegistry();
 	using service = new LanguageCompletionService(model, registry);
 	using session = new LanguageCompletionSessionController(service.results, selections);
@@ -65,8 +67,8 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	assert.equal(widget.element.style.left, "68px");
 	assert.equal(widget.element.style.top, "20px");
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "list");
-	assert.equal(input.element.getAttribute("aria-haspopup"), "listbox");
-	assert.equal(input.element.getAttribute("aria-controls"), widget.element.id);
+	assert.equal(input.element.getAttribute("aria-haspopup"), "true");
+	assert.equal(input.element.getAttribute("aria-controls"), null);
 	assert.equal(input.element.getAttribute("aria-activedescendant"), options[1]!.id);
 	assert.deepEqual(options.map(option => ({
 		selected: option.getAttribute("aria-selected"),
@@ -100,9 +102,9 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 	fixture.input.element.dispatchEvent(enter);
 	assert.equal(enter.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console");
-	assert.equal(fixture.selections.selections.primary.active.compareTo(TextPosition.at(0, 7)), 0);
+	assert.equal(Position.compare(fixture.selections.selections.primary.getPosition(), new Position((0) + 1, (7) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
-	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "none");
+	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "both");
 	assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
 
 	fixture.selections.undo();
@@ -122,7 +124,7 @@ test("Typing a declared completion commit character accepts it atomically before
 
 	assert.equal(commit.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console.");
-	assert.equal(fixture.selections.selections.primary.active.compareTo(TextPosition.at(0, 8)), 0);
+	assert.equal(Position.compare(fixture.selections.selections.primary.getPosition(), new Position((0) + 1, (8) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	fixture.selections.undo();
 	assert.equal(fixture.model.getText(), "con");
@@ -131,16 +133,16 @@ test("Typing a declared completion commit character accepts it atomically before
 test("Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeholder navigation", () => {
 	const fixture = createFixture("fn");
 	using resources = fixture;
-	fixture.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
+	fixture.selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
 	assert.equal(fixture.store.accept({
 		requestId: 1,
 		textModel: fixture.model,
 		modelVersion: fixture.model.version,
 		value: {
-			position: TextPosition.at(0, 2),
+			position: new Position((0) + 1, (2) + 1),
 			items: [{
 				...completion("function", "function", LanguageCompletionItemKind.Function),
-				range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
 				insertText: "function ${1:name}(${2:value}) { $0 }",
 				insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
 			}],
@@ -153,11 +155,11 @@ test("Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeh
 	const next = keyboardEvent(fixture.dom.window, "Tab");
 	fixture.input.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections.primary.range, TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 19)));
+	assert.deepEqual(fixture.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
 	const previous = keyboardEvent(fixture.dom.window, "Tab", true);
 	fixture.input.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections.primary.range, TextRange.from(TextPosition.at(0, 9), TextPosition.at(0, 13)));
+	assert.deepEqual(fixture.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
 	const escape = keyboardEvent(fixture.dom.window, "Escape");
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
@@ -214,13 +216,13 @@ test("Escape cancels locally while clicking accepts the selected option", () => 
 	assert.equal(fixture.suggest.widget.visible, false);
 });
 
-test("Completion widget validates ownership and restores input ARIA on disposal", () => {
+test("Completion widget validates ownership and clears its active descendant on disposal", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("con");
 	using otherModel = new TextModel("other");
-	using selections = controllerAt(model, TextPosition.at(0, 3));
-	using otherSelections = controllerAt(otherModel, TextPosition.at(0, 5));
+	using selections = controllerAt(model, new Position((0) + 1, (3) + 1));
+	using otherSelections = controllerAt(otherModel, new Position((0) + 1, (5) + 1));
 	using registry = new LanguageCompletionProviderRegistry();
 	using otherRegistry = new LanguageCompletionProviderRegistry();
 	using service = new LanguageCompletionService(model, registry);
@@ -237,9 +239,9 @@ test("Completion widget validates ownership and restores input ARIA on disposal"
 	using input = new EditorView(viewport, selections);
 	assert.throws(() => new SuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
 	using suggest = new SuggestController(input, selections, service, session, "plaintext");
-	assert.equal(input.element.getAttribute("aria-autocomplete"), "none");
+	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
 	suggest.dispose();
-	assert.equal(input.element.getAttribute("aria-autocomplete"), null);
+	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
 	assert.equal(input.element.getAttribute("aria-controls"), null);
 
 	accept(service.results, model, 1, [
@@ -260,7 +262,7 @@ test("Disposing the common session immediately hides a surviving widget", () => 
 	fixture.session.dispose();
 
 	assert.equal(fixture.suggest.widget.visible, false);
-	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "none");
+	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "both");
 	const down = keyboardEvent(fixture.dom.window, "ArrowDown");
 	fixture.input.element.dispatchEvent(down);
 	assert.equal(down.defaultPrevented, false);
@@ -313,7 +315,7 @@ interface CompletionFixture extends Disposable {
 function createFixture(text: string, sessionOptions: LanguageCompletionSessionOptions = {}): CompletionFixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const model = new TextModel(text);
-	const selections = controllerAt(model, TextPosition.at(0, text.length));
+	const selections = controllerAt(model, new Position((0) + 1, (text.length) + 1));
 	const registry = new LanguageCompletionProviderRegistry();
 	const service = new LanguageCompletionService(model, registry);
 	const session = new LanguageCompletionSessionController(service.results, selections, sessionOptions);
@@ -362,7 +364,7 @@ function accept(
 		textModel: model,
 		modelVersion: model.version,
 		value: {
-			position: TextPosition.at(0, 3),
+			position: new Position((0) + 1, (3) + 1),
 			items,
 			isIncomplete: false,
 		},
@@ -375,17 +377,17 @@ function completion(id: string, label: string, kind: LanguageCompletionItemKind,
 		id,
 		label,
 		kind,
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 		insertText: label,
 		...(detail === undefined ? {} : { detail }),
 		...(preselect ? { preselect } : {}),
 	};
 }
 
-function controllerAt(model: TextModel, position: TextPosition): CursorsController {
+function controllerAt(model: TextModel, position: Position): CursorsController {
 	return new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(position)),
+		SelectionSet.single(Selection.fromPositions(position)),
 	);
 }
 

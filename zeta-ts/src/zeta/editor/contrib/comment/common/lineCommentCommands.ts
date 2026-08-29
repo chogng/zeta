@@ -1,6 +1,8 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange, type TextEdit } from "../../../common/core/text.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface EditorLineCommentOptions {
@@ -16,14 +18,14 @@ interface OffsetEdit {
 }
 
 /** Toggles one language line-comment token over every selected physical line. */
-export function createToggleLineCommentCommand(model: TextModel, selections: TextSelectionSet, options: EditorLineCommentOptions): EditorEditCommand {
+export function createToggleLineCommentCommand(model: TextModel, selections: SelectionSet, options: EditorLineCommentOptions): EditorEditCommand {
 	const lineComment = readLineComment(options);
 	const lineIndices = selectedLineIndices(selections);
 	const remove = shouldRemoveLineComments(model, lineIndices, lineComment);
 	const edits = lineIndices.flatMap<OffsetEdit>(lineIndex => {
-		const line = model.getLineContent(lineIndex);
+		const line = model.getLineContent((lineIndex) + 1);
 		const leadingWhitespaceLength = leadingWhitespace(line).length;
-		const position = TextPosition.at(lineIndex, leadingWhitespaceLength);
+		const position = new Position((lineIndex) + 1, (leadingWhitespaceLength) + 1);
 		const startOffset = model.offsetAt(position);
 		if (remove) {
 			if (!line.startsWith(lineComment, leadingWhitespaceLength)) return [];
@@ -31,10 +33,10 @@ export function createToggleLineCommentCommand(model: TextModel, selections: Tex
 			const endColumn = leadingWhitespaceLength + lineComment.length + followingSpace;
 			return [{
 				startOffset,
-				endOffset: model.offsetAt(TextPosition.at(lineIndex, endColumn)),
+				endOffset: model.offsetAt(new Position((lineIndex) + 1, (endColumn) + 1)),
 				text: "",
 				edit: Object.freeze({
-					range: TextRange.from(position, TextPosition.at(lineIndex, endColumn)),
+					range: Range.fromPositions(position, new Position((lineIndex) + 1, (endColumn) + 1)),
 					text: "",
 				}),
 			}];
@@ -45,14 +47,14 @@ export function createToggleLineCommentCommand(model: TextModel, selections: Tex
 			startOffset,
 			endOffset: startOffset,
 			text,
-			edit: Object.freeze({ range: TextRange.emptyAt(position), text }),
+			edit: Object.freeze({ range: Range.fromPositions(position), text }),
 		}];
 	});
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
 		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({
-			anchorOffset: mapOffsetThroughEdits(model.offsetAt(selection.anchor), edits),
-			activeOffset: mapOffsetThroughEdits(model.offsetAt(selection.active), edits),
+			anchorOffset: mapOffsetThroughEdits(model.offsetAt(selection.getSelectionStart()), edits),
+			activeOffset: mapOffsetThroughEdits(model.offsetAt(selection.getPosition()), edits),
 		}))),
 		primarySelectionIndex: selections.primaryIndex,
 		historyMode: EditorCommandHistoryMode.Isolated,
@@ -61,25 +63,25 @@ export function createToggleLineCommentCommand(model: TextModel, selections: Tex
 
 function shouldRemoveLineComments(model: TextModel, lineIndices: readonly number[], lineComment: string): boolean {
 	const contentLines = lineIndices.filter(lineIndex => {
-		const content = model.getLineContent(lineIndex);
+		const content = model.getLineContent((lineIndex) + 1);
 		return content.trim().length > 0;
 	});
 	const candidates = contentLines.length > 0 ? contentLines : lineIndices;
 	return candidates.length > 0 && candidates.every(lineIndex => {
-		const content = model.getLineContent(lineIndex);
+		const content = model.getLineContent((lineIndex) + 1);
 		return content.startsWith(lineComment, leadingWhitespace(content).length);
 	});
 }
 
-function selectedLineIndices(selections: TextSelectionSet): readonly number[] {
+function selectedLineIndices(selections: SelectionSet): readonly number[] {
 	const indices = new Set<number>();
 	for (const selection of selections.selections) {
-		const range = selection.range;
-		let endLineIndex = range.end.lineIndex;
-		if (!selection.collapsed && range.end.columnIndex === 0 && endLineIndex > range.start.lineIndex) {
+		const range = selection;
+		let endLineIndex = range.endLineNumber - 1;
+		if (!selection.isEmpty() && range.endColumn === 1 && endLineIndex > range.startLineNumber - 1) {
 			endLineIndex -= 1;
 		}
-		for (let lineIndex = range.start.lineIndex; lineIndex <= endLineIndex; lineIndex += 1) indices.add(lineIndex);
+		for (let lineIndex = range.startLineNumber - 1; lineIndex <= endLineIndex; lineIndex += 1) indices.add(lineIndex);
 	}
 	return Object.freeze([...indices].sort((left, right) => left - right));
 }

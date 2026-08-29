@@ -1,7 +1,8 @@
 import "./media/inlayHints.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -24,7 +25,7 @@ export class InlayHintsController extends Disposable {
 		const request = this.request = new AbortController();
 		const model = this.viewport.textModel;
 		try {
-			const hints = await this.service.provideInlayHints(this.languageId, TextRange.from(TextPosition.at(0, 0), model.positionAt(model.length)), request.signal);
+			const hints = await this.service.provideInlayHints(this.languageId, Range.fromPositions(new Position((0) + 1, (0) + 1), model.positionAt(model.length)), request.signal);
 			if (request.signal.aborted) return;
 			this.hints = hints;
 			this.render();

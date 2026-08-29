@@ -5,7 +5,9 @@ import { type VersionedLanguageResult } from "../languages/languageRequestCoordi
 import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from "../languages/languageResultStore.js";
 import { getLanguageTokenResultDelta, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from '../services/semanticTokensDto.js';
 import { type LanguageToken, type LanguageTokenResult } from "./languageTokens.js";
-import { TextPosition, TextRange, type TextModelChange } from "../core/text.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
+import { type TextModelChange } from "../core/textChange.js";
 import { type TextModel } from "../model/textModel.js";
 
 export interface LanguageTokenLine {
@@ -142,7 +144,7 @@ export class LanguageTokenLineIndex extends Disposable {
 	getLineTokens(lineIndex: number): readonly LanguageToken[] {
 		this.assertNotDisposed();
 		assertLineIndex(lineIndex);
-		this.model.getLineContent(lineIndex);
+		this.model.getLineContent((lineIndex) + 1);
 		return this.state.statesByLine.get(lineIndex)?.line.tokens ?? EMPTY_TOKENS;
 	}
 
@@ -199,16 +201,16 @@ function fullUpdate(tokens: readonly LanguageToken[]): LanguageTokenIndexUpdate 
 
 function preserveUnaffectedLines(state: LanguageTokenIndexState, change: TextModelChange): LanguageTokenIndexUpdate {
 	if (state.tokenCount === 0 || change.changes.length === 0) return Object.freeze({ state, rebuiltLineCount: 0, reusedLineCount: state.lines.length });
-	const changes = [...change.changes].sort((left, right) => left.range.start.compareTo(right.range.start));
+	const changes = [...change.changes].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
 	const lineStates: LanguageTokenLineState[] = [];
 	const ranges: LanguageTokenLineItemRange[] = [];
 	let tokenCount = 0;
 	for (const lineState of state.lineStates) {
-		if (changes.some(entry => entry.range.start.lineIndex <= lineState.lineIndex && lineState.lineIndex <= entry.range.end.lineIndex)) continue;
+		if (changes.some(entry => entry.range.startLineNumber - 1 <= lineState.lineIndex && lineState.lineIndex <= entry.range.endLineNumber - 1)) continue;
 		let lineDelta = 0;
 		for (const entry of changes) {
-			if (entry.range.end.lineIndex >= lineState.lineIndex) break;
-			lineDelta += countLineBreaks(entry.text) - (entry.range.end.lineIndex - entry.range.start.lineIndex);
+			if (entry.range.endLineNumber - 1 >= lineState.lineIndex) break;
+			lineDelta += countLineBreaks(entry.text) - (entry.range.endLineNumber - entry.range.startLineNumber);
 		}
 		const shiftedLineIndex = lineState.lineIndex + lineDelta;
 		const shifted = lineDelta === 0 ? lineState : createLineState(shiftedLineIndex, lineState.payload);
@@ -307,7 +309,7 @@ function createReusedLineCandidates(base: LanguageTokenIndexState, tokens: reado
 		if (shiftedLineIndex < 0 || !lineMatchesResult(line.payload, shiftedLineIndex, tokens, resultStartItemIndex, resultEndItemIndex)) continue;
 		const previousToken = tokens[resultStartItemIndex - 1];
 		const nextToken = tokens[resultEndItemIndex];
-		if (previousToken?.range.start.lineIndex === shiftedLineIndex || nextToken?.range.start.lineIndex === shiftedLineIndex) continue;
+		if (previousToken?.range.startLineNumber - 1 === shiftedLineIndex || nextToken?.range.startLineNumber - 1 === shiftedLineIndex) continue;
 		candidates.push(Object.freeze({
 			state: segment.lineDelta === 0 ? line : createLineState(shiftedLineIndex, line.payload),
 			range: Object.freeze({ startItemIndex: resultStartItemIndex, endItemIndex: resultEndItemIndex }),
@@ -325,9 +327,9 @@ function buildLineStates(tokens: readonly LanguageToken[], startItemIndex: numbe
 	const states: LanguageTokenLineState[] = [];
 	const ranges: LanguageTokenLineItemRange[] = [];
 	for (let index = startItemIndex; index < endItemIndex;) {
-		const lineIndex = tokens[index]!.range.start.lineIndex;
+		const lineIndex = tokens[index]!.range.startLineNumber - 1;
 		let end = index + 1;
-		while (end < endItemIndex && tokens[end]!.range.start.lineIndex === lineIndex) end += 1;
+		while (end < endItemIndex && tokens[end]!.range.startLineNumber - 1 === lineIndex) end += 1;
 		const payload = createLinePayload(tokens.slice(index, end));
 		states.push(createLineState(lineIndex, payload));
 		ranges.push(Object.freeze({ startItemIndex: index, endItemIndex: end }));
@@ -339,8 +341,8 @@ function buildLineStates(tokens: readonly LanguageToken[], startItemIndex: numbe
 function createLinePayload(tokens: readonly LanguageToken[]): LanguageTokenLinePayload {
 	return Object.freeze({
 		tokens: Object.freeze(tokens.map(token => Object.freeze({
-			startColumn: token.range.start.columnIndex,
-			endColumn: token.range.end.columnIndex,
+			startColumn: token.range.startColumn - 1,
+			endColumn: token.range.endColumn - 1,
 			tokenType: token.tokenType,
 			modifiers: token.modifiers,
 			...(token.languageId === undefined ? {} : { languageId: token.languageId }),
@@ -356,7 +358,7 @@ function createLineState(lineIndex: number, payload: LanguageTokenLinePayload): 
 		lineIndex,
 		get tokens(): readonly LanguageToken[] {
 			materializedTokens ??= Object.freeze(payload.tokens.map(token => Object.freeze({
-				range: TextRange.from(TextPosition.at(lineIndex, token.startColumn), TextPosition.at(lineIndex, token.endColumn)),
+				range: Range.fromPositions(new Position((lineIndex) + 1, (token.startColumn) + 1), new Position((lineIndex) + 1, (token.endColumn) + 1)),
 				tokenType: token.tokenType,
 				modifiers: token.modifiers,
 				...(token.languageId === undefined ? {} : { languageId: token.languageId }),
@@ -386,10 +388,10 @@ function lineMatchesResult(payload: LanguageTokenLinePayload, lineIndex: number,
 	if (endItemIndex - startItemIndex !== payload.tokens.length) return false;
 	return payload.tokens.every((relative, index) => {
 		const token = tokens[startItemIndex + index]!;
-		return token.range.start.lineIndex === lineIndex &&
-			token.range.end.lineIndex === lineIndex &&
-			token.range.start.columnIndex === relative.startColumn &&
-			token.range.end.columnIndex === relative.endColumn &&
+		return token.range.startLineNumber - 1 === lineIndex &&
+			token.range.endLineNumber - 1 === lineIndex &&
+			token.range.startColumn - 1 === relative.startColumn &&
+			token.range.endColumn - 1 === relative.endColumn &&
 			token.tokenType === relative.tokenType &&
 			arraysEqual(token.modifiers, relative.modifiers) &&
 			token.languageId === relative.languageId &&

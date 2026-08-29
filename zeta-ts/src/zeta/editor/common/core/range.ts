@@ -1,147 +1,520 @@
-import { IPosition } from "./position.js";
-import { TextPosition } from "./position.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-export interface ITextRange {
-	readonly start: IPosition;
-	readonly end: IPosition;
-}
-
-export interface IRange extends ITextRange {}
+import { IPosition, Position } from './position.js';
 
 /**
- * An ordered, end-exclusive text range.
+ * A range in the editor. This interface is suitable for serialization.
  */
-export class TextRange {
-	private constructor(
-		readonly start: TextPosition,
-		readonly end: TextPosition,
-	) {
-		Object.freeze(this);
-	}
+export interface IRange {
+	/**
+	 * Line number on which the range starts (starts at 1).
+	 */
+	readonly startLineNumber: number;
+	/**
+	 * Column on which the range starts in line `startLineNumber` (starts at 1).
+	 */
+	readonly startColumn: number;
+	/**
+	 * Line number on which the range ends.
+	 */
+	readonly endLineNumber: number;
+	/**
+	 * Column on which the range ends in line `endLineNumber`.
+	 */
+	readonly endColumn: number;
+}
 
-	static from(start: IPosition, end: IPosition): TextRange {
-		const startPosition = TextPosition.lift(start);
-		const endPosition = TextPosition.lift(end);
-		if (TextPosition.compare(startPosition, endPosition) > 0) {
-			throw new RangeError("TextRange end must not precede its start");
+/**
+ * A range in the editor. (startLineNumber,startColumn) is <= (endLineNumber,endColumn)
+ */
+export class Range {
+
+	/**
+	 * Line number on which the range starts (starts at 1).
+	 */
+	public readonly startLineNumber: number;
+	/**
+	 * Column on which the range starts in line `startLineNumber` (starts at 1).
+	 */
+	public readonly startColumn: number;
+	/**
+	 * Line number on which the range ends.
+	 */
+	public readonly endLineNumber: number;
+	/**
+	 * Column on which the range ends in line `endLineNumber`.
+	 */
+	public readonly endColumn: number;
+
+	constructor(startLineNumber: number, startColumn: number, endLineNumber: number, endColumn: number) {
+		if ((startLineNumber > endLineNumber) || (startLineNumber === endLineNumber && startColumn > endColumn)) {
+			this.startLineNumber = endLineNumber;
+			this.startColumn = endColumn;
+			this.endLineNumber = startLineNumber;
+			this.endColumn = startColumn;
+		} else {
+			this.startLineNumber = startLineNumber;
+			this.startColumn = startColumn;
+			this.endLineNumber = endLineNumber;
+			this.endColumn = endColumn;
 		}
-		return new TextRange(startPosition, endPosition);
 	}
 
-	static fromPositions(start: IPosition, end = start): TextRange {
-		return TextRange.from(start, end);
+	/**
+	 * Test if this range is empty.
+	 */
+	public isEmpty(): boolean {
+		return Range.isEmpty(this);
 	}
 
-	static emptyAt(position: IPosition): TextRange {
-		const lifted = TextPosition.lift(position);
-		return new TextRange(lifted, lifted);
+	/**
+	 * Test if `range` is empty.
+	 */
+	public static isEmpty(range: IRange): boolean {
+		return (range.startLineNumber === range.endLineNumber && range.startColumn === range.endColumn);
 	}
 
-	static isEmpty(range: ITextRange): boolean {
-		return TextPosition.equals(range.start, range.end);
+	/**
+	 * Test if position is in this range. If the position is at the edges, will return true.
+	 */
+	public containsPosition(position: IPosition): boolean {
+		return Range.containsPosition(this, position);
 	}
 
-	static equals(left: ITextRange | undefined, right: ITextRange | undefined): boolean {
-		return left === right || Boolean(left && right && TextPosition.equals(left.start, right.start) && TextPosition.equals(left.end, right.end));
+	/**
+	 * Test if `position` is in `range`. If the position is at the edges, will return true.
+	 */
+	public static containsPosition(range: IRange, position: IPosition): boolean {
+		if (position.lineNumber < range.startLineNumber || position.lineNumber > range.endLineNumber) {
+			return false;
+		}
+		if (position.lineNumber === range.startLineNumber && position.column < range.startColumn) {
+			return false;
+		}
+		if (position.lineNumber === range.endLineNumber && position.column > range.endColumn) {
+			return false;
+		}
+		return true;
 	}
 
-	static join(left: ITextRange, right: ITextRange): TextRange {
-		return TextRange.from(
-			comparePositions(left.start, right.start) <= 0 ? left.start : right.start,
-			comparePositions(left.end, right.end) >= 0 ? left.end : right.end,
+	/**
+	 * Test if `position` is in `range`. If the position is at the edges, will return false.
+	 * @internal
+	 */
+	public static strictContainsPosition(range: IRange, position: IPosition): boolean {
+		if (position.lineNumber < range.startLineNumber || position.lineNumber > range.endLineNumber) {
+			return false;
+		}
+		if (position.lineNumber === range.startLineNumber && position.column <= range.startColumn) {
+			return false;
+		}
+		if (position.lineNumber === range.endLineNumber && position.column >= range.endColumn) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Test if range is in this range. If the range is equal to this range, will return true.
+	 */
+	public containsRange(range: IRange): boolean {
+		return Range.containsRange(this, range);
+	}
+
+	/**
+	 * Test if `otherRange` is in `range`. If the ranges are equal, will return true.
+	 */
+	public static containsRange(range: IRange, otherRange: IRange): boolean {
+		if (otherRange.startLineNumber < range.startLineNumber || otherRange.endLineNumber < range.startLineNumber) {
+			return false;
+		}
+		if (otherRange.startLineNumber > range.endLineNumber || otherRange.endLineNumber > range.endLineNumber) {
+			return false;
+		}
+		if (otherRange.startLineNumber === range.startLineNumber && otherRange.startColumn < range.startColumn) {
+			return false;
+		}
+		if (otherRange.endLineNumber === range.endLineNumber && otherRange.endColumn > range.endColumn) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Test if `range` is strictly in this range. `range` must start after and end before this range for the result to be true.
+	 */
+	public strictContainsRange(range: IRange): boolean {
+		return Range.strictContainsRange(this, range);
+	}
+
+	/**
+	 * Test if `otherRange` is strictly in `range` (must start after, and end before). If the ranges are equal, will return false.
+	 */
+	public static strictContainsRange(range: IRange, otherRange: IRange): boolean {
+		if (otherRange.startLineNumber < range.startLineNumber || otherRange.endLineNumber < range.startLineNumber) {
+			return false;
+		}
+		if (otherRange.startLineNumber > range.endLineNumber || otherRange.endLineNumber > range.endLineNumber) {
+			return false;
+		}
+		if (otherRange.startLineNumber === range.startLineNumber && otherRange.startColumn <= range.startColumn) {
+			return false;
+		}
+		if (otherRange.endLineNumber === range.endLineNumber && otherRange.endColumn >= range.endColumn) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * A reunion of the two ranges.
+	 * The smallest position will be used as the start point, and the largest one as the end point.
+	 */
+	public plusRange(range: IRange): Range {
+		return Range.plusRange(this, range);
+	}
+
+	/**
+	 * A reunion of the two ranges.
+	 * The smallest position will be used as the start point, and the largest one as the end point.
+	 */
+	public static plusRange(a: IRange, b: IRange): Range {
+		let startLineNumber: number;
+		let startColumn: number;
+		let endLineNumber: number;
+		let endColumn: number;
+
+		if (b.startLineNumber < a.startLineNumber) {
+			startLineNumber = b.startLineNumber;
+			startColumn = b.startColumn;
+		} else if (b.startLineNumber === a.startLineNumber) {
+			startLineNumber = b.startLineNumber;
+			startColumn = Math.min(b.startColumn, a.startColumn);
+		} else {
+			startLineNumber = a.startLineNumber;
+			startColumn = a.startColumn;
+		}
+
+		if (b.endLineNumber > a.endLineNumber) {
+			endLineNumber = b.endLineNumber;
+			endColumn = b.endColumn;
+		} else if (b.endLineNumber === a.endLineNumber) {
+			endLineNumber = b.endLineNumber;
+			endColumn = Math.max(b.endColumn, a.endColumn);
+		} else {
+			endLineNumber = a.endLineNumber;
+			endColumn = a.endColumn;
+		}
+
+		return new Range(startLineNumber, startColumn, endLineNumber, endColumn);
+	}
+
+	/**
+	 * A intersection of the two ranges.
+	 */
+	public intersectRanges(range: IRange): Range | null {
+		return Range.intersectRanges(this, range);
+	}
+
+	/**
+	 * A intersection of the two ranges.
+	 */
+	public static intersectRanges(a: IRange, b: IRange): Range | null {
+		let resultStartLineNumber = a.startLineNumber;
+		let resultStartColumn = a.startColumn;
+		let resultEndLineNumber = a.endLineNumber;
+		let resultEndColumn = a.endColumn;
+		const otherStartLineNumber = b.startLineNumber;
+		const otherStartColumn = b.startColumn;
+		const otherEndLineNumber = b.endLineNumber;
+		const otherEndColumn = b.endColumn;
+
+		if (resultStartLineNumber < otherStartLineNumber) {
+			resultStartLineNumber = otherStartLineNumber;
+			resultStartColumn = otherStartColumn;
+		} else if (resultStartLineNumber === otherStartLineNumber) {
+			resultStartColumn = Math.max(resultStartColumn, otherStartColumn);
+		}
+
+		if (resultEndLineNumber > otherEndLineNumber) {
+			resultEndLineNumber = otherEndLineNumber;
+			resultEndColumn = otherEndColumn;
+		} else if (resultEndLineNumber === otherEndLineNumber) {
+			resultEndColumn = Math.min(resultEndColumn, otherEndColumn);
+		}
+
+		// Check if selection is now empty
+		if (resultStartLineNumber > resultEndLineNumber) {
+			return null;
+		}
+		if (resultStartLineNumber === resultEndLineNumber && resultStartColumn > resultEndColumn) {
+			return null;
+		}
+		return new Range(resultStartLineNumber, resultStartColumn, resultEndLineNumber, resultEndColumn);
+	}
+
+	/**
+	 * Test if this range equals other.
+	 */
+	public equalsRange(other: IRange | null | undefined): boolean {
+		return Range.equalsRange(this, other);
+	}
+
+	/**
+	 * Test if range `a` equals `b`.
+	 */
+	public static equalsRange(a: IRange | null | undefined, b: IRange | null | undefined): boolean {
+		if (!a && !b) {
+			return true;
+		}
+		return (
+			!!a &&
+			!!b &&
+			a.startLineNumber === b.startLineNumber &&
+			a.startColumn === b.startColumn &&
+			a.endLineNumber === b.endLineNumber &&
+			a.endColumn === b.endColumn
 		);
 	}
 
-	static intersect(left: ITextRange, right: ITextRange): TextRange | undefined {
-		const start = comparePositions(left.start, right.start) >= 0 ? left.start : right.start;
-		const end = comparePositions(left.end, right.end) <= 0 ? left.end : right.end;
-		return comparePositions(start, end) <= 0 ? TextRange.from(start, end) : undefined;
+	/**
+	 * Return the end position (which will be after or equal to the start position)
+	 */
+	public getEndPosition(): Position {
+		return Range.getEndPosition(this);
 	}
 
-	static intersectRanges(left: ITextRange, right: ITextRange): TextRange | undefined { return TextRange.intersect(left, right); }
-	static plusRange(left: ITextRange, right: ITextRange): TextRange { return TextRange.join(left, right); }
-	static containsPosition(range: ITextRange, position: IPosition): boolean { return comparePositions(range.start, position) <= 0 && comparePositions(position, range.end) <= 0; }
-	static strictContainsPosition(range: ITextRange, position: IPosition): boolean { return comparePositions(range.start, position) < 0 && comparePositions(position, range.end) < 0; }
-	static containsRange(range: ITextRange, other: ITextRange): boolean { return comparePositions(range.start, other.start) <= 0 && comparePositions(other.end, range.end) <= 0; }
-	static strictContainsRange(range: ITextRange, other: ITextRange): boolean { return comparePositions(range.start, other.start) < 0 && comparePositions(other.end, range.end) < 0; }
-	static equalsRange(left: ITextRange | undefined | null, right: ITextRange | undefined | null): boolean { return TextRange.equals(left ?? undefined, right ?? undefined); }
-	static compareRangesUsingStarts(left: ITextRange | undefined | null, right: ITextRange | undefined | null): number { return compareRanges(left, right, false); }
-	static compareRangesUsingEnds(left: ITextRange, right: ITextRange): number { return compareRanges(left, right, true); }
-	static areIntersectingOrTouching(left: ITextRange, right: ITextRange): boolean { return comparePositions(left.start, right.end) <= 0 && comparePositions(right.start, left.end) <= 0; }
-	static areIntersecting(left: ITextRange, right: ITextRange): boolean { return comparePositions(left.start, right.end) < 0 && comparePositions(right.start, left.end) < 0; }
-	static areOnlyIntersecting(left: ITextRange, right: ITextRange): boolean { return TextRange.areIntersecting(left, right); }
-	static lift(range: ITextRange | undefined | null): TextRange | null { return range ? TextRange.from(range.start, range.end) : null; }
-	static isIRange(value: unknown): value is ITextRange { return Boolean(value && typeof value === "object" && TextPosition.isIPosition((value as ITextRange).start) && TextPosition.isIPosition((value as ITextRange).end)); }
-	static spansMultipleLines(range: ITextRange): boolean { return range.start.lineIndex < range.end.lineIndex; }
-
-	get empty(): boolean {
-		return this.start.compareTo(this.end) === 0;
+	/**
+	 * Return the end position (which will be after or equal to the start position)
+	 */
+	public static getEndPosition(range: IRange): Position {
+		return new Position(range.endLineNumber, range.endColumn);
 	}
 
-	get isEmpty(): boolean { return this.empty; }
+	/**
+	 * Return the start position (which will be before or equal to the end position)
+	 */
+	public getStartPosition(): Position {
+		return Range.getStartPosition(this);
+	}
 
-	get length(): { readonly lineCount: number; readonly columnCount: number } {
-		if (this.start.lineIndex === this.end.lineIndex) {
-			return { lineCount: 0, columnCount: this.end.columnIndex - this.start.columnIndex };
+	/**
+	 * Return the start position (which will be before or equal to the end position)
+	 */
+	public static getStartPosition(range: IRange): Position {
+		return new Position(range.startLineNumber, range.startColumn);
+	}
+
+	/**
+	 * Transform to a user presentable string representation.
+	 */
+	public toString(): string {
+		return '[' + this.startLineNumber + ',' + this.startColumn + ' -> ' + this.endLineNumber + ',' + this.endColumn + ']';
+	}
+
+	/**
+	 * Create a new range using this range's start position, and using endLineNumber and endColumn as the end position.
+	 */
+	public setEndPosition(endLineNumber: number, endColumn: number): Range {
+		return new Range(this.startLineNumber, this.startColumn, endLineNumber, endColumn);
+	}
+
+	/**
+	 * Create a new range using this range's end position, and using startLineNumber and startColumn as the start position.
+	 */
+	public setStartPosition(startLineNumber: number, startColumn: number): Range {
+		return new Range(startLineNumber, startColumn, this.endLineNumber, this.endColumn);
+	}
+
+	/**
+	 * Create a new empty range using this range's start position.
+	 */
+	public collapseToStart(): Range {
+		return Range.collapseToStart(this);
+	}
+
+	/**
+	 * Create a new empty range using this range's start position.
+	 */
+	public static collapseToStart(range: IRange): Range {
+		return new Range(range.startLineNumber, range.startColumn, range.startLineNumber, range.startColumn);
+	}
+
+	/**
+	 * Create a new empty range using this range's end position.
+	 */
+	public collapseToEnd(): Range {
+		return Range.collapseToEnd(this);
+	}
+
+	/**
+	 * Create a new empty range using this range's end position.
+	 */
+	public static collapseToEnd(range: IRange): Range {
+		return new Range(range.endLineNumber, range.endColumn, range.endLineNumber, range.endColumn);
+	}
+
+	/**
+	 * Moves the range by the given amount of lines.
+	 */
+	public delta(lineCount: number): Range {
+		return new Range(this.startLineNumber + lineCount, this.startColumn, this.endLineNumber + lineCount, this.endColumn);
+	}
+
+	/**
+	 * Test if this range starts and ends on the same line.
+	 */
+	public isSingleLine(): boolean {
+		return this.startLineNumber === this.endLineNumber;
+	}
+
+	// ---
+
+	public static fromPositions(start: IPosition, end: IPosition = start): Range {
+		return new Range(start.lineNumber, start.column, end.lineNumber, end.column);
+	}
+
+	/**
+	 * Create a `Range` from an `IRange`.
+	 */
+	public static lift(range: undefined | null): null;
+	public static lift(range: IRange): Range;
+	public static lift(range: IRange | undefined | null): Range | null;
+	public static lift(range: IRange | undefined | null): Range | null {
+		if (!range) {
+			return null;
 		}
-		return { lineCount: this.end.lineIndex - this.start.lineIndex, columnCount: this.end.columnIndex };
+		return new Range(range.startLineNumber, range.startColumn, range.endLineNumber, range.endColumn);
 	}
 
-	containsPosition(position: IPosition): boolean {
-		return comparePositions(this.start, position) <= 0 && comparePositions(position, this.end) <= 0;
+	/**
+	 * Test if `obj` is an `IRange`.
+	 */
+	public static isIRange(obj: unknown): obj is IRange {
+		return (
+			!!obj
+			&& (typeof (obj as IRange).startLineNumber === 'number')
+			&& (typeof (obj as IRange).startColumn === 'number')
+			&& (typeof (obj as IRange).endLineNumber === 'number')
+			&& (typeof (obj as IRange).endColumn === 'number')
+		);
 	}
 
-	strictContainsPosition(position: IPosition): boolean {
-		return comparePositions(this.start, position) < 0 && comparePositions(position, this.end) < 0;
+	/**
+	 * Test if the two ranges are touching in any way.
+	 */
+	public static areIntersectingOrTouching(a: IRange, b: IRange): boolean {
+		// Check if `a` is before `b`
+		if (a.endLineNumber < b.startLineNumber || (a.endLineNumber === b.startLineNumber && a.endColumn < b.startColumn)) {
+			return false;
+		}
+
+		// Check if `b` is before `a`
+		if (b.endLineNumber < a.startLineNumber || (b.endLineNumber === a.startLineNumber && b.endColumn < a.startColumn)) {
+			return false;
+		}
+
+		// These ranges must intersect
+		return true;
 	}
 
-	containsRange(range: ITextRange): boolean {
-		return comparePositions(this.start, range.start) <= 0 && comparePositions(range.end, this.end) <= 0;
+	/**
+	 * Test if the two ranges are intersecting. If the ranges are touching it returns true.
+	 */
+	public static areIntersecting(a: IRange, b: IRange): boolean {
+		// Check if `a` is before `b`
+		if (a.endLineNumber < b.startLineNumber || (a.endLineNumber === b.startLineNumber && a.endColumn <= b.startColumn)) {
+			return false;
+		}
+
+		// Check if `b` is before `a`
+		if (b.endLineNumber < a.startLineNumber || (b.endLineNumber === a.startLineNumber && b.endColumn <= a.startColumn)) {
+			return false;
+		}
+
+		// These ranges must intersect
+		return true;
 	}
 
-	strictContainsRange(range: ITextRange): boolean { return comparePositions(this.start, range.start) < 0 && comparePositions(range.end, this.end) < 0; }
+	/**
+	 * Test if the two ranges are intersecting, but not touching at all.
+	 */
+	public static areOnlyIntersecting(a: IRange, b: IRange): boolean {
+		// Check if `a` is before `b`
+		if (a.endLineNumber < (b.startLineNumber - 1) || (a.endLineNumber === b.startLineNumber && a.endColumn < (b.startColumn - 1))) {
+			return false;
+		}
 
-	intersects(range: ITextRange): boolean {
-		return comparePositions(this.start, range.end) < 0 && comparePositions(range.start, this.end) < 0;
+		// Check if `b` is before `a`
+		if (b.endLineNumber < (a.startLineNumber - 1) || (b.endLineNumber === a.startLineNumber && b.endColumn < (a.startColumn - 1))) {
+			return false;
+		}
+
+		// These ranges must intersect
+		return true;
 	}
 
-	intersectsOrTouches(range: ITextRange): boolean {
-		return comparePositions(this.start, range.end) <= 0 && comparePositions(range.start, this.end) <= 0;
+	/**
+	 * A function that compares ranges, useful for sorting ranges
+	 * It will first compare ranges on the startPosition and then on the endPosition
+	 */
+	public static compareRangesUsingStarts(a: IRange | null | undefined, b: IRange | null | undefined): number {
+		if (a && b) {
+			const aStartLineNumber = a.startLineNumber | 0;
+			const bStartLineNumber = b.startLineNumber | 0;
+
+			if (aStartLineNumber === bStartLineNumber) {
+				const aStartColumn = a.startColumn | 0;
+				const bStartColumn = b.startColumn | 0;
+
+				if (aStartColumn === bStartColumn) {
+					const aEndLineNumber = a.endLineNumber | 0;
+					const bEndLineNumber = b.endLineNumber | 0;
+
+					if (aEndLineNumber === bEndLineNumber) {
+						const aEndColumn = a.endColumn | 0;
+						const bEndColumn = b.endColumn | 0;
+						return aEndColumn - bEndColumn;
+					}
+					return aEndLineNumber - bEndLineNumber;
+				}
+				return aStartColumn - bStartColumn;
+			}
+			return aStartLineNumber - bStartLineNumber;
+		}
+		const aExists = (a ? 1 : 0);
+		const bExists = (b ? 1 : 0);
+		return aExists - bExists;
 	}
 
-	plusRange(range: ITextRange): TextRange {
-		return TextRange.join(this, range);
+	/**
+	 * A function that compares ranges, useful for sorting ranges
+	 * It will first compare ranges on the endPosition and then on the startPosition
+	 */
+	public static compareRangesUsingEnds(a: IRange, b: IRange): number {
+		if (a.endLineNumber === b.endLineNumber) {
+			if (a.endColumn === b.endColumn) {
+				if (a.startLineNumber === b.startLineNumber) {
+					return a.startColumn - b.startColumn;
+				}
+				return a.startLineNumber - b.startLineNumber;
+			}
+			return a.endColumn - b.endColumn;
+		}
+		return a.endLineNumber - b.endLineNumber;
 	}
 
-	intersect(range: ITextRange): TextRange | undefined {
-		return TextRange.intersect(this, range);
+	/**
+	 * Test if the range spans multiple lines.
+	 */
+	public static spansMultipleLines(range: IRange): boolean {
+		return range.endLineNumber > range.startLineNumber;
 	}
 
-	equals(other: ITextRange): boolean {
-		return TextPosition.equals(this.start, other.start) && TextPosition.equals(this.end, other.end);
+	public toJSON(): IRange {
+		return this;
 	}
-
-	equalsRange(other: ITextRange | undefined | null): boolean { return TextRange.equals(this, other ?? undefined); }
-	getStartPosition(): TextPosition { return this.start; }
-	getEndPosition(): TextPosition { return this.end; }
-	setStartPosition(lineIndex: number, columnIndex: number): TextRange { return TextRange.from(TextPosition.at(lineIndex, columnIndex), this.end); }
-	setEndPosition(lineIndex: number, columnIndex: number): TextRange { return TextRange.from(this.start, TextPosition.at(lineIndex, columnIndex)); }
-	collapseToStart(): TextRange { return TextRange.emptyAt(this.start); }
-	collapseToEnd(): TextRange { return TextRange.emptyAt(this.end); }
-	delta(lineDelta: number): TextRange { return TextRange.from(this.start.delta(lineDelta), this.end.delta(lineDelta)); }
-	isSingleLine(): boolean { return this.start.lineIndex === this.end.lineIndex; }
-	toJSON(): ITextRange { return this; }
-
-	toString(): string {
-		return `[${this.start.toString()},${this.end.toString()})`;
-	}
-}
-
-function comparePositions(left: IPosition, right: IPosition): number { return TextPosition.compare(left, right); }
-
-function compareRanges(left: ITextRange | undefined | null, right: ITextRange | undefined | null, byEnd: boolean): number {
-	if (!left || !right) return Number(Boolean(right)) - Number(Boolean(left));
-	const primary = byEnd ? comparePositions(left.end, right.end) : comparePositions(left.start, right.start);
-	if (primary !== 0) return primary;
-	return byEnd ? comparePositions(left.start, right.start) : comparePositions(left.end, right.end);
 }

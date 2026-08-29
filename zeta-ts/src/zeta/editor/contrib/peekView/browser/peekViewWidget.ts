@@ -1,5 +1,6 @@
 import "./media/peekView.css";
-import { TextRange, type TextPosition } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 import { ZoneWidget } from "../../zoneWidget/browser/zoneWidget.js";
@@ -10,11 +11,11 @@ const DEFAULT_PEEK_HEIGHT_IN_LINES = 18;
 export class PeekViewWidget extends ZoneWidget {
 	private body: HTMLDivElement | undefined;
 
-	constructor(viewport: EditorViewport, private readonly initialPosition: TextPosition, private readonly title = "Preview") {
+	constructor(viewport: EditorViewport, private readonly initialPosition: Position, private readonly title = "Preview") {
 		viewport.textModel.offsetAt(initialPosition);
 		super({
 			viewport,
-			revealRange: range => viewport.revealPosition(range.start),
+			revealRange: range => viewport.revealPosition(range.getStartPosition()),
 		}, {
 			className: "stanza-editor-peek-view",
 			isAccessible: true,
@@ -32,7 +33,7 @@ export class PeekViewWidget extends ZoneWidget {
 		this.body!.replaceChildren(content);
 	}
 
-	public override show(rangeOrPosition: TextRange | TextPosition = this.initialPosition, heightInLines = DEFAULT_PEEK_HEIGHT_IN_LINES): void {
+	public override show(rangeOrPosition: Range | Position = this.initialPosition, heightInLines = DEFAULT_PEEK_HEIGHT_IN_LINES): void {
 		super.show(rangeOrPosition, heightInLines);
 	}
 

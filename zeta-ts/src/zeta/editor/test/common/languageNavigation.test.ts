@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../base/common/uri.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
 import { LanguageNavigationService } from '../../contrib/gotoSymbol/common/languageNavigation.js';
@@ -13,8 +14,8 @@ test("language navigation collects provider results with source resource identit
 	using model = new TextModel("const answer = value;");
 	const source = URI.file("C:\\project\\main.ts");
 	const target = URI.file("C:\\project\\value.ts");
-	const range = TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 12));
-	const selectionRange = TextRange.from(TextPosition.at(2, 6), TextPosition.at(2, 11));
+	const range = Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (12) + 1));
+	const selectionRange = Range.fromPositions(new Position((2) + 1, (6) + 1), new Position((2) + 1, (11) + 1));
 	let observedResource: URI | undefined;
 	languages.definitionProvider.register({
 		languageIds: ["typescript"],
@@ -29,7 +30,7 @@ test("language navigation collects provider results with source resource identit
 	});
 	using navigation = createNavigationService(languages, model, source);
 
-	const locations = await navigation.provideDefinition("typescript", TextPosition.at(0, 15));
+	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (15) + 1));
 
 	assert.equal(observedResource, source);
 	assert.deepEqual(locations, [{ resource: target, range, selectionRange }]);
@@ -42,7 +43,7 @@ test("language navigation exposes declaration, implementation, type definition, 
 	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("value");
 	const source = URI.file("C:\\project\\main.ts");
-	const location = { resource: source, range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)) };
+	const location = { resource: source, range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)) };
 	let includeDeclaration: boolean | undefined;
 	languages.declarationProvider.register({ languageIds: ["typescript"], provideDeclaration: () => [location] });
 	languages.implementationProvider.register({ languageIds: ["typescript"], provideImplementation: () => [location] });
@@ -52,7 +53,7 @@ test("language navigation exposes declaration, implementation, type definition, 
 		return [location];
 	} });
 	using navigation = createNavigationService(languages, model, source);
-	const position = TextPosition.at(0, 2);
+	const position = new Position((0) + 1, (2) + 1);
 
 	assert.equal((await navigation.provideDeclaration("typescript", position)).length, 1);
 	assert.equal((await navigation.provideImplementation("typescript", position)).length, 1);
@@ -66,12 +67,12 @@ test("language navigation discards results after the source model changes", asyn
 	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("value");
 	const source = URI.file("C:\\project\\main.ts");
-	const pending = deferred<readonly { readonly resource: URI; readonly range: TextRange }[]>();
+	const pending = deferred<readonly { readonly resource: URI; readonly range: Range }[]>();
 	languages.definitionProvider.register({ languageIds: ["typescript"], provideDefinition: () => pending.promise });
 	using navigation = createNavigationService(languages, model, source);
-	const result = navigation.provideDefinition("typescript", TextPosition.at(0, 2));
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "!" }]);
-	pending.resolve([{ resource: source, range: TextRange.emptyAt(TextPosition.at(0, 0)) }]);
+	const result = navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }]);
+	pending.resolve([{ resource: source, range: Range.fromPositions(new Position((0) + 1, (0) + 1)) }]);
 
 	assert.deepEqual(await result, []);
 });

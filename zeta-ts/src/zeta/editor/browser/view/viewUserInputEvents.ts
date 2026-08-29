@@ -1,5 +1,6 @@
 import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
-import { type TextPosition, type TextRange } from '../../common/core/text.js';
+import { type Position } from '../../common/core/position.js';
+import { type Range } from '../../common/core/range.js';
 import { EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
 
 /** Callback shape used by the view/input bridge, matching VS Code's boundary. */
@@ -19,8 +20,8 @@ export type EditorViewMouseTargetKind =
 /** Mouse target exposed by the browser view without depending on controller policy. */
 export interface EditorViewMouseTarget {
 	readonly kind: EditorViewMouseTargetKind;
-	readonly position?: TextPosition;
-	readonly range?: TextRange;
+	readonly position?: Position;
+	readonly range?: Range;
 	readonly element?: Element;
 	readonly detail?: unknown;
 }
@@ -38,7 +39,7 @@ export type EditorViewPartialMouseEvent = EditorViewMouseEvent;
  * Transport between browser view input producers and editor-facing consumers.
  *
  * VS Code performs view-to-model coordinate conversion here. Stanza's hit-test
- * contract already returns model-relative TextPosition values, so this class
+ * contract already returns model-relative Position values, so this class
  * preserves that contract and only isolates the target object at the boundary.
  * It does not own pointer gestures, selection, editing, or drag/drop policy.
  */

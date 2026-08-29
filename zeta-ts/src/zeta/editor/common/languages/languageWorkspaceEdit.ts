@@ -1,5 +1,5 @@
 import { type URI } from "../../../base/common/uri.js";
-import { type TextEdit } from "../core/text.js";
+import { type TextEdit } from "../core/editOperation.js";
 
 /** Text replacements for one exact resource snapshot. */
 export interface LanguageTextDocumentEdit {

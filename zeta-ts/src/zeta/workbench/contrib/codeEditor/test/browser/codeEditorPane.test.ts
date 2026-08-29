@@ -3,7 +3,8 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
@@ -54,6 +55,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	}, new AbortController().signal);
 
 	assert.equal(pane.getValue(), "const alpha = 1;");
+	assert.deepEqual(pane.getStatus(), { lineNumber: 1, columnNumber: 1, languageId: "typescript", encoding: "UTF-8", endOfLine: "LF" });
 	assert.equal(parent.querySelectorAll(".stanza-editor-pane").length, 1);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 1);
 	const editor = parent.querySelector<HTMLElement>(".stanza-editor")!;
@@ -156,7 +158,7 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 	await pane.setInput({ resource, label: "main.ts" }, new AbortController().signal);
 
 	reference.model.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
 		text: "saved",
 	}]);
 	assert.equal(pane.isDirty, true);
@@ -165,7 +167,7 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 	assert.equal(pane.isDirty, false);
 
 	reference.model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
 		text: " locally",
 	}]);
 	textFiles.setText("from disk");

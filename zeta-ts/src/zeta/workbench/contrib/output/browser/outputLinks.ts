@@ -1,6 +1,6 @@
 import { URI } from "../../../../base/common/uri.js";
-import { TextPosition } from "../../../../editor/common/core/text.js";
-import { TextRange } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import { workspaceRelativePath } from "../../../../platform/files/browser/fileService.js";
 import type { IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
 
@@ -9,7 +9,7 @@ export interface OutputLink {
 	readonly endIndex: number;
 	readonly label: string;
 	readonly resource: URI;
-	readonly selection: TextRange;
+	readonly selection: Range;
 }
 
 const LocationPattern = /((?:[A-Za-z]:[\\/]|\/|\.\.?[\\/])?[^\s:(),]+(?:[\\/][^\s:(),]+)*\.[A-Za-z0-9_-]+)(?::(\d+)(?::(\d+))?|\((\d+),(\d+)\))/g;
@@ -26,7 +26,7 @@ export function detectOutputLinks(text: string, folders: readonly IWorkspaceFold
 		if (!resource) continue;
 		const line = parseCoordinate(match[2] ?? match[4]);
 		const column = parseCoordinate(match[3] ?? match[5]);
-		links.push(Object.freeze({ startIndex, endIndex: startIndex + label.length, label, resource, selection: TextRange.emptyAt(TextPosition.at(line, column)) }));
+		links.push(Object.freeze({ startIndex, endIndex: startIndex + label.length, label, resource, selection: Range.fromPositions(new Position((line) + 1, (column) + 1)) }));
 	}
 	return Object.freeze(links);
 }

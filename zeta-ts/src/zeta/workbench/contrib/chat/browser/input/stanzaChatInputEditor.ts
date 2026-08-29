@@ -10,8 +10,10 @@ import { LanguageCompletionProviderRegistry } from "../../../../../editor/common
 import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/suggestModel.js";
 import { SuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
 import "../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
-import { TextSelection, TextSelectionSet } from "../../../../../editor/common/core/selection.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Selection } from "../../../../../editor/common/core/selection.js";
+import { SelectionSet } from "../../../../../editor/common/cursor/selectionSet.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditor.js";
 import { CHAT_INPUT_LANGUAGE_ID, createStanzaChatCommandCompletionProvider } from "./stanzaChatCommandCompletion.js";
@@ -26,7 +28,7 @@ const CHAT_INPUT_MAX_HEIGHT = 320;
 export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
 	private readonly model = this._register(new TextModel());
-	private readonly selections = this._register(new CursorsController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));
+	private readonly selections = this._register(new CursorsController(this.model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1)))));
 	private readonly editor: CodeEditorWidget;
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
@@ -90,10 +92,10 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 
 	set value(value: string) {
 		if (this.model.getText() === value) return;
-		const range = TextRange.from(TextPosition.at(0, 0), this.model.positionAt(this.model.length));
+		const range = Range.fromPositions(new Position((0) + 1, (0) + 1), this.model.positionAt(this.model.length));
 		this.model.applyEdits([{ range, text: value }]);
 		const end = this.model.positionAt(this.model.length);
-		this.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(end)));
+		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(end)));
 	}
 
 	focus(): void {

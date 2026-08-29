@@ -3,7 +3,7 @@ import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fa
 import { getClientArea, getDomNodePagePosition, type IDimension } from '../../../../base/browser/geometry.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidgetPosition, type IContentWidgetRenderedCoordinate } from '../../editorBrowser.js';
-import { type IPosition, TextPosition } from '../../../common/core/position.js';
+import { type IPosition, Position } from '../../../common/core/position.js';
 import { PositionAffinity } from '../../../common/model.js';
 import { PartFingerprint, PartFingerprints, type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
 
@@ -277,9 +277,9 @@ class RenderedCoordinate implements IContentWidgetRenderedCoordinate {
 function anchorCoordinate(context: EditorRenderingContext, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {
 	const overlay = context.overlay;
 	if (!overlay) return null;
-	let validPosition: TextPosition;
+	let validPosition: Position;
 	try {
-		validPosition = TextPosition.lift(position);
+		validPosition = Position.lift(position);
 		overlay.model.offsetAt(validPosition);
 	} catch {
 		return null;
@@ -289,10 +289,10 @@ function anchorCoordinate(context: EditorRenderingContext, position: IPosition, 
 	const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
 	if (!visualLine) return null;
 	const renderedPosition = overlay.visibleRangeForPosition(validPosition);
-	const left = validPosition.columnIndex === 0 && affinity === PositionAffinity.LeftOfInjectedText
+	const left = validPosition.column === 1 && affinity === PositionAffinity.LeftOfInjectedText
 		? 0
 		: renderedPosition?.left ?? overlay.textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + overlay.textMeasurer.measureLineWidth(
-			overlay.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, validPosition.columnIndex),
+			overlay.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, validPosition.column - 1),
 		);
 	return new AnchorCoordinate(context.viewportData.getLineTop(visualLineIndex), left, context.layout.lineHeight, visualLineIndex);
 }

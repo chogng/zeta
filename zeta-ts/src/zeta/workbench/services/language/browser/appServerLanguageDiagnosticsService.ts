@@ -2,7 +2,8 @@ import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../editor/common/languages/languageResults.js";
 import { type LanguageDiagnosticsPublisher } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
@@ -406,7 +407,7 @@ function deduplicateDiagnostics(diagnostics: readonly LanguageDiagnostic[]): rea
 
 function diagnosticKey(diagnostic: LanguageDiagnostic): string {
 	const range = diagnostic.range;
-	return `${range.start.lineIndex}:${range.start.columnIndex}:${range.end.lineIndex}:${range.end.columnIndex}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
+	return `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
 }
 
 function projectDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto, model: TextModel): readonly LanguageDiagnostic[] {
@@ -415,9 +416,9 @@ function projectDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto, model: T
 	const source = diagnostic.source?.trim() || undefined;
 	const code = typeof diagnostic.code === "string" ? diagnostic.code.trim() || undefined : typeof diagnostic.code === "number" && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
 	try {
-		const range = TextRange.from(TextPosition.at(diagnostic.range.start.lineIndex, diagnostic.range.start.columnIndex), TextPosition.at(diagnostic.range.end.lineIndex, diagnostic.range.end.columnIndex));
-		model.offsetAt(range.start);
-		model.offsetAt(range.end);
+		const range = Range.fromPositions(new Position((diagnostic.range.start.lineIndex) + 1, (diagnostic.range.start.columnIndex) + 1), new Position((diagnostic.range.end.lineIndex) + 1, (diagnostic.range.end.columnIndex) + 1));
+		model.offsetAt(range.getStartPosition());
+		model.offsetAt(range.getEndPosition());
 		return [Object.freeze({
 			range,
 			severity: diagnostic.severity as LanguageDiagnosticSeverity,
@@ -436,7 +437,7 @@ function projectWorkspaceDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto)
 	const source = diagnostic.source?.trim() || undefined;
 	const code = typeof diagnostic.code === "string" ? diagnostic.code.trim() || undefined : typeof diagnostic.code === "number" && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
 	try {
-		const range = TextRange.from(TextPosition.at(diagnostic.range.start.lineIndex, diagnostic.range.start.columnIndex), TextPosition.at(diagnostic.range.end.lineIndex, diagnostic.range.end.columnIndex));
+		const range = Range.fromPositions(new Position((diagnostic.range.start.lineIndex) + 1, (diagnostic.range.start.columnIndex) + 1), new Position((diagnostic.range.end.lineIndex) + 1, (diagnostic.range.end.columnIndex) + 1));
 		return [Object.freeze({ range, severity: diagnostic.severity as LanguageDiagnosticSeverity, message, ...(code === undefined ? {} : { code }), ...(source === undefined ? {} : { source }) })];
 	} catch {
 		return [];

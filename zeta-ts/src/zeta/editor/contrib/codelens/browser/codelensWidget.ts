@@ -65,7 +65,7 @@ export class CodeLensWidget extends Disposable {
 		this.viewZone.afterLineIndex = this.afterVisualLineIndex;
 		this.viewZone.heightInPixels = this.codeLensHeight;
 		this.viewZoneHandle.layout();
-		const coordinates = this.viewport.getPositionContentCoordinates(this.items[0]!.symbol.range.start);
+		const coordinates = this.viewport.getPositionContentCoordinates(this.items[0]!.symbol.range.getStartPosition());
 		this.domNode.style.left = `${Math.max(4, coordinates.left)}px`;
 	}
 
@@ -75,7 +75,7 @@ export class CodeLensWidget extends Disposable {
 	}
 
 	private get afterVisualLineIndex(): number {
-		return this.viewport.getVisualLineProjection().visualLineIndexAt(this.items[0]!.symbol.range.start) - 1;
+		return this.viewport.getVisualLineProjection().visualLineIndexAt(this.items[0]!.symbol.range.getStartPosition()) - 1;
 	}
 
 	private get codeLensHeight(): number {

@@ -8,7 +8,8 @@ import { type VersionedLanguageResultStore } from "../../../common/languages/lan
 import { assertLanguageCompletionCommitCharacter, LanguageCompletionInsertTextFormat, normalizeLanguageCompletionItemDetails, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "../../../common/languages/completion/languageCompletions.js";
 import { parseLanguageCompletionSnippet, type LanguageCompletionSnippet, type LanguageCompletionSnippetVariableResolver } from "../../snippet/common/snippetParser.js";
 import { LanguageCompletionSnippetSession } from "../../snippet/common/snippetSession.js";
-import { normalizeTextLineEndings, type TextPosition } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
+import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export enum LanguageCompletionSessionChangeReason {
@@ -30,7 +31,7 @@ export enum LanguageCompletionDetailsStatus {
 export interface LanguageCompletionSessionState {
 	readonly requestId: number;
 	readonly modelVersion: number;
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly items: readonly LanguageCompletionItem[];
 	readonly selectedIndex: number;
 	readonly selectedItem: LanguageCompletionItem;
@@ -287,11 +288,11 @@ export class LanguageCompletionSessionController extends Disposable {
 		});
 	}
 
-	private selectionMatches(position: TextPosition): boolean {
+	private selectionMatches(position: Position): boolean {
 		const selections = this.selectionController.selections;
 		return selections.selections.length === 1 &&
-			selections.primary.collapsed &&
-			selections.primary.active.compareTo(position) === 0;
+			selections.primary.isEmpty() &&
+			Position.compare(selections.primary.getPosition(), position) === 0;
 	}
 
 	private close(reason: LanguageCompletionSessionChangeReason): boolean {
@@ -352,11 +353,11 @@ export function createLanguageCompletionAcceptCommand(model: TextModel, selectio
 		throw new TypeError("Language completion command and selection controller must share one text model");
 	}
 	const selections = selectionController.selections;
-	if (selections.selections.length !== 1 || !selections.primary.collapsed) {
+	if (selections.selections.length !== 1 || !selections.primary.isEmpty()) {
 		throw new Error("Language completion acceptance requires one collapsed selection");
 	}
-	const position = selections.primary.active;
-	if (item.range.start.compareTo(position) > 0 || item.range.end.compareTo(position) < 0) {
+	const position = selections.primary.getPosition();
+	if (Position.compare(item.range.getStartPosition(), position) > 0 || Position.compare(item.range.getEndPosition(), position) < 0) {
 		throw new RangeError("Language completion item range must contain the active position");
 	}
 	if (commitCharacter !== undefined) {
@@ -391,10 +392,10 @@ function resolveLanguageCompletionInsertion(item: LanguageCompletionItem, commit
 		? parseLanguageCompletionSnippet(normalizeTextLineEndings(item.insertText), { variables: snippetVariables })
 		: undefined;
 	const text = (snippet?.text ?? normalizeTextLineEndings(item.insertText)) + (commitCharacter ?? "");
-	const primaryStartOffset = model?.offsetAt(item.range.start) ?? 0;
+	const primaryStartOffset = model?.offsetAt(item.range.getStartPosition()) ?? 0;
 	const offsetDelta = model
-		? (item.additionalTextEdits ?? []).reduce((delta, edit) => edit.range.end.compareTo(item.range.start) < 0
-			? delta + edit.text.length - (model.offsetAt(edit.range.end) - model.offsetAt(edit.range.start))
+		? (item.additionalTextEdits ?? []).reduce((delta, edit) => Position.compare(edit.range.getEndPosition(), item.range.getStartPosition()) < 0
+			? delta + edit.text.length - (model.offsetAt(edit.range.getEndPosition()) - model.offsetAt(edit.range.getStartPosition()))
 			: delta, 0)
 		: 0;
 	return Object.freeze({ text, snippet, resultStartOffset: primaryStartOffset + offsetDelta });

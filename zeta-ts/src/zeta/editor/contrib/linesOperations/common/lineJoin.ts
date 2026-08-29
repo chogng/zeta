@@ -1,17 +1,19 @@
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
-import { TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange, type TextEdit } from "../../../common/core/text.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 interface JoinSelection {
-	readonly start: TextPosition;
-	readonly end: TextPosition;
+	readonly start: Position;
+	readonly end: Position;
 	readonly containsPrimary: boolean;
 }
 
 interface JoinOperation {
 	readonly selection: JoinSelection;
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly startOffset: number;
 	readonly endOffset: number;
 	readonly replacement: string;
@@ -24,7 +26,7 @@ interface JoinOperation {
  * edit. Leading indentation on subsequent non-empty lines is removed and one
  * separating space is retained when both adjacent fragments contain text.
  */
-export function createJoinLinesCommand(model: TextModel, selections: TextSelectionSet): EditorEditCommand {
+export function createJoinLinesCommand(model: TextModel, selections: SelectionSet): EditorEditCommand {
 	const reduced = reduceJoinSelections(selections);
 	const operations = reduced.map(selection => createJoinOperation(model, selection));
 	if (operations.every(operation => operation.startOffset === operation.endOffset)) {
@@ -60,13 +62,13 @@ export function createJoinLinesCommand(model: TextModel, selections: TextSelecti
 	});
 }
 
-function reduceJoinSelections(selections: TextSelectionSet): readonly JoinSelection[] {
+function reduceJoinSelections(selections: SelectionSet): readonly JoinSelection[] {
 	const ordered = selections.selections.map((selection, index) => Object.freeze({
-		start: selection.range.start,
-		end: selection.range.end,
-		collapsed: selection.collapsed,
+		start: selection.getStartPosition(),
+		end: selection.getEndPosition(),
+		collapsed: selection.isEmpty(),
 		containsPrimary: index === selections.primaryIndex,
-	})).sort((left, right) => left.start.compareTo(right.start) || left.end.compareTo(right.end));
+	})).sort((left, right) => Position.compare(left.start, right.start) || Position.compare(left.end, right.end));
 	const reduced: JoinSelection[] = [];
 	for (const current of ordered) {
 		const previous = reduced.at(-1);
@@ -74,8 +76,8 @@ function reduceJoinSelections(selections: TextSelectionSet): readonly JoinSelect
 			reduced.push(Object.freeze(current));
 			continue;
 		}
-		const previousCollapsed = previous.start.compareTo(previous.end) === 0;
-		if (previousCollapsed && previous.end.lineIndex === current.start.lineIndex) {
+		const previousCollapsed = Position.compare(previous.start, previous.end) === 0;
+		if (previousCollapsed && previous.end.lineNumber === current.start.lineNumber) {
 			reduced[reduced.length - 1] = Object.freeze({
 				start: current.start,
 				end: current.end,
@@ -84,8 +86,8 @@ function reduceJoinSelections(selections: TextSelectionSet): readonly JoinSelect
 			continue;
 		}
 		const separated = previousCollapsed
-			? current.start.lineIndex > previous.end.lineIndex + 1
-			: current.start.lineIndex > previous.end.lineIndex;
+			? current.start.lineNumber > previous.end.lineNumber + 1
+			: current.start.lineNumber > previous.end.lineNumber;
 		if (separated) {
 			reduced.push(Object.freeze(current));
 			continue;
@@ -100,45 +102,45 @@ function reduceJoinSelections(selections: TextSelectionSet): readonly JoinSelect
 }
 
 function createJoinOperation(model: TextModel, selection: JoinSelection): JoinOperation {
-	const joinsFollowingLine = selection.start.lineIndex === selection.end.lineIndex;
-	const endLineIndex = joinsFollowingLine
-		? Math.min(selection.start.lineIndex + 1, model.lineCount - 1)
-		: selection.end.lineIndex;
-	if (endLineIndex === selection.start.lineIndex) {
-		const lineStart = TextPosition.at(selection.start.lineIndex, 0);
+	const joinsFollowingLine = selection.start.lineNumber === selection.end.lineNumber;
+	const endLineNumber = joinsFollowingLine
+		? Math.min(selection.start.lineNumber + 1, model.lineCount)
+		: selection.end.lineNumber;
+	if (endLineNumber === selection.start.lineNumber) {
+		const lineStart = new Position(selection.start.lineNumber, 1);
 		const startOffset = model.offsetAt(lineStart);
 		return Object.freeze({
 			selection,
-			range: TextRange.emptyAt(lineStart),
+			range: Range.fromPositions(lineStart),
 			startOffset,
 			endOffset: startOffset,
 			replacement: "",
-			resultStartColumn: selection.start.columnIndex,
-			resultEndColumn: selection.end.columnIndex,
+			resultStartColumn: selection.start.column - 1,
+			resultEndColumn: selection.end.column - 1,
 		});
 	}
-	const end = TextPosition.at(endLineIndex, model.getLineContent(endLineIndex).length);
-	const joined = joinLineContents(model, selection.start.lineIndex, endLineIndex);
-	const selectionEndOffset = model.getLineContent(selection.end.lineIndex).length - selection.end.columnIndex;
+	const end = new Position(endLineNumber, model.getLineContent(endLineNumber).length + 1);
+	const joined = joinLineContents(model, selection.start.lineNumber, endLineNumber);
+	const selectionEndOffset = model.getLineContent(selection.end.lineNumber).length - (selection.end.column - 1);
 	const endColumn = joinsFollowingLine
 		? joined.text.length - joined.finalSegmentLength
 		: joined.text.length - selectionEndOffset;
 	return Object.freeze({
 		selection: Object.freeze({ ...selection, end }),
-		range: TextRange.from(TextPosition.at(selection.start.lineIndex, 0), end),
-		startOffset: model.offsetAt(TextPosition.at(selection.start.lineIndex, 0)),
+		range: Range.fromPositions(new Position(selection.start.lineNumber, 1), end),
+		startOffset: model.offsetAt(new Position(selection.start.lineNumber, 1)),
 		endOffset: model.offsetAt(end),
 		replacement: joined.text,
-		resultStartColumn: joinsFollowingLine ? endColumn : selection.start.columnIndex,
+		resultStartColumn: joinsFollowingLine ? endColumn : selection.start.column - 1,
 		resultEndColumn: endColumn,
 	});
 }
 
-function joinLineContents(model: TextModel, startLineIndex: number, endLineIndex: number): { readonly text: string; readonly finalSegmentLength: number } {
-	let text = model.getLineContent(startLineIndex);
+function joinLineContents(model: TextModel, startLineNumber: number, endLineNumber: number): { readonly text: string; readonly finalSegmentLength: number } {
+	let text = model.getLineContent(startLineNumber);
 	let finalSegmentLength = 0;
-	for (let lineIndex = startLineIndex + 1; lineIndex <= endLineIndex; lineIndex += 1) {
-		const nextLine = model.getLineContent(lineIndex);
+	for (let lineNumber = startLineNumber + 1; lineNumber <= endLineNumber; lineNumber += 1) {
+		const nextLine = model.getLineContent(lineNumber);
 		const trimmed = nextLine.replace(/^[\s\uFEFF\xA0]+/u, "");
 		if (trimmed.length === 0) {
 			finalSegmentLength = 0;
@@ -155,12 +157,12 @@ function joinLineContents(model: TextModel, startLineIndex: number, endLineIndex
 	return Object.freeze({ text, finalSegmentLength });
 }
 
-function unchangedCommand(model: TextModel, selections: TextSelectionSet): EditorEditCommand {
+function unchangedCommand(model: TextModel, selections: SelectionSet): EditorEditCommand {
 	return Object.freeze({
 		edits: Object.freeze([]),
 		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({
-			anchorOffset: model.offsetAt(selection.anchor),
-			activeOffset: model.offsetAt(selection.active),
+			anchorOffset: model.offsetAt(selection.getSelectionStart()),
+			activeOffset: model.offsetAt(selection.getPosition()),
 		}))),
 		primarySelectionIndex: selections.primaryIndex,
 		historyMode: EditorCommandHistoryMode.Isolated,

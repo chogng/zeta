@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextPosition } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 
@@ -62,9 +62,9 @@ test("visual line projection maps logical rows, UTF-16 columns, and empty lines"
 			lastForLogicalLine: true,
 		},
 	]);
-	assert.equal(projection.visualLineIndexAt(TextPosition.at(0, 2)), 1);
-	assert.equal(projection.visualLineIndexAt(TextPosition.at(0, 6)), 2);
-	assert.equal(projection.visualLineIndexAt(TextPosition.at(1, 0)), 3);
+	assert.equal(projection.visualLineIndexAt(new Position((0) + 1, (2) + 1)), 1);
+	assert.equal(projection.visualLineIndexAt(new Position((0) + 1, (6) + 1)), 2);
+	assert.equal(projection.visualLineIndexAt(new Position((1) + 1, (0) + 1)), 3);
 	assert.equal(projection.firstVisualLineIndex(2), 4);
 });
 
@@ -90,5 +90,5 @@ test("identity visual line projection resolves unwrapped lines lazily", () => {
 		lastForLogicalLine: true,
 	});
 	assert.equal(projection.firstVisualLineIndex(1), 1);
-	assert.equal(projection.visualLineIndexAt(TextPosition.at(1, 3)), 1);
+	assert.equal(projection.visualLineIndexAt(new Position((1) + 1, (3) + 1)), 1);
 });

@@ -6,8 +6,10 @@ import { type EditorCapability, registerEditorContribution } from '../../../brow
 import { type EditorViewport } from '../../../browser/view.js';
 import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
-import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
-import { TextRange, type TextPosition } from '../../../common/core/text.js';
+import { Selection } from '../../../common/core/selection.js';
+import { SelectionSet } from '../../../common/cursor/selectionSet.js';
+import { type Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
 
@@ -43,28 +45,28 @@ export class SelectionAnchorController extends Disposable {
 	}
 
 	setSelectionAnchor(): void {
-		const position = this.selections.selections.primary.active;
+		const position = this.selections.selections.primary.getPosition();
 		const [decorationId] = this.decorations.replaceAll([{
-			range: TextRange.emptyAt(position),
+			range: Range.fromPositions(position),
 			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 			metadata: undefined,
 		}]);
 		this.decorationId = decorationId;
-		this.viewport.announceAccessibilityStatus(`Anchor set at ${position.lineIndex + 1}:${position.columnIndex + 1}`);
+		this.viewport.announceAccessibilityStatus(`Anchor set at ${position.lineNumber}:${position.column}`);
 	}
 
 	goToSelectionAnchor(): void {
 		const position = this.selectionAnchorPosition;
 		if (!position) return;
-		this.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(position)));
+		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(position)));
 		this.viewport.revealPosition(position);
 	}
 
 	selectFromAnchorToCursor(): void {
 		const anchor = this.selectionAnchorPosition;
 		if (!anchor) return;
-		const cursor = this.selections.selections.primary.active;
-		this.selections.setSelections(TextSelectionSet.single(TextSelection.from(anchor, cursor)));
+		const cursor = this.selections.selections.primary.getPosition();
+		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(anchor, cursor)));
 		this.cancelSelectionAnchor();
 		this.viewport.revealPosition(cursor);
 	}
@@ -75,9 +77,9 @@ export class SelectionAnchorController extends Disposable {
 		this.decorationId = undefined;
 	}
 
-	private get selectionAnchorPosition(): TextPosition | undefined {
+	private get selectionAnchorPosition(): Position | undefined {
 		if (this.decorationId === undefined) return undefined;
-		return this.decorations.get(this.decorationId)?.range.start;
+		return this.decorations.get(this.decorationId)?.range.getStartPosition();
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {

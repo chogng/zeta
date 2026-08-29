@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TextModelChangeReason, TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
+import { TextModelChangeReason } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
 
-const position = TextPosition.at;
+const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
 	startLine: number,
 	startColumn: number,
 	endLine: number,
 	endColumn: number,
-): TextRange => TextRange.from(
+): Range => Range.fromPositions(
 	position(startLine, startColumn),
 	position(endLine, endColumn),
 );
@@ -20,7 +22,7 @@ test("TextModel normalizes line endings and maps UTF-16 positions", () => {
 	assert.deepEqual({
 		text: model.getText(),
 		lineCount: model.lineCount,
-		lines: [0, 1, 2, 3].map(index => model.getLineContent(index)),
+		lines: [0, 1, 2, 3].map(index => model.getLineContent((index) + 1)),
 		emojiEndOffset: model.offsetAt(position(0, 3)),
 		emojiInterior: model.positionAt(2),
 		end: model.positionAt(model.getText().length),
@@ -38,9 +40,9 @@ test("TextModel exposes allocation-free document and line lengths", () => {
 	using model = new TextModel("alpha\n😀");
 
 	assert.equal(model.length, 8);
-	assert.equal(model.getLineLength(0), 5);
-	assert.equal(model.getLineLength(1), 2);
-	assert.throws(() => model.getLineLength(2), /lineIndex/);
+	assert.equal(model.getLineLength((0) + 1), 5);
+	assert.equal(model.getLineLength((1) + 1), 2);
+	assert.throws(() => model.getLineLength((2) + 1), /lineIndex/);
 });
 
 test("TextModel reset replaces content and clears undo and redo history", () => {
@@ -127,8 +129,8 @@ test("TextModel rejects overlapping edits without mutating", () => {
 		{ range: range(0, 3, 0, 5), text: "y" },
 	]), /must not overlap/);
 	assert.throws(() => model.applyEdits([
-		{ range: TextRange.emptyAt(position(0, 2)), text: "x" },
-		{ range: TextRange.emptyAt(position(0, 2)), text: "y" },
+		{ range: Range.fromPositions(position(0, 2)), text: "x" },
+		{ range: Range.fromPositions(position(0, 2)), text: "y" },
 	]), /must not overlap/);
 	assert.deepEqual({
 		text: model.getText(),

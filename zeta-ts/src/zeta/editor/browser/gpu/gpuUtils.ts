@@ -44,7 +44,7 @@ export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: Gp
 		for (const visualLineIndex of lineIndexes) {
 			const visualLine = input.visualLines.lineAt(visualLineIndex);
 			if (!visualLine) continue;
-			const text = input.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, visualLine.endColumn);
+			const text = input.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
 			const tokens = input.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 			const brackets = input.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
 			if (!canRenderLine(input, text, tokens)) continue;

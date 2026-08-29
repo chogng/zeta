@@ -7,7 +7,8 @@ import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 
 test("Visible visual-line projection removes hidden bodies while preserving wrapped header rows", () => {
 	using model = new TextModel("header\ninside\nend\nlast");
@@ -35,7 +36,7 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 	assert.deepEqual(projection.projection.lines.map(line => line.logicalLineIndex), [0, 0, 0, 3, 3]);
 	assert.equal(projection.lineSource.lineCount, 5);
-	assert.equal(projection.projection.visualLineIndexAt(TextPosition.at(1, 3)), 2);
+	assert.equal(projection.projection.visualLineIndexAt(new Position((1) + 1, (3) + 1)), 2);
 	assert.equal(projection.projection.lineAt(2)?.logicalLineIndex, 0);
 });
 
@@ -49,7 +50,7 @@ test("Visible visual-line projection refreshes the source before collapsed range
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 
 	assert.doesNotThrow(() => model.applyEdits([{
-		range: TextRange.from(TextPosition.at(0, 0), model.positionAt(model.length)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), model.positionAt(model.length)),
 		text: "x",
 	}]));
 	assert.equal(projection.projection.logicalLineCount, 1);
@@ -62,7 +63,7 @@ test("View-model lines keep the wrapping projection path when no visibility filt
 	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()));
 
 	const initialProjection = projection.projection;
-	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 0)), text: "x" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (0) + 1)), text: "x" }]);
 	assert.notEqual(projection.projection, initialProjection);
 	assert.equal(projection.projection.visualLineCount, 2);
 });

@@ -4,8 +4,9 @@ import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -29,8 +30,8 @@ test("Line comment shortcut toggles current language comments through one editor
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("  alpha\nbeta");
-	using selections = new CursorsController(model, TextSelectionSet.single(
-		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(1, 4)),
+	using selections = new CursorsController(model, SelectionSet.single(
+		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (4) + 1)),
 	));
 	using configurations = new LanguageConfigurationRegistry();
 	using registration = configurations.register("typescript", {
@@ -66,8 +67,8 @@ test("Line comment shortcut ignores unsupported languages and invalid wiring", (
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("alpha");
 	using other = new TextModel("beta");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	using otherSelections = new CursorsController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using otherSelections = new CursorsController(other, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using configurations = new LanguageConfigurationRegistry();
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");

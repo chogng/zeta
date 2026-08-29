@@ -1,9 +1,9 @@
 import { clamp } from "../../../../base/common/numbers.js";
-import { TextPosition } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface GotoLocation {
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly kind: "lineColumn" | "offset";
 }
 
@@ -52,22 +52,22 @@ function parseLineColumn(model: TextModel, value: string): GotoLocationParseResu
 	const lineIndex = clamp(oneBasedLine - 1, 0, model.lineCount - 1);
 	const requestedColumn = parts.length > 1 ? parseInteger(parts[1]!.trim()) : undefined;
 	if (parts.length > 1 && requestedColumn === undefined) {
-		return Object.freeze({ kind: "invalid", message: `Type a column number from 1 to ${model.getLineContent(lineIndex).length + 1}` });
+		return Object.freeze({ kind: "invalid", message: `Type a column number from 1 to ${model.getLineContent((lineIndex) + 1).length + 1}` });
 	}
-	const lineLength = model.getLineContent(lineIndex).length;
+	const lineLength = model.getLineContent((lineIndex) + 1).length;
 	const oneBasedColumn = requestedColumn === undefined
 		? 1
 		: requestedColumn < 0
 			? lineLength + 2 + requestedColumn
 			: requestedColumn;
-	return locationResult(TextPosition.at(lineIndex, clamp(oneBasedColumn - 1, 0, lineLength)), "lineColumn");
+	return locationResult(new Position((lineIndex) + 1, (clamp(oneBasedColumn - 1, 0, lineLength)) + 1), "lineColumn");
 }
 
-function locationResult(position: TextPosition, kind: GotoLocation["kind"]): GotoLocationParseResult {
+function locationResult(position: Position, kind: GotoLocation["kind"]): GotoLocationParseResult {
 	return Object.freeze({
 		kind: "location",
 		location: Object.freeze({ position, kind }),
-		message: `Line ${position.lineIndex + 1}, Column ${position.columnIndex + 1}`,
+		message: `Line ${position.lineNumber}, Column ${position.column}`,
 	});
 }
 

@@ -7,7 +7,8 @@ import { registerBuiltinLanguageConfigurations } from "../../common/languages/la
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
 import { TextModel } from "../../common/model/textModel.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -229,7 +230,7 @@ test("Stanza editor browser mounts text drop as an optional full-editor contribu
 	});
 	editorPart.layout({ width: 120, height: 20 });
 	editorPart.viewport.element.getBoundingClientRect = () => rectangle(120, 20);
-	const dropPosition = editorPart.viewport.getPositionContentCoordinates(TextPosition.at(0, 5));
+	const dropPosition = editorPart.viewport.getPositionContentCoordinates(new Position((0) + 1, (5) + 1));
 	const drop = textDropEvent(dom.window, "dropped", dropPosition.left, dropPosition.top + dropPosition.height / 2);
 
 	editorPart.viewport.element.dispatchEvent(drop);
@@ -251,7 +252,7 @@ test("Stanza editor browser prepares selected before-save contributions for host
 	using languageFeatures = new LanguageFeaturesService(languageConfigurationService);
 	using formatting = languageFeatures.formattingProvider.register({
 		languageIds: ["plaintext"],
-		provideDocumentFormattingEdits: () => [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "formatted" }],
+		provideDocumentFormattingEdits: () => [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "formatted" }],
 	});
 	const editorPart = new EditorBrowser({
 		container,

@@ -27,12 +27,12 @@ export class LanguageDiagnosticsMarkerBridge extends Disposable {
 					resource: snapshot.resource,
 					range: {
 						start: {
-							lineIndex: diagnostic.range.start.lineIndex,
-							columnIndex: diagnostic.range.start.columnIndex,
+							lineIndex: diagnostic.range.getStartPosition().lineNumber - 1,
+							columnIndex: diagnostic.range.getStartPosition().column - 1,
 						},
 						end: {
-							lineIndex: diagnostic.range.end.lineIndex,
-							columnIndex: diagnostic.range.end.columnIndex,
+							lineIndex: diagnostic.range.getEndPosition().lineNumber - 1,
+							columnIndex: diagnostic.range.getEndPosition().column - 1,
 						},
 					},
 					severity: toMarkerSeverity(diagnostic.severity),

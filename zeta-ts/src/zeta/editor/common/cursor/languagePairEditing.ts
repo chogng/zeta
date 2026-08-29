@@ -3,8 +3,10 @@ import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTy
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { type LanguageAutoClosingPair, type LanguageCharacterPair, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";
 import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
-import { type TextSelection, type TextSelectionSet } from "../core/selection.js";
-import { TextPosition, TextRange } from "../core/text.js";
+import { type Selection } from "../core/selection.js";
+import type { SelectionSet } from "./selectionSet.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
 
 export interface LanguagePairTypeCommand {
@@ -22,8 +24,8 @@ export interface LanguageAutoClosingAction {
 }
 
 export interface LanguageAutoClosingTrust {
-	canOvertype(position: TextPosition, close: string): boolean;
-	canDeletePair(position: TextPosition, pair: LanguageCharacterPair): boolean;
+	canOvertype(position: Position, close: string): boolean;
+	canDeletePair(position: Position, pair: LanguageCharacterPair): boolean;
 }
 
 export interface LanguagePairTypeOptions {
@@ -38,7 +40,7 @@ interface PairTypeEdit {
 }
 
 /** Creates language-aware surround, auto-close, or closing-token overtype. */
-export function createLanguagePairTypeCommand(model: TextModel, selections: TextSelectionSet, text: string, configuration: ResolvedLanguageConfiguration, options: LanguagePairTypeOptions = {}): LanguagePairTypeCommand | undefined {
+export function createLanguagePairTypeCommand(model: TextModel, selections: SelectionSet, text: string, configuration: ResolvedLanguageConfiguration, options: LanguagePairTypeOptions = {}): LanguagePairTypeCommand | undefined {
 	if (typeof text !== "string") throw new TypeError("Language pair input text must be a string");
 	assertConfiguration(configuration);
 	assertOptions(model, configuration, options);
@@ -56,32 +58,32 @@ export function createLanguagePairTypeCommand(model: TextModel, selections: Text
 }
 
 /** Deletes both sides of an empty configured pair, falling back per selection. */
-export function createLanguagePairBackspaceCommand(model: TextModel, selections: TextSelectionSet, configuration: ResolvedLanguageConfiguration, trust?: LanguageAutoClosingTrust): EditorEditCommand | undefined {
+export function createLanguagePairBackspaceCommand(model: TextModel, selections: SelectionSet, configuration: ResolvedLanguageConfiguration, trust?: LanguageAutoClosingTrust): EditorEditCommand | undefined {
 	assertConfiguration(configuration);
 	let paired = false;
 	const edits = selections.selections.map(selection => {
-		if (!selection.collapsed) return collapsedEdit(selection.range);
-		const pairRange = getEmptyPairRange(model, selection.active, configuration.autoClosingPairs, trust);
+		if (!selection.isEmpty()) return collapsedEdit(selection);
+		const pairRange = getEmptyPairRange(model, selection.getPosition(), configuration.autoClosingPairs, trust);
 		if (pairRange) {
 			paired = true;
 			return collapsedEdit(pairRange);
 		}
-		return collapsedEdit(DeleteOperations.getPreviousDeleteRange(model, selection.active));
+		return collapsedEdit(DeleteOperations.getPreviousDeleteRange(model, selection.getPosition()));
 	});
 	if (!paired) return undefined;
 	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.CoalesceBackspace);
 }
 
-function createPairTypeEdit(model: TextModel, selection: TextSelection, text: string, configuration: ResolvedLanguageConfiguration, surroundingPair: LanguageCharacterPair | undefined, autoClosingPair: LanguageAutoClosingPair | undefined, closingPairs: readonly LanguageAutoClosingPair[], options: LanguagePairTypeOptions): PairTypeEdit {
-	if (!selection.collapsed && surroundingPair) {
-		const selectedText = model.getTextInRange(selection.range);
+function createPairTypeEdit(model: TextModel, selection: Selection, text: string, configuration: ResolvedLanguageConfiguration, surroundingPair: LanguageCharacterPair | undefined, autoClosingPair: LanguageAutoClosingPair | undefined, closingPairs: readonly LanguageAutoClosingPair[], options: LanguagePairTypeOptions): PairTypeEdit {
+	if (!selection.isEmpty() && surroundingPair) {
+		const selectedText = model.getTextInRange(selection);
 		const replacement = surroundingPair.open + selectedText + surroundingPair.close;
 		const start = surroundingPair.open.length;
 		const end = start + selectedText.length;
-		const forward = selection.anchor.compareTo(selection.range.start) === 0;
+		const forward = Position.compare(selection.getSelectionStart(), selection.getStartPosition()) === 0;
 		return {
 			edit: {
-				range: selection.range,
+				range: selection,
 				text: replacement,
 				anchorOffsetInText: forward ? start : end,
 				activeOffsetInText: forward ? end : start,
@@ -89,14 +91,14 @@ function createPairTypeEdit(model: TextModel, selection: TextSelection, text: st
 			didInsertText: true,
 		};
 	}
-	if (selection.collapsed) {
-		const line = model.getLineContent(selection.active.lineIndex);
-		const column = selection.active.columnIndex;
-		const closingPair = closingPairs.find(pair => line.startsWith(pair.close, column) && options.autoClosingTrust?.canOvertype(selection.active, pair.close) === true);
+	if (selection.isEmpty()) {
+		const line = model.getLineContent(selection.getPosition().lineNumber);
+		const columnIndex = selection.getPosition().column - 1;
+		const closingPair = closingPairs.find(pair => line.startsWith(pair.close, columnIndex) && options.autoClosingTrust?.canOvertype(selection.getPosition(), pair.close) === true);
 		if (closingPair) {
 			return {
 				edit: {
-					range: selection.range,
+					range: selection,
 					text: "",
 					anchorOffsetInText: closingPair.close.length,
 					activeOffsetInText: closingPair.close.length,
@@ -104,10 +106,10 @@ function createPairTypeEdit(model: TextModel, selection: TextSelection, text: st
 				didInsertText: false,
 			};
 		}
-		if (autoClosingPair && shouldAutoClose(line, column, configuration.autoCloseBefore) && isAutoClosingAllowed(selection.active, autoClosingPair, options.lexicalContext)) {
+		if (autoClosingPair && shouldAutoClose(line, columnIndex, configuration.autoCloseBefore) && isAutoClosingAllowed(selection.getPosition(), autoClosingPair, options.lexicalContext)) {
 			return {
 				edit: {
-					range: selection.range,
+					range: selection,
 					text: autoClosingPair.open + autoClosingPair.close,
 					anchorOffsetInText: autoClosingPair.open.length,
 					activeOffsetInText: autoClosingPair.open.length,
@@ -119,7 +121,7 @@ function createPairTypeEdit(model: TextModel, selection: TextSelection, text: st
 	}
 	return {
 		edit: {
-			range: selection.range,
+			range: selection,
 			text,
 			anchorOffsetInText: text.length,
 			activeOffsetInText: text.length,
@@ -128,18 +130,19 @@ function createPairTypeEdit(model: TextModel, selection: TextSelection, text: st
 	};
 }
 
-function getEmptyPairRange(model: TextModel, position: TextPosition, pairs: readonly LanguageCharacterPair[], trust: LanguageAutoClosingTrust | undefined): TextRange | undefined {
-	const line = model.getLineContent(position.lineIndex);
+function getEmptyPairRange(model: TextModel, position: Position, pairs: readonly LanguageCharacterPair[], trust: LanguageAutoClosingTrust | undefined): Range | undefined {
+	const line = model.getLineContent(position.lineNumber);
+	const columnIndex = position.column - 1;
 	const pair = [...pairs].sort((left, right) => right.open.length - left.open.length).find(candidate => (
 		trust?.canDeletePair(position, candidate) === true &&
-		position.columnIndex >= candidate.open.length &&
-		line.slice(position.columnIndex - candidate.open.length, position.columnIndex) === candidate.open &&
-		line.startsWith(candidate.close, position.columnIndex)
+		columnIndex >= candidate.open.length &&
+		line.slice(columnIndex - candidate.open.length, columnIndex) === candidate.open &&
+		line.startsWith(candidate.close, columnIndex)
 	));
 	if (!pair) return undefined;
-	return TextRange.from(
-		TextPosition.at(position.lineIndex, position.columnIndex - pair.open.length),
-		TextPosition.at(position.lineIndex, position.columnIndex + pair.close.length),
+	return Range.fromPositions(
+		new Position(position.lineNumber, position.column - pair.open.length),
+		new Position(position.lineNumber, position.column + pair.close.length),
 	);
 }
 
@@ -147,8 +150,8 @@ function createAutoClosingActions(model: TextModel, pairEdits: readonly PairType
 	const ordered = pairEdits.map((pairEdit, selectionIndex) => ({
 		pairEdit,
 		selectionIndex,
-		startOffset: model.offsetAt(pairEdit.edit.range.start),
-		endOffset: model.offsetAt(pairEdit.edit.range.end),
+		startOffset: model.offsetAt(pairEdit.edit.range.getStartPosition()),
+		endOffset: model.offsetAt(pairEdit.edit.range.getEndPosition()),
 	})).sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset || left.selectionIndex - right.selectionIndex);
 	const actions: LanguageAutoClosingAction[] = [];
 	let cumulativeDelta = 0;
@@ -170,7 +173,7 @@ function createAutoClosingActions(model: TextModel, pairEdits: readonly PairType
 	return Object.freeze(actions);
 }
 
-function collapsedEdit(range: TextRange): SelectionEdit {
+function collapsedEdit(range: Range): SelectionEdit {
 	return {
 		range,
 		text: "",
@@ -191,7 +194,7 @@ function assertConfiguration(configuration: ResolvedLanguageConfiguration): void
 	}
 }
 
-function isAutoClosingAllowed(position: TextPosition, pair: LanguageAutoClosingPair, lexicalContext: LanguageLexicalContextSource | undefined): boolean {
+function isAutoClosingAllowed(position: Position, pair: LanguageAutoClosingPair, lexicalContext: LanguageLexicalContextSource | undefined): boolean {
 	if (!pair.notIn || pair.notIn.length === 0 || !lexicalContext) return true;
 	const tokenType = lexicalContext.getTokenTypeAt(position);
 	return tokenType !== "string" && tokenType !== "comment" || !pair.notIn.includes(tokenType);

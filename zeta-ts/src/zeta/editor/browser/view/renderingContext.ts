@@ -1,4 +1,5 @@
-import { type TextPosition, type TextRange } from '../../common/core/text.js';
+import { type Position } from '../../common/core/position.js';
+import { type Range } from '../../common/core/range.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
@@ -26,8 +27,8 @@ export interface EditorOverlayContext {
 	readonly textMeasurer: TextMeasurer;
 	readonly renderLineHighlight: 'none' | 'gutter' | 'line' | 'all';
 	readonly renderLineHighlightOnlyWhenFocus: boolean;
-	linesVisibleRangesForRange(range: TextRange, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined;
-	visibleRangeForPosition(position: TextPosition): EditorVisiblePosition | undefined;
+	linesVisibleRangesForRange(range: Range, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined;
+	visibleRangeForPosition(position: Position): EditorVisiblePosition | undefined;
 }
 
 /**

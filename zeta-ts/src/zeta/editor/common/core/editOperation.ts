@@ -1,25 +1,25 @@
-import { TextPosition } from "./position.js";
-import { TextRange } from "./range.js";
+import { Position } from "./position.js";
+import { Range } from "./range.js";
 
 /** A single pre-transaction replacement consumed by the text model. */
 export interface ISingleEditOperation {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly text: string | null;
 	readonly forceMoveMarkers?: boolean;
 }
 
 /** One replacement in the pre-transaction document. */
 export interface TextEdit {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly text: string;
 }
 
 /** Factory helpers for the editor's canonical single-edit operation shape. */
 export class EditOperation {
-	static insert(position: TextPosition, text: string): ISingleEditOperation { return { range: TextRange.emptyAt(position), text, forceMoveMarkers: true }; }
-	static delete(range: TextRange): ISingleEditOperation { return { range, text: null }; }
-	static replace(range: TextRange, text: string | null): ISingleEditOperation { return { range, text }; }
-	static replaceMove(range: TextRange, text: string | null): ISingleEditOperation { return { range, text, forceMoveMarkers: true }; }
+	static insert(position: Position, text: string): ISingleEditOperation { return { range: Range.fromPositions(position), text, forceMoveMarkers: true }; }
+	static delete(range: Range): ISingleEditOperation { return { range, text: null }; }
+	static replace(range: Range, text: string | null): ISingleEditOperation { return { range, text }; }
+	static replaceMove(range: Range, text: string | null): ISingleEditOperation { return { range, text, forceMoveMarkers: true }; }
 }
 
 /**

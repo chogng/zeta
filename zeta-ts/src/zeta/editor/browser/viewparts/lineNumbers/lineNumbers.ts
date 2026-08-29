@@ -6,7 +6,7 @@ import { type EditorVisualLineProjection } from "../../../common/viewModel/model
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 import { ViewPartRows } from "../../view/viewLayer.js";
 
-export interface LineNumbersOverlayOptions {
+interface LineNumbersOverlayOptions {
 	readonly host: HTMLElement;
 	readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	readonly selectionController: CursorsController | undefined;
@@ -15,6 +15,7 @@ export interface LineNumbersOverlayOptions {
 
 /** Projects line numbers into virtual rows. */
 export class LineNumbersOverlay extends EditorViewPart {
+	public static readonly CLASS_NAME = 'stanza-editor-line-number';
 	public readonly domNode: HTMLElement;
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	private readonly selectionController: CursorsController | undefined;
@@ -33,12 +34,12 @@ export class LineNumbersOverlay extends EditorViewPart {
 	render(context: EditorRenderingContext): void {
 		this.domNode.style.left = `${context.layout.scrollPosition.left}px`;
 		const visualProjection = this.readVisualProjection();
-		const activeLineIndex = this.selectionController?.selections.primary.active.lineIndex;
+		const activeLineIndex = this.selectionController ? this.selectionController.selections.primary.getPosition().lineNumber - 1 : undefined;
 		for (const [visualLineIndex, row] of this.rows.render(context)) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
 			const number = row.firstElementChild as HTMLElement | null ?? h(row.ownerDocument, "span");
-			number.className = "stanza-editor-line-number";
+			number.className = LineNumbersOverlay.CLASS_NAME;
 			number.classList.toggle("active", visualLine.logicalLineIndex === activeLineIndex);
 			number.textContent = visualLine.firstForLogicalLine
 				? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex)

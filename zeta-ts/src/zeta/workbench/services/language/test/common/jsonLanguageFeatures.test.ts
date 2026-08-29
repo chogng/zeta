@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseJsonc } from '../../../../../base/common/jsonc.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { TextPosition } from '../../../../../editor/common/core/text.js';
+import { Position } from '../../../../../editor/common/core/position.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages/completion/languageCompletionProviders.js';
 import type { LanguageDiagnostic } from '../../../../../editor/common/languages/languageResults.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
@@ -28,7 +28,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 	using registry = associatedRegistry();
 	const completion = createJsonCompletionProvider(registry);
 	using completionModel = new TextModel('{ "editor": { "en\n}');
-	const completionPosition = TextPosition.at(0, completionModel.getLineLength(0));
+	const completionPosition = new Position((0) + 1, (completionModel.getLineLength((0) + 1)) + 1);
 	const completionResult = await completion.provideCompletions({
 		requestId: 1,
 		languageId: 'jsonc',
@@ -44,7 +44,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 		requestId: 2,
 		languageId: 'jsonc',
 		resource,
-		position: TextPosition.at(0, valueCompletionModel.getLineLength(0)),
+		position: new Position((0) + 1, (valueCompletionModel.getLineLength((0) + 1)) + 1),
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
 		snapshot: valueCompletionModel.createSnapshot(),
 	}, new AbortController().signal);
@@ -58,7 +58,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 		languageId: 'jsonc',
 		signal,
 		resource,
-		position: TextPosition.at(0, 13),
+		position: new Position((0) + 1, (13) + 1),
 	}, signal);
 	assert.deepEqual(hover?.contents, ['Enabled', 'Controls the editor.', 'Default: true']);
 

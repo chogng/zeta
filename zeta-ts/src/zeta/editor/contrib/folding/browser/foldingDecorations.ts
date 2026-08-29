@@ -2,7 +2,7 @@ import './folding.css';
 import { register } from '../../../../base/common/icon.js';
 import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { TextRange } from '../../../common/core/text.js';
+import { Range } from '../../../common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
 import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
@@ -46,7 +46,7 @@ export class FoldingDecorationProvider extends Disposable implements OwnedDecora
 
 	private updateDecorations(): void {
 		this.decorationIds = this.collection.deltaDecorations(this.decorationIds, this.folding.regions.map(region => ({
-			range: TextRange.emptyAt({ lineIndex: region.startLineIndex, columnIndex: 0 }),
+			range: Range.fromPositions({ lineNumber: region.startLineIndex + 1, column: 1 }),
 			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 			metadata: region,
 		})));

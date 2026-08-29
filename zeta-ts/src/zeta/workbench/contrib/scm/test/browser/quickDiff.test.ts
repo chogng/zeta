@@ -45,9 +45,9 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	);
 	await waitFor(() => source.decorations.length === 2);
 
-	assert.deepEqual(source.decorations.map(decoration => [decoration.presentation, decoration.range.start.lineIndex]), [
-		[DecorationPresentation.DiffModified, 1],
-		[DecorationPresentation.DiffDeleted, 2],
+	assert.deepEqual(source.decorations.map(decoration => [decoration.presentation, decoration.range.getStartPosition().lineNumber]), [
+		[DecorationPresentation.DiffModified, 2],
+		[DecorationPresentation.DiffDeleted, 3],
 	]);
 	assert.ok(source.decorations.every(decoration => decoration.linesDecoration?.className?.includes('zeta-quick-diff-gutter')));
 	assert.ok(source.decorations.every(decoration => decoration.overviewRuler === true && decoration.minimap === true));

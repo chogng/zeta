@@ -2,7 +2,9 @@ import { arraysEqual, commonPrefixLength, commonSuffixLength } from "../../../..
 import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { type LanguageWorkerDocumentSynchronization } from '../../../../editor/common/services/textModelSync/textModelSync.protocol.js';
 import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
+import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type TextMateScopeResolver } from "./textMateScopeResolver.js";
 import { type TextMateGrammarContent, type RegisteredTextMateGrammarDefinition, type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 import * as textMateNamespace from "vscode-textmate";
@@ -482,7 +484,7 @@ function aggregateTokens(lineResults: readonly TextMateLineResult[]): LanguageTo
 	for (let lineIndex = 0; lineIndex < lineResults.length; lineIndex += 1) {
 		for (const token of lineResults[lineIndex]!.tokens) {
 			tokens.push(Object.freeze({
-				range: TextRange.from(TextPosition.at(lineIndex, token.startColumn), TextPosition.at(lineIndex, token.endColumn)),
+				range: Range.fromPositions(new Position((lineIndex) + 1, (token.startColumn) + 1), new Position((lineIndex) + 1, (token.endColumn) + 1)),
 				tokenType: token.tokenType,
 				modifiers: token.modifiers,
 				...(token.languageId === undefined ? {} : { languageId: token.languageId }),

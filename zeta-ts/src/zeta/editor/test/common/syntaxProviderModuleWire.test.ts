@@ -11,7 +11,8 @@ import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
 import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Required Syntax modules activate before the first request and preserve confirmed result bases", async () => {
@@ -45,7 +46,7 @@ test("Required Syntax modules activate before the first request and preserve con
 	assert.equal(requestIndex > activationIndex, true);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, model.getText().length)),
+		range: Range.fromPositions(new Position((0) + 1, (model.getText().length) + 1)),
 		text: "\nreturn value;",
 	}]);
 	assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);

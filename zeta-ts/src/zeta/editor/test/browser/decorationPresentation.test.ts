@@ -3,7 +3,8 @@ import test from "node:test";
 import { DecorationPresentation, GlyphMarginLane, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorations.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
 
@@ -11,17 +12,17 @@ test("Decoration source resolves opaque metadata without owning the collection",
 	using model = new TextModel("abcd\nefgh\nij");
 	using collection = new TextDecorationCollection<DecorationMetadata>(model);
 	const matchId = collection.add({
-		range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
+		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: { presentation: DecorationPresentation.SearchMatch },
 	});
 	collection.add({
-		range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 1)),
+		range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (1) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: {},
 	});
 	const errorId = collection.add({
-		range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
+		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: { presentation: DecorationPresentation.ErrorUnderline },
 	});
@@ -32,11 +33,11 @@ test("Decoration source resolves opaque metadata without owning the collection",
 
 	assert.deepEqual(source.decorations, [{
 		id: matchId,
-		range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
+		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
 		presentation: DecorationPresentation.SearchMatch,
 	}, {
 		id: errorId,
-		range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
+		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
 		presentation: DecorationPresentation.ErrorUnderline,
 	}]);
 	assert.equal(Object.isFrozen(source.decorations), true);
@@ -79,7 +80,7 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
 	using model = new TextModel("abcd\nefgh");
 	using collection = new TextDecorationCollection<string>(model);
 	const id = collection.add({
-		range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
+		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "match",
 	});
@@ -113,7 +114,7 @@ test("Decoration geometry presents an empty diagnostic at its text position", ()
 	using model = new TextModel("abcd\nefgh");
 	using collection = new TextDecorationCollection<DecorationPresentation>(model);
 	const id = collection.add({
-		range: TextRange.emptyAt(TextPosition.at(1, 2)),
+		range: Range.fromPositions(new Position((1) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: DecorationPresentation.HintUnderline,
 	});
@@ -138,7 +139,7 @@ test("Decoration sources declare and validate glyph-margin ownership", () => {
 	using model = new TextModel("abc");
 	using collection = new TextDecorationCollection<string>(model);
 	const id = collection.add({
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "folding",
 	});
@@ -152,7 +153,7 @@ test("Decoration sources declare and validate glyph-margin ownership", () => {
 	assert.deepEqual(source.glyphMarginLanes, [{ owner: "folding", lane: GlyphMarginLane.Center }]);
 	assert.deepEqual(source.decorations, [{
 		id,
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		presentation: DecorationPresentation.GlyphMargin,
 		glyphMargin: { owner: "folding", lane: GlyphMarginLane.Center, ariaLabel: "Collapse lines", expanded: true },
 	}]);
@@ -168,7 +169,7 @@ test("Decoration sources declare and validate line-decoration ownership", () => 
 	using model = new TextModel("abc");
 	using collection = new TextDecorationCollection<string>(model);
 	const id = collection.add({
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "folding",
 	});
@@ -182,7 +183,7 @@ test("Decoration sources declare and validate line-decoration ownership", () => 
 	assert.deepEqual(source.linesDecorationLanes, [{ owner: "folding", width: 20 }]);
 	assert.deepEqual(source.decorations, [{
 		id,
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		presentation: DecorationPresentation.LineDecoration,
 		linesDecoration: { owner: "folding", className: "folding-marker" },
 	}]);

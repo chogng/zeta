@@ -63,7 +63,7 @@ function deduplicateDiagnostics(diagnostics: readonly LanguageDiagnostic[]): rea
 	const seen = new Set<string>();
 	return diagnostics.filter(diagnostic => {
 		const range = diagnostic.range;
-		const key = `${range.start.lineIndex}:${range.start.columnIndex}:${range.end.lineIndex}:${range.end.columnIndex}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
+		const key = `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;

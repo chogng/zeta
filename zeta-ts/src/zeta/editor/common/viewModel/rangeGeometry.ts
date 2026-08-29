@@ -1,10 +1,10 @@
-import { type TextRange } from "../core/text.js";
+import { type Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorLineRange } from "../viewModel.js";
 import { type TextMeasurer } from "./textMeasurer.js";
 
 export interface RangeGeometryEntry<T> {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly value: T;
 }
 
@@ -34,30 +34,30 @@ export function createStanzaRangeRectangles<T>(
 	const newlineWidth = measurer.measureLineWidth(" ");
 
 	for (const entry of entries) {
-		if (entry.range.empty && emptyRangeRendering === EmptyRangeRendering.RenderAsSpace) {
-			const lineIndex = entry.range.start.lineIndex;
+		if (entry.range.isEmpty() && emptyRangeRendering === EmptyRangeRendering.RenderAsSpace) {
+			const lineIndex = entry.range.startLineNumber - 1;
 			if (!containsLine(renderLines, lineIndex)) continue;
 			rectangles.push(Object.freeze({
 				value: entry.value,
 				lineIndex,
-				left: textLeft + prefixWidth(model, lineIndex, entry.range.start.columnIndex, measurer),
+				left: textLeft + prefixWidth(model, lineIndex, entry.range.startColumn - 1, measurer),
 				width: Math.max(1, newlineWidth),
 			}));
 			continue;
 		}
-		if (entry.range.empty) continue;
+		if (entry.range.isEmpty()) continue;
 		for (
-			let lineIndex = entry.range.start.lineIndex;
-			lineIndex <= entry.range.end.lineIndex;
+			let lineIndex = entry.range.startLineNumber - 1;
+			lineIndex <= entry.range.endLineNumber - 1;
 			lineIndex++
 		) {
 			if (!containsLine(renderLines, lineIndex)) continue;
-			const startsOnLine = lineIndex === entry.range.start.lineIndex;
-			const endsOnLine = lineIndex === entry.range.end.lineIndex;
-			const startColumn = startsOnLine ? entry.range.start.columnIndex : 0;
+			const startsOnLine = lineIndex === entry.range.startLineNumber - 1;
+			const endsOnLine = lineIndex === entry.range.endLineNumber - 1;
+			const startColumn = startsOnLine ? entry.range.startColumn - 1 : 0;
 			const endColumn = endsOnLine
-				? entry.range.end.columnIndex
-				: model.getLineContent(lineIndex).length;
+				? entry.range.endColumn - 1
+				: model.getLineContent((lineIndex) + 1).length;
 			if (endsOnLine && endColumn === 0 && !startsOnLine) continue;
 			const left = textLeft + prefixWidth(
 				model,
@@ -92,7 +92,7 @@ function prefixWidth(
 	measurer: TextMeasurer,
 ): number {
 	return measurer.measureLineWidth(
-		model.getLineContent(lineIndex).slice(0, columnIndex),
+		model.getLineContent((lineIndex) + 1).slice(0, columnIndex),
 	);
 }
 

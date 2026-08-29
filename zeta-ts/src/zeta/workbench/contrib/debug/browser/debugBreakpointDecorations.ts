@@ -7,7 +7,8 @@ import { type URI } from '../../../../base/common/uri.js';
 import { MouseTargetFactory, MouseTargetKind } from '../../../../editor/browser/controller/mouseTarget.js';
 import { type TextEditorContributionContext } from '../../../../editor/browser/editorExtensions.js';
 import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../../editor/browser/viewparts/decorations/decorations.js';
-import { TextPosition, TextRange } from '../../../../editor/common/core/text.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../../../editor/common/model/trackedRange.js';
@@ -51,7 +52,7 @@ export class DebugBreakpointDecorationProvider extends Disposable implements Own
 		const model = this.collection.textModel;
 		const breakpoints = this.debug.breakpoints.filter(candidate => candidate.resource.toString() === this.resource.toString() && candidate.lineNumber >= 1 && candidate.lineNumber <= model.lineCount);
 		this.decorationIds = this.collection.deltaDecorations(this.decorationIds, breakpoints.map(breakpoint => ({
-			range: TextRange.emptyAt(TextPosition.at(breakpoint.lineNumber - 1, 0)),
+			range: Range.fromPositions(new Position(breakpoint.lineNumber, 1)),
 			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 			metadata: breakpoint,
 		})));
@@ -70,11 +71,11 @@ export class DebugBreakpointController extends Disposable {
 		this._register(addDisposableListener(context.viewport.element, 'pointerdown', event => {
 			const target = this.mouseTargets.create(event);
 			if (target?.kind !== MouseTargetKind.GutterDecoration || target.glyphMarginLane !== GlyphMarginLane.Left) return;
-			const lineIndex = target.editorTarget?.position.lineIndex;
-			if (lineIndex === undefined) return;
+			const lineNumber = target.editorTarget?.position.lineNumber;
+			if (lineNumber === undefined) return;
 			stopEvent(event);
 			context.viewport.element.focus({ preventScroll: true });
-			this.debug.toggleBreakpoint(resource, lineIndex + 1);
+			this.debug.toggleBreakpoint(resource, lineNumber);
 		}, true));
 	}
 }

@@ -1,5 +1,6 @@
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { TextRange, type TextEdit } from '../core/text.js';
+import { Range } from '../core/range.js';
+import { type TextEdit } from '../core/editOperation.js';
 import { type LanguageWorker } from '../languages/languageRequestCoordinator.js';
 import { LanguageRequestCoordinator, LanguageRequestStatus } from '../languages/languageRequestCoordinator.js';
 import { type InplaceReplaceResult } from '../languages/supports/inplaceReplaceSupport.js';
@@ -19,7 +20,7 @@ export interface EditorWorkerMinimalEditsRequest {
 }
 
 export interface EditorWorkerNavigateValueRequest {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly up: boolean;
 	readonly wordDefinition: RegExp;
 }
@@ -33,7 +34,7 @@ export type EditorWorkerFactory = (model: TextModel) => IEditorWorkerClient;
 export interface IEditorWorkerClient extends IDisposable {
 	computeUnicodeHighlights(signal?: AbortSignal): Promise<readonly UnicodeHighlight[] | undefined>;
 	computeMoreMinimalEdits(edits: readonly TextEdit[], signal?: AbortSignal): Promise<readonly TextEdit[] | undefined>;
-	navigateValueSet(range: TextRange, up: boolean, wordDefinition: RegExp, signal?: AbortSignal): Promise<InplaceReplaceResult | undefined>;
+	navigateValueSet(range: Range, up: boolean, wordDefinition: RegExp, signal?: AbortSignal): Promise<InplaceReplaceResult | undefined>;
 }
 
 /** Owns version gating and one reusable worker implementation for a TextModel. */
@@ -53,7 +54,7 @@ export class EditorWorkerClient extends Disposable implements IEditorWorkerClien
 		return this.run(EDITOR_WORKER_MINIMAL_EDITS_LANE, Object.freeze({ edits: Object.freeze([...edits]) }), signal) as Promise<readonly TextEdit[] | undefined>;
 	}
 
-	public navigateValueSet(range: TextRange, up: boolean, wordDefinition: RegExp, signal?: AbortSignal): Promise<InplaceReplaceResult | undefined> {
+	public navigateValueSet(range: Range, up: boolean, wordDefinition: RegExp, signal?: AbortSignal): Promise<InplaceReplaceResult | undefined> {
 		return this.run(EDITOR_WORKER_NAVIGATE_VALUE_LANE, Object.freeze({ range, up, wordDefinition }), signal) as Promise<InplaceReplaceResult | undefined>;
 	}
 

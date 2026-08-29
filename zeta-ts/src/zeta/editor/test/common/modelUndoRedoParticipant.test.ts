@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../base/common/uri.js";
-import { TextEditHistoryGroup, TextRange } from "../../common/core/text.js";
+import { Range } from "../../common/core/range.js";
+import { TextEditHistoryGroup } from "../../common/core/editOperation.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { ModelUndoRedoParticipant } from "../../common/services/modelUndoRedoParticipant.js";
 
@@ -28,7 +29,7 @@ test("ModelUndoRedoParticipant does not capture an unfinished history revision",
 	const group = TextEditHistoryGroup.create();
 	model.beginHistoryRevision(group);
 	model.applyEdits(
-		[{ range: TextRange.emptyAt(model.positionAt(model.length)), text: "!" }],
+		[{ range: Range.fromPositions(model.positionAt(model.length)), text: "!" }],
 		{ historyGroup: group },
 	);
 	participant.remember(resource, model);
@@ -41,6 +42,6 @@ test("ModelUndoRedoParticipant does not capture an unfinished history revision",
 
 function editedModel(text: string): TextModel {
 	const model = new TextModel(text);
-	model.applyEdits([{ range: TextRange.emptyAt(model.positionAt(model.length)), text: "!" }]);
+	model.applyEdits([{ range: Range.fromPositions(model.positionAt(model.length)), text: "!" }]);
 	return model;
 }

@@ -1,5 +1,5 @@
 import { type OffsetTextEdit } from "./historyCoalescing.js";
-import { TextEditHistoryGroup } from "../core/text.js";
+import { TextEditHistoryGroup } from "../core/editOperation.js";
 
 export interface TextModelHistoryEntry {
 	readonly edits: readonly OffsetTextEdit[];

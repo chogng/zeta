@@ -143,7 +143,7 @@ test("standalone languages API feeds the shared editor registries", async () => 
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments.lineComment, '//');
 	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));
 	using hover = new HoverService(model, services.languageFeaturesService.hoverProvider);
-	assert.deepEqual(await hover.provideHover('stanza-public-test', stanza.TextPosition.at(0, 1)), { contents: ['Public hover'] });
+	assert.deepEqual(await hover.provideHover('stanza-public-test', new stanza.Position(1, 2)), { contents: ['Public hover'] });
 });
 
 test("standalone completion providers execute in a live editor", async () => {
@@ -162,7 +162,7 @@ test("standalone completion providers execute in a live editor", async () => {
 					id: "standalone-result",
 					label: "standaloneResult",
 					kind: stanza.languages.LanguageCompletionItemKind.Text,
-					range: stanza.TextRange.emptyAt(request.position),
+					range: stanza.Range.fromPositions(request.position),
 					insertText: "standaloneResult",
 					insertTextFormat: stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
 				}],

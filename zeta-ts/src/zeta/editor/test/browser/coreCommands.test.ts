@@ -3,8 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { h } from "../../../base/browser/dom.js";
 
@@ -32,7 +33,7 @@ test("core commands select all", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -47,7 +48,7 @@ test("core commands select all", () => {
 	const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
 	input.element.dispatchEvent(selectAll);
 	assert.equal(selectAll.defaultPrevented, true);
-	assert.deepEqual(selections.selections.primary.range.end, TextPosition.at(2, 5));
+	assert.deepEqual(selections.selections.primary.getEndPosition(), new Position((2) + 1, (5) + 1));
 
 	dom.window.close();
 });
@@ -56,7 +57,7 @@ test("line selection remains an independent editor extension", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 400, height: 100 });
 	using input = new EditorView(viewport, selections);
@@ -65,9 +66,9 @@ test("line selection remains an independent editor extension", () => {
 	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
 	input.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(TextPosition.at(0, 0), TextPosition.at(1, 0)));
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
 	input.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(TextPosition.at(0, 0), TextPosition.at(2, 0)));
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
 	dom.window.close();
 });
@@ -76,8 +77,8 @@ test("core commands reject dependencies from different text models", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	using model = new TextModel("one");
 	using otherModel = new TextModel("two");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	using otherSelections = new CursorsController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using otherSelections = new CursorsController(otherModel, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container: dom.window.document.querySelector<HTMLElement>("main")!,
 		model,

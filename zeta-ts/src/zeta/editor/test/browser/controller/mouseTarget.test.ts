@@ -5,7 +5,7 @@ import { h } from "../../../../base/browser/dom.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
 import { PartFingerprint, PartFingerprints } from '../../../browser/view/viewPart.js';
-import { TextPosition } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
 import { EditorHitTargetKind } from "../../../common/viewModel/pointerHitTest.js";
 
 test("MouseTargetFactory preserves editor targets and classifies browser-owned regions", () => {
@@ -14,7 +14,7 @@ test("MouseTargetFactory preserves editor targets and classifies browser-owned r
 	assert.ok(container);
 	const editorTarget = Object.freeze({
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(0, 1),
+		position: new Position((0) + 1, (1) + 1),
 	});
 	const viewport = {
 		element: container,

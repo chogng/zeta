@@ -11,10 +11,11 @@ import {
 	type ISettableObservable,
 	type ITransaction,
 } from '../../base/common/observable.js';
-import { type IPosition, TextPosition } from '../common/core/position.js';
+import { type IPosition, Position } from '../common/core/position.js';
 import { Point } from '../common/core/2d/point.js';
 import { LineRange } from '../common/core/ranges/lineRange.js';
-import { TextSelection, type TextSelectionSet } from '../common/core/selection.js';
+import { Selection } from '../common/core/selection.js';
+import type { SelectionSet } from '../common/cursor/selectionSet.js';
 import { type CursorsController } from '../common/cursor/cursor.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorViewportLayout } from '../common/viewLayout/viewLayout.js';
@@ -38,7 +39,7 @@ const observableEditorCache = new WeakMap<CodeEditorWidget, ObservableCodeEditor
 export class ObservableCodeEditor extends Disposable {
 	private readonly modelState: ObservableState<TextModel>;
 	private readonly versionState: ObservableState<number>;
-	private readonly selectionsState: ObservableState<TextSelectionSet>;
+	private readonly selectionsState: ObservableState<SelectionSet>;
 	private readonly focusState: ObservableState<boolean>;
 	private readonly textFocusState: ObservableState<boolean>;
 	private readonly compositionState: ObservableState<boolean>;
@@ -51,15 +52,15 @@ export class ObservableCodeEditor extends Disposable {
 	public readonly model: IObservable<TextModel>;
 	public readonly isReadonly: IObservable<boolean>;
 	public readonly versionId: IObservable<number>;
-	public readonly selections: IObservable<TextSelectionSet>;
-	public readonly positions: IObservable<readonly TextPosition[]>;
+	public readonly selections: IObservable<SelectionSet>;
+	public readonly positions: IObservable<readonly Position[]>;
 	public readonly isFocused: IObservable<boolean>;
 	public readonly isTextFocused: IObservable<boolean>;
 	public readonly inComposition: IObservable<boolean>;
 	public readonly value: ISettableObservable<string>;
 	public readonly valueIsEmpty: IObservable<boolean>;
-	public readonly cursorSelection: IObservable<TextSelection>;
-	public readonly cursorPosition: IObservable<TextPosition>;
+	public readonly cursorSelection: IObservable<Selection>;
+	public readonly cursorPosition: IObservable<Position>;
 	/** The primary cursor's zero-based line index. */
 	public readonly cursorLineIndex: IObservable<number>;
 	/** The primary cursor's one-based line number. */
@@ -99,7 +100,7 @@ export class ObservableCodeEditor extends Disposable {
 		this.versionState = this._register(new ObservableState(model.version));
 		this.selectionsState = this._register(new ObservableState(selectionController.selections));
 		this.focusState = this._register(new ObservableState(readFocus(editor.element)));
-		this.textFocusState = this._register(new ObservableState(readFocus(editor.view.editContext.element)));
+		this.textFocusState = this._register(new ObservableState(editor.view.isFocused()));
 		this.compositionState = this._register(new ObservableState(editor.view.compositionController.composing));
 		this.layoutState = this._register(new ObservableState(editor.viewport.currentLayout));
 		this.typeChannel = this._register(new ObservableChannel(''));
@@ -134,7 +135,7 @@ export class ObservableCodeEditor extends Disposable {
 		});
 		this.cursorSelection = derived(reader => this.selections.read(reader).primary);
 		this.cursorPosition = derived(reader => this.cursorSelection.read(reader).getPosition());
-		this.cursorLineIndex = derived(reader => this.cursorPosition.read(reader).lineIndex);
+		this.cursorLineIndex = derived(reader => this.cursorPosition.read(reader).lineNumber - 1);
 		this.cursorLineNumber = derived(reader => this.cursorLineIndex.read(reader) + 1);
 
 		this.onDidType = this.typeChannel;
@@ -143,7 +144,7 @@ export class ObservableCodeEditor extends Disposable {
 		this.layoutInfoContentLeft = derived(reader => {
 			this.layoutInfo.read(reader);
 			this.value.read(reader);
-			return editor.viewport.getPositionContentCoordinates(TextPosition.at(0, 0)).left;
+			return editor.viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1)).left;
 		});
 		this.layoutInfoDecorationsLeft = this.layoutInfoContentLeft;
 		this.layoutInfoWidth = this.layoutInfo.map(layout => layout.viewportSize.width);
@@ -204,8 +205,8 @@ export class ObservableCodeEditor extends Disposable {
 	public getLeftOfPosition(position: IPosition, reader: IReader | undefined = undefined): number {
 		this.layoutInfo.read(reader);
 		this.value.read(reader);
-		const textOrigin = this.editor.viewport.getPositionContentCoordinates(TextPosition.at(0, 0)).left;
-		return this.editor.viewport.getPositionContentCoordinates(TextPosition.lift(position)).left - textOrigin;
+		const textOrigin = this.editor.viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1)).left;
+		return this.editor.viewport.getPositionContentCoordinates(Position.lift(position)).left - textOrigin;
 	}
 
 	/** Observes a position in viewport coordinates, including scroll changes. */
@@ -215,7 +216,7 @@ export class ObservableCodeEditor extends Disposable {
 			if (currentPosition === null) return null;
 			const layout = this.layoutInfo.read(reader);
 			const model = this.model.read(reader);
-			const liftedPosition = TextPosition.lift(currentPosition);
+			const liftedPosition = Position.lift(currentPosition);
 			model.offsetAt(liftedPosition);
 			const coordinates = this.editor.viewport.getPositionContentCoordinates(liftedPosition);
 			return new Point(
@@ -232,49 +233,49 @@ export class ObservableCodeEditor extends Disposable {
 			const currentPosition = readValue(position, reader);
 			if (currentPosition === null) return null;
 			const model = this.model.read(reader);
-			model.offsetAt(TextPosition.lift(currentPosition));
+			model.offsetAt(Position.lift(currentPosition));
 			return this.layoutInfo.read(reader).lineHeight;
 		});
 	}
 
-	public observeLineHeightForLine(lineIndex: IObservable<number | null>): IObservable<number | null>;
-	public observeLineHeightForLine(lineIndex: number): IObservable<number>;
-	public observeLineHeightForLine(lineIndex: IObservable<number | null> | number): IObservable<number | null> {
+	public observeLineHeightForLine(lineNumber: IObservable<number | null>): IObservable<number | null>;
+	public observeLineHeightForLine(lineNumber: number): IObservable<number>;
+	public observeLineHeightForLine(lineNumber: IObservable<number | null> | number): IObservable<number | null> {
 		return derived(reader => {
-			const currentLineIndex = readValue(lineIndex, reader);
-			if (currentLineIndex === null) return null;
-			return this.readLineHeight(currentLineIndex, reader);
+			const currentLineNumber = readValue(lineNumber, reader);
+			if (currentLineNumber === null) return null;
+			return this.readLineHeight(currentLineNumber, reader);
 		});
 	}
 
 	public observeLineHeightsForLineRange(lineRange: IObservable<LineRange> | LineRange): IObservable<readonly number[]> {
 		return derived(reader => {
 			const currentLineRange = readValue(lineRange, reader);
-			return currentLineRange.mapToLineArray(lineIndex => this.readLineHeight(lineIndex, reader));
+			return currentLineRange.mapToLineArray(lineNumber => this.readLineHeight(lineNumber, reader));
 		});
 	}
 
-	public getWidthOfLine(lineIndex: number, reader: IReader | undefined = undefined): number {
+	public getWidthOfLine(lineNumber: number, reader: IReader | undefined = undefined): number {
 		this.layoutInfo.read(reader);
 		this.value.read(reader);
 		const model = this.model.read(reader);
-		validateLineIndex(model, lineIndex);
-		return this.editor.viewport.measureTextWidth(model.getLineContent(lineIndex));
+		validateLineNumber(model, lineNumber);
+		return this.editor.viewport.measureTextWidth(model.getLineContent(lineNumber));
 	}
 
-	public observeTopForLineNumber(lineIndex: number): IObservable<number> {
+	public observeTopForLineNumber(lineNumber: number): IObservable<number> {
 		return derived(reader => {
 			this.layoutInfo.read(reader);
 			const model = this.model.read(reader);
-			return this.readLineTop(model, lineIndex);
+			return this.readLineTop(model, lineNumber);
 		});
 	}
 
-	public observeBottomForLineNumber(lineIndex: number): IObservable<number> {
+	public observeBottomForLineNumber(lineNumber: number): IObservable<number> {
 		return derived(reader => {
 			this.layoutInfo.read(reader);
 			const model = this.model.read(reader);
-			return this.readLineBottom(model, lineIndex);
+			return this.readLineBottom(model, lineNumber);
 		});
 	}
 
@@ -298,33 +299,32 @@ export class ObservableCodeEditor extends Disposable {
 		this.selectionsState.update(selectionController.selections, transaction, force);
 		this.layoutState.update(this.editor.viewport.currentLayout, transaction, force);
 		this.focusState.update(readFocus(this.editor.element), transaction, force);
-		this.textFocusState.update(readFocus(this.editor.view.editContext.element), transaction, force);
+		this.textFocusState.update(this.editor.view.isFocused(), transaction, force);
 		this.compositionState.update(this.editor.view.compositionController.composing, transaction, force);
 	}
 
 	private refreshFocusState(): void {
+		this.editor.view.refreshFocusState();
 		this.runInTransaction(transaction => {
 			this.focusState.set(readFocus(this.editor.element), transaction);
-			this.textFocusState.set(readFocus(this.editor.view.editContext.element), transaction);
+			this.textFocusState.set(this.editor.view.isFocused(), transaction);
 		});
 	}
 
-	private readLineHeight(lineIndex: number, reader: IReader): number {
+	private readLineHeight(lineNumber: number, reader: IReader): number {
 		const model = this.model.read(reader);
-		validateLineIndex(model, lineIndex);
+		validateLineNumber(model, lineNumber);
 		return this.layoutInfo.read(reader).lineHeight;
 	}
 
-	private readLineTop(model: TextModel, lineIndex: number): number {
-		validateLineIndexOrEnd(model, lineIndex);
-		if (lineIndex === model.lineCount) return this.readLineBottom(model, model.lineCount - 1);
-		return this.editor.viewport.getPositionContentCoordinates(TextPosition.at(lineIndex, 0)).top;
+	private readLineTop(model: TextModel, lineNumber: number): number {
+		validateLineNumber(model, lineNumber);
+		return this.editor.viewport.getPositionContentCoordinates(new Position(lineNumber, 1)).top;
 	}
 
-	private readLineBottom(model: TextModel, lineIndex: number): number {
-		validateLineIndexOrEnd(model, lineIndex);
-		if (lineIndex === model.lineCount) return this.readLineBottom(model, model.lineCount - 1);
-		const position = TextPosition.at(lineIndex, model.getLineLength(lineIndex));
+	private readLineBottom(model: TextModel, lineNumber: number): number {
+		validateLineNumber(model, lineNumber);
+		const position = new Position(lineNumber, model.getLineLength(lineNumber) + 1);
 		const coordinates = this.editor.viewport.getPositionContentCoordinates(position);
 		return coordinates.top + coordinates.height;
 	}
@@ -441,14 +441,8 @@ function readFocus(element: HTMLElement): boolean {
 	return activeElement === element || Boolean(activeElement && element.contains(activeElement));
 }
 
-function validateLineIndex(model: TextModel, lineIndex: number): void {
-	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= model.lineCount) {
-		throw new RangeError(`Line index must be between 0 and ${model.lineCount - 1}`);
-	}
-}
-
-function validateLineIndexOrEnd(model: TextModel, lineIndex: number): void {
-	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex > model.lineCount) {
-		throw new RangeError(`Line index must be between 0 and ${model.lineCount}`);
+function validateLineNumber(model: TextModel, lineNumber: number): void {
+	if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || lineNumber > model.lineCount) {
+		throw new RangeError(`Line number must be between 1 and ${model.lineCount}`);
 	}
 }

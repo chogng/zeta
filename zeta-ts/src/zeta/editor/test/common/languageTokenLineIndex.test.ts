@@ -7,7 +7,8 @@ import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from "../..
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
 import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWireProtocol.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Token line index groups sparse lines and answers constant-time line queries", () => {
@@ -80,7 +81,7 @@ test("Model changes invalidate token lines before consumers observe new text", (
 	}));
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
 
@@ -117,11 +118,11 @@ test("Model changes preserve unaffected token lines and shift later lines", () =
 	using listener = index.onDidChange(event => events.push(event));
 
 	model.applyEdits([{
-		range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 6)),
+		range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (6) + 1)),
 		text: "changed\ninserted",
 	}]);
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(2, 8)),
+		range: Range.fromPositions(new Position((2) + 1, (8) + 1)),
 		text: "\n",
 	}]);
 
@@ -162,7 +163,7 @@ test("Token line index validates queries and owns neither store nor model", () =
 	acceptTokens(store, model, 1, [token(0, 0, 1, "word")]);
 	assert.equal(store.result!.value.tokens.length, 1);
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "!",
 	}]);
 	assert.equal(model.getText(), "abc!");
@@ -182,7 +183,7 @@ test("Token line index reuses unchanged sparse lines from a confirmed delta", ()
 	const oldLine = lines[changedLine]!;
 	const lineOffset = lines.slice(0, changedLine).reduce((offset, line) => offset + line.length + 1, 0);
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(lineOffset), model.positionAt(lineOffset + oldLine.length)),
+		range: Range.fromPositions(model.positionAt(lineOffset), model.positionAt(lineOffset + oldLine.length)),
 		text: "changed",
 	}]);
 	const currentTokens = initialTokens.map((entry, lineIndex) => (
@@ -227,10 +228,10 @@ test("Token line index rebuilds only two disjoint splice lines", () => {
 	const events: Array<{ readonly rebuiltLineCount: number; readonly reusedLineCount: number }> = [];
 	using listener = index.onDidChange(event => events.push(event));
 	model.applyEdits([{
-		range: TextRange.from(TextPosition.at(100, 0), TextPosition.at(100, lines[100]!.length)),
+		range: Range.fromPositions(new Position((100) + 1, (0) + 1), new Position((100) + 1, (lines[100]!.length) + 1)),
 		text: "changed100",
 	}, {
-		range: TextRange.from(TextPosition.at(900, 0), TextPosition.at(900, lines[900]!.length)),
+		range: Range.fromPositions(new Position((900) + 1, (0) + 1), new Position((900) + 1, (lines[900]!.length) + 1)),
 		text: "changed900",
 	}]);
 	const currentTokens = initialTokens.map((entry, lineIndex) => (
@@ -296,7 +297,7 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 	const insertionLine = 100;
 	const insertionOffset = lines.slice(0, insertionLine).reduce((offset, line) => offset + line.length + 1, 0);
 	model.applyEdits([{
-		range: TextRange.emptyAt(model.positionAt(insertionOffset)),
+		range: Range.fromPositions(model.positionAt(insertionOffset)),
 		text: "inserted\n",
 	}]);
 	const snapshot = model.createSnapshot();
@@ -363,7 +364,7 @@ test("Token line index matches full results across random wire deltas", () => {
 		const startOffset = randomInteger(length + 1);
 		const removedLength = Math.min(randomInteger(4), length - startOffset);
 		model.applyEdits([{
-			range: TextRange.from(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
+			range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
 			text: insertions[randomInteger(insertions.length)]!,
 		}]);
 	}
@@ -392,9 +393,9 @@ function acceptTokens(
 
 function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageToken {
 	return {
-		range: TextRange.from(
-			TextPosition.at(lineIndex, startColumn),
-			TextPosition.at(lineIndex, endColumn),
+		range: Range.fromPositions(
+			new Position((lineIndex) + 1, (startColumn) + 1),
+			new Position((lineIndex) + 1, (endColumn) + 1),
 		),
 		tokenType,
 		modifiers: [],
@@ -403,9 +404,9 @@ function token(lineIndex: number, startColumn: number, endColumn: number, tokenT
 
 function serializeTokens(tokens: readonly LanguageToken[]): readonly unknown[] {
 	return tokens.map(entry => [
-		entry.range.start.lineIndex,
-		entry.range.start.columnIndex,
-		entry.range.end.columnIndex,
+		entry.range.getStartPosition().lineNumber,
+		entry.range.getStartPosition().column,
+		entry.range.getEndPosition().column,
 		entry.tokenType,
 		entry.modifiers,
 	]);

@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { URI } from "../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { LanguageFeatureProviderRegistry } from "../../common/languageFeatureRegistry.js";
 import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider, WorkspaceSymbolService } from "../../common/languages/workspaceSymbols.js";
 
-const RANGE = TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4));
+const RANGE = Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1));
 
 test("workspace symbols publish fast providers before deterministic final fusion", async () => {
 	using providers = new LanguageFeatureProviderRegistry<LanguageWorkspaceSymbolProvider>();

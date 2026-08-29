@@ -4,8 +4,9 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
-import { TextPosition } from "../../../common/core/text.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { Position } from "../../../common/core/position.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type TextEditorContributionContext } from "../../../browser/editorExtensions.js";
 import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
@@ -92,7 +93,7 @@ export class FoldingController extends Disposable {
 	private handleGutterPointerDown(event: PointerEvent): void {
 		const target = this.mouseTargets.create(event);
 		if (target?.kind !== MouseTargetKind.GutterDecoration || target.decorationOwner !== "folding") return;
-		const lineIndex = target.editorTarget?.position.lineIndex;
+		const lineIndex = target.editorTarget?.position.lineNumber === undefined ? undefined : target.editorTarget.position.lineNumber - 1;
 		if (lineIndex === undefined) return;
 		event.preventDefault();
 		event.stopPropagation();
@@ -102,10 +103,10 @@ export class FoldingController extends Disposable {
 	}
 
 	private setContainingFoldCollapsed(collapsed: boolean): void {
-		const region = this.folding.setContainingLineCollapsed(this.selections.selections.primary.active.lineIndex, collapsed);
+		const region = this.folding.setContainingLineCollapsed(this.selections.selections.primary.getPosition().lineNumber - 1, collapsed);
 		if (!region) return;
 		if (region.collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 
 	private setAllCollapsed(collapsed: boolean): void {
@@ -113,51 +114,48 @@ export class FoldingController extends Disposable {
 		if (collapsed) {
 			for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
 		}
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 
 	private setContainingFoldRecursively(collapsed: boolean): void {
-		const lineIndex = this.selections.selections.primary.active.lineIndex;
+		const lineIndex = this.selections.selections.primary.getPosition().lineNumber - 1;
 		const region = collapsed
 			? this.folding.collapseContainingRegionRecursively(lineIndex)
 			: this.folding.expandContainingRegionRecursively(lineIndex);
 		if (!region) return;
 		if (collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 
 	private createManualRange(): void {
-		const selection = this.selections.selections.primary.range;
-		const endLineIndex = selection.end.columnIndex === 0 && selection.end.lineIndex > selection.start.lineIndex
-			? selection.end.lineIndex - 1
-			: selection.end.lineIndex;
-		const region = this.folding.addManualRange(selection.start.lineIndex, endLineIndex);
-		if (region) this.viewport.revealPosition(this.selections.selections.primary.active);
+		const selection = this.selections.selections.primary;
+		const endLineIndex = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
+			? selection.endLineNumber - 2
+			: selection.endLineNumber - 1;
+		const region = this.folding.addManualRange(selection.startLineNumber - 1, endLineIndex);
+		if (region) this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 
 	private removeManualRange(): void {
-		const region = this.folding.removeContainingManualRange(this.selections.selections.primary.active.lineIndex);
-		if (region) this.viewport.revealPosition(this.selections.selections.primary.active);
+		const region = this.folding.removeContainingManualRange(this.selections.selections.primary.getPosition().lineNumber - 1);
+		if (region) this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 
 	private setCollapsedToLevel(level: number): void {
 		if (!this.folding.collapseToLevel(level)) return;
 		for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
-		this.viewport.revealPosition(this.selections.selections.primary.active);
+		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 
 	private relocateHiddenSelections(region: EditorFoldingRegion): void {
-		const header = TextPosition.at(
-			region.startLineIndex,
-			this.viewport.textModel.getLineContent(region.startLineIndex).length,
-		);
+		const header = new Position((region.startLineIndex) + 1, (this.viewport.textModel.getLineContent((region.startLineIndex) + 1).length) + 1);
 		const selections = this.selections.selections.selections.map(selection => {
-			const activeLineIndex = selection.active.lineIndex;
+			const activeLineIndex = selection.getPosition().lineNumber - 1;
 			return activeLineIndex > region.startLineIndex && activeLineIndex <= region.endLineIndex
-				? TextSelection.collapsedAt(header)
+				? Selection.fromPositions(header)
 				: selection;
 		});
-		this.selections.setSelections(TextSelectionSet.withPrimary(selections, this.selections.selections.primaryIndex));
+		this.selections.setSelections(SelectionSet.withPrimary(selections, this.selections.selections.primaryIndex));
 	}
 }
 

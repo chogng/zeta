@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { RGBA8 } from '../../../../common/core/misc/rgba.js';
 import { ColorPickerModel } from '../../browser/colorPickerModel.js';
 
 test('color picker model retains format choice while provider presentations refresh', () => {
 	using model = new ColorPickerModel(new RGBA8(255, 0, 0, 128));
-	const range = TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 9));
+	const range = Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (9) + 1));
 	const presentations = ['rgba(255, 0, 0, 0.5)', 'hsla(0, 100%, 50%, 0.5)', '#ff000080'].map(label => ({ label, textEdit: { range, text: label } }));
 
 	model.setColorPresentations(presentations, '#ff000080');

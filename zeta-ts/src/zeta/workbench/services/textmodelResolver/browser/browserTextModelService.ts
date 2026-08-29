@@ -5,7 +5,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { runWhenWindowIdle } from "../../../../base/browser/scheduler.js";
 import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelService } from "../../../../editor/common/services/resolverService.js";
 import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
-import { normalizeTextLineEndings } from "../../../../editor/common/core/text.js";
+import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/common/model/textModel.js";
 import { ModelUndoRedoParticipant } from '../../../../editor/common/services/modelUndoRedoParticipant.js';
 

@@ -1,6 +1,6 @@
 {
   "yoloMode": false,
-  "planMode": false,
+  "planMode": true,
   "vulnerabilityHuntingMode": false,
   "toolSearchEnabled": false,
   "hybridCompressEnabled": false,

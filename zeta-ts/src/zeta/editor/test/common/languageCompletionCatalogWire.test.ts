@@ -9,7 +9,8 @@ import { languageCompletionWireCodec } from "../../common/languages/completion/l
 import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
 import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Remote provider catalog drives trigger routing without renderer providers", async () => {
@@ -23,7 +24,7 @@ test("Remote provider catalog drives trigger routing without renderer providers"
 	using service = new LanguageCompletionService(model, localRegistry, {
 		workerFactory: () => new LanguageCompletionCatalogWorkerClient(clientPort),
 	});
-	const position = TextPosition.at(0, model.getText().length);
+	const position = new Position((0) + 1, (model.getText().length) + 1);
 
 	const outcome = await service.requestTriggerCharacter("typescript", position, ".");
 
@@ -82,7 +83,7 @@ test("A failed catalog worker clears metadata and the next trigger rebuilds both
 			return new LanguageCompletionCatalogWorkerClient(clientPort);
 		},
 	});
-	const position = TextPosition.at(0, model.getText().length);
+	const position = new Position((0) + 1, (model.getText().length) + 1);
 
 	await assert.rejects(
 		service.request("typescript", position, createLanguageCompletionInvokeContext()),
@@ -107,7 +108,7 @@ function triggerProvider(id: string, triggerCharacter: string): LanguageCompleti
 				id: "member",
 				label: "member",
 				kind: LanguageCompletionItemKind.Property,
-				range: TextRange.emptyAt(request.position),
+				range: Range.fromPositions(request.position),
 				insertText: "member",
 			}],
 			isIncomplete: false,

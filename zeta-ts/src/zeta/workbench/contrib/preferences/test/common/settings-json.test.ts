@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TextPosition, TextRange } from '../../../../../editor/common/core/text.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages/completion/languageCompletionProviders.js';
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
@@ -66,7 +67,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 	"editor.enabled": true,
 	"editor.
 }`);
-	const position = TextPosition.at(2, model.getLineLength(2));
+	const position = new Position((2) + 1, (model.getLineLength((2) + 1)) + 1);
 	const result = await provider.provideCompletions({
 		requestId: 1,
 		languageId: 'jsonc',
@@ -85,7 +86,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		requestId: 2,
 		languageId: 'jsonc',
 		resource: UserSettingsResource,
-		position: TextPosition.at(1, triggeredModel.getLineLength(1)),
+		position: new Position((1) + 1, (triggeredModel.getLineLength((1) + 1)) + 1),
 		context: { kind: LanguageCompletionTriggerKind.TriggerCharacter, triggerCharacter: '"' },
 		snapshot: triggeredModel.createSnapshot(),
 	}, new AbortController().signal);
@@ -100,12 +101,12 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 	}, new AbortController().signal), undefined);
 
 	using valueModel = new TextModel('{ "editor.fontFamily": "editor. }');
-	const valuePosition = valueModel.getLineContent(0).lastIndexOf('editor.') + 'editor.'.length;
+	const valuePosition = valueModel.getLineContent((0) + 1).lastIndexOf('editor.') + 'editor.'.length;
 	const valueResult = await provider.provideCompletions({
 		requestId: 4,
 		languageId: 'jsonc',
 		resource: UserSettingsResource,
-		position: TextPosition.at(0, valuePosition),
+		position: new Position((0) + 1, (valuePosition) + 1),
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
 		snapshot: valueModel.createSnapshot(),
 	}, new AbortController().signal);
@@ -119,7 +120,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		requestId: 5,
 		languageId: 'jsonc',
 		resource: UserSettingsResource,
-		position: TextPosition.at(2, nestedModel.getLineLength(2)),
+		position: new Position((2) + 1, (nestedModel.getLineLength((2) + 1)) + 1),
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
 		snapshot: nestedModel.createSnapshot(),
 	}, new AbortController().signal), undefined);
@@ -155,7 +156,7 @@ test('the text-model save path updates configuration and accepts later external 
 	using models = new BrowserTextModelService(resourceStore);
 	using reference = await models.acquire({ resource: UserSettingsResource }, new AbortController().signal);
 	reference.model.applyOperations([{
-		range: TextRange.from(TextPosition.at(0, 0), reference.model.positionAt(reference.model.length)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), reference.model.positionAt(reference.model.length)),
 		text: '{\n\t// Keep me.\n\t"editor.enabled": false,\n}\n',
 	}]);
 
@@ -174,8 +175,8 @@ test('the text-model save path updates configuration and accepts later external 
 
 test('SmartSnippetInserter preserves object-array punctuation around the cursor', () => {
 	using empty = new TextModel('[]');
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(empty, TextPosition.at(0, 0)), {
-		position: TextPosition.at(0, 1),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(empty, new Position((0) + 1, (0) + 1)), {
+		position: new Position((0) + 1, (1) + 1),
 		prepend: '',
 		append: '',
 	});
@@ -183,20 +184,20 @@ test('SmartSnippetInserter preserves object-array punctuation around the cursor'
 	using populated = new TextModel(`[
 {}
 ]`);
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, TextPosition.at(1, 1)), {
-		position: TextPosition.at(1, 0),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, new Position((1) + 1, (1) + 1)), {
+		position: new Position((1) + 1, (0) + 1),
 		prepend: '',
 		append: ',',
 	});
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, TextPosition.at(1, 2)), {
-		position: TextPosition.at(1, 2),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(populated, new Position((1) + 1, (2) + 1)), {
+		position: new Position((1) + 1, (2) + 1),
 		prepend: ',',
 		append: '',
 	});
 
 	using invalid = new TextModel('// no array');
-	assert.deepEqual(SmartSnippetInserter.insertSnippet(invalid, TextPosition.at(0, 0)), {
-		position: TextPosition.at(0, 11),
+	assert.deepEqual(SmartSnippetInserter.insertSnippet(invalid, new Position((0) + 1, (0) + 1)), {
+		position: new Position((0) + 1, (11) + 1),
 		prepend: '\n[',
 		append: ']',
 	});

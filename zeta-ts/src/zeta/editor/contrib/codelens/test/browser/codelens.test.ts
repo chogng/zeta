@@ -6,7 +6,8 @@ import { URI } from '../../../../../base/common/uri.js';
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { MouseTargetFactory, MouseTargetKind } from '../../../../browser/controller/mouseTarget.js';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageCodeLensProvider } from '../../common/codelens.js';
@@ -116,7 +117,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	assert.equal(viewport.element.querySelectorAll('.stanza-editor-codelens').length, 1);
 	assert.equal(widget.getAttribute('aria-label'), 'CodeLens commands');
 	assert.equal(widget.style.top, '20px');
-	assert.equal(viewport.getPositionContentCoordinates(TextPosition.at(1, 0)).top, 34);
+	assert.equal(viewport.getPositionContentCoordinates(new Position((1) + 1, (0) + 1)).top, 34);
 	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Immediate', 'Deferred']);
 	assert.equal(resolveCount, 1);
 	const pointerTarget = new MouseTargetFactory(viewport).create({
@@ -250,13 +251,13 @@ test('CodeLens cache persists workspace line positions without command data', ()
 	const closingResource = URI.parse('file:///closing.ts');
 	const storage = new TestStorageService({
 		'codelens/cache2': JSON.stringify({
-			[restoredResource.toString()]: { lineCount: 3, lines: [2, 2, 7] },
+			[restoredResource.toString()]: { lineCount: 3, lines: [3, 3, 7] },
 			'invalid resource': { lineCount: 1, lines: [0] },
 		}),
 	});
 	let binding: ReturnType<typeof bindCodeLensCacheStorage> | undefined = bindCodeLensCacheStorage(storage);
 	try {
-		assert.deepEqual(codeLensCache.get(restoredResource, 3)?.lenses.map(item => ({ lineIndex: item.symbol.range.start.lineIndex, command: item.symbol.command })), [
+		assert.deepEqual(codeLensCache.get(restoredResource, 3)?.lenses.map(item => ({ lineIndex: item.symbol.range.startLineNumber - 1, command: item.symbol.command })), [
 			{ lineIndex: 2, command: undefined },
 		]);
 		const restoredDom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -274,7 +275,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		assert.deepEqual({
 			hidden: restoredWidget.hidden,
 			zoneTop: restoredWidget.style.top,
-			thirdLineTop: restoredViewport.getPositionContentCoordinates(TextPosition.at(2, 0)).top,
+			thirdLineTop: restoredViewport.getPositionContentCoordinates(new Position((2) + 1, (0) + 1)).top,
 			contentHeight: restoredViewport.viewportLayout.contentSize.height,
 		}, {
 			hidden: true,
@@ -292,22 +293,22 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		const serialized = storage.get('codelens/cache2', StorageScope.WORKSPACE, '{}');
 
 		assert.deepEqual(JSON.parse(serialized), {
-			[restoredResource.toString()]: { lineCount: 3, lines: [2] },
-			[storedResource.toString()]: { lineCount: 2, lines: [1] },
+			[restoredResource.toString()]: { lineCount: 3, lines: [3] },
+			[storedResource.toString()]: { lineCount: 2, lines: [2] },
 		});
 		assert.equal(serialized.includes('source.run') || serialized.includes('Run'), false);
 		storage.fireExternalChange('codelens/cache2', JSON.stringify({
-			[switchedResource.toString()]: { lineCount: 1, lines: [0] },
+			[switchedResource.toString()]: { lineCount: 1, lines: [1] },
 		}));
 		assert.equal(codeLensCache.get(storedResource, 2), undefined);
-		assert.deepEqual(codeLensCache.get(switchedResource, 1)?.lenses.map(item => item.symbol.range.start.lineIndex), [0]);
+		assert.deepEqual(codeLensCache.get(switchedResource, 1)?.lenses.map(item => item.symbol.range.getStartPosition().lineNumber), [1]);
 
 		codeLensCache.put(closingResource, 1, new CodeLensModel([
 			Object.freeze({ symbol: lens(0, 0, command('closing.run', 'Closing')), provider }),
 		]));
 		binding.dispose();
 		binding = undefined;
-		assert.deepEqual(JSON.parse(storage.get('codelens/cache2', StorageScope.WORKSPACE, '{}'))[closingResource.toString()], { lineCount: 1, lines: [0] });
+		assert.deepEqual(JSON.parse(storage.get('codelens/cache2', StorageScope.WORKSPACE, '{}'))[closingResource.toString()], { lineCount: 1, lines: [1] });
 	} finally {
 		binding?.dispose();
 		codeLensCache.delete(restoredResource);
@@ -318,9 +319,9 @@ test('CodeLens cache persists workspace line positions without command data', ()
 });
 
 function lens(lineIndex: number, columnIndex: number, value?: ReturnType<typeof command>, data?: unknown) {
-	const position = TextPosition.at(lineIndex, columnIndex);
+	const position = new Position((lineIndex) + 1, (columnIndex) + 1);
 	return {
-		range: TextRange.emptyAt(position),
+		range: Range.fromPositions(position),
 		...(value ? { command: value } : {}),
 		...(data !== undefined ? { data } : {}),
 	};

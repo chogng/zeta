@@ -1,7 +1,7 @@
 import { LineRange } from "../ranges/lineRange.js";
 import { splitLines } from '../../../../base/common/strings.js';
-import { TextPosition } from "../position.js";
-import { TextRange } from "../range.js";
+import { Position } from "../position.js";
+import { Range } from "../range.js";
 import { AbstractText } from "../text/abstractText.js";
 import { StringEdit, StringReplacement } from "./stringEdit.js";
 import { TextEdit, TextReplacement } from "./textEdit.js";
@@ -17,7 +17,7 @@ export class LineEdit {
 			const replacement = edit.replacements[index]!;
 			current.push(replacement);
 			const next = edit.replacements[index + 1];
-			if (next && next.range.start.lineIndex === replacement.range.end.lineIndex) continue;
+			if (next && next.range.startLineNumber === replacement.range.endLineNumber) continue;
 			const combined = current.length === 1 ? current[0]! : new TextEdit(current).toReplacement(initialValue);
 			result.push(LineReplacement.fromTextReplacement(combined, initialValue));
 			current = [];
@@ -25,23 +25,23 @@ export class LineEdit {
 		return new LineEdit(result);
 	}
 	static fromStringEdit(edit: StringEdit, initialValue: AbstractText): LineEdit { return LineEdit.fromTextEdit(TextEdit.fromStringEdit(edit, initialValue), initialValue); }
-	static createFromUnsorted(edits: readonly LineReplacement[]): LineEdit { return new LineEdit([...edits].sort((left, right) => left.lineRange.startLineIndex - right.lineRange.startLineIndex)); }
+	static createFromUnsorted(edits: readonly LineReplacement[]): LineEdit { return new LineEdit([...edits].sort((left, right) => left.lineRange.startLineNumber - right.lineRange.startLineNumber)); }
 
 	constructor(readonly replacements: readonly LineReplacement[]) {
-		for (let index = 1; index < replacements.length; index += 1) if (replacements[index - 1]!.lineRange.endLineIndexExclusive > replacements[index]!.lineRange.startLineIndex) throw new RangeError("Line edits must be sorted and disjoint");
+		for (let index = 1; index < replacements.length; index += 1) if (replacements[index - 1]!.lineRange.endLineNumberExclusive > replacements[index]!.lineRange.startLineNumber) throw new RangeError("Line edits must be sorted and disjoint");
 	}
 
 	isEmpty(): boolean { return this.replacements.length === 0; }
 	apply(lines: readonly string[]): string[] {
 		const result: string[] = [];
-		let sourceLine = 0;
+		let sourceLineIndex = 0;
 		for (const replacement of this.replacements) {
-			if (replacement.lineRange.endLineIndexExclusive > lines.length) throw new RangeError("Line edit is outside the text source");
-			while (sourceLine < replacement.lineRange.startLineIndex) result.push(lines[sourceLine++]!);
+			if (replacement.lineRange.endLineNumberExclusive > lines.length + 1) throw new RangeError("Line edit is outside the text source");
+			while (sourceLineIndex < replacement.lineRange.startLineNumber - 1) result.push(lines[sourceLineIndex++]!);
 			result.push(...replacement.newLines);
-			sourceLine = replacement.lineRange.endLineIndexExclusive;
+			sourceLineIndex = replacement.lineRange.endLineNumberExclusive - 1;
 		}
-		while (sourceLine < lines.length) result.push(lines[sourceLine++]!);
+		while (sourceLineIndex < lines.length) result.push(lines[sourceLineIndex++]!);
 		return result;
 	}
 
@@ -49,7 +49,7 @@ export class LineEdit {
 		const inverse: LineReplacement[] = [];
 		let delta = 0;
 		for (const replacement of this.replacements) {
-			inverse.push(new LineReplacement(new LineRange(replacement.lineRange.startLineIndex + delta, replacement.lineRange.startLineIndex + delta + replacement.newLines.length), originalLines.slice(replacement.lineRange.startLineIndex, replacement.lineRange.endLineIndexExclusive)));
+			inverse.push(new LineReplacement(new LineRange(replacement.lineRange.startLineNumber + delta, replacement.lineRange.startLineNumber + delta + replacement.newLines.length), originalLines.slice(replacement.lineRange.startLineNumber - 1, replacement.lineRange.endLineNumberExclusive - 1)));
 			delta += replacement.newLines.length - replacement.lineRange.length;
 		}
 		return new LineEdit(inverse);
@@ -58,9 +58,9 @@ export class LineEdit {
 	toEdit(initialValue: AbstractText): StringEdit { return new StringEdit(this.replacements.map(replacement => replacement.toStringReplacement(initialValue))); }
 	toStringEdit(initialValue: AbstractText): StringEdit { return this.toEdit(initialValue); }
 	serialize(): SerializedLineEdit { return this.replacements.map(replacement => replacement.serialize()); }
-	getNewLineRanges(): LineRange[] { let delta = 0; return this.replacements.map(replacement => { const range = LineRange.ofLength(replacement.lineRange.startLineIndex + delta, replacement.newLines.length); delta += replacement.newLines.length - replacement.lineRange.length; return range; }); }
-	mapLineNumber(lineIndex: number): number { let delta = 0; for (const replacement of this.replacements) { if (replacement.lineRange.endLineIndexExclusive > lineIndex) break; delta += replacement.newLines.length - replacement.lineRange.length; } return lineIndex + delta; }
-	mapLineRange(range: LineRange): LineRange { return new LineRange(this.mapLineNumber(range.startLineIndex), this.mapLineNumber(range.endLineIndexExclusive)); }
+	getNewLineRanges(): LineRange[] { let delta = 0; return this.replacements.map(replacement => { const range = LineRange.ofLength(replacement.lineRange.startLineNumber + delta, replacement.newLines.length); delta += replacement.newLines.length - replacement.lineRange.length; return range; }); }
+	mapLineNumber(lineNumber: number): number { let delta = 0; for (const replacement of this.replacements) { if (replacement.lineRange.endLineNumberExclusive > lineNumber) break; delta += replacement.newLines.length - replacement.lineRange.length; } return lineNumber + delta; }
+	mapLineRange(range: LineRange): LineRange { return new LineRange(this.mapLineNumber(range.startLineNumber), this.mapLineNumber(range.endLineNumberExclusive)); }
 	mapBackLineRange(range: LineRange, originalLines: readonly string[]): LineRange { return this.inverse(originalLines).mapLineRange(range); }
 	rebase(base: LineEdit): LineEdit { return new LineEdit(this.replacements.map(replacement => new LineReplacement(base.mapLineRange(replacement.lineRange), replacement.newLines))); }
 	touches(other: LineEdit): boolean { return this.replacements.some(left => other.replacements.some(right => left.lineRange.intersectsOrTouches(right.lineRange))); }
@@ -77,17 +77,17 @@ export class LineReplacement {
 
 	static fromTextReplacement(edit: TextReplacement, initialValue: AbstractText): LineReplacement {
 		const newLines = splitLines(edit.text);
-		const prefix = initialValue.getLineAt(edit.range.start.lineIndex).slice(0, edit.range.start.columnIndex);
-		const suffix = initialValue.getLineAt(edit.range.end.lineIndex).slice(edit.range.end.columnIndex);
+		const prefix = initialValue.getLineAt(edit.range.startLineNumber).slice(0, edit.range.startColumn - 1);
+		const suffix = initialValue.getLineAt(edit.range.endLineNumber).slice(edit.range.endColumn - 1);
 		newLines[0] = prefix + newLines[0]!;
 		newLines[newLines.length - 1] = newLines.at(-1)! + suffix;
-		let startLine = edit.range.start.lineIndex;
-		let endLineExclusive = edit.range.end.lineIndex + 1;
-		if (edit.range.start.columnIndex === initialValue.getLineLength(edit.range.start.lineIndex) && newLines[0] === prefix) {
+		let startLine = edit.range.startLineNumber;
+		let endLineExclusive = edit.range.endLineNumber + 1;
+		if (edit.range.startColumn === initialValue.getLineLength(edit.range.startLineNumber) + 1 && newLines[0] === prefix) {
 			startLine += 1;
 			newLines.shift();
 		}
-		if (newLines.length > 0 && startLine < endLineExclusive && edit.range.end.columnIndex === 0 && newLines.at(-1) === suffix) {
+		if (newLines.length > 0 && startLine < endLineExclusive && edit.range.endColumn === 1 && newLines.at(-1) === suffix) {
 			endLineExclusive -= 1;
 			newLines.pop();
 		}
@@ -96,30 +96,26 @@ export class LineReplacement {
 
 	toTextReplacement(initialValue: AbstractText): TextReplacement {
 		const totalLines = initialValue.length.lineCount + 1;
-		if (this.lineRange.endLineIndexExclusive > totalLines) throw new RangeError("Line replacement is outside the text source");
-		if (this.lineRange.empty) {
-			if (this.newLines.length === 0) return TextReplacement.insert(TextPosition.at(this.lineRange.startLineIndex, 0), "");
-			if (this.lineRange.startLineIndex >= totalLines) {
-				const lastLine = totalLines - 1;
-				return TextReplacement.insert(TextPosition.at(lastLine, initialValue.getLineLength(lastLine)), `\n${this.newLines.join("\n")}`);
+		if (this.lineRange.endLineNumberExclusive > totalLines + 1) throw new RangeError("Line replacement is outside the text source");
+		if (this.lineRange.isEmpty) {
+			if (this.newLines.length === 0) return TextReplacement.insert(new Position(this.lineRange.startLineNumber, 1), "");
+			if (this.lineRange.startLineNumber === totalLines + 1) {
+				return TextReplacement.insert(new Position(totalLines, initialValue.getLineLength(totalLines) + 1), `\n${this.newLines.join("\n")}`);
 			}
-			return TextReplacement.insert(TextPosition.at(this.lineRange.startLineIndex, 0), `${this.newLines.join("\n")}\n`);
+			return TextReplacement.insert(new Position(this.lineRange.startLineNumber, 1), `${this.newLines.join("\n")}\n`);
 		}
 		if (this.newLines.length === 0) {
-			if (this.lineRange.endLineIndexExclusive === totalLines) {
-				const start = this.lineRange.startLineIndex === 0
-					? TextPosition.at(0, 0)
-					: TextPosition.at(this.lineRange.startLineIndex - 1, initialValue.getLineLength(this.lineRange.startLineIndex - 1));
-				const end = TextPosition.at(totalLines - 1, initialValue.getLineLength(totalLines - 1));
-				return new TextReplacement(TextRange.from(start, end), "");
+			if (this.lineRange.endLineNumberExclusive === totalLines + 1) {
+				const start = this.lineRange.startLineNumber === 1
+					? new Position(1, 1)
+					: new Position(this.lineRange.startLineNumber - 1, initialValue.getLineLength(this.lineRange.startLineNumber - 1) + 1);
+				const end = new Position(totalLines, initialValue.getLineLength(totalLines) + 1);
+				return new TextReplacement(Range.fromPositions(start, end), "");
 			}
-			return new TextReplacement(TextRange.from(TextPosition.at(this.lineRange.startLineIndex, 0), TextPosition.at(this.lineRange.endLineIndexExclusive, 0)), "");
+			return new TextReplacement(new Range(this.lineRange.startLineNumber, 1, this.lineRange.endLineNumberExclusive, 1), "");
 		}
-		if (this.lineRange.endLineIndexExclusive === totalLines) {
-			const endLine = totalLines - 1;
-			return new TextReplacement(TextRange.from(TextPosition.at(this.lineRange.startLineIndex, 0), TextPosition.at(endLine, initialValue.getLineLength(endLine))), this.newLines.join("\n"));
-		}
-		return new TextReplacement(TextRange.from(TextPosition.at(this.lineRange.startLineIndex, 0), TextPosition.at(this.lineRange.endLineIndexExclusive, 0)), `${this.newLines.join("\n")}\n`);
+		const endLineNumber = this.lineRange.endLineNumberExclusive - 1;
+		return new TextReplacement(new Range(this.lineRange.startLineNumber, 1, endLineNumber, initialValue.getLineLength(endLineNumber) + 1), this.newLines.join("\n"));
 	}
 
 	toSingleTextEdit(initialValue: AbstractText): TextReplacement { return this.toTextReplacement(initialValue); }
@@ -130,25 +126,25 @@ export class LineReplacement {
 		return new StringReplacement(initialValue.getTransformer().getOffsetRange(replacement.range), replacement.text);
 	}
 
-	serialize(): SerializedLineReplacement { return [this.lineRange.startLineIndex, this.lineRange.endLineIndexExclusive, this.newLines]; }
+	serialize(): SerializedLineReplacement { return [this.lineRange.startLineNumber, this.lineRange.endLineNumberExclusive, this.newLines]; }
 	removeCommonSuffixPrefixLines(initialValue: AbstractText): LineReplacement {
-		let startLineIndex = this.lineRange.startLineIndex;
-		let endLineIndexExclusive = this.lineRange.endLineIndexExclusive;
+		let startLineNumber = this.lineRange.startLineNumber;
+		let endLineNumberExclusive = this.lineRange.endLineNumberExclusive;
 		let trimStartCount = 0;
-		while (startLineIndex < endLineIndexExclusive && trimStartCount < this.newLines.length && this.newLines[trimStartCount] === initialValue.getLineAt(startLineIndex)) {
-			startLineIndex += 1;
+		while (startLineNumber < endLineNumberExclusive && trimStartCount < this.newLines.length && this.newLines[trimStartCount] === initialValue.getLineAt(startLineNumber)) {
+			startLineNumber += 1;
 			trimStartCount += 1;
 		}
 		let trimEndCount = 0;
-		while (startLineIndex < endLineIndexExclusive && trimStartCount + trimEndCount < this.newLines.length && this.newLines[this.newLines.length - trimEndCount - 1] === initialValue.getLineAt(endLineIndexExclusive - 1)) {
-			endLineIndexExclusive -= 1;
+		while (startLineNumber < endLineNumberExclusive && trimStartCount + trimEndCount < this.newLines.length && this.newLines[this.newLines.length - trimEndCount - 1] === initialValue.getLineAt(endLineNumberExclusive - 1)) {
+			endLineNumberExclusive -= 1;
 			trimEndCount += 1;
 		}
 		if (trimStartCount === 0 && trimEndCount === 0) return this;
-		return new LineReplacement(new LineRange(startLineIndex, endLineIndexExclusive), this.newLines.slice(trimStartCount, this.newLines.length - trimEndCount));
+		return new LineReplacement(new LineRange(startLineNumber, endLineNumberExclusive), this.newLines.slice(trimStartCount, this.newLines.length - trimEndCount));
 	}
 	toLineEdit(): LineEdit { return new LineEdit([this]); }
 	toString(): string { return `${this.lineRange.toString()} -> ${JSON.stringify(this.newLines)}`; }
 }
 
-export type SerializedLineReplacement = [startLineIndex: number, endLineIndexExclusive: number, newLines: readonly string[]];
+export type SerializedLineReplacement = [startLineNumber: number, endLineNumberExclusive: number, newLines: readonly string[]];

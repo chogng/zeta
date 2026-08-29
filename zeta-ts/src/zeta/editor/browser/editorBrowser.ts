@@ -5,9 +5,11 @@ import { Disposable, type IDisposable, toDisposable } from "../../base/common/li
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import type { URI } from "../../base/common/uri.js";
 import { CursorsController } from "../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
+import { Selection } from "../common/core/selection.js";
+import { SelectionSet } from "../common/cursor/selectionSet.js";
 import type { IPosition } from '../common/core/position.js';
-import { TextPosition, type TextRange } from "../common/core/text.js";
+import { Position } from "../common/core/position.js";
+import { type Range } from "../common/core/range.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
 import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
@@ -41,7 +43,7 @@ import { LanguageEditingAdapter } from "./view/viewController.js";
 import { type ICodeEditorService } from './services/codeEditorService.js';
 
 export interface EditorContextMenuRequest {
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly target: EditorHitTarget | undefined;
 	readonly clientX: number;
 	readonly clientY: number;
@@ -163,6 +165,12 @@ export interface EditorResourceInput {
 	readonly initialText?: string;
 }
 
+/** Editor input accessibility state shared with contributed widgets. */
+export interface IEditorAriaOptions {
+	activeDescendant: string | undefined;
+	role?: string;
+}
+
 export interface EditorBrowserOptions {
 	readonly container: HTMLElement;
 	readonly input: EditorResourceInput;
@@ -278,7 +286,7 @@ export interface IEditorBrowser extends IDisposable {
 	focus(): void;
 	getValue(): string;
 	setValue(value: string): void;
-	revealRange(range: TextRange): void;
+	revealRange(range: Range): void;
 	getViewState(): EditorTextViewState;
 	restoreViewState(state: EditorTextViewState): void;
 	addContentWidget(widget: IContentWidget): void;
@@ -325,7 +333,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			const configurations = languageConfigurationService;
 			this.selections = this._register(new CursorsController(
 				model,
-				TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+				SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 				{ readOnly: options.input.readOnly },
 			));
 			const contributionCapabilities = new Map<string, unknown>();
@@ -497,7 +505,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 	focus(): void { this.codeEditor.focus(); }
 	getValue(): string { return this.codeEditor.getValue(); }
 	setValue(value: string): void { this.codeEditor.setValue(value); }
-	revealRange(range: TextRange): void { this.codeEditor.revealRange(range); }
+	revealRange(range: Range): void { this.codeEditor.revealRange(range); }
 	getViewState(): EditorTextViewState { return this.codeEditor.saveViewState(); }
 	restoreViewState(state: EditorTextViewState): void { this.codeEditor.restoreViewState(state); }
 	addContentWidget(widget: IContentWidget): void { this.codeEditor.addContentWidget(widget); }

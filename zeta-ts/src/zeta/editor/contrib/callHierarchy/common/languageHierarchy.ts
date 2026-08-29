@@ -1,6 +1,7 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type TextPosition, TextRange } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -10,20 +11,20 @@ export interface LanguageHierarchyItem {
 	readonly symbolKind: number;
 	readonly detail?: string;
 	readonly resource: URI;
-	readonly range: TextRange;
-	readonly selectionRange: TextRange;
+	readonly range: Range;
+	readonly selectionRange: Range;
 	readonly data?: unknown;
 }
 
 export interface LanguageCallHierarchyEntry {
 	readonly item: LanguageHierarchyItem;
 	readonly fromResource?: URI;
-	readonly fromRanges: readonly TextRange[];
+	readonly fromRanges: readonly Range[];
 }
 
 export interface LanguageHierarchyRequest extends LanguageFeatureRequest {
 	readonly resource: URI;
-	readonly position: TextPosition;
+	readonly position: Position;
 }
 
 export interface LanguageHierarchyFollowupRequest extends LanguageFeatureRequest {
@@ -59,7 +60,7 @@ export interface PreparedTypeHierarchy {
 export class LanguageHierarchyService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly callProviders: LanguageFeatureProviderRegistry<LanguageCallHierarchyProvider>, private readonly typeProviders: LanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>) { super(); }
 
-	async prepareCallHierarchy(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedCallHierarchy[]> {
+	async prepareCallHierarchy(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedCallHierarchy[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };
 		const prepared: PreparedCallHierarchy[] = [];
 		for (const provider of this.callProviders.getProviders(languageId)) {
@@ -75,7 +76,7 @@ export class LanguageHierarchyService extends Disposable {
 		return Object.freeze(prepared);
 	}
 
-	async prepareTypeHierarchy(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedTypeHierarchy[]> {
+	async prepareTypeHierarchy(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedTypeHierarchy[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };
 		const prepared: PreparedTypeHierarchy[] = [];
 		for (const provider of this.typeProviders.getProviders(languageId)) {
@@ -106,7 +107,7 @@ export class LanguageHierarchyService extends Disposable {
 }
 
 function normalizeItems(items: readonly LanguageHierarchyItem[]): readonly LanguageHierarchyItem[] { return Object.freeze(items.map(normalizeItem)); }
-function normalizeRange(range: TextRange): TextRange { return TextRange.from(range.start, range.end); }
+function normalizeRange(range: Range): Range { return Range.fromPositions(range.getStartPosition(), range.getEndPosition()); }
 function normalizeItem(item: LanguageHierarchyItem): LanguageHierarchyItem {
 	const range = normalizeRange(item.range);
 	const selectionRange = normalizeRange(item.selectionRange);

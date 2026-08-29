@@ -1,5 +1,8 @@
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
-import { TextPosition, TextRange, normalizeTextLineEndings, type TextEdit, type TextSnapshot } from '../core/text.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import { normalizeTextLineEndings, type TextSnapshot } from '../core/textChange.js';
+import { type TextEdit } from '../core/editOperation.js';
 import { StringText } from '../core/text/abstractText.js';
 import { TextReplacement } from '../core/edits/textEdit.js';
 import { getWordAtText } from '../core/wordHelper.js';
@@ -48,15 +51,15 @@ function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMi
 }
 
 function mergeAdjacentEdits(edits: readonly TextEdit[]): readonly TextEdit[] {
-	const sorted = edits.map(edit => Object.freeze({ range: TextRange.from(edit.range.start, edit.range.end), text: edit.text })).sort((left, right) => left.range.start.compareTo(right.range.start));
+	const sorted = edits.map(edit => Object.freeze({ range: Range.fromPositions(edit.range.getStartPosition(), edit.range.getEndPosition()), text: edit.text })).sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
 	const result: TextEdit[] = [];
 	for (const edit of sorted) {
 		const previous = result.at(-1);
-		if (previous && previous.range.end.equals(edit.range.start)) {
+		if (previous && previous.range.getEndPosition().equals(edit.range.getStartPosition())) {
 			result[result.length - 1] = Object.freeze({ range: previous.range.plusRange(edit.range), text: previous.text + edit.text });
 			continue;
 		}
-		if (previous && previous.range.end.isAfter(edit.range.start)) throw new RangeError('Editor worker edits must not overlap');
+		if (previous && Position.isBefore(edit.range.getStartPosition(), previous.range.getEndPosition())) throw new RangeError('Editor worker edits must not overlap');
 		result.push(edit);
 	}
 	return result;
@@ -65,22 +68,22 @@ function mergeAdjacentEdits(edits: readonly TextEdit[]): readonly TextEdit[] {
 function navigateValueSet(snapshot: TextSnapshot, request: EditorWorkerNavigateValueRequest): EditorWorkerResult {
 	const document = new StringText(snapshot.getText());
 	const range = validateRange(document, request.range);
-	const selectionRange = range.empty && range.end.columnIndex < document.getLineLength(range.end.lineIndex)
-		? TextRange.from(range.start, TextPosition.at(range.end.lineIndex, range.end.columnIndex + 1))
+	const selectionRange = range.isEmpty() && range.getEndPosition().column < document.getLineLength(range.getEndPosition().lineNumber)
+		? Range.fromPositions(range.getStartPosition(), new Position(range.endLineNumber, range.endColumn + 1))
 		: range;
 	const selectionText = document.getValueOfRange(selectionRange);
-	const line = document.getLineAt(range.start.lineIndex);
-	const word = getWordAtText(range.start.columnIndex, request.wordDefinition, line)
-		?? (range.start.columnIndex > 0 ? getWordAtText(range.start.columnIndex - 1, request.wordDefinition, line) : undefined);
-	const wordRange = word ? TextRange.from(
-		TextPosition.at(range.start.lineIndex, word.startColumnIndex),
-		TextPosition.at(range.start.lineIndex, word.endColumnIndexExclusive),
+	const line = document.getLineAt(range.getStartPosition().lineNumber);
+	const word = getWordAtText(range.getStartPosition().column, request.wordDefinition, line)
+		?? (range.startColumn > 1 ? getWordAtText(range.startColumn - 1, request.wordDefinition, line) : undefined);
+	const wordRange = word ? Range.fromPositions(
+		new Position(range.startLineNumber, word.startColumn),
+		new Position(range.startLineNumber, word.endColumn),
 	) : undefined;
 	return BasicInplaceReplace.instance.navigateValueSet(selectionRange, selectionText, wordRange, word?.word, request.up);
 }
 
-function validateRange(document: StringText, range: TextRange): TextRange {
-	const lifted = TextRange.from(range.start, range.end);
+function validateRange(document: StringText, range: Range): Range {
+	const lifted = Range.fromPositions(range.getStartPosition(), range.getEndPosition());
 	document.getValueOfRange(lifted);
 	return lifted;
 }

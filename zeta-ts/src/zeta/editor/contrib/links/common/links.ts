@@ -1,12 +1,12 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type TextRange } from "../../../common/core/text.js";
+import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface LanguageLink {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly target: string;
 	readonly tooltip?: string;
 }
@@ -35,7 +35,7 @@ export class LinkService extends Disposable {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			for (const link of result) {
 				if (typeof link.target !== "string" || link.target.length === 0) continue;
-				const key = `${this.model.offsetAt(link.range.start)}:${this.model.offsetAt(link.range.end)}:${link.target}`;
+				const key = `${this.model.offsetAt(link.range.getStartPosition())}:${this.model.offsetAt(link.range.getEndPosition())}:${link.target}`;
 				if (seen.has(key)) continue;
 				seen.add(key);
 				links.push(Object.freeze({ range: link.range, target: link.target, ...(link.tooltip !== undefined ? { tooltip: link.tooltip } : {}) }));

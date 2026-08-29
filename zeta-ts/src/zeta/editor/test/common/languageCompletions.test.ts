@@ -2,7 +2,9 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageCompletionItemKind, createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, type LanguageCompletionItem } from "../../common/languages/completion/languageCompletions.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
+import { type TextSnapshot } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion stores normalize immutable current-version results", () => {
@@ -22,7 +24,7 @@ test("Completion stores normalize immutable current-version results", () => {
 		textModel: model,
 		modelVersion: model.version,
 		value: {
-			position: TextPosition.at(0, 3),
+			position: new Position((0) + 1, (3) + 1),
 			items: [item],
 			isIncomplete: true,
 		},
@@ -53,10 +55,10 @@ test("Completion normalization rejects ambiguous items atomically", () => {
 			completion("same", "two", 0, 3),
 		],
 		[completion("line", "line", 0, 3, {
-			range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(1, 0)),
+			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)),
 		})],
 		[completion("ahead", "ahead", 0, 2, {
-			range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
+			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
 		})],
 		[completion("kind", "kind", 0, 3, {
 			kind: "mystery" as LanguageCompletionItemKind,
@@ -76,7 +78,7 @@ test("Completion normalization rejects ambiguous items atomically", () => {
 			textModel: model,
 			modelVersion: model.version,
 			value: {
-				position: TextPosition.at(0, 3),
+				position: new Position((0) + 1, (3) + 1),
 				items,
 				isIncomplete: false,
 			},
@@ -91,7 +93,7 @@ test("Completion stores invalidate results on model edits", () => {
 	accept(store, model, 1, [completion("abc", "abc", 0, 3)]);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "!",
 	}]);
 
@@ -106,16 +108,16 @@ test("Completion stores normalize immutable non-overlapping additional text edit
 		textModel: model,
 		modelVersion: model.version,
 		value: {
-			position: TextPosition.at(0, 4),
+			position: new Position((0) + 1, (4) + 1),
 			items: [{
 				...completion("console", "console", 1, 4),
-				additionalTextEdits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "import " }],
+				additionalTextEdits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "import " }],
 			}],
 			isIncomplete: false,
 		},
 	}), LanguageResultAcceptance.Applied);
 	const edits = store.result!.value.items[0]!.additionalTextEdits!;
-	assert.deepEqual(edits, [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "import " }]);
+	assert.deepEqual(edits, [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "import " }]);
 	assert.equal(Object.isFrozen(edits), true);
 	assert.equal(Object.isFrozen(edits[0]), true);
 
@@ -124,10 +126,10 @@ test("Completion stores normalize immutable non-overlapping additional text edit
 		textModel: model,
 		modelVersion: model.version,
 		value: {
-			position: TextPosition.at(0, 4),
+			position: new Position((0) + 1, (4) + 1),
 			items: [{
 				...completion("overlap", "overlap", 1, 4),
-				additionalTextEdits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)), text: "" }],
+				additionalTextEdits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)), text: "" }],
 			}],
 			isIncomplete: false,
 		},
@@ -148,7 +150,7 @@ test("Snapshot completion normalization indexes captured text once", () => {
 	};
 	const normalize = createLanguageCompletionSnapshotNormalizer(snapshot);
 	const value = {
-		position: TextPosition.at(0, 3),
+		position: new Position((0) + 1, (3) + 1),
 		items: [completion("abc", "abc", 0, 3)],
 		isIncomplete: false,
 	};
@@ -170,7 +172,7 @@ function accept(
 		textModel: model,
 		modelVersion: model.version,
 		value: {
-			position: TextPosition.at(0, 3),
+			position: new Position((0) + 1, (3) + 1),
 			items,
 			isIncomplete: false,
 		},
@@ -186,7 +188,7 @@ interface CompletionOverrides {
 	readonly preselect?: boolean;
 	readonly commitCharacters?: readonly string[];
 	readonly insertText?: string;
-	readonly range?: TextRange;
+	readonly range?: Range;
 	readonly kind?: LanguageCompletionItemKind;
 }
 
@@ -196,9 +198,9 @@ function completion(id: string, label: string, startColumn: number, endColumn: n
 		id,
 		label,
 		kind: overrides.kind ?? LanguageCompletionItemKind.Keyword,
-		range: overrides.range ?? TextRange.from(
-			TextPosition.at(0, startColumn),
-			TextPosition.at(0, endColumn),
+		range: overrides.range ?? Range.fromPositions(
+			new Position((0) + 1, (startColumn) + 1),
+			new Position((0) + 1, (endColumn) + 1),
 		),
 		insertText: overrides.insertText ?? label,
 		...(overrides.detail === undefined ? {} : { detail: overrides.detail }),

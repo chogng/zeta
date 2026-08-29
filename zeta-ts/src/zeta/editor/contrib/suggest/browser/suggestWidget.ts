@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type EditorView, type EditorViewport } from "../../../browser/view.js";
 
 let nextCompletionWidgetId = 1;
 
@@ -12,13 +12,9 @@ let nextCompletionWidgetId = 1;
 export class CompletionWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly widgetId: string;
-	private readonly previousAriaAutocomplete: string | null;
-	private readonly previousAriaControls: string | null;
-	private readonly previousAriaHasPopup: string | null;
-	private readonly previousAriaActiveDescendant: string | null;
 
 	constructor(
-		private readonly inputElement: HTMLElement,
+		private readonly view: EditorView,
 		private readonly viewport: EditorViewport,
 		private readonly selectionController: CursorsController,
 		private readonly session: LanguageCompletionSessionController,
@@ -37,32 +33,22 @@ export class CompletionWidget extends Disposable {
 			throw error;
 		}
 		this.widgetId = `stanza-completion-${nextCompletionWidgetId++}`;
-		this.previousAriaAutocomplete = inputElement.getAttribute("aria-autocomplete");
-		this.previousAriaControls = inputElement.getAttribute("aria-controls");
-		this.previousAriaHasPopup = inputElement.getAttribute("aria-haspopup");
-		this.previousAriaActiveDescendant = inputElement.getAttribute("aria-activedescendant");
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.id = this.widgetId;
 		this.element.className = "stanza-editor-completion";
 		this.element.setAttribute("role", "listbox");
 		this.element.hidden = true;
-		inputElement.setAttribute("aria-autocomplete", "none");
-		inputElement.setAttribute("aria-controls", this.widgetId);
-		inputElement.setAttribute("aria-haspopup", "listbox");
 		(container ?? viewport.element).append(this.element);
 		this._register(toDisposable(() => {
 			this.element.remove();
-			restoreAttribute(inputElement, "aria-autocomplete", this.previousAriaAutocomplete);
-			restoreAttribute(inputElement, "aria-controls", this.previousAriaControls);
-			restoreAttribute(inputElement, "aria-haspopup", this.previousAriaHasPopup);
-			restoreAttribute(inputElement, "aria-activedescendant", this.previousAriaActiveDescendant);
+			this.view.setAriaOptions({ activeDescendant: undefined });
 		}));
 		this._register(session.onDidChange(() => this.render()));
 		this._register(viewport.onDidChangeLayout(() => this.position()));
-		this._register(addDisposableListener(inputElement, "keydown", event => this.handleKeydown(event)));
-		this._register(addDisposableListener(inputElement, "blur", () => session.cancel()));
-		this._register(addDisposableListener(inputElement, "compositionstart", () => session.cancel()));
+		this._register(addDisposableListener(view.element, "keydown", event => this.handleKeydown(event)));
+		this._register(addDisposableListener(view.element, "blur", () => session.cancel()));
+		this._register(addDisposableListener(view.element, "compositionstart", () => session.cancel()));
 		this._register(addDisposableListener<MouseEvent>(this.element, "mousedown", event => {
 			const index = this.readOptionIndex(event);
 			if (index === undefined || event.button !== 0) return;
@@ -116,8 +102,8 @@ export class CompletionWidget extends Disposable {
 
 	private accept(): void {
 		if (!this.session.acceptSelected()) return;
-		this.viewport.revealPosition(this.selectionController.selections.primary.active);
-		this.inputElement.focus({ preventScroll: true });
+		this.viewport.revealPosition(this.selectionController.selections.primary.getPosition());
+		this.view.focus();
 	}
 
 	private render(): void {
@@ -126,8 +112,7 @@ export class CompletionWidget extends Disposable {
 			reset(this.element);
 			this.element.classList.remove("visible");
 			this.element.hidden = true;
-			this.inputElement.setAttribute("aria-autocomplete", "none");
-			this.inputElement.removeAttribute("aria-activedescendant");
+			this.view.setAriaOptions({ activeDescendant: undefined });
 			return;
 		}
 		const ownerDocument = this.element.ownerDocument;
@@ -167,8 +152,7 @@ export class CompletionWidget extends Disposable {
 		reset(this.element, fragment);
 		this.element.hidden = false;
 		this.element.classList.add("visible");
-		this.inputElement.setAttribute("aria-autocomplete", "list");
-		this.inputElement.setAttribute("aria-activedescendant", `${this.widgetId}-option-${state.selectedIndex}`);
+		this.view.setAriaOptions({ activeDescendant: `${this.widgetId}-option-${state.selectedIndex}` });
 		this.position(state);
 	}
 
@@ -220,9 +204,4 @@ function completionKindLabel(kind: LanguageCompletionItemKind): string {
 		case LanguageCompletionItemKind.Reference: return "Reference";
 		case LanguageCompletionItemKind.TypeParameter: return "Type";
 	}
-}
-
-function restoreAttribute(element: Element, name: string, value: string | null): void {
-	if (value === null) element.removeAttribute(name);
-	else element.setAttribute(name, value);
 }

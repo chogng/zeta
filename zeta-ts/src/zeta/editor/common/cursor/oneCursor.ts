@@ -1,4 +1,4 @@
-import { SelectionDirection, TextSelection } from '../core/selection.js';
+import { SelectionDirection, Selection } from '../core/selection.js';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { type TextModel } from '../model/textModel.js';
 import { TrackedRangeStickiness, type TrackedRange } from '../model/trackedRange.js';
@@ -6,19 +6,19 @@ import { TrackedRangeStickiness, type TrackedRange } from '../model/trackedRange
 export class Cursor extends AbstractDisposable {
 	private readonly trackedRange: TrackedRange;
 
-	constructor(model: TextModel, selection: TextSelection) {
+	constructor(model: TextModel, selection: Selection) {
 		super();
-		this.trackedRange = model.trackRange(selection.range, TrackedRangeStickiness.NeverGrowsAtEdges);
-		this.direction = selection.direction;
+		this.trackedRange = model.trackRange(selection, TrackedRangeStickiness.NeverGrowsAtEdges);
+		this.direction = selection.getDirection();
 	}
 
 	public readonly direction: SelectionDirection;
 
-	public get selection(): TextSelection {
+	public get selection(): Selection {
 		const range = this.trackedRange.range;
-		return this.direction === SelectionDirection.Backward
-			? TextSelection.from(range.end, range.start)
-			: TextSelection.from(range.start, range.end);
+		return this.direction === SelectionDirection.RTL
+			? Selection.fromPositions(range.getEndPosition(), range.getStartPosition())
+			: Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
 	}
 
 	protected override disposeCore(): void {

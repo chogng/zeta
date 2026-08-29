@@ -6,7 +6,7 @@ import type { ServicesAccessor } from "../../../../../platform/instantiation/com
 import type { AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, ExtensionHostOutputEvent, ExtensionHostReconcileMode, IExtensionHostApi, JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { TextPosition } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
 import { HoverService } from "../../../../../editor/contrib/hover/common/hover.js";
 import { ParameterHintsService } from "../../../../../editor/contrib/parameterHints/common/parameterHints.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
@@ -83,8 +83,10 @@ test("projects supported language operations while diagnosing unsupported operat
 	using model = new TextModel("answer");
 	using hover = new HoverService(model, languages.hoverProvider);
 	using parameterHints = new ParameterHintsService(model, languages.parameterHintsProvider);
-	assert.deepEqual(await hover.provideHover("typescript", TextPosition.at(0, 1)), { contents: ["Host hover"] });
-	assert.deepEqual(await parameterHints.provideParameterHints("typescript", TextPosition.at(0, 1)), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });
+	assert.deepEqual(await hover.provideHover("typescript", new Position((0) + 1, (1) + 1)), { contents: ["Host hover"] });
+	assert.deepEqual(await parameterHints.provideParameterHints("typescript", new Position((0) + 1, (1) + 1)), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });
+	assert.deepEqual((api.invocations.find(request => request.operation === "hover")!.payload as { readonly position: unknown }).position, { lineIndex: 0, columnIndex: 1 });
+	assert.deepEqual((api.invocations.find(request => request.operation === "parameterHints")!.payload as { readonly position: unknown }).position, { lineIndex: 0, columnIndex: 1 });
 	assert.equal(service.state, "degraded");
 	assert.ok(failures.includes("unsupportedRegistrationBridge"));
 });

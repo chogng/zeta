@@ -1,7 +1,7 @@
-import { type TextRange } from '../../core/text.js';
+import { type Range } from '../../core/range.js';
 
 export interface InplaceReplaceResult {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly value: string;
 }
 
@@ -9,7 +9,7 @@ export interface InplaceReplaceResult {
 export class BasicInplaceReplace {
 	public static readonly instance = new BasicInplaceReplace();
 
-	public navigateValueSet(selectionRange: TextRange, selectionText: string, wordRange: TextRange | undefined, word: string | undefined, up: boolean): InplaceReplaceResult | undefined {
+	public navigateValueSet(selectionRange: Range, selectionText: string, wordRange: Range | undefined, word: string | undefined, up: boolean): InplaceReplaceResult | undefined {
 		const selectionValue = this.navigateValue(selectionText, up);
 		if (selectionValue !== undefined) return Object.freeze({ range: selectionRange, value: selectionValue });
 		if (!wordRange || word === undefined) return undefined;

@@ -1,5 +1,5 @@
 import { isNonEmptyArray } from "../../../base/common/arrays.js";
-import { TextPosition } from "../core/text.js";
+import { Position } from "../core/position.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 
@@ -44,7 +44,7 @@ export class EditorVisualLineProjection {
 		const lines: EditorVisualLine[] = [];
 		const visualLineStarts: number[] = [];
 		for (let logicalLineIndex = 0; logicalLineIndex < model.lineCount; logicalLineIndex += 1) {
-			const text = model.getLineContent(logicalLineIndex);
+			const text = model.getLineContent((logicalLineIndex) + 1);
 			const breaks = breakColumnsByLine[logicalLineIndex];
 			if (!breaks) throw new RangeError("Visual line break columns must not contain holes");
 			validateBreakColumns(text, breaks);
@@ -159,17 +159,19 @@ export class EditorVisualLineProjection {
 		return this.visualLineStarts?.[logicalLineIndex] ?? logicalLineIndex;
 	}
 
-	visualLineIndexAt(position: TextPosition): number {
-		validateLogicalLineIndex(position.lineIndex, this.logicalLineCount);
-		if (this.identityModel) return position.lineIndex;
-		const first = this.firstVisualLineIndex(position.lineIndex);
-		if (!this.logicalLineVisibility![position.lineIndex]) return first;
-		const lastExclusive = position.lineIndex + 1 < this.logicalLineCount
-			? this.nextVisualLineIndex(position.lineIndex + 1)
+	visualLineIndexAt(position: Position): number {
+		const logicalLineIndex = position.lineNumber - 1;
+		const columnIndex = position.column - 1;
+		validateLogicalLineIndex(logicalLineIndex, this.logicalLineCount);
+		if (this.identityModel) return logicalLineIndex;
+		const first = this.firstVisualLineIndex(logicalLineIndex);
+		if (!this.logicalLineVisibility![logicalLineIndex]) return first;
+		const lastExclusive = logicalLineIndex + 1 < this.logicalLineCount
+			? this.nextVisualLineIndex(logicalLineIndex + 1)
 			: this.visualLineCount;
 		for (let visualLineIndex = first; visualLineIndex < lastExclusive; visualLineIndex += 1) {
 			const line = this.lines[visualLineIndex]!;
-			if (position.columnIndex < line.endColumn || line.lastForLogicalLine) return visualLineIndex;
+			if (columnIndex < line.endColumn || line.lastForLogicalLine) return visualLineIndex;
 		}
 		throw new Error("Visual line projection is inconsistent");
 	}
@@ -188,7 +190,7 @@ export class EditorVisualLineProjection {
 			visualLineIndex: lineIndex,
 			logicalLineIndex: lineIndex,
 			startColumn: 0,
-			endColumn: model.getLineLength(lineIndex),
+			endColumn: model.getLineLength((lineIndex) + 1),
 			firstForLogicalLine: true,
 			lastForLogicalLine: true,
 		});

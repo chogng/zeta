@@ -1,5 +1,5 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -24,7 +24,7 @@ export interface LanguageParameterHints {
 
 export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly context: LanguageParameterHintsContext;
 }
 
@@ -40,7 +40,7 @@ export class ParameterHintsService extends Disposable {
 		super();
 	}
 
-	async provideParameterHints(languageId: string, position: TextPosition, context: LanguageParameterHintsContext = { kind: "invoke" }, signal: AbortSignal = new AbortController().signal): Promise<LanguageParameterHints | undefined> {
+	async provideParameterHints(languageId: string, position: Position, context: LanguageParameterHintsContext = { kind: "invoke" }, signal: AbortSignal = new AbortController().signal): Promise<LanguageParameterHints | undefined> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), position, context };
 		for (const provider of this.providers.getProviders(languageId)) {
 			const value = await provider.provideParameterHints(request, signal);

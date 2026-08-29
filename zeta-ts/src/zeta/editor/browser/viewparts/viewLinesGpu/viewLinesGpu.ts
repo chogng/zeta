@@ -305,7 +305,7 @@ export class ViewLinesGpu extends Disposable {
 	private canUseFullFileStrategy(visualLines: EditorVisualLineProjection): boolean {
 		if (visualLines.visualLineCount > FullFileRenderStrategy.maxSupportedLines) return false;
 		for (let lineIndex = 0; lineIndex < this.options.model.lineCount; lineIndex += 1) {
-			if (this.options.model.getLineContent(lineIndex).length > FullFileRenderStrategy.maxSupportedColumns) return false;
+			if (this.options.model.getLineContent((lineIndex) + 1).length > FullFileRenderStrategy.maxSupportedColumns) return false;
 		}
 		return true;
 	}

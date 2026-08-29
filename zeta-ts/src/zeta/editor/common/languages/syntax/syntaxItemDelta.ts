@@ -1,7 +1,8 @@
 import { arraysEqual, commonPrefixLength, commonSuffixLength } from "../../../../base/common/arrays.js";
 import { SYNTAX_TOKEN_LANE, type SyntaxLane } from "./syntaxService.js";
 import { type LanguageDiagnostic, type LanguageToken } from "../languageResults.js";
-import { type TextRange, type TextSnapshot } from "../../core/text.js";
+import { type Range } from "../../core/range.js";
+import { type TextSnapshot } from "../../core/textChange.js";
 
 export type SyntaxItem = LanguageToken | LanguageDiagnostic;
 
@@ -153,10 +154,10 @@ function createLineItemBounds(items: readonly SyntaxItem[], lineCount: number): 
 	let itemIndex = 0;
 	for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
 		bounds[lineIndex] = itemIndex;
-		while (itemIndex < items.length && items[itemIndex]!.range.start.lineIndex === lineIndex) {
+		while (itemIndex < items.length && items[itemIndex]!.range.startLineNumber - 1 === lineIndex) {
 			itemIndex += 1;
 		}
-		if (itemIndex < items.length && items[itemIndex]!.range.start.lineIndex < lineIndex) return undefined;
+		if (itemIndex < items.length && items[itemIndex]!.range.startLineNumber - 1 < lineIndex) return undefined;
 	}
 	bounds[lineCount] = itemIndex;
 	return itemIndex === items.length ? Object.freeze(bounds) : undefined;
@@ -209,9 +210,9 @@ function comparePairs(left: LinePair, right: LinePair): number {
 	return left.previousLineIndex - right.previousLineIndex || left.currentLineIndex - right.currentLineIndex;
 }
 
-function rangesEqual(current: TextRange, previous: TextRange, lineDelta: number): boolean {
-	return current.start.lineIndex === previous.start.lineIndex + lineDelta &&
-		current.start.columnIndex === previous.start.columnIndex &&
-		current.end.lineIndex === previous.end.lineIndex + lineDelta &&
-		current.end.columnIndex === previous.end.columnIndex;
+function rangesEqual(current: Range, previous: Range, lineDelta: number): boolean {
+	return current.getStartPosition().lineNumber === previous.getStartPosition().lineNumber + lineDelta &&
+		current.getStartPosition().column === previous.getStartPosition().column &&
+		current.getEndPosition().lineNumber === previous.getEndPosition().lineNumber + lineDelta &&
+		current.getEndPosition().column === previous.getEndPosition().column;
 }

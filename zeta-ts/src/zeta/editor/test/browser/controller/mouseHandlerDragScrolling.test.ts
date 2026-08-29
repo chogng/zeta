@@ -3,8 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -87,7 +88,7 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 	);
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -115,17 +116,17 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 		110,
 		1,
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 1),
-		TextPosition.at(1, 1),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (1) + 1),
+		new Position((1) + 1, (1) + 1),
 	));
 	assert.equal(frames.pendingCount, 1);
 
 	frames.flush();
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 10);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 1),
-		TextPosition.at(2, 1),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (1) + 1),
+		new Position((2) + 1, (1) + 1),
 	));
 
 	dom.window.dispatchEvent(pointerEvent(
@@ -154,9 +155,9 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 		55,
 		2,
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 1),
-		TextPosition.at(0, 5),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (1) + 1),
+		new Position((0) + 1, (5) + 1),
 	));
 
 	let frameCount = 0;
@@ -166,9 +167,9 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 	}
 	assert.equal(viewport.viewportLayout.scrollPosition.left, 60);
 	assert.equal(frames.pendingCount, 0);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 1),
-		TextPosition.at(0, 10),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (1) + 1),
+		new Position((0) + 1, (10) + 1),
 	));
 
 	dom.window.dispatchEvent(pointerEvent(

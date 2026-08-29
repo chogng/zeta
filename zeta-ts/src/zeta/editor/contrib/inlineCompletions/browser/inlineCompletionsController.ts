@@ -1,9 +1,10 @@
+import { Position } from "../../../common/core/position.js";
 import "./media/inlineCompletions.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
-import { TextRange } from "../../../common/core/text.js";
+import { Range } from "../../../common/core/range.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { InlineCompletionsService } from "../../../browser/services/inlineCompletionsService.js";
 import { type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
@@ -50,11 +51,11 @@ export class InlineCompletionsController extends Disposable {
 
 	private async refresh(triggerKind: "automatic" | "explicit"): Promise<void> {
 		const selection = this.selections.selections.primary;
-		if (!selection.range.empty) return;
+		if (!selection.isEmpty()) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
 		try {
-			const items = await this.service.provideInlineCompletions(this.languageId, selection.active, triggerKind, request.signal);
+			const items = await this.service.provideInlineCompletions(this.languageId, selection.getPosition(), triggerKind, request.signal);
 			if (request.signal.aborted) return;
 			this.item = items[0];
 			this.render();
@@ -70,8 +71,8 @@ export class InlineCompletionsController extends Disposable {
 			return;
 		}
 		const selection = this.selections.selections.primary;
-		const range = item.range ?? TextRange.emptyAt(selection.active);
-		const coordinates = this.viewport.getPositionContentCoordinates(range.start);
+		const range = item.range ?? Range.fromPositions(selection.getPosition());
+		const coordinates = this.viewport.getPositionContentCoordinates(range.getStartPosition());
 		const scroll = this.viewport.viewportLayout.scrollPosition;
 		this.element.textContent = item.insertText;
 		this.element.style.left = `${coordinates.left - scroll.left}px`;
@@ -83,7 +84,7 @@ export class InlineCompletionsController extends Disposable {
 		const item = this.item;
 		if (!item) return;
 		const selection = this.selections.selections.primary;
-		const edits = [...(item.additionalTextEdits ?? []), { range: item.range ?? TextRange.emptyAt(selection.active), text: item.insertText }].sort((left, right) => left.range.start.compareTo(right.range.start));
+		const edits = [...(item.additionalTextEdits ?? []), { range: item.range ?? Range.fromPositions(selection.getPosition()), text: item.insertText }].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
 		const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edits);
 		if (command) this.selections.execute(command);
 		this.clear();

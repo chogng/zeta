@@ -12,7 +12,7 @@ export function computeEditorIndentFoldingRanges(model: TextModel, options: Edit
 	const ranges: EditorFoldingRange[] = [];
 	let previous: IndentLine | undefined;
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
-		const text = model.getLineContent(lineIndex);
+		const text = model.getLineContent((lineIndex) + 1);
 		if (isBlank(text)) continue;
 		const indentation = leadingIndentation(text, tabSize);
 		while (true) {

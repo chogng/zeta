@@ -3,7 +3,8 @@ import test from 'node:test';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../../common/languages/languageWorkerWire.js';
-import { TextPosition, TextRange } from '../../../common/core/text.js';
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { EditorWorkerClient } from '../../../common/services/editorWorker.js';
 import { EditorWorker } from '../../../common/services/editorWebWorker.js';
@@ -15,12 +16,12 @@ test('Editor worker client synchronizes model versions across the structured-clo
 	using model = new TextModel('const value = true;');
 	using client = new EditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
 
-	const first = await client.navigateValueSet(TextRange.emptyAt(TextPosition.at(0, 14)), true, /[A-Za-z]+/g);
-	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 18)), text: 'false' }]);
-	const second = await client.navigateValueSet(TextRange.emptyAt(TextPosition.at(0, 14)), true, /[A-Za-z]+/g);
+	const first = await client.navigateValueSet(Range.fromPositions(new Position((0) + 1, (14) + 1)), true, /[A-Za-z]+/g);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (18) + 1)), text: 'false' }]);
+	const second = await client.navigateValueSet(Range.fromPositions(new Position((0) + 1, (14) + 1)), true, /[A-Za-z]+/g);
 
 	assert.equal(first?.value, 'false');
-	assert.equal(first?.range instanceof TextRange, true);
+	assert.equal(first?.range instanceof Range, true);
 	assert.equal(second?.value, 'true');
 	assert.deepEqual(clientPort.sentMessages.map(message => message.kind), ['request', 'sync', 'request']);
 	assert.equal(clientPort.sentMessages[0]!.snapshot?.kind, 'full');

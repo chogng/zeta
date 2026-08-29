@@ -1,5 +1,5 @@
-import { SelectionDirection, type TextSelection } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { SelectionDirection, type Selection } from "../../../../common/core/selection.js";
+import { Position } from "../../../../common/core/position.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
 
@@ -61,12 +61,12 @@ export interface NativeScreenReaderContent {
 
 export function createScreenReaderContentState(
 	model: TextModel,
-	selection: TextSelection,
+	selection: Selection,
 	options: ScreenReaderContentOptions = {},
 ): ScreenReaderContentState {
-	const selectionStart = model.offsetAt(selection.range.start);
-	const selectionEnd = model.offsetAt(selection.range.end);
-	const activeOffset = model.offsetAt(selection.active);
+	const selectionStart = model.offsetAt(selection.getStartPosition());
+	const selectionEnd = model.offsetAt(selection.getEndPosition());
+	const activeOffset = model.offsetAt(selection.getPosition());
 	const pageSize = options.pageSize === undefined ? undefined : normalizePageSize(options.pageSize);
 	const modelSegments = pageSize === undefined
 		? [createScreenReaderWindow(model.length, selectionStart, selectionEnd, activeOffset)]
@@ -97,20 +97,20 @@ export function createScreenReaderContentState(
 	const stateWithoutOffsets = {
 		startOffset: frozenSegments[0]!.modelStartOffset,
 		endOffset: frozenSegments[frozenSegments.length - 1]!.modelEndOffset,
-		startLineIndex: startPosition.lineIndex,
-		startColumn: startPosition.columnIndex,
+		startLineIndex: startPosition.lineNumber - 1,
+		startColumn: startPosition.column - 1,
 		text,
 		segments: frozenSegments,
 	};
 	const orderedSelectionStart = contentOffsetAtModelOffset(stateWithoutOffsets, selectionStart, "start");
 	const orderedSelectionEnd = contentOffsetAtModelOffset(stateWithoutOffsets, selectionEnd, "end");
-	const anchorAffinity = selection.direction === SelectionDirection.Forward ? "start" : "end";
-	const activeAffinity = selection.direction === SelectionDirection.Forward ? "end" : "start";
+	const anchorAffinity = selection.getDirection() === SelectionDirection.LTR ? "start" : "end";
+	const activeAffinity = selection.getDirection() === SelectionDirection.LTR ? "end" : "start";
 	return Object.freeze({
 		...stateWithoutOffsets,
 		selectionStart: orderedSelectionStart,
 		selectionEnd: orderedSelectionEnd,
-		anchorOffset: contentOffsetAtModelOffset(stateWithoutOffsets, model.offsetAt(selection.anchor), anchorAffinity),
+		anchorOffset: contentOffsetAtModelOffset(stateWithoutOffsets, model.offsetAt(selection.getSelectionStart()), anchorAffinity),
 		activeOffset: contentOffsetAtModelOffset(stateWithoutOffsets, activeOffset, activeAffinity),
 	});
 }
@@ -273,8 +273,8 @@ function createScreenReaderPageWindows(
 	activeOffset: number,
 	pageSize: number,
 ): readonly { readonly startOffset: number; readonly endOffset: number }[] {
-	const startPage = Math.floor(model.positionAt(selectionStart).lineIndex / pageSize);
-	const endPage = Math.floor(model.positionAt(selectionEnd).lineIndex / pageSize);
+	const startPage = Math.floor((model.positionAt(selectionStart).lineNumber - 1) / pageSize);
+	const endPage = Math.floor((model.positionAt(selectionEnd).lineNumber - 1) / pageSize);
 	const start = pageWindowForModel(model, startPage, pageSize);
 	const end = pageWindowForModel(model, endPage, pageSize);
 	const intervals = startPage === endPage
@@ -310,10 +310,10 @@ function pageWindowForModel(
 ): { readonly startOffset: number; readonly endOffset: number } {
 	const startLineIndex = page * pageSize;
 	const endLineIndexExclusive = Math.min(model.lineCount, startLineIndex + pageSize);
-	const startOffset = model.offsetAt(TextPosition.at(startLineIndex, 0));
+	const startOffset = model.offsetAt(new Position((startLineIndex) + 1, (0) + 1));
 	const endOffset = endLineIndexExclusive >= model.lineCount
 		? model.length
-		: model.offsetAt(TextPosition.at(endLineIndexExclusive, 0));
+		: model.offsetAt(new Position((endLineIndexExclusive) + 1, (0) + 1));
 	return { startOffset, endOffset };
 }
 

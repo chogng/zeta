@@ -1,7 +1,7 @@
 import "./indentGuides.css";
 import { h } from "../../../../base/browser/dom.js";
 import { type InternalGuidesOptions } from '../../../common/config/editorOptions.js';
-import { type TextPosition } from '../../../common/core/text.js';
+import { Position } from '../../../common/core/position.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { type EditorVisualLine } from '../../../common/viewModel/modelLineProjection.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
@@ -49,7 +49,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 			row.replaceChildren();
 			const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
-			const text = overlay.model.getLineContent(visualLine.logicalLineIndex);
+			const text = overlay.model.getLineContent((visualLine.logicalLineIndex) + 1);
 			if (this.guides.indentation && visualLine.firstForLogicalLine) {
 				for (const guide of createStanzaIndentationGuides(text, this.tabSize)) {
 					const element = h(overlay.ownerDocument, "span");
@@ -74,7 +74,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	}
 
 	private resolveActiveBracketGuide(guides: readonly BracketGuide[]): BracketGuide | undefined {
-		const position = this.selectionController?.selections.primary.active;
+		const position = this.selectionController?.selections.primary.getPosition();
 		if (!position) return undefined;
 		return guides.filter(guide => containsPosition(guide, position)).sort(compareInnermostFirst)[0];
 	}
@@ -82,15 +82,15 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	private resolveActiveIndentation(activeBracketGuide: BracketGuide | undefined): ActiveIndentationGuide | undefined {
 		const highlight = this.guides.highlightActiveIndentation;
 		if (highlight === false || (highlight !== 'always' && activeBracketGuide)) return undefined;
-		const lineIndex = this.selectionController?.selections.primary.active.lineIndex;
+		const lineIndex = this.selectionController ? this.selectionController.selections.primary.getPosition().lineNumber - 1 : undefined;
 		if (lineIndex === undefined) return undefined;
 		const model = this.bracketColorizationSource?.textModel ?? this.selectionController!.textModel;
-		const level = createStanzaIndentationGuides(model.getLineContent(lineIndex), this.tabSize).at(-1)?.level;
+		const level = createStanzaIndentationGuides(model.getLineContent((lineIndex) + 1), this.tabSize).at(-1)?.level;
 		if (!level) return undefined;
 		let startLineIndex = lineIndex;
 		let endLineIndex = lineIndex;
-		while (startLineIndex > 0 && indentationLevel(model.getLineContent(startLineIndex - 1), this.tabSize) >= level) startLineIndex -= 1;
-		while (endLineIndex + 1 < model.lineCount && indentationLevel(model.getLineContent(endLineIndex + 1), this.tabSize) >= level) endLineIndex += 1;
+		while (startLineIndex > 0 && indentationLevel(model.getLineContent((startLineIndex - 1) + 1), this.tabSize) >= level) startLineIndex -= 1;
+		while (endLineIndex + 1 < model.lineCount && indentationLevel(model.getLineContent((endLineIndex + 1) + 1), this.tabSize) >= level) endLineIndex += 1;
 		return { level, startLineIndex, endLineIndex };
 	}
 
@@ -104,27 +104,31 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		measureLineWidth: (text: string) => number,
 	): void {
 		const lineIndex = visualLine.logicalLineIndex;
-		if (lineIndex < guide.opening.start.lineIndex || lineIndex > guide.closing.start.lineIndex) return;
-		if (lineIndex === guide.opening.start.lineIndex && visualLine.endColumn <= guide.opening.start.columnIndex) return;
-		if (lineIndex === guide.closing.start.lineIndex && visualLine.startColumn > guide.closing.start.columnIndex) return;
+		const openingLineIndex = guide.opening.startLineNumber - 1;
+		const closingLineIndex = guide.closing.startLineNumber - 1;
+		const openingColumnIndex = guide.opening.startColumn - 1;
+		const closingColumnIndex = guide.closing.startColumn - 1;
+		if (lineIndex < openingLineIndex || lineIndex > closingLineIndex) return;
+		if (lineIndex === openingLineIndex && visualLine.endColumn <= openingColumnIndex) return;
+		if (lineIndex === closingLineIndex && visualLine.startColumn > closingColumnIndex) return;
 		const active = activeGuide === guide;
 		if (this.guides.bracketPairs === 'active' && !active) return;
-		const openingLine = this.bracketColorizationSource!.textModel.getLineContent(guide.opening.start.lineIndex);
-		const left = textLeft + measureLineWidth(openingLine.slice(0, guide.opening.start.columnIndex));
+		const openingLine = this.bracketColorizationSource!.textModel.getLineContent(guide.opening.getStartPosition().lineNumber);
+		const left = textLeft + measureLineWidth(openingLine.slice(0, openingColumnIndex));
 		const vertical = h(row.ownerDocument, 'span');
 		vertical.className = 'stanza-editor-bracket-guide';
 		vertical.dataset.bracketLevel = String(guide.level);
 		vertical.style.left = `${left}px`;
-		const openingVisualLine = lineIndex === guide.opening.start.lineIndex && visualLine.startColumn <= guide.opening.start.columnIndex && guide.opening.start.columnIndex < visualLine.endColumn;
-		const closingVisualLine = lineIndex === guide.closing.start.lineIndex && visualLine.startColumn <= guide.closing.start.columnIndex && guide.closing.start.columnIndex <= visualLine.endColumn;
+		const openingVisualLine = lineIndex === openingLineIndex && visualLine.startColumn <= openingColumnIndex && openingColumnIndex < visualLine.endColumn;
+		const closingVisualLine = lineIndex === closingLineIndex && visualLine.startColumn <= closingColumnIndex && closingColumnIndex <= visualLine.endColumn;
 		if (openingVisualLine) vertical.style.top = `${lineHeight / 2}px`;
 		if (closingVisualLine) vertical.style.bottom = `${lineHeight / 2}px`;
 		if (active && this.guides.highlightActiveBracketPair) vertical.classList.add('active');
 		row.append(vertical);
 		const horizontalMode = this.guides.bracketPairsHorizontal;
 		if (!closingVisualLine || horizontalMode === false || (horizontalMode === 'active' && !active)) return;
-		const closingLine = this.bracketColorizationSource!.textModel.getLineContent(guide.closing.start.lineIndex);
-		const closingLeft = textLeft + measureLineWidth(closingLine.slice(0, guide.closing.start.columnIndex));
+		const closingLine = this.bracketColorizationSource!.textModel.getLineContent(guide.closing.getStartPosition().lineNumber);
+		const closingLeft = textLeft + measureLineWidth(closingLine.slice(0, closingColumnIndex));
 		const horizontal = h(row.ownerDocument, 'span');
 		horizontal.className = 'stanza-editor-bracket-guide-horizontal';
 		horizontal.style.left = `${Math.min(left, closingLeft)}px`;
@@ -141,13 +145,13 @@ interface ActiveIndentationGuide {
 	readonly endLineIndex: number;
 }
 
-function containsPosition(guide: BracketGuide, position: TextPosition): boolean {
-	return guide.opening.start.compareTo(position) <= 0 && guide.closing.end.compareTo(position) >= 0;
+function containsPosition(guide: BracketGuide, position: Position): boolean {
+	return Position.compare(guide.opening.getStartPosition(), position) <= 0 && Position.compare(guide.closing.getEndPosition(), position) >= 0;
 }
 
 function compareInnermostFirst(left: BracketGuide, right: BracketGuide): number {
-	const opening = right.opening.start.compareTo(left.opening.start);
-	return opening !== 0 ? opening : left.closing.end.compareTo(right.closing.end);
+	const opening = Position.compare(right.opening.getStartPosition(), left.opening.getStartPosition());
+	return opening !== 0 ? opening : Position.compare(left.closing.getEndPosition(), right.closing.getEndPosition());
 }
 
 function indentationLevel(text: string, tabSize: number): number {

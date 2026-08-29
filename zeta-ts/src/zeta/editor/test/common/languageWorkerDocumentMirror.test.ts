@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { LanguageWorkerDocumentMirror } from '../../common/services/textModelSync/textModelSync.impl.js';
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Worker document mirror applies model transactions through its Piece Tree", () => {
@@ -10,11 +11,11 @@ test("Worker document mirror applies model transactions through its Piece Tree",
 	const captured = mirror.createSnapshot();
 	const change = model.applyEdits([
 		{
-			range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)),
+			range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)),
 			text: "XYZ",
 		},
 		{
-			range: TextRange.emptyAt(TextPosition.at(1, 3)),
+			range: Range.fromPositions(new Position((1) + 1, (3) + 1)),
 			text: "\nlast",
 		},
 	])!;

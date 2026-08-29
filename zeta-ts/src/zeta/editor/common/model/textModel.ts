@@ -3,7 +3,11 @@ import { Disposable, MutableDisposable, type IDisposable, toDisposable } from ".
 import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
 import { countEOL } from "../core/misc/eolCounter.js";
 import { OffsetRange } from "../core/ranges/offsetRange.js";
-import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, TextLength, type ISingleEditOperation, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/text.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
+import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/textChange.js";
+import { TextEditHistoryGroup, TextEditHistoryMergeMode, type ISingleEditOperation, type TextEdit } from "../core/editOperation.js";
+import { TextLength } from "../core/text/textLength.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
 import type { TextBuffer } from "./textBuffer.js";
 import { createTextBuffer } from "./textBufferFactory.js";
@@ -23,7 +27,7 @@ import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type 
 interface OffsetEdit extends OffsetTextEdit {}
 
 interface PreparedEdit extends OffsetEdit {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly replacedText: string;
 }
 
@@ -187,19 +191,19 @@ export class TextModel extends Disposable {
 		return lineIndex;
 	}
 
-	linePointAt(position: TextPosition): LinePoint {
+	linePointAt(position: Position): LinePoint {
 		this.assertNotDisposed();
 		this.offsetAt(position);
-		return linePoint(this.getLineId(position.lineIndex), position.columnIndex);
+		return linePoint(this.getLineId(position.lineNumber - 1), position.column - 1);
 	}
 
-	textPositionAt(point: LinePoint): TextPosition {
+	textPositionAt(point: LinePoint): Position {
 		this.assertNotDisposed();
 		const lineIndex = this.getLineIndex(point.lineId);
 		if (!Number.isSafeInteger(point.offset) || point.offset < 0 || point.offset > this.buffer.getLineLength(lineIndex)) {
 			throw new RangeError("Line point offset is outside the TextModel");
 		}
-		return TextPosition.at(lineIndex, point.offset);
+		return new Position((lineIndex) + 1, (point.offset) + 1);
 	}
 
 	get schema(): DocumentSchema {
@@ -349,49 +353,46 @@ export class TextModel extends Disposable {
 		});
 	}
 
-	getTextInRange(range: TextRange): string {
+	getTextInRange(range: Range): string {
 		this.assertNotDisposed();
 		return this.buffer.getTextInRange(
-			this.offsetAt(range.start),
-			this.offsetAt(range.end),
+			this.offsetAt(range.getStartPosition()),
+			this.offsetAt(range.getEndPosition()),
 		);
 	}
 
-	getLineContent(lineIndex: number): string {
+	getLineContent(lineNumber: number): string {
 		this.assertNotDisposed();
-		return this.buffer.getLineContent(lineIndex);
+		return this.buffer.getLineContent(lineNumber - 1);
 	}
 
-	getLineLength(lineIndex: number): number {
+	getLineLength(lineNumber: number): number {
 		this.assertNotDisposed();
-		return this.buffer.getLineLength(lineIndex);
+		return this.buffer.getLineLength(lineNumber - 1);
 	}
 
-	offsetAt(position: TextPosition): number {
+	offsetAt(position: Position): number {
 		this.assertNotDisposed();
 		return this.buffer.offsetAt(
-			position.lineIndex,
-			position.columnIndex,
+			position.lineNumber - 1,
+			position.column - 1,
 		);
 	}
 
-	positionAt(offset: number): TextPosition {
+	positionAt(offset: number): Position {
 		this.assertNotDisposed();
 		const position = this.buffer.positionAt(offset);
-		return TextPosition.at(
-			position.lineIndex,
-			position.columnIndex,
-		);
+		return new Position((position.lineIndex) + 1, (position.columnIndex) + 1);
 	}
 
 	trackRange(
-		range: TextRange,
+		range: Range,
 		stickiness: TrackedRangeStickiness,
 	): TrackedRange {
 		this.assertNotDisposed();
 		return this.trackedRanges.add(
-			this.offsetAt(range.start),
-			this.offsetAt(range.end),
+			this.offsetAt(range.getStartPosition()),
+			this.offsetAt(range.getEndPosition()),
 			stickiness,
 		);
 	}
@@ -473,8 +474,8 @@ export class TextModel extends Disposable {
 				throw new TypeError("TextEdit.text must be a string");
 			}
 			return {
-				startOffset: this.offsetAt(edit.range.start),
-				endOffset: this.offsetAt(edit.range.end),
+				startOffset: this.offsetAt(edit.range.getStartPosition()),
+				endOffset: this.offsetAt(edit.range.getEndPosition()),
 				text: normalizeTextLineEndings(edit.text),
 			};
 		});
@@ -732,7 +733,7 @@ export class TextModel extends Disposable {
 			if (replacedText === edit.text) return [];
 			return [{
 				...edit,
-				range: TextRange.from(
+				range: Range.fromPositions(
 					this.positionAt(edit.startOffset),
 					this.positionAt(edit.endOffset),
 				),
@@ -790,7 +791,7 @@ export class TextModel extends Disposable {
 			transactionId: this.nextTransactionId++,
 			reason: TextModelChangeReason.Blocks,
 			changes: Object.freeze([Object.freeze<TextModelContentChange>({
-				range: TextRange.from(TextPosition.at(0, 0), this.positionAt(this.buffer.length)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), this.positionAt(this.buffer.length)),
 				rangeOffset: 0,
 				rangeLength: this.buffer.length,
 				text: previousText,
@@ -811,7 +812,7 @@ export class TextModel extends Disposable {
 
 	private mapLineIds(prepared: readonly PreparedEdit[]): readonly LineId[] {
 		const lineEdit = LengthEdit.create(prepared.map(edit => new LengthReplacement(
-			new OffsetRange(edit.range.start.lineIndex + 1, edit.range.end.lineIndex + 1),
+			new OffsetRange(edit.range.startLineNumber, edit.range.endLineNumber),
 			countEOL(edit.text)[0],
 		)));
 		const lineIds = lineEdit

@@ -13,7 +13,7 @@ test("Editor keeps explicit feature files without index barrels", () => {
 	assert.deepEqual(indexFiles, []);
 });
 
-test("Cursor files keep the upstream owner layout plus Zeta language editing", () => {
+test("Cursor files keep the upstream owner layout plus Zeta selection and language editing", () => {
 	assert.deepEqual(readdirSync(join(editorRoot, "common/cursor")).sort(), [
 		"cursor.ts",
 		"cursorAtomicMoveOperations.ts",
@@ -30,6 +30,7 @@ test("Cursor files keep the upstream owner layout plus Zeta language editing", (
 		"languageEnter.ts",
 		"languagePairEditing.ts",
 		"oneCursor.ts",
+		"selectionSet.ts",
 	]);
 });
 

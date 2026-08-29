@@ -1,15 +1,16 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextPosition, type TextRange } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
+import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
 
 export type LanguageInlayHintKind = "type" | "parameter" | "other";
-export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: TextRange }[];
+export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: Range }[];
 
 export interface LanguageInlayHint {
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly label: LanguageInlayHintLabel;
 	readonly kind?: LanguageInlayHintKind;
 	readonly tooltip?: string;
@@ -19,7 +20,7 @@ export interface LanguageInlayHint {
 
 export interface LanguageInlayHintsRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
-	readonly range: TextRange;
+	readonly range: Range;
 }
 
 export interface LanguageInlayHintsProvider extends LanguageFeatureProviderMetadata {
@@ -32,7 +33,7 @@ export class InlayHintsService extends Disposable {
 		super();
 	}
 
-	async provideInlayHints(languageId: string, range: TextRange, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageInlayHint[]> {
+	async provideInlayHints(languageId: string, range: Range, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageInlayHint[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), range };
 		const result: LanguageInlayHint[] = [];
 		for (const provider of this.providers.getProviders(languageId)) {
@@ -46,7 +47,7 @@ export class InlayHintsService extends Disposable {
 }
 
 function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint {
-	if (!hint || typeof hint !== "object" || typeof hint.position?.lineIndex !== "number") throw new TypeError("Inlay hint has invalid position");
+	if (!hint || typeof hint !== "object" || typeof hint.position?.lineNumber !== "number") throw new TypeError("Inlay hint has invalid position");
 	return Object.freeze({
 		position: hint.position,
 		label: typeof hint.label === "string" ? hint.label : Object.freeze(hint.label.map(part => Object.freeze({ value: part.value, ...(part.location ? { location: part.location } : {}) }))),

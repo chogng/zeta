@@ -3,7 +3,7 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type HoverService, type LanguageHover } from "../common/hover.js";
-import { type TextPosition } from "../../../common/core/text.js";
+import { type Position } from "../../../common/core/position.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
@@ -42,7 +42,7 @@ export class HoverController extends Disposable {
 		}, 300);
 	}
 
-	private async show(position: TextPosition): Promise<void> {
+	private async show(position: Position): Promise<void> {
 		const request = this.request = new AbortController();
 		try {
 			const hover = await this.service.provideHover(this.languageId, position, request.signal);
@@ -53,14 +53,14 @@ export class HoverController extends Disposable {
 		}
 	}
 
-	private render(hover: LanguageHover, position: TextPosition): void {
+	private render(hover: LanguageHover, position: Position): void {
 		this.element.replaceChildren(...hover.contents.map(content => {
 			const node = h(this.element.ownerDocument, "div");
 			node.className = "stanza-editor-hover-content";
 			node.textContent = typeof content === "string" ? content : content.value;
 			return node;
 		}));
-		const coordinates = this.viewport.getPositionContentCoordinates(hover.range?.start ?? position);
+		const coordinates = this.viewport.getPositionContentCoordinates(hover.range?.getStartPosition() ?? position);
 		const bounds = this.viewport.element.getBoundingClientRect();
 		const width = Math.min(480, Math.max(160, bounds.width - 16));
 		this.element.style.maxWidth = `${width}px`;

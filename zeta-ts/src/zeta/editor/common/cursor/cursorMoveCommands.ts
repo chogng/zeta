@@ -1,5 +1,6 @@
-import { TextSelection, TextSelectionSet } from "../core/selection.js";
-import { TextPosition } from "../core/text.js";
+import { Selection } from "../core/selection.js";
+import { SelectionSet } from "./selectionSet.js";
+import { Position } from "../core/position.js";
 import { type TextModel } from "../model/textModel.js";
 
 /**
@@ -9,15 +10,15 @@ import { type TextModel } from "../model/textModel.js";
  * line length and never duplicate or overlap a retained selection.
  */
 export class CursorMoveCommands {
-	public static addCursorDown(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
+	public static addCursorDown(model: TextModel, selections: SelectionSet): SelectionSet {
 		return addAdjacentLineCursors(model, selections, 'below');
 	}
 
-	public static addCursorUp(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
+	public static addCursorUp(model: TextModel, selections: SelectionSet): SelectionSet {
 		return addAdjacentLineCursors(model, selections, 'above');
 	}
 
-	public static addCursorsToLineEnds(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
+	public static addCursorsToLineEnds(model: TextModel, selections: SelectionSet): SelectionSet {
 		return addCursorsToSelectedLineEnds(model, selections);
 	}
 
@@ -35,67 +36,67 @@ export class CursorMoveCommands {
 		return (state.ctrlKey || state.metaKey) && !state.altKey;
 	}
 
-	public static combinePointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
+	public static combinePointerSelection(base: SelectionSet, active: Selection, toggleCandidateIndex: number | undefined): SelectionSet {
 		return combinePointerSelection(base, active, toggleCandidateIndex);
 	}
 
-	public static findPointerToggleCandidate(base: TextSelectionSet, selection: TextSelection): number | undefined {
+	public static findPointerToggleCandidate(base: SelectionSet, selection: Selection): number | undefined {
 		const index = base.selections.findIndex(candidate => selectionsHaveSameRange(candidate, selection));
 		return index >= 0 ? index : undefined;
 	}
 }
 
-function addAdjacentLineCursors(model: TextModel, selections: TextSelectionSet, direction: 'above' | 'below'): TextSelectionSet {
+function addAdjacentLineCursors(model: TextModel, selections: SelectionSet, direction: 'above' | 'below'): SelectionSet {
 	const nextSelections = [...selections.selections];
 	let primaryIndex = selections.primaryIndex;
 	for (const selection of selections.selections) {
-		const target = adjacentLinePosition(model, selection.active, direction);
+		const target = adjacentLinePosition(model, selection.getPosition(), direction);
 		if (!target || nextSelections.some(candidate => positionOverlapsSelection(target, candidate))) continue;
-		nextSelections.push(TextSelection.collapsedAt(target));
+		nextSelections.push(Selection.fromPositions(target));
 		primaryIndex = nextSelections.length - 1;
 	}
 	return nextSelections.length === selections.selections.length
 		? selections
-		: TextSelectionSet.withPrimary(nextSelections, primaryIndex);
+		: SelectionSet.withPrimary(nextSelections, primaryIndex);
 }
 
 /** Replaces non-empty selections with carets at the selected physical line ends. */
-function addCursorsToSelectedLineEnds(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
-	const nextSelections: TextSelection[] = [];
+function addCursorsToSelectedLineEnds(model: TextModel, selections: SelectionSet): SelectionSet {
+	const nextSelections: Selection[] = [];
 	let primaryIndex: number | undefined;
 	for (let selectionIndex = 0; selectionIndex < selections.selections.length; selectionIndex += 1) {
 		const selection = selections.selections[selectionIndex]!;
-		if (selection.collapsed) continue;
-		const range = selection.range;
+		if (selection.isEmpty()) continue;
+		const range = selection;
 		const startIndex = nextSelections.length;
-		for (let lineIndex = range.start.lineIndex; lineIndex < range.end.lineIndex; lineIndex += 1) {
-			appendUniqueCaret(nextSelections, TextPosition.at(lineIndex, model.getLineContent(lineIndex).length));
+		for (let lineNumber = range.startLineNumber; lineNumber < range.endLineNumber; lineNumber += 1) {
+			appendUniqueCaret(nextSelections, new Position(lineNumber, model.getLineContent(lineNumber).length + 1));
 		}
-		if (range.end.columnIndex > 0) {
-			appendUniqueCaret(nextSelections, range.end);
+		if (range.endColumn > 1) {
+			appendUniqueCaret(nextSelections, range.getEndPosition());
 		}
 		if (selectionIndex === selections.primaryIndex && nextSelections.length > startIndex) {
 			primaryIndex = startIndex;
 		}
 	}
 	if (nextSelections.length === 0) return selections;
-	return TextSelectionSet.withPrimary(nextSelections, primaryIndex ?? 0);
+	return SelectionSet.withPrimary(nextSelections, primaryIndex ?? 0);
 }
 
-function adjacentLinePosition(model: TextModel, position: TextPosition, direction: 'above' | 'below'): TextPosition | undefined {
-	const lineIndex = position.lineIndex + (direction === 'above' ? -1 : 1);
-	if (lineIndex < 0 || lineIndex >= model.lineCount) return undefined;
-	return TextPosition.at(lineIndex, Math.min(position.columnIndex, model.getLineContent(lineIndex).length));
+function adjacentLinePosition(model: TextModel, position: Position, direction: 'above' | 'below'): Position | undefined {
+	const lineNumber = position.lineNumber + (direction === 'above' ? -1 : 1);
+	if (lineNumber < 1 || lineNumber > model.lineCount) return undefined;
+	return new Position(lineNumber, Math.min(position.column, model.getLineContent(lineNumber).length + 1));
 }
 
-function positionOverlapsSelection(position: TextPosition, selection: TextSelection): boolean {
-	if (selection.collapsed) return position.compareTo(selection.active) === 0;
-	return position.compareTo(selection.range.start) >= 0 && position.compareTo(selection.range.end) < 0;
+function positionOverlapsSelection(position: Position, selection: Selection): boolean {
+	if (selection.isEmpty()) return Position.compare(position, selection.getPosition()) === 0;
+	return Position.compare(position, selection.getStartPosition()) >= 0 && Position.compare(position, selection.getEndPosition()) < 0;
 }
 
-function appendUniqueCaret(target: TextSelection[], position: TextPosition): void {
-	if (target.some(selection => selection.collapsed && selection.active.compareTo(position) === 0)) return;
-	target.push(TextSelection.collapsedAt(position));
+function appendUniqueCaret(target: Selection[], position: Position): void {
+	if (target.some(selection => selection.isEmpty() && Position.compare(selection.getPosition(), position) === 0)) return;
+	target.push(Selection.fromPositions(position));
 }
 
 export enum PointerMultiCursorModifier {
@@ -110,37 +111,37 @@ export interface PointerModifierState {
 	readonly shiftKey: boolean;
 }
 
-function combinePointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
+function combinePointerSelection(base: SelectionSet, active: Selection, toggleCandidateIndex: number | undefined): SelectionSet {
 	validateToggleCandidate(base, toggleCandidateIndex);
 	if (toggleCandidateIndex !== undefined && selectionsHaveSameRange(base.selections[toggleCandidateIndex]!, active)) {
 		if (base.selections.length === 1) return base;
 		const selections = base.selections.filter((_, index) => index !== toggleCandidateIndex);
-		return TextSelectionSet.withPrimary(selections, primaryAfterRemoval(base.primaryIndex, toggleCandidateIndex, selections.length));
+		return SelectionSet.withPrimary(selections, primaryAfterRemoval(base.primaryIndex, toggleCandidateIndex, selections.length));
 	}
 
 	const retained = toggleCandidateIndex === undefined
 		? [...base.selections]
 		: base.selections.filter((_, index) => index !== toggleCandidateIndex);
 	const duplicateIndex = retained.findIndex(selection => selectionsHaveSameRange(selection, active));
-	if (duplicateIndex >= 0) return TextSelectionSet.withPrimary(retained, duplicateIndex);
+	if (duplicateIndex >= 0) return SelectionSet.withPrimary(retained, duplicateIndex);
 	const nonOverlapping = retained.filter(selection => !selectionRangesOverlap(selection, active));
-	if (nonOverlapping.length === 0) return TextSelectionSet.single(active);
-	return TextSelectionSet.withPrimary([...nonOverlapping, active], nonOverlapping.length);
+	if (nonOverlapping.length === 0) return SelectionSet.single(active);
+	return SelectionSet.withPrimary([...nonOverlapping, active], nonOverlapping.length);
 }
 
-function selectionsHaveSameRange(left: TextSelection, right: TextSelection): boolean {
-	return left.range.start.compareTo(right.range.start) === 0 && left.range.end.compareTo(right.range.end) === 0;
+function selectionsHaveSameRange(left: Selection, right: Selection): boolean {
+	return Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 && Position.compare(left.getEndPosition(), right.getEndPosition()) === 0;
 }
 
-function selectionRangesOverlap(left: TextSelection, right: TextSelection): boolean {
-	if (left.collapsed) return pointOverlapsRange(left.range.start, right);
-	if (right.collapsed) return pointOverlapsRange(right.range.start, left);
-	return left.range.start.compareTo(right.range.end) < 0 && right.range.start.compareTo(left.range.end) < 0;
+function selectionRangesOverlap(left: Selection, right: Selection): boolean {
+	if (left.isEmpty()) return pointOverlapsRange(left.getStartPosition(), right);
+	if (right.isEmpty()) return pointOverlapsRange(right.getStartPosition(), left);
+	return Position.compare(left.getStartPosition(), right.getEndPosition()) < 0 && Position.compare(right.getStartPosition(), left.getEndPosition()) < 0;
 }
 
-function pointOverlapsRange(point: TextPosition, selection: TextSelection): boolean {
-	if (selection.collapsed) return point.compareTo(selection.range.start) === 0;
-	return point.compareTo(selection.range.start) >= 0 && point.compareTo(selection.range.end) < 0;
+function pointOverlapsRange(point: Position, selection: Selection): boolean {
+	if (selection.isEmpty()) return Position.compare(point, selection.getStartPosition()) === 0;
+	return Position.compare(point, selection.getStartPosition()) >= 0 && Position.compare(point, selection.getEndPosition()) < 0;
 }
 
 function primaryAfterRemoval(primaryIndex: number, removedIndex: number, remainingCount: number): number {
@@ -149,7 +150,7 @@ function primaryAfterRemoval(primaryIndex: number, removedIndex: number, remaini
 	return Math.min(removedIndex, remainingCount - 1);
 }
 
-function validateToggleCandidate(base: TextSelectionSet, index: number | undefined): void {
+function validateToggleCandidate(base: SelectionSet, index: number | undefined): void {
 	if (index !== undefined && (!Number.isSafeInteger(index) || index < 0 || index >= base.selections.length)) {
 		throw new RangeError("Pointer toggle candidate is outside the selection set");
 	}

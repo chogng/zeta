@@ -6,7 +6,8 @@ import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputer } from "../../browser/view/domLineBreaksComputer.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
 	using model = new TextModel("ab😀cd\nxyz");
@@ -30,7 +31,7 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
 	]);
 
 	model.applyEdits([{
-		range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 0)),
+		range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (0) + 1)),
 		text: "qq",
 	}]);
 	assert.equal(changes, 1);
@@ -43,10 +44,10 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
 test("browser visual-line projection applies wrapping indent modes to continuation rows", () => {
 	using model = new TextModel("  abcdefghijkl");
 	const computer = new DOMLineBreaksComputer(new FixedTextMeasurer(), 4);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.None).wrappedTextIndentWidth, 0);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.Same).wrappedTextIndentWidth, 20);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.Indent).wrappedTextIndentWidth, 40);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.DeepIndent).wrappedTextIndentWidth, 80);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.None).wrappedTextIndentWidth, 0);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.Same).wrappedTextIndentWidth, 20);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.Indent).wrappedTextIndentWidth, 40);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.DeepIndent).wrappedTextIndentWidth, 80);
 
 	using projection = new ViewModelLines(model, computer, {
 		wrapping: EditorLineWrapping.On,
@@ -144,7 +145,7 @@ test("browser visual-line projection restarts an incomplete wrapped scan after a
 	});
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "d",
 	}]);
 	assert.equal(projection.complete, false);

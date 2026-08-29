@@ -4,7 +4,8 @@ import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type ITextModelService, type TextModelReference } from "../../../../../editor/common/services/resolverService.js";
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
@@ -22,9 +23,9 @@ test("bulk edit preview follows ordered create and text operations without mutat
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
 			{ kind: "create", resource: created, existing: "error" },
-			{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "hello" }] },
-			{ kind: "textDocument", resource: existing, expectedText: "alpha", edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "omega" }] },
-			{ kind: "textDocument", resource: existing, expectedText: "omega", edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "!" }] },
+			{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "hello" }] },
+			{ kind: "textDocument", resource: existing, expectedText: "alpha", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "omega" }] },
+			{ kind: "textDocument", resource: existing, expectedText: "omega", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
 		],
 	};
 

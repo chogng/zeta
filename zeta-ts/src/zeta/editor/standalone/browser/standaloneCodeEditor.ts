@@ -6,7 +6,7 @@ import { EditorBrowser, type EditorBrowserOptions, type EditorTextViewState, typ
 import type { EditorView, EditorViewport } from '../../browser/view.js';
 import type { CodeEditorWidget } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import type { CursorsController } from '../../common/cursor/cursor.js';
-import type { TextRange } from '../../common/core/text.js';
+import type { Range } from '../../common/core/range.js';
 import type { TextModel } from '../../common/model/textModel.js';
 
 export interface IStandaloneCodeEditor extends IEditorBrowser {
@@ -50,7 +50,7 @@ export class StandaloneCodeEditor extends Disposable implements IStandaloneCodeE
 	public focus(): void { this.editor.focus(); }
 	public getValue(): string { return this.editor.getValue(); }
 	public setValue(value: string): void { this.editor.setValue(value); }
-	public revealRange(range: TextRange): void { this.editor.revealRange(range); }
+	public revealRange(range: Range): void { this.editor.revealRange(range); }
 	public getViewState(): EditorTextViewState { return this.editor.getViewState(); }
 	public restoreViewState(state: EditorTextViewState): void { this.editor.restoreViewState(state); }
 	public addContentWidget(widget: IContentWidget): void { this.editor.addContentWidget(widget); }

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { MarkerService, MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
 import { type EditorInput, type EditorOpenOptions, type IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
@@ -57,7 +58,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 		pane.element.querySelector<HTMLButtonElement>(".zeta-problems-item.error .zeta-problems-item-button")!.click();
 		await Promise.resolve();
 		assert.equal(opened?.input.resource.toString(), main.toString());
-		assert.deepEqual(opened?.options?.selection, TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 4)));
+		assert.deepEqual(opened?.options?.selection, Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)));
 		assert.equal(focusCount, 1);
 
 		markerService.set("fixture", []);

@@ -7,7 +7,7 @@ import { isDocumentSelectionValid, selectionsEqual, validateDocumentSelection, t
 import { freezeDocumentNode, type DocumentMark, type DocumentNode } from "./document.js";
 import { DocumentSchema } from "./documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "./documentTransaction.js";
-import type { TextModelChange } from "../core/text.js";
+import type { TextModelChange } from "../core/textChange.js";
 import type { LineDocumentSnapshot } from "./lineDocument.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 

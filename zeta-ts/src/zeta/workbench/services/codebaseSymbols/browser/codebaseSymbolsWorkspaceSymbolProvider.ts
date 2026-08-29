@@ -1,4 +1,5 @@
-import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
@@ -42,9 +43,9 @@ function singleWorkspaceRoot(workspace: IWorkspaceContextService) {
 	return folders.length === 1 ? folders[0]?.uri : undefined;
 }
 
-function textRange(match: CodebaseSymbolsMatch): TextRange {
-	return TextRange.from(
-		TextPosition.at(match.selectionRange.start.lineIndex, match.selectionRange.start.columnIndex),
-		TextPosition.at(match.selectionRange.end.lineIndex, match.selectionRange.end.columnIndex),
+function textRange(match: CodebaseSymbolsMatch): Range {
+	return Range.fromPositions(
+		new Position(match.selectionRange.start.lineIndex + 1, match.selectionRange.start.columnIndex + 1),
+		new Position(match.selectionRange.end.lineIndex + 1, match.selectionRange.end.columnIndex + 1),
 	);
 }

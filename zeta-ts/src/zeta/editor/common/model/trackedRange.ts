@@ -1,5 +1,7 @@
 import { AbstractDisposable, DisposableMap, Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
-import { TextPosition, TextRange, type TextModelContentChange } from "../core/text.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
+import { type TextModelContentChange } from "../core/textChange.js";
 
 export enum TrackedRangeStickiness {
 	GrowsAtBothEdges = "growsAtBothEdges",
@@ -9,7 +11,7 @@ export enum TrackedRangeStickiness {
 }
 
 export interface TrackedRange extends IDisposable {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly stickiness: TrackedRangeStickiness;
 }
 
@@ -28,7 +30,7 @@ export class TrackedRangeCollection extends Disposable {
 	private readonly handles = this._register(new DisposableMap<TrackedRangeRecord, TrackedRangeHandle>());
 
 	constructor(
-		private readonly positionAt: (offset: number) => TextPosition,
+		private readonly positionAt: (offset: number) => Position,
 	) {
 		super();
 	}
@@ -76,15 +78,15 @@ export class TrackedRangeCollection extends Disposable {
 class TrackedRangeHandle extends AbstractDisposable implements TrackedRange {
 	constructor(
 		private readonly record: TrackedRangeRecord,
-		private readonly positionAt: (offset: number) => TextPosition,
+		private readonly positionAt: (offset: number) => Position,
 		private readonly remove: () => void,
 	) {
 		super();
 	}
 
-	get range(): TextRange {
+	get range(): Range {
 		this.assertNotDisposed();
-		return TextRange.from(
+		return Range.fromPositions(
 			this.positionAt(this.record.startOffset),
 			this.positionAt(this.record.endOffset),
 		);

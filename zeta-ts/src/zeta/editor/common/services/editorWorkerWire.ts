@@ -1,4 +1,7 @@
-import { TextPosition, TextRange, type TextEdit, type TextSnapshot } from '../core/text.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import { type TextEdit } from '../core/editOperation.js';
+import { type TextSnapshot } from '../core/textChange.js';
 import { type InplaceReplaceResult } from '../languages/supports/inplaceReplaceSupport.js';
 import { type LanguageWorkerWireCodec } from '../languages/languageWorkerWire.js';
 import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorker.js';
@@ -85,30 +88,30 @@ function decodeEdit(value: unknown, snapshot: TextSnapshot): TextEdit {
 	return Object.freeze({ range: decodeRange(value.range, snapshot), text: decodeString(value.text, 'Editor worker edit text') });
 }
 
-function encodeRange(range: TextRange): unknown {
+function encodeRange(range: Range): unknown {
 	return Object.freeze({
-		start: Object.freeze({ lineIndex: range.start.lineIndex, columnIndex: range.start.columnIndex }),
-		end: Object.freeze({ lineIndex: range.end.lineIndex, columnIndex: range.end.columnIndex }),
+		start: Object.freeze({ lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 }),
+		end: Object.freeze({ lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 }),
 	});
 }
 
-function decodeRange(value: unknown, snapshot: TextSnapshot): TextRange {
+function decodeRange(value: unknown, snapshot: TextSnapshot): Range {
 	assertRecord(value, 'Editor worker range');
 	const start = decodePosition(value.start, 'Editor worker range start');
 	const end = decodePosition(value.end, 'Editor worker range end');
-	const range = TextRange.from(start, end);
+	const range = Range.fromPositions(start, end);
 	const lines = snapshot.getText().split('\n');
-	for (const position of [range.start, range.end]) {
-		if (position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
+	for (const position of [range.getStartPosition(), range.getEndPosition()]) {
+		if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
 			throw new RangeError('Editor worker range is outside its snapshot');
 		}
 	}
 	return range;
 }
 
-function decodePosition(value: unknown, owner: string): TextPosition {
+function decodePosition(value: unknown, owner: string): Position {
 	assertRecord(value, owner);
-	return TextPosition.at(decodebase(value.lineIndex, `${owner} line index`), decodebase(value.columnIndex, `${owner} column index`));
+	return new Position((decodebase(value.lineIndex, `${owner} line index`)) + 1, (decodebase(value.columnIndex, `${owner} column index`)) + 1);
 }
 
 function decodeUnicodeHighlight(value: unknown, snapshot: TextSnapshot): UnicodeHighlight {

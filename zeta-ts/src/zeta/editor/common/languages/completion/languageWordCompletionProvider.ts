@@ -1,6 +1,7 @@
 import { LanguageCompletionItemKind } from "./languageCompletions.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "./languageCompletionProviders.js";
-import { TextPosition, TextRange } from "../../core/text.js";
+import { Position } from "../../core/position.js";
+import { Range } from "../../core/range.js";
 import { getTextWordSegments } from "../../core/textSegmentation.js";
 
 const DEFAULT_MAXIMUM_WORD_COMPLETIONS = 100;
@@ -25,17 +26,18 @@ export function createLanguageWordCompletionProvider(options: LanguageWordComple
 		provideCompletions: (request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined => {
 			signal.throwIfAborted();
 			const lines = request.snapshot.getText().split("\n");
-			const triggerLine = lines[request.position.lineIndex];
-			if (triggerLine === undefined || request.position.columnIndex > triggerLine.length) {
+			const columnIndex = request.position.column - 1;
+			const triggerLine = lines[request.position.lineNumber - 1];
+			if (triggerLine === undefined || columnIndex < 0 || columnIndex > triggerLine.length) {
 				throw new RangeError("Word completion position is outside its snapshot");
 			}
 			const active = getTextWordSegments(triggerLine).find(segment => (
 				segment.wordLike &&
-				request.position.columnIndex > segment.start &&
-				request.position.columnIndex <= segment.end
+				columnIndex > segment.start &&
+				columnIndex <= segment.end
 			));
 			if (!active) return undefined;
-			const prefix = triggerLine.slice(active.start, request.position.columnIndex);
+			const prefix = triggerLine.slice(active.start, columnIndex);
 			if (prefix.length === 0) return undefined;
 			const currentWord = triggerLine.slice(active.start, active.end);
 			const words = new Set<string>();
@@ -49,9 +51,9 @@ export function createLanguageWordCompletionProvider(options: LanguageWordComple
 			}
 			const candidates = [...words].sort().slice(0, maximumItems);
 			if (candidates.length === 0) return undefined;
-			const range = TextRange.from(
-				TextPosition.at(request.position.lineIndex, active.start),
-				TextPosition.at(request.position.lineIndex, active.end),
+			const range = Range.fromPositions(
+				new Position(request.position.lineNumber, active.start + 1),
+				new Position(request.position.lineNumber, active.end + 1),
 			);
 			return Object.freeze({
 				items: Object.freeze(candidates.map(word => Object.freeze({

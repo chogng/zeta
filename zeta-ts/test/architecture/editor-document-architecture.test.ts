@@ -10,7 +10,7 @@ const workbenchRoot = resolve(desktopRoot, "src/zeta/workbench");
 
 test("editor exposes one flat VS Code-shaped domain for both feature implementations", () => {
 	assert.deepEqual(directoryNames(editorRoot), ["browser", "common", "contrib", "standalone", "test"]);
-	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "config", "core", "cursor", "diff", "languages", "model", "services", "tokens", "viewLayout", "viewModel"]);
+	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "config", "core", "cursor", "diff", "languages", "model", "services", "standalone", "tokens", "viewLayout", "viewModel"]);
 	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["config", "controller", "gpu", "services", "view", "viewparts", "widget"]);
 	assert.equal(statSafe(join(editorRoot, "contrib", "academic")), true);
 	assert.equal(statSafe(join(editorRoot, "editor.academic.all.ts")), true);

@@ -3,7 +3,8 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageCompletionCommand, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult } from "./languageCompletions.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
-import { type TextPosition, type TextSnapshot } from "../../core/text.js";
+import { type Position } from "../../core/position.js";
+import { type TextSnapshot } from "../../core/textChange.js";
 import { type URI } from "../../../../base/common/uri.js";
 
 export enum LanguageCompletionTriggerKind {
@@ -30,7 +31,7 @@ export type LanguageCompletionContext = LanguageCompletionInvokeContext | Langua
 export interface LanguageCompletionRequest {
 	readonly languageId: string;
 	readonly resource?: URI;
-	readonly position: TextPosition;
+	readonly position: Position;
 	readonly context: LanguageCompletionContext;
 }
 

@@ -66,8 +66,8 @@ function resolveLineTokens(tokens: readonly LanguageToken[], styling: SemanticTo
 		if (new Set(tokenStyling.modifiers).size !== tokenStyling.modifiers.length || tokenStyling.modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) throw new TypeError('Unknown or duplicate semantic token modifier');
 		if (tokenStyling.presentation === undefined && token.presentation === undefined) continue;
 		resolved.push(Object.freeze({
-			startColumn: token.range.start.columnIndex,
-			endColumn: token.range.end.columnIndex,
+			startColumn: token.range.startColumn - 1,
+			endColumn: token.range.endColumn - 1,
 			...(tokenStyling.presentation === undefined ? {} : { presentation: tokenStyling.presentation }),
 			...(tokenStyling.modifiers.length === 0 ? {} : { modifiers: tokenStyling.modifiers }),
 			...(token.presentation === undefined ? {} : { syntaxPresentation: token.presentation }),

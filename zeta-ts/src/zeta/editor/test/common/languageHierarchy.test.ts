@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
@@ -29,7 +30,7 @@ test("language hierarchy keeps prepare and follow-up requests on the same provid
 	});
 	using service = new LanguageHierarchyService(model, source, languages.callHierarchyProvider, languages.typeHierarchyProvider);
 
-	const prepared = await service.prepareCallHierarchy("typescript", TextPosition.at(0, 10));
+	const prepared = await service.prepareCallHierarchy("typescript", new Position((0) + 1, (10) + 1));
 	const incoming = await prepared[0]!.incoming(prepared[0]!.roots[0]!);
 
 	assert.deepEqual(followedData, { opaque: "root" });
@@ -51,16 +52,16 @@ test("language hierarchy discards follow-up results when the source revision cha
 		provideSubtypes: () => [],
 	});
 	using service = new LanguageHierarchyService(model, source, languages.callHierarchyProvider, languages.typeHierarchyProvider);
-	const prepared = await service.prepareTypeHierarchy("typescript", TextPosition.at(0, 7));
+	const prepared = await service.prepareTypeHierarchy("typescript", new Position((0) + 1, (7) + 1));
 	const result = prepared[0]!.supertypes(root);
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 13)), text: " " }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (13) + 1)), text: " " }]);
 	pending.resolve([item("Base", source, 1)]);
 	assert.deepEqual(await result, []);
 });
 
 function item(name: string, resource: URI, line: number) {
-	const range = TextRange.from(TextPosition.at(line, 0), TextPosition.at(line, name.length + 2));
-	const selectionRange = TextRange.from(TextPosition.at(line, 1), TextPosition.at(line, name.length + 1));
+	const range = Range.fromPositions(new Position((line) + 1, (0) + 1), new Position((line) + 1, (name.length + 2) + 1));
+	const selectionRange = Range.fromPositions(new Position((line) + 1, (1) + 1), new Position((line) + 1, (name.length + 1) + 1));
 	return { name, symbolKind: 12, resource, range, selectionRange, data: { opaque: name } };
 }
 

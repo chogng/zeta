@@ -5,7 +5,8 @@ import { DecorationPresentation, createStanzaDecorationSource } from "../../../.
 import { DiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { TextPosition, TextRange } from "../../../../common/core/text.js";
+import { Position } from "../../../../common/core/position.js";
+import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { TrackedRangeStickiness } from "../../../../common/model/trackedRange.js";
 
@@ -42,7 +43,7 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 	using model = new TextModel("const value");
 	using decorations = new TextDecorationCollection<string>(model);
 	decorations.add({
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "Use let instead",
 	});

@@ -4,8 +4,9 @@ import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../commo
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageCompletionSnippet } from "./snippetParser.js";
 import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "./snippetTransform.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 
@@ -52,7 +53,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 				index: group.index,
 				ranges: Object.freeze(group.placeholders.map(placeholder =>
 					model.trackRange(
-						TextRange.from(
+						Range.fromPositions(
 							model.positionAt(insertionStartOffset + placeholder.startOffset),
 							model.positionAt(insertionStartOffset + placeholder.endOffset),
 						),
@@ -65,7 +66,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 				index: transform.index,
 				transform: transform.transform,
 				range: model.trackRange(
-					TextRange.from(
+					Range.fromPositions(
 						model.positionAt(insertionStartOffset + transform.startOffset),
 						model.positionAt(insertionStartOffset + transform.endOffset),
 					),
@@ -73,7 +74,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 				),
 			})));
 			this.finalRange = model.trackRange(
-				TextRange.emptyAt(model.positionAt(insertionStartOffset + finalOffsetWithinInsertion)),
+				Range.fromPositions(model.positionAt(insertionStartOffset + finalOffsetWithinInsertion)),
 				TrackedRangeStickiness.NeverGrowsAtEdges,
 			);
 			this._register(toDisposable(() => {
@@ -104,7 +105,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 		if (this.currentGroupIndex === this.groups.length - 1) {
 			this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
 			this.currentGroupIndex += 1;
-			this.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(this.finalRange.range.end)));
+			this.selections.setSelections(SelectionSet.single(Selection.fromPositions(this.finalRange.range.getEndPosition())));
 			return true;
 		}
 		this.dispose();
@@ -145,8 +146,8 @@ export class LanguageCompletionSnippetSession extends Disposable {
 	private selectGroup(index: number): void {
 		const group = this.groups[index];
 		if (!group) throw new RangeError("Language completion snippet tabstop index is outside its session");
-		this.selections.setSelections(TextSelectionSet.withPrimary(
-			group.ranges.map(range => TextSelection.from(range.range.start, range.range.end)),
+		this.selections.setSelections(SelectionSet.withPrimary(
+			group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())),
 			0,
 		));
 	}
@@ -167,8 +168,8 @@ export class LanguageCompletionSnippetSession extends Disposable {
 		const model = this.selections.textModel;
 		const ranges = group.ranges.map(range => ({
 			range,
-			startOffset: model.offsetAt(range.range.start),
-			endOffset: model.offsetAt(range.range.end),
+			startOffset: model.offsetAt(range.range.getStartPosition()),
+			endOffset: model.offsetAt(range.range.getEndPosition()),
 		})).sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
 		for (let index = 1; index < ranges.length; index += 1) {
 			const previous = ranges[index - 1]!;

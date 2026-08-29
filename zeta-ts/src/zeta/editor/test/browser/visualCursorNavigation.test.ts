@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorMoveOperations.js";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 
@@ -16,7 +18,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	const first = navigateStanzaVisualCursors(
 		model,
 		projection,
-		TextSelectionSet.single(caret(0, 1)),
+		SelectionSet.single(caret(0, 1)),
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -45,7 +47,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	const extended = navigateStanzaVisualCursors(
 		model,
 		projection,
-		TextSelectionSet.single(caret(0, 1)),
+		SelectionSet.single(caret(0, 1)),
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Extend,
@@ -55,7 +57,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	);
 	assert.deepEqual(
 		extended.selections.primary,
-		TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 3)),
+		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (3) + 1)),
 	);
 });
 
@@ -65,7 +67,7 @@ test("Visual cursor navigation removes continuation indentation before resolving
 	const result = navigateStanzaVisualCursors(
 		model,
 		projection,
-		TextSelectionSet.single(caret(0, 1)),
+		SelectionSet.single(caret(0, 1)),
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -84,7 +86,7 @@ test("Visual cursor navigation uses browser geometry when bidirectional layout p
 	const result = navigateStanzaVisualCursors(
 		model,
 		projection,
-		TextSelectionSet.single(caret(0, 1)),
+		SelectionSet.single(caret(0, 1)),
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -92,11 +94,11 @@ test("Visual cursor navigation uses browser geometry when bidirectional layout p
 		},
 		() => 0,
 		{
-			getHorizontalOffset: position => position.columnIndex === 1 ? 91 : undefined,
+			getHorizontalOffset: position => position.column === 2 ? 91 : undefined,
 			getNearestPosition: (visualLineIndex, horizontalOffset) => {
 				assert.equal(visualLineIndex, 1);
 				assert.equal(horizontalOffset, 91);
-				return TextPosition.at(0, 5);
+				return new Position((0) + 1, (5) + 1);
 			},
 		},
 	);
@@ -108,14 +110,14 @@ test("Visual cursor navigation rejects stale projections and invalid preferred o
 	using model = new TextModel("abc");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "d",
 	}]);
 
 	assert.throws(() => navigateStanzaVisualCursors(
 		model,
 		projection,
-		TextSelectionSet.single(caret(0, 0)),
+		SelectionSet.single(caret(0, 0)),
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -128,7 +130,7 @@ test("Visual cursor navigation rejects stale projections and invalid preferred o
 	assert.throws(() => navigateStanzaVisualCursors(
 		model,
 		current,
-		TextSelectionSet.single(caret(0, 0)),
+		SelectionSet.single(caret(0, 0)),
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -139,6 +141,6 @@ test("Visual cursor navigation rejects stale projections and invalid preferred o
 	), /preferred horizontal offsets/);
 });
 
-function caret(lineIndex: number, columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex));
+function caret(lineIndex: number, columnIndex: number): Selection {
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }

@@ -1,7 +1,7 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextEdit } from "../../../common/core/text.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
 
 interface BracketDeletion {
 	readonly startOffset: number;
@@ -10,24 +10,24 @@ interface BracketDeletion {
 }
 
 /** Removes every distinct matched bracket pair containing a collapsed cursor. */
-export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracketPairs, selections: TextSelectionSet): EditorEditCommand | undefined {
+export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracketPairs, selections: SelectionSet): EditorEditCommand | undefined {
 	const model = bracketPairs.textModel;
 	const deletions = new Map<string, BracketDeletion>();
 	for (const selection of selections.selections) {
-		if (!selection.collapsed) continue;
-		const match = bracketPairs.matchBracket(selection.active) ?? bracketPairs.findEnclosingBrackets(selection.active);
+		if (!selection.isEmpty()) continue;
+		const match = bracketPairs.matchBracket(selection.getPosition()) ?? bracketPairs.findEnclosingBrackets(selection.getPosition());
 		if (!match) continue;
-		addDeletion(deletions, model.offsetAt(match.opening.start), model.offsetAt(match.opening.end), match.opening);
-		addDeletion(deletions, model.offsetAt(match.closing.start), model.offsetAt(match.closing.end), match.closing);
+		addDeletion(deletions, model.offsetAt(match.opening.getStartPosition()), model.offsetAt(match.opening.getEndPosition()), match.opening);
+		addDeletion(deletions, model.offsetAt(match.closing.getStartPosition()), model.offsetAt(match.closing.getEndPosition()), match.closing);
 	}
 	if (deletions.size === 0) return undefined;
 	const ordered = [...deletions.values()].sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
 	const selectionsAfter = selections.selections.map(selection => {
-		const match = selection.collapsed ? bracketPairs.matchBracket(selection.active) ?? bracketPairs.findEnclosingBrackets(selection.active) : undefined;
-		const targetOffset = match ? model.offsetAt(match.opening.start) : model.offsetAt(selection.active);
+		const match = selection.isEmpty() ? bracketPairs.matchBracket(selection.getPosition()) ?? bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined;
+		const targetOffset = match ? model.offsetAt(match.opening.getStartPosition()) : model.offsetAt(selection.getPosition());
 		const mapped = mapOffsetThroughDeletions(targetOffset, ordered);
 		return Object.freeze({
-			anchorOffset: selection.collapsed ? mapped : mapOffsetThroughDeletions(model.offsetAt(selection.anchor), ordered),
+			anchorOffset: selection.isEmpty() ? mapped : mapOffsetThroughDeletions(model.offsetAt(selection.getSelectionStart()), ordered),
 			activeOffset: mapped,
 		});
 	});

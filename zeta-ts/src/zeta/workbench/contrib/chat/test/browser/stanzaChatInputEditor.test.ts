@@ -17,10 +17,48 @@ for (const [name, value] of Object.entries({
 }
 
 const { ChatInputEditor } = await import("../../browser/input/stanzaChatInputEditor.js");
+const { createStanzaChatCommandCompletionProvider } = await import("../../browser/input/stanzaChatCommandCompletion.js");
+const { createStanzaChatSkillCompletionProvider } = await import("../../browser/input/stanzaChatSkillCompletion.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
+const { Position } = await import("../../../../../editor/common/core/position.js");
+const { Range } = await import("../../../../../editor/common/core/range.js");
+const { LanguageCompletionTriggerKind } = await import("../../../../../editor/common/languages/completion/languageCompletionProviders.js");
+const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
 
 test.after(() => browserEnvironment.window.close());
+
+test("Chat completion providers use one-based editor positions and ranges", async () => {
+	const slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
+	using slashModel = new TextModel("/ne");
+	const slashPosition = new Position(1, 4);
+	const slashResult = await createStanzaChatCommandCompletionProvider(slashCommands).provideCompletions({
+		requestId: 1,
+		languageId: "zeta-chat-input",
+		position: slashPosition,
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: slashModel.createSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(slashResult?.items[0]?.range, new Range(1, 1, 1, 4));
+
+	const skills = new SkillSelectorCatalog();
+	skills.setSkills([{
+		name: "commit",
+		description: "Draft a commit message",
+		source: "user",
+		skill: { id: { source: "user:skill-source:test", name: "commit" }, version: { type: "pinnedDigest", digest: "sha256:commit" } },
+	}]);
+	using skillModel = new TextModel("first line\nuse $com here");
+	const skillPosition = new Position(2, 9);
+	const skillResult = await createStanzaChatSkillCompletionProvider(skills).provideCompletions({
+		requestId: 2,
+		languageId: "zeta-chat-input",
+		position: skillPosition,
+		context: { kind: LanguageCompletionTriggerKind.Invoke },
+		snapshot: skillModel.createSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(skillResult?.items[0]?.range, new Range(2, 5, 2, 9));
+});
 
 test("Stanza Chat input completes slash commands before submitting", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

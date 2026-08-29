@@ -1,12 +1,12 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
+import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface EditorState {
 	readonly focused: boolean;
 	readonly modelVersion: number;
-	readonly selections: TextSelectionSet;
+	readonly selections: SelectionSet;
 	readonly scrollLeft: number;
 	readonly scrollTop: number;
 }
@@ -17,7 +17,7 @@ export class EditorStateModel extends Disposable {
 	private state: EditorState;
 	readonly onDidChange: Event<EditorState> = this.changeEmitter.event;
 
-	constructor(private readonly model: TextModel, selections: TextSelectionSet) {
+	constructor(private readonly model: TextModel, selections: SelectionSet) {
 		super();
 		this.state = Object.freeze({ focused: false, modelVersion: model.version, selections, scrollLeft: 0, scrollTop: 0 });
 		this._register(model.onDidChange(() => this.update({ modelVersion: model.version })));
@@ -32,7 +32,7 @@ export class EditorStateModel extends Disposable {
 		this.update({ focused });
 	}
 
-	setSelections(selections: TextSelectionSet): void {
+	setSelections(selections: SelectionSet): void {
 		this.update({ selections });
 	}
 

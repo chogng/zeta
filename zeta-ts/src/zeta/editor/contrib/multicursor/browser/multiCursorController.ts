@@ -39,7 +39,7 @@ export class MultiCursorController extends Disposable {
 			if (next === this.selections.selections) return;
 			stopEvent(event);
 			this.selections.setCursorSelections(next);
-			this.viewport.revealPosition(next.primary.active);
+			this.viewport.revealPosition(next.primary.getPosition());
 			return;
 		}
 		const direction = resolveStanzaAdjacentCursorDirection(event, this.targetOperatingSystem);
@@ -49,7 +49,7 @@ export class MultiCursorController extends Disposable {
 			? CursorMoveCommands.addCursorUp(this.viewport.textModel, this.selections.selections)
 			: CursorMoveCommands.addCursorDown(this.viewport.textModel, this.selections.selections);
 		this.selections.setCursorSelections(next);
-		this.viewport.revealPosition(next.primary.active);
+		this.viewport.revealPosition(next.primary.getPosition());
 	}
 }
 

@@ -2,7 +2,7 @@ import { isHighSurrogate } from '../../../base/common/strings.js';
 import { InlineDecorationType, type InlineDecoration } from '../viewModel/inlineDecorations.js';
 import { LinePartMetadata } from './linePart.js';
 
-/** One zero-based source span after line decorations have been clipped. */
+/** One one-based source span after line decorations have been clipped. */
 export class LineDecoration {
 	public constructor(
 		public readonly startColumn: number,
@@ -29,10 +29,12 @@ export class LineDecoration {
 		if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset) || startOffset < 0 || endOffset < startOffset) {
 			throw new RangeError('Wrapped line offsets must be ordered non-negative safe integers');
 		}
+		const wrappedStartColumn = startOffset + 1;
+		const wrappedEndColumn = endOffset + 1;
 		return decorations.flatMap(decoration => {
-			if (decoration.endColumn <= startOffset || decoration.startColumn >= endOffset) return [];
-			const startColumn = Math.max(0, decoration.startColumn - startOffset);
-			const endColumn = Math.min(endOffset - startOffset, decoration.endColumn - startOffset);
+			if (decoration.endColumn <= wrappedStartColumn || decoration.startColumn >= wrappedEndColumn) return [];
+			const startColumn = Math.max(1, decoration.startColumn - wrappedStartColumn + 1);
+			const endColumn = Math.min(endOffset - startOffset + 1, decoration.endColumn - wrappedStartColumn + 1);
 			return endColumn >= startColumn
 				? [new LineDecoration(startColumn, endColumn, decoration.className, decoration.type)]
 				: [];
@@ -41,18 +43,18 @@ export class LineDecoration {
 
 	public static filter(
 		decorations: readonly InlineDecoration[],
-		lineIndex: number,
+		lineNumber: number,
 		minColumn: number,
 		maxColumn: number,
 	): LineDecoration[] {
-		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || !Number.isSafeInteger(minColumn) || !Number.isSafeInteger(maxColumn) || minColumn < 0 || maxColumn < minColumn) {
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(minColumn) || !Number.isSafeInteger(maxColumn) || minColumn < 0 || maxColumn < minColumn) {
 			throw new RangeError('Line decoration filter coordinates are invalid');
 		}
 		return decorations.flatMap(decoration => {
-			if (decoration.range.end.lineIndex < lineIndex || decoration.range.start.lineIndex > lineIndex) return [];
-			if (decoration.range.empty && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
-			const startColumn = decoration.range.start.lineIndex === lineIndex ? decoration.range.start.columnIndex : minColumn;
-			const endColumn = decoration.range.end.lineIndex === lineIndex ? decoration.range.end.columnIndex : maxColumn;
+			if (decoration.range.endLineNumber < lineNumber || decoration.range.startLineNumber > lineNumber) return [];
+			if (decoration.range.isEmpty() && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
+			const startColumn = decoration.range.startLineNumber === lineNumber ? decoration.range.startColumn : minColumn;
+			const endColumn = decoration.range.endLineNumber === lineNumber ? decoration.range.endColumn : maxColumn;
 			const clippedStartColumn = Math.max(minColumn, startColumn);
 			const clippedEndColumn = Math.min(maxColumn, endColumn);
 			if (clippedEndColumn < clippedStartColumn) return [];
@@ -85,8 +87,8 @@ export class LineDecorationsNormalizer {
 		if (decorations.length === 0) return Object.freeze([]);
 		const normalizedDecorations = decorations.map(decoration => ({
 			decoration,
-			startColumn: moveSurrogateBoundary(lineContent, decoration.startColumn),
-			endColumn: moveSurrogateBoundary(lineContent, decoration.endColumn),
+			startColumn: moveSurrogateBoundary(lineContent, decoration.startColumn - 1),
+			endColumn: moveSurrogateBoundary(lineContent, decoration.endColumn - 1),
 		}));
 		const boundaries = new Set<number>([0, lineContent.length]);
 		for (const { startColumn, endColumn } of normalizedDecorations) {

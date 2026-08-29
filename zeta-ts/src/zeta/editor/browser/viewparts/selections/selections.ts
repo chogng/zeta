@@ -36,8 +36,8 @@ function projectStanzaSelectionOverlays(context: EditorOverlayContext, controlle
 	const domSelections = new Map<number, readonly EditorLineVisibleRange[]>();
 	for (let selectionIndex = 0; selectionIndex < controller.selections.selections.length; selectionIndex += 1) {
 		const selection = controller.selections.selections[selectionIndex]!;
-		if (selection.collapsed) continue;
-		const ranges = context.linesVisibleRangesForRange(selection.range, true);
+		if (selection.isEmpty()) continue;
+		const ranges = context.linesVisibleRangesForRange(selection, true);
 		if (ranges) domSelections.set(selectionIndex, ranges);
 	}
 	const geometry = createStanzaVisualSelectionGeometry(context.model, controller.selections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);

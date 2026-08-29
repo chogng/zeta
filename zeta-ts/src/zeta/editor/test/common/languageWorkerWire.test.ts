@@ -9,7 +9,8 @@ import { LanguageCompletionItemKind } from "../../common/languages/completion/la
 import { createLanguageWordCompletionProvider } from "../../common/languages/completion/languageWordCompletionProvider.js";
 import { LanguageWorkerRemoteError, LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 import { LanguageRequestStatus, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion service crosses a structured-clone worker boundary", async () => {
@@ -28,7 +29,7 @@ test("Completion service crosses a structured-clone worker boundary", async () =
 		workerFactory: () => new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec),
 	});
 	const line = "const connection = con";
-	const position = TextPosition.at(1, line.length);
+	const position = new Position((1) + 1, (line.length) + 1);
 
 	const outcome = await service.request("typescript", position, createLanguageCompletionInvokeContext());
 
@@ -36,10 +37,10 @@ test("Completion service crosses a structured-clone worker boundary", async () =
 	const result = service.results.result!.value;
 	assert.deepEqual(result.items.map(item => item.label), ["connection", "console", "const"]);
 	assert.equal(result.items.every(item => item.providerId === "language.word"), true);
-	assert.equal(result.position instanceof TextPosition, true);
-	assert.equal(result.items[0]!.range instanceof TextRange, true);
-	assert.deepEqual(result.items[0]!.range, TextRange.from(
-		TextPosition.at(1, line.length - 3),
+	assert.equal(result.position instanceof Position, true);
+	assert.equal(result.items[0]!.range instanceof Range, true);
+	assert.deepEqual(result.items[0]!.range, Range.fromPositions(
+		new Position((1) + 1, (line.length - 3) + 1),
 		position,
 	));
 });
@@ -58,14 +59,14 @@ test("Completion wire synchronizes model changes and then references the mirror"
 	using service = new LanguageCompletionService(model, localRegistry, {
 		workerFactory: () => new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec),
 	});
-	const firstPosition = TextPosition.at(0, model.getText().length);
+	const firstPosition = new Position((0) + 1, (model.getText().length) + 1);
 	assert.equal((await service.request("plaintext", firstPosition, createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(firstPosition),
+		range: Range.fromPositions(firstPosition),
 		text: "p",
 	}]);
-	const secondPosition = TextPosition.at(0, model.getText().length);
+	const secondPosition = new Position((0) + 1, (model.getText().length) + 1);
 	assert.equal((await service.request("plaintext", secondPosition, createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 
 	assert.deepEqual(service.results.result!.value.items.map(item => item.label), ["alpha"]);
@@ -91,8 +92,8 @@ test("A skipped model version makes the next wire request send a full snapshot",
 	);
 	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
-	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 8)), text: "p" }]);
-	const skipped = model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 9)), text: "h" }])!;
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (8) + 1)), text: "p" }]);
+	const skipped = model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (9) + 1)), text: "h" }])!;
 
 	client.synchronizeModel(skipped);
 	await client.run(request(model, 2), new AbortController().signal);
@@ -153,7 +154,7 @@ test("Remote failures and invalid DTO results reject in the client realm", async
 				id: "outside",
 				label: "outside",
 				kind: LanguageCompletionItemKind.Text,
-				range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 99)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (99) + 1)),
 				insertText: "outside",
 			}],
 			isIncomplete: false,
@@ -183,7 +184,7 @@ test("Completion service replaces a failed wire worker on the next request", asy
 			return new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
 		},
 	});
-	const position = TextPosition.at(0, model.getText().length);
+	const position = new Position((0) + 1, (model.getText().length) + 1);
 
 	await assert.rejects(service.request("typescript", position, createLanguageCompletionInvokeContext()), /first worker failed/);
 	const outcome = await service.request("typescript", position, createLanguageCompletionInvokeContext());
@@ -291,7 +292,7 @@ function request(model: TextModel, requestId: number): LanguageWorkerRequest<typ
 		snapshot: model.createSnapshot(),
 		payload: Object.freeze({
 			languageId: "typescript",
-			position: TextPosition.at(0, model.getText().length),
+			position: new Position((0) + 1, (model.getText().length) + 1),
 			context: createLanguageCompletionInvokeContext(),
 		}),
 	});

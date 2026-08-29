@@ -23,13 +23,13 @@ export class InPlaceReplaceController extends Disposable {
 		const model = this.viewport.textModel;
 		const selectionState = this.selections.selections;
 		const selection = selectionState.primary;
-		if (selection.range.start.lineIndex !== selection.range.end.lineIndex) return false;
-		const result = await this.editorWorker.navigateValueSet(selection.range, direction > 0, this.wordDefinition());
+		if (selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return false;
+		const result = await this.editorWorker.navigateValueSet(selection, direction > 0, this.wordDefinition());
 		if (!result || !this.selections.selections.equals(selectionState)) return false;
 		const command = createEditorEditCommand(model, this.selections.selections, [{ range: result.range, text: result.value }]);
 		if (!command) return false;
 		this.selections.execute(command);
-		this.viewport.revealPosition(result.range.start);
+		this.viewport.revealPosition(result.range.getStartPosition());
 		return true;
 	}
 }

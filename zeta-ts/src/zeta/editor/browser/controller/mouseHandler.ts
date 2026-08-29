@@ -1,8 +1,10 @@
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../common/cursor/cursor.js";
 import { ColumnSelection } from "../../common/cursor/cursorColumnSelection.js";
-import { SelectionDirection, TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { SelectionDirection, Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
 import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
@@ -150,7 +152,7 @@ export class MouseHandler extends Disposable {
 		if (!hitTarget) return;
 		this.viewport.element.focus({ preventScroll: true });
 		if (isPositionInSelections(hitTarget.position, this.selectionController.selections)) return;
-		this.selectionController.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(hitTarget.position)));
+		this.selectionController.setSelections(SelectionSet.single(Selection.fromPositions(hitTarget.position)));
 	}
 
 	private createActiveSelection(
@@ -162,39 +164,39 @@ export class MouseHandler extends Disposable {
 		addSelection: boolean,
 	): ActiveMouseSelection {
 		let kind: MouseSelectionKind;
-		let anchorRange: TextRange;
+		let anchorRange: Range;
 		if (column && clickCount === 1) {
 			kind = MouseSelectionKind.Column;
-			anchorRange = TextRange.emptyAt(hitTarget.position);
+			anchorRange = Range.fromPositions(hitTarget.position);
 		} else if (hitTarget.kind === EditorHitTargetKind.Gutter) {
 			if (extend) {
 				kind = MouseSelectionKind.ExtendToLine;
-				anchorRange = TextRange.emptyAt(
-					this.selectionController.selections.primary.anchor,
+				anchorRange = Range.fromPositions(
+					this.selectionController.selections.primary.getSelectionStart(),
 				);
 			} else {
 				kind = MouseSelectionKind.WholeLine;
-				anchorRange = TextRange.emptyAt(
-					lineStart(hitTarget.position.lineIndex),
+				anchorRange = Range.fromPositions(
+					lineStart(hitTarget.position.lineNumber),
 				);
 			}
 		} else if (clickCount >= 3) {
 			if (extend) {
 				kind = MouseSelectionKind.ExtendToLine;
-				anchorRange = TextRange.emptyAt(
-					this.selectionController.selections.primary.anchor,
+				anchorRange = Range.fromPositions(
+					this.selectionController.selections.primary.getSelectionStart(),
 				);
 			} else {
 				kind = MouseSelectionKind.WholeLine;
-				anchorRange = TextRange.emptyAt(
-					lineStart(hitTarget.position.lineIndex),
+				anchorRange = Range.fromPositions(
+					lineStart(hitTarget.position.lineNumber),
 				);
 			}
 		} else if (clickCount === 2) {
 			if (extend) {
 				kind = MouseSelectionKind.ExtendToWord;
-				anchorRange = TextRange.emptyAt(
-					this.selectionController.selections.primary.anchor,
+				anchorRange = Range.fromPositions(
+					this.selectionController.selections.primary.getSelectionStart(),
 				);
 			} else {
 				kind = MouseSelectionKind.Word;
@@ -202,8 +204,8 @@ export class MouseHandler extends Disposable {
 			}
 		} else {
 			kind = MouseSelectionKind.Character;
-			anchorRange = TextRange.emptyAt(extend
-				? this.selectionController.selections.primary.anchor
+			anchorRange = Range.fromPositions(extend
+				? this.selectionController.selections.primary.getSelectionStart()
 				: hitTarget.position);
 		}
 		const anchor = this.dragListeners.add(this.viewport.textModel.trackRange(
@@ -223,7 +225,7 @@ export class MouseHandler extends Disposable {
 			anchor,
 			columnFallbackAnchor: kind === MouseSelectionKind.Column
 				? this.dragListeners.add(this.viewport.textModel.trackRange(
-					TextRange.emptyAt(this.selectionController.selections.primary.anchor),
+					Range.fromPositions(this.selectionController.selections.primary.getSelectionStart()),
 					TrackedRangeStickiness.NeverGrowsAtEdges,
 				))
 				: undefined,
@@ -234,15 +236,15 @@ export class MouseHandler extends Disposable {
 		};
 	}
 
-	private trackAdditionalSelections(initialSelection: TextSelection): AdditionalMouseSelections {
+	private trackAdditionalSelections(initialSelection: Selection): AdditionalMouseSelections {
 		const base = this.selectionController.selections;
 		return {
 			selections: base.selections.map(selection => ({
 				range: this.dragListeners.add(this.viewport.textModel.trackRange(
-					selection.range,
+					selection,
 					TrackedRangeStickiness.NeverGrowsAtEdges,
 				)),
-				direction: selection.direction,
+				direction: selection.getDirection(),
 			})),
 			primaryIndex: base.primaryIndex,
 			toggleCandidateIndex: CursorMoveCommands.findPointerToggleCandidate(
@@ -290,7 +292,7 @@ export class MouseHandler extends Disposable {
 		if (active.kind === MouseSelectionKind.Column) {
 			this.selectionController.setSelections(ColumnSelection.columnSelect(
 				this.viewport.textModel,
-				anchorRange.start,
+				anchorRange.getStartPosition(),
 				hitTarget.position,
 			));
 			return;
@@ -304,7 +306,7 @@ export class MouseHandler extends Disposable {
 		);
 		const additional = active.additionalSelections;
 		if (!additional) {
-			this.selectionController.setSelections(TextSelectionSet.single(selection));
+			this.selectionController.setSelections(SelectionSet.single(selection));
 			return;
 		}
 		const base = trackedSelectionSet(additional);
@@ -316,10 +318,10 @@ export class MouseHandler extends Disposable {
 	}
 
 	private applyColumnFallback(active: ActiveMouseSelection, hitTarget: EditorHitTarget): void {
-		const anchor = active.columnFallbackAnchor?.range.start;
+		const anchor = active.columnFallbackAnchor?.range.getStartPosition();
 		if (!anchor) return;
-		this.selectionController.setSelections(TextSelectionSet.single(
-			TextSelection.from(anchor, hitTarget.position),
+		this.selectionController.setSelections(SelectionSet.single(
+			Selection.fromPositions(anchor, hitTarget.position),
 		));
 	}
 
@@ -343,102 +345,99 @@ export class MouseHandler extends Disposable {
 }
 
 /** Returns whether a context-menu point belongs to existing selected content. */
-export function isPositionInSelections(position: TextPosition, selections: TextSelectionSet): boolean {
-	return selections.selections.some(selection => !selection.collapsed && position.compareTo(selection.range.start) >= 0 && position.compareTo(selection.range.end) < 0);
+export function isPositionInSelections(position: Position, selections: SelectionSet): boolean {
+	return selections.selections.some(selection => !selection.isEmpty() && Position.compare(position, selection.getStartPosition()) >= 0 && Position.compare(position, selection.getEndPosition()) < 0);
 }
 
-function selectionForTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: TextRange, hitTarget: EditorHitTarget, wordPattern: RegExp | undefined): TextSelection {
-	const anchor = anchorRange.start;
+function selectionForTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: Range, hitTarget: EditorHitTarget, wordPattern: RegExp | undefined): Selection {
+	const anchor = anchorRange.getStartPosition();
 	if (kind === MouseSelectionKind.Character) {
-		return TextSelection.from(anchor, hitTarget.position);
+		return Selection.fromPositions(anchor, hitTarget.position);
 	}
-	if (kind === MouseSelectionKind.Column) return TextSelection.collapsedAt(anchor);
+	if (kind === MouseSelectionKind.Column) return Selection.fromPositions(anchor);
 	if (kind === MouseSelectionKind.Word) {
 		return wordSelection(model, anchorRange, hitTarget.position, wordPattern);
 	}
 	if (kind === MouseSelectionKind.WholeLine) {
 		return wholeLineSelection(
 			model,
-			anchor.lineIndex,
-			hitTarget.position.lineIndex,
+			anchor.lineNumber,
+			hitTarget.position.lineNumber,
 		);
 	}
 	if (kind === MouseSelectionKind.ExtendToWord) {
 		return extendSelectionToWord(model, anchor, hitTarget.position, wordPattern);
 	}
-	return extendSelectionToLine(model, anchor, hitTarget.position.lineIndex);
+	return extendSelectionToLine(model, anchor, hitTarget.position.lineNumber);
 }
 
-function trackedSelectionSet(additional: AdditionalMouseSelections): TextSelectionSet {
-	return TextSelectionSet.withPrimary(
+function trackedSelectionSet(additional: AdditionalMouseSelections): SelectionSet {
+	return SelectionSet.withPrimary(
 		additional.selections.map(selection => {
 			const range = selection.range.range;
-			return selection.direction === SelectionDirection.Backward
-				? TextSelection.from(range.end, range.start)
-				: TextSelection.from(range.start, range.end);
+			return selection.direction === SelectionDirection.RTL
+				? Selection.fromPositions(range.getEndPosition(), range.getStartPosition())
+				: Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
 		}),
 		additional.primaryIndex,
 	);
 }
 
-function wordSelection(model: TextModel, anchorRange: TextRange, activePosition: TextPosition, wordPattern: RegExp | undefined): TextSelection {
+function wordSelection(model: TextModel, anchorRange: Range, activePosition: Position, wordPattern: RegExp | undefined): Selection {
 	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
-	return activeRange.start.compareTo(anchorRange.start) < 0
-		? TextSelection.from(anchorRange.end, activeRange.start)
-		: TextSelection.from(anchorRange.start, activeRange.end);
+	return Position.compare(activeRange.getStartPosition(), anchorRange.getStartPosition()) < 0
+		? Selection.fromPositions(anchorRange.getEndPosition(), activeRange.getStartPosition())
+		: Selection.fromPositions(anchorRange.getStartPosition(), activeRange.getEndPosition());
 }
 
-function extendSelectionToWord(model: TextModel, anchor: TextPosition, activePosition: TextPosition, wordPattern: RegExp | undefined): TextSelection {
+function extendSelectionToWord(model: TextModel, anchor: Position, activePosition: Position, wordPattern: RegExp | undefined): Selection {
 	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
-	const active = activeRange.start.compareTo(anchor) < 0
-		? activeRange.start
-		: activeRange.end;
-	return TextSelection.from(anchor, active);
+	const active = Position.compare(activeRange.getStartPosition(), anchor) < 0
+		? activeRange.getStartPosition()
+		: activeRange.getEndPosition();
+	return Selection.fromPositions(anchor, active);
 }
 
 function wholeLineSelection(
 	model: TextModel,
-	anchorLineIndex: number,
-	activeLineIndex: number,
-): TextSelection {
-	if (activeLineIndex >= anchorLineIndex) {
-		return TextSelection.from(
-			lineStart(anchorLineIndex),
-			lineEndExclusive(model, activeLineIndex),
+	anchorLineNumber: number,
+	activeLineNumber: number,
+): Selection {
+	if (activeLineNumber >= anchorLineNumber) {
+		return Selection.fromPositions(
+			lineStart(anchorLineNumber),
+			lineEndExclusive(model, activeLineNumber),
 		);
 	}
-	return TextSelection.from(
-		lineEndExclusive(model, anchorLineIndex),
-		lineStart(activeLineIndex),
+	return Selection.fromPositions(
+		lineEndExclusive(model, anchorLineNumber),
+		lineStart(activeLineNumber),
 	);
 }
 
 function extendSelectionToLine(
 	model: TextModel,
-	anchor: TextPosition,
-	activeLineIndex: number,
-): TextSelection {
-	const active = activeLineIndex < anchor.lineIndex
-		? lineStart(activeLineIndex)
-		: lineEndExclusive(model, activeLineIndex);
-	return TextSelection.from(anchor, active);
+	anchor: Position,
+	activeLineNumber: number,
+): Selection {
+	const active = activeLineNumber < anchor.lineNumber
+		? lineStart(activeLineNumber)
+		: lineEndExclusive(model, activeLineNumber);
+	return Selection.fromPositions(anchor, active);
 }
 
-function lineStart(lineIndex: number): TextPosition {
-	return TextPosition.at(lineIndex, 0);
+function lineStart(lineNumber: number): Position {
+	return new Position(lineNumber, 1);
 }
 
 function lineEndExclusive(
 	model: TextModel,
-	lineIndex: number,
-): TextPosition {
-	if (lineIndex + 1 < model.lineCount) {
-		return TextPosition.at(lineIndex + 1, 0);
+	lineNumber: number,
+): Position {
+	if (lineNumber < model.lineCount) {
+		return new Position(lineNumber + 1, 1);
 	}
-	return TextPosition.at(
-		lineIndex,
-		model.getLineContent(lineIndex).length,
-	);
+	return new Position(lineNumber, model.getLineContent(lineNumber).length + 1);
 }
 
 function readPointerId(event: PointerEvent): number | undefined {

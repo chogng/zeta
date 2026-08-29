@@ -72,7 +72,7 @@ export class GlyphMarginWidgets extends EditorViewPart {
 			.sort(compareGlyphDecorations);
 		const renderedIds = new Set<TextDecorationId>();
 		for (const decoration of visible) {
-			const visualLineIndex = visualLines.visualLineIndexAt(decoration.range.start);
+			const visualLineIndex = visualLines.visualLineIndexAt(decoration.range.getStartPosition());
 			if (visualLineIndex < context.viewportData.startLineIndex || visualLineIndex >= context.viewportData.endLineIndexExclusive) continue;
 			const laneDomNode = this.laneDomNodes.get(decoration.glyphMargin.lane);
 			if (!laneDomNode) continue;
@@ -100,7 +100,7 @@ export class GlyphMarginWidgets extends EditorViewPart {
 		const glyph = decoration.glyphMargin;
 		button.className = `stanza-editor-glyph-margin-decoration${glyph.className ? ` ${glyph.className}` : ''}`;
 		button.dataset.decorationOwner = glyph.owner;
-		button.dataset.logicalLineIndex = String(decoration.range.start.lineIndex);
+		button.dataset.logicalLineIndex = String(decoration.range.startLineNumber - 1);
 		button.setAttribute('aria-label', glyph.ariaLabel);
 		setOptionalBooleanAttribute(button, 'aria-expanded', glyph.expanded);
 		setOptionalBooleanAttribute(button, 'aria-pressed', glyph.pressed);
@@ -144,7 +144,7 @@ export function resolveGlyphMarginLanes(sources: readonly DecorationSource[], en
 }
 
 function compareGlyphDecorations(left: ResolvedDecoration & { readonly glyphMargin: DecorationGlyphMarginPresentation }, right: ResolvedDecoration & { readonly glyphMargin: DecorationGlyphMarginPresentation }): number {
-	return left.range.start.lineIndex - right.range.start.lineIndex
+	return left.range.getStartPosition().lineNumber - right.range.getStartPosition().lineNumber
 		|| laneOrder(left.glyphMargin.lane) - laneOrder(right.glyphMargin.lane)
 		|| (left.glyphMargin.zIndex ?? 0) - (right.glyphMargin.zIndex ?? 0)
 		|| left.id - right.id;

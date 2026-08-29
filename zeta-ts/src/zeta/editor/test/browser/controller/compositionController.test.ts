@@ -4,8 +4,10 @@ import { JSDOM } from "jsdom";
 import { IME } from "../../../../base/common/ime.js";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -47,7 +49,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("hello");
-	const initial = TextSelectionSet.single(selection(0, 1, 0, 4));
+	const initial = SelectionSet.single(selection(0, 1, 0, 4));
 	using selections = new CursorsController(model, initial);
 	using viewport = new EditorViewport({
 		container,
@@ -95,7 +97,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
 		},
 	}, {
 		text: "hnio",
-		selection: TextSelection.from(TextPosition.at(0, 3), TextPosition.at(0, 2)),
+		selection: Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (2) + 1)),
 		underline: {
 			left: "48px",
 			width: "20px",
@@ -144,7 +146,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abc");
-	const initial = TextSelectionSet.single(caret(0, 1));
+	const initial = SelectionSet.single(caret(0, 1));
 	using selections = new CursorsController(model, initial);
 	using viewport = new EditorViewport({
 		container,
@@ -205,7 +207,7 @@ test("Empty composition end commits deletion while a stray end is ignored", () =
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abc");
-	const initial = TextSelectionSet.single(selection(0, 1, 0, 2));
+	const initial = SelectionSet.single(selection(0, 1, 0, 2));
 	using selections = new CursorsController(model, initial);
 	using viewport = new EditorViewport({
 		container,
@@ -247,7 +249,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
 	using model = new TextModel("a\nbc");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.withPrimary([caret(1, 1), caret(0, 0)], 0),
+		SelectionSet.withPrimary([caret(1, 1), caret(0, 0)], 0),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -265,7 +267,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
 	assert.equal(multiStart.defaultPrevented, true);
 	assert.equal(input.compositionController.composing, false);
 
-	selections.setSelections(TextSelectionSet.single(caret(1, 1)));
+	selections.setSelections(SelectionSet.single(caret(1, 1)));
 	try {
 		IME.disable();
 		assert.equal(input.textArea!.readOnly, true);
@@ -304,7 +306,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
 		});
 
 		model.applyEdits([{
-			range: TextRange.emptyAt(model.positionAt(model.getText().length)),
+			range: Range.fromPositions(model.positionAt(model.getText().length)),
 			text: "!",
 		}]);
 		assert.equal(input.compositionController.composing, false);
@@ -346,13 +348,13 @@ function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: stri
 	}) as unknown as KeyboardEvent;
 }
 
-function selection(startLine: number, startColumn: number, endLine: number, endColumn: number): TextSelection {
-	return TextSelection.from(
-		TextPosition.at(startLine, startColumn),
-		TextPosition.at(endLine, endColumn),
+function selection(startLine: number, startColumn: number, endLine: number, endColumn: number): Selection {
+	return Selection.fromPositions(
+		new Position((startLine) + 1, (startColumn) + 1),
+		new Position((endLine) + 1, (endColumn) + 1),
 	);
 }
 
-function caret(lineIndex: number, columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex));
+function caret(lineIndex: number, columnIndex: number): Selection {
+	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
 }

@@ -3,8 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { EditorIndentationKind } from "../../../../common/core/misc/indentation.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -32,7 +33,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -46,8 +47,8 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 		indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
 	});
 
-	const range = TextSelection.from(TextPosition.at(0, 0), TextPosition.at(2, 5));
-	selections.setSelections(TextSelectionSet.single(range));
+	const range = Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (5) + 1));
+	selections.setSelections(SelectionSet.single(range));
 
 	const indent = keyboardEvent(dom.window, "Tab");
 	input.element.dispatchEvent(indent);
@@ -66,8 +67,8 @@ test("Line operations controller validates model ownership and indentation optio
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one");
 	using otherModel = new TextModel("two");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	using otherSelections = new CursorsController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using otherSelections = new CursorsController(otherModel, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,

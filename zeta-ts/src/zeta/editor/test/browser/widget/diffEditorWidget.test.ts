@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { TextRange } from "../../../common/core/text.js";
+import { Range } from "../../../common/core/range.js";
 import { type DiffComputationRequest, type IDiffComputationService } from "../../../common/diff/diffComputationService.js";
 import { LineDiffKind, type LineDiff } from "../../../common/diff/lineDiff.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -83,7 +83,7 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
 	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.transform === "translate3d(0, 0px, 0)", false);
 
 	modified.applyEdits([{
-		range: TextRange.from(modified.positionAt(0), modified.positionAt(modified.getText().length)),
+		range: Range.fromPositions(modified.positionAt(0), modified.positionAt(modified.getText().length)),
 		text: "same",
 	}]);
 	await waitForReady(model);

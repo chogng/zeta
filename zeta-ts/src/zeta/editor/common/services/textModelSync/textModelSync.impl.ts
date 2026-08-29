@@ -1,7 +1,7 @@
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { CharCode } from '../../../../base/common/charCode.js';
 import { isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../../base/common/numbers.js';
-import { normalizeTextLineEndings, type TextSnapshot } from '../../core/text.js';
+import { normalizeTextLineEndings, type TextSnapshot } from '../../core/textChange.js';
 import type { TextBuffer } from '../../model/textBuffer.js';
 import { createTextBuffer } from '../../model/textBufferFactory.js';
 import type { LanguageWorkerDocumentChange } from './textModelSync.protocol.js';

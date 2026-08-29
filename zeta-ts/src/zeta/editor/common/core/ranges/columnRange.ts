@@ -1,18 +1,15 @@
-import { TextPosition } from "../position.js";
-import { TextRange } from "../range.js";
+import { Range } from "../range.js";
 import { OffsetRange } from "./offsetRange.js";
 
-/** A zero-based half-open range of columns on one physical line. */
+/** A one-based half-open range of columns on one physical line. */
 export class ColumnRange {
-	static fromOffsetRange(range: OffsetRange): ColumnRange { return new ColumnRange(range.start, range.endExclusive); }
+	static fromOffsetRange(range: OffsetRange): ColumnRange { return new ColumnRange(range.start + 1, range.endExclusive + 1); }
 
-	constructor(readonly startColumnIndex: number, readonly endColumnIndexExclusive: number) {
-		if (startColumnIndex < 0 || startColumnIndex > endColumnIndexExclusive) throw new RangeError("Invalid column range");
+	constructor(readonly startColumn: number, readonly endColumnExclusive: number) {
+		if (startColumn < 1 || startColumn > endColumnExclusive) throw new RangeError("Invalid column range");
 	}
 
-	get length(): number { return this.endColumnIndexExclusive - this.startColumnIndex; }
-	get empty(): boolean { return this.length === 0; }
-	toRange(lineIndex: number): TextRange { return TextRange.from(TextPosition.at(lineIndex, this.startColumnIndex), TextPosition.at(lineIndex, this.endColumnIndexExclusive)); }
-	toOffsetRange(): OffsetRange { return new OffsetRange(this.startColumnIndex, this.endColumnIndexExclusive); }
-	equals(other: ColumnRange): boolean { return this.startColumnIndex === other.startColumnIndex && this.endColumnIndexExclusive === other.endColumnIndexExclusive; }
+	toRange(lineNumber: number): Range { return new Range(lineNumber, this.startColumn, lineNumber, this.endColumnExclusive); }
+	toZeroBasedOffsetRange(): OffsetRange { return new OffsetRange(this.startColumn - 1, this.endColumnExclusive - 1); }
+	equals(other: ColumnRange): boolean { return this.startColumn === other.startColumn && this.endColumnExclusive === other.endColumnExclusive; }
 }

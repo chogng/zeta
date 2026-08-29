@@ -3,7 +3,7 @@ import test from "node:test";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { LineWidthIndex } from "../../browser/viewparts/viewLines/viewLines.js";
-import { TextRange } from "../../common/core/text.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("LineWidthIndex matches full scans across random transactions", () => {
@@ -74,7 +74,7 @@ test("LineWidthIndex restarts an incomplete scan after an edit", () => {
 	using listener = model.onDidChange(change => index.applyModelChange(change));
 
 	model.applyEdits([{
-		range: TextRange.from(model.positionAt(0), model.positionAt(1)),
+		range: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
 		text: "xxxxxxxx",
 	}]);
 	scheduler.runAll();
@@ -155,7 +155,7 @@ function fullScanMaximum(
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex++) {
 		maximum = Math.max(
 			maximum,
-			measurer.measureLineWidth(model.getLineContent(lineIndex)),
+			measurer.measureLineWidth(model.getLineContent((lineIndex) + 1)),
 		);
 	}
 	return maximum;
@@ -186,7 +186,7 @@ function randomEdit(
 	minimumOffset: number,
 	maximumOffset: number,
 ): {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly text: string;
 } {
 	const first = randomInteger(
@@ -202,7 +202,7 @@ function randomEdit(
 	const startOffset = Math.min(first, second);
 	const endOffset = Math.max(first, second);
 	return {
-		range: TextRange.from(
+		range: Range.fromPositions(
 			model.positionAt(startOffset),
 			model.positionAt(endOffset),
 		),

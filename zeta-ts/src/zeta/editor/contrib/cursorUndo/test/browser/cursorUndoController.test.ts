@@ -4,8 +4,9 @@ import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
+import { Selection } from "../../../../common/core/selection.js";
+import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
+import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -29,20 +30,20 @@ test("Cursor undo restores macOS multi-cursor history without changing text", ()
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo");
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	container.append(input);
 	using controller = new CursorUndoController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
-	selections.setCursorSelections(TextSelectionSet.withPrimary([
-		TextSelection.collapsedAt(TextPosition.at(0, 0)),
-		TextSelection.collapsedAt(TextPosition.at(1, 0)),
+	selections.setCursorSelections(SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (0) + 1)),
 	], 1));
 
 	const undo = keydown(dom.window, "u", { metaKey: true });
 	input.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
-	assert.deepEqual(selections.selections, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	assert.deepEqual(selections.selections, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	assert.equal(model.getText(), "one\ntwo");
 	assert.equal(keydown(dom.window, "u", { ctrlKey: true }).defaultPrevented, false);
 	dom.window.close();

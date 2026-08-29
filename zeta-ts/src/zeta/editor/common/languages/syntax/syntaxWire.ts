@@ -2,7 +2,7 @@ import { decodeSyntaxWireResult, encodeSyntaxWireResult } from "./syntaxWireResu
 import { assertSyntaxRequest, type SyntaxRequest } from "./syntaxProviders.js";
 import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from "./syntaxService.js";
 import { type LanguageWorkerWireCodec } from "../languageWorkerWire.js";
-import { type TextSnapshot } from "../../core/text.js";
+import { type TextSnapshot } from "../../core/textChange.js";
 
 export const syntaxWireCodec: LanguageWorkerWireCodec<SyntaxLane, SyntaxRequest, SyntaxResult> = Object.freeze({
 	lanes: Object.freeze([SYNTAX_TOKEN_LANE, SYNTAX_DIAGNOSTIC_LANE] as const),

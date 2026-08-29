@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { EditorHitTargetKind, hitTestStanzaEditorPoint } from "../../common/viewModel/pointerHitTest.js";
-import { TextPosition } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -55,43 +55,43 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 	), /layout is invalid/);
 	assert.deepEqual(hit(10, 25), {
 		kind: EditorHitTargetKind.Gutter,
-		position: TextPosition.at(1, 0),
+		position: new Position((1) + 1, (0) + 1),
 	});
 	assert.deepEqual(hit(35, 5), {
 		kind: EditorHitTargetKind.EmptyContent,
-		position: TextPosition.at(0, 0),
+		position: new Position((0) + 1, (0) + 1),
 	});
 	assert.deepEqual(hit(54, 5), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(0, 1),
+		position: new Position((0) + 1, (1) + 1),
 	});
 	assert.deepEqual(hit(65, 5), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(0, 2),
+		position: new Position((0) + 1, (2) + 1),
 	});
 	assert.deepEqual(hit(86, 5), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(0, 3),
+		position: new Position((0) + 1, (3) + 1),
 	});
 	assert.deepEqual(hit(100, 5), {
 		kind: EditorHitTargetKind.EmptyContent,
-		position: TextPosition.at(0, 3),
+		position: new Position((0) + 1, (3) + 1),
 	});
 	assert.deepEqual(hit(44, 25), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(1, 0),
+		position: new Position((1) + 1, (0) + 1),
 	});
 	assert.deepEqual(hit(45, 25), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(1, 2),
+		position: new Position((1) + 1, (2) + 1),
 	});
 	assert.deepEqual(hit(40, 45), {
 		kind: EditorHitTargetKind.EmptyContent,
-		position: TextPosition.at(2, 0),
+		position: new Position((2) + 1, (0) + 1),
 	});
 	assert.deepEqual(hit(40, 65), {
 		kind: EditorHitTargetKind.AfterLines,
-		position: TextPosition.at(2, 0),
+		position: new Position((2) + 1, (0) + 1),
 	});
 });
 
@@ -112,7 +112,7 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 		new FixedTextMeasurer(),
 	), {
 		kind: EditorHitTargetKind.Gutter,
-		position: TextPosition.at(1, 0),
+		position: new Position((1) + 1, (0) + 1),
 	});
 	assert.deepEqual(hitTestStanzaEditorPoint(
 		model,
@@ -122,7 +122,7 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 		new FixedTextMeasurer(),
 	), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(1, 2),
+		position: new Position((1) + 1, (2) + 1),
 	});
 });
 
@@ -178,14 +178,14 @@ test("Viewport maps client coordinates through its bounds and scroll state", () 
 		clientY: 55,
 	}), {
 		kind: EditorHitTargetKind.Gutter,
-		position: TextPosition.at(1, 0),
+		position: new Position((1) + 1, (0) + 1),
 	});
 	assert.deepEqual(viewport.getTargetAtClientPoint({
 		clientX: 140,
 		clientY: 55,
 	}), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(1, 1),
+		position: new Position((1) + 1, (1) + 1),
 	});
 	assert.equal(viewport.getTargetAtClientPoint({
 		clientX: 99,
@@ -196,14 +196,14 @@ test("Viewport maps client coordinates through its bounds and scroll state", () 
 		clientY: 55,
 	}), {
 		kind: EditorHitTargetKind.Gutter,
-		position: TextPosition.at(1, 0),
+		position: new Position((1) + 1, (0) + 1),
 	});
 	assert.deepEqual(viewport.getNearestTargetAtClientPoint({
 		clientX: 140,
 		clientY: 100,
 	}), {
 		kind: EditorHitTargetKind.Text,
-		position: TextPosition.at(2, 1),
+		position: new Position((2) + 1, (1) + 1),
 	});
 	assert.throws(() => viewport.getTargetAtClientPoint({
 		clientX: Number.NaN,

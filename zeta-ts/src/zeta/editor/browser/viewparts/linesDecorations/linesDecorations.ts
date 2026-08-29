@@ -55,10 +55,10 @@ function projectStanzaLinesDecorations(
 	const decorationsByLogicalLine = new Map<number, ResolvedDecoration[]>();
 	for (const decoration of decorations) {
 		if (!decoration.linesDecoration) continue;
-		const startLineIndex = decoration.range.start.lineIndex;
-		const endLineIndex = decoration.range.end.columnIndex === 0 && decoration.range.end.lineIndex > startLineIndex
-			? decoration.range.end.lineIndex - 1
-			: decoration.range.end.lineIndex;
+		const startLineIndex = decoration.range.startLineNumber - 1;
+		const endLineIndex = decoration.range.endColumn === 1 && decoration.range.endLineNumber - 1 > startLineIndex
+			? decoration.range.endLineNumber - 2
+			: decoration.range.endLineNumber - 1;
 		for (let lineIndex = startLineIndex; lineIndex <= endLineIndex; lineIndex += 1) {
 			const lineDecorations = decorationsByLogicalLine.get(lineIndex) ?? [];
 			lineDecorations.push(decoration);
@@ -76,7 +76,7 @@ function projectStanzaLinesDecorations(
 			if (!lane) throw new RangeError(`Lines decoration owner '${presentation.owner}' has no layout lane`);
 			const classes = [
 				presentation.className,
-				visualLine.logicalLineIndex === decoration.range.start.lineIndex ? presentation.firstLineClassName : undefined,
+				visualLine.logicalLineIndex === decoration.range.startLineNumber - 1 ? presentation.firstLineClassName : undefined,
 			].filter((className): className is string => className !== undefined);
 			const element = presentation.icon ? h(context.ownerDocument, 'button') : h(context.ownerDocument, 'div');
 			if (presentation.icon) {

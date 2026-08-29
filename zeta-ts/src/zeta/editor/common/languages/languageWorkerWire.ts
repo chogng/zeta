@@ -5,7 +5,7 @@ import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWork
 import { LanguageWorkerDocumentMirror } from '../services/textModelSync/textModelSync.impl.js';
 import { type LanguageWorkerDocumentChange, type LanguageWorkerDocumentSynchronizationObserver } from '../services/textModelSync/textModelSync.protocol.js';
 import { assertRequestId, createCancelMessage, createFailureMessage, createResultMessage, createSyncFailureMessage, decodeClientMessage, decodeRequestSnapshot, decodeServerMessage, encodeRequestMessage, encodeSyncMessage, isProtocolMessage, readRequestId, type FailureWireMessage, type LanguageWorkerWireCodec, type LanguageWorkerWireResultState, type RequestWireMessage, type ResultWireMessage, type SyncFailureWireMessage } from "./languageWorkerWireProtocol.js";
-import { type TextModelChange } from "../core/text.js";
+import { type TextModelChange } from "../core/textChange.js";
 
 export { type LanguageWorkerWireCodec } from "./languageWorkerWireProtocol.js";
 

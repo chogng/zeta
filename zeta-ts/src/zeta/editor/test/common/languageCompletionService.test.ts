@@ -6,8 +6,10 @@ import { LanguageCompletionService } from "../../common/languages/completion/lan
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
-import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Selection } from "../../common/core/selection.js";
+import { SelectionSet } from "../../common/cursor/selectionSet.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion service runs providers concurrently and merges deterministically", async () => {
@@ -27,7 +29,7 @@ test("Completion service runs providers concurrently and merges deterministicall
 	using service = new LanguageCompletionService(model, registry);
 	const request = service.request(
 		"typescript",
-		TextPosition.at(0, 3),
+		new Position((0) + 1, (3) + 1),
 		createLanguageCompletionInvokeContext(),
 	);
 	assert.deepEqual(started, ["first", "second"]);
@@ -82,16 +84,16 @@ test("Trigger characters filter providers while invoke and refresh call all", as
 	using model = new TextModel("con");
 	using service = new LanguageCompletionService(model, registry);
 
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionTriggerCharacterContext("."));
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionTriggerCharacterContext("."));
 	assert.deepEqual(calls.map(call => call.id), ["dot"]);
 	assert.equal(calls[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
 
 	calls.length = 0;
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	assert.deepEqual(calls.map(call => call.id), ["dot", "colon", "plain"]);
 
 	calls.length = 0;
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionIncompleteRefreshContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionIncompleteRefreshContext());
 	assert.deepEqual(calls.map(call => call.id), ["dot", "colon", "plain"]);
 	assert.equal(calls[0]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
 });
@@ -102,9 +104,9 @@ test("Provider failures and invalid snapshots are isolated from healthy results"
 		throw new Error("provider crash");
 	}));
 	using invalidRegistration = registry.register(provider("invalid", () => ({
-		items: [item("invalid", "invalid", false, TextRange.from(
-			TextPosition.at(0, 0),
-			TextPosition.at(0, 4),
+		items: [item("invalid", "invalid", false, Range.fromPositions(
+			new Position((0) + 1, (0) + 1),
+			new Position((0) + 1, (4) + 1),
 		))],
 		isIncomplete: false,
 	})));
@@ -117,7 +119,7 @@ test("Provider failures and invalid snapshots are isolated from healthy results"
 
 	const outcome = await service.request(
 		"typescript",
-		TextPosition.at(0, 3),
+		new Position((0) + 1, (3) + 1),
 		createLanguageCompletionInvokeContext(),
 	);
 
@@ -145,12 +147,12 @@ test("Model changes cancel provider work without reporting an external failure",
 	});
 	const request = service.request(
 		"typescript",
-		TextPosition.at(0, 3),
+		new Position((0) + 1, (3) + 1),
 		createLanguageCompletionInvokeContext(),
 	);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "s",
 	}]);
 
@@ -169,7 +171,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(provider("typescript", request => {
 		assert.equal(request.snapshot.getText(), "con");
-		assert.equal(request.position.compareTo(TextPosition.at(0, 3)), 0);
+		assert.equal(Position.compare(request.position, new Position((0) + 1, (3) + 1)), 0);
 		return {
 			items: [item("console", "console", true)],
 			isIncomplete: false,
@@ -179,11 +181,11 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	using service = new LanguageCompletionService(model, registry);
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))),
+		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1))),
 	);
 	using session = new LanguageCompletionSessionController(service.results, selections);
 
-	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	assert.equal(session.state!.selectedItem.providerId, "typescript");
 	assert.equal(session.acceptSelected(), true);
 	assert.equal(model.getText(), "console");
@@ -191,7 +193,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 
 	selections.undo();
 	assert.equal(model.getText(), "con");
-	assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 3)), 0);
+	assert.equal(Position.compare(selections.selections.primary.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
 
 test("Completion service disposal owns neither registry nor model", () => {
@@ -206,7 +208,7 @@ test("Completion service disposal owns neither registry nor model", () => {
 		["one"],
 	);
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
 		text: "!",
 	}]);
 	assert.equal(model.getText(), "con!");
@@ -236,7 +238,7 @@ function item(
 	id: string,
 	label: string,
 	preselect = false,
-	range = TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+	range = Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 ): LanguageCompletionProviderItem {
 	return {
 		id,

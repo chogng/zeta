@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
 import { createLanguageCompletionInvokeContext } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
@@ -43,13 +44,14 @@ test("App Server language providers map cross-resource locations without double-
 	using model = new TextModel("value");
 	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main file.ts"));
 
-	const locations = await navigation.provideDefinition("typescript", TextPosition.at(0, 2));
+	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
 
 	assert.equal(api.locationRequests.length, 1);
 	assert.equal(api.locationRequests[0]!.document.path, "main file.ts");
 	assert.equal(api.locationRequests[0]!.document.text, "value");
+	assert.deepEqual(api.locationRequests[0]!.position, { lineIndex: 0, columnIndex: 2 });
 	assert.equal(locations[0]!.resource.toString(), "file:///C:/project/src/with%20space.ts");
-	assert.equal(locations[0]!.selectionRange?.end.columnIndex, 5);
+	assert.equal(locations[0]!.selectionRange!.endColumn, 6);
 });
 
 test("App Server language providers route resources through their owning Workspace folder", async () => {
@@ -67,7 +69,7 @@ test("App Server language providers route resources through their owning Workspa
 	using model = new TextModel("value");
 	using navigation = createNavigationService(languages, model, URI.file("C:\\backend\\main.ts"));
 
-	const locations = await navigation.provideDefinition("typescript", TextPosition.at(0, 2));
+	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
 
 	assert.equal(api.locationRequests[0]!.document.workspaceFolderId, "backend");
 	assert.equal(api.locationRequests[0]!.document.path, "main.ts");
@@ -101,21 +103,21 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using inlayHints = new InlayHintsService(model, languages.inlayHintsProvider, resource);
 	using linkedEditing = new LinkedEditingService(model, languages.linkedEditingProvider, resource);
 
-	const hoverResult = await hover.provideHover("rust", TextPosition.at(0, 1));
-	await completions.request("rust", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	const hoverResult = await hover.provideHover("rust", new Position((0) + 1, (1) + 1));
+	await completions.request("rust", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	const completionResult = completions.results.result!;
 	const completionItem = completionResult.value.items[0]!;
 	const resolved = await completions.resolveCompletionItem({ completionRequestId: completionResult.requestId, modelVersion: completionResult.modelVersion, providerId: completionItem.providerId, itemId: completionItem.id }, new AbortController().signal);
 	await completions.executeCompletionCommand("rust", completionItem, new AbortController().signal);
-	const hints = await parameterHints.provideParameterHints("rust", TextPosition.at(0, 3), { kind: "triggerCharacter", triggerCharacter: "(" });
-	const inlays = await inlayHints.provideInlayHints("rust", TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)));
-	const linked = await linkedEditing.provideLinkedEditingRanges("rust", TextPosition.at(0, 1));
+	const hints = await parameterHints.provideParameterHints("rust", new Position((0) + 1, (3) + 1), { kind: "triggerCharacter", triggerCharacter: "(" });
+	const inlays = await inlayHints.provideInlayHints("rust", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)));
+	const linked = await linkedEditing.provideLinkedEditingRanges("rust", new Position((0) + 1, (1) + 1));
 
 	assert.equal(hoverResult?.contents[0], "hover docs");
 	assert.equal(api.hoverRequests[0]!.document.path, "main.rs");
 	assert.equal(api.completionRequests[0]!.document.text, "pri");
 	assert.equal(completions.results.result?.value.items[0]!.insertText, "println!($0)");
-	assert.equal(completions.results.result?.value.items[0]!.range.end.columnIndex, 3);
+	assert.equal(completions.results.result?.value.items[0]!.range.getEndPosition().column, 4);
 	assert.equal(completionItem.hasDeferredDetails, true);
 	assert.equal(completionItem.command?.id, "rust-analyzer.runSingle");
 	assert.equal(resolved.documentation, "Resolved completion docs");
@@ -123,7 +125,7 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	assert.equal(hints?.signatures[0]!.parameters[1]!.label, "value");
 	assert.equal(api.signatureHelpRequests[0]!.triggerCharacter, "(");
 	assert.equal(inlays[0]!.label, ": &str");
-	assert.equal(linked?.ranges[1]!.start.columnIndex, 8);
+	assert.equal(linked?.ranges[1]!.getStartPosition().column, 9);
 	assert.equal(linked?.wordPattern?.test("value"), true);
 });
 
@@ -137,9 +139,9 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	using rename = new RenameService(model, resource, languages.renameProvider);
 	using actions = new CodeActionService(model, resource, languages.codeActionProvider);
 
-	const preparation = await rename.prepareRename("typescript", TextPosition.at(0, 2));
-	const edit = await rename.provideRenameEdits("typescript", TextPosition.at(0, 2), "renamed");
-	const available = await actions.provideCodeActions("typescript", TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), severity: LanguageDiagnosticSeverity.Warning, message: "demo", source: "test" }]);
+	const preparation = await rename.prepareRename("typescript", new Position((0) + 1, (2) + 1));
+	const edit = await rename.provideRenameEdits("typescript", new Position((0) + 1, (2) + 1), "renamed");
+	const available = await actions.provideCodeActions("typescript", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), severity: LanguageDiagnosticSeverity.Warning, message: "demo", source: "test" }]);
 
 	assert.equal(preparation?.placeholder, "value");
 	assert.equal(edit.entries[0]!.kind, "create");
@@ -157,13 +159,13 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	using formatting = new FormatService(model, languages.formattingProvider, URI.file("C:\\project\\main.ts"));
 
 	const documentEdits = await formatting.provideDocumentFormattingEdits("typescript", { tabSize: 2, insertSpaces: true });
-	const rangeEdits = await formatting.provideRangeFormattingEdits("typescript", TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true });
+	const rangeEdits = await formatting.provideRangeFormattingEdits("typescript", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true });
 
 	assert.equal(api.documentFormattingRequests[0]!.document.path, "main.ts");
 	assert.deepEqual(api.documentFormattingRequests[0]!.options, { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null });
 	assert.deepEqual(api.rangeFormattingRequests[0]!.range, DTO_RANGE);
 	assert.equal(documentEdits[0]!.text, "formatted");
-	assert.equal(rangeEdits[0]!.range.end.columnIndex, 5);
+	assert.equal(rangeEdits[0]!.range.getEndPosition().column, 6);
 });
 
 test("App Server language providers do not send documents above their transport limit", async () => {
@@ -174,7 +176,7 @@ test("App Server language providers do not send documents above their transport 
 	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)));
 	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\large.ts"));
 
-	assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 0)), []);
+	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (0) + 1)), []);
 	assert.equal(api.locationRequests.length, 0);
 });
 
@@ -189,19 +191,19 @@ test("App Server language providers register only while the Workspace is trusted
 	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main.ts"));
 
 	await tick();
-	assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 2)), []);
+	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1)), []);
 	assert.equal(api.locationRequests.length, 0);
 
 	trust.setting = "trusted";
 	events.fire({ method: "config/changed", params: { revision: 2, generation: 2 } });
 	await tick();
-	assert.equal((await navigation.provideDefinition("typescript", TextPosition.at(0, 2))).length, 1);
+	assert.equal((await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1))).length, 1);
 	assert.equal(api.locationRequests.length, 1);
 
 	trust.setting = "restricted";
 	events.fire({ method: "config/changed", params: { revision: 3, generation: 3 } });
 	await tick();
-	assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 2)), []);
+	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1)), []);
 	assert.equal(api.locationRequests.length, 1);
 });
 

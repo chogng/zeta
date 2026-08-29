@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
 import { MarkerService, MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
 import { LanguageDiagnosticsMarkerBridge } from "../../browser/languageDiagnosticsMarkerBridge.js";
@@ -23,7 +24,13 @@ test("language diagnostics bridge projects current diagnostics into markers", ()
 		severity: marker.severity,
 		message: marker.message,
 		source: marker.source,
-	})), [{ severity: MarkerSeverity.Error, message: "broken", source: "rust-analyzer" }]);
+		range: marker.range,
+	})), [{
+		severity: MarkerSeverity.Error,
+		message: "broken",
+		source: "rust-analyzer",
+		range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 1, columnIndex: 5 } },
+	}]);
 
 	snapshots = [snapshot(resource, LanguageDiagnosticSeverity.Warning, "unused")];
 	changes.fire(resource);
@@ -40,7 +47,7 @@ function snapshot(resource: URI, severity: LanguageDiagnosticSeverity, message: 
 		resource,
 		revision: 1,
 		diagnostics: [{
-			range: TextRange.from(TextPosition.at(1, 2), TextPosition.at(1, 5)),
+			range: Range.fromPositions(new Position((1) + 1, (2) + 1), new Position((1) + 1, (5) + 1)),
 			severity,
 			message,
 			source: "rust-analyzer",

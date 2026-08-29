@@ -8,7 +8,8 @@ import { TextDecorationCollection } from "../../common/model/decorationCollectio
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore } from "../../common/languages/languageResults.js";
-import { TextPosition, TextRange } from "../../common/core/text.js";
+import { Position } from "../../common/core/position.js";
+import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
 
@@ -41,12 +42,12 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	using matches = new TextDecorationCollection<string>(model);
 	using diagnostics = new TextDecorationCollection<"error" | "warning">(model);
 	const matchId = matches.add({
-		range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(1, 2)),
+		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "match",
 	});
 	const diagnosticId = diagnostics.add({
-		range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
+		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "error",
 	});
@@ -114,7 +115,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(errorMinimap.style.top, "4px");
 
 	diagnostics.update(diagnosticId, {
-		range: TextRange.from(TextPosition.at(1, 1), TextPosition.at(1, 3)),
+		range: Range.fromPositions(new Position((1) + 1, (1) + 1), new Position((1) + 1, (3) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "warning",
 	});
@@ -143,7 +144,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(matchResolutionCount, 1);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X\n",
 	}]);
 
@@ -170,12 +171,12 @@ test("Line and block decoration parts project source presentation details", () =
 	using model = new TextModel("first\nsecond\nthird");
 	using decorations = new TextDecorationCollection<"lines" | "block">(model);
 	decorations.add({
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(2, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "lines",
 	});
 	decorations.add({
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(2, 1)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "block",
 	});
@@ -241,9 +242,9 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 	using model = new TextModel("same\nadded\nmodified\nafter delete");
 	using decorations = new TextDecorationCollection<DecorationPresentation>(model);
 	decorations.replaceAll([
-		{ range: TextRange.emptyAt(TextPosition.at(1, 0)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffAdded },
-		{ range: TextRange.emptyAt(TextPosition.at(2, 0)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffModified },
-		{ range: TextRange.emptyAt(TextPosition.at(3, 0)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffDeleted },
+		{ range: Range.fromPositions(new Position((1) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffAdded },
+		{ range: Range.fromPositions(new Position((2) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffModified },
+		{ range: Range.fromPositions(new Position((3) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffDeleted },
 	]);
 	using viewport = new EditorViewport({
 		container,
@@ -287,7 +288,7 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 	using model = new TextModel("abc אבג");
 	using decorations = new TextDecorationCollection<void>(model);
 	const id = decorations.add({
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: undefined,
 	});
@@ -306,7 +307,7 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 		value: () => testRectangle(100, 0, 200),
 	});
 	decorations.update(id, {
-		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: undefined,
 	});
@@ -324,7 +325,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 	using model = new TextModel("abcdef");
 	using decorations = new TextDecorationCollection<void>(model);
 	decorations.add({
-		range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 5)),
+		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (5) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: undefined,
 	});
@@ -386,24 +387,24 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 		value: {
 			diagnostics: [
 				{
-					range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 3)),
+					range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (3) + 1)),
 					severity: LanguageDiagnosticSeverity.Error,
 					message: "error",
 					source: "language.lexical",
 					code: "E100",
 				},
 				{
-					range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 2)),
+					range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (2) + 1)),
 					severity: LanguageDiagnosticSeverity.Warning,
 					message: "warning",
 				},
 				{
-					range: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 2)),
+					range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
 					severity: LanguageDiagnosticSeverity.Information,
 					message: "information",
 				},
 				{
-					range: TextRange.emptyAt(TextPosition.at(3, 1)),
+					range: Range.fromPositions(new Position((3) + 1, (1) + 1)),
 					severity: LanguageDiagnosticSeverity.Hint,
 					message: "hint",
 				},
@@ -450,7 +451,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 	);
 
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
 	assert.deepEqual(decorationElements(viewport.element), []);
@@ -463,7 +464,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 		modelVersion: 2,
 		value: {
 			diagnostics: [{
-				range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
 				severity: LanguageDiagnosticSeverity.Error,
 				message: "after viewport",
 			}],

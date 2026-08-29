@@ -1,6 +1,6 @@
 import type { URI } from "../../../../base/common/uri.js";
 import type { Event } from '../../../../base/common/event.js';
-import type { TextRange } from "../../../../editor/common/core/text.js";
+import type { Range } from "../../../../editor/common/core/range.js";
 import type { EditorActivationOptions } from "../../../../platform/editor/common/editor.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
@@ -18,7 +18,7 @@ export interface EditorInput {
 export interface EditorOpenOptions extends EditorActivationOptions {
 	readonly preferredEditorId?: string;
 	readonly index?: number;
-	readonly selection?: TextRange;
+	readonly selection?: Range;
 }
 
 /** The editor group selected by a resource-navigation request. */

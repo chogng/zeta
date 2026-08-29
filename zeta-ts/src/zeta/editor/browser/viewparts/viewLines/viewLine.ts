@@ -4,7 +4,7 @@ import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
 import { ViewLineTextDirection, type ViewLineOptions } from './viewLineOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type TextRange } from '../../../common/core/text.js';
+import { type Range } from '../../../common/core/range.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
@@ -120,8 +120,8 @@ export interface BracketColorizationSpan {
 }
 
 export interface BracketGuide {
-	readonly opening: TextRange;
-	readonly closing: TextRange;
+	readonly opening: Range;
+	readonly closing: Range;
 	readonly level: number;
 }
 
@@ -208,7 +208,7 @@ export function snapshotStanzaSemanticTokenLines(source: SemanticTokenSource): R
 			...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
 			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
 		})));
-		validateLineTokens(source.textModel.getLineContent(line.lineIndex), tokens);
+		validateLineTokens(source.textModel.getLineContent((line.lineIndex) + 1), tokens);
 		result.set(line.lineIndex, tokens);
 	}
 	return result;

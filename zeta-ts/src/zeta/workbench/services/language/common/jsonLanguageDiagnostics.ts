@@ -2,7 +2,7 @@ import { parseJsonDocument } from '../../../../base/common/json.js';
 import { validateJsonSchema } from '../../../../base/common/jsonSchema.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
-import { TextRange } from '../../../../editor/common/core/text.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../../../../editor/common/languages/languageResults.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { LanguageDiagnosticsPublisher } from '../../../../editor/common/services/languageDiagnosticsService.js';
@@ -53,8 +53,8 @@ export function acquireJsonLanguageDiagnostics(
 	return store;
 }
 
-function diagnosticRange(model: TextModel, offset: number, length: number): TextRange {
+function diagnosticRange(model: TextModel, offset: number, length: number): Range {
 	const start = Math.max(0, Math.min(model.length, offset));
 	const end = Math.max(start, Math.min(model.length, offset + length));
-	return TextRange.from(model.positionAt(start), model.positionAt(end));
+	return Range.fromPositions(model.positionAt(start), model.positionAt(end));
 }

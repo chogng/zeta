@@ -1,5 +1,8 @@
 import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
-import { TextPosition, TextRange, type TextEdit, type TextSnapshot } from "../../../../editor/common/core/text.js";
+import { Position } from "../../../../editor/common/core/position.js";
+import { Range } from "../../../../editor/common/core/range.js";
+import { type TextEdit } from "../../../../editor/common/core/editOperation.js";
+import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import type { LanguageProviderBatch } from '../../../../editor/common/services/languageFeatures.js';
@@ -124,12 +127,12 @@ function formattingOptionsValue(options: LanguageFormattingOptions): JsonValue {
 	return Object.freeze({ tabSize: options.tabSize, insertSpaces: options.insertSpaces, ...(options.trimTrailingWhitespace === undefined ? {} : { trimTrailingWhitespace: options.trimTrailingWhitespace }) });
 }
 
-function positionValue(position: TextPosition): JsonValue {
-	return Object.freeze({ lineIndex: position.lineIndex, columnIndex: position.columnIndex });
+function positionValue(position: Position): JsonValue {
+	return Object.freeze({ lineIndex: position.lineNumber - 1, columnIndex: position.column - 1 });
 }
 
-function rangeValue(range: TextRange): JsonValue {
-	return Object.freeze({ start: positionValue(range.start), end: positionValue(range.end) });
+function rangeValue(range: Range): JsonValue {
+	return Object.freeze({ start: positionValue(range.getStartPosition()), end: positionValue(range.getEndPosition()) });
 }
 
 function normalizeCompletionResult(value: JsonValue, snapshot: TextSnapshot): LanguageCompletionProviderResult {
@@ -247,18 +250,18 @@ function normalizeParameterHintsResult(value: JsonValue): LanguageParameterHints
 	return Object.freeze({ signatures: Object.freeze(signatures), ...(activeSignature === undefined ? {} : { activeSignature }) });
 }
 
-function normalizePosition(value: JsonValue | undefined, snapshot: TextSnapshot, owner: string): TextPosition {
+function normalizePosition(value: JsonValue | undefined, snapshot: TextSnapshot, owner: string): Position {
 	const position = exactObject(value, owner, ["columnIndex", "lineIndex"]);
 	const lineIndex = nonNegativeInteger(position.lineIndex, `${owner} lineIndex`);
 	const columnIndex = nonNegativeInteger(position.columnIndex, `${owner} columnIndex`);
 	const lines = snapshot.getText().split("\n");
 	if (lineIndex >= lines.length || columnIndex > lines[lineIndex]!.length) throw new RangeError(`${owner} is outside the document snapshot`);
-	return TextPosition.at(lineIndex, columnIndex);
+	return new Position((lineIndex) + 1, (columnIndex) + 1);
 }
 
-function normalizeRange(value: JsonValue | undefined, snapshot: TextSnapshot, owner: string): TextRange {
+function normalizeRange(value: JsonValue | undefined, snapshot: TextSnapshot, owner: string): Range {
 	const range = exactObject(value, owner, ["end", "start"]);
-	return TextRange.from(normalizePosition(range.start, snapshot, `${owner} start`), normalizePosition(range.end, snapshot, `${owner} end`));
+	return Range.fromPositions(normalizePosition(range.start, snapshot, `${owner} start`), normalizePosition(range.end, snapshot, `${owner} end`));
 }
 
 function exactObject(value: JsonValue | undefined, owner: string, keys: readonly string[]): Record<string, JsonValue> {

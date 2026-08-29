@@ -2,7 +2,9 @@ import { LANGUAGE_COMPLETION_LANE, type LanguageCompletionLane } from "./languag
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, LanguageCompletionTriggerKind, type LanguageCompletionContext, type LanguageCompletionRequest } from "./languageCompletionProviders.js";
 import { normalizeLanguageCompletionSnapshotResult, type LanguageCompletionItem, type LanguageCompletionResult } from "./languageCompletions.js";
 import { type LanguageWorkerWireCodec } from "../languageWorkerWire.js";
-import { TextPosition, TextRange, type TextSnapshot } from "../../core/text.js";
+import { Position } from "../../core/position.js";
+import { Range } from "../../core/range.js";
+import { type TextSnapshot } from "../../core/textChange.js";
 import { URI } from "../../../../base/common/uri.js";
 
 export const languageCompletionWireCodec: LanguageWorkerWireCodec<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult> = Object.freeze({
@@ -76,8 +78,8 @@ function encodeItem(item: LanguageCompletionItem): unknown {
 		label: item.label,
 		kind: item.kind,
 		range: Object.freeze({
-			start: encodePosition(item.range.start),
-			end: encodePosition(item.range.end),
+			start: encodePosition(item.range.getStartPosition()),
+			end: encodePosition(item.range.getEndPosition()),
 		}),
 		insertText: item.insertText,
 		...(item.insertTextFormat === undefined ? {} : { insertTextFormat: item.insertTextFormat }),
@@ -88,7 +90,7 @@ function encodeItem(item: LanguageCompletionItem): unknown {
 		...(item.preselect === undefined ? {} : { preselect: item.preselect }),
 		...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
 		...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits.map(edit => Object.freeze({
-			range: Object.freeze({ start: encodePosition(edit.range.start), end: encodePosition(edit.range.end) }),
+			range: Object.freeze({ start: encodePosition(edit.range.getStartPosition()), end: encodePosition(edit.range.getEndPosition()) }),
 			text: edit.text,
 		})) }),
 		...(item.hasDeferredDetails === undefined ? {} : { hasDeferredDetails: item.hasDeferredDetails }),
@@ -116,7 +118,7 @@ function decodeItem(value: unknown): LanguageCompletionItem {
 		id: decodeString(value.id, "Completion wire item ID"),
 		label: decodeString(value.label, "Completion wire item label"),
 		kind: decodeString(value.kind, "Completion wire item kind") as LanguageCompletionItem["kind"],
-		range: TextRange.from(
+		range: Range.fromPositions(
 			decodePosition(range.start, "Completion wire item range start"),
 			decodePosition(range.end, "Completion wire item range end"),
 		),
@@ -139,14 +141,14 @@ function decodeOptionalCommitCharacters(value: unknown): readonly string[] | und
 	return value.map(character => decodeString(character, "Completion wire item commit character"));
 }
 
-function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: TextRange; readonly text: string }[] | undefined {
+function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: Range; readonly text: string }[] | undefined {
 	if (value === undefined) return undefined;
 	if (!Array.isArray(value)) throw new TypeError("Completion wire item additional text edits must be an array");
 	return value.map(edit => {
 		assertRecord(edit, "Completion wire additional text edit");
 		assertRecord(edit.range, "Completion wire additional text edit range");
 		return {
-			range: TextRange.from(
+			range: Range.fromPositions(
 				decodePosition(edit.range.start, "Completion wire additional text edit range start"),
 				decodePosition(edit.range.end, "Completion wire additional text edit range end"),
 			),
@@ -177,27 +179,24 @@ function decodeContext(value: unknown): LanguageCompletionContext {
 	throw new TypeError(`Unknown completion wire trigger kind '${String(value.kind)}'`);
 }
 
-function encodePosition(position: TextPosition): unknown {
-	if (!(position instanceof TextPosition)) {
-		throw new TypeError("Completion wire position must be a TextPosition");
+function encodePosition(position: Position): unknown {
+	if (!(position instanceof Position)) {
+		throw new TypeError("Completion wire position must be a Position");
 	}
 	return Object.freeze({
-		lineIndex: position.lineIndex,
-		columnIndex: position.columnIndex,
+		lineIndex: position.lineNumber - 1,
+		columnIndex: position.column - 1,
 	});
 }
 
-function decodePosition(value: unknown, owner: string): TextPosition {
+function decodePosition(value: unknown, owner: string): Position {
 	assertRecord(value, owner);
-	return TextPosition.at(
-		decodeNonNegativeSafeInteger(value.lineIndex, `${owner} line index`),
-		decodeNonNegativeSafeInteger(value.columnIndex, `${owner} column index`),
-	);
+	return new Position((decodeNonNegativeSafeInteger(value.lineIndex, `${owner} line index`)) + 1, (decodeNonNegativeSafeInteger(value.columnIndex, `${owner} column index`)) + 1);
 }
 
-function assertSnapshotPosition(snapshot: TextSnapshot, position: TextPosition): void {
+function assertSnapshotPosition(snapshot: TextSnapshot, position: Position): void {
 	const lines = snapshot.getText().split("\n");
-	if (position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
 		throw new RangeError("Completion wire request position is outside its snapshot");
 	}
 }

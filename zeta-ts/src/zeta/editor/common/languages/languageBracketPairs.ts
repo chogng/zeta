@@ -1,17 +1,18 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { TextPosition, TextRange } from '../core/text.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
 import { type TextModel } from '../model/textModel.js';
 import { type LanguageLexicalBracketEvent } from './languageLexicalLineScanner.js';
 import { type LanguageStructuralBracketSource } from './languageLexicalContext.js';
 
 export interface LanguageBracketPair {
-	readonly opening: TextRange;
-	readonly closing: TextRange;
+	readonly opening: Range;
+	readonly closing: Range;
 }
 
 export interface LanguageBracketInfo {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly token: string;
 	readonly action: 'open' | 'close';
 	readonly nestingLevel: number;
@@ -21,7 +22,7 @@ export interface LanguageBracketInfo {
 }
 
 interface MutableBracketInfo {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly token: string;
 	readonly action: 'open' | 'close';
 	readonly nestingLevel: number;
@@ -63,28 +64,28 @@ export class LanguageBracketPairs extends Disposable {
 		}));
 	}
 
-	matchBracket(position: TextPosition): LanguageBracketPair | undefined {
+	matchBracket(position: Position): LanguageBracketPair | undefined {
 		this.assertNotDisposed();
 		this.textModel.offsetAt(position);
 		return this.findBracketAt(position)?.pair;
 	}
 
-	findEnclosingBrackets(position: TextPosition): LanguageBracketPair | undefined {
+	findEnclosingBrackets(position: Position): LanguageBracketPair | undefined {
 		this.assertNotDisposed();
 		this.textModel.offsetAt(position);
 		let result: LanguageBracketPair | undefined;
 		for (const bracket of this.ensureState().brackets) {
 			if (bracket.action !== 'open' || !bracket.pair) continue;
-			if (bracket.pair.opening.start.compareTo(position) >= 0 || bracket.pair.closing.end.compareTo(position) <= 0) continue;
-			if (!result || bracket.pair.opening.start.compareTo(result.opening.start) > 0) result = bracket.pair;
+			if (Position.compare(bracket.pair.opening.getStartPosition(), position) >= 0 || Position.compare(bracket.pair.closing.getEndPosition(), position) <= 0) continue;
+			if (!result || Position.compare(bracket.pair.opening.getStartPosition(), result.opening.getStartPosition()) > 0) result = bracket.pair;
 		}
 		return result;
 	}
 
-	findNextBracket(position: TextPosition): LanguageBracketInfo | undefined {
+	findNextBracket(position: Position): LanguageBracketInfo | undefined {
 		this.assertNotDisposed();
 		this.textModel.offsetAt(position);
-		return this.ensureState().brackets.find(bracket => bracket.range.start.compareTo(position) >= 0);
+		return this.ensureState().brackets.find(bracket => Position.compare(bracket.range.getStartPosition(), position) >= 0);
 	}
 
 	getLineBrackets(lineIndex: number): readonly LanguageBracketInfo[] {
@@ -101,16 +102,16 @@ export class LanguageBracketPairs extends Disposable {
 			throw new RangeError('Language bracket pair range is outside the text model');
 		}
 		return Object.freeze(this.ensureState().brackets.filter(bracket => bracket.action === 'open' && bracket.pair
-			&& bracket.pair.opening.start.lineIndex <= endLineIndexInclusive
-			&& bracket.pair.closing.end.lineIndex >= startLineIndex));
+			&& bracket.pair.opening.startLineNumber - 1 <= endLineIndexInclusive
+			&& bracket.pair.closing.endLineNumber - 1 >= startLineIndex));
 	}
 
-	private findBracketAt(position: TextPosition): LanguageBracketInfo | undefined {
-		const brackets = this.ensureState().bracketsByLine[position.lineIndex]!;
-		const contained = brackets.find(bracket => bracket.range.start.columnIndex <= position.columnIndex && position.columnIndex < bracket.range.end.columnIndex);
+	private findBracketAt(position: Position): LanguageBracketInfo | undefined {
+		const brackets = this.ensureState().bracketsByLine[position.lineNumber - 1]!;
+		const contained = brackets.find(bracket => bracket.range.getStartPosition().column <= position.column && position.column < bracket.range.getEndPosition().column);
 		if (contained) return contained;
 		for (let index = brackets.length - 1; index >= 0; index -= 1) {
-			if (brackets[index]!.range.end.columnIndex === position.columnIndex) return brackets[index];
+			if (brackets[index]!.range.getEndPosition().column === position.column) return brackets[index];
 		}
 		return undefined;
 	}
@@ -122,7 +123,7 @@ export class LanguageBracketPairs extends Disposable {
 		const stack: OpenBracket[] = [];
 		for (let lineIndex = 0; lineIndex < this.textModel.lineCount; lineIndex += 1) {
 			for (const event of this.source.getStructuralBracketEvents(lineIndex)) {
-				const range = TextRange.from(TextPosition.at(lineIndex, event.startColumn), TextPosition.at(lineIndex, event.endColumn));
+				const range = Range.fromPositions(new Position((lineIndex) + 1, (event.startColumn) + 1), new Position((lineIndex) + 1, (event.endColumn) + 1));
 				if (event.action === 'open') {
 					const info: MutableBracketInfo = {
 						range,

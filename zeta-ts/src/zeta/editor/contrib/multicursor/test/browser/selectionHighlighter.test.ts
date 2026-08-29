@@ -3,8 +3,10 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
-import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -30,12 +32,12 @@ const { SelectionHighlighter } = await import('../../browser/selectionHighlighte
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
 	using languages = new LanguageFeaturesService();
 	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
-	using harness = createHarness('item itemized item\nitem', languages, TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 2)));
+	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
-		TextRange.from(TextPosition.at(0, 5), TextPosition.at(0, 7)),
-		TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 16)),
-		TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 2)),
+		Range.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (7) + 1)),
+		Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (16) + 1)),
+		Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (2) + 1)),
 	]);
 	assert.equal(harness.viewport.element.querySelectorAll('.selection-highlight').length, 3);
 });
@@ -43,23 +45,23 @@ test('Selection highlighter owns non-empty textual matches and excludes active s
 test('Selection highlighter applies whole-word, whitespace, multiline, and maximum-length policy', () => {
 	using languages = new LanguageFeaturesService();
 	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
-	using harness = createHarness('item itemized item\nitem', languages, TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 4)));
+	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
-		TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 18)),
-		TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 4)),
+		Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (18) + 1)),
+		Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)),
 	]);
-	harness.selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 4), TextPosition.at(0, 5))));
+	harness.selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (4) + 1), new Position((0) + 1, (5) + 1))));
 	assert.equal(harness.decorations.size, 0);
-	harness.selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(1, 1))));
+	harness.selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (1) + 1))));
 	assert.equal(harness.decorations.size, 0);
 });
 
-function createHarness(text: string, languages: LanguageFeaturesService, initialSelection: TextSelection): SelectionHarness {
+function createHarness(text: string, languages: LanguageFeaturesService, initialSelection: Selection): SelectionHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
-	const selections = new CursorsController(model, TextSelectionSet.single(initialSelection));
+	const selections = new CursorsController(model, SelectionSet.single(initialSelection));
 	const decorations = new TextDecorationCollection<boolean>(model);
 	const viewport = new EditorViewport({
 		container,

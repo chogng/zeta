@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { observableCodeEditor } from '../../../browser/observableCodeEditor.js';
 import { type CodeEditorWidget } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { type CodeEditorContributionContext } from '../../../browser/widget/codeEditor/codeEditorContributions.js';
-import { TextPosition } from '../../../common/core/text.js';
+import { Position } from '../../../common/core/position.js';
 
 /** Uses the editor option to present placeholder text while the model is empty. */
 export class PlaceholderTextContribution extends Disposable {
@@ -40,7 +40,7 @@ export class PlaceholderTextContribution extends Disposable {
 
 	private updateLayout(context: CodeEditorContributionContext): void {
 		if (!this.element) return;
-		const position = context.viewport.getPositionContentCoordinates(TextPosition.at(0, 0));
+		const position = context.viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1));
 		this.element.style.left = `${position.left}px`;
 		this.element.style.top = `${position.top}px`;
 		this.element.style.width = `${Math.max(0, context.viewport.currentLayout.viewportSize.width - position.left)}px`;

@@ -1,4 +1,4 @@
-import { TextRange } from "./range.js";
+import { Range } from "./range.js";
 import { decodeUTF16LE } from "./stringBuilder.js";
 
 /** A compact offset change used by incremental buffers and worker protocols. */
@@ -60,7 +60,7 @@ export enum TextModelChangeReason {
 
 /** One normalized replacement reported after a transaction commits. */
 export interface TextModelContentChange {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly rangeOffset: number;
 	readonly rangeLength: number;
 	readonly text: string;

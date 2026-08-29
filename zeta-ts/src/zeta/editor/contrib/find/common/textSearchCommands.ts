@@ -1,5 +1,6 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { normalizeTextLineEndings, type TextEdit } from "../../../common/core/text.js";
+import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
+import { type TextEdit } from "../../../common/core/editOperation.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TextSearchMatch } from "../../../common/model/textModelSearch.js";
 
@@ -23,7 +24,7 @@ export function resolveTextSearchReplacement(match: TextSearchMatch, replacement
 export function createReplaceTextMatchCommand(model: TextModel, match: TextSearchMatch, replacement: string): EditorEditCommand {
 	assertCurrentMatch(model, match);
 	const normalized = normalizeTextLineEndings(replacement);
-	const startOffset = model.offsetAt(match.range.start);
+	const startOffset = model.offsetAt(match.range.getStartPosition());
 	return Object.freeze({
 		edits: Object.freeze([{ range: match.range, text: normalized }]),
 		selectionsAfter: Object.freeze([Object.freeze({
@@ -50,8 +51,8 @@ export function createReplaceAllTextMatchesCommand(model: TextModel, matches: re
 		const match = matches[index]!;
 		const replacement = normalizeTextLineEndings(replacements[index]!);
 		assertCurrentMatch(model, match);
-		const startOffset = model.offsetAt(match.range.start);
-		const endOffset = model.offsetAt(match.range.end);
+		const startOffset = model.offsetAt(match.range.getStartPosition());
+		const endOffset = model.offsetAt(match.range.getEndPosition());
 		if (startOffset < previousEndOffset) throw new RangeError("Text search matches must not overlap");
 		edits.push(Object.freeze({ range: match.range, text: replacement }));
 		caretOffset = startOffset + cumulativeDelta + replacement.length;

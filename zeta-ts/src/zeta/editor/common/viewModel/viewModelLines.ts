@@ -184,7 +184,7 @@ export class ViewModelLines extends Disposable {
 		this.pendingBreaks = Array.from(
 			{ length: this.model.lineCount },
 			(_, lineIndex) => Object.freeze({
-				breakColumns: Object.freeze([this.model.getLineContent(lineIndex).length]),
+				breakColumns: Object.freeze([this.model.getLineContent((lineIndex) + 1).length]),
 				wrappedTextIndentWidth: 0,
 			}),
 		);
@@ -215,7 +215,7 @@ export class ViewModelLines extends Disposable {
 		for (; this.nextLineIndex < endLineIndex; this.nextLineIndex += 1) {
 			breaks[this.nextLineIndex] = computeLineBreaksForLine(
 				this.lineBreaksComputer,
-				this.model.getLineContent(this.nextLineIndex),
+				this.model.getLineContent((this.nextLineIndex) + 1),
 				this.wrapWidth,
 				this.currentWrappingIndent,
 			);
@@ -250,7 +250,7 @@ export class ViewModelLines extends Disposable {
 		const breakColumnsByLine: number[][] = [];
 		const wrappedTextIndentWidthsByLine: number[] = [];
 		for (let lineIndex = 0; lineIndex < this.model.lineCount; lineIndex += 1) {
-			const text = this.model.getLineContent(lineIndex);
+			const text = this.model.getLineContent((lineIndex) + 1);
 			const result = computeLineBreaksForLine(this.lineBreaksComputer, text, this.wrapWidth, this.currentWrappingIndent);
 			breakColumnsByLine.push([...result.breakColumns]);
 			wrappedTextIndentWidthsByLine.push(result.wrappedTextIndentWidth);

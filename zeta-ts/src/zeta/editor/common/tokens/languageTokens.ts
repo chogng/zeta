@@ -1,10 +1,12 @@
-import { TextRange, type TextPosition, type TextSnapshot } from "../core/text.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
+import { type TextSnapshot } from "../core/textChange.js";
 import { VersionedLanguageResultStore } from "../languages/languageResultStore.js";
 import { type TextModel } from "../model/textModel.js";
 import { attachLanguageTokenResultDelta, getLanguageTokenResultDelta } from '../services/semanticTokensDto.js';
 
 export interface LanguageToken {
-	readonly range: TextRange;
+	readonly range: Range;
 	readonly tokenType: string;
 	readonly modifiers: readonly string[];
 	/** Embedded language selected by the grammar for this source range. */
@@ -40,25 +42,25 @@ export function createLanguageTokenSnapshotNormalizer(snapshot: TextSnapshot): (
 	return value => normalizeLanguageTokenResult(value, range => assertSnapshotRange(lines, range, "Language token"), false);
 }
 
-function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange: (range: TextRange) => void, preserveDelta: boolean): LanguageTokenResult {
+function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange: (range: Range) => void, preserveDelta: boolean): LanguageTokenResult {
 	if (typeof value !== "object" || value === null || !Array.isArray(value.tokens)) {
 		throw new TypeError("Language token result must contain a tokens array");
 	}
 	const delta = preserveDelta ? getLanguageTokenResultDelta(value) : undefined;
 	const tokens: LanguageToken[] = [];
-	let previousEnd: TextPosition | undefined;
+	let previousEnd: Position | undefined;
 	for (const token of value.tokens) {
 		if (typeof token !== "object" || token === null) {
 			throw new TypeError("Language token must be an object");
 		}
 		validateRange(token.range);
-		if (token.range.empty) {
+		if (token.range.isEmpty()) {
 			throw new RangeError("Language token range must not be empty");
 		}
-		if (token.range.start.lineIndex !== token.range.end.lineIndex) {
+		if (token.range.startLineNumber !== token.range.endLineNumber) {
 			throw new RangeError("Language token range must stay on one line");
 		}
-		if (previousEnd && previousEnd.compareTo(token.range.start) > 0) {
+		if (previousEnd && Position.compare(previousEnd, token.range.getStartPosition()) > 0) {
 			throw new RangeError("Language tokens must be sorted and non-overlapping");
 		}
 		assertIdentifier(token.tokenType, "Language token type");
@@ -83,7 +85,7 @@ function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange:
 			...(token.balancedBrackets === false ? { balancedBrackets: false as const } : {}),
 			...(presentation === undefined ? {} : { presentation }),
 		}));
-		previousEnd = token.range.end;
+		previousEnd = token.range.getEndPosition();
 	}
 	const result = Object.freeze({ tokens: Object.freeze(tokens) });
 	return delta ? attachLanguageTokenResultDelta(result, delta) : result;
@@ -116,24 +118,24 @@ function normalizedIdentifier(value: unknown, owner: string): string {
 	return value;
 }
 
-function assertModelRange(model: TextModel, range: TextRange, owner: string): void {
-	if (!(range instanceof TextRange)) {
-		throw new TypeError(`${owner} range must be a TextRange`);
+function assertModelRange(model: TextModel, range: Range, owner: string): void {
+	if (!(range instanceof Range)) {
+		throw new TypeError(`${owner} range must be a Range`);
 	}
-	model.offsetAt(range.start);
-	model.offsetAt(range.end);
+	model.offsetAt(range.getStartPosition());
+	model.offsetAt(range.getEndPosition());
 }
 
-function assertSnapshotRange(lines: readonly string[], range: TextRange, owner: string): void {
-	if (!(range instanceof TextRange)) {
-		throw new TypeError(`${owner} range must be a TextRange`);
+function assertSnapshotRange(lines: readonly string[], range: Range, owner: string): void {
+	if (!(range instanceof Range)) {
+		throw new TypeError(`${owner} range must be a Range`);
 	}
-	assertSnapshotPosition(lines, range.start, owner);
-	assertSnapshotPosition(lines, range.end, owner);
+	assertSnapshotPosition(lines, range.getStartPosition(), owner);
+	assertSnapshotPosition(lines, range.getEndPosition(), owner);
 }
 
-function assertSnapshotPosition(lines: readonly string[], position: TextPosition, owner: string): void {
-	if (position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
+function assertSnapshotPosition(lines: readonly string[], position: Position, owner: string): void {
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
 		throw new RangeError(`${owner} range is outside its snapshot`);
 	}
 }
@@ -143,4 +145,3 @@ function assertIdentifier(value: unknown, owner: string): asserts value is strin
 		throw new TypeError(`${owner} must be a non-empty trimmed string`);
 	}
 }
-

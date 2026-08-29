@@ -1,6 +1,6 @@
 import "./media/stickyScroll.css";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { TextPosition } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
@@ -36,7 +36,7 @@ export class StickyScrollController extends Disposable {
 			button.style.paddingLeft = `${8 + entry.depth * 12}px`;
 			button.textContent = entry.label || `Line ${entry.lineIndex + 1}`;
 			button.title = `Reveal line ${entry.lineIndex + 1}`;
-			button.addEventListener("click", () => this.viewport.revealPosition(TextPosition.at(entry.lineIndex, 0)));
+			button.addEventListener("click", () => this.viewport.revealPosition(new Position((entry.lineIndex) + 1, (0) + 1)));
 			return button;
 		}));
 		this.element.hidden = entries.length === 0;

@@ -10,18 +10,17 @@ import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { type IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { type CursorsController } from '../common/cursor/cursor.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
-import { TextPosition, type TextRange } from '../common/core/text.js';
+import { Position } from '../common/core/position.js';
+import { type Range } from '../common/core/range.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel.js';
 import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
-import { CompositionController, type EditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
+import { type AbstractEditContext, type CompositionController, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
 import { createNativeEditContext, supportsNativeEditContext } from './controller/editContext/native/editContextFactory.js';
-import { NativeEditContext } from './controller/editContext/native/nativeEditContext.js';
-import { ScreenReaderSupport } from './controller/editContext/native/screenReaderSupport.js';
-import { TextAreaAccessibilityController, TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
+import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
 import { ViewController, type EditorCommandContext, type EditorCommandTransformer, type EditorLanguageEditingAdapter, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from './view/viewController.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
 import { applyEditorFontInfo } from './config/domFontInfo.js';
@@ -42,7 +41,7 @@ import { ScrollDecorationViewPart } from './viewparts/scrollDecoration/scrollDec
 import { ViewContentWidgets } from './viewparts/contentWidgets/contentWidgets.js';
 import { ViewOverlayWidgets } from './viewparts/overlayWidgets/overlayWidgets.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
-import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
+import type { IContentWidget, IEditorAriaOptions, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { LineWidthIndex, ViewLines } from './viewparts/viewLines/viewLines.js';
 import { ViewLineOptions, ViewLineTextDirection as EditorTextDirection } from './viewparts/viewLines/viewLineOptions.js';
@@ -96,9 +95,7 @@ export class EditorView extends Disposable {
 	readonly ownerId: string;
 	readonly viewport: View;
 	readonly selectionController: CursorsController;
-	readonly editContext: EditContext;
-	/** Compatibility alias for integrations that call the browser surface input. */
-	readonly input: EditContext;
+	readonly editContext: AbstractEditContext;
 	readonly element: HTMLElement;
 	readonly textArea: HTMLTextAreaElement | undefined;
 	readonly compositionController: CompositionController;
@@ -151,32 +148,32 @@ export class EditorView extends Disposable {
 				throw new TypeError('Editor view bracket colorization must share its text model');
 			}
 
-			// Language editing is contribution-owned. The view only borrows the adapter
-			// while ViewController invokes it for the current input command.
 			const languageEditing = viewOptions.languageEditing;
+			this.viewController = this._register(new ViewController(
+				this.viewport,
+				selectionController,
+				{ languageEditing, wordPattern: viewOptions.wordPattern, userInputEvents: this.userInputEvents },
+			));
 			this.editContext = this._register(createEditContext(this.viewport.element, {
 				ariaLabel: viewOptions.ariaLabel,
 				readOnly: selectionController.readOnly,
 				textDirection: this.viewport.editorTextDirection,
 				ownerId: this.ownerId,
 				characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
+				viewController: this.viewController,
+				viewport: this.viewport,
+				selectionController,
+				accessibilityService: viewOptions.accessibilityService,
+				renderRichScreenReaderContent: viewOptions.renderRichScreenReaderContent,
+				accessibilityPageSize: viewOptions.accessibilityPageSize,
+				semanticTokenSource: viewOptions.semanticTokenSource,
+				bracketColorizationSource: viewOptions.bracketColorizationSource,
 			}));
-			this.input = this.editContext;
-			this.element = this.editContext.element;
+			this.element = this.editContext.domNode;
 			this.textArea = this.editContext instanceof TextAreaEditContext
-				? this.editContext.element
+				? this.editContext.domNode
 				: undefined;
-			this.compositionController = this._register(new CompositionController(
-				this.editContext,
-				this.viewport,
-				selectionController,
-			));
-			this.viewController = this._register(new ViewController(
-				this.viewport,
-				selectionController,
-				{ languageEditing, wordPattern: viewOptions.wordPattern, userInputEvents: this.userInputEvents },
-			));
-			this.editContext.connectViewController(this.viewController, this.compositionController);
+			this.compositionController = this.editContext.compositionController;
 			this.onWillBeforeInput = this.editContext.onWillBeforeInput;
 			this.onWillTextUpdate = this.editContext.onWillTextUpdate;
 			this.onWillKeydown = this.editContext.onWillKeydown;
@@ -186,33 +183,9 @@ export class EditorView extends Disposable {
 				this.viewport.setOvertype(overtyping);
 			}));
 
-			if (this.editContext instanceof NativeEditContext) {
-				this._register(new ScreenReaderSupport({
-					element: this.editContext.element,
-					model: this.viewport.textModel,
-					viewport: this.viewport,
-					selectionController,
-					onDidFocus: this.editContext.onDidFocus,
-					onDidBlur: this.editContext.onDidBlur,
-					accessibilityService: viewOptions.accessibilityService,
-					renderRichContent: viewOptions.renderRichScreenReaderContent,
-					accessibilityPageSize: viewOptions.accessibilityPageSize,
-					semanticTokenSource: viewOptions.semanticTokenSource,
-					bracketColorizationSource: viewOptions.bracketColorizationSource,
-					isComposing: () => this.compositionController.composing,
-				}));
-			}
 			this._register(this.compositionController.onDidChange(composing => {
 				if (!composing) this.synchronizeEditContext();
 			}));
-			if (this.editContext instanceof TextAreaEditContext) {
-				this._register(new TextAreaAccessibilityController(
-					this.editContext,
-					this.viewport,
-					selectionController,
-					this.compositionController,
-				));
-			}
 			this._register(toDisposable(() => {
 				this.viewport.element.classList.remove('input-focused');
 				this.viewport.element.classList.remove('overtype');
@@ -253,6 +226,22 @@ export class EditorView extends Disposable {
 		this.editContext.focus();
 	}
 
+	isFocused(): boolean {
+		return this.editContext.isFocused();
+	}
+
+	refreshFocusState(): void {
+		this.editContext.refreshFocusState();
+	}
+
+	setAriaOptions(options: IEditorAriaOptions): void {
+		this.editContext.setAriaOptions(options);
+	}
+
+	writeScreenReaderContent(reason: string): void {
+		this.editContext.writeScreenReaderContent(reason);
+	}
+
 	get overtyping(): boolean {
 		return this.viewController.overtyping;
 	}
@@ -279,12 +268,14 @@ export class EditorView extends Disposable {
 		const selection = this.selectionController.selections.primary;
 		this.editContext.syncState({
 			text: this.viewport.textModel.getText(),
-			selectionStart: this.viewport.textModel.offsetAt(selection.range.start),
-			selectionEnd: this.viewport.textModel.offsetAt(selection.range.end),
+			selectionStart: this.viewport.textModel.offsetAt(selection.getStartPosition()),
+			selectionEnd: this.viewport.textModel.offsetAt(selection.getEndPosition()),
+			position: selection.getPosition(),
 		});
 		this.editContext.updateBounds(
-			this.viewport.getPositionContentCoordinates(selection.active),
+			this.viewport.getPositionContentCoordinates(selection.getPosition()),
 		);
+		this.editContext.writeScreenReaderContent('editor state changed');
 	}
 
 	private characterBoundsAt(modelOffset: number): EditContextCharacterBounds | undefined {
@@ -294,7 +285,7 @@ export class EditorView extends Disposable {
 		const nextPosition = model.positionAt(Math.min(model.length, modelOffset + 1));
 		const start = this.viewport.getPositionContentCoordinates(position);
 		const end = this.viewport.getPositionContentCoordinates(nextPosition);
-		const width = position.lineIndex === nextPosition.lineIndex
+		const width = position.lineNumber === nextPosition.lineNumber
 			? Math.max(1, Math.abs(end.left - start.left))
 			: Math.max(1, this.viewport.measureTextWidth(' '));
 		return Object.freeze({
@@ -753,7 +744,7 @@ export class View extends Disposable {
 			getVerticalOffsetForLineIndex: lineIndex => this.viewport.getVerticalOffsetForLineIndex(
 				lineIndex >= this.model.lineCount
 					? this.visualProjection.visualLineCount
-					: this.visualProjection.visualLineIndexAt(TextPosition.at(lineIndex, 0)),
+					: this.visualProjection.visualLineIndexAt(new Position((lineIndex) + 1, (0) + 1)),
 			),
 			readMarkers: () => this.viewOverlays.decorations.overviewMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
@@ -982,7 +973,7 @@ export class View extends Disposable {
 		return layout;
 	}
 
-	revealPosition(position: TextPosition): EditorViewportLayout {
+	revealPosition(position: Position): EditorViewportLayout {
 		this.model.offsetAt(position);
 		const layout = this.viewport.layout;
 		const visualProjection = this.visualProjection;
@@ -997,10 +988,11 @@ export class View extends Disposable {
 			top = lineBottom - layout.viewportSize.height;
 		}
 
-		const line = this.model.getLineContent(visualLine.logicalLineIndex);
-		const domCaretLeft = this.domCaretLeft(visualLineIndex, position.columnIndex - visualLine.startColumn);
+		const line = this.model.getLineContent((visualLine.logicalLineIndex) + 1);
+		const columnIndex = position.column - 1;
+		const domCaretLeft = this.domCaretLeft(visualLineIndex, columnIndex - visualLine.startColumn);
 		const caretLeft = domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) +
-			this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, position.columnIndex)));
+			this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, columnIndex)));
 		const caretRight = caretLeft + Math.max(
 			1,
 			this.textMeasurer.measureLineWidth(" "),
@@ -1014,15 +1006,16 @@ export class View extends Disposable {
 		return this.scrollTo({ left, top });
 	}
 
-	getPositionContentCoordinates(position: TextPosition): EditorContentPosition {
+	getPositionContentCoordinates(position: Position): EditorContentPosition {
 		this.model.offsetAt(position);
 		const visualProjection = this.visualProjection;
 		const visualLineIndex = visualProjection.visualLineIndexAt(position);
 		const visualLine = visualProjection.lineAt(visualLineIndex)!;
-		const domCaretLeft = this.domCaretLeft(visualLineIndex, position.columnIndex - visualLine.startColumn);
+		const columnIndex = position.column - 1;
+		const domCaretLeft = this.domCaretLeft(visualLineIndex, columnIndex - visualLine.startColumn);
 		return Object.freeze({
 			left: domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) + this.textMeasurer.measureLineWidth(
-				this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, position.columnIndex),
+				this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, columnIndex),
 			)),
 			top: this.viewport.getVerticalOffsetForLineIndex(visualLineIndex),
 			height: this.viewport.layout.lineHeight,
@@ -1030,23 +1023,23 @@ export class View extends Disposable {
 	}
 
 	/** Returns a browser-shaped x-coordinate for one rendered visual cursor, when available. */
-	getVisualHorizontalOffset(position: TextPosition): number | undefined {
+	getVisualHorizontalOffset(position: Position): number | undefined {
 		this.model.offsetAt(position);
 		const visualLineIndex = this.visualProjection.visualLineIndexAt(position);
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		return visualLine
-			? this.domCaretLeft(visualLineIndex, position.columnIndex - visualLine.startColumn)
+			? this.domCaretLeft(visualLineIndex, position.column - 1 - visualLine.startColumn)
 			: undefined;
 	}
 
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
-	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined {
+	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): Position | undefined {
 		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
 		if (this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		const line = this.viewLines.renderedLines.get(visualLineIndex);
 		if (!visualLine || !line) return undefined;
-		const text = this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, visualLine.endColumn);
+		const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
 		if (line.textElement.textContent?.length !== text.length) return undefined;
 		let nearestColumn: number | undefined;
 		let nearestDistance = Number.POSITIVE_INFINITY;
@@ -1061,10 +1054,10 @@ export class View extends Disposable {
 		}
 		return nearestColumn === undefined
 			? undefined
-			: TextPosition.at(visualLine.logicalLineIndex, visualLine.startColumn + nearestColumn);
+			: new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + nearestColumn) + 1);
 	}
 
-	setCompositionRange(range: TextRange | undefined): void {
+	setCompositionRange(range: Range | undefined): void {
 		this.viewOverlays.setCompositionRange(range);
 	}
 
@@ -1131,7 +1124,7 @@ export class View extends Disposable {
 			if (!visualLine) continue;
 			return Object.freeze({
 				kind: EditorHitTargetKind.Text,
-				position: TextPosition.at(visualLine.logicalLineIndex, visualLine.startColumn + offset),
+				position: new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + offset) + 1),
 			});
 		}
 		return undefined;
@@ -1248,20 +1241,20 @@ export class View extends Disposable {
 		const selectionSet = this.selectionController?.selections;
 		const selection = selectionSet?.primary;
 		if (!selection || !selectionSet) return;
-		const position = selection.active;
-		const selectedLength = this.model.offsetAt(selection.range.end) - this.model.offsetAt(selection.range.start);
+		const position = selection.getPosition();
+		const selectedLength = this.model.offsetAt(selection.getEndPosition()) - this.model.offsetAt(selection.getStartPosition());
 		if (selectionSet.selections.length > 1) {
 			const totalSelectedLength = selectionSet.selections.reduce((length, current) =>
-				length + this.model.offsetAt(current.range.end) - this.model.offsetAt(current.range.start), 0);
+				length + this.model.offsetAt(current.getEndPosition()) - this.model.offsetAt(current.getStartPosition()), 0);
 			const summary = totalSelectedLength === 0
 				? `${selectionSet.selections.length} cursors`
 				: `${selectionSet.selections.length} selections, ${totalSelectedLength} characters selected`;
-			this.announceAccessibilityStatus(`${summary}; primary at Line ${position.lineIndex + 1}, column ${position.columnIndex + 1}`);
+			this.announceAccessibilityStatus(`${summary}; primary at Line ${position.lineNumber}, column ${position.column}`);
 			return;
 		}
 		this.announceAccessibilityStatus(selectedLength === 0
-			? `Line ${position.lineIndex + 1}, column ${position.columnIndex + 1}`
-			: `Line ${position.lineIndex + 1}, column ${position.columnIndex + 1}, ${selectedLength} characters selected`);
+			? `Line ${position.lineNumber}, column ${position.column}`
+			: `Line ${position.lineNumber}, column ${position.column}, ${selectedLength} characters selected`);
 	}
 
 	private createRenderingContext(layout: EditorViewportLayout, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
@@ -1333,14 +1326,10 @@ export { View as EditorViewport };
 /** Creates the best browser editing surface available for one editor. */
 function createEditContext(
 	container: HTMLElement,
-	options: EditContextOptions = {},
-): EditContext {
+	options: EditContextOptions,
+): AbstractEditContext {
 	if (supportsNativeEditContext(container)) {
-		try {
-			return createNativeEditContext(container, options);
-		} catch {
-			// A partially implemented browser API is treated like an unsupported one.
-		}
+		return createNativeEditContext(container, options);
 	}
 	return new TextAreaEditContext(container, options);
 }

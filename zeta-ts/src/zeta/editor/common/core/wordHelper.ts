@@ -1,10 +1,10 @@
 export const USUAL_WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?';
 
-/** A word result expressed with zero-based UTF-16 columns. */
+/** A word result expressed with one-based editor columns. */
 export interface IWordAtPosition {
 	readonly word: string;
-	readonly startColumnIndex: number;
-	readonly endColumnIndexExclusive: number;
+	readonly startColumn: number;
+	readonly endColumn: number;
 }
 
 export interface IGetWordAtTextConfig {
@@ -31,18 +31,18 @@ export function ensureValidWordDefinition(wordDefinition?: RegExp | null): RegEx
 	return result;
 }
 
-/** Finds the word-like regex match enclosing a zero-based text column. */
-export function getWordAtText(columnIndex: number, wordDefinition: RegExp, text: string, textOffset = 0, config = defaultConfig): IWordAtPosition | null {
+/** Finds the word-like regex match enclosing a one-based editor column. */
+export function getWordAtText(column: number, wordDefinition: RegExp, text: string, textOffset = 0, config = defaultConfig): IWordAtPosition | null {
 	validateConfig(config);
-	if (!Number.isSafeInteger(columnIndex) || columnIndex < 0) throw new RangeError("columnIndex must be a non-negative safe integer");
+	if (!Number.isSafeInteger(column) || column < 1) throw new RangeError("column must be a positive safe integer");
 	const regex = ensureValidWordDefinition(wordDefinition);
 	if (text.length > config.maxLen) {
 		const halfWindow = Math.floor(config.maxLen / 2);
-		const start = Math.max(0, columnIndex - halfWindow);
-		const end = Math.min(text.length, columnIndex + halfWindow);
-		return getWordAtText(columnIndex - start, regex, text.slice(start, end), textOffset + start, config);
+		const start = Math.max(0, column - 1 - halfWindow);
+		const end = Math.min(text.length, column - 1 + halfWindow);
+		return getWordAtText(column - start, regex, text.slice(start, end), textOffset + start, config);
 	}
-	const probe = columnIndex - textOffset;
+	const probe = column - 1 - textOffset;
 	const startedAt = Date.now();
 	let match: RegExpExecArray | null;
 	while ((match = regex.exec(text))) {
@@ -51,7 +51,7 @@ export function getWordAtText(columnIndex: number, wordDefinition: RegExp, text:
 		const end = start + match[0].length;
 		if (match[0].length > 0 && start <= probe && probe < end) {
 			regex.lastIndex = 0;
-			return { word: match[0], startColumnIndex: textOffset + start, endColumnIndexExclusive: textOffset + end };
+			return { word: match[0], startColumn: textOffset + start + 1, endColumn: textOffset + end + 1 };
 		}
 		if (match[0].length === 0) regex.lastIndex += 1;
 	}

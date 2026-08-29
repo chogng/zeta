@@ -3,8 +3,10 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Selection } from "../../../common/core/selection.js";
+import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 class FixedTextMeasurer implements TextMeasurer {
@@ -45,7 +47,7 @@ test("Pointer click counts select and drag by word or complete line", () => {
 	using model = new TextModel("alpha beta\ngamma delta\nlast");
 	using selections = new CursorsController(
 		model,
-		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -59,37 +61,37 @@ test("Pointer click counts select and drag by word or complete line", () => {
 	using pointer = new MouseHandler(viewport, selections);
 
 	drag(dom.window, viewport.element, 1, point(20, 5), point(20, 5), 2);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 0),
-		TextPosition.at(0, 5),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (0) + 1),
+		new Position((0) + 1, (5) + 1),
 	));
 
 	drag(dom.window, viewport.element, 2, point(20, 5), point(80, 5), 2);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 0),
-		TextPosition.at(0, 10),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (0) + 1),
+		new Position((0) + 1, (10) + 1),
 	));
 
 	drag(dom.window, viewport.element, 3, point(80, 5), point(10, 5), 2);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 10),
-		TextPosition.at(0, 0),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (10) + 1),
+		new Position((0) + 1, (0) + 1),
 	));
 
 	drag(dom.window, viewport.element, 4, point(20, 25), point(20, 25), 3);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(1, 0),
-		TextPosition.at(2, 0),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((1) + 1, (0) + 1),
+		new Position((2) + 1, (0) + 1),
 	));
 
 	drag(dom.window, viewport.element, 5, point(20, 25), point(20, 5), 3);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(2, 0),
-		TextPosition.at(0, 0),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((2) + 1, (0) + 1),
+		new Position((0) + 1, (0) + 1),
 	));
 
-	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(
-		TextPosition.at(0, 2),
+	selections.setSelections(SelectionSet.single(Selection.fromPositions(
+		new Position((0) + 1, (2) + 1),
 	)));
 	drag(
 		dom.window,
@@ -100,9 +102,9 @@ test("Pointer click counts select and drag by word or complete line", () => {
 		2,
 		true,
 	);
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 2),
-		TextPosition.at(1, 5),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (2) + 1),
+		new Position((1) + 1, (5) + 1),
 	));
 
 	viewport.element.dispatchEvent(pointerEvent(
@@ -112,7 +114,7 @@ test("Pointer click counts select and drag by word or complete line", () => {
 		{ pointerId: 7, detail: 2 },
 	));
 	model.applyEdits([{
-		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
 		text: "X",
 	}]);
 	dom.window.dispatchEvent(pointerEvent(
@@ -121,9 +123,9 @@ test("Pointer click counts select and drag by word or complete line", () => {
 		point(80, 25),
 		{ pointerId: 7 },
 	));
-	assert.deepEqual(selections.selections.primary, TextSelection.from(
-		TextPosition.at(0, 7),
-		TextPosition.at(1, 11),
+	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+		new Position((0) + 1, (7) + 1),
+		new Position((1) + 1, (11) + 1),
 	));
 	dom.window.dispatchEvent(pointerEvent(
 		dom.window,

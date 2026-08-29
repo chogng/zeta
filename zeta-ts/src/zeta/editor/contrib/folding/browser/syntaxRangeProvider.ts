@@ -36,7 +36,7 @@ export function computeEditorLanguageFoldingRanges(model: TextModel, languageId:
 	const ranges: EditorFoldingRange[] = [];
 	let state: LanguageLexicalState = "normal";
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
-		const line = model.getLineContent(lineIndex);
+		const line = model.getLineContent((lineIndex) + 1);
 		const result = scanner.scan(line, state);
 		state = result.outputState;
 		if (matchesMarker(configuration.foldingMarkers?.end, line)) {

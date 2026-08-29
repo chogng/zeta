@@ -7,8 +7,10 @@ import { type EditorCommandExecutor } from '../../../../browser/editorExtensions
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
-import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
-import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageRenameProvider, RenameService } from '../../common/rename.js';
 
@@ -35,7 +37,7 @@ test('Rename reports its command after applying the provider edit', async () => 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resource = URI.file('C:\\project\\rename.ts');
 	using model = new TextModel('abc');
-	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, 'textarea');
@@ -43,8 +45,8 @@ test('Rename reports its command after applying the provider edit', async () => 
 	using providers = new LanguageFeatureProviderRegistry<LanguageRenameProvider>();
 	providers.register({
 		languageIds: ['typescript'],
-		prepareRename: () => ({ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)), placeholder: 'abc' }),
-		provideRenameEdits: () => ({ entries: [{ kind: 'textDocument', resource, edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)), text: 'xyz' }] }] }),
+		prepareRename: () => ({ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)), placeholder: 'abc' }),
+		provideRenameEdits: () => ({ entries: [{ kind: 'textDocument', resource, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)), text: 'xyz' }] }] }),
 	});
 	using service = new RenameService(model, resource, providers);
 	const executedCommands: string[] = [];

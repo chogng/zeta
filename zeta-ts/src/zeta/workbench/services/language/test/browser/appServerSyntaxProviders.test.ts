@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
-import { TextPosition, TextRange } from '../../../../../editor/common/core/text.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { SyntaxService } from '../../../../../editor/common/languages/syntax/syntaxService.js';
 import { DocumentSymbolService } from '../../../../../editor/contrib/documentSymbols/common/documentSymbols.js';
@@ -54,16 +55,16 @@ test('App Server syntax registers tokens, diagnostics, symbols, folds, and selec
 	await syntax.requestAll('rust');
 	const documentSymbols = await symbols.provideDocumentSymbols('rust');
 	const foldingRanges = await folding.provideFoldingRanges('rust');
-	const structural = await selections.provideSelectionRanges('rust', [TextRange.from(TextPosition.at(0, 3), TextPosition.at(0, 7))]);
+	const structural = await selections.provideSelectionRanges('rust', [Range.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (7) + 1))]);
 
 	assert.equal(analyzeCalls, 1);
 	assert.equal(workerCalls, 0);
-	assert.deepEqual(syntax.tokens.result!.value.tokens.map(token => [token.range.start.lineIndex, token.range.start.columnIndex, token.range.end.lineIndex, token.range.end.columnIndex, token.tokenType]), [
-		[0, 0, 0, 2, 'keyword'],
-		[0, 2, 0, 3, 'variable'],
-		[0, 3, 0, 7, 'function'],
-		[1, 2, 1, 7, 'comment'],
-		[2, 0, 2, 4, 'comment'],
+	assert.deepEqual(syntax.tokens.result!.value.tokens.map(token => [token.range.getStartPosition().lineNumber, token.range.getStartPosition().column, token.range.getEndPosition().lineNumber, token.range.getEndPosition().column, token.tokenType]), [
+		[1, 1, 1, 3, 'keyword'],
+		[1, 3, 1, 4, 'variable'],
+		[1, 4, 1, 8, 'function'],
+		[2, 3, 2, 8, 'comment'],
+		[3, 1, 3, 5, 'comment'],
 	]);
 	assert.ok(syntax.diagnostics.result!.value.diagnostics.some(diagnostic => diagnostic.code === 'syntax-missing' && diagnostic.source === 'zeta-syntax'));
 	assert.deepEqual(documentSymbols.map(symbol => [symbol.name, symbol.kind]), [['main', 'function']]);

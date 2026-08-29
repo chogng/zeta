@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
+import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 import { EditorFoldingRangeSource, editorFoldingRangeKey, normalizeEditorFoldingRanges, validateEditorFoldingLineIndex, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
@@ -45,9 +46,9 @@ export class EditorFoldingModel extends Disposable {
 		const normalized = normalizeEditorFoldingRanges(this.textModel, ranges);
 		const next = normalized.map(range => ({
 			range: this.textModel.trackRange(
-				TextRange.from(
-					TextPosition.at(range.startLineIndex, 0),
-					TextPosition.at(range.endLineIndex, this.textModel.getLineContent(range.endLineIndex).length),
+				Range.fromPositions(
+					new Position((range.startLineIndex) + 1, (0) + 1),
+					new Position((range.endLineIndex) + 1, (this.textModel.getLineContent((range.endLineIndex) + 1).length) + 1),
 				),
 				TrackedRangeStickiness.NeverGrowsAtEdges,
 			),
@@ -81,7 +82,7 @@ export class EditorFoldingModel extends Disposable {
 	/** Toggles the innermost fold whose header is exactly `lineIndex`. */
 	toggleAtLine(lineIndex: number): EditorFoldingRegion | undefined {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
-		const record = this.findRecord(candidate => candidate.range.range.start.lineIndex === lineIndex);
+		const record = this.findRecord(candidate => candidate.range.range.startLineNumber - 1 === lineIndex);
 		if (!record) return undefined;
 		record.collapsed = !record.collapsed;
 		const region = this.toRegion(record);
@@ -94,7 +95,7 @@ export class EditorFoldingModel extends Disposable {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
 		const record = this.findRecord(candidate => {
 				const range = candidate.range.range;
-				return lineIndex >= range.start.lineIndex && lineIndex <= range.end.lineIndex;
+				return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
 			});
 		if (!record) return undefined;
 		record.collapsed = !record.collapsed;
@@ -109,7 +110,7 @@ export class EditorFoldingModel extends Disposable {
 		if (typeof collapsed !== "boolean") throw new TypeError("Folding collapse state must be boolean");
 		const record = this.findRecord(candidate => {
 			const range = candidate.range.range;
-			return lineIndex >= range.start.lineIndex && lineIndex <= range.end.lineIndex;
+			return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
 		});
 		if (!record) return undefined;
 		if (record.collapsed === collapsed) return this.toRegion(record);
@@ -136,7 +137,7 @@ export class EditorFoldingModel extends Disposable {
 		if (endLineIndex <= startLineIndex || !this.canAddManualRange(startLineIndex, endLineIndex)) return undefined;
 		const existingManual = this.records.find(record => {
 			const range = record.range.range;
-			return record.source === EditorFoldingRangeSource.Manual && range.start.lineIndex === startLineIndex && range.end.lineIndex === endLineIndex;
+			return record.source === EditorFoldingRangeSource.Manual && range.startLineNumber - 1 === startLineIndex && range.endLineNumber - 1 === endLineIndex;
 		});
 		if (existingManual) return this.toRegion(existingManual);
 		const ranges = this.regions
@@ -152,7 +153,7 @@ export class EditorFoldingModel extends Disposable {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
 		const target = this.findRecord(candidate => {
 			const range = candidate.range.range;
-			return candidate.source === EditorFoldingRangeSource.Manual && lineIndex >= range.start.lineIndex && lineIndex <= range.end.lineIndex;
+			return candidate.source === EditorFoldingRangeSource.Manual && lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
 		});
 		if (!target) return undefined;
 		const region = this.toRegion(target);
@@ -190,7 +191,7 @@ export class EditorFoldingModel extends Disposable {
 	private reconcileTrackedRanges(): void {
 		const retained = this.records.filter(record => {
 			const range = record.range.range;
-			return range.start.lineIndex < range.end.lineIndex;
+			return range.getStartPosition().lineNumber < range.getEndPosition().lineNumber;
 		});
 		const normalized = normalizeRecords(retained);
 		if (recordsEqual(this.records, normalized)) return;
@@ -204,14 +205,14 @@ export class EditorFoldingModel extends Disposable {
 		validateEditorFoldingLineIndex(this.textModel, lineIndex);
 		const target = this.findRecord(candidate => {
 			const range = candidate.range.range;
-			return lineIndex >= range.start.lineIndex && lineIndex <= range.end.lineIndex;
+			return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
 		});
 		if (!target) return undefined;
 		const targetRange = target.range.range;
 		let changed = false;
 		for (const candidate of this.records) {
 			const range = candidate.range.range;
-			if (range.start.lineIndex < targetRange.start.lineIndex || range.end.lineIndex > targetRange.end.lineIndex) continue;
+			if (range.getStartPosition().lineNumber < targetRange.getStartPosition().lineNumber || range.getEndPosition().lineNumber > targetRange.getEndPosition().lineNumber) continue;
 			if (candidate.collapsed === collapsed) continue;
 			candidate.collapsed = collapsed;
 			changed = true;
@@ -223,9 +224,11 @@ export class EditorFoldingModel extends Disposable {
 	private canAddManualRange(startLineIndex: number, endLineIndex: number): boolean {
 		return this.records.every(record => {
 			const range = record.range.range;
-			const disjoint = endLineIndex < range.start.lineIndex || startLineIndex > range.end.lineIndex;
-			const contains = startLineIndex <= range.start.lineIndex && endLineIndex >= range.end.lineIndex;
-			const containedBy = startLineIndex >= range.start.lineIndex && endLineIndex <= range.end.lineIndex;
+			const rangeStartLineIndex = range.startLineNumber - 1;
+			const rangeEndLineIndex = range.endLineNumber - 1;
+			const disjoint = endLineIndex < rangeStartLineIndex || startLineIndex > rangeEndLineIndex;
+			const contains = startLineIndex <= rangeStartLineIndex && endLineIndex >= rangeEndLineIndex;
+			const containedBy = startLineIndex >= rangeStartLineIndex && endLineIndex <= rangeEndLineIndex;
 			return disjoint || contains || containedBy;
 		});
 	}
@@ -235,15 +238,15 @@ export class EditorFoldingModel extends Disposable {
 		return 1 + this.records.filter(candidate => {
 			if (candidate === record) return false;
 			const candidateRange = candidate.range.range;
-			return candidateRange.start.lineIndex <= range.start.lineIndex && candidateRange.end.lineIndex >= range.end.lineIndex;
+			return candidateRange.getStartPosition().lineNumber <= range.getStartPosition().lineNumber && candidateRange.getEndPosition().lineNumber >= range.getEndPosition().lineNumber;
 		}).length;
 	}
 
 	private toRegion(record: EditorFoldingRegionRecord): EditorFoldingRegion {
 		const range = record.range.range;
 		return Object.freeze({
-			startLineIndex: range.start.lineIndex,
-			endLineIndex: range.end.lineIndex,
+			startLineIndex: range.startLineNumber - 1,
+			endLineIndex: range.endLineNumber - 1,
 			collapsed: record.collapsed,
 			source: record.source,
 		});
@@ -255,7 +258,7 @@ export class EditorFoldingModel extends Disposable {
 			.sort((left, right) => {
 				const leftRange = left.range.range;
 				const rightRange = right.range.range;
-				return leftRange.end.lineIndex - leftRange.start.lineIndex - (rightRange.end.lineIndex - rightRange.start.lineIndex);
+				return leftRange.getEndPosition().lineNumber - leftRange.getStartPosition().lineNumber - (rightRange.getEndPosition().lineNumber - rightRange.getStartPosition().lineNumber);
 			})[0];
 	}
 }
@@ -264,7 +267,7 @@ function normalizeRecords(records: readonly EditorFoldingRegionRecord[]): readon
 	const sorted = [...records].sort((left, right) => {
 		const leftRange = left.range.range;
 		const rightRange = right.range.range;
-		return leftRange.start.lineIndex - rightRange.start.lineIndex || rightRange.end.lineIndex - leftRange.end.lineIndex;
+		return leftRange.getStartPosition().lineNumber - rightRange.getStartPosition().lineNumber || rightRange.getEndPosition().lineNumber - leftRange.getEndPosition().lineNumber;
 	});
 	const normalized: EditorFoldingRegionRecord[] = [];
 	for (const record of sorted) {
@@ -272,11 +275,11 @@ function normalizeRecords(records: readonly EditorFoldingRegionRecord[]): readon
 		if (previous) {
 			const previousRange = previous.range.range;
 			const range = record.range.range;
-			if (range.start.lineIndex <= previousRange.end.lineIndex && range.end.lineIndex > previousRange.end.lineIndex) {
+			if (range.getStartPosition().lineNumber <= previousRange.getEndPosition().lineNumber && range.getEndPosition().lineNumber > previousRange.getEndPosition().lineNumber) {
 				record.range.dispose();
 				continue;
 			}
-			if (range.start.lineIndex === previousRange.start.lineIndex && range.end.lineIndex === previousRange.end.lineIndex) {
+			if (range.getStartPosition().lineNumber === previousRange.getStartPosition().lineNumber && range.getEndPosition().lineNumber === previousRange.getEndPosition().lineNumber) {
 				record.range.dispose();
 				continue;
 			}
@@ -293,4 +296,3 @@ function recordsEqual(left: readonly EditorFoldingRegionRecord[], right: readonl
 function disposeRecords(records: readonly EditorFoldingRegionRecord[]): void {
 	for (const record of records) record.range.dispose();
 }
-

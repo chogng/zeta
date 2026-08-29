@@ -4,7 +4,8 @@ import { Sash, SashState, type SashDragEvent } from '../../../../base/browser/ui
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { type CodeEditorWidget } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { type EditorViewZone, type EditorViewZoneHandle } from '../../../browser/view.js';
-import { TextRange, type TextPosition } from '../../../common/core/text.js';
+import { type Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';
 
 export type ZoneWidgetEditor = Pick<CodeEditorWidget, 'viewport' | 'revealRange'>;
@@ -75,8 +76,8 @@ export abstract class ZoneWidget extends Disposable {
 		this._register(editor.viewport.onDidChangeLayout(() => this.layoutZone()));
 	}
 
-	public get position(): TextPosition | undefined {
-		return this.anchor.value?.range.start;
+	public get position(): Position | undefined {
+		return this.anchor.value?.range.getStartPosition();
 	}
 
 	protected get isShowing(): boolean {
@@ -113,13 +114,13 @@ export abstract class ZoneWidget extends Disposable {
 		this.applyStyles();
 	}
 
-	public show(rangeOrPosition: TextRange | TextPosition, heightInLines: number): void {
+	public show(rangeOrPosition: Range | Position, heightInLines: number): void {
 		this.assertNotDisposed();
 		this.assertCreated();
 		const range = normalizeRange(rangeOrPosition);
 		validateHeightInLines(heightInLines);
-		this.editor.viewport.textModel.offsetAt(range.start);
-		this.editor.viewport.textModel.offsetAt(range.end);
+		this.editor.viewport.textModel.offsetAt(range.getStartPosition());
+		this.editor.viewport.textModel.offsetAt(range.getEndPosition());
 		this.hide();
 		this.heightInLines = this.limitHeightInLines(heightInLines);
 		this.anchor.value = this.editor.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
@@ -140,17 +141,17 @@ export abstract class ZoneWidget extends Disposable {
 			throw error;
 		}
 		this.layoutZone();
-		if (this.options.keepEditorSelection) this.editor.viewport.revealPosition(range.start);
+		if (this.options.keepEditorSelection) this.editor.viewport.revealPosition(range.getStartPosition());
 		else this.editor.revealRange(range);
 	}
 
-	public updatePositionAndHeight(rangeOrPosition: TextRange | TextPosition, heightInLines = this.heightInLines): void {
+	public updatePositionAndHeight(rangeOrPosition: Range | Position, heightInLines = this.heightInLines): void {
 		this.assertNotDisposed();
 		if (!this.viewZone) return;
 		const range = normalizeRange(rangeOrPosition);
 		validateHeightInLines(heightInLines);
-		this.editor.viewport.textModel.offsetAt(range.start);
-		this.editor.viewport.textModel.offsetAt(range.end);
+		this.editor.viewport.textModel.offsetAt(range.getStartPosition());
+		this.editor.viewport.textModel.offsetAt(range.getEndPosition());
 		this.anchor.value = this.editor.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
 		this.heightInLines = this.limitHeightInLines(heightInLines);
 		this.layoutZone();
@@ -199,7 +200,7 @@ export abstract class ZoneWidget extends Disposable {
 	protected abstract layoutContent(heightInPixels: number, widthInPixels: number): void;
 
 	private get anchorVisualLineIndex(): number {
-		const position = this.anchor.value?.range.start;
+		const position = this.anchor.value?.range.getStartPosition();
 		if (!position) throw new Error('Zone widget has no anchor');
 		return this.editor.viewport.getVisualLineProjection().visualLineIndexAt(position);
 	}
@@ -243,7 +244,7 @@ export abstract class ZoneWidget extends Disposable {
 		this.domNode.style.width = `${widthInPixels}px`;
 		this.arrowDomNode?.style.setProperty('--stanza-zone-widget-arrow-size', `${arrowHeight}px`);
 		if (this.arrowDomNode) {
-			const coordinates = this.editor.viewport.getPositionContentCoordinates(this.anchor.value!.range.start);
+			const coordinates = this.editor.viewport.getPositionContentCoordinates(this.anchor.value!.range.getStartPosition());
 			const relativeLeft = Math.min(Math.max(arrowHeight, coordinates.left - layout.scrollPosition.left), Math.max(arrowHeight, widthInPixels - arrowHeight));
 			this.arrowDomNode.style.left = `${relativeLeft}px`;
 		}
@@ -323,8 +324,8 @@ function readOptions(options: ZoneWidgetOptions): ResolvedZoneWidgetOptions {
 	});
 }
 
-function normalizeRange(rangeOrPosition: TextRange | TextPosition): TextRange {
-	return TextRange.isIRange(rangeOrPosition) ? TextRange.from(rangeOrPosition.start, rangeOrPosition.end) : TextRange.emptyAt(rangeOrPosition);
+function normalizeRange(rangeOrPosition: Range | Position): Range {
+	return Range.isIRange(rangeOrPosition) ? Range.fromPositions(rangeOrPosition.getStartPosition(), rangeOrPosition.getEndPosition()) : Range.fromPositions(rangeOrPosition);
 }
 
 function validateHeightInLines(heightInLines: number): void {
