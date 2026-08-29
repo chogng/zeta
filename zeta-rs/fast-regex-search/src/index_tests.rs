@@ -1,4 +1,5 @@
 use super::*;
+use crate::workspace_files::take_source_read_count;
 use std::fs;
 use tempfile::TempDir;
 
@@ -27,6 +28,29 @@ fn query(pattern: &str) -> FastRegexQuery {
         exclude_patterns: Vec::new(),
         max_results: 20,
     }
+}
+
+fn base_file(storage: &TempDir, generation: u64, name: &str) -> PathBuf {
+    storage
+        .path()
+        .join("bases")
+        .join(format!("{generation:020}"))
+        .join(name)
+}
+
+fn layer_file(storage: &TempDir, generation: u64, name: &str) -> PathBuf {
+    storage
+        .path()
+        .join("layers")
+        .join(format!("{generation:020}"))
+        .join(name)
+}
+
+fn manifest_file(storage: &TempDir, generation: u64) -> PathBuf {
+    storage
+        .path()
+        .join("manifests")
+        .join(format!("{generation:020}.manifest"))
 }
 
 #[test]
@@ -138,32 +162,197 @@ fn persistent_storage_writes_compact_index_files() {
 
     assert_eq!(reopened.snapshot(), built);
     assert_eq!(reopened.search(&insensitive).unwrap().matches.len(), 2);
-    assert!(storage.path().join("complete.bin").is_file());
-    assert!(storage.path().join("documents.bin").is_file());
-    assert!(storage.path().join("postings.bin").is_file());
-    assert!(storage.path().join("lookup.bin").is_file());
-    assert!(storage.path().join("weights.bin").is_file());
+    assert!(manifest_file(&storage, built.generation).is_file());
+    assert!(base_file(&storage, built.generation, "format.bin").is_file());
+    assert!(base_file(&storage, built.generation, "documents.bin").is_file());
+    assert!(base_file(&storage, built.generation, "postings.bin").is_file());
+    assert!(base_file(&storage, built.generation, "lookup.bin").is_file());
+    assert!(layer_file(&storage, built.generation, "delta.bin").is_file());
+    assert!(!storage.path().join("weights.bin").exists());
 }
 
 #[test]
-fn changed_workspace_invalidates_a_persisted_generation_before_search() {
+fn replacing_the_lookup_generation_keeps_an_existing_reader_valid() {
+    let directory = workspace();
+    fs::write(
+        directory.path().join("first.rs"),
+        "first_generation_marker\n",
+    )
+    .expect("first source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let initial = search(&directory, storage_mode.clone());
+    let first_generation = initial.rebuild().expect("first generation");
+    drop(initial);
+    let existing_reader = search(&directory, storage_mode.clone());
+    fs::write(
+        directory.path().join("second.rs"),
+        "second_generation_marker\n",
+    )
+    .expect("second source");
+    let publisher = search(&directory, storage_mode.clone());
+
+    let second_generation = publisher.rebuild().expect("replacement generation");
+
+    assert!(second_generation.generation > first_generation.generation);
+    assert_eq!(existing_reader.snapshot(), first_generation);
+    assert_eq!(
+        existing_reader
+            .search(&query("first_generation_marker"))
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert!(
+        existing_reader
+            .search(&query("second_generation_marker"))
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+    drop(publisher);
+    let replacement_reader = search(&directory, storage_mode);
+    assert_eq!(replacement_reader.snapshot(), second_generation);
+    assert_eq!(
+        replacement_reader
+            .search(&query("second_generation_marker"))
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn unchanged_reopen_reads_metadata_but_not_source_contents() {
+    let directory = workspace();
+    fs::write(
+        directory.path().join("source.rs"),
+        "reopen_without_source_scan_marker\n",
+    )
+    .expect("source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    let built = index.rebuild().expect("rebuild");
+    drop(index);
+    take_source_read_count();
+
+    let reopened = search(&directory, storage_mode);
+
+    assert_eq!(reopened.snapshot(), built);
+    assert_eq!(take_source_read_count(), 0);
+}
+
+#[test]
+fn posting_payload_corruption_is_detected_when_the_selected_span_is_read() {
+    let directory = workspace();
+    fs::write(
+        directory.path().join("source.rs"),
+        "lazy_posting_corruption_marker\n",
+    )
+    .expect("source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    let built = index.rebuild().expect("rebuild");
+    drop(index);
+    let postings_path = base_file(&storage, built.generation, "postings.bin");
+    let mut postings = fs::read(&postings_path).expect("postings");
+    postings[crate::storage::header_length()..].fill(0);
+    fs::write(&postings_path, postings).expect("corrupt posting payload");
+    let reopened = search(&directory, storage_mode);
+
+    let result = reopened.search(&query("lazy_posting_corruption_marker"));
+
+    assert!(
+        matches!(result, Err(FastRegexError::CorruptIndex(path)) if path == storage.path().join("postings.bin"))
+    );
+}
+
+#[test]
+fn reopen_reconciles_added_deleted_and_newly_ignored_paths() {
+    let directory = workspace();
+    let deleted = directory.path().join("deleted.rs");
+    let ignored = directory.path().join("ignored.rs");
+    fs::write(&deleted, "deleted_while_closed_marker\n").expect("deleted source");
+    fs::write(&ignored, "ignored_while_closed_marker\n").expect("ignored source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    index.rebuild().expect("rebuild");
+    drop(index);
+    fs::remove_file(deleted).expect("delete while closed");
+    fs::write(
+        directory.path().join("added.rs"),
+        "added_while_closed_marker\n",
+    )
+    .expect("added source");
+    fs::write(directory.path().join(".gitignore"), "ignored.rs\n").expect("ignore update");
+
+    let reopened = search(&directory, storage_mode);
+
+    assert_eq!(
+        reopened
+            .search(&query("added_while_closed_marker"))
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert!(
+        reopened
+            .search(&query("deleted_while_closed_marker"))
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+    assert!(
+        reopened
+            .search(&query("ignored_while_closed_marker"))
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+}
+
+#[test]
+fn reopening_reconciles_changed_files_into_the_delta_without_rebuilding_the_base() {
     let directory = workspace();
     let source = directory.path().join("source.rs");
     fs::write(&source, "before_persisted_marker\n").expect("source");
     let storage = tempfile::tempdir().expect("storage");
     let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
     let index = search(&directory, storage_mode.clone());
-    index.rebuild().expect("rebuild");
+    let built = index.rebuild().expect("rebuild");
+    let lookup_path = base_file(&storage, built.generation, "lookup.bin");
+    let lookup_before = fs::read(&lookup_path).expect("base lookup");
     drop(index);
     fs::write(&source, "after_persisted_marker\n").expect("changed source");
 
     let reopened = search(&directory, storage_mode);
 
-    assert_eq!(reopened.snapshot().generation, 0);
-    assert!(matches!(
-        reopened.search(&query("after_persisted_marker")),
-        Err(FastRegexError::NotReady)
-    ));
+    assert!(reopened.snapshot().generation > built.generation);
+    assert_eq!(
+        reopened
+            .search(&query("after_persisted_marker"))
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert!(
+        reopened
+            .search(&query("before_persisted_marker"))
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+    assert_eq!(
+        fs::read(lookup_path).expect("unchanged base lookup"),
+        lookup_before
+    );
 }
 
 #[test]
@@ -178,10 +367,9 @@ fn persisted_change_layer_restores_updates_and_deletions_without_rewriting_the_b
     let storage = tempfile::tempdir().expect("storage");
     let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
     let index = search(&directory, storage_mode.clone());
-    index.rebuild().expect("rebuild");
-    let base_lookup_size = fs::metadata(storage.path().join("lookup.bin"))
-        .expect("lookup metadata")
-        .len();
+    let built = index.rebuild().expect("rebuild");
+    let lookup_path = base_file(&storage, built.generation, "lookup.bin");
+    let base_lookup_size = fs::metadata(&lookup_path).expect("lookup metadata").len();
     fs::write(&changed, "after_layer_marker\n").expect("changed source update");
     fs::remove_file(&deleted).expect("delete source");
 
@@ -193,13 +381,13 @@ fn persisted_change_layer_restores_updates_and_deletions_without_rewriting_the_b
         other => panic!("expected published update, got {other:?}"),
     };
     assert_eq!(
-        fs::metadata(storage.path().join("lookup.bin"))
+        fs::metadata(&lookup_path)
             .expect("lookup metadata after update")
             .len(),
         base_lookup_size
     );
     assert!(
-        fs::metadata(storage.path().join("delta.bin"))
+        fs::metadata(layer_file(&storage, published.generation, "delta.bin"))
             .expect("delta metadata")
             .len()
             < base_lookup_size
@@ -266,15 +454,60 @@ fn persisted_change_layer_restores_updates_and_deletions_without_rewriting_the_b
 }
 
 #[test]
+fn a_large_change_layer_is_compacted_into_a_new_base_generation() {
+    let directory = workspace();
+    let paths = (0..DELTA_COMPACTION_MIN_PATHS)
+        .map(|index| {
+            let path = directory.path().join(format!("source-{index}.rs"));
+            fs::write(&path, format!("before_compaction_{index}\n")).expect("source");
+            path
+        })
+        .collect::<Vec<_>>();
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    let first = index.rebuild().expect("first generation");
+    for (file_index, path) in paths.iter().enumerate() {
+        fs::write(path, format!("after_compaction_{file_index}\n")).expect("changed source");
+    }
+
+    let outcome = index
+        .refresh_observed_paths(&paths)
+        .expect("compact change layer");
+    let compacted = match outcome {
+        FastRegexUpdateOutcome::Rebuilt(snapshot) => snapshot,
+        other => panic!("expected rebuilt generation, got {other:?}"),
+    };
+    assert!(compacted.generation > first.generation);
+    drop(index);
+
+    let reopened = search(&directory, storage_mode);
+
+    assert_eq!(reopened.snapshot(), compacted);
+    assert_eq!(
+        reopened
+            .search(&query("after_compaction_127"))
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn corrupt_completed_generation_is_rejected_instead_of_serving_partial_postings() {
     let directory = workspace();
     fs::write(directory.path().join("source.rs"), "corrupt_marker\n").expect("source");
     let storage = tempfile::tempdir().expect("storage");
     let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
     let index = search(&directory, storage_mode.clone());
-    index.rebuild().expect("rebuild");
+    let built = index.rebuild().expect("rebuild");
     drop(index);
-    fs::write(storage.path().join("lookup.bin"), b"truncated").expect("corrupt lookup");
+    fs::write(
+        base_file(&storage, built.generation, "lookup.bin"),
+        b"truncated",
+    )
+    .expect("corrupt lookup");
 
     let result = FastRegexSearch::open(
         WorkspaceRoot::open(directory.path()).expect("root"),
@@ -283,6 +516,128 @@ fn corrupt_completed_generation_is_rejected_instead_of_serving_partial_postings(
     );
 
     assert!(matches!(result, Err(FastRegexError::CorruptIndex(_))));
+}
+
+#[test]
+fn persisted_paths_that_escape_the_workspace_are_rejected() {
+    let directory = workspace();
+    fs::write(directory.path().join("inside.rs"), "safe_path_marker\n").expect("source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    let built = index.rebuild().expect("rebuild");
+    drop(index);
+    let documents_path = base_file(&storage, built.generation, "documents.bin");
+    let mut documents = fs::read(&documents_path).expect("documents");
+    let path_offset = crate::storage::header_length() + 8 + 8 + 4;
+    documents[path_offset..path_offset + 9].copy_from_slice(b"../bad.rs");
+    fs::write(documents_path, documents).expect("corrupt stored path");
+
+    let result = FastRegexSearch::open(
+        WorkspaceRoot::open(directory.path()).expect("root"),
+        storage_mode,
+        FastRegexSearchLimits::default(),
+    );
+
+    assert!(matches!(result, Err(FastRegexError::CorruptIndex(_))));
+}
+
+#[test]
+fn delta_generation_must_match_the_published_manifest() {
+    let directory = workspace();
+    let source = directory.path().join("source.rs");
+    fs::write(&source, "first_delta_generation_marker\n").expect("source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    index.rebuild().expect("rebuild");
+    fs::write(&source, "second_delta_generation_marker\n").expect("changed source");
+    let published = index
+        .refresh_observed_paths(&[source])
+        .expect("publish delta");
+    let FastRegexUpdateOutcome::Published(snapshot) = published else {
+        panic!("expected a delta publication");
+    };
+    drop(index);
+    let delta_path = layer_file(&storage, snapshot.generation, "delta.bin");
+    let mut delta = fs::read(&delta_path).expect("delta");
+    let generation_offset = crate::storage::STORE_VERSION.len() + 32 + 8;
+    delta[generation_offset..generation_offset + 8]
+        .copy_from_slice(&(snapshot.generation + 1).to_le_bytes());
+    fs::write(delta_path, delta).expect("corrupt delta generation");
+
+    let result = FastRegexSearch::open(
+        WorkspaceRoot::open(directory.path()).expect("root"),
+        storage_mode,
+        FastRegexSearchLimits::default(),
+    );
+
+    assert!(matches!(result, Err(FastRegexError::CorruptIndex(_))));
+}
+
+#[test]
+fn failed_base_publish_preserves_the_previous_generation() {
+    let directory = workspace();
+    let source = directory.path().join("source.rs");
+    fs::write(&source, "first_publish_marker\n").expect("source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    let first = index.rebuild().expect("first rebuild");
+    let layers = storage.path().join("layers");
+    let saved_layers = storage.path().join("layers.saved");
+    fs::rename(&layers, &saved_layers).expect("move layers directory");
+    fs::write(&layers, b"block layer publication").expect("block layer publication");
+    fs::write(&source, "second_publish_marker\n").expect("changed source");
+
+    let result = index.rebuild();
+
+    assert!(matches!(result, Err(FastRegexError::Io { .. })));
+    assert!(manifest_file(&storage, first.generation).is_file());
+    assert!(!manifest_file(&storage, first.generation + 1).exists());
+    fs::remove_file(&layers).expect("remove blocker");
+    fs::rename(saved_layers, layers).expect("restore layers directory");
+    let reopened = search(&directory, storage_mode);
+    assert!(reopened.snapshot().generation > first.generation);
+    assert_eq!(
+        reopened
+            .search(&query("second_publish_marker"))
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn frequency_table_digest_mismatch_makes_a_generation_ineligible() {
+    let directory = workspace();
+    fs::write(
+        directory.path().join("source.rs"),
+        "frequency_digest_marker\n",
+    )
+    .expect("source");
+    let storage = tempfile::tempdir().expect("storage");
+    let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
+    let index = search(&directory, storage_mode.clone());
+    let built = index.rebuild().expect("rebuild");
+    drop(index);
+    let format_path = base_file(&storage, built.generation, "format.bin");
+    let mut format = fs::read(&format_path).expect("format marker");
+    format[crate::storage::STORE_VERSION.len()] ^= 0xff;
+    fs::write(format_path, format).expect("change frequency table digest");
+
+    let reopened = search(&directory, storage_mode);
+
+    assert!(reopened.snapshot().generation > built.generation);
+    assert_eq!(
+        reopened
+            .search(&query("frequency_digest_marker"))
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
 }
 
 #[test]

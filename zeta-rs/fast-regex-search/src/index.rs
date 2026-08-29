@@ -10,14 +10,19 @@ use crate::FastRegexSearchSnapshot;
 use crate::FastRegexSearchStatistics;
 use crate::FastRegexSearchStorage;
 use crate::FastRegexUpdateOutcome;
-use crate::ngram::PairWeights;
+use crate::disk_index::DiskBaseIndex;
+use crate::file_stamp::FileStamp;
 use crate::ngram::covering_ngrams;
 use crate::ngram::sparse_ngrams;
 use crate::storage;
+use crate::workspace_files::read_text_file;
+use crate::workspace_files::read_text_file_with_stamp;
+use crate::workspace_files::scan_workspace;
+use crate::workspace_files::scan_workspace_stamps;
+use crate::workspace_files::workspace_walk_builder;
 use globset::GlobBuilder;
 use globset::GlobSet;
 use globset::GlobSetBuilder;
-use ignore::WalkBuilder;
 use regex::Regex;
 use regex::RegexBuilder;
 use regex_syntax::hir::literal::ExtractKind;
@@ -33,6 +38,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use zeta_workspace::WorkspaceRoot;
+
+const DELTA_COMPACTION_MIN_PATHS: usize = 128;
+const DELTA_COMPACTION_MAX_PATHS: usize = 4_096;
 
 pub struct FastRegexSearch {
     root: WorkspaceRoot,
@@ -54,15 +62,15 @@ pub(crate) struct IndexState {
     pub(crate) folded_postings: HashMap<u64, BTreeSet<u32>>,
     pub(crate) overlays: BTreeMap<PathBuf, String>,
     pub(crate) dirty_paths: BTreeSet<PathBuf>,
-    pub(crate) disk_base: Option<storage::DiskBaseIndex>,
-    pub(crate) pair_weights: PairWeights,
-    pub(crate) folded_pair_weights: PairWeights,
+    pub(crate) disk_base: Option<DiskBaseIndex>,
+    pub(crate) requires_rebuild: bool,
 }
 
 pub(crate) struct IndexedDocument {
     pub(crate) id: u32,
     pub(crate) revision: String,
     pub(crate) source_bytes: usize,
+    pub(crate) stamp: FileStamp,
     pub(crate) grams: Vec<u64>,
     pub(crate) folded_grams: Vec<u64>,
 }
@@ -89,17 +97,21 @@ impl FastRegexSearch {
             .into_iter()
             .next()
             .expect("workspace walk has exactly one root");
-        let state = match storage::load(&storage)? {
-            Some(state) if persisted_state_is_current(&root, &limits, &state)? => state,
-            Some(_) | None => IndexState::default(),
-        };
-        Ok(Self {
+        let state = storage::load(&storage)?.unwrap_or_default();
+        let requires_rebuild = state.requires_rebuild;
+        let search = Self {
             root,
             storage,
             limits,
             ignore_matcher: Mutex::new(ignore_matcher),
             state: RwLock::new(state),
-        })
+        };
+        if requires_rebuild {
+            search.rebuild()?;
+        } else if search.snapshot().generation != 0 {
+            search.reconcile_workspace()?;
+        }
+        Ok(search)
     }
 
     pub fn root(&self) -> &WorkspaceRoot {
@@ -112,32 +124,14 @@ impl FastRegexSearch {
 
     pub fn rebuild(&self) -> Result<FastRegexSearchSnapshot, FastRegexError> {
         let prepared = scan_workspace(&self.root, &self.limits)?;
-        let pair_weights =
-            PairWeights::trained(prepared.iter().map(|(_, content)| content.as_bytes()));
-        let folded_documents = prepared
-            .iter()
-            .map(|(_, content)| {
-                content
-                    .as_bytes()
-                    .iter()
-                    .map(u8::to_ascii_lowercase)
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        let folded_pair_weights = PairWeights::trained(folded_documents.iter().map(Vec::as_slice));
-        let mut next = IndexState {
-            pair_weights,
-            folded_pair_weights,
-            ..IndexState::default()
-        };
-        for (path, content) in prepared {
-            insert_document(&mut next, path, content);
+        let mut next = IndexState::default();
+        for (path, content, stamp) in prepared {
+            insert_document(&mut next, path, content, stamp);
         }
         let mut state = self
             .state
             .write()
             .unwrap_or_else(|error| error.into_inner());
-        state.disk_base = None;
         next.generation = state.generation.saturating_add(1);
         next.base_generation = next.generation;
         next.overlays = std::mem::take(&mut state.overlays);
@@ -193,7 +187,9 @@ impl FastRegexSearch {
                 if !self.is_indexable_path(&path) {
                     continue;
                 }
-                let Some(content) = read_text_file(&absolute, self.limits.max_file_bytes)? else {
+                let Some((content, stamp)) =
+                    read_text_file_with_stamp(&absolute, self.limits.max_file_bytes)?
+                else {
                     continue;
                 };
                 if state.documents.len() == self.limits.max_files
@@ -203,13 +199,13 @@ impl FastRegexSearch {
                     drop(state);
                     return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
                 }
-                insert_document(&mut state, path.clone(), content);
+                insert_document(&mut state, path.clone(), content, stamp);
                 state.dirty_paths.insert(path);
                 changed = true;
                 continue;
             }
-            match read_text_file(&absolute, self.limits.max_file_bytes)? {
-                Some(content) => {
+            match read_text_file_with_stamp(&absolute, self.limits.max_file_bytes)? {
+                Some((content, stamp)) => {
                     let current_revision = revision(&content);
                     if state
                         .documents
@@ -219,7 +215,7 @@ impl FastRegexSearch {
                         continue;
                     }
                     remove_document(&mut state, &path);
-                    insert_document(&mut state, path.clone(), content);
+                    insert_document(&mut state, path.clone(), content, stamp);
                     state.dirty_paths.insert(path);
                     changed = true;
                 }
@@ -233,6 +229,10 @@ impl FastRegexSearch {
         }
         if !changed {
             return Ok(FastRegexUpdateOutcome::NoChange);
+        }
+        if self.should_compact_delta(&state) {
+            drop(state);
+            return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
         }
         state.generation = state.generation.saturating_add(1);
         storage::persist_delta(&self.storage, &state)?;
@@ -281,7 +281,7 @@ impl FastRegexSearch {
         if state.generation == 0 {
             return Err(FastRegexError::NotReady);
         }
-        let candidates = candidate_paths(&state, query, sensitive);
+        let candidates = candidate_paths(&state, query, sensitive)?;
         let candidate_file_count = candidates.len();
         let mut matches = Vec::new();
         let mut limit_hit = false;
@@ -337,18 +337,84 @@ impl FastRegexSearch {
             .matched(relative, false)
             .is_ignore()
     }
+
+    fn reconcile_workspace(&self) -> Result<(), FastRegexError> {
+        let current = scan_workspace_stamps(&self.root, &self.limits)?;
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        let mut paths = state.documents.keys().cloned().collect::<BTreeSet<_>>();
+        paths.extend(current.keys().cloned());
+        let mut changed = false;
+        for path in paths {
+            let Some(stamp) = current.get(&path).copied() else {
+                if remove_document(&mut state, &path) {
+                    state.dirty_paths.insert(path);
+                    changed = true;
+                }
+                continue;
+            };
+            if state
+                .documents
+                .get(&path)
+                .is_some_and(|document| document.stamp == stamp)
+            {
+                continue;
+            }
+            let absolute = self.root.canonical_path().join(&path);
+            let content = read_text_file_with_stamp(&absolute, self.limits.max_file_bytes)?;
+            if state.documents.contains_key(&path) {
+                remove_document(&mut state, &path);
+                state.dirty_paths.insert(path.clone());
+                changed = true;
+            }
+            let Some((content, stamp)) = content else {
+                continue;
+            };
+            if state.documents.len() == self.limits.max_files
+                || state.source_bytes.saturating_add(content.len())
+                    > self.limits.max_total_source_bytes
+            {
+                drop(state);
+                self.rebuild()?;
+                return Ok(());
+            }
+            insert_document(&mut state, path.clone(), content, stamp);
+            state.dirty_paths.insert(path);
+            changed = true;
+        }
+        if self.should_compact_delta(&state) {
+            drop(state);
+            self.rebuild()?;
+        } else if changed {
+            state.generation = state.generation.saturating_add(1);
+            storage::persist_delta(&self.storage, &state)?;
+        }
+        Ok(())
+    }
+
+    fn should_compact_delta(&self, state: &IndexState) -> bool {
+        if !matches!(&self.storage, FastRegexSearchStorage::Persistent(_)) {
+            return false;
+        }
+        let dirty = state.dirty_paths.len();
+        dirty >= DELTA_COMPACTION_MAX_PATHS
+            || (dirty >= DELTA_COMPACTION_MIN_PATHS
+                && dirty.saturating_mul(5) >= state.documents.len().max(1))
+    }
 }
 
-fn insert_document(state: &mut IndexState, path: PathBuf, content: String) {
+fn insert_document(state: &mut IndexState, path: PathBuf, content: String, stamp: FileStamp) {
     let id = state.next_document_id;
     state.next_document_id = state.next_document_id.saturating_add(1);
-    let grams = sparse_ngrams(content.as_bytes(), &state.pair_weights);
+    let grams = sparse_ngrams(content.as_bytes());
     let folded = content
         .as_bytes()
         .iter()
         .map(u8::to_ascii_lowercase)
         .collect::<Vec<_>>();
-    let folded_grams = sparse_ngrams(&folded, &state.folded_pair_weights);
+    let folded_grams = sparse_ngrams(&folded);
     for gram in &grams {
         state.postings.entry(*gram).or_default().insert(id);
     }
@@ -363,6 +429,7 @@ fn insert_document(state: &mut IndexState, path: PathBuf, content: String) {
             id,
             revision: revision(&content),
             source_bytes: content.len(),
+            stamp,
             grams,
             folded_grams,
         },
@@ -399,13 +466,8 @@ fn candidate_paths(
     state: &IndexState,
     query: &FastRegexQuery,
     sensitive: bool,
-) -> BTreeSet<PathBuf> {
+) -> Result<BTreeSet<PathBuf>, FastRegexError> {
     let clauses = required_literal_clauses(query, sensitive);
-    let pair_weights = if sensitive {
-        &state.pair_weights
-    } else {
-        &state.folded_pair_weights
-    };
     let mut candidates = match clauses.as_ref() {
         None => state.documents.keys().cloned().collect(),
         Some(clauses) if clauses.is_empty() => state.documents.keys().cloned().collect(),
@@ -414,7 +476,7 @@ fn candidate_paths(
             for alternatives in clauses {
                 let mut clause_candidates = BTreeSet::new();
                 for literal in alternatives {
-                    match candidates_for_literal(state, sensitive, pair_weights, literal) {
+                    match candidates_for_literal(state, sensitive, literal)? {
                         Some(literal_candidates) => clause_candidates.extend(literal_candidates),
                         None => {
                             clause_candidates = state.documents.keys().cloned().collect();
@@ -456,23 +518,23 @@ fn candidate_paths(
             candidates.insert(path.clone());
         }
     }
-    candidates
+    Ok(candidates)
 }
 
 fn candidates_for_literal(
     state: &IndexState,
     sensitive: bool,
-    pair_weights: &PairWeights,
     literal: &[u8],
-) -> Option<BTreeSet<PathBuf>> {
-    let grams = covering_ngrams(literal, pair_weights);
+) -> Result<Option<BTreeSet<PathBuf>>, FastRegexError> {
+    let grams = covering_ngrams(literal);
     if grams.is_empty() {
-        return None;
+        return Ok(None);
     }
     let mut intersection = state
         .disk_base
         .as_ref()
         .map(|base| base.intersect_postings(&grams, !sensitive, &state.dirty_paths))
+        .transpose()?
         .unwrap_or_default();
     let postings = if sensitive {
         &state.postings
@@ -502,7 +564,7 @@ fn candidates_for_literal(
                 .filter_map(|id| state.document_paths.get(&id).cloned()),
         );
     }
-    Some(intersection)
+    Ok(Some(intersection))
 }
 
 fn required_literal_clauses(query: &FastRegexQuery, sensitive: bool) -> Option<Vec<Vec<Vec<u8>>>> {
@@ -632,70 +694,6 @@ fn build_glob_set(patterns: &[String]) -> Result<GlobSet, FastRegexError> {
         builder.add(glob);
     }
     builder.build().map_err(|_| FastRegexError::InvalidGlob)
-}
-
-fn scan_workspace(
-    root: &WorkspaceRoot,
-    limits: &FastRegexSearchLimits,
-) -> Result<Vec<(PathBuf, String)>, FastRegexError> {
-    let mut paths = workspace_walk_builder(root.canonical_path())
-        .build()
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
-        .filter_map(|entry| {
-            entry
-                .path()
-                .strip_prefix(root.canonical_path())
-                .ok()
-                .map(Path::to_path_buf)
-        })
-        .collect::<Vec<_>>();
-    paths.sort();
-    paths.truncate(limits.max_files);
-    let mut source_bytes = 0usize;
-    let mut documents = Vec::new();
-    for path in paths {
-        let absolute = root.canonical_path().join(&path);
-        let Some(content) = read_text_file(&absolute, limits.max_file_bytes)? else {
-            continue;
-        };
-        if source_bytes.saturating_add(content.len()) > limits.max_total_source_bytes {
-            break;
-        }
-        source_bytes = source_bytes.saturating_add(content.len());
-        documents.push((path, content));
-    }
-    Ok(documents)
-}
-
-fn read_text_file(path: &Path, max_bytes: usize) -> Result<Option<String>, FastRegexError> {
-    let bytes = fs::read(path).map_err(|source| io_error(path, source))?;
-    if bytes.len() > max_bytes || bytes.iter().take(8 * 1024).any(|byte| *byte == 0) {
-        return Ok(None);
-    }
-    Ok(String::from_utf8(bytes).ok())
-}
-
-fn workspace_walk_builder(root: &Path) -> WalkBuilder {
-    let mut builder = WalkBuilder::new(root);
-    builder.hidden(true).follow_links(false).require_git(true);
-    builder
-}
-
-fn persisted_state_is_current(
-    root: &WorkspaceRoot,
-    limits: &FastRegexSearchLimits,
-    state: &IndexState,
-) -> Result<bool, FastRegexError> {
-    let current = scan_workspace(root, limits)?;
-    if current.len() != state.documents.len() {
-        return Ok(false);
-    }
-    Ok(current.into_iter().all(|(path, content)| {
-        state.documents.get(&path).is_some_and(|document| {
-            document.source_bytes == content.len() && document.revision == revision(&content)
-        })
-    }))
 }
 
 fn validate_query(

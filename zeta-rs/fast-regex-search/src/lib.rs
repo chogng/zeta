@@ -1,9 +1,14 @@
 //! Local sparse n-gram acceleration for exact workspace text and regular-expression search.
 
+mod binary_codec;
+mod disk_index;
+mod file_stamp;
 mod index;
 mod ngram;
+mod path_codec;
 mod storage;
 mod types;
+mod workspace_files;
 
 pub use index::FastRegexSearch;
 pub use types::FastRegexCaseSensitivity;
