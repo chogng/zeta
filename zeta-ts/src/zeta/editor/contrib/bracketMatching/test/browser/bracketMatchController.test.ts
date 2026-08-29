@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewparts/decorations/decorations.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";

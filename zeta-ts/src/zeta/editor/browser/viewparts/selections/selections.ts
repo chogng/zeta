@@ -26,16 +26,7 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 			return;
 		}
 		const rows = this.rows.render(context);
-		projectStanzaCurrentLineHighlight(overlay, this.selectionController, rows);
 		projectStanzaSelectionOverlays(overlay, this.selectionController, rows);
-	}
-}
-
-function projectStanzaCurrentLineHighlight(context: EditorOverlayContext, controller: EditorSelectionController | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
-	const activeLineIndex = controller?.selections.primary.active.lineIndex;
-	for (const [visualLineIndex, row] of rows) {
-		const active = context.activeLineHighlight === 'on' && context.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex === activeLineIndex;
-		row.classList.toggle('active', active);
 	}
 }
 

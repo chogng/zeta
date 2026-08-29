@@ -3,7 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorationPresentation.js';
+import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
 import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';

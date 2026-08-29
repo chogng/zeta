@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { DecorationPresentation } from '../../../../../editor/browser/viewparts/decorations/decorationPresentation.js';
+import { DecorationPresentation } from '../../../../../editor/browser/viewparts/decorations/decorations.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { type IConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
 import { type IDiffApi } from '../../../../../platform/diff/common/diffApi.js';

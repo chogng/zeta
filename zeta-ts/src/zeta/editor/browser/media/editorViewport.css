@@ -52,8 +52,15 @@
 }
 
 .stanza-editor-view-zone {
-  position: absolute;
-  box-sizing: border-box;
+    position: absolute;
+    box-sizing: border-box;
+	pointer-events: auto;
+  }
+
+.stanza-editor-view-zones {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
 }
 
 .stanza-editor-diagnostic-hover {
@@ -130,4 +137,152 @@
   overflow: hidden;
   visibility: hidden;
   pointer-events: none;
+}
+
+.stanza-editor {
+  --zeta-scrollbar-size: var(--stanza-editor-vertical-scrollbar-size);
+  scrollbar-width: none;
+}
+
+.stanza-editor::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.stanza-editor-scrollbar-track {
+  position: absolute;
+  z-index: 8;
+  box-sizing: border-box;
+  opacity: 1;
+  outline: none;
+  touch-action: none;
+  transition: opacity 100ms linear;
+}
+
+.stanza-editor-scrollbar-track-horizontal {
+  bottom: 0;
+  left: 0;
+  height: var(--stanza-editor-horizontal-scrollbar-size);
+  border-radius: calc(var(--stanza-editor-horizontal-scrollbar-size) / 2);
+}
+
+.stanza-editor-scrollbar-track-vertical {
+  top: 0;
+  right: 0;
+  width: var(--stanza-editor-vertical-scrollbar-size);
+  border-radius: calc(var(--stanza-editor-vertical-scrollbar-size) / 2);
+}
+
+.stanza-editor-scrollbar-track[data-visibility="auto"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stanza-editor:hover > .stanza-editor-scrollbar-track[data-visibility="auto"],
+.stanza-editor:focus-within > .stanza-editor-scrollbar-track[data-visibility="auto"],
+.stanza-editor-scrolling > .stanza-editor-scrollbar-track[data-visibility="auto"],
+.stanza-editor-scrollbar-track.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.stanza-editor-scrollbar-track.disabled {
+  pointer-events: none;
+}
+
+.stanza-editor-scrollbar-track > .zeta-scrollbar-thumb {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  background: var(--zeta-scrollbar-slider-background) padding-box;
+  cursor: default;
+  forced-color-adjust: none;
+  will-change: transform;
+}
+
+.stanza-editor-scrollbar-track-horizontal > .zeta-scrollbar-thumb {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: calc(var(--stanza-editor-horizontal-scrollbar-size) / 2);
+}
+
+.stanza-editor-scrollbar-track-vertical > .zeta-scrollbar-thumb {
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  border-radius: calc(var(--stanza-editor-vertical-scrollbar-size) / 2);
+}
+
+.stanza-editor-scrollbar-track:hover > .zeta-scrollbar-thumb {
+  background: var(--zeta-scrollbar-slider-hover-background) padding-box;
+}
+
+.stanza-editor-scrollbar-track.active > .zeta-scrollbar-thumb {
+  background: var(--zeta-scrollbar-slider-active-background) padding-box;
+}
+
+.stanza-editor-scrollbar-track:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+@media (forced-colors: active) {
+  .stanza-editor-scrollbar-track > .zeta-scrollbar-thumb {
+    border-color: ButtonText;
+    background: ButtonFace padding-box;
+  }
+}
+.stanza-editor-overview-ruler {
+  position: absolute;
+  z-index: 6;
+  width: 6px;
+  pointer-events: none;
+}
+
+.stanza-editor-overview-marker {
+  position: absolute;
+  right: 0;
+  left: 0;
+  min-height: 2px;
+}
+
+.stanza-editor-overview-marker.diff-added {
+  right: 3px;
+  background: var(--zeta-diff-editor-inserted-line-marker);
+}
+
+.stanza-editor-overview-marker.diff-modified {
+  right: 3px;
+  background: var(--zeta-focus-border);
+}
+
+.stanza-editor-overview-marker.diff-deleted {
+  right: 3px;
+  background: var(--zeta-diff-editor-removed-line-marker);
+}
+
+.stanza-editor-overview-marker.error-underline {
+  background: var(--zeta-error-foreground);
+}
+
+.stanza-editor-overview-marker.warning-underline {
+  background: var(--zeta-warning-foreground);
+}
+
+.stanza-editor-overview-marker.information-underline {
+  background: var(--zeta-focus-border);
+}
+
+.stanza-editor-overview-marker.hint-underline {
+  background: var(--zeta-description-foreground);
+}
+
+@media (forced-colors: active) {
+  .stanza-editor-overview-marker {
+    background: CanvasText;
+    color: CanvasText;
+  }
 }

@@ -2,7 +2,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { FindController } from "./findController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
 
 registerEditorContribution({
 	id: "editor.contrib.find",

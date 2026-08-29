@@ -50,7 +50,7 @@ test('PeekViewWidget renders inside reserved editor space', () => {
 		accessible: widget.element.hasAttribute('aria-hidden'),
 	}, {
 		position: TextPosition.at(0, 2),
-		parent: viewport.element,
+		parent: requiredElement(viewport.element, '.stanza-editor-view-zones'),
 		top: '20px',
 		height: '40px',
 		contentHeight: 100,

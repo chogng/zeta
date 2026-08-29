@@ -11,7 +11,7 @@ import { type EditorViewport } from "../../../view.js";
 import { RichScreenReaderContent } from "./screenReaderContentRich.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 import { createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, screenReaderLineOffsetAtModelOffset, type NativeScreenReaderContent } from "./screenReaderUtils.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewparts/viewLines/semanticTokenPresentation.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewparts/viewLines/viewLine.js";
 
 export interface NativeScreenReaderSupportOptions {
 	readonly element: HTMLElement;

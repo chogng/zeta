@@ -1,4 +1,4 @@
-import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
+import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorations.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { type URI } from "../../../../base/common/uri.js";

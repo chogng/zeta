@@ -139,6 +139,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/viewLines/viewLines.ts",
 		"browser/viewparts/viewLines/viewLine.ts",
 		"browser/viewparts/viewLinesGpu/viewLinesGpu.ts",
+		"browser/viewparts/currentLineHighlight/currentLineHighlight.ts",
 		"contrib/folding/browser/foldingDecorations.ts",
 		"contrib/folding/browser/folding.css",
 		"contrib/smartSelect/common/selectionRanges.ts",
@@ -153,6 +154,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/editorScrollbar/editorScrollbar.ts",
 		"browser/viewparts/lineNumbers/lineNumbers.ts",
 		"browser/viewparts/overviewRuler/decorationsOverviewRuler.ts",
+		"browser/viewparts/overviewRuler/overviewRuler.ts",
 		"browser/viewparts/scrollDecoration/scrollDecoration.ts",
 		"browser/viewparts/minimap/minimap.ts",
 		"browser/viewparts/minimap/minimapCharRenderer.ts",
@@ -163,6 +165,8 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/indentGuides/indentGuides.ts",
 		"browser/viewparts/selections/selections.ts",
 		"browser/viewparts/viewCursors/viewCursors.ts",
+		"browser/viewparts/viewCursors/viewCursor.ts",
+		"browser/viewparts/viewZones/viewZones.ts",
 		"browser/config/fontMeasurements.ts",
 		"browser/config/charWidthReader.ts",
 		"browser/config/editorConfiguration.ts",
@@ -177,8 +181,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/viewModel/visualSelectionGeometry.ts",
 		"common/viewModel/visualCursorNavigation.ts",
 		"common/viewModel/pointerHitTest.ts",
-		"browser/viewparts/decorations/decorationPresentation.ts",
-		"browser/viewparts/viewLines/semanticTokenPresentation.ts",
 		"browser/viewparts/viewLines/domReadingContext.ts",
 		"browser/viewparts/viewLines/rangeUtil.ts",
 		"browser/viewparts/viewLines/viewLineOptions.ts",
@@ -320,6 +322,12 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/semanticTokens/semanticTokenPresentation.ts",
 		"browser/viewparts/viewCursors/viewCursorsPart.ts",
 		"browser/viewparts/viewCursors/cursorProjection.ts",
+		"browser/viewparts/decorations/decorationPresentation.ts",
+		"browser/viewparts/decorations/decorationLineIndex.ts",
+		"browser/viewparts/minimap/minimapLayout.ts",
+		"browser/viewparts/overviewRuler/diagnosticOverviewMarkers.ts",
+		"browser/viewparts/overviewRuler/diffOverviewMarkers.ts",
+		"browser/viewparts/viewLines/semanticTokenPresentation.ts",
 		"text-engine-architecture.md",
 		"text-engine-implementation-ledger.md",
 		"document-engine-architecture.md",
@@ -357,7 +365,7 @@ test("ViewLine owns text rows while overlays own their row DOM", () => {
 		assert.doesNotMatch(viewLine, new RegExp(`stanza-editor-${foreignRow}`, "u"), foreignRow);
 	}
 	assert.match(viewLine, /stanza-editor-line-text/u);
-	for (const part of ["decorations/decorations", "indentGuides/indentGuides", "linesDecorations/linesDecorations", "marginDecorations/marginDecorations", "selections/selections", "viewCursors/viewCursors", "lineNumbers/lineNumbers"]) {
+	for (const part of ["currentLineHighlight/currentLineHighlight", "decorations/decorations", "indentGuides/indentGuides", "linesDecorations/linesDecorations", "marginDecorations/marginDecorations", "selections/selections", "viewCursors/viewCursors", "lineNumbers/lineNumbers"]) {
 		const source = readFileSync(join(editorRoot, `browser/viewparts/${part}.ts`), "utf8");
 		assert.match(source, /new ViewPartRows/u, part);
 	}

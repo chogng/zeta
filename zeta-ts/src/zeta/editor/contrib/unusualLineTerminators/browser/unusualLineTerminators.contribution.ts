@@ -2,7 +2,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { UnusualLineTerminatorsController } from "./unusualLineTerminatorsController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
 
 registerEditorContribution({ id: "editor.contrib.unusualLineTerminators", configure: context => {
 	const decorations = context.register(new TextDecorationCollection<void>(context.model));

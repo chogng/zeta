@@ -4,7 +4,7 @@ import { type TextPosition } from '../../../common/core/text.js';
 import { type TextDecorationId, TextDecorationCollection, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource } from '../../../browser/viewparts/decorations/decorationPresentation.js';
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { ColorService, type ColorData, type DefaultColorDecoratorsEnablement } from '../common/color.js';
 
 export interface ColorDetectorOptions {

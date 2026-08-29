@@ -1,5 +1,4 @@
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import "./editorScrollbar.css";
 import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";

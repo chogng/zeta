@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
-import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorationPresentation.js";
+import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorations.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -904,7 +904,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 			.classList.contains("active"),
 		true,
 	);
-	assert.equal(requiredPartRow(viewport.element, "stanza-editor-line-selections", 1).classList.contains("active"), true);
+	assert.equal(requiredPartRow(viewport.element, "stanza-editor-current-line-highlight", 1).classList.contains("active"), true);
 
 	model.applyEdits([{
 		range: TextRange.emptyAt(TextPosition.at(0, 0)),

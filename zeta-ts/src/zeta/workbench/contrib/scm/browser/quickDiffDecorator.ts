@@ -1,7 +1,7 @@
 import { type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from '../../../../editor/browser/viewparts/decorations/decorationPresentation.js';
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from '../../../../editor/browser/viewparts/decorations/decorations.js';
 import { TextPosition, TextRange } from '../../../../editor/common/core/text.js';
 import { LineDiffKind, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { TextDecorationCollection } from '../../../../editor/common/model/decorationCollection.js';

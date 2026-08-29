@@ -10,7 +10,7 @@ import {
 	type DecorationPresentationResolution,
 	type DecorationSource,
 	type OwnedDecorationSource,
-} from "../../../browser/viewparts/decorations/decorationPresentation.js";
+} from "../../../browser/viewparts/decorations/decorations.js";
 import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/documentSymbols.js";
 
 const SYMBOL_ICON_DECORATION_OWNER = "symbol-icons";

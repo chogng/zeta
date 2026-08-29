@@ -4,7 +4,7 @@ import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
-import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorationPresentation.js';
+import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { TextRange, type TextPosition } from '../../../common/core/text.js';

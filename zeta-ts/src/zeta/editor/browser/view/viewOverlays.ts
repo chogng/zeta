@@ -3,9 +3,10 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
 import { type TextRange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';
-import { type DecorationSource } from '../viewparts/decorations/decorationPresentation.js';
+import { type DecorationSource } from '../viewparts/decorations/decorations.js';
 import { BlockDecorations } from '../viewparts/blockDecorations/blockDecorations.js';
 import { DecorationsOverlay } from '../viewparts/decorations/decorations.js';
+import { CurrentLineHighlightOverlay } from '../viewparts/currentLineHighlight/currentLineHighlight.js';
 import { IndentGuidesOverlay } from '../viewparts/indentGuides/indentGuides.js';
 import { LinesDecorationsOverlay } from '../viewparts/linesDecorations/linesDecorations.js';
 import { MarginViewLineDecorationsOverlay } from '../viewparts/marginDecorations/marginDecorations.js';
@@ -32,6 +33,7 @@ export class ViewOverlays extends Disposable {
 
 	private readonly parts: DynamicViewOverlay[] = [];
 	private readonly selections: SelectionsOverlay;
+	private readonly currentLineHighlight: CurrentLineHighlightOverlay;
 	private readonly viewCursors: ViewCursors;
 
 	constructor(context: EditorViewContext, options: ViewOverlaysOptions) {
@@ -55,11 +57,13 @@ export class ViewOverlays extends Disposable {
 			showIndentationGuides: options.showIndentationGuides,
 			tabSize: options.indentationTabSize,
 		}));
+		this.currentLineHighlight = this.register(new CurrentLineHighlightOverlay(context, options.contentElement, options.selectionController));
 		this.selections = this.register(new SelectionsOverlay(context, options.contentElement, options.selectionController));
 		this.viewCursors = this.register(new ViewCursors(context, options.contentElement, options.model, options.selectionController));
 		this.domNodes = Object.freeze([
 			indentGuides.domNode,
 			this.decorations.domNode,
+			this.currentLineHighlight.domNode,
 			this.selections.domNode,
 			this.viewCursors.domNode,
 			linesDecorations.domNode,
@@ -80,6 +84,7 @@ export class ViewOverlays extends Disposable {
 	}
 
 	renderSelection(context: EditorRenderingContext): void {
+		this.currentLineHighlight.renderNow(context);
 		this.selections.renderNow(context);
 		this.viewCursors.renderNow(context);
 	}

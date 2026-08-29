@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view.js");
-const { DecorationPresentation, createStanzaDecorationSource } = await import("../../../../browser/viewparts/decorations/decorationPresentation.js");
+const { DecorationPresentation, createStanzaDecorationSource } = await import("../../../../browser/viewparts/decorations/decorations.js");
 const { FindController } = await import("../../browser/findController.js");
 
 test.after(() => browserEnvironment.window.close());

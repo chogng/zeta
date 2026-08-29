@@ -1,9 +1,8 @@
-import "./overviewRuler.css";
 import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { type DiagnosticOverviewMarker } from "./diagnosticOverviewMarkers.js";
-import { type DiffOverviewMarker } from "./diffOverviewMarkers.js";
+import { type DiagnosticOverviewMarker } from "./overviewRuler.js";
+import { type DiffOverviewMarker } from "./overviewRuler.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 const OVERVIEW_RULER_WIDTH = 6;

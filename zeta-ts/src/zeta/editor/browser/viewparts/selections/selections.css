@@ -13,15 +13,6 @@
   background: var(--zeta-selection-background);
 }
 
-.stanza-editor-line-selections.active::before {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  content: "";
-  background: color-mix(in srgb, var(--zeta-editor-foreground) 6%, transparent);
-}
-
 @media (forced-colors: active) {
   .stanza-editor-selection {
     background: Highlight;

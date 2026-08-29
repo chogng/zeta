@@ -23,7 +23,7 @@ import type { TextRange } from "../../../../editor/common/core/text.js";
 import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
+import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorations.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";

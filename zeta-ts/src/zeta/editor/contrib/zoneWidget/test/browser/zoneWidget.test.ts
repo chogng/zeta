@@ -66,7 +66,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		revealedRanges,
 	}, {
 		position: TextPosition.at(1, 2),
-		parent: viewport.element,
+		parent: requiredElement(viewport.element, '.stanza-editor-view-zones'),
 		top: '40px',
 		height: '40px',
 		contentHeight: 100,

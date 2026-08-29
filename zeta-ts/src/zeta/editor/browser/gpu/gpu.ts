@@ -2,7 +2,7 @@ import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type TextModel } from '../../common/model/textModel.js';
-import { type BracketColorizationSource, type SemanticTokenSource } from '../viewparts/viewLines/semanticTokenPresentation.js';
+import { type BracketColorizationSource, type SemanticTokenSource } from '../viewparts/viewLines/viewLine.js';
 import { type TextureAtlas } from './atlas/textureAtlas.js';
 import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
 import { type ViewLineTextDirection } from '../viewparts/viewLines/viewLineOptions.js';

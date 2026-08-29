@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MinimapRenderLayout } from '../../browser/viewparts/minimap/minimapLayout.js';
+import { MinimapRenderLayout } from '../../browser/viewparts/minimap/minimap.js';
 import { RenderMinimap, type EditorMinimapLayoutInfo } from '../../common/config/editorOptions.js';
 import type { EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 

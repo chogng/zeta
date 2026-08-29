@@ -14,7 +14,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { SemanticTokenPresentation } = await import('../../browser/viewparts/viewLines/semanticTokenPresentation.js');
+const { SemanticTokenPresentation } = await import('../../browser/viewparts/viewLines/viewLine.js');
 const { ViewLine } = await import('../../browser/viewparts/viewLines/viewLine.js');
 const { ViewLineTextDirection, ViewLineOptions } = await import('../../browser/viewparts/viewLines/viewLineOptions.js');
 

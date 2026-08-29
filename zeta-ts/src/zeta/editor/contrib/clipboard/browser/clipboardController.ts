@@ -12,7 +12,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { EditContext } from "../../../browser/controller/editContext/editContext.js";
 import { createClipboardCopyEvent, createClipboardPasteEvent, readEditorClipboardText, type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
-import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewparts/viewLines/semanticTokenPresentation.js";
+import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewparts/viewLines/viewLine.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
 
 export const EDITOR_CLIPBOARD_MIME = 'application/x-stanza-editor';

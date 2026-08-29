@@ -25,7 +25,7 @@ See [`src/zeta/editor/README.md`](../../zeta-ts/src/zeta/editor/README.md), [`te
 - Keep long-lived view context limited to canonical view-model, layout, scheduling, measurement, and projection access.
 - Create one version-bound rendering context per render pass. Do not make each Part reconstruct the same frame snapshot.
 - Centralize overlay snapshot creation and version validation at the rendering-context boundary.
-- Keep feature state with its owner; decoration consumers depend directly on `DecorationsPart` rather than accessing it through the context.
+- Keep feature state with its owner; decoration consumers depend directly on `DecorationsOverlay` rather than accessing it through the context.
 - Pass feature dependencies directly. Do not turn context into a service locator.
 
 ## Update, layout, and rendering

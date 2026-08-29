@@ -1,0 +1,14 @@
+.stanza-editor-current-line-highlight {
+	position: relative;
+	box-sizing: border-box;
+	min-width: 100%;
+	z-index: 1;
+	pointer-events: none;
+}
+
+.stanza-editor-current-line-highlight.active::before {
+	position: absolute;
+	inset: 0;
+	content: '';
+	background: color-mix(in srgb, var(--zeta-editor-foreground) 6%, transparent);
+}

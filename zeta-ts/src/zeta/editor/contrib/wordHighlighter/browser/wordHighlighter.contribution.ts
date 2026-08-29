@@ -4,7 +4,7 @@ import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type EditorView } from '../../../browser/view.js';
-import { createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorationPresentation.js';
+import { createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { type TextPosition, type TextRange } from '../../../common/core/text.js';
 import { EditorSelectionChangeReason, type EditorSelectionChange, type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';

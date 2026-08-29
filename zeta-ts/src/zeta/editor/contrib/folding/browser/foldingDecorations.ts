@@ -5,7 +5,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { TextRange } from '../../../common/core/text.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../browser/viewparts/decorations/decorationPresentation.js';
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { EditorFoldingRangeSource, type EditorFoldingRegion } from './foldingRanges.js';
 import { type EditorFoldingModel } from './foldingModel.js';
 

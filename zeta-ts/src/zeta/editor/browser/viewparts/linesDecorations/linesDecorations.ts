@@ -4,7 +4,7 @@ import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
 import { DecorationsOverlay } from "../decorations/decorations.js";
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
+import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorations.js";
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { ViewPartRows } from '../../view/viewPartRows.js';
 

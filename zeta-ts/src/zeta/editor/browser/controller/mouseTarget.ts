@@ -1,7 +1,7 @@
 import { type EditorViewport } from '../view.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
 import { type TextDecorationId } from '../../common/model/decorationCollection.js';
-import { GlyphMarginLane } from '../viewparts/decorations/decorationPresentation.js';
+import { GlyphMarginLane } from '../viewparts/decorations/decorations.js';
 
 /** Identifies the browser-owned semantic area under one mouse or pointer event. */
 export enum MouseTargetKind {

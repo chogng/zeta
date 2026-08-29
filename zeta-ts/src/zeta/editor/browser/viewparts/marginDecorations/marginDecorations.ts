@@ -1,6 +1,6 @@
 import "./marginDecorations.css";
 import { DecorationsOverlay } from "../decorations/decorations.js";
-import { type ResolvedDecoration, DecorationPresentation } from '../decorations/decorationPresentation.js';
+import { type ResolvedDecoration, DecorationPresentation } from '../decorations/decorations.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";

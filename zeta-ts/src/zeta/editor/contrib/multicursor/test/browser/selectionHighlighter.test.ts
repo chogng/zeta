@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorationPresentation.js';
+import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
 import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';

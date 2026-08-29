@@ -3,7 +3,7 @@ import { h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { DecorationsOverlay } from '../decorations/decorations.js';
-import { type ResolvedDecoration } from '../decorations/decorationPresentation.js';
+import { type ResolvedDecoration } from '../decorations/decorations.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';

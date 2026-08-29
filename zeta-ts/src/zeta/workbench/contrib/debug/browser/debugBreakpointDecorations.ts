@@ -6,7 +6,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { MouseTargetFactory, MouseTargetKind } from '../../../../editor/browser/controller/mouseTarget.js';
 import { type TextEditorContributionContext } from '../../../../editor/browser/editorExtensions.js';
-import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../../editor/browser/viewparts/decorations/decorationPresentation.js';
+import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../../editor/browser/viewparts/decorations/decorations.js';
 import { TextPosition, TextRange } from '../../../../editor/common/core/text.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';

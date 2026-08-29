@@ -6,7 +6,7 @@ import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
-import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration, GlyphMarginLane } from '../decorations/decorationPresentation.js';
+import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration, GlyphMarginLane } from '../decorations/decorations.js';
 import { type DecorationsOverlay } from '../decorations/decorations.js';
 
 export interface GlyphMarginWidgetsOptions {

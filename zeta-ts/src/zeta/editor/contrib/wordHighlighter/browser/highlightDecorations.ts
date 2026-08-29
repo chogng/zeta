@@ -1,6 +1,6 @@
 import './highlightDecorations.css';
 import { DocumentHighlightKind } from '../../../common/languages/documentHighlights.js';
-import { DecorationPresentation, type DecorationPresentationResolution } from '../../../browser/viewparts/decorations/decorationPresentation.js';
+import { DecorationPresentation, type DecorationPresentationResolution } from '../../../browser/viewparts/decorations/decorations.js';
 
 const wordHighlight = Object.freeze({
 	presentation: DecorationPresentation.WordHighlight,

@@ -24,13 +24,13 @@ import { type ILanguageDiagnosticsService } from "../common/services/languageDia
 import { isCompletionsEnablement, type CompletionsEnablement } from "../common/services/completionsEnablement.js";
 import { EditorWorkerClient, type EditorWorkerFactory } from "../common/services/editorWorker.js";
 import { EditorWorker } from "../common/services/editorWebWorker.js";
-import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
+import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorations.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { type IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import { TabFocus } from "./config/tabFocus.js";
 import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
 import { getEditorContributions, type EditorCapability, type TextEditorContributionContext } from "./editorExtensions.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/semanticTokenPresentation.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/viewLine.js";
 import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";

@@ -1,5 +1,5 @@
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
-import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorationPresentation.js';
+import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { TextEditorCapability } from '../../textEditorCapabilities.js';

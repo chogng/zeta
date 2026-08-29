@@ -1,11 +1,13 @@
-import { h } from "../../../../base/browser/dom.js";
+import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
 import { ViewLineTextDirection, type ViewLineOptions } from './viewLineOptions.js';
-import { DomPosition, type CharacterMapping } from '../../../common/viewLayout/viewLineRenderer.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
+import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
+import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
 import { type FloatHorizontalRange } from '../../view/renderingContext.js';
-import { projectStanzaSemanticTokenLine, type BracketColorizationSpan, type ResolvedSemanticToken } from './semanticTokenPresentation.js';
 
 interface BrowserCaretPosition {
 	readonly offsetNode: Node;
@@ -105,4 +107,141 @@ export class ViewLine {
 	private createReadingContext(): DomReadingContext {
 		return new DomReadingContext(this.domNode.domNode, this.textElement);
 	}
+}
+
+export { SemanticTokenModifier, SemanticTokenPresentation } from '../../../common/services/semanticTokensStyling.js';
+export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
+
+export interface BracketColorizationSpan {
+	readonly startColumn: number;
+	readonly endColumn: number;
+	readonly level: number;
+}
+
+/** Feature-neutral bracket projection consumed by the browser viewport. */
+export interface BracketColorizationSource {
+	readonly textModel: TextModel;
+	getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[];
+}
+
+/** Projects one line transactionally while preserving its exact source text. */
+export function projectStanzaSemanticTokenLine(
+	element: HTMLElement,
+	lineText: string,
+	tokens: readonly ResolvedSemanticToken[],
+	brackets: readonly BracketColorizationSpan[] = [],
+	tabSize = 4,
+): CharacterMapping {
+	validateLineTokens(lineText, tokens);
+	validateBracketColorizations(lineText, brackets);
+	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
+	const ownerDocument = element.ownerDocument;
+	const fragment = createFragment(ownerDocument);
+	const characterMapping = new CharacterMapping(lineText.length + 1);
+	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn])])].sort((left, right) => left - right);
+	let visibleColumn = 0;
+	if (lineText.length === 0) {
+		fragment.append(h(ownerDocument, 'span'));
+		characterMapping.setColumnInfo(1, 0, 0, 0);
+	}
+	for (let index = 0; index + 1 < boundaries.length; index += 1) {
+		const startColumn = boundaries[index]!;
+		const endColumn = boundaries[index + 1]!;
+		const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
+		const bracket = brackets.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
+		const tokenElement = h(ownerDocument, "span");
+		if (token || bracket) tokenElement.className = "stanza-editor-token";
+		if (token?.presentation) tokenElement.classList.add(token.presentation);
+		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
+		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
+		if (bracket) tokenElement.classList.add(`stanza-editor-bracket-level-${bracket.level}`);
+		tokenElement.textContent = lineText.slice(startColumn, endColumn);
+		for (let offset = startColumn; offset < endColumn; offset += 1) {
+			characterMapping.setColumnInfo(offset + 1, index, offset - startColumn, visibleColumn);
+			visibleColumn += lineText.charCodeAt(offset) === 9 ? tabSize - visibleColumn % tabSize : 1;
+		}
+		if (endColumn === lineText.length) characterMapping.setColumnInfo(lineText.length + 1, index, endColumn - startColumn, visibleColumn);
+		fragment.append(tokenElement);
+	}
+	if (fragment.textContent !== lineText) {
+		throw new Error("Stanza semantic token projection changed line text");
+	}
+	reset(element, fragment);
+	return characterMapping;
+}
+
+function validateBracketColorizations(lineText: string, brackets: readonly BracketColorizationSpan[]): void {
+	let previousEnd = 0;
+	for (const bracket of brackets) {
+		if (!Number.isSafeInteger(bracket.startColumn) || !Number.isSafeInteger(bracket.endColumn) || bracket.startColumn < previousEnd || bracket.endColumn <= bracket.startColumn || bracket.endColumn > lineText.length) {
+			throw new RangeError("Stanza bracket colorizations must be sorted, non-overlapping source ranges");
+		}
+		if (!Number.isSafeInteger(bracket.level) || bracket.level < 1 || bracket.level > 6) {
+			throw new RangeError("Stanza bracket colorization level must be between 1 and 6");
+		}
+		previousEnd = bracket.endColumn;
+	}
+}
+
+/** Captures and validates one source before a viewport replaces its snapshot. */
+export function snapshotStanzaSemanticTokenLines(source: SemanticTokenSource): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
+	const result = new Map<number, readonly ResolvedSemanticToken[]>();
+	for (const line of source.lines) {
+		if (!Number.isSafeInteger(line.lineIndex) || line.lineIndex < 0) {
+			throw new RangeError("Stanza semantic token line index must be a non-negative safe integer");
+		}
+		if (result.has(line.lineIndex)) {
+			throw new RangeError(`Duplicate Stanza semantic token line ${line.lineIndex}`);
+		}
+		const tokens = Object.freeze(line.tokens.map(token => Object.freeze({
+			startColumn: token.startColumn,
+			endColumn: token.endColumn,
+			presentation: token.presentation,
+			...(token.modifiers && token.modifiers.length > 0 ? { modifiers: Object.freeze([...token.modifiers]) } : {}),
+			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+		})));
+		validateLineTokens(source.textModel.getLineContent(line.lineIndex), tokens);
+		result.set(line.lineIndex, tokens);
+	}
+	return result;
+}
+
+function validateLineTokens(lineText: string, tokens: readonly ResolvedSemanticToken[]): void {
+	let previousEnd = 0;
+	for (const token of tokens) {
+		if (token.presentation !== undefined) validatePresentation(token.presentation);
+		validateModifiers(token.modifiers);
+		if (!Number.isSafeInteger(token.startColumn) || !Number.isSafeInteger(token.endColumn)) {
+			throw new RangeError("Stanza semantic token columns must be safe integers");
+		}
+		if (token.startColumn < previousEnd || token.endColumn <= token.startColumn) {
+			throw new RangeError("Stanza semantic tokens must be sorted, non-overlapping, and non-empty");
+		}
+		if (token.endColumn > lineText.length) {
+			throw new RangeError("Stanza semantic token exceeds its line text");
+		}
+		previousEnd = token.endColumn;
+	}
+}
+
+function validatePresentation(presentation: SemanticTokenPresentation): void {
+	if (!Object.values(SemanticTokenPresentation).includes(presentation)) {
+		throw new TypeError(`Unknown Stanza semantic token presentation '${presentation}'`);
+	}
+}
+
+function validateModifiers(modifiers: readonly SemanticTokenModifier[] | undefined): void {
+	if (modifiers === undefined) return;
+	if (new Set(modifiers).size !== modifiers.length || modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) {
+		throw new TypeError("Unknown or duplicate Stanza semantic token modifier");
+	}
+}
+
+function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable<LanguageToken["presentation"]>): void {
+	if (presentation.foreground !== undefined) element.style.color = presentation.foreground;
+	if (presentation.background !== undefined) element.style.backgroundColor = presentation.background;
+	if (presentation.fontStyle?.includes("italic")) element.style.fontStyle = "italic";
+	if (presentation.fontStyle?.includes("bold")) element.style.fontWeight = "bold";
+	const decorations = presentation.fontStyle?.filter(style => style === "underline" || style === "strikethrough").map(style => style === "strikethrough" ? "line-through" : style) ?? [];
+	if (decorations.length > 0) element.style.textDecorationLine = decorations.join(" ");
 }
