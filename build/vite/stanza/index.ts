@@ -35,9 +35,9 @@ const model = disposables.add(stanzaApi.editor.createModel(initialText, "typescr
 const editor = disposables.add(stanzaApi.editor.create(container, {
   model,
   lineWrapping: stanzaApi.EditorLineWrapping.On,
-  showLineNumbers: true,
+  lineNumbers: "on",
   showSymbolIcons: false,
-  showIndentationGuides: true,
+  guides: { indentation: true },
   bracketPairColorization: true,
   stickyScroll: true,
   suggestions: true,
