@@ -3,6 +3,9 @@ import test from "node:test";
 import {
 	createServiceIdentifier,
 	InstantiationType,
+	getSingletonServiceDescriptors,
+	registerSingleton,
+	ServiceCollection,
 	ServiceContainer,
 	SyncDescriptor,
 	type ServicesAccessor,
@@ -129,6 +132,29 @@ test("container owns disposable singleton instances", () => {
 	container.get(serviceId);
 	container.dispose();
 	assert.equal(value?.disposed, true);
+});
+
+test("ServiceCollection transfers explicit instances into a container", () => {
+	const serviceId = createServiceIdentifier<string>("test.collection");
+	const collection = new ServiceCollection([serviceId, "ready"]);
+	assert.equal(collection.has(serviceId), true);
+	assert.equal(collection.get(serviceId), "ready");
+	using container = new ServiceContainer();
+	container.registerCollection(collection);
+	assert.equal(container.get(serviceId), "ready");
+});
+
+test("global singleton descriptors remain explicit until a container adopts them", () => {
+	const serviceId = createServiceIdentifier<{ readonly created: number }>("test.global-singleton");
+	let created = 0;
+	const descriptor = registerSingleton(serviceId, () => ({ created: ++created }), InstantiationType.Delayed);
+	assert.equal(getSingletonServiceDescriptors().includes(descriptor), true);
+	using container = new ServiceContainer();
+	assert.equal(container.getOptional(serviceId), undefined);
+	container.registerSingletonDescriptor(descriptor);
+	assert.equal(created, 0);
+	assert.equal(container.get(serviceId).created, 1);
+	assert.equal(container.get(serviceId).created, 1);
 });
 
 class TestContribution {

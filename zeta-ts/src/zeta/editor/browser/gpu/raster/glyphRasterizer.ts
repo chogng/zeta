@@ -20,7 +20,7 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 	}
 
 	public styleKey(style: IGpuGlyphStyle): string {
-		return [style.color, style.fontFamily, style.fontSize, style.fontStyle, style.fontVariant, style.fontWeight, style.letterSpacing, this.devicePixelRatio].join('|');
+		return JSON.stringify([style.color, style.fontFamily, style.fontSize, style.fontStyle, style.fontVariant, style.fontWeight, style.letterSpacing, this.devicePixelRatio]);
 	}
 
 	public getTextMetrics(text: string, style: IGpuGlyphStyle): TextMetrics {

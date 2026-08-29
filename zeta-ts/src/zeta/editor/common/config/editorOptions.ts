@@ -1,4 +1,5 @@
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
+import type { IMarkdownString } from '../../../base/common/htmlContent.js';
 import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
 import { isMacintosh } from '../../../base/common/platform.js';
@@ -596,12 +597,7 @@ export interface IPasteAsOptions {
 export type EditorPasteAsOptions = Readonly<Required<IPasteAsOptions>>;
 
 /** Minimal markdown payload used by the read-only message option. */
-export interface IEditorMarkdownString {
-	readonly value: string;
-	readonly isTrusted?: boolean | { readonly enabledCommands?: readonly string[] };
-	readonly supportHtml?: boolean;
-	readonly supportThemeIcons?: boolean;
-}
+export type IEditorMarkdownString = IMarkdownString;
 
 /** Raw editor options shared by browser and non-browser consumers. */
 export interface IEditorOptions {

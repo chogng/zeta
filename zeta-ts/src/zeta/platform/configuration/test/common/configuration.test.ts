@@ -7,6 +7,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { URI } from "../../../../base/common/uri.js";
 import {
 	ConfigurationRegistry,
 } from "../../../../platform/configuration/common/configurationRegistry.js";
@@ -28,6 +29,19 @@ import {
 import {
 	ConfigurationResourceRevisionConflictError,
 } from "../../../../platform/configuration/common/configurationResourceService.js";
+import { ConfigurationTarget, getConfigValueInTarget, isConfigurationOverrides } from "../../../../platform/configuration/common/configurationService.js";
+
+test("configuration contracts expose target inspection and validate overrides", () => {
+	const values = { defaultValue: 12, userValue: 14, workspaceValue: 16 };
+	assert.equal(getConfigValueInTarget(values, ConfigurationTarget.DEFAULT), 12);
+	assert.equal(getConfigValueInTarget(values, ConfigurationTarget.USER), 14);
+	assert.equal(getConfigValueInTarget(values, ConfigurationTarget.WORKSPACE), 16);
+	assert.equal(getConfigValueInTarget(values, ConfigurationTarget.MEMORY), undefined);
+	assert.equal(isConfigurationOverrides({ overrideIdentifier: "typescript" }), true);
+	assert.equal(isConfigurationOverrides({ resource: URI.parse("file:///workspace/file.ts") }), true);
+	assert.equal(isConfigurationOverrides({ overrideIdentifier: 1 }), false);
+	assert.equal(isConfigurationOverrides({ resource: {} }), false);
+});
 
 test("configuration validators bound the complete wire document", () => {
 	assert.deepEqual(

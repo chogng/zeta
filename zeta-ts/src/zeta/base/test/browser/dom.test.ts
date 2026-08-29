@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { addDisposableListener, getActiveDocument, getActiveElement, getDocument, getShadowRoot, getWindow, h, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
+import { addDisposableListener, Dimension, getActiveDocument, getActiveElement, getDocument, getDomNodePagePosition, getShadowRoot, getWindow, h, isEditableElement, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
 import { registerWindow } from "../../browser/window.js";
 
 test("disposable DOM listeners detach deterministically", () => {
@@ -61,6 +61,20 @@ test("DOM guards validate nodes from their owning window", () => {
 		svgHtmlElement: false,
 		structuralLookalike: false,
 	});
+});
+
+test("DOM exposes shared geometry and editable-element guards", () => {
+	const ownerWindow = new JSDOM("<!doctype html><body><input><div contenteditable='true'></div><span></span></body>").window;
+	const input = ownerWindow.document.querySelector("input")!;
+	const editable = ownerWindow.document.querySelector("div")!;
+	const span = ownerWindow.document.querySelector("span")!;
+	Object.defineProperty(span, "getBoundingClientRect", { value: () => ({ left: 2, top: 3, width: 4, height: 5 }) });
+	assert.equal(Dimension.None, Dimension.Zero);
+	assert.equal(isEditableElement(input), true);
+	assert.equal(isEditableElement(editable), true);
+	assert.equal(isEditableElement(span), false);
+	assert.deepEqual(getDomNodePagePosition(span), { left: 2, top: 3, width: 4, height: 5 });
+	ownerWindow.close();
 });
 
 test("DOM context queries resolve the owning window and document", () => {

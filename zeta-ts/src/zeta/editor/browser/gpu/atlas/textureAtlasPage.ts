@@ -1,5 +1,6 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { NKeyMap } from '../../../../base/common/map.js';
 import { type IGlyphRasterizer, type IRasterizedGlyph } from '../raster/raster.js';
 import { type IReadableTextureAtlasPage, type ITextureAtlasAllocator, type ITextureAtlasPageGlyph } from './atlas.js';
 import { TextureAtlasShelfAllocator } from './textureAtlasShelfAllocator.js';
@@ -12,7 +13,7 @@ export class TextureAtlasPage extends Disposable implements IReadableTextureAtla
 	public readonly source: HTMLCanvasElement;
 	public readonly glyphs = new Set<Readonly<ITextureAtlasPageGlyph>>();
 	private readonly allocator: ITextureAtlasAllocator;
-	private readonly glyphMap = new Map<string, Readonly<ITextureAtlasPageGlyph>>();
+	private readonly glyphMap = new NKeyMap<Readonly<ITextureAtlasPageGlyph>, [string, string, string]>();
 	private currentVersion = 0;
 	private mutableUsedArea = { left: 0, top: 0, right: 0, bottom: 0 };
 
@@ -41,13 +42,12 @@ export class TextureAtlasPage extends Disposable implements IReadableTextureAtla
 	}
 
 	public getGlyph(rasterizer: IGlyphRasterizer, chars: string, styleKey: string, rasterize: () => IRasterizedGlyph): Readonly<ITextureAtlasPageGlyph> | undefined {
-		const key = `${rasterizer.cacheKey}|${styleKey}|${chars}`;
-		const existing = this.glyphMap.get(key);
+		const existing = this.glyphMap.get(rasterizer.cacheKey, styleKey, chars);
 		if (existing) return existing;
 		if (this.glyphs.size >= TextureAtlasPage.maximumGlyphCount) return undefined;
 		const glyph = this.allocator.allocate(rasterize());
 		if (!glyph) return undefined;
-		this.glyphMap.set(key, glyph);
+		this.glyphMap.set(glyph, rasterizer.cacheKey, styleKey, chars);
 		this.glyphs.add(glyph);
 		this.currentVersion += 1;
 		this.mutableUsedArea = Object.freeze({

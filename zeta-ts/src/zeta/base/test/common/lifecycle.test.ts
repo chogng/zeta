@@ -8,7 +8,9 @@ import {
 	DisposableStore,
 	Disposable,
 	dispose,
+	ImmortalReference,
 	type IDisposable,
+	isDisposable,
 	noneDisposable,
 	toDisposable,
 } from "../../common/lifecycle.js";
@@ -118,6 +120,20 @@ test("DisposableStore owns callback cleanup through toDisposable", () => {
 
 	store.dispose();
 	assert.deepEqual(released, ["deferred", "value"]);
+});
+
+test("DisposableStore delete transfers a resource without disposing it", () => {
+	const calls: string[] = [];
+	const store = new DisposableStore();
+	const first = store.add(toDisposable(() => calls.push("first")));
+	store.add(toDisposable(() => calls.push("second")));
+
+	assert.equal(store.delete(first), true);
+	assert.equal(store.delete(first), false);
+	store.dispose();
+	assert.deepEqual(calls, ["second"]);
+	first.dispose();
+	assert.deepEqual(calls, ["second", "first"]);
 });
 
 test("DisposableMap replaces, removes, leaks, and disposes keyed resources", () => {
@@ -287,4 +303,14 @@ test("AsyncDisposableStore closes registration when disposal starts", async () =
 	assert.throws(() => store.add(rejected), ReferenceError);
 	rejected.dispose();
 	await disposal;
+});
+
+test("disposable guards and borrowed references keep ownership explicit", () => {
+	const borrowed = { value: 1 };
+	const reference = new ImmortalReference(borrowed);
+	assert.equal(reference.object, borrowed);
+	assert.equal(isDisposable(reference), true);
+	assert.equal(isDisposable({ dispose(value: unknown): void { void value; } }), false);
+	assert.equal(isDisposable(null), false);
+	assert.doesNotThrow(() => reference.dispose());
 });

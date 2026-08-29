@@ -65,6 +65,43 @@ export class SyncDescriptor<T> {
 	}
 }
 
+export class ServiceCollection {
+	private readonly entriesById = new Map<ServiceIdentifier<unknown>, unknown>();
+
+	constructor(...entries: readonly (readonly [ServiceIdentifier<unknown>, unknown])[]) {
+		for (const [id, value] of entries) this.set(id, value);
+	}
+
+	set<T>(id: ServiceIdentifier<T>, value: T): T | undefined {
+		const previous = this.entriesById.get(id) as T | undefined;
+		this.entriesById.set(id, value);
+		return previous;
+	}
+
+	has<T>(id: ServiceIdentifier<T>): boolean { return this.entriesById.has(id); }
+	get<T>(id: ServiceIdentifier<T>): T | undefined { return this.entriesById.get(id) as T | undefined; }
+	entries(): IterableIterator<[ServiceIdentifier<unknown>, unknown]> { return this.entriesById.entries(); }
+}
+
+export interface SingletonServiceDescriptor<T> {
+	readonly id: ServiceIdentifier<T>;
+	readonly factory: ServiceFactory<T>;
+	readonly instantiation: InstantiationType;
+}
+
+const singletonServiceDescriptors = new Map<ServiceIdentifier<unknown>, SingletonServiceDescriptor<unknown>>();
+
+export function registerSingleton<T>(id: ServiceIdentifier<T>, factory: ServiceFactory<T>, instantiation = InstantiationType.Delayed): SingletonServiceDescriptor<T> {
+	if (singletonServiceDescriptors.has(id)) throw new Error(`Singleton service '${serviceName(id)}' is already registered`);
+	const descriptor = Object.freeze({ id, factory, instantiation });
+	singletonServiceDescriptors.set(id, descriptor as SingletonServiceDescriptor<unknown>);
+	return descriptor;
+}
+
+export function getSingletonServiceDescriptors(): readonly SingletonServiceDescriptor<unknown>[] {
+	return Object.freeze([...singletonServiceDescriptors.values()]);
+}
+
 /** The service container used by commands, contributions, and views. */
 export interface IInstantiationService extends ServicesAccessor {
 	createInstance<T>(
@@ -154,6 +191,14 @@ export class ServiceContainer extends Disposable implements IInstantiationServic
 			factory,
 			value: UNINITIALIZED,
 		});
+	}
+
+	registerCollection(collection: ServiceCollection): void {
+		for (const [id, value] of collection.entries()) this.registerInstance(id, value);
+	}
+
+	registerSingletonDescriptor<T>(descriptor: SingletonServiceDescriptor<T>): void {
+		this.registerSingleton(descriptor.id, descriptor.factory, { instantiation: descriptor.instantiation });
 	}
 
 	has<T>(id: ServiceIdentifier<T>): boolean {

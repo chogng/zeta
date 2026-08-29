@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assert as assertCondition, assertDefined, assertReturnsDefined, isFunction, isNonEmptyString, isObject, isRecord, type Mutable } from "../../common/types.js";
+import { assert as assertCondition, assertDefined, assertReturnsDefined, assertType, isDefined, isFunction, isNonEmptyString, isObject, isRecord, type Mutable } from "../../common/types.js";
 
 test("assert narrows caller-defined conditions", () => {
 	assert.equal(requireStringFromUnknown("value"), "value");
@@ -63,6 +63,9 @@ test('general type guards expose object, function, defined, and mutable contract
 		defined: 'value',
 	});
 	assert.throws(() => assertReturnsDefined(undefined), /must not be null or undefined/);
+	assert.deepEqual([undefined, null, 0].filter(isDefined), [0]);
+	assert.doesNotThrow(() => assertType(typeof value.count === "number", "number"));
+	assert.throws(() => assertType(false, "string"), TypeError);
 });
 
 function requireString(value: string | undefined): string {

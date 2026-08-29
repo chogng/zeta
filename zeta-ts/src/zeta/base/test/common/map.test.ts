@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getOrSet, LRUCache } from '../../common/map.js';
+import { getOrSet, LRUCache, NKeyMap } from '../../common/map.js';
 
 test('getOrSet returns existing values without replacing them', () => {
 	const map = new Map([['key', 'existing']]);
@@ -50,4 +50,32 @@ test('LRUCache iteration remains finite while reads update recency', () => {
 	});
 
 	assert.deepEqual(seen, ['one', 'two', 'three']);
+});
+
+test('NKeyMap keeps tuple components distinct without composite-key collisions', () => {
+	const map = new NKeyMap<string, [string, string]>();
+	map.set('first', 'a|b', 'c');
+	map.set('second', 'a', 'b|c');
+
+	assert.equal(map.get('a|b', 'c'), 'first');
+	assert.equal(map.get('a', 'b|c'), 'second');
+});
+
+test('NKeyMap accepts map values and supports prefix operations', () => {
+	const map = new NKeyMap<Map<string, number>, [string, number, boolean]>();
+	const first = new Map([['value', 1]]);
+	const second = new Map([['value', 2]]);
+	const third = new Map([['value', 3]]);
+	map.set(first, 'group', 0, false);
+	map.set(second, 'group', 1, true);
+	map.set(third, 'other', 0, false);
+
+	assert.deepEqual([...map.getAll('group')], [first, second]);
+	assert.equal(map.delete('group', 0, false), true);
+	assert.equal(map.delete('group', 0, false), false);
+	assert.equal(map.deleteAll('group'), true);
+	assert.deepEqual([...map.values()], [third]);
+	assert.equal(map.deleteAll(), true);
+	assert.deepEqual([...map.values()], []);
+	assert.equal(map.deleteAll(), false);
 });

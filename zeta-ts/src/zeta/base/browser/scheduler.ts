@@ -140,11 +140,18 @@ export function disposableWindowTimeout(targetWindow: Window, callback: () => vo
 /** Creates a cancellable interval scoped to a particular browser window. */
 export function disposableWindowInterval(
 	targetWindow: Window,
-	callback: () => void,
+	callback: () => void | boolean | Promise<unknown>,
 	intervalMs: number,
+	iterations?: number,
 ): IDisposable {
-	const handle = targetWindow.setInterval(callback, intervalMs);
-	return toDisposable(() => targetWindow.clearInterval(handle));
+	let iteration = 0;
+	const handle = targetWindow.setInterval(() => {
+		iteration += 1;
+		const shouldStop = callback() === true;
+		if ((iterations !== undefined && iteration >= iterations) || shouldStop) registration.dispose();
+	}, intervalMs);
+	const registration = toDisposable(() => targetWindow.clearInterval(handle));
+	return registration;
 }
 
 /** Coalesces repeated schedule calls into one animation-frame callback. */

@@ -3,6 +3,7 @@ import type { DocumentMark } from '../../../common/model/document.js';
 import type { DocumentNode } from '../../../common/model/document.js';
 import type { DocumentFragment } from '../../../common/model/documentSerialization.js';
 import type { DocumentSchema } from '../../../common/model/documentSchema.js';
+import { sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 
 const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
 
@@ -15,9 +16,8 @@ const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
  */
 export function createDocumentFragmentFromHtml(ownerDocument: Document, schema: DocumentSchema, html: string): DocumentFragment | undefined {
 	if (typeof html !== "string" || html.length === 0 || html.length > MAX_HTML_CLIPBOARD_CHARACTERS) return undefined;
-	const parsedDocument = ownerDocument.implementation.createHTMLDocument("Stanza clipboard");
-	parsedDocument.body.innerHTML = html;
-	const content = blocksFromNodes(parsedDocument.body.childNodes, schema);
+	const sanitized = sanitizeHtmlToFragment(html, { ownerDocument, config: {} });
+	const content = blocksFromNodes(sanitized.childNodes, schema);
 	if (content.length === 0) return undefined;
 	try {
 		schema.createDocument(content, "__stanza_html_clipboard_fragment__");

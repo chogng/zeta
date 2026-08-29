@@ -22,6 +22,14 @@ export function assertDefined<T>(
 	assert(value !== undefined && value !== null, messageOrError);
 }
 
+export function isDefined<T>(value: T | null | undefined): value is T {
+	return value !== undefined && value !== null;
+}
+
+export function assertType(condition: unknown, type?: string): asserts condition {
+	if (!condition) throw new TypeError(type ? `Unexpected type, expected '${type}'` : 'Unexpected type');
+}
+
 /** Narrows an unknown value to a non-array object with string keys. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);

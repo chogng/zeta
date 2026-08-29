@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { disposableWindowTimeout, measure, modify, runAtThisOrScheduleAtNextAnimationFrame, scheduleAtNextAnimationFrame } from "../../browser/scheduler.js";
+import { WindowIdleValue, WindowIntervalTimer } from "../../browser/dom.js";
+import { disposableWindowInterval, disposableWindowTimeout, measure, modify, runAtThisOrScheduleAtNextAnimationFrame, scheduleAtNextAnimationFrame } from "../../browser/scheduler.js";
 
 test("animation-frame scheduling orders reads, ordinary work, and writes", () => {
 	const targetWindow = new TestAnimationWindow();
@@ -63,6 +64,51 @@ test("window timeouts remain cancellable", () => {
 	assert.equal(called, false);
 });
 
+test("window intervals stop on a result or iteration limit", () => {
+	const targetWindow = new TestTimerWindow();
+	let selfStopping = 0;
+	disposableWindowInterval(targetWindow.value, () => {
+		selfStopping += 1;
+		return true;
+	}, 10);
+	let limited = 0;
+	disposableWindowInterval(targetWindow.value, () => { limited += 1; }, 10, 2);
+
+	targetWindow.flushIntervals();
+	targetWindow.flushIntervals();
+	targetWindow.flushIntervals();
+
+	assert.equal(selfStopping, 1);
+	assert.equal(limited, 2);
+});
+
+test("window idle values compute at idle or immediately when requested", () => {
+	const targetWindow = new TestTimerWindow();
+	let executions = 0;
+	const urgent = new WindowIdleValue(targetWindow.value, () => ++executions);
+	assert.equal(urgent.isInitialized, false);
+	assert.equal(urgent.value, 1);
+	targetWindow.flush();
+	assert.equal(executions, 1);
+
+	const idle = new WindowIdleValue(targetWindow.value, () => ++executions);
+	targetWindow.flush();
+	assert.equal(idle.isInitialized, true);
+	assert.equal(idle.value, 2);
+});
+
+test("WindowIntervalTimer scopes cancellation to the selected window", () => {
+	const targetWindow = new TestTimerWindow();
+	const timer = new WindowIntervalTimer();
+	let calls = 0;
+	timer.cancelAndSet(() => calls += 1, 10, targetWindow.value);
+	targetWindow.flushIntervals();
+	assert.equal(calls, 1);
+	timer.dispose();
+	targetWindow.flushIntervals();
+	assert.equal(calls, 1);
+});
+
 class TestAnimationWindow {
 	private nextHandle = 1;
 	private callbacks = new Map<number, FrameRequestCallback>();
@@ -90,6 +136,7 @@ class TestAnimationWindow {
 class TestTimerWindow {
 	private nextHandle = 1;
 	private callbacks = new Map<number, () => void>();
+	private intervals = new Map<number, () => void>();
 
 	readonly value = {
 		setTimeout: (callback: () => void): number => {
@@ -100,6 +147,15 @@ class TestTimerWindow {
 		clearTimeout: (handle: number): void => {
 			this.callbacks.delete(handle);
 		},
+		setInterval: (callback: () => void): number => {
+			const handle = this.nextHandle++;
+			this.intervals.set(handle, callback);
+			return handle;
+		},
+		clearInterval: (handle: number): void => {
+			this.intervals.delete(handle);
+		},
+		performance: { now: () => 0 },
 		queueMicrotask,
 	} as unknown as Window;
 
@@ -111,5 +167,9 @@ class TestTimerWindow {
 		const callbacks = [...this.callbacks.values()];
 		this.callbacks.clear();
 		for (const callback of callbacks) callback();
+	}
+
+	flushIntervals(): void {
+		for (const callback of [...this.intervals.values()]) callback();
 	}
 }

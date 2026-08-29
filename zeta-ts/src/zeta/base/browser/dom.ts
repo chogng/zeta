@@ -1,5 +1,7 @@
+import { IntervalTimer, type IntervalTimerContext } from "../common/async.js";
 import { Emitter, type Event as BaseEvent } from "../common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
+import { runWhenWindowIdle } from "./scheduler.js";
 import { type BrowserWindow, getWindows, isWindow, mainWindow } from "./window.js";
 
 type DomListenerOptions = boolean | AddEventListenerOptions;
@@ -16,6 +18,67 @@ type DomTreeChild =
 const DOCUMENT_NODE_TYPE = 9;
 const ELEMENT_NODE_TYPE = 1;
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
+
+export { runAtThisOrScheduleAtNextAnimationFrame, runWhenWindowIdle, scheduleAtNextAnimationFrame } from "./scheduler.js";
+export { Dimension, getDomNodePagePosition } from './geometry.js';
+export { getWindowById, getWindowId } from './window.js';
+
+/** Computes a value during window idle time, or synchronously when first requested. */
+export class WindowIdleValue<T> implements IDisposable {
+	private readonly executor: () => void;
+	private readonly registration: IDisposable;
+	private initialized = false;
+	private result: T | undefined;
+	private error: unknown;
+
+	constructor(targetWindow: Window, executor: () => T) {
+		this.executor = () => {
+			if (this.initialized) return;
+			try {
+				this.result = executor();
+			} catch (error) {
+				this.error = error;
+			} finally {
+				this.initialized = true;
+			}
+		};
+		this.registration = runWhenWindowIdle(targetWindow, this.executor);
+	}
+
+	get isInitialized(): boolean {
+		return this.initialized;
+	}
+
+	get value(): T {
+		if (!this.initialized) {
+			this.registration.dispose();
+			this.executor();
+		}
+		if (this.error !== undefined) throw this.error;
+		return this.result as T;
+	}
+
+	dispose(): void {
+		this.registration.dispose();
+	}
+
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
+}
+
+export class WindowIntervalTimer extends IntervalTimer {
+	private readonly defaultWindow: Window | undefined;
+
+	constructor(node?: Node) {
+		super();
+		this.defaultWindow = node ? getWindow(node) : undefined;
+	}
+
+	override cancelAndSet(runner: () => void, interval: number, targetWindow: IntervalTimerContext = this.defaultWindow ?? getActiveWindow()): void {
+		super.cancelAndSet(runner, interval, targetWindow);
+	}
+}
 
 export interface IExternalFocusInfo {
 	readonly hasFocus: boolean;
@@ -240,6 +303,15 @@ export function isHTMLElement(value: unknown): value is HTMLElement {
 	return typeof htmlElementConstructor === "function"
 		? value instanceof htmlElementConstructor
 		: value.namespaceURI === HTML_NAMESPACE;
+}
+
+export function isEditableElement(element: Element): boolean {
+	const tagName = element.tagName.toLowerCase();
+	return tagName === 'input' || tagName === 'textarea' || isHTMLElement(element) && (
+		element.isContentEditable ||
+		element.hasAttribute('contenteditable') && element.getAttribute('contenteditable') !== 'false' ||
+		(element as HTMLElement & { readonly editContext?: unknown }).editContext != null
+	);
 }
 
 export function getShadowRoot(node: Node): ShadowRoot | null {

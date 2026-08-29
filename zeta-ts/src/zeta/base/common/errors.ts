@@ -65,6 +65,10 @@ export function canceled(reason?: unknown): CancellationError {
 	return new CancellationError('Operation cancelled', reason);
 }
 
+export function illegalArgument(name?: string): Error {
+	return new TypeError(name ? `Illegal argument: ${name}` : 'Illegal argument');
+}
+
 export function setUnexpectedErrorHandler(handler: (error: unknown) => void): void {
 	errorHandler.setUnexpectedErrorHandler(handler);
 }

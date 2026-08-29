@@ -46,7 +46,7 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 
 function createCacheKey(input: GpuRenderStrategyInput): string {
 	const style = input.rootStyle;
-	return [
+	return JSON.stringify([
 		input.visualLines.modelVersion,
 		input.visualLines.visualLineCount,
 		input.layout.lineHeight,
@@ -62,5 +62,5 @@ function createCacheKey(input: GpuRenderStrategyInput): string {
 		style.fontWeight,
 		style.letterSpacing,
 		style.tabSize,
-	].join('|');
+	]);
 }

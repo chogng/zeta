@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { LogEntry } from "../../common/logService.js";
+import { canLog, ConsoleLogger, LogLevel, NullLoggerService, type LogEntry } from "../../common/logService.js";
 import { LogService } from "../../common/logServiceImpl.js";
 
 test("LogService publishes structured entries and releases dynamic sinks", () => {
@@ -24,4 +24,34 @@ test("LogService isolates a failing sink", () => {
 	service.error("test", "failure");
 	assert.equal(entries.length, 1);
 	assert.equal(sinkErrors.length, 1);
+});
+
+test("log levels, null logging, and console logging expose the complete platform contract", () => {
+	assert.equal(canLog(LogLevel.Info, LogLevel.Debug), false);
+	assert.equal(canLog(LogLevel.Info, LogLevel.Error), true);
+	assert.equal(canLog(LogLevel.Off, LogLevel.Error), false);
+	const nullLogger = new NullLoggerService();
+	assert.doesNotThrow(() => nullLogger.error(new Error("ignored")));
+	assert.equal(nullLogger.createLogger("child"), nullLogger);
+
+	const calls: unknown[][] = [];
+	const logger = new ConsoleLogger("editor", {
+		debug: (...arguments_) => calls.push(arguments_),
+		info: (...arguments_) => calls.push(arguments_),
+		warn: (...arguments_) => calls.push(arguments_),
+		error: (...arguments_) => calls.push(arguments_),
+	});
+	logger.info("ready", { version: 1 });
+	assert.deepEqual(calls, [["[editor] ready", { version: 1 }]]);
+});
+
+test("LogService accepts uncategorized messages without losing structured local calls", () => {
+	const entries: LogEntry[] = [];
+	using service = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+	service.info("standalone message");
+	service.info("editor", "opened", { id: 1 });
+	assert.deepEqual(entries.map(entry => [entry.category, entry.message]), [
+		["application", "standalone message"],
+		["editor", "opened {\"id\":1}"],
+	]);
 });

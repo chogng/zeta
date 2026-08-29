@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
+import { DeferredPromise } from "../../../../base/common/async.js";
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LanguageCompletionProviderRegistry, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionRequest } from "./languageCompletionProviders.js";
@@ -19,7 +20,7 @@ const CATALOG_PROTOCOL_VERSION = 1;
 /** Completion worker client with a provider-catalog side channel. */
 export class LanguageCompletionCatalogWorkerClient extends Disposable implements LanguageCompletionWorker, LanguageWorkerModelSynchronizer, LanguageCompletionProviderCatalogSource, LanguageCompletionProviderModuleController, LanguageCompletionItemResolver {
 	private readonly catalogEmitter = this._register(new Emitter<LanguageCompletionProviderCatalog>());
-	private readonly waiters = new Set<CatalogWaiter>();
+	private readonly waiters = new Set<DeferredPromise<LanguageCompletionProviderCatalog>>();
 	private readonly worker: LanguageWorkerWireClient<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult>;
 	private readonly modules: LanguageCompletionProviderModuleWireClient;
 	private readonly resolver: LanguageCompletionResolveWireClient;
@@ -69,9 +70,9 @@ export class LanguageCompletionCatalogWorkerClient extends Disposable implements
 			return Promise.reject(error);
 		}
 		if (this.failure) return Promise.reject(this.failure);
-		const catalog = this.catalogReady ? Promise.resolve(this.catalog) : new Promise<LanguageCompletionProviderCatalog>((resolve, reject) => {
-			this.waiters.add({ resolve, reject });
-		});
+		const catalogWaiter = new DeferredPromise<LanguageCompletionProviderCatalog>();
+		if (!this.catalogReady) this.waiters.add(catalogWaiter);
+		const catalog = this.catalogReady ? Promise.resolve(this.catalog) : catalogWaiter.p;
 		return Promise.all([catalog, this.moduleReadiness]).then(() => {
 			this.ensureAlive();
 			return this.catalog;
@@ -127,7 +128,7 @@ export class LanguageCompletionCatalogWorkerClient extends Disposable implements
 			this.catalogReady = true;
 			const waiters = [...this.waiters];
 			this.waiters.clear();
-			for (const waiter of waiters) waiter.resolve(catalog);
+			for (const waiter of waiters) void waiter.complete(catalog);
 			this.catalogEmitter.fire(catalog);
 		} catch (error) {
 			this.worker.invalidate(error);
@@ -168,7 +169,7 @@ export class LanguageCompletionCatalogWorkerClient extends Disposable implements
 	private failWaiters(error: Error): void {
 		const waiters = [...this.waiters];
 		this.waiters.clear();
-		for (const waiter of waiters) waiter.reject(error);
+		for (const waiter of waiters) void waiter.error(error);
 	}
 
 	private ensureAlive(): void {
@@ -205,11 +206,6 @@ export class LanguageCompletionCatalogWirePublisher extends Disposable {
 			throw error;
 		}
 	}
-}
-
-interface CatalogWaiter {
-	readonly resolve: (catalog: LanguageCompletionProviderCatalog) => void;
-	readonly reject: (error: Error) => void;
 }
 
 const EMPTY_CATALOG: LanguageCompletionProviderCatalog = Object.freeze({

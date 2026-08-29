@@ -8,6 +8,7 @@ import {
 } from "../common/lifecycle.js";
 
 export type BrowserWindow = Window & typeof globalThis;
+export type CodeWindow = BrowserWindow;
 
 export interface IRegisteredWindow {
 	readonly id: number;

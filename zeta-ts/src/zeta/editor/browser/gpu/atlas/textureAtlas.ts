@@ -30,7 +30,7 @@ export class TextureAtlas extends Disposable {
 
 	public getGlyph(rasterizer: IGlyphRasterizer, chars: string, style: IGpuGlyphStyle, deviceX: number): Readonly<ITextureAtlasPageGlyph> {
 		const subPixelBucket = Math.round((deviceX - Math.floor(deviceX)) * 10) % 10;
-		const styleKey = `${rasterizer.styleKey(style)}|${subPixelBucket}`;
+		const styleKey = JSON.stringify([rasterizer.styleKey(style), subPixelBucket]);
 		for (const page of this.mutablePages) {
 			const glyph = page.getGlyph(rasterizer, chars, styleKey, () => rasterizer.rasterizeGlyph(chars, style, subPixelBucket / 10));
 			if (glyph) return glyph;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BugIndicatingError, CancellationError, ErrorHandler, errorHandler, getErrorMessage, isCancellationError, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
+import { BugIndicatingError, CancellationError, ErrorHandler, errorHandler, getErrorMessage, illegalArgument, isCancellationError, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
 
 test('CancellationError preserves context and is the only project cancellation error', () => {
 	const reason = new Error('superseded');
@@ -21,6 +21,10 @@ test('toError preserves Error instances', () => {
 test('toError wraps non-Error values', () => {
 	assert.deepEqual(toError('failure'), new Error('failure'));
 	assert.deepEqual(toError(undefined), new Error('undefined'));
+});
+
+test('illegalArgument identifies the rejected input', () => {
+	assert.throws(() => { throw illegalArgument('lineIndex'); }, /Illegal argument: lineIndex/);
 });
 
 test('getErrorMessage reads messages, stack headers, and fallback values', () => {

@@ -16,6 +16,7 @@ export interface EmitterOptions {
 	readonly onWillRemoveListener?: (emitter: Emitter<any>) => void;
 	readonly onDidRemoveLastListener?: (emitter: Emitter<any>) => void;
 	readonly onListenerError?: (error: unknown) => void;
+	readonly deliveryQueue?: EventDeliveryQueue;
 }
 
 interface ListenerRegistration<T> {
@@ -24,13 +25,36 @@ interface ListenerRegistration<T> {
 	isActive: boolean;
 }
 
-interface EventDelivery<T> {
-	readonly registration: ListenerRegistration<T>;
-	readonly event: T;
-}
-
 interface BufferedEventDelivery {
 	deliver(): void;
+}
+
+export interface EventDeliveryQueue {
+	readonly _isEventDeliveryQueue: true;
+}
+
+export function createEventDeliveryQueue(): EventDeliveryQueue {
+	return new EventDeliveryQueueImpl();
+}
+
+class EventDeliveryQueueImpl implements EventDeliveryQueue {
+	readonly _isEventDeliveryQueue = true;
+	private readonly deliveries: BufferedEventDelivery[] = [];
+	private isDelivering = false;
+
+	enqueue(deliveries: readonly BufferedEventDelivery[]): void {
+		this.deliveries.push(...deliveries);
+		if (this.isDelivering) return;
+		this.isDelivering = true;
+		try {
+			for (let index = 0; index < this.deliveries.length; index += 1) {
+				this.deliveries[index]!.deliver();
+			}
+		} finally {
+			this.deliveries.length = 0;
+			this.isDelivering = false;
+		}
+	}
 }
 
 let activeEventBuffer: BufferedEventDelivery[] | undefined;
@@ -80,8 +104,7 @@ export function runWithBufferedEvents<T>(mutation: () => T): T {
 
 export class Emitter<T> extends AbstractDisposable {
 	private readonly listeners = new Set<ListenerRegistration<T>>();
-	private readonly deliveryQueue: EventDelivery<T>[] = [];
-	private isDelivering = false;
+	private readonly deliveryQueue: EventDeliveryQueueImpl;
 
 	public readonly event: Event<T> = (listener, thisArgs, disposables) => {
 		this.assertNotDisposed();
@@ -103,6 +126,9 @@ export class Emitter<T> extends AbstractDisposable {
 
 	constructor(private readonly options: EmitterOptions = {}) {
 		super();
+		this.deliveryQueue = options.deliveryQueue
+			? options.deliveryQueue as EventDeliveryQueueImpl
+			: new EventDeliveryQueueImpl();
 	}
 
 	public fire(event: T): void {
@@ -110,7 +136,9 @@ export class Emitter<T> extends AbstractDisposable {
 			return;
 		}
 
-		const deliveries = [...this.listeners].map(registration => ({ registration, event }));
+		const deliveries = [...this.listeners].map(registration => ({
+			deliver: () => this.deliver(registration, event),
+		}));
 		if (activeEventBuffer) {
 			activeEventBuffer.push({ deliver: () => this.enqueue(deliveries) });
 			return;
@@ -128,7 +156,6 @@ export class Emitter<T> extends AbstractDisposable {
 			registration.isActive = false;
 		}
 		this.listeners.clear();
-		this.deliveryQueue.length = 0;
 		if (hadListeners) {
 			this.options.onDidRemoveLastListener?.(this);
 		}
@@ -146,28 +173,16 @@ export class Emitter<T> extends AbstractDisposable {
 		}
 	}
 
-	private enqueue(deliveries: readonly EventDelivery<T>[]): void {
-		this.deliveryQueue.push(...deliveries);
-		if (this.isDelivering) {
-			return;
-		}
+	private enqueue(deliveries: readonly BufferedEventDelivery[]): void {
+		this.deliveryQueue.enqueue(deliveries);
+	}
 
-		this.isDelivering = true;
+	private deliver(registration: ListenerRegistration<T>, event: T): void {
+		if (!registration.isActive) return;
 		try {
-			for (let index = 0; index < this.deliveryQueue.length; index += 1) {
-				const delivery = this.deliveryQueue[index];
-				if (!delivery.registration.isActive) {
-					continue;
-				}
-				try {
-					delivery.registration.listener.call(delivery.registration.thisArgs, delivery.event);
-				} catch (error) {
-					this.reportListenerError(error);
-				}
-			}
-		} finally {
-			this.deliveryQueue.length = 0;
-			this.isDelivering = false;
+			registration.listener.call(registration.thisArgs, event);
+		} catch (error) {
+			this.reportListenerError(error);
 		}
 	}
 
@@ -177,6 +192,79 @@ export class Emitter<T> extends AbstractDisposable {
 		} catch (reportingError) {
 			console.error('Unexpected error while reporting an event listener error', error, reportingError);
 		}
+	}
+}
+
+export class PauseableEmitter<T> extends Emitter<T> {
+	private pauseCount = 0;
+	private readonly eventQueue: T[] = [];
+	private readonly merge: ((events: readonly T[]) => T) | undefined;
+
+	constructor(options: EmitterOptions & { readonly merge?: (events: readonly T[]) => T } = {}) {
+		super(options);
+		this.merge = options.merge;
+	}
+
+	get isPaused(): boolean {
+		return this.pauseCount > 0;
+	}
+
+	pause(): void {
+		this.assertNotDisposed();
+		this.pauseCount += 1;
+	}
+
+	resume(): void {
+		this.assertNotDisposed();
+		if (this.pauseCount === 0 || --this.pauseCount > 0) return;
+		if (this.merge && this.eventQueue.length > 0) {
+			const events = this.eventQueue.splice(0);
+			super.fire(this.merge(events));
+			return;
+		}
+		while (!this.isPaused && this.eventQueue.length > 0) {
+			super.fire(this.eventQueue.shift()!);
+		}
+	}
+
+	override fire(event: T): void {
+		if (this.isPaused) {
+			this.eventQueue.push(event);
+			return;
+		}
+		super.fire(event);
+	}
+
+	protected override disposeCore(): void {
+		this.eventQueue.length = 0;
+		this.pauseCount = 0;
+		super.disposeCore();
+	}
+}
+
+export interface IValueWithChangeEvent<T> {
+	readonly onDidChange: Event<void>;
+	readonly value: T;
+}
+
+export class ValueWithChangeEvent<T> implements IValueWithChangeEvent<T> {
+	static const<T>(value: T): IValueWithChangeEvent<T> {
+		return Object.freeze({ onDidChange: Event.None, value });
+	}
+
+	private readonly changeEmitter = new Emitter<void>();
+	readonly onDidChange = this.changeEmitter.event;
+
+	constructor(private currentValue: T) {}
+
+	get value(): T {
+		return this.currentValue;
+	}
+
+	set value(value: T) {
+		if (Object.is(value, this.currentValue)) return;
+		this.currentValue = value;
+		this.changeEmitter.fire(undefined);
 	}
 }
 

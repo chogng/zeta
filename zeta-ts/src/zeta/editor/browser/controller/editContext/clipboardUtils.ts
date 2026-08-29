@@ -1,4 +1,6 @@
 import { h } from '../../../../base/browser/dom.js';
+import { sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
+import { Mimes } from '../../../../base/common/mime.js';
 
 /** Clipboard data readable by an editor input adapter. */
 export interface IReadableClipboardData {
@@ -92,18 +94,18 @@ export function createWritableClipboardData(dataTransfer: DataTransfer | null | 
 }
 
 function readPlainText(clipboardData: IReadableClipboardData): string {
-	return clipboardData.getData('text/plain');
+	return clipboardData.getData(Mimes.text);
 }
 
 export function readEditorClipboardText(clipboardData: IReadableClipboardData, ownerDocument: Document): string {
 	try {
-		const text = clipboardData.getData('text/plain');
+		const text = clipboardData.getData(Mimes.text);
 		if (text.length > 0) return text;
 	} catch {
 		// A browser transfer may expose HTML without allowing plain-text access.
 	}
 	try {
-		return readEditorHtmlText(clipboardData.getData('text/html'), ownerDocument);
+		return readEditorHtmlText(clipboardData.getData(Mimes.html), ownerDocument);
 	} catch {
 		return '';
 	}
@@ -112,10 +114,9 @@ export function readEditorClipboardText(clipboardData: IReadableClipboardData, o
 /** Reduces untrusted HTML to inert deterministic text for paste and drop paths. */
 export function readEditorHtmlText(html: string, ownerDocument: Document): string {
 	if (html.length === 0) return '';
-	const template = h(ownerDocument, 'template');
-	template.innerHTML = html;
+	const fragment = sanitizeHtmlToFragment(html, { ownerDocument, config: {} });
 	const parts: string[] = [];
-	appendHtmlClipboardText(template.content, parts);
+	appendHtmlClipboardText(fragment, parts);
 	return parts.join('').replaceAll('\u00a0', ' ').replace(/\n{3,}/g, '\n\n').replace(/^\n|\n$/g, '');
 }
 

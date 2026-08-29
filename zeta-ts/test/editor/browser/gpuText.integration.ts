@@ -84,7 +84,7 @@ function measureGpuAdvance(text: string): number {
 	const editorElement = container.querySelector<HTMLElement>('.stanza-editor');
 	if (!editorElement) throw new Error('GPU integration editor is missing');
 	const style = getComputedStyle(editorElement);
-	const rasterizer = new GlyphRasterizer(document, devicePixelRatio);
+	const rasterizer = new GlyphRasterizer(editorElement, devicePixelRatio);
 	const glyphStyle: IGpuGlyphStyle = {
 		color: style.color,
 		fontFamily: style.fontFamily,

@@ -1,3 +1,4 @@
+import { findLastIdxMonotonous } from "../../../../base/common/arraysFind.js";
 import { CharCode } from "../../../../base/common/charCode.js";
 import { TextPosition } from "../position.js";
 import { TextRange } from "../range.js";
@@ -49,14 +50,7 @@ export class PositionOffsetTransformer extends PositionOffsetTransformerBase {
 
 	getPosition(offset: number): TextPosition {
 		const clampedOffset = Math.min(Math.max(Math.trunc(offset), 0), this.text.length);
-		let low = 0;
-		let high = this.lineStarts.length - 1;
-		while (low <= high) {
-			const middle = (low + high) >> 1;
-			if (this.lineStarts[middle] <= clampedOffset) low = middle + 1;
-			else high = middle - 1;
-		}
-		const lineIndex = Math.max(0, high);
+		const lineIndex = Math.max(0, findLastIdxMonotonous(this.lineStarts, start => start <= clampedOffset));
 		return TextPosition.at(lineIndex, Math.min(clampedOffset - this.lineStarts[lineIndex], this.getLineLength(lineIndex)));
 	}
 
@@ -99,14 +93,7 @@ export class LineBasedPositionOffsetTransformer extends PositionOffsetTransforme
 
 	getPosition(offset: number): TextPosition {
 		const clampedOffset = Math.min(Math.max(Math.trunc(offset), 0), this.textLengthToOffset());
-		let low = 0;
-		let high = this.lineStarts.length - 1;
-		while (low <= high) {
-			const middle = (low + high) >> 1;
-			if (this.lineStarts[middle] <= clampedOffset) low = middle + 1;
-			else high = middle - 1;
-		}
-		const lineIndex = Math.max(0, high);
+		const lineIndex = Math.max(0, findLastIdxMonotonous(this.lineStarts, start => start <= clampedOffset));
 		return TextPosition.at(lineIndex, Math.min(clampedOffset - this.lineStarts[lineIndex], this.lineLengths[lineIndex]));
 	}
 

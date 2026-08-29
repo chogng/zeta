@@ -13,6 +13,19 @@ export interface IReference<T> extends IDisposable {
 	readonly object: T;
 }
 
+export function isDisposable<T>(value: T): value is T & IDisposable {
+	if (typeof value !== 'object' || value === null) return false;
+	const dispose = Reflect.get(value, 'dispose');
+	return typeof dispose === 'function' && dispose.length === 0;
+}
+
+/** A reference whose value is borrowed and therefore never disposed here. */
+export class ImmortalReference<T> implements IReference<T> {
+	constructor(readonly object: T) {}
+	dispose(): void {}
+	[Symbol.dispose](): void {}
+}
+
 /**
  * A project resource that supports both explicit `.disposeAsync()` calls and
  * the ECMAScript `await using` protocol.
@@ -365,6 +378,16 @@ export class DisposableStore extends AbstractDisposable {
 		setDisposableOwner(resource, this);
 		this.resources.add(resource);
 		return owned;
+	}
+
+	/** Removes a resource without disposing it, transferring ownership to the caller. */
+	public delete(resource: IDisposable): boolean {
+		if (this.isDisposed || !this.resources.delete(resource)) return false;
+		clearDisposableOwner(resource);
+		const replacement = new DisposableStack();
+		for (const remaining of this.resources) replacement.use(remaining);
+		this.stack = replacement;
+		return true;
 	}
 
 	protected override disposeCore(): void {

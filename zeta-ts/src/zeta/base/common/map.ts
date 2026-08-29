@@ -275,3 +275,118 @@ export class ResourceSet implements Set<URI> {
 		return this.values();
 	}
 }
+
+export type NKey = string | number | boolean;
+
+interface NKeyMapNode<T> {
+	readonly children: Map<NKey, NKeyMapNode<T>>;
+	hasValue: boolean;
+	value: T | undefined;
+}
+
+/** Stores values under fixed-length tuples without allocating composite keys. */
+export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
+	private readonly root = createNKeyMapNode<TValue>();
+
+	public set(value: TValue, ...keys: TKeys): void {
+		const node = this.getOrCreateNode(keys);
+		node.hasValue = true;
+		node.value = value;
+	}
+
+	public get(...keys: TKeys): TValue | undefined {
+		const node = this.getNode(keys);
+		return node?.hasValue ? node.value : undefined;
+	}
+
+	public delete(...keys: TKeys): boolean {
+		const path = this.getPath(keys);
+		const node = path.at(-1)?.node;
+		if (!node?.hasValue) return false;
+		node.hasValue = false;
+		node.value = undefined;
+		this.prune(path);
+		return true;
+	}
+
+	public deleteAll(...keys: Partial<TKeys>): boolean {
+		if (keys.length === 0) {
+			const hadValues = this.root.hasValue || this.root.children.size > 0;
+			this.clear();
+			return hadValues;
+		}
+		const path = this.getPath(keys as readonly NKey[]);
+		if (path.length !== keys.length) return false;
+		const last = path.at(-1)!;
+		const deleted = last.parent.children.delete(last.key);
+		if (deleted) this.prune(path.slice(0, -1));
+		return deleted;
+	}
+
+	public clear(): void {
+		this.root.children.clear();
+		this.root.hasValue = false;
+		this.root.value = undefined;
+	}
+
+	public *getAll(...keys: Partial<TKeys>): IterableIterator<TValue> {
+		const node = keys.length === 0 ? this.root : this.getNode(keys as readonly NKey[]);
+		if (node) yield* this.valuesFrom(node);
+	}
+
+	public *values(): IterableIterator<TValue> {
+		yield* this.valuesFrom(this.root);
+	}
+
+	private getOrCreateNode(keys: readonly NKey[]): NKeyMapNode<TValue> {
+		let node = this.root;
+		for (const key of keys) {
+			let child = node.children.get(key);
+			if (!child) {
+				child = createNKeyMapNode<TValue>();
+				node.children.set(key, child);
+			}
+			node = child;
+		}
+		return node;
+	}
+
+	private getNode(keys: readonly NKey[]): NKeyMapNode<TValue> | undefined {
+		let node = this.root;
+		for (const key of keys) {
+			const child = node.children.get(key);
+			if (!child) return undefined;
+			node = child;
+		}
+		return node;
+	}
+
+	private getPath(keys: readonly NKey[]): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> {
+		const path: Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> = [];
+		let parent = this.root;
+		for (const key of keys) {
+			const node = parent.children.get(key);
+			if (!node) break;
+			path.push({ parent, key, node });
+			parent = node;
+		}
+		return path;
+	}
+
+	private prune(path: readonly { readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }[]): void {
+		for (let index = path.length - 1; index >= 0; index -= 1) {
+			const entry = path[index]!;
+			if (entry.node.hasValue || entry.node.children.size > 0) return;
+			entry.parent.children.delete(entry.key);
+		}
+	}
+
+	private *valuesFrom(node: NKeyMapNode<TValue>): IterableIterator<TValue> {
+		if (node.hasValue) yield node.value as TValue;
+		for (const child of node.children.values()) yield* this.valuesFrom(child);
+	}
+}
+
+function createNKeyMapNode<T>(): NKeyMapNode<T> {
+	return { children: new Map(), hasValue: false, value: undefined };
+}

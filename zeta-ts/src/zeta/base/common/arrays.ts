@@ -1,3 +1,108 @@
+export type Comparator<T> = (left: T, right: T) => number;
+
+export const numberComparator: Comparator<number> = (left, right) => left - right;
+export const booleanComparator: Comparator<boolean> = (left, right) => numberComparator(left ? 1 : 0, right ? 1 : 0);
+
+export function equals<T>(left: readonly T[] | undefined, right: readonly T[] | undefined, itemEquals: (left: T, right: T) => boolean = strictEquals): boolean {
+	if (left === right) return true;
+	if (!left || !right) return false;
+	return arraysEqual(left, right, itemEquals);
+}
+
+/** Binary-searches an indexed collection. A missing item is encoded as `-(insertionIndex + 1)`. */
+export function binarySearch2(length: number, compareToKey: (index: number) => number): number {
+	if (!Number.isSafeInteger(length) || length < 0) throw new RangeError('Binary-search length must be a non-negative safe integer');
+	let low = 0;
+	let high = length - 1;
+	while (low <= high) {
+		const middle = low + Math.floor((high - low) / 2);
+		const comparison = compareToKey(middle);
+		if (comparison < 0) low = middle + 1;
+		else if (comparison > 0) high = middle - 1;
+		else return middle;
+	}
+	return -(low + 1);
+}
+
+export function compareBy<T, K>(selector: (item: T) => K, comparator: Comparator<K>): Comparator<T> {
+	return (left, right) => comparator(selector(left), selector(right));
+}
+
+export function pushMany<T>(target: T[], items: readonly T[]): void {
+	for (const item of items) target.push(item);
+}
+
+export function sumBy<T>(items: readonly T[], selector: (item: T) => number): number {
+	let result = 0;
+	for (const item of items) result += selector(item);
+	return result;
+}
+
+export function* groupAdjacentBy<T>(items: Iterable<T>, shouldGroup: (left: T, right: T) => boolean): IterableIterator<T[]> {
+	let group: T[] = [];
+	for (const item of items) {
+		if (group.length > 0 && !shouldGroup(group[group.length - 1]!, item)) {
+			yield group;
+			group = [];
+		}
+		group.push(item);
+	}
+	if (group.length > 0) yield group;
+}
+
+/** Consumes values from the front of an array without repeatedly shifting it. */
+export class ArrayQueue<T> {
+	private firstIndex = 0;
+	private lastIndex: number;
+
+	constructor(private readonly items: readonly T[]) {
+		this.lastIndex = items.length - 1;
+	}
+
+	get length(): number {
+		return this.lastIndex - this.firstIndex + 1;
+	}
+
+	get first(): T | undefined {
+		return this.peek();
+	}
+
+	takeWhile(predicate: (item: T) => boolean): readonly T[] | null {
+		const start = this.firstIndex;
+		while (this.firstIndex <= this.lastIndex && predicate(this.items[this.firstIndex]!)) this.firstIndex += 1;
+		return start === this.firstIndex ? null : this.items.slice(start, this.firstIndex);
+	}
+
+	takeFromEndWhile(predicate: (item: T) => boolean): readonly T[] | null {
+		const previousEnd = this.lastIndex;
+		while (this.lastIndex >= this.firstIndex && predicate(this.items[this.lastIndex]!)) this.lastIndex -= 1;
+		if (this.lastIndex === previousEnd) return null;
+		const result = this.items.slice(this.lastIndex + 1, previousEnd + 1);
+		return result;
+	}
+
+	peek(): T | undefined { return this.length === 0 ? undefined : this.items[this.firstIndex]; }
+	peekLast(): T | undefined { return this.length === 0 ? undefined : this.items[this.lastIndex]; }
+	dequeue(): T | undefined {
+		if (this.length === 0) return undefined;
+		const result = this.items[this.firstIndex];
+		this.firstIndex += 1;
+		return result;
+	}
+	removeLast(): T | undefined {
+		if (this.length === 0) return undefined;
+		const result = this.items[this.lastIndex];
+		this.lastIndex -= 1;
+		return result;
+	}
+	takeCount(count: number): readonly T[] {
+		if (!Number.isSafeInteger(count) || count < 0 || count > this.length) throw new RangeError('Queue count is outside the remaining items');
+		const result = this.items.slice(this.firstIndex, this.firstIndex + count);
+		this.firstIndex += count;
+		return result;
+	}
+}
+
 /** Compares two array-like sequences item by item. */
 export function arraysEqual<T>(
 	left: readonly T[],

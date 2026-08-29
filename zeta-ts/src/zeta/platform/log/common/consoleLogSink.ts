@@ -1,4 +1,5 @@
 import type { ILogSink, LogEntry } from "./logService.js";
+import { LogLevel } from "./logService.js";
 
 /** Development and host-console projection of structured log entries. */
 export class ConsoleLogSink implements ILogSink {
@@ -8,11 +9,11 @@ export class ConsoleLogSink implements ILogSink {
 		const message = `[${entry.category}] ${entry.message}`;
 		const argumentsList = entry.error === undefined ? [message] : [message, entry.error];
 		switch (entry.level) {
-			case "trace":
-			case "debug": this.target.debug(...argumentsList); break;
-			case "information": this.target.info(...argumentsList); break;
-			case "warning": this.target.warn(...argumentsList); break;
-			case "error": this.target.error(...argumentsList); break;
+			case LogLevel.Trace:
+			case LogLevel.Debug: this.target.debug(...argumentsList); break;
+			case LogLevel.Info: this.target.info(...argumentsList); break;
+			case LogLevel.Warning: this.target.warn(...argumentsList); break;
+			case LogLevel.Error: this.target.error(...argumentsList); break;
 		}
 	}
 }

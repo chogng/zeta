@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { Emitter, Event, runWithBufferedEvents } from "../../common/event.js";
+import { createEventDeliveryQueue, Emitter, Event, PauseableEmitter, runWithBufferedEvents, ValueWithChangeEvent } from "../../common/event.js";
 import { DisposableStore, type IDisposable, noneDisposable } from "../../common/lifecycle.js";
 
 test("Event.None returns the reusable empty disposable", () => {
@@ -190,4 +190,58 @@ test("runWithBufferedEvents discards notifications from failed mutations", () =>
 
 	assert.equal(calls, 0);
 	emitter.dispose();
+});
+
+test("shared delivery queues keep nested cross-emitter delivery in FIFO order", () => {
+	const deliveryQueue = createEventDeliveryQueue();
+	const first = new Emitter<number>({ deliveryQueue });
+	const second = new Emitter<number>({ deliveryQueue });
+	const received: string[] = [];
+	first.event(value => {
+		received.push(`first-a:${value}`);
+		second.fire(value);
+	});
+	first.event(value => received.push(`first-b:${value}`));
+	second.event(value => received.push(`second:${value}`));
+
+	first.fire(1);
+
+	assert.deepEqual(received, ["first-a:1", "first-b:1", "second:1"]);
+	first.dispose();
+	second.dispose();
+});
+
+test("PauseableEmitter preserves nesting and optionally merges queued events", () => {
+	const plain = new PauseableEmitter<number>();
+	const received: number[] = [];
+	plain.event(value => received.push(value));
+	plain.pause();
+	plain.pause();
+	plain.fire(1);
+	plain.fire(2);
+	plain.resume();
+	assert.deepEqual([...received], []);
+	plain.resume();
+	assert.deepEqual(received, [1, 2]);
+
+	const merged = new PauseableEmitter<number>({ merge: values => values.reduce((sum, value) => sum + value, 0) });
+	merged.event(value => received.push(value));
+	merged.pause();
+	merged.fire(3);
+	merged.fire(4);
+	merged.resume();
+	assert.deepEqual(received, [1, 2, 7]);
+	plain.dispose();
+	merged.dispose();
+});
+
+test("ValueWithChangeEvent emits only for changed values", () => {
+	const value = new ValueWithChangeEvent(1);
+	let changes = 0;
+	value.onDidChange(() => changes += 1);
+	value.value = 1;
+	value.value = 2;
+	assert.equal(value.value, 2);
+	assert.equal(changes, 1);
+	assert.equal(ValueWithChangeEvent.const("fixed").value, "fixed");
 });

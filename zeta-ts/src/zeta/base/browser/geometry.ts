@@ -5,6 +5,7 @@ export interface IDimension {
 
 export class Dimension implements IDimension {
 	static readonly Zero = new Dimension(0, 0);
+	static readonly None = Dimension.Zero;
 
 	constructor(
 		readonly width: number,
