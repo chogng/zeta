@@ -6,17 +6,17 @@
 
 ## 快速理解
 
-Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、usage/Goal 治理、按模型校准未来预算、模型输入逐项限幅、冻结的统一代码编辑工具面、durable 计划，以及使用 native OAuth target 的 ChatGPT 订阅本地 Agent Loop。Core、App Server 和 Desktop 的确定性行为由现有测试与 smoke 入口覆盖；后续重点是 ChatGPT 订阅兼容收口，真实模型 benchmark 与 production telemetry 仅在产品确有需要时再建设。
+Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、成本与目标治理、按模型校准未来预算、模型输入逐项限幅、冻结的统一代码编辑工具面、durable 计划，以及使用 native OAuth 的 ChatGPT 与 Kimi 订阅本地 Agent Loop。Core、App Server 和 Desktop 的确定性行为由现有测试与 smoke 入口覆盖；剩余重点是 ChatGPT 订阅兼容收口，真实模型 benchmark 与 production telemetry 仅在产品确有需要时再建设。
 
-| 用户场景 | 当前表现 | 本计划完成后的结果 | 对应阶段 |
+| 用户场景 | 今天可以做什么 | 剩余工作 | 对应阶段 |
 | --- | --- | --- | --- |
-| 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持冻结工具 profile、durable 计划、批准、取消和恢复 | 用现有行为测试验证确定性闭环；真实模型成功率后置 | S3、S7 |
-| Agent 运行中追加要求 | 消息 durable 追加到当前 Turn；所有模型都由本地执行器在模型安全点重规划 | 增加完整故障矩阵和恢复验证 | S1、S5 |
-| 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
-| 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage、跨 Turn 累计的 Thread Goal token 预算，以及按模型和估算 revision 恢复的未来预算校准 | 由现有压缩、usage 和 Goal 测试验证；质量/成本 benchmark 后置 | S2、S7 |
-| 切换 OpenAI、Anthropic 或 Google 模型 | Turn 接受时已冻结同一套 coding ToolProfile；`apply_patch` 默认承担通用变更，`edit` 只承担唯一字符串微编辑和降级 | 由 provider conformance 与行为测试保持统一 profile；模型对比 benchmark 后置 | S3、S7 |
-| 使用 ChatGPT 订阅模型 | native device OAuth、SecretStore、refresh、Responses target 与本地 Agent Loop 已接通 | 增加兼容探测、secret、rate-limit 与故障矩阵 | S5 |
-| 使用 Skills、MCP 和子 Agent | 显式 Skill、动态工具发现和多 Agent durable 协调已具备 | 自动选择受控、MCP 暴露策略固定、多 Agent 有完整故障验证 | S6、S7 |
+| 让 Agent 修复代码并运行测试 | 完整的模型→工具→模型循环，支持冻结工具 profile、durable 计划、批准、取消和恢复 | 无；真实模型成功率属于后置度量 | S3、S7 |
+| Agent 运行中追加要求 | 消息 durable 追加到当前 Turn，由本地执行器在模型安全点重规划 | 无；订阅路径的故障矩阵在 S5 补齐 | S1、S5 |
+| 供应商报上下文溢出或认证失败 | 认证失败直接成为当前 Turn 错误，上下文溢出先持久化压缩再以新快照重试一次，错误卡片按稳定错误码给出下一步 | 无 | S1 |
+| 长会话消耗大量 token | ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage，以及跨 Turn 累计的 Thread Goal token 预算和按模型校准的未来容量 | 无；质量与成本 benchmark 属于后置度量 | S2、S7 |
+| 切换 OpenAI、Anthropic 或 Google 模型 | Turn 接受时冻结同一套 coding ToolProfile；`apply_patch` 默认承担通用变更，`edit` 只承担唯一字符串微编辑和降级 | 无；模型对比 benchmark 属于后置度量 | S3、S4 |
+| 使用 ChatGPT 订阅模型 | native device OAuth、SecretStore、refresh、Responses target 与本地 Agent Loop 已接通 | 兼容探测、丰富 item 投影、secret 输入、账户与 rate-limit 状态、故障矩阵 | S5 |
+| 使用 Skills、MCP 和子 Agent | 显式与受信任自动选择、MCP 暴露阈值切换、多 Agent durable 协调和 Desktop 嵌套视图 | 无 | S6 |
 
 ## 1. 当前实现基线
 
@@ -61,8 +61,6 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 
 ## 3. S1：交互与失败语义（P0）
 
-S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产品完整。
-
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
 | AL-101 | 已实现 | 运行中 steering | durable `ThreadCommand::SteerTurn`、`TurnSteered`/delivery facts、App Server `session/request::SteerTurn`、Desktop 运行中发送与本地 executor 重规划 | Running、WaitingForApproval、WaitingForUserInput 可追加；Cancelling 和终态稳定拒绝；多条 steer 保序；重启后不丢失、不重复提交 |
@@ -70,8 +68,6 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 | AL-103 | 已实现 | 溢出恢复 | Provider 返回 `ContextOverflow` 时触发一次 durable compaction，再以新 snapshot 重试一次 | checkpoint 与本 Turn 的恢复标记原子提交后才发重试调用；再次溢出稳定失败；取消立即生效；恢复过程不重复 checkpoint 或模型副作用 |
 | AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `toolRepetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
 | AL-105 | 已实现 | 交互错误 UI | Desktop 从 canonical `StableTurnErrorCode` 投影对话内错误卡片；可重试失败开始新 Turn，认证错误打开模型选择，上下文或预算耗尽创建新对话，无效请求与工具重复失败聚焦输入以修改方案 | UI 只按稳定错误码分流；仅最新失败 Turn 暴露动作；刷新和重连从 canonical Thread 重建相同卡片 |
-
-S1、S2 与 S3 已完成；确定性行为由现有测试覆盖，下一阶段继续 S5 能力协商。真实模型 baseline 和 production telemetry 属于后置工作，不作为当前闭环的隐含前置条件。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
@@ -83,8 +79,6 @@ S1、S2 与 S3 已完成；确定性行为由现有测试覆盖，下一阶段�
 | AL-204 | 已实现 | 手动压缩 | `/compact` 以独立、不可 steering 的 Turn 执行；可选保留提示冻结在 typed command receipt；本地路径复用 durable checkpoint/usage，订阅路径把无提示请求委托给 upstream `thread/compact/start` | 只覆盖完整 terminal durable 前缀；压缩 Turn 和未完成工具组不被吸收；超长 Core-managed 前缀分批提交；失败不提交半成品 checkpoint；command replay 不重复外部调用 |
 | AL-205 | 已实现 | 预算校准 | 普通调用和模型驱动的 compaction 把带 estimator/calibration revision 的调用前估算写入 `ModelUsageRecorded`；reducer 按冻结模型与 estimator revision 从 provider input usage 重建只收紧未来容量的非对称 EMA；现有 OpenAI exact preflight、其他声明式 remote preflight 与本地 tokenizer 降级路径继续作用于最终 request | 重启后校准一致；缺失 input usage 不生成样本；上调立即生效、下调渐进衰减；未知窗口仍为 provider-managed；历史 durable usage 聚合保持原值 |
 
-AL-201 至 AL-205 已完成，S2 收口；统一工具面与 durable 计划由 S3 接续完成。
-
 ## 5. S3：统一编辑工具面与计划工具（P1）
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
@@ -94,8 +88,6 @@ AL-201 至 AL-205 已完成，S2 收口；统一工具面与 durable 计划由 S
 | AL-303 | 已实现 | `update_plan` | 模型可见工具提交 durable `PlanUpdated`，Turn 保存 canonical plan，Desktop 只投影该状态 | 更新幂等、replay/restart 不丢失；同一时刻最多一个 `in_progress`；计划状态不依赖 transient stream |
 | AL-304 | 已实现 | 工具 schema 与提示词回归 | 固定统一 profile 的工具顺序、schema、描述和 digest fixture；工具使用边界由各 `ToolDefinition` owner 维护，模型基础 instructions 只要求服从 host exact schema | 同一 snapshot 组装稳定；两个不同 Provider/model 使用相同 canonical schema；definition 变化要求新 revision/digest；模型基础 instructions 不复制具体工具契约 |
 | AL-305 | 已实现 | 多工具调用顺序 | 保持 `parallel_tool_calls: true`，执行侧继续按 durable 调用顺序串行 | 一次模型响应中的多个调用先完整持久化，再依次批准和执行；取消后未开始调用不得执行；不引入并行写副作用 |
-
-S3 已完成；模型行为指标和发布门属于 S7 的后置可选工作，不要求 PR 或 S3 依赖真实模型 API。
 
 ## 6. S4：供应商流式与 Prompt 缓存（P1）
 
@@ -107,7 +99,7 @@ S3 已完成；模型行为指标和发布门属于 S7 的后置可选工作，�
 | AL-404 | 已实现 | Provider conformance matrix | OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 与兼容 Chat profile 共用 canonical fixture | instructions、tool call/result、refusal、usage、图片、错误分类和流式终止语义已有覆盖；未物化附件与 unsupported output 明确失败 |
 | AL-405 | 已实现 | 多模态输入收口 | 图片进入 durable attachment authority 后才按模型限制生成 provider-bound clone；所有 provider 路径共用同一约束 | MIME/字节/像素边界在调用前验证；provider 只接收受控内容，不接收或持久化未授权本地路径 |
 
-S4 已完成；新增 Provider 必须先声明 `ModelOutputTransport` 并加入 conformance fixture，不能由 Desktop 按协议名称猜测。
+新增 Provider 必须先声明 `ModelOutputTransport` 并加入 conformance fixture，不能由 Desktop 按协议名称猜测。
 
 ## 7. S5：ChatGPT 订阅 native OAuth 与兼容性收口（P1）
 
@@ -120,8 +112,6 @@ S4 已完成；新增 Provider 必须先声明 `ModelOutputTransport` 并加入 
 | AL-505 | 待构建 | Account 与 rate-limit 状态 | 将本机 OAuth account metadata、额度和 rate-limit observation 投影到独立账户/对话状态，并丰富 Turn 错误上下文 | 状态不得改写或门禁静态模型目录；状态过期后显示未知，不把缓存值当永久事实；执行失败仍由 exact Turn 承载 |
 | AL-506 | 待构建 | OAuth 与 stream 故障矩阵 | 覆盖 device poll、refresh rotation、401、429、stream truncation、取消和恢复 | token 不泄露；不确定 inference 不重放；所有等待交互有终止结果 |
 
-AL-501 和 native OAuth/target vertical slice 已完成；S4 capability contract 已稳定，S5 可继续推进兼容验证、丰富 item、secret、账户状态与故障矩阵。
-
 ## 8. S6：Skills、MCP 与多 Agent 收口（P2）
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
@@ -132,10 +122,7 @@ AL-501 和 native OAuth/target vertical slice 已完成；S4 capability contract
 | AL-604 | 已实现 | 多 Agent 故障矩阵 | child failure、parent cancel、join timeout、any/quorum、恢复、Turn/结构预算耗尽进入确定性测试 | terminal child reconciliation 幂等；取消树可恢复；mailbox 绑定 exact delegation，不能投递到 sibling |
 | AL-605 | 已实现 | Desktop 多 Agent 可观测性 | App Server `session/subscribe` 返回 canonical nested tree；Desktop 展示状态、预算、等待原因、join 和结果，并可中断单个节点 | UI 不再从 lineage 自行构树；刷新使用同一投影；interrupt 使用节点冻结的 Thread/Turn/sequence 精确目标 |
 
-S6 的选择与投影都冻结在当前 catalog/Session snapshot 上：Skill、MCP 或 Agent definition 的后续
-刷新只影响新 Turn/新 delegation；Desktop 只展示 App Server 从 durable Session/Thread facts 生成的
-projection。仍未纳入本阶段的是跨机器 Agent transport、Agent definition list/picker API 与
-Agent-tree 累计 token/cost scheduler；这些不能反向削弱本表已经冻结的执行 ceiling。
+S6 的选择与投影都冻结在当前 catalog/Session snapshot 上：Skill、MCP 或 Agent definition 的后续刷新只影响新 Turn 和新 delegation；Desktop 只展示 App Server 从 durable Session/Thread facts 生成的 projection。跨机器 Agent transport、Agent definition list/picker API 与 Agent-tree 累计 token/cost scheduler 仍不在本阶段范围内，且不能反向削弱本表已经冻结的执行 ceiling。
 
 ## 9. S7：评测、观测与发布门（横向）
 
@@ -143,45 +130,26 @@ S3 已为 S7 冻结工具 contract；现有 Rust/TS 测试与项目 smoke 入口
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
-| AL-701 | 暂缓 | 封闭任务集 | 当前不维护独立 fixture corpus；需要模型对比时再按版本化 benchmark 任务集建立 | 任务集的维护有明确产品目标、受控模型预算和去内容化结果策略后再启动 |
+| AL-701 | 延后 | 封闭任务集 | 当前不维护独立 fixture corpus；需要模型对比时再按版本化 benchmark 任务集建立 | 任务集的维护有明确产品目标、受控模型预算和去内容化结果策略后再启动 |
 | AL-702 | 已实现 | Deterministic smoke | Core、App Server 和 Desktop 现有测试覆盖 retry、steering、overflow、approval、repetition、budget、stream gap 与恢复；通过项目标准测试入口运行 | 不依赖网络或真实凭据；事件序列、canonical 状态和副作用由对应单测/集成测试断言 |
-| AL-703 | 后置 | 模型行为评测数据 | 需要时按 provider/model/profile 记录成功率、token、cache、工具选择、失败次数和墙钟时间的去内容化结果；当前无受控 baseline | 启动前必须有版本化任务集、受控凭据或明确启用的隐私受控聚合；没有证据时继续使用统一 profile |
+| AL-703 | 延后 | 模型行为评测数据 | 需要时按 provider/model/profile 记录成功率、token、cache、工具选择、失败次数和墙钟时间的去内容化结果；当前无受控 baseline | 启动前必须有版本化任务集、受控凭据或明确启用的隐私受控聚合；没有证据时继续使用统一 profile |
 | AL-704 | 待构建 | 运行时观测 | 为模型调用、重试、压缩、usage、批准等待、工具 terminal outcome、编辑工具选择、验证结果和委托恢复提供结构化指标 | telemetry 不含 prompt、secret、工具参数、diff 或文件内容；用户聚合数据必须明确启用且去内容化；可按 Thread/Turn 关联但不能恢复用户正文 |
 | AL-705 | 待构建 | 发布检查表 | 在确定产品发布范围后汇总 S1–S6 capability matrix、已知限制、迁移和回滚条件 | 没有 P0 缺口；protocol/schema/docs 同步；主力路径通过故障注入；未支持能力在产品中显式隐藏或解释 |
 
-## 10. 构建顺序
+## 10. 剩余构建顺序
 
-```mermaid
-flowchart TD
-    Current[当前 durable Agent Loop] --> Catalog[AL-501 模型目录已收口]
-    Current --> S1[S1 交互与失败语义]
-    S1 --> S2[S2 Usage 与上下文]
-    S1 --> S3[S3 统一编辑工具与计划工具]
-    S1 --> S4[S4 Provider 流式与缓存]
-    Catalog --> S5[S5 ChatGPT 订阅适配]
-    S4 --> S5
-    S2 --> S6[S6 Skills、MCP 与多 Agent]
-    S3 --> S6
-    S2 --> S7[S7 评测与发布门]
-    S3 --> S7
-    S4 --> S7
-    S5 --> S7
-    S6 --> S7
-```
+S1 至 S4、S6 与 AL-501 已完成，其冻结的 ToolProfile contract、capability contract 和 durable 语义是后续工作的基线，不再重新排期。剩余两条链路互不阻塞：
 
-实际执行批次：
+1. S5 的 AL-502 至 AL-506：在已接通的 native OAuth 与 Responses target 上完成兼容探测、丰富 item 投影、secret 输入、账户与 rate-limit 状态和故障矩阵。
+2. S7 的 AL-704 与 AL-705：运行时观测在 S5 收口后建立；发布检查表在确定产品发布范围后汇总。
 
-1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
-2. 以已完成的 AL-101 至 AL-105 作为交互与失败语义基线。
-3. S2 的 AL-201 至 AL-205、S3 的 AL-301 至 AL-305 与 S4 的 AL-401 至 AL-405 已完成；下一批从 S5 的 AL-502 能力协商继续，模型 benchmark 和 production telemetry 仅在确有产品需求时启动。
-4. S4 capability contract 与 S3 ToolProfile contract 已稳定；在此基础上完成 S6。
-5. S7 的确定性回归使用现有项目测试入口；真实模型行为数据只在有受控凭据或明确启用、去内容化的用户聚合指标时收集。AL-705 在确定发布范围后再建立。
+AL-701 与 AL-703 需要版本化任务集和受控模型预算或明确启用的去内容化聚合，前置不满足就不启动，也不构成其他工作项的隐含前置条件。
 
 ## 11. 验证矩阵
 
 | 变更面 | 最小验证 | 阶段完成验证 |
 | --- | --- | --- |
-| Core loop、Context、多 Agent | `cargo test --manifest-path Cargo.toml -p zeta-core` | Core 故障恢复测试 + 对应 deterministic eval |
+| Core loop、Context、多 Agent | `cargo test --manifest-path Cargo.toml -p zeta-core` | Core 故障恢复测试与 AL-702 的 deterministic smoke |
 | Provider 与 wire adapter | `cargo test --manifest-path Cargo.toml -p zeta-api -p zeta-model-provider` | Provider conformance matrix |
 | App Server 与 ChatGPT 订阅适配 | `cargo test --manifest-path Cargo.toml -p zeta-app-server --lib -p zeta-chatgpt -p zeta-model-provider` | OAuth/refresh/stream/reconnect/fault matrix |
 | Protocol | `corepack pnpm run verify:protocol` | schema hash、fixtures、生成 TypeScript 和 Desktop consumer 同批通过 |
@@ -191,15 +159,11 @@ flowchart TD
 
 ## 12. Agent Loop v1 完成标准
 
-以下条件全部满足后，状态才从 Active build plan 改为 Completed：
+S1 至 S4 与 S6 的完成条件已由各阶段验收标准满足。状态从 Active build plan 改为 Completed 还需要同时满足：
 
-- S1 全部完成，运行中消息、错误恢复和失控防护形成稳定 contract；
-- S2 全部完成，Thread 可以解释实际 usage、终止原因和只影响未来规划的预算校准；
-- S3 全部完成，主力模型使用冻结的统一 coding profile，并遵守 `apply_patch` 默认、`edit` 微编辑/降级的选择规则；
-- S4 完成所有已声明主力 Provider 的流式、错误、usage 和 cache capability；
-- S5 全部完成，ChatGPT 订阅 OAuth、模型调用与错误映射没有静默丢弃受支持的响应事件；
-- S6 完成受信任自动选择、MCP 阈值和多 Agent 故障矩阵；
-- S7 的现有 deterministic 测试通过；如产品需要模型评测或隐私受控聚合，再单独建立版本化任务集、隐私边界和发布门；
+- S5 全部完成，ChatGPT 订阅的 OAuth、模型调用、丰富 item 投影、secret 输入和错误映射没有静默丢弃受支持的响应事件；
+- S7 的现有 deterministic 测试通过，AL-704 的结构化指标不包含 prompt、secret、工具参数、diff 或文件内容；
+- AL-705 汇总 S1 至 S6 的 capability matrix、已知限制、迁移和回滚条件，且没有 P0 缺口；
 - 所有 durable side effect 在 crash/restart 测试中保持 once-only 或明确的 unknown outcome，绝不静默重放。
 
 ## 13. 明确不做
