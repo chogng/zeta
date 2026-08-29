@@ -1,6 +1,7 @@
 import "./viewCursors.css";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { TextEditorCursorBlinkingStyle } from '../../../common/config/editorOptions.js';
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextPosition, type TextRange } from '../../../common/core/text.js';
 import { getTextGraphemeBoundaries } from '../../../common/core/textSegmentation.js';
@@ -16,6 +17,7 @@ import { ViewCursor, type ViewCursorOptions } from './viewCursor.js';
 
 export interface ViewCursorsOptions extends ViewCursorOptions {
 	readonly host: HTMLElement;
+	readonly blinking: TextEditorCursorBlinkingStyle;
 }
 
 /** Projects primary and secondary carets without owning cursor positions. */
@@ -32,6 +34,7 @@ export class ViewCursors extends DynamicViewOverlay {
 		super(context);
 		this.rows = this._register(new ViewPartRows(options.host, 'stanza-editor-cursors-layer', 'stanza-editor-line-cursors'));
 		this.domNode = this.rows.domNode;
+		this.domNode.classList.add(cursorBlinkingClass(options.blinking));
 		this.model = model;
 		this.selectionController = selectionController;
 		this.cursorOptions = options;
@@ -61,6 +64,17 @@ export class ViewCursors extends DynamicViewOverlay {
 			cursor.domNode.remove();
 			this.cursors.delete(selectionIndex);
 		}
+	}
+}
+
+function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
+	switch (blinking) {
+		case TextEditorCursorBlinkingStyle.Smooth: return 'cursor-blinking-smooth';
+		case TextEditorCursorBlinkingStyle.Phase: return 'cursor-blinking-phase';
+		case TextEditorCursorBlinkingStyle.Expand: return 'cursor-blinking-expand';
+		case TextEditorCursorBlinkingStyle.Solid: return 'cursor-blinking-solid';
+		case TextEditorCursorBlinkingStyle.Hidden: return 'cursor-blinking-hidden';
+		default: return 'cursor-blinking-blink';
 	}
 }
 

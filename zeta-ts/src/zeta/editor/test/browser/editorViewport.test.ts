@@ -1001,7 +1001,7 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	viewport.layout({ width: 300, height: 60 });
 	const primaryCaret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret.primary');
 	assert.equal(primaryCaret.classList.contains('cursor-style-block-outline'), true);
-	assert.equal(primaryCaret.classList.contains('cursor-blinking-solid'), true);
+	assert.equal(requiredElement(viewport.element, '.stanza-editor-cursors-layer').classList.contains('cursor-blinking-solid'), true);
 	assert.equal(primaryCaret.style.width, '8px');
 	assert.equal(primaryCaret.style.height, '12px');
 	assert.equal(primaryCaret.style.top, '4px');
@@ -1020,6 +1020,37 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	], 1));
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 0).classList.contains('highlight-line'), true);
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 2).classList.contains('highlight-line'), true);
+	dom.window.close();
+});
+
+test('EditorViewport gives every cursor one shared blinking animation', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha;\nbeta;');
+	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 5))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: controller,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		cursorBlinking: 'expand',
+	});
+	viewport.layout({ width: 300, height: 40 });
+	const cursorsLayer = requiredElement(viewport.element, '.stanza-editor-cursors-layer');
+	controller.setSelections(TextSelectionSet.withPrimary([
+		TextSelection.collapsedAt(TextPosition.at(0, 5)),
+		TextSelection.collapsedAt(TextPosition.at(1, 4)),
+	], 1));
+
+	assert.deepEqual({
+		layerExpands: cursorsLayer.classList.contains('cursor-blinking-expand'),
+		cursorAnimationClasses: [...viewport.element.querySelectorAll('.stanza-editor-caret')]
+			.map(caret => [...caret.classList].filter(className => className.startsWith('cursor-blinking-'))),
+	}, {
+		layerExpands: true,
+		cursorAnimationClasses: [[], []],
+	});
 	dom.window.close();
 });
 

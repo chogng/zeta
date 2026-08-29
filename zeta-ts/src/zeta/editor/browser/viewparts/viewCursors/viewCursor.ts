@@ -1,9 +1,8 @@
 import { h } from '../../../../base/browser/dom.js';
-import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
+import { TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
 
 export interface ViewCursorOptions {
 	readonly style: TextEditorCursorStyle;
-	readonly blinking: TextEditorCursorBlinkingStyle;
 	readonly lineWidth: number;
 	readonly lineHeight: number;
 }
@@ -16,7 +15,7 @@ export class ViewCursor {
 		this.domNode = h(host.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-caret';
 		this.domNode.dataset.selectionIndex = String(selectionIndex);
-		this.domNode.classList.add(cursorStyleClass(options.style), cursorBlinkingClass(options.blinking));
+		this.domNode.classList.add(cursorStyleClass(options.style));
 	}
 
 	public render(row: HTMLElement, left: number, characterWidth: number, rowHeight: number, isPrimary: boolean): void {
@@ -38,17 +37,6 @@ function cursorStyleClass(style: TextEditorCursorStyle): string {
 		case TextEditorCursorStyle.BlockOutline: return 'cursor-style-block-outline';
 		case TextEditorCursorStyle.UnderlineThin: return 'cursor-style-underline-thin';
 		default: return 'cursor-style-line';
-	}
-}
-
-function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
-	switch (blinking) {
-		case TextEditorCursorBlinkingStyle.Smooth: return 'cursor-blinking-smooth';
-		case TextEditorCursorBlinkingStyle.Phase: return 'cursor-blinking-phase';
-		case TextEditorCursorBlinkingStyle.Expand: return 'cursor-blinking-expand';
-		case TextEditorCursorBlinkingStyle.Solid: return 'cursor-blinking-solid';
-		case TextEditorCursorBlinkingStyle.Hidden: return 'cursor-blinking-hidden';
-		default: return 'cursor-blinking-blink';
 	}
 }
 

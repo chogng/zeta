@@ -1,3 +1,20 @@
+@property --stanza-editor-caret-opacity {
+	syntax: '<number>';
+	inherits: true;
+	initial-value: 1;
+}
+
+@property --stanza-editor-caret-scale {
+	syntax: '<number>';
+	inherits: true;
+	initial-value: 1;
+}
+
+.stanza-editor-cursors-layer {
+	--stanza-editor-caret-opacity: 1;
+	--stanza-editor-caret-scale: 1;
+}
+
 .stanza-editor-line-cursors {
 	position: relative;
 	box-sizing: border-box;
@@ -10,10 +27,13 @@
   position: absolute;
   box-sizing: border-box;
   background: var(--zeta-editor-foreground);
+	opacity: calc(var(--stanza-editor-caret-opacity) * var(--stanza-editor-caret-base-opacity, 1));
+	transform: scaleX(var(--stanza-editor-caret-scale));
+	transform-origin: center;
 }
 
 .stanza-editor-caret.cursor-style-block {
-	opacity: 0.5;
+	--stanza-editor-caret-base-opacity: 0.5;
 }
 
 .stanza-editor-caret.cursor-style-block-outline {
@@ -30,45 +50,44 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-blink {
+  .stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-blink {
     animation: stanza-editor-caret-blink 1.2s step-end infinite;
   }
 
-	.stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-smooth {
+	.stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-smooth {
 		animation: stanza-editor-caret-smooth 1.2s ease-in-out infinite;
 	}
 
-	.stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-phase {
+	.stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-phase {
 		animation: stanza-editor-caret-phase 1.2s ease-in-out infinite;
 	}
 
-	.stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-expand {
+	.stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-expand {
 		animation: stanza-editor-caret-expand 1.2s ease-in-out infinite;
-		transform-origin: center;
 	}
 }
 
 @keyframes stanza-editor-caret-blink {
   0%,
   45% {
-    opacity: 1;
+		--stanza-editor-caret-opacity: 1;
   }
 
   46%,
   100% {
-    opacity: 0;
+		--stanza-editor-caret-opacity: 0;
   }
 }
 
 @keyframes stanza-editor-caret-smooth {
 	0%,
 	20% {
-		opacity: 1;
+		--stanza-editor-caret-opacity: 1;
 	}
 
 	70%,
 	100% {
-		opacity: 0;
+		--stanza-editor-caret-opacity: 0;
 	}
 }
 
@@ -77,32 +96,32 @@
 	25%,
 	75%,
 	100% {
-		opacity: 1;
+		--stanza-editor-caret-opacity: 1;
 	}
 
 	50% {
-		opacity: 0;
+		--stanza-editor-caret-opacity: 0;
 	}
 }
 
 @keyframes stanza-editor-caret-expand {
 	0%,
 	20% {
-		transform: scaleX(1);
+		--stanza-editor-caret-scale: 1;
 	}
 
 	70%,
 	100% {
-		transform: scaleX(0);
+		--stanza-editor-caret-scale: 0;
 	}
 }
 
-.stanza-editor-caret.cursor-blinking-hidden {
+.stanza-editor-cursors-layer.cursor-blinking-hidden .stanza-editor-caret {
 	display: none;
 }
 
 .stanza-editor:not(:focus-within) .stanza-editor-caret {
-  opacity: 0.65;
+	--stanza-editor-caret-base-opacity: 0.65;
 }
 
 @media (forced-colors: active) {
