@@ -18,8 +18,10 @@ registerEditorContribution({
 		context.provideCapability(TextEditorCapability.bracketPairs, bracketPairs);
 		context.provideCapability(TextEditorCapability.bracketDecorations, decorations);
 		context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.BracketMatch));
-		if (!largeFile && context.options.bracketPairColorization !== false) {
-			context.setBracketColorizationSource(new BracketColorizationSource(bracketPairs));
+		const colorizeBrackets = context.options.bracketPairColorization !== false;
+		const renderBracketGuides = context.options.guides?.bracketPairs !== undefined && context.options.guides.bracketPairs !== false;
+		if (!largeFile && (colorizeBrackets || renderBracketGuides)) {
+			context.setBracketColorizationSource(new BracketColorizationSource(bracketPairs, colorizeBrackets));
 		}
 	},
 	install: context => {

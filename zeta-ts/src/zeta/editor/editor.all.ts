@@ -1,4 +1,5 @@
 // Complete Code line-editor feature implementation. Academic owns a separate bundle.
+import { registerEditorBrowserContributions } from './browser/services/contribution.js';
 import "./browser/coreCommands.js";
 import "./contrib/languageAnalysis/browser/languageAnalysis.contribution.js";
 import './contrib/anchorSelect/browser/anchorSelect.js';
@@ -51,3 +52,5 @@ import "./contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.js"
 import "./contrib/unusualLineTerminators/browser/unusualLineTerminators.contribution.js";
 import "./contrib/wordHighlighter/browser/wordHighlighter.contribution.js";
 import "./contrib/wordWrap/browser/wordWrapController.js";
+
+registerEditorBrowserContributions();

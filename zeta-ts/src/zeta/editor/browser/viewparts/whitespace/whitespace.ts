@@ -1,5 +1,7 @@
 import './whitespace.css';
 import { h, reset } from '../../../../base/browser/dom.js';
+import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
+import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
@@ -12,7 +14,13 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, private readonly model: TextModel, private readonly mode: WhitespaceRenderingMode) {
+	constructor(
+		context: EditorViewContext,
+		host: HTMLElement,
+		private readonly model: TextModel,
+		private readonly selectionController: EditorSelectionController | undefined,
+		private readonly mode: WhitespaceRenderingMode,
+	) {
 		super(context);
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-whitespace-layer', 'stanza-editor-whitespace-row'));
 		this.domNode = this.rows.domNode;
@@ -25,7 +33,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 		}
 		for (const [visualLineIndex, row] of this.rows.render(context)) {
 			reset(row);
-			if (this.mode === 'none' || this.mode === 'selection') {
+			if (this.mode === 'none') {
 				continue;
 			}
 			const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
@@ -45,6 +53,9 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 				if (this.mode === 'boundary' && index > 0 && index < trailingStart) {
 					continue;
 				}
+				if (this.mode === 'selection' && !this.isSelected(visualLine.logicalLineIndex, visualLine.startColumn + index)) {
+					continue;
+				}
 				const marker = h(row.ownerDocument, 'span');
 				marker.className = 'stanza-editor-whitespace';
 				marker.textContent = character === '\t' ? '→' : '·';
@@ -52,5 +63,11 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 				row.append(marker);
 			}
 		}
+	}
+
+	private isSelected(lineIndex: number, columnIndex: number): boolean {
+		if (!this.selectionController) return false;
+		const characterRange = TextRange.from(TextPosition.at(lineIndex, columnIndex), TextPosition.at(lineIndex, columnIndex + 1));
+		return this.selectionController.selections.selections.some(selection => selection.range.intersects(characterRange));
 	}
 }

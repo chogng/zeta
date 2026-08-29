@@ -1,9 +1,12 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
+import { countEOL } from "../core/misc/eolCounter.js";
+import { OffsetRange } from "../core/ranges/offsetRange.js";
+import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, TextLength, type ISingleEditOperation, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/text.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
 import type { TextBuffer } from "./textBuffer.js";
 import { createTextBuffer } from "./textBufferFactory.js";
-import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, TextLength, type ISingleEditOperation, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/text.js";
 import { TextModelHistory, type TextModelHistoryEntry, type TextModelHistorySnapshot } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange, type TrackedRangeStickiness } from "./trackedRange.js";
 import { classifyTextModelSize, type TextModelLargeFilePolicy } from "./textModelLargeFile.js";
@@ -807,14 +810,13 @@ export class TextModel extends Disposable {
 	}
 
 	private mapLineIds(prepared: readonly PreparedEdit[]): readonly LineId[] {
-		const lineIds = [...this.plainLineIds!];
-		for (let index = prepared.length - 1; index >= 0; index -= 1) {
-			const edit = prepared[index]!;
-			const removedLineCount = edit.range.end.lineIndex - edit.range.start.lineIndex;
-			const insertedLineCount = countLineBreaks(edit.text);
-			const insertedLineIds = Array.from({ length: insertedLineCount }, () => this.allocateLineId());
-			lineIds.splice(edit.range.start.lineIndex + 1, removedLineCount, ...insertedLineIds);
-		}
+		const lineEdit = LengthEdit.create(prepared.map(edit => new LengthReplacement(
+			new OffsetRange(edit.range.start.lineIndex + 1, edit.range.end.lineIndex + 1),
+			countEOL(edit.text)[0],
+		)));
+		const lineIds = lineEdit
+			.applyArray<LineId | undefined>(this.plainLineIds!, undefined)
+			.map(lineId => lineId ?? this.allocateLineId());
 		if (lineIds.length !== this.buffer.lineCount) throw new Error("TextModel line identity mapping diverged from the TextBuffer");
 		return Object.freeze(lineIds);
 	}
@@ -888,12 +890,6 @@ export class TextModel extends Disposable {
 function compareOffsetEdits(left: OffsetEdit, right: OffsetEdit): number {
 	return left.startOffset - right.startOffset ||
 		left.endOffset - right.endOffset;
-}
-
-function countLineBreaks(text: string): number {
-	let count = 0;
-	for (let index = text.indexOf("\n"); index >= 0; index = text.indexOf("\n", index + 1)) count += 1;
-	return count;
 }
 
 function readHistoryLimit(

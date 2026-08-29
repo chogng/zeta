@@ -1,7 +1,8 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
-import { EditorWorkerService } from "../../browser/services/editorWorkerService.js";
+import { createEditorBrowserServices } from '../../browser/services/contribution.js';
+import { type ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
 import { type EditorWorkerFactory } from "../../common/services/editorWorker.js";
@@ -36,6 +37,7 @@ export class StandaloneServiceCollection extends Disposable {
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 	readonly editorWorkerFactory: EditorWorkerFactory;
 	readonly completionWorkerFactory: LanguageCompletionWorkerFactory | undefined;
+	readonly codeEditorService: ICodeEditorService;
 
 	constructor(overrides: StandaloneServiceOverrides) {
 		super();
@@ -56,7 +58,10 @@ export class StandaloneServiceCollection extends Disposable {
 		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService.configurations));
-		const workers = new EditorWorkerService();
+		const browserServices = createEditorBrowserServices();
+		this._register(browserServices.codeEditors);
+		this.codeEditorService = browserServices.codeEditors;
+		const workers = browserServices.workers;
 		this.editorWorkerFactory = overrides.editorWorkerFactory ?? workers.editorWorkerFactory;
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory ?? workers.syntaxWorkerFactory;
 		this.completionWorkerFactory = overrides.completionWorkerFactory;

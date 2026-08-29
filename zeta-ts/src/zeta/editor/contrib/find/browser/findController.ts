@@ -11,6 +11,7 @@ import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type Text
 import { createReplaceAllTextMatchesCommand, createReplaceTextMatchCommand, resolveTextSearchReplacement } from "../common/textSearchCommands.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 import { type EditorViewport } from "../../../browser/view.js";
+import { EditorOptions } from '../../../common/config/editorOptions.js';
 
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;
@@ -22,6 +23,7 @@ export interface FindControllerOptions {
 	readonly matchCase?: boolean;
 	readonly wholeWord?: boolean;
 	readonly regularExpression?: boolean;
+	readonly wordSeparators?: string;
 }
 
 /** Owns Stanza's browser find/replace widget, shortcuts, match navigation, and search decorations. */
@@ -48,6 +50,7 @@ export class FindController extends Disposable {
 	private readonly seedSearchStringFromSelection: boolean;
 	private readonly autoFindInSelection: boolean;
 	private readonly loop: boolean;
+	private readonly wordSeparators: string;
 
 	constructor(
 		private readonly editorInput: HTMLElement,
@@ -61,6 +64,7 @@ export class FindController extends Disposable {
 		this.seedSearchStringFromSelection = options.seedSearchStringFromSelection ?? true;
 		this.autoFindInSelection = options.autoFindInSelection ?? false;
 		this.loop = options.loop ?? true;
+		this.wordSeparators = options.wordSeparators ?? EditorOptions.wordSeparators.defaultValue;
 		this.matchCase = options.matchCase ?? false;
 		this.wholeWord = options.wholeWord ?? false;
 		this.regularExpression = options.regularExpression ?? false;
@@ -409,6 +413,7 @@ export class FindController extends Disposable {
 			patternKind: this.regularExpression ? TextSearchPatternKind.RegularExpression : TextSearchPatternKind.Literal,
 			matchCase: this.matchCase,
 			wholeWord: this.wholeWord,
+			wordSeparators: this.wordSeparators,
 		};
 	}
 
@@ -441,6 +446,7 @@ function projectToggle(button: HTMLButtonElement, checked: boolean): void {
 function validateFindControllerOptions(options: FindControllerOptions): void {
 	if (!options || typeof options !== "object") throw new TypeError("Stanza Find options must be an object");
 	for (const [name, value] of Object.entries(options)) {
+		if (name === 'wordSeparators' && typeof value === 'string') continue;
 		if (typeof value !== "boolean") throw new TypeError(`Stanza Find option '${name}' must be boolean`);
 	}
 }

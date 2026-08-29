@@ -4,6 +4,7 @@ import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
 import { ViewLineTextDirection, type ViewLineOptions } from './viewLineOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
+import { type TextRange } from '../../../common/core/text.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
@@ -118,10 +119,17 @@ export interface BracketColorizationSpan {
 	readonly level: number;
 }
 
+export interface BracketGuide {
+	readonly opening: TextRange;
+	readonly closing: TextRange;
+	readonly level: number;
+}
+
 /** Feature-neutral bracket projection consumed by the browser viewport. */
 export interface BracketColorizationSource {
 	readonly textModel: TextModel;
 	getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[];
+	getBracketGuides?(startLineIndex: number, endLineIndexInclusive: number): readonly BracketGuide[];
 }
 
 /** Projects one line transactionally while preserving its exact source text. */

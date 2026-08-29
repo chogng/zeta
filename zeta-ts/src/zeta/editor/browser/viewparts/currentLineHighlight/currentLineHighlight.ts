@@ -22,10 +22,17 @@ export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
 		if (!overlay) {
 			return;
 		}
-		const activeLineIndex = this.selectionController?.selections.primary.active.lineIndex;
+		const selections = this.selectionController?.selections.selections ?? [];
+		const activeLineIndexes = new Set(selections.map(selection => selection.active.lineIndex));
+		const selectionIsEmpty = selections.every(selection => selection.range.empty);
 		for (const [visualLineIndex, row] of this.rows.render(context)) {
-			const isActive = overlay.activeLineHighlight === 'on' && overlay.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex === activeLineIndex;
+			const isActive = activeLineIndexes.has(overlay.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex ?? -1);
+			const highlightsLine = selectionIsEmpty && (overlay.renderLineHighlight === 'line' || overlay.renderLineHighlight === 'all');
+			const highlightsGutter = overlay.renderLineHighlight === 'gutter' || overlay.renderLineHighlight === 'all';
 			row.classList.toggle('active', isActive);
+			row.classList.toggle('highlight-line', highlightsLine);
+			row.classList.toggle('highlight-gutter', highlightsGutter);
+			row.classList.toggle('focus-only', overlay.renderLineHighlightOnlyWhenFocus);
 		}
 	}
 }

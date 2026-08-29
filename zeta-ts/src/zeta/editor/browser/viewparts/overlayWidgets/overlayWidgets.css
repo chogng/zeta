@@ -7,6 +7,15 @@
 	pointer-events: none;
 }
 
-.stanza-editor-overlay-widgets > * {
+.stanza-editor-overflowing-overlay-widgets {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 40;
+	pointer-events: none;
+}
+
+.stanza-editor-overlay-widgets > *,
+.stanza-editor-overflowing-overlay-widgets > * {
 	pointer-events: auto;
 }

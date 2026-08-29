@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { findDesktopRoot } from "./testPaths.js";
 
@@ -113,19 +113,15 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/controller/editContext/native/screenReaderContentRich.ts",
 		"browser/controller/editContext/native/screenReaderUtils.ts",
 		"browser/services/abstractCodeEditorService.ts",
-		"browser/services/bulkEditService.ts",
 		"browser/services/codeEditorService.ts",
 		"browser/services/contribution.ts",
 		"browser/services/editorWorkerService.ts",
 		"browser/services/inlineCompletionsService.ts",
 		"browser/services/markerDecorations.ts",
-		"browser/services/openerService.ts",
-		"browser/services/renameSymbolTrackerService.ts",
 		"common/services/syntaxWorkerMain.ts",
 		"common/services/languageCompletionWorkerMain.ts",
 		"common/core/position.ts",
 		"common/config/diffEditor.ts",
-		"common/config/editorConfiguration.ts",
 		"common/config/editorConfigurationSchema.ts",
 		"common/config/editorOptions.ts",
 		"common/config/editorZoom.ts",
@@ -189,6 +185,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/config/elementSizeObserver.ts",
 		"browser/config/tabFocus.ts",
 		"common/viewModel/textMeasurer.ts",
+		"common/viewModel/overviewZoneManager.ts",
 		"common/viewModel/viewModelLines.ts",
 		"common/viewModel/rangeGeometry.ts",
 		"common/viewModel/visualRangeGeometry.ts",
@@ -371,6 +368,67 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 	];
 	for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
 	assert.equal(existsSync(join(editorRoot, "browser/input")), false, "legacy browser input directory");
+});
+
+test('Required editor view parts are connected to their production owners', () => {
+	const editorBrowser = readFileSync(join(editorRoot, 'browser/editorBrowser.ts'), 'utf8');
+	const codeEditorWidget = readFileSync(join(editorRoot, 'browser/widget/codeEditor/codeEditorWidget.ts'), 'utf8');
+	const view = readFileSync(join(editorRoot, 'browser/view.ts'), 'utf8');
+	const viewOverlays = readFileSync(join(editorRoot, 'browser/view/viewOverlays.ts'), 'utf8');
+	const whitespace = readFileSync(join(editorRoot, 'browser/viewparts/whitespace/whitespace.ts'), 'utf8');
+	const overviewRuler = readFileSync(join(editorRoot, 'browser/viewparts/overviewRuler/overviewRuler.ts'), 'utf8');
+	const textureAtlas = readFileSync(join(editorRoot, 'browser/gpu/atlas/textureAtlas.ts'), 'utf8');
+	const placeholder = readFileSync(join(editorRoot, 'contrib/placeholderText/browser/placeholderTextContribution.ts'), 'utf8');
+	const textModel = readFileSync(join(editorRoot, 'common/model/textModel.ts'), 'utf8');
+	const textModelSearch = readFileSync(join(editorRoot, 'common/model/textModelSearch.ts'), 'utf8');
+
+	assert.match(editorBrowser, /interface IOverlayWidget[\s\S]*addOverlayWidget[\s\S]*layoutOverlayWidget[\s\S]*removeOverlayWidget/u);
+	assert.match(editorBrowser, /interface IViewZoneChangeAccessor[\s\S]*changeViewZones/u);
+	assert.match(codeEditorWidget, /viewport\.addOverlayWidget[\s\S]*viewport\.layoutOverlayWidget[\s\S]*viewport\.removeOverlayWidget/u);
+	assert.match(codeEditorWidget, /viewport\.changeViewZones/u);
+	assert.match(view, /new ViewOverlayWidgets/u);
+	assert.match(view, /new RulersGpu/u);
+	assert.match(view, /readGpuLineIndexes/u);
+	assert.match(viewOverlays, /new GpuMarkOverlay/u);
+	assert.match(whitespace, /selectionController\.selections/u);
+	assert.match(overviewRuler, /new OverviewZoneManager/u);
+	assert.match(textureAtlas, /from ['"]\.\.\/taskQueue\.js['"]/u);
+	assert.match(codeEditorWidget, /observableCodeEditor\(this\)/u);
+	assert.match(placeholder, /observableCodeEditor\(context\.editor\)/u);
+	assert.match(textModel, /countEOL\(edit\.text\)/u);
+	assert.match(textModelSearch, /getMapForWordSeparators/u);
+});
+
+test('Editor production files are entrypoints or have a production caller', () => {
+	const sourceRoot = resolve(desktopRoot, 'src');
+	const sourceFiles = collectFiles(sourceRoot).filter(file => file.endsWith('.ts'));
+	const editorProductionFiles = sourceFiles.filter(file => file.startsWith(editorRoot) && !isTestFile(file));
+	const productionIncoming = new Map(editorProductionFiles.map(file => [file, 0]));
+	const testIncoming = new Map(editorProductionFiles.map(file => [file, 0]));
+	const importPattern = /(?:from\s+|import\s*(?:\(\s*)?)["']([^"']+)["']/gu;
+
+	for (const sourceFile of sourceFiles) {
+		const source = readFileSync(sourceFile, 'utf8');
+		for (const match of source.matchAll(importPattern)) {
+			const specifier = match[1]!;
+			if (!specifier.startsWith('.')) continue;
+			const target = resolve(dirname(sourceFile), specifier.replace(/\.js$/u, '.ts'));
+			const incoming = isTestFile(sourceFile) ? testIncoming : productionIncoming;
+			if (incoming.has(target)) incoming.set(target, incoming.get(target)! + 1);
+		}
+	}
+
+	const explicitEntrypoints = new Set([
+		resolve(editorRoot, 'editor.main.ts'),
+		resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'),
+		resolve(editorRoot, 'common/services/languageCompletionWorkerMain.ts'),
+		resolve(editorRoot, 'common/services/syntaxWorkerMain.ts'),
+		resolve(editorRoot, 'browser/controller/editContext/native/debugEditContext.ts'),
+	]);
+	for (const file of editorProductionFiles) {
+		if (productionIncoming.get(file)! > 0 || explicitEntrypoints.has(file)) continue;
+		assert.ok(testIncoming.get(file)! > 0, `${relative(editorRoot, file)} has neither a production caller nor a direct test`);
+	}
 });
 
 test("Editor browser retires only the editor-layer EditorPart", () => {
@@ -632,4 +690,8 @@ function statSafe(file: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+function isTestFile(file: string): boolean {
+	return /[\\/]test[\\/]|\.test\.ts$/u.test(file);
 }

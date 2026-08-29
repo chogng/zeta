@@ -6,6 +6,7 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import { type IInstantiationService, type SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 import { type EditorView } from '../../view.js';
 import { type EditorViewport } from '../../view.js';
+import { type CodeEditorWidget } from './codeEditorWidget.js';
 import { EditorContributionInstantiation as CodeEditorContributionInstantiation } from '../../editorExtensions.js';
 
 /** VS Code-aligned instantiation phases shared by widget and host contributions. */
@@ -13,6 +14,7 @@ export { CodeEditorContributionInstantiation };
 
 /** Narrow editor state exposed to a direct CodeEditorWidget contribution. */
 export interface CodeEditorContributionContext {
+	readonly editor: CodeEditorWidget;
 	readonly model: TextModel;
 	readonly selectionController: EditorSelectionController;
 	readonly viewport: EditorViewport;

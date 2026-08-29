@@ -1747,6 +1747,11 @@ type EditorOptionsCollection = Record<string, IEditorOption<EditorOption, unknow
 	readonly lineHeight: IEditorOption<EditorOption.lineHeight, number>;
 	readonly letterSpacing: IEditorOption<EditorOption.letterSpacing, number>;
 	readonly lineNumbers: IEditorOption<EditorOption.lineNumbers, InternalEditorRenderLineNumbersOptions>;
+	readonly cursorStyle: IEditorOption<EditorOption.cursorStyle, TextEditorCursorStyle>;
+	readonly cursorBlinking: IEditorOption<EditorOption.cursorBlinking, TextEditorCursorBlinkingStyle>;
+	readonly cursorWidth: IEditorOption<EditorOption.cursorWidth, number>;
+	readonly cursorHeight: IEditorOption<EditorOption.cursorHeight, number>;
+	readonly guides: IEditorOption<EditorOption.guides, InternalGuidesOptions>;
 	readonly accessibilitySupport: IEditorOption<EditorOption.accessibilitySupport, AccessibilitySupport>;
 	readonly scrollbar: IEditorOption<EditorOption.scrollbar, InternalEditorScrollbarOptions>;
 	readonly quickSuggestions: IEditorOption<EditorOption.quickSuggestions, InternalQuickSuggestionsOptions>;
@@ -1755,6 +1760,7 @@ type EditorOptionsCollection = Record<string, IEditorOption<EditorOption, unknow
 	readonly unicodeHighlighting: IEditorOption<EditorOption.unicodeHighlighting, InternalUnicodeHighlightOptions>;
 	readonly layoutInfo: IEditorOption<EditorOption.layoutInfo, EditorLayoutInfo>;
 	readonly wrappingInfo: IEditorOption<EditorOption.wrappingInfo, EditorWrappingInfo>;
+	readonly wordSeparators: IEditorOption<EditorOption.wordSeparators, string>;
 };
 
 const editorOptionsCollection = editorOptions as unknown as EditorOptionsCollection;

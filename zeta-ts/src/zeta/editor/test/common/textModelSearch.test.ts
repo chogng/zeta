@@ -53,6 +53,18 @@ test("whole-word search uses Unicode word boundaries", () => {
 	);
 });
 
+test('whole-word search obeys editor word separators', () => {
+	using model = new TextModel('foo.bar foo-bar foobar');
+	assert.deepEqual(
+		findTextMatches(model, { pattern: 'foo', wholeWord: true, wordSeparators: '.-' }).map(match => match.range.start.columnIndex),
+		[0, 8],
+	);
+	assert.deepEqual(
+		findTextMatches(model, { pattern: 'foo', wholeWord: true, wordSeparators: '-' }).map(match => match.range.start.columnIndex),
+		[8],
+	);
+});
+
 test("zero-length regular expressions advance and next search wraps", () => {
 	using model = new TextModel("a\nb");
 	const lineStarts = findTextMatches(model, {

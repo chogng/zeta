@@ -8,10 +8,17 @@
 
 .stanza-editor-caret {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
+  box-sizing: border-box;
   background: var(--zeta-editor-foreground);
+}
+
+.stanza-editor-caret.cursor-style-block {
+	opacity: 0.5;
+}
+
+.stanza-editor-caret.cursor-style-block-outline {
+	background: transparent;
+	border: 1px solid var(--zeta-editor-foreground);
 }
 
 .stanza-editor.composing .stanza-editor-composition {
@@ -23,9 +30,22 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .stanza-editor:focus-within .stanza-editor-caret {
+  .stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-blink {
     animation: stanza-editor-caret-blink 1.2s step-end infinite;
   }
+
+	.stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-smooth {
+		animation: stanza-editor-caret-smooth 1.2s ease-in-out infinite;
+	}
+
+	.stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-phase {
+		animation: stanza-editor-caret-phase 1.2s ease-in-out infinite;
+	}
+
+	.stanza-editor:focus-within .stanza-editor-caret.cursor-blinking-expand {
+		animation: stanza-editor-caret-expand 1.2s ease-in-out infinite;
+		transform-origin: center;
+	}
 }
 
 @keyframes stanza-editor-caret-blink {
@@ -38,6 +58,47 @@
   100% {
     opacity: 0;
   }
+}
+
+@keyframes stanza-editor-caret-smooth {
+	0%,
+	20% {
+		opacity: 1;
+	}
+
+	70%,
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes stanza-editor-caret-phase {
+	0%,
+	25%,
+	75%,
+	100% {
+		opacity: 1;
+	}
+
+	50% {
+		opacity: 0;
+	}
+}
+
+@keyframes stanza-editor-caret-expand {
+	0%,
+	20% {
+		transform: scaleX(1);
+	}
+
+	70%,
+	100% {
+		transform: scaleX(0);
+	}
+}
+
+.stanza-editor-caret.cursor-blinking-hidden {
+	display: none;
 }
 
 .stanza-editor:not(:focus-within) .stanza-editor-caret {

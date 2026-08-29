@@ -1,12 +1,9 @@
-import { type TextDecorationCollection } from '../../common/model/decorationCollection.js';
-import { type LanguageDiagnostic } from '../../common/languages/languageResults.js';
+import { type EditorContribution, type TextEditorContributionConfigurationContext } from '../editorExtensions.js';
+import { TextEditorCapability } from '../../contrib/textEditorCapabilities.js';
 import { createStanzaLanguageDiagnosticSource } from '../../contrib/gotoError/browser/languageDiagnosticPresentation.js';
 
-/** Owns the browser decoration source derived from one diagnostic collection. */
-export class MarkerDecorationsContribution {
-	public readonly decorationSource;
-
-	constructor(collection: TextDecorationCollection<LanguageDiagnostic>) {
-		this.decorationSource = createStanzaLanguageDiagnosticSource(collection);
-	}
-}
+/** Ensures diagnostic collections are projected as editor decorations. */
+export const MarkerDecorationsContribution: EditorContribution = Object.freeze({
+	id: 'editor.contrib.markerDecorations',
+	configure: (context: TextEditorContributionConfigurationContext) => context.addDecorationSource(createStanzaLanguageDiagnosticSource(context.getCapability(TextEditorCapability.diagnosticDecorations))),
+});

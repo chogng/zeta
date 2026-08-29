@@ -1,21 +1,31 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { type RectangleRenderer } from '../../gpu/rectangleRenderer.js';
+import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
-import { type EditorRuler } from '../rulers/rulers.js';
+import { type EditorRuler, validateRuler } from '../rulers/rulers.js';
 
 /** Projects configured rulers into the shared GPU rectangle buffer. */
 export class RulersGpu extends EditorViewPart {
 	private readonly entries = this._register(new DisposableStore());
+	private readonly rulers: readonly EditorRuler[];
 
-	constructor(private readonly renderer: RectangleRenderer, private readonly rulers: readonly EditorRuler[], private readonly measureColumn: (column: number) => number) {
+	constructor(private readonly gpuContext: ViewGpuContext, rulers: readonly EditorRuler[], private readonly measureColumn: (column: number) => number) {
 		super();
+		this.rulers = Object.freeze(rulers.map(validateRuler));
 	}
 
 	public render(context: EditorRenderingContext): void {
 		this.entries.clear();
+		if (this.gpuContext.status !== 'ready') return;
+		const devicePixelRatio = this.gpuContext.devicePixelRatio;
 		for (const ruler of this.rulers) {
 			const color = parseColor(ruler.color);
-			this.entries.add(this.renderer.register(this.measureColumn(ruler.column), 0, 1, context.layout.contentSize.height, color[0], color[1], color[2], color[3]));
+			this.entries.add(this.gpuContext.rectangleRenderer.register(
+				this.measureColumn(ruler.column) * devicePixelRatio,
+				0,
+				Math.max(1, Math.ceil(devicePixelRatio)),
+				Math.min(context.layout.contentSize.height * devicePixelRatio, 1_000_000),
+				color[0], color[1], color[2], color[3],
+			));
 		}
 	}
 }

@@ -67,7 +67,14 @@ function classifyElement(element: Element | undefined, editorDomNode: HTMLElemen
 	}
 	if (element.closest('.stanza-editor-zone-widget')) return { kind: MouseTargetKind.ViewZone };
 	const fingerprints = PartFingerprints.collect(element, editorDomNode);
-	if (fingerprints.includes(PartFingerprint.ContentWidgets) || fingerprints.includes(PartFingerprint.OverflowingContentWidgets) || element.closest('.stanza-editor-widget, .stanza-editor-content-widget, .stanza-editor-overlay-widget')) {
+	if (element.closest('.stanza-editor-widget, .stanza-editor-content-widget, .stanza-editor-overlay-widget')) return { kind: MouseTargetKind.Widget };
+	if (fingerprints.includes(PartFingerprint.ViewZones)) return { kind: MouseTargetKind.ViewZone };
+	if (
+		fingerprints.includes(PartFingerprint.ContentWidgets)
+		|| fingerprints.includes(PartFingerprint.OverflowingContentWidgets)
+		|| fingerprints.includes(PartFingerprint.OverlayWidgets)
+		|| fingerprints.includes(PartFingerprint.OverflowingOverlayWidgets)
+	) {
 		return { kind: MouseTargetKind.Widget };
 	}
 	if (element.closest('.stanza-editor-line-number')) return { kind: MouseTargetKind.LineNumber };

@@ -14,7 +14,7 @@ import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel.js';
-import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { CompositionController, type EditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
@@ -33,22 +33,23 @@ import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
 import { Margin } from './viewparts/margin/margin.js';
 import { GlyphMarginWidgets, resolveGlyphMarginLanes } from './viewparts/glyphMargin/glyphMargin.js';
 import { Rulers, type EditorRuler } from './viewparts/rulers/rulers.js';
+import { RulersGpu } from './viewparts/rulersGpu/rulersGpu.js';
 import { EditorScrollbar } from './viewparts/editorScrollbar/editorScrollbar.js';
 import { LineNumbersOverlay } from './viewparts/lineNumbers/lineNumbers.js';
 import { Minimap } from './viewparts/minimap/minimap.js';
 import { DecorationsOverviewRuler } from './viewparts/overviewRuler/decorationsOverviewRuler.js';
 import { ScrollDecorationViewPart } from './viewparts/scrollDecoration/scrollDecoration.js';
 import { ViewContentWidgets } from './viewparts/contentWidgets/contentWidgets.js';
-import { ViewOverlayWidgets, type IOverlayWidget } from './viewparts/overlayWidgets/overlayWidgets.js';
+import { ViewOverlayWidgets } from './viewparts/overlayWidgets/overlayWidgets.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
-import type { IContentWidget } from './editorBrowser.js';
+import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { LineWidthIndex, ViewLines } from './viewparts/viewLines/viewLines.js';
 import { ViewLineOptions, ViewLineTextDirection as EditorTextDirection } from './viewparts/viewLines/viewLineOptions.js';
 import { ViewLinesGpu } from './viewparts/viewLinesGpu/viewLinesGpu.js';
 import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './viewparts/viewZones/viewZones.js';
 import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorations.js';
-import { createEditorRenderingContext, createEditorViewportData, type ActiveLineHighlight, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
+import { createEditorRenderingContext, createEditorViewportData, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
 import './widget/codeEditor/editor.css';
@@ -330,9 +331,6 @@ export type EditorViewportPresentation = "document" | "embedded";
 /** Chooses which component renders the visible focus outline for an Stanza viewport. */
 export type EditorFocusOutlineOwner = "editor" | "host";
 
-/** Controls whether the viewport projects current-line presentation DOM. */
-export type EditorActiveLineHighlight = ActiveLineHighlight;
-
 /** Space reserved around the editor's projected text rows. */
 export interface EditorViewportPadding {
 	readonly top: number;
@@ -362,23 +360,27 @@ export interface EditorViewportOptions {
 	readonly presentation?: EditorViewportPresentation;
 	/** `host` delegates the visible focus outline to the viewport's direct host. */
 	readonly focusOutlineOwner?: EditorFocusOutlineOwner;
-	/** `off` omits current-line presentation while preserving selections and carets. */
-	readonly activeLineHighlight?: EditorActiveLineHighlight;
+	readonly renderLineHighlight?: IEditorOptions['renderLineHighlight'];
+	readonly renderLineHighlightOnlyWhenFocus?: IEditorOptions['renderLineHighlightOnlyWhenFocus'];
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: WrappingIndent;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
 	readonly fontLigatures?: boolean;
-	readonly showLineNumbers?: boolean;
+	readonly lineNumbers?: IEditorOptions['lineNumbers'];
 	readonly glyphMargin?: boolean;
 	readonly rulers?: readonly EditorRuler[];
-	readonly showIndentationGuides?: boolean;
+	readonly guides?: IEditorOptions['guides'];
 	readonly minimap?: IEditorMinimapOptions;
 	readonly indentation?: EditorIndentationOptions;
 	/** Browser text-direction input; automatic direction is the default. */
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
+	readonly cursorStyle?: IEditorOptions['cursorStyle'];
+	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
+	readonly cursorWidth?: IEditorOptions['cursorWidth'];
+	readonly cursorHeight?: IEditorOptions['cursorHeight'];
 	readonly allowOverflow?: IEditorOptions['allowOverflow'];
 	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
 }
@@ -423,10 +425,11 @@ export class View extends Disposable {
 	private readonly selectionController: EditorSelectionController | undefined;
 	private readonly presentation: EditorViewportPresentation;
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
-	private readonly activeLineHighlight: EditorActiveLineHighlight;
-	private readonly showLineNumbers: boolean;
+	private readonly renderLineHighlight: NonNullable<IEditorOptions['renderLineHighlight']>;
+	private readonly renderLineHighlightOnlyWhenFocus: boolean;
+	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	private readonly showGlyphMargin: boolean;
-	private readonly showIndentationGuides: boolean;
+	private readonly guides: InternalGuidesOptions;
 	private readonly padding: EditorViewportPadding;
 	private readonly indentation: ResolvedEditorIndentationOptions;
 	private readonly minimap: EditorMinimapOptions;
@@ -434,6 +437,8 @@ export class View extends Disposable {
 	private readonly viewLineOptions: ViewLineOptions;
 	private readonly elementSizeObserver: ElementSizeObserver;
 	private readonly pixelRatio: IPixelRatioMonitor;
+	private overlayWidgetsMinimumContentWidth = 0;
+	private viewZonesMinimumContentWidth = 0;
 	private softWrapping: boolean;
 
 	get currentLayout(): EditorViewportLayout {
@@ -456,10 +461,18 @@ export class View extends Disposable {
 		this.selectionController = options.selectionController;
 		this.presentation = options.presentation ?? "document";
 		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
-		this.activeLineHighlight = options.activeLineHighlight ?? (this.presentation === "embedded" ? "off" : "on");
-		this.showLineNumbers = options.showLineNumbers ?? this.presentation !== "embedded";
+		this.renderLineHighlight = options.renderLineHighlight ?? (this.presentation === 'embedded' ? 'none' : 'line');
+		this.renderLineHighlightOnlyWhenFocus = options.renderLineHighlightOnlyWhenFocus ?? false;
+		const cursorStyle = EditorOptions.cursorStyle.validate(options.cursorStyle);
+		const cursorBlinking = EditorOptions.cursorBlinking.validate(options.cursorBlinking);
+		const cursorWidth = EditorOptions.cursorWidth.validate(options.cursorWidth);
+		const cursorHeight = EditorOptions.cursorHeight.validate(options.cursorHeight);
+		this.lineNumbers = EditorOptions.lineNumbers.validate(options.lineNumbers ?? (this.presentation === 'embedded' ? 'off' : 'on'));
 		this.showGlyphMargin = this.presentation !== 'embedded' && (options.glyphMargin ?? true);
-		this.showIndentationGuides = options.showIndentationGuides ?? this.presentation !== "embedded";
+		this.guides = EditorOptions.guides.validate({
+			...options.guides,
+			indentation: options.guides?.indentation ?? this.presentation !== 'embedded',
+		});
 		this.padding = resolveEditorViewportPadding(options.padding);
 		this.minimap = EditorOptions.minimap.validate({
 			...options.minimap,
@@ -481,8 +494,11 @@ export class View extends Disposable {
 			if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
 				throw new TypeError("Unknown Stanza editor focus outline owner");
 			}
-			if (this.activeLineHighlight !== "on" && this.activeLineHighlight !== "off") {
-				throw new TypeError("Unknown Stanza editor active-line highlight");
+			if (!['none', 'gutter', 'line', 'all'].includes(this.renderLineHighlight)) {
+				throw new TypeError('Unknown Stanza editor line highlight mode');
+			}
+			if (typeof this.renderLineHighlightOnlyWhenFocus !== 'boolean') {
+				throw new TypeError('Stanza editor line highlight focus option must be boolean');
 			}
 			if (this.selectionController && this.selectionController.textModel !== this.model) {
 				throw new TypeError(
@@ -503,7 +519,7 @@ export class View extends Disposable {
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
 		this.element.classList.add(`stanza-editor-direction-${this.viewLineOptions.textDirection}`);
-		this.element.classList.toggle("hide-line-numbers", !this.showLineNumbers);
+		this.element.classList.toggle("hide-line-numbers", this.lineNumbers.renderType === RenderLineNumbersType.Off);
 		applyEditorFontInfo(this.element, {
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
@@ -573,7 +589,14 @@ export class View extends Disposable {
 			layout => this.createRenderingContext(layout),
 		);
 		this.viewParts = this._register(new EditorViewPartCollection());
-		this.viewZones = this.viewParts.register(new ViewZones(this.element, this.viewport, () => this.visualProjection.visualLineCount));
+		this.viewZones = this.viewParts.register(new ViewZones({
+			host: this.element,
+			viewLayout: this.viewport,
+			readVisualLineCount: () => this.visualProjection.visualLineCount,
+			readContentLeft: () => this.contentOffsetLeft + this.textLeft,
+			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft - this.textLeft),
+			setMinimumContentWidth: width => this.setViewZonesMinimumContentWidth(width),
+		}));
 		this.contentWidgets = this.viewParts.register(new ViewContentWidgets({
 			viewDomNode: this.element,
 			allowOverflow: options.allowOverflow ?? true,
@@ -581,7 +604,18 @@ export class View extends Disposable {
 			readContentLeft: () => this.contentOffsetLeft,
 			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft),
 		}));
-		this.overlayWidgets = this.viewParts.register(new ViewOverlayWidgets(this.element));
+		this.overlayWidgets = this.viewParts.register(new ViewOverlayWidgets({
+			viewDomNode: this.element,
+			allowOverflow: options.allowOverflow ?? true,
+			fixedOverflowWidgets: options.fixedOverflowWidgets ?? false,
+			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
+			horizontalScrollbarHeight: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
+			readMinimapWidth: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height).minimapWidth,
+			setMinimumContentWidth: width => this.setOverlayWidgetsMinimumContentWidth(width),
+			requestRender: () => {
+				if (!this.isDisposed) this.project(this.viewport.layout);
+			},
+		}));
 		this.viewLines = this._register(new ViewLines({
 			host: this.contentElement,
 			model: this.model,
@@ -601,6 +635,9 @@ export class View extends Disposable {
 				paddingTop: this.padding.top,
 				viewLineOptions: this.viewLineOptions,
 				viewLines: this.viewLines,
+				requestRender: () => {
+					if (!this.isDisposed) this.project(this.viewport.layout);
+				},
 			}))
 			: undefined;
 		const decorationSources = Object.freeze([...(options.decorationSources ?? [])]);
@@ -610,10 +647,16 @@ export class View extends Disposable {
 			contentElement: this.contentElement,
 			model: this.model,
 			selectionController: this.selectionController,
+			bracketColorizationSource: options.bracketColorizationSource,
 			decorationSources,
-			showIndentationGuides: this.showIndentationGuides,
+			guides: this.guides,
 			indentationTabSize: this.indentation.tabSize,
 			renderWhitespace: options.renderWhitespace ?? 'none',
+			cursorStyle,
+			cursorBlinking,
+			cursorWidth,
+			cursorHeight,
+			...(this.viewLinesGpu ? { readGpuLineIndexes: () => this.viewLinesGpu!.gpuLineIndexes } : {}),
 		}));
 		this.margin = this.viewParts.register(new Margin({
 			host: this.element,
@@ -621,11 +664,12 @@ export class View extends Disposable {
 			model: this.model,
 			textMeasurer: this.textMeasurer,
 			presentation: this.presentation,
-			showLineNumbers: this.showLineNumbers,
+			showLineNumbers: this.lineNumbers.renderType !== RenderLineNumbersType.Off,
 			glyphMarginLaneCount: glyphMarginLanes.length,
 			lineHeight: options.lineHeight,
 			lineDecorationsWidth: linesDecorationsWidth(decorationSources),
 		}));
+		this.margin.domNode.append(this.viewZones.marginDomNode);
 		const glyphMarginWidgets = this.viewParts.register(new GlyphMarginWidgets({
 			host: this.contentElement,
 			lanes: glyphMarginLanes,
@@ -636,16 +680,25 @@ export class View extends Disposable {
 		}));
 		const lineNumbersOverlay = this.viewParts.register(new LineNumbersOverlay({
 			host: this.contentElement,
-			showLineNumbers: this.showLineNumbers,
+			lineNumbers: this.lineNumbers,
 			selectionController: this.selectionController,
 			readVisualProjection: () => this.visualProjection,
 		}));
-		const rulers = this.viewParts.register(new Rulers({
-			host: this.contentElement,
-			textMeasurer: this.textMeasurer,
-			readTextLeft: () => this.textLeft,
-			rulers: options.rulers,
-		}));
+		let rulersDomNode: HTMLElement | undefined;
+		if (this.viewLinesGpu) {
+			this.viewParts.register(new RulersGpu(
+				this.viewLinesGpu.gpuContext,
+				Object.freeze([...(options.rulers ?? [])]),
+				column => this.textLeft + this.textMeasurer.measureLineWidth('0'.repeat(column)),
+			));
+		} else {
+			rulersDomNode = this.viewParts.register(new Rulers({
+				host: this.contentElement,
+				textMeasurer: this.textMeasurer,
+				readTextLeft: () => this.textLeft,
+				rulers: options.rulers,
+			})).domNode;
+		}
 		this.viewParts.register(new EditorScrollbar({
 			container: this.element,
 			viewport: this.element,
@@ -672,7 +725,11 @@ export class View extends Disposable {
 		const decorationsOverviewRuler = this.viewParts.register(new DecorationsOverviewRuler({
 			host: this.element,
 			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
-			readLineCount: () => this.model.lineCount,
+			getVerticalOffsetForLineIndex: lineIndex => this.viewport.getVerticalOffsetForLineIndex(
+				lineIndex >= this.model.lineCount
+					? this.visualProjection.visualLineCount
+					: this.visualProjection.visualLineIndexAt(TextPosition.at(lineIndex, 0)),
+			),
 			readMarkers: () => this.viewOverlays.decorations.overviewMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
 		}));
@@ -687,16 +744,19 @@ export class View extends Disposable {
 			this.margin.domNode,
 			glyphMarginWidgets.domNode,
 			this.viewOverlays.blockDecorations.domNode,
-			rulers.domNode,
+			...(rulersDomNode ? [rulersDomNode] : []),
 		);
 		this.element.append(
-			this.overlayWidgets.domNode,
+			this.overlayWidgets.domNode.domNode,
 			minimapPart.domNode,
 			decorationsOverviewRuler.domNode,
 			scrollDecoration.domNode,
 			this.viewZones.domNode,
 		);
-		ownerDocument.body.append(this.contentWidgets.overflowingContentWidgetsDomNode.domNode);
+		ownerDocument.body.append(
+			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
+			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
+		);
 		this._register(this.viewModelLines.onDidChange(() => this.project(viewport.layout)));
 		this._register(this.viewOverlays.onDidChangeDecorations(() => this.project(viewport.layout)));
 		viewport.setContentWidth(this.measuredContentWidth);
@@ -852,6 +912,10 @@ export class View extends Disposable {
 		return this.viewZones.addZone(zone);
 	}
 
+	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void {
+		this.viewZones.changeViewZones(callback);
+	}
+
 	addContentWidget(widget: IContentWidget): void {
 		this.contentWidgets.addWidget(widget);
 		this.layoutContentWidget(widget);
@@ -868,6 +932,11 @@ export class View extends Disposable {
 
 	addOverlayWidget(widget: IOverlayWidget): void {
 		this.overlayWidgets.addWidget(widget);
+		this.layoutOverlayWidget(widget);
+	}
+
+	layoutOverlayWidget(widget: IOverlayWidget): void {
+		this.overlayWidgets.setWidgetPosition(widget, widget.getPosition());
 		this.project(this.viewport.layout);
 	}
 
@@ -1041,12 +1110,24 @@ export class View extends Disposable {
 	}
 
 	private get measuredContentWidth(): number {
-		if (this.softWrapping) return 0;
-		return Math.ceil(
+		const textContentWidth = this.softWrapping ? 0 : Math.ceil(
 			this.gutterWidth +
 			this.lineWidths.maximumLineWidth +
 			this.textMeasurer.horizontalPadding,
 		);
+		return Math.max(textContentWidth, this.overlayWidgetsMinimumContentWidth, this.viewZonesMinimumContentWidth);
+	}
+
+	private setOverlayWidgetsMinimumContentWidth(width: number): void {
+		if (width === this.overlayWidgetsMinimumContentWidth) return;
+		this.overlayWidgetsMinimumContentWidth = width;
+		this.viewport.setContentWidth(this.measuredContentWidth);
+	}
+
+	private setViewZonesMinimumContentWidth(width: number): void {
+		if (width === this.viewZonesMinimumContentWidth) return;
+		this.viewZonesMinimumContentWidth = width;
+		this.viewport.setContentWidth(this.measuredContentWidth);
 	}
 
 	private get gutterWidth(): number {
@@ -1111,8 +1192,8 @@ export class View extends Disposable {
 		this.viewParts.prepareRender(context);
 		this.viewOverlays.prepareRender(context);
 		this.viewParts.render(context);
-		this.viewOverlays.render(context);
 		this.viewLinesGpu?.render(context);
+		this.viewOverlays.render(context);
 		this.syncScrollPosition(layout);
 	}
 
@@ -1156,7 +1237,8 @@ export class View extends Disposable {
 			renderLines: layout.renderLines,
 			textLeft: this.textLeft,
 			textMeasurer: this.textMeasurer,
-			activeLineHighlight: this.activeLineHighlight,
+			renderLineHighlight: this.renderLineHighlight,
+			renderLineHighlightOnlyWhenFocus: this.renderLineHighlightOnlyWhenFocus,
 			linesVisibleRangesForRange: (range, includeNewLines) => useDomTextGeometry
 				? this.viewLines.linesVisibleRangesForRange(range, includeNewLines)
 				: undefined,

@@ -223,9 +223,14 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		experimentalGpuAcceleration: "on",
 		lineWrapping: EditorLineWrapping.On,
 		minimap: { enabled: false },
-		activeLineHighlight: "off",
-		showLineNumbers: false,
-		showIndentationGuides: false,
+		renderLineHighlight: 'none',
+		renderLineHighlightOnlyWhenFocus: true,
+		cursorStyle: 'block-outline',
+		cursorBlinking: 'solid',
+		cursorWidth: 3,
+		cursorHeight: 18,
+		lineNumbers: 'off',
+		guides: { indentation: false },
 		bracketPairColorization: false,
 		matchBrackets: "near",
 		stickyScroll: false,
@@ -265,9 +270,14 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.fontLigatures, true);
 	assert.equal(received?.experimentalGpuAcceleration, "on");
 	assert.deepEqual(received?.minimap, { enabled: false });
-	assert.equal(received?.activeLineHighlight, "off");
-	assert.equal(received?.showLineNumbers, false);
-	assert.equal(received?.showIndentationGuides, false);
+	assert.equal(received?.renderLineHighlight, 'none');
+	assert.equal(received?.renderLineHighlightOnlyWhenFocus, true);
+	assert.equal(received?.cursorStyle, 'block-outline');
+	assert.equal(received?.cursorBlinking, 'solid');
+	assert.equal(received?.cursorWidth, 3);
+	assert.equal(received?.cursorHeight, 18);
+	assert.equal(received?.lineNumbers, 'off');
+	assert.deepEqual(received?.guides, { indentation: false });
 	assert.equal(received?.bracketPairColorization, false);
 	assert.equal(received?.matchBrackets, "near");
 	assert.equal(received?.stickyScroll, false);

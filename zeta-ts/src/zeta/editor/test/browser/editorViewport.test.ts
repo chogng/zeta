@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { h } from "../../../base/browser/dom.js";
-import { ContentWidgetPositionPreference, type IContentWidgetPosition } from '../../browser/editorBrowser.js';
+import { Emitter } from '../../../base/common/event.js';
+import { ContentWidgetPositionPreference, type IContentWidgetPosition, OverlayWidgetPositionPreference } from '../../browser/editorBrowser.js';
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorations.js";
+import { type BracketColorizationSource } from '../../browser/viewparts/viewLines/viewLine.js';
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -13,6 +15,7 @@ import { TextSelection, TextSelectionSet } from "../../common/core/selection.js"
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { WrappingIndent } from "../../common/config/editorOptions.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { PositionAffinity } from '../../common/model.js';
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
 
@@ -414,8 +417,8 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
-		activeLineHighlight: "unknown" as never,
-	}), /Unknown Stanza editor active-line highlight/);
+		renderLineHighlight: "unknown" as never,
+	}), /Unknown Stanza editor line highlight mode/);
 	dom.window.close();
 });
 
@@ -489,11 +492,14 @@ test("EditorViewport keeps DOM text visible when WebGPU initialization is unavai
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		experimentalGpuAcceleration: "on",
+		rulers: [{ column: 80 }],
 	});
 	viewport.layout({ width: 300, height: 40 });
 
 	const canvas = requiredElement(viewport.element, ".stanza-editor-gpu-canvas") as HTMLCanvasElement;
 	assert.equal(canvas.hidden, true);
+	assert.ok(viewport.element.querySelector('.stanza-editor-gpu-mark-layer'));
+	assert.equal(viewport.element.querySelector('.stanza-editor-rulers'), null);
 	assert.equal(lineText(requiredLine(viewport.element, 0)).textContent, "alpha");
 	assert.equal(requiredLine(viewport.element, 0).classList.contains("gpu-rendered"), false);
 	dom.window.close();
@@ -933,6 +939,90 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	dom.window.close();
 });
 
+test('EditorViewport renders active bracket and indentation guides from the structural bracket source', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('{\n    value\n}\ntail');
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 4))));
+	const bracketSource: BracketColorizationSource = {
+		textModel: model,
+		getLineBrackets: () => Object.freeze([]),
+		getBracketGuides: () => Object.freeze([Object.freeze({
+			opening: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
+			closing: TextRange.from(TextPosition.at(2, 0), TextPosition.at(2, 1)),
+			level: 1,
+		})]),
+	};
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: selections,
+		bracketColorizationSource: bracketSource,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(8, 24),
+		guides: {
+			bracketPairs: 'active',
+			bracketPairsHorizontal: 'active',
+			highlightActiveBracketPair: true,
+			indentation: true,
+			highlightActiveIndentation: 'always',
+		},
+	});
+	viewport.layout({ width: 200, height: 80 });
+
+	assert.equal(viewport.element.querySelectorAll('.stanza-editor-bracket-guide').length, 3);
+	assert.equal(viewport.element.querySelectorAll('.stanza-editor-bracket-guide.active').length, 3);
+	assert.equal(viewport.element.querySelectorAll('.stanza-editor-bracket-guide-horizontal.active').length, 1);
+	assert.equal(viewport.element.querySelectorAll('.stanza-editor-indent-guide.active').length, 1);
+	dom.window.close();
+});
+
+test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight semantics', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha\nbeta\ngamma');
+	using controller = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
+		TextSelection.collapsedAt(TextPosition.at(2, 1)),
+	], 1));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		selectionController: controller,
+		renderLineHighlight: 'all',
+		renderLineHighlightOnlyWhenFocus: true,
+		cursorStyle: 'block-outline',
+		cursorBlinking: 'solid',
+		cursorWidth: 7,
+		cursorHeight: 12,
+	});
+	viewport.layout({ width: 300, height: 60 });
+	const primaryCaret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret.primary');
+	assert.equal(primaryCaret.classList.contains('cursor-style-block-outline'), true);
+	assert.equal(primaryCaret.classList.contains('cursor-blinking-solid'), true);
+	assert.equal(primaryCaret.style.width, '8px');
+	assert.equal(primaryCaret.style.height, '12px');
+	assert.equal(primaryCaret.style.top, '4px');
+
+	for (const lineIndex of [0, 2]) {
+		const row = requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', lineIndex);
+		assert.equal(row.classList.contains('active'), true);
+		assert.equal(row.classList.contains('highlight-gutter'), true);
+		assert.equal(row.classList.contains('highlight-line'), false);
+		assert.equal(row.classList.contains('focus-only'), true);
+	}
+
+	controller.setSelections(TextSelectionSet.withPrimary([
+		TextSelection.collapsedAt(TextPosition.at(0, 2)),
+		TextSelection.collapsedAt(TextPosition.at(2, 1)),
+	], 1));
+	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 0).classList.contains('highlight-line'), true);
+	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 2).classList.contains('highlight-line'), true);
+	dom.window.close();
+});
+
 test("Measured content width, line height, and scroll stay synchronized", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
@@ -1070,7 +1160,11 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 		afterRender: (position: ContentWidgetPositionPreference | null) => { renderedPosition = position; },
 	};
 	const overlayDomNode = h(dom.window.document, 'div');
-	const overlayWidget = { id: 'overlay', domNode: overlayDomNode, getPosition: () => 'top-right' as const };
+	const overlayWidget = {
+		getId: () => 'overlay',
+		getDomNode: () => overlayDomNode,
+		getPosition: () => ({ preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER }),
+	};
 
 	viewport.addContentWidget(contentWidget);
 	viewport.addOverlayWidget(overlayWidget);
@@ -1081,15 +1175,131 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 	assert.equal(contentDomNode.style.top, '20px');
 	assert.equal(renderedPosition, ContentWidgetPositionPreference.BELOW);
 	assert.equal(overlayDomNode.parentElement?.className, 'stanza-editor-overlay-widgets');
-	assert.equal(overlayDomNode.hidden, false);
-	contentPosition = { position: { lineIndex: 0, columnIndex: 1 }, preference: [ContentWidgetPositionPreference.EXACT] };
+	assert.equal(overlayDomNode.style.display, 'block');
+	contentPosition = { position: { lineIndex: 0, columnIndex: 0 }, preference: [ContentWidgetPositionPreference.EXACT], positionAffinity: PositionAffinity.LeftOfInjectedText };
 	viewport.layoutContentWidget(contentWidget);
 	assert.equal(contentDomNode.style.top, '0px');
+	assert.equal(contentDomNode.style.left, '0px');
 	assert.equal(renderedPosition, ContentWidgetPositionPreference.EXACT);
 	viewport.removeContentWidget(contentWidget);
 	viewport.removeOverlayWidget(overlayWidget);
 	assert.equal(contentDomNode.isConnected, false);
 	assert.equal(overlayDomNode.isConnected, false);
+	dom.window.close();
+});
+
+test('EditorViewport renders relative, interval, and custom line numbers', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel(lines(12).join('\n'));
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(5, 0))));
+	using relative = new EditorViewport({
+		container,
+		model,
+		selectionController: selections,
+		lineHeight: 20,
+		lineNumbers: 'relative',
+		textMeasurer: fixedTextMeasurer(),
+	});
+	relative.layout({ width: 300, height: 240 });
+	const relativeRows = lineElements(relative.element);
+	assert.equal(lineNumber(relativeRows[0]!).textContent, '5');
+	assert.equal(lineNumber(relativeRows[5]!).textContent, '6');
+	assert.equal(lineNumber(relativeRows[9]!).textContent, '4');
+	relative.dispose();
+
+	using interval = new EditorViewport({ container, model, lineHeight: 20, lineNumbers: 'interval', textMeasurer: fixedTextMeasurer() });
+	interval.layout({ width: 300, height: 240 });
+	assert.equal(lineNumber(lineElements(interval.element)[8]!).textContent, '');
+	assert.equal(lineNumber(lineElements(interval.element)[9]!).textContent, '10');
+	interval.dispose();
+
+	using custom = new EditorViewport({ container, model, lineHeight: 20, lineNumbers: line => `L${line}`, textMeasurer: fixedTextMeasurer() });
+	custom.layout({ width: 300, height: 40 });
+	assert.equal(lineNumber(lineElements(custom.element)[0]!).textContent, 'L1');
+	dom.window.close();
+});
+
+test('EditorViewport changes public view zones with content and margin ownership', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha\nbeta');
+	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+	viewport.layout({ width: 300, height: 100 });
+	const domNode = h(dom.window.document, 'button');
+	const marginDomNode = h(dom.window.document, 'span');
+	let computedHeight = 0;
+	let relativeTop = 0;
+	let id = '';
+	let retainedAccessor: { layoutZone(id: string): void } | undefined;
+	viewport.changeViewZones(accessor => {
+		retainedAccessor = accessor;
+		id = accessor.addZone({
+			afterLineIndex: 0,
+			heightInPixels: 24,
+			minWidthInPixels: 450,
+			suppressMouseDown: true,
+			domNode,
+			marginDomNode,
+			onComputedHeight: height => { computedHeight = height; },
+			onDomNodeTop: top => { relativeTop = top; },
+		});
+	});
+
+	assert.equal(domNode.parentElement?.className, 'stanza-editor-view-zones');
+	assert.equal(marginDomNode.parentElement?.className, 'stanza-editor-margin-view-zones');
+	assert.equal(domNode.style.height, '24px');
+	assert.equal(computedHeight, 24);
+	assert.equal(relativeTop, 20);
+	assert.equal(viewport.currentLayout.contentSize.width, 450);
+	const mouseDown = new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+	domNode.dispatchEvent(mouseDown);
+	assert.equal(mouseDown.defaultPrevented, true);
+	assert.throws(() => retainedAccessor?.layoutZone(id), /no longer valid/);
+	viewport.changeViewZones(accessor => accessor.removeZone(id));
+	assert.equal(domNode.isConnected, false);
+	assert.equal(marginDomNode.isConnected, false);
+	dom.window.close();
+});
+
+test('EditorViewport lays out overflowing and relayout-aware overlay widgets', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		fixedOverflowWidgets: true,
+		minimap: { enabled: false },
+	});
+	viewport.layout({ width: 300, height: 100 });
+	const domNode = h(dom.window.document, 'div');
+	let width = 40;
+	domNode.getBoundingClientRect = () => ({ width, height: 20 }) as DOMRect;
+	using layoutEmitter = new Emitter<void>();
+	const widget = {
+		allowEditorOverflow: true,
+		onDidLayout: layoutEmitter.event,
+		getId: () => 'overflow-overlay',
+		getDomNode: () => domNode,
+		getPosition: () => ({ preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER }),
+		getMinContentWidthInPx: () => 420,
+	};
+
+	viewport.addOverlayWidget(widget);
+	const initialLeft = Number.parseFloat(domNode.style.left);
+	assert.equal(domNode.parentElement?.className, 'stanza-editor-overflowing-overlay-widgets');
+	assert.equal(domNode.style.position, 'fixed');
+	assert.equal(viewport.currentLayout.contentSize.width, 420);
+	width = 60;
+	layoutEmitter.fire();
+	assert.equal(Number.parseFloat(domNode.style.left), initialLeft - 20);
+
+	viewport.removeOverlayWidget(widget);
+	assert.equal(viewport.currentLayout.contentSize.width < 420, true);
+	assert.equal(domNode.isConnected, false);
 	dom.window.close();
 });
 
@@ -1142,6 +1352,31 @@ test('EditorViewport projects configured whitespace through WhitespaceOverlay', 
 	viewport.layout({ width: 300, height: 100 });
 
 	assert.deepEqual([...viewport.element.querySelectorAll('.stanza-editor-whitespace')].map(element => element.textContent), ['·', '→']);
+	dom.window.close();
+});
+
+test('EditorViewport limits selection whitespace to the current selections', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('a b c');
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 2))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: selections,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		renderWhitespace: 'selection',
+	});
+	viewport.layout({ width: 300, height: 100 });
+
+	const firstMarker = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-whitespace');
+	const firstLeft = firstMarker.style.left;
+	assert.equal(viewport.element.querySelectorAll('.stanza-editor-whitespace').length, 1);
+	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 3), TextPosition.at(0, 4))));
+	const secondMarker = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-whitespace');
+	assert.equal(viewport.element.querySelectorAll('.stanza-editor-whitespace').length, 1);
+	assert.notEqual(secondMarker.style.left, firstLeft);
 	dom.window.close();
 });
 

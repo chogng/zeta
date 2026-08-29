@@ -63,6 +63,16 @@ test("MouseTargetFactory preserves editor targets and classifies browser-owned r
 	const fingerprintedWidget = h(dom.window.document, 'button');
 	contentWidgets.append(fingerprintedWidget);
 	assert.equal(factory.create(mouseEvent(fingerprintedWidget))?.kind, MouseTargetKind.Widget);
+	const overlayWidgets = node('stanza-editor-overlay-widgets');
+	PartFingerprints.write(overlayWidgets, PartFingerprint.OverlayWidgets);
+	const fingerprintedOverlayWidget = h(dom.window.document, 'button');
+	overlayWidgets.append(fingerprintedOverlayWidget);
+	assert.equal(factory.create(mouseEvent(fingerprintedOverlayWidget))?.kind, MouseTargetKind.Widget);
+	const viewZones = node('stanza-editor-view-zones');
+	PartFingerprints.write(viewZones, PartFingerprint.ViewZones);
+	const fingerprintedViewZone = h(dom.window.document, 'div');
+	viewZones.append(fingerprintedViewZone);
+	assert.equal(factory.create(mouseEvent(fingerprintedViewZone))?.kind, MouseTargetKind.ViewZone);
 
 	const textTarget = factory.create(mouseEvent(node("stanza-editor-text")));
 	assert.equal(textTarget?.kind, MouseTargetKind.Text);

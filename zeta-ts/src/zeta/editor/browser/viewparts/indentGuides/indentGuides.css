@@ -13,3 +13,28 @@
   width: 1px;
   background: color-mix(in srgb, var(--zeta-description-foreground) 35%, transparent);
 }
+
+.stanza-editor-indent-guide.active {
+	background: var(--zeta-foreground);
+}
+
+.stanza-editor-bracket-guide,
+.stanza-editor-bracket-guide-horizontal {
+	position: absolute;
+	background: color-mix(in srgb, var(--zeta-description-foreground) 45%, transparent);
+}
+
+.stanza-editor-bracket-guide {
+	top: 0;
+	bottom: 0;
+	width: 1px;
+}
+
+.stanza-editor-bracket-guide-horizontal {
+	height: 1px;
+}
+
+.stanza-editor-bracket-guide.active,
+.stanza-editor-bracket-guide-horizontal.active {
+	background: var(--zeta-foreground);
+}

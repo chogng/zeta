@@ -14,8 +14,9 @@ import type { ILanguageFeaturesService } from '../common/services/languageFeatur
 import { LanguageConfigurationService, type ILanguageConfigurationService } from '../common/services/languageConfigurationService.js';
 import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
+import { type PositionAffinity } from '../common/model.js';
 import { type EditorIndentationOptions } from "../common/core/misc/indentation.js";
-import { type EditorActiveLineHighlight, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
+import { type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
 import { type EditorLineWrapping, type IEditorMinimapOptions, type IEditorOptions, type WrappingIndent } from "../common/config/editorOptions.js";
@@ -37,6 +38,7 @@ import { SemanticTokensStylingService } from '../common/services/semanticTokensS
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { LanguageEditingAdapter } from "./view/viewController.js";
+import { type ICodeEditorService } from './services/codeEditorService.js';
 
 export interface EditorContextMenuRequest {
 	readonly position: TextPosition;
@@ -55,6 +57,7 @@ export interface IContentWidgetPosition {
 	readonly position: IPosition | null;
 	readonly secondaryPosition?: IPosition | null;
 	readonly preference: readonly ContentWidgetPositionPreference[];
+	readonly positionAffinity?: PositionAffinity;
 }
 
 export interface IContentWidgetRenderedCoordinate {
@@ -71,6 +74,50 @@ export interface IContentWidget {
 	getPosition(): IContentWidgetPosition | null;
 	beforeRender?(): IDimension | null;
 	afterRender?(position: ContentWidgetPositionPreference | null, coordinate: IContentWidgetRenderedCoordinate | null): void;
+}
+
+export enum OverlayWidgetPositionPreference {
+	TOP_RIGHT_CORNER,
+	BOTTOM_RIGHT_CORNER,
+	TOP_CENTER,
+}
+
+export interface IOverlayWidgetPositionCoordinates {
+	readonly top: number;
+	readonly left: number;
+}
+
+export interface IOverlayWidgetPosition {
+	readonly preference: OverlayWidgetPositionPreference | IOverlayWidgetPositionCoordinates | null;
+	readonly stackOrdinal?: number;
+}
+
+export interface IOverlayWidget {
+	readonly onDidLayout?: Event<void>;
+	readonly allowEditorOverflow?: boolean;
+	getId(): string;
+	getDomNode(): HTMLElement;
+	getPosition(): IOverlayWidgetPosition | null;
+	getMinContentWidthInPx?(): number;
+}
+
+export interface IViewZone {
+	afterLineIndex: number;
+	heightInPixels: number;
+	heightInLines?: number;
+	ordinal?: number;
+	minWidthInPixels?: number;
+	suppressMouseDown?: boolean;
+	readonly domNode: HTMLElement;
+	readonly marginDomNode?: HTMLElement | null;
+	onDomNodeTop?: (top: number) => void;
+	onComputedHeight?: (height: number) => void;
+}
+
+export interface IViewZoneChangeAccessor {
+	addZone(zone: IViewZone): string;
+	removeZone(id: string): void;
+	layoutZone(id: string): void;
 }
 
 export type EditorTextViewPositionState = CodeEditorViewPositionState;
@@ -95,6 +142,7 @@ export interface EditorFindOptions {
 	readonly matchCase?: boolean;
 	readonly wholeWord?: boolean;
 	readonly regularExpression?: boolean;
+	readonly wordSeparators?: string;
 }
 
 /** Selects the named source sections presented as editor line headers. */
@@ -127,6 +175,8 @@ export interface EditorBrowserOptions {
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 	/** Window-scoped constructor service for runtime editor contributions. */
 	readonly instantiationService?: IInstantiationService;
+	/** Host-scoped registry for live code editors and resource open handlers. */
+	readonly codeEditorService?: ICodeEditorService;
 	/** Optional accessibility policy used by native screen-reader content. */
 	readonly accessibilityService?: IAccessibilityService;
 	/** Chooses line-structured content for native screen-reader projection. */
@@ -153,8 +203,9 @@ export interface EditorBrowserOptions {
 	readonly fontLigatures?: boolean;
 	readonly minimap?: IEditorMinimapOptions;
 	readonly sectionHeaders?: EditorSectionHeaderOptions | false;
-	readonly activeLineHighlight?: EditorActiveLineHighlight;
-	readonly showLineNumbers?: boolean;
+	readonly renderLineHighlight?: IEditorOptions['renderLineHighlight'];
+	readonly renderLineHighlightOnlyWhenFocus?: IEditorOptions['renderLineHighlightOnlyWhenFocus'];
+	readonly lineNumbers?: IEditorOptions['lineNumbers'];
 	readonly occurrencesHighlight?: 'off' | 'singleFile' | 'multiFile';
 	readonly occurrencesHighlightDelay?: number;
 	readonly selectionHighlight?: boolean;
@@ -163,7 +214,7 @@ export interface EditorBrowserOptions {
 	readonly glyphMargin?: boolean;
 	readonly showSymbolIcons?: boolean;
 	readonly rulers?: readonly EditorRuler[];
-	readonly showIndentationGuides?: boolean;
+	readonly guides?: IEditorOptions['guides'];
 	readonly bracketPairColorization?: boolean;
 	readonly matchBrackets?: "never" | "near" | "always";
 	readonly stickyScroll?: boolean;
@@ -184,6 +235,10 @@ export interface EditorBrowserOptions {
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
+	readonly cursorStyle?: IEditorOptions['cursorStyle'];
+	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
+	readonly cursorWidth?: IEditorOptions['cursorWidth'];
+	readonly cursorHeight?: IEditorOptions['cursorHeight'];
 	readonly allowOverflow?: IEditorOptions['allowOverflow'];
 	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
 	readonly presentation?: EditorViewportPresentation;
@@ -223,6 +278,10 @@ export interface IEditorBrowser extends IDisposable {
 	addContentWidget(widget: IContentWidget): void;
 	layoutContentWidget(widget: IContentWidget): void;
 	removeContentWidget(widget: IContentWidget): void;
+	addOverlayWidget(widget: IOverlayWidget): void;
+	layoutOverlayWidget(widget: IOverlayWidget): void;
+	removeOverlayWidget(widget: IOverlayWidget): void;
+	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
 	/** Runs editor-local formatting and normalization before the host persists the model. */
 	prepareSave(): Promise<void>;
 }
@@ -338,15 +397,20 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					fontFamily: configuration.fontFamily,
 					fontSize: configuration.fontSize,
 					fontLigatures: configuration.fontLigatures,
-					showLineNumbers: options.showLineNumbers,
+					lineNumbers: options.lineNumbers,
 					glyphMargin: options.glyphMargin,
 					rulers: options.rulers,
-					showIndentationGuides: options.showIndentationGuides,
+					guides: options.guides,
 					minimap: options.minimap,
-					activeLineHighlight: options.activeLineHighlight,
+					renderLineHighlight: options.renderLineHighlight,
+					renderLineHighlightOnlyWhenFocus: options.renderLineHighlightOnlyWhenFocus,
 					textDirection: options.textDirection,
 					experimentalGpuAcceleration: options.experimentalGpuAcceleration,
 					renderWhitespace: options.renderWhitespace,
+					cursorStyle: options.cursorStyle,
+					cursorBlinking: options.cursorBlinking,
+					cursorWidth: options.cursorWidth,
+					cursorHeight: options.cursorHeight,
 					allowOverflow: options.allowOverflow,
 					fixedOverflowWidgets: options.fixedOverflowWidgets,
 					presentation: options.presentation,
@@ -366,6 +430,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
 				},
 			}));
+			if (options.codeEditorService) this._register(options.codeEditorService.addCodeEditor(this.codeEditor));
 			this.viewport = this.codeEditor.viewport;
 			this.view = this.codeEditor.view;
 			const installContext: TextEditorContributionContext = {
@@ -408,6 +473,10 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 		}
 	}
 
+	public registerEditorLifetime<T extends IDisposable>(value: T): T {
+		return this._register(value);
+	}
+
 	layout(dimension: IDimension): void { this.codeEditor.layout(dimension); }
 	announceAccessibilityStatus(message: string): void { this.codeEditor.announceAccessibilityStatus(message); }
 	focus(): void { this.codeEditor.focus(); }
@@ -419,6 +488,10 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 	addContentWidget(widget: IContentWidget): void { this.codeEditor.addContentWidget(widget); }
 	layoutContentWidget(widget: IContentWidget): void { this.codeEditor.layoutContentWidget(widget); }
 	removeContentWidget(widget: IContentWidget): void { this.codeEditor.removeContentWidget(widget); }
+	addOverlayWidget(widget: IOverlayWidget): void { this.codeEditor.addOverlayWidget(widget); }
+	layoutOverlayWidget(widget: IOverlayWidget): void { this.codeEditor.layoutOverlayWidget(widget); }
+	removeOverlayWidget(widget: IOverlayWidget): void { this.codeEditor.removeOverlayWidget(widget); }
+	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void { this.codeEditor.changeViewZones(callback); }
 	async prepareSave(): Promise<void> {
 		for (const hook of [...this.beforeSaveHooks]) await hook();
 	}
@@ -479,11 +552,25 @@ function validateOptions(options: EditorBrowserOptions): void {
 	if (options.renderWhitespace !== undefined && !['none', 'boundary', 'selection', 'trailing', 'all'].includes(options.renderWhitespace)) {
 		throw new TypeError('Editor whitespace rendering option is invalid');
 	}
+	if (options.lineNumbers !== undefined && typeof options.lineNumbers !== 'function' && !['on', 'off', 'relative', 'interval'].includes(options.lineNumbers)) {
+		throw new TypeError('Editor line numbers option is invalid');
+	}
+	if (options.renderLineHighlight !== undefined && !['none', 'gutter', 'line', 'all'].includes(options.renderLineHighlight)) {
+		throw new TypeError('Editor line highlight option is invalid');
+	}
+	if (options.cursorStyle !== undefined && !['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'].includes(options.cursorStyle)) {
+		throw new TypeError('Editor cursor style option is invalid');
+	}
+	if (options.cursorBlinking !== undefined && !['blink', 'smooth', 'phase', 'expand', 'solid'].includes(options.cursorBlinking)) {
+		throw new TypeError('Editor cursor blinking option is invalid');
+	}
+	for (const [name, value] of [['cursor width', options.cursorWidth], ['cursor height', options.cursorHeight]] as const) {
+		if (value !== undefined && (!isSafeInteger(value) || value < 0)) throw new RangeError(`Editor ${name} must be a non-negative safe integer`);
+	}
 	for (const [name, value] of [
-		["line numbers", options.showLineNumbers],
 		["glyph margin", options.glyphMargin],
 		["symbol icons", options.showSymbolIcons],
-		["indentation guides", options.showIndentationGuides],
+		['line highlight focus', options.renderLineHighlightOnlyWhenFocus],
 		["bracket pair colorization", options.bracketPairColorization],
 		["sticky scroll", options.stickyScroll],
 		["parameter hints", options.parameterHints],

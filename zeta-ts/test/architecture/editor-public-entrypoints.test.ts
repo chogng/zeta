@@ -41,6 +41,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(api, /createStandaloneLanguagesApi/u);
 	assert.match(api, /export const editor/u);
 	assert.match(api, /export const languages/u);
+	assert.match(api, /export \{ PositionAffinity \} from '\.\/common\/model\.js'/u);
 	assert.match(api, /LineDocumentSnapshot/u);
 	assert.match(api, /LineSequence/u);
 	assert.match(api, /RangeStore/u);
@@ -52,6 +53,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.doesNotMatch(api, /^import\s+(?!type\b).*contrib/mu);
 	assert.match(standaloneEditor, /export function create\(/u);
 	assert.match(standaloneEditor, /createModel/u);
+	assert.match(standaloneEditor, /PositionAffinity,/u);
 	assert.match(standaloneCodeEditor, /class StandaloneCodeEditor/u);
 	assert.match(standaloneLanguages, /export function register\(/u);
 	assert.match(standaloneLanguages, /export function registerLanguages\(/u);

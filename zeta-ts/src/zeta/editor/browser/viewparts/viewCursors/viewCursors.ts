@@ -2,7 +2,8 @@ import "./viewCursors.css";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type TextRange } from '../../../common/core/text.js';
+import { type TextPosition, type TextRange } from '../../../common/core/text.js';
+import { getTextGraphemeBoundaries } from '../../../common/core/textSegmentation.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
@@ -11,7 +12,11 @@ import { type EditorOverlayContext, type EditorVisiblePosition } from '../../vie
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { ViewPartRows } from '../../view/viewLayer.js';
-import { ViewCursor } from './viewCursor.js';
+import { ViewCursor, type ViewCursorOptions } from './viewCursor.js';
+
+export interface ViewCursorsOptions extends ViewCursorOptions {
+	readonly host: HTMLElement;
+}
 
 /** Projects primary and secondary carets without owning cursor positions. */
 export class ViewCursors extends DynamicViewOverlay {
@@ -19,15 +24,17 @@ export class ViewCursors extends DynamicViewOverlay {
 	private readonly model: TextModel;
 	private readonly selectionController: EditorSelectionController | undefined;
 	private readonly rows: ViewPartRows;
+	private readonly cursorOptions: ViewCursorOptions;
 	private readonly cursors = new Map<number, ViewCursor>();
 	private compositionRange: TrackedRange | undefined;
 
-	constructor(context: EditorViewContext, host: HTMLElement, model: TextModel, selectionController: EditorSelectionController | undefined) {
+	constructor(context: EditorViewContext, options: ViewCursorsOptions, model: TextModel, selectionController: EditorSelectionController | undefined) {
 		super(context);
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-cursors-layer', 'stanza-editor-line-cursors'));
+		this.rows = this._register(new ViewPartRows(options.host, 'stanza-editor-cursors-layer', 'stanza-editor-line-cursors'));
 		this.domNode = this.rows.domNode;
 		this.model = model;
 		this.selectionController = selectionController;
+		this.cursorOptions = options;
 		this._register(toDisposable(() => this.compositionRange?.dispose()));
 	}
 
@@ -46,7 +53,7 @@ export class ViewCursors extends DynamicViewOverlay {
 		const rows = this.rows.render(context);
 		for (const row of rows.values()) reset(row);
 		projectStanzaCompositionOverlay(overlay, this.compositionRange?.range, rows);
-		const renderedCursorIndexes = projectStanzaCursorOverlays(overlay, this.selectionController, rows, this.cursors);
+		const renderedCursorIndexes = projectStanzaCursorOverlays(overlay, this.selectionController, rows, this.cursors, this.cursorOptions, context.layout.lineHeight);
 		for (const [selectionIndex, cursor] of this.cursors) {
 			if (renderedCursorIndexes.has(selectionIndex)) {
 				continue;
@@ -57,7 +64,7 @@ export class ViewCursors extends DynamicViewOverlay {
 	}
 }
 
-function projectStanzaCursorOverlays(context: EditorOverlayContext, controller: EditorSelectionController | undefined, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>): ReadonlySet<number> {
+function projectStanzaCursorOverlays(context: EditorOverlayContext, controller: EditorSelectionController | undefined, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, cursorOptions: ViewCursorOptions, lineHeight: number): ReadonlySet<number> {
 	const renderedCursorIndexes = new Set<number>();
 	if (!controller) return renderedCursorIndexes;
 	const domCarets = new Map<number, EditorVisiblePosition>();
@@ -68,21 +75,28 @@ function projectStanzaCursorOverlays(context: EditorOverlayContext, controller: 
 	const geometry = createStanzaVisualSelectionGeometry(context.model, controller.selections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	for (const rectangle of geometry.carets) {
 		if (domCarets.has(rectangle.selectionIndex)) continue;
-		appendCaret(context, rows, cursors, renderedCursorIndexes, rectangle.selectionIndex, rectangle.visualLineIndex, rectangle.left, rectangle.primary);
+		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, rectangle.selectionIndex, rectangle.visualLineIndex, rectangle.left, rectangle.primary, controller.selections.selections[rectangle.selectionIndex]!.active);
 	}
 	for (const [selectionIndex, rectangle] of domCarets) {
-		appendCaret(context, rows, cursors, renderedCursorIndexes, selectionIndex, rectangle.visualLineIndex, rectangle.left, selectionIndex === controller.selections.primaryIndex);
+		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, selectionIndex, rectangle.visualLineIndex, rectangle.left, selectionIndex === controller.selections.primaryIndex, controller.selections.selections[selectionIndex]!.active);
 	}
 	return renderedCursorIndexes;
 }
 
-function appendCaret(context: EditorOverlayContext, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, renderedCursorIndexes: Set<number>, selectionIndex: number, visualLineIndex: number, left: number, primary: boolean): void {
+function appendCaret(context: EditorOverlayContext, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, renderedCursorIndexes: Set<number>, cursorOptions: ViewCursorOptions, lineHeight: number, selectionIndex: number, visualLineIndex: number, left: number, primary: boolean, position: TextPosition): void {
 	const row = rows.get(visualLineIndex);
 	if (!row) return;
-	const cursor = cursors.get(selectionIndex) ?? new ViewCursor(row, selectionIndex);
+	const cursor = cursors.get(selectionIndex) ?? new ViewCursor(row, selectionIndex, cursorOptions);
 	cursors.set(selectionIndex, cursor);
-	cursor.render(row, left, primary);
+	cursor.render(row, left, cursorCharacterWidth(context, position), lineHeight, primary);
 	renderedCursorIndexes.add(selectionIndex);
+}
+
+function cursorCharacterWidth(context: EditorOverlayContext, position: TextPosition): number {
+	const line = context.model.getLineContent(position.lineIndex);
+	const nextBoundary = getTextGraphemeBoundaries(line).find(boundary => boundary > position.columnIndex) ?? position.columnIndex;
+	const nextCharacter = line.slice(position.columnIndex, nextBoundary);
+	return Math.max(1, context.textMeasurer.measureLineWidth(nextCharacter || ' '));
 }
 
 function projectStanzaCompositionOverlay(context: EditorOverlayContext, range: TextRange | undefined, rows: ReadonlyMap<number, HTMLElement>): void {

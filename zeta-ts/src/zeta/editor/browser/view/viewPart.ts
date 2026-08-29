@@ -36,6 +36,9 @@ export const enum PartFingerprint {
 	None,
 	ContentWidgets,
 	OverflowingContentWidgets,
+	OverlayWidgets,
+	OverflowingOverlayWidgets,
+	ViewZones,
 }
 
 export class PartFingerprints {

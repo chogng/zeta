@@ -1,6 +1,7 @@
 import { escapeRegExpCharacters } from "../../../base/common/strings.js";
 import { TextPosition } from "../core/text.js";
 import { TextRange } from "../core/text.js";
+import { getMapForWordSeparators, WordCharacterClass, type WordCharacterClassifier } from '../core/wordCharacterClassifier.js';
 import type { TextModel } from "./textModel.js";
 
 const DEFAULT_RESULT_LIMIT = 999;
@@ -19,6 +20,8 @@ export interface TextSearchQuery {
 	readonly patternKind?: TextSearchPatternKind;
 	readonly matchCase?: boolean;
 	readonly wholeWord?: boolean;
+	/** Characters that delimit whole-word matches. */
+	readonly wordSeparators?: string;
 }
 
 /** Bounds one search without changing its matching semantics. */
@@ -66,7 +69,7 @@ export function findTextMatches(model: TextModel, query: TextSearchQuery, option
 	while (matches.length < resultLimit && (match = expression.exec(text))) {
 		const relativeStart = match.index;
 		const relativeEnd = relativeStart + match[0].length;
-		if (!query.wholeWord || isWholeWordMatch(text, relativeStart, relativeEnd)) {
+		if (!query.wholeWord || isWholeWordMatch(text, relativeStart, relativeEnd, query.wordSeparators)) {
 			matches.push(Object.freeze({
 				modelVersion: snapshot.version,
 				range: TextRange.from(
@@ -104,6 +107,7 @@ export function findNextTextMatch(model: TextModel, query: TextSearchQuery, from
 function validateQuery(query: TextSearchQuery): void {
 	if (!query || typeof query !== "object") throw new TypeError("Text search requires a query");
 	if (typeof query.pattern !== "string") throw new TypeError("Text search pattern must be a string");
+	if (query.wordSeparators !== undefined && typeof query.wordSeparators !== 'string') throw new TypeError('Text search word separators must be a string');
 	if (query.pattern.length > MAX_PATTERN_LENGTH) {
 		throw new TextSearchQueryError(`Text search pattern must not exceed ${MAX_PATTERN_LENGTH} UTF-16 units`);
 	}
@@ -131,17 +135,21 @@ function compileQuery(query: TextSearchQuery): RegExp {
 	}
 }
 
-function isWholeWordMatch(text: string, start: number, end: number): boolean {
+function isWholeWordMatch(text: string, start: number, end: number, wordSeparators: string | undefined): boolean {
 	const first = codePointAt(text, start);
 	const last = codePointBefore(text, end);
 	const before = codePointBefore(text, start);
 	const after = codePointAt(text, end);
-	return !(isWordCharacter(first) && isWordCharacter(before)) &&
-		!(isWordCharacter(last) && isWordCharacter(after));
+	const classifier = wordSeparators === undefined ? undefined : getMapForWordSeparators(wordSeparators);
+	return !(isWordCharacter(first, classifier) && isWordCharacter(before, classifier)) &&
+		!(isWordCharacter(last, classifier) && isWordCharacter(after, classifier));
 }
 
-function isWordCharacter(value: string | undefined): boolean {
-	return value !== undefined && /^[\p{L}\p{M}\p{N}_]$/u.test(value);
+function isWordCharacter(value: string | undefined, classifier: WordCharacterClassifier | undefined): boolean {
+	if (value === undefined) return false;
+	if (!classifier) return /^[\p{L}\p{M}\p{N}_]$/u.test(value);
+	if (/^\s$/u.test(value)) return false;
+	return classifier.get(value.codePointAt(0)!) === WordCharacterClass.Regular;
 }
 
 function codePointAt(text: string, offset: number): string | undefined {

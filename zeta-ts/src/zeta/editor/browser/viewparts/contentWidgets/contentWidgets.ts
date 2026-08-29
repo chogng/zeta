@@ -4,6 +4,7 @@ import { getClientArea, getDomNodePagePosition, type IDimension } from '../../..
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidgetPosition, type IContentWidgetRenderedCoordinate } from '../../editorBrowser.js';
 import { type IPosition, TextPosition } from '../../../common/core/position.js';
+import { PositionAffinity } from '../../../common/model.js';
 import { PartFingerprint, PartFingerprints, type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
 
 interface ViewContentWidgetsOptions {
@@ -171,14 +172,14 @@ class ContentWidget extends Disposable {
 	private prepareRenderData(context: EditorRenderingContext): RenderData | null {
 		const position = this.position;
 		if (this.useDisplayNone || !position || !position.position || position.preference.length === 0) return null;
-		const primary = anchorCoordinate(context, position.position);
+		const primary = anchorCoordinate(context, position.position, position.positionAffinity);
 		if (!primary) {
 			return {
 				kind: 'offViewport',
 				preserveFocus: this.domNode.domNode.contains(this.domNode.domNode.ownerDocument.activeElement),
 			};
 		}
-		const secondary = position.secondaryPosition ? anchorCoordinate(context, position.secondaryPosition) : null;
+		const secondary = position.secondaryPosition ? anchorCoordinate(context, position.secondaryPosition, position.positionAffinity) : null;
 		this.updateDimensions();
 		const anchor = reduceAnchor(primary, secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null, this.cachedWidth, context);
 		const placement = this.allowEditorOverflow
@@ -273,7 +274,7 @@ class RenderedCoordinate implements IContentWidgetRenderedCoordinate {
 	) {}
 }
 
-function anchorCoordinate(context: EditorRenderingContext, position: IPosition): AnchorCoordinate | null {
+function anchorCoordinate(context: EditorRenderingContext, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {
 	const overlay = context.overlay;
 	if (!overlay) return null;
 	let validPosition: TextPosition;
@@ -288,9 +289,11 @@ function anchorCoordinate(context: EditorRenderingContext, position: IPosition):
 	const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
 	if (!visualLine) return null;
 	const renderedPosition = overlay.visibleRangeForPosition(validPosition);
-	const left = renderedPosition?.left ?? overlay.textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + overlay.textMeasurer.measureLineWidth(
-		overlay.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, validPosition.columnIndex),
-	);
+	const left = validPosition.columnIndex === 0 && affinity === PositionAffinity.LeftOfInjectedText
+		? 0
+		: renderedPosition?.left ?? overlay.textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + overlay.textMeasurer.measureLineWidth(
+			overlay.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, validPosition.columnIndex),
+		);
 	return new AnchorCoordinate(context.viewportData.getLineTop(visualLineIndex), left, context.layout.lineHeight, visualLineIndex);
 }
 

@@ -1,5 +1,11 @@
 import { AbstractCodeEditorService } from './abstractCodeEditorService.js';
+import { registerEditorContribution } from '../editorExtensions.js';
 import { EditorWorkerService } from './editorWorkerService.js';
+import { MarkerDecorationsContribution } from './markerDecorations.js';
+
+export function registerEditorBrowserContributions(): void {
+	registerEditorContribution(MarkerDecorationsContribution);
+}
 
 class BrowserCodeEditorService extends AbstractCodeEditorService {}
 

@@ -1,7 +1,8 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { type EditorBrowserOptions } from "../../browser/editorBrowser.js";
+import { ContentWidgetPositionPreference, type EditorBrowserOptions, OverlayWidgetPositionPreference } from "../../browser/editorBrowser.js";
+import { PositionAffinity } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type ModelLanguageChangeEvent } from "../../common/services/model.js";
 import { type IStandaloneThemeData } from "../common/standaloneTheme.js";
@@ -25,6 +26,9 @@ export interface IStandaloneEditorConstructionOptions extends StandaloneEditorBr
 }
 
 export interface IStandaloneEditorApi {
+	readonly ContentWidgetPositionPreference: typeof ContentWidgetPositionPreference;
+	readonly OverlayWidgetPositionPreference: typeof OverlayWidgetPositionPreference;
+	readonly PositionAffinity: typeof PositionAffinity;
 	readonly create: typeof create;
 	readonly createModel: typeof createModel;
 	readonly getModel: typeof getModel;
@@ -88,6 +92,7 @@ export function create(
 			editorWorkerFactory: services.editorWorkerFactory,
 			syntaxWorkerFactory: services.syntaxWorkerFactory,
 			instantiationService: services.instantiationService,
+			codeEditorService: services.codeEditorService,
 		};
 		const editor = services.completionWorkerFactory
 			? new StandaloneCodeEditor({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService)
@@ -140,6 +145,9 @@ export function setTheme(themeId: string): void {
 
 export function createStandaloneEditorApi(): IStandaloneEditorApi {
 	return Object.freeze({
+		ContentWidgetPositionPreference,
+		OverlayWidgetPositionPreference,
+		PositionAffinity,
 		create,
 		createModel,
 		getModel,

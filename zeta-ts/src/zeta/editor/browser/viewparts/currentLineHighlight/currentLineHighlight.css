@@ -6,9 +6,26 @@
 	pointer-events: none;
 }
 
-.stanza-editor-current-line-highlight.active::before {
+.stanza-editor-current-line-highlight.active.highlight-line::before,
+.stanza-editor-current-line-highlight.active.highlight-gutter::after {
 	position: absolute;
-	inset: 0;
+	top: 0;
+	bottom: 0;
 	content: '';
 	background: color-mix(in srgb, var(--zeta-editor-foreground) 6%, transparent);
+}
+
+.stanza-editor-current-line-highlight.active.highlight-line::before {
+	left: var(--stanza-editor-gutter-width);
+	right: 0;
+}
+
+.stanza-editor-current-line-highlight.active.highlight-gutter::after {
+	left: 0;
+	width: var(--stanza-editor-gutter-width);
+}
+
+.stanza-editor:not(:focus-within) .stanza-editor-current-line-highlight.active.focus-only::before,
+.stanza-editor:not(:focus-within) .stanza-editor-current-line-highlight.active.focus-only::after {
+	display: none;
 }

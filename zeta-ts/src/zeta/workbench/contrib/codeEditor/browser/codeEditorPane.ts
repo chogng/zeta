@@ -72,9 +72,14 @@ export interface EditorPaneOptions {
 	readonly fontLigatures?: boolean;
 	readonly experimentalGpuAcceleration?: EditorBrowserOptions["experimentalGpuAcceleration"];
 	readonly minimap?: EditorBrowserOptions["minimap"];
-	readonly activeLineHighlight?: EditorBrowserOptions["activeLineHighlight"];
-	readonly showLineNumbers?: boolean;
-	readonly showIndentationGuides?: boolean;
+	readonly renderLineHighlight?: EditorBrowserOptions['renderLineHighlight'];
+	readonly renderLineHighlightOnlyWhenFocus?: EditorBrowserOptions['renderLineHighlightOnlyWhenFocus'];
+	readonly cursorStyle?: EditorBrowserOptions['cursorStyle'];
+	readonly cursorBlinking?: EditorBrowserOptions['cursorBlinking'];
+	readonly cursorWidth?: EditorBrowserOptions['cursorWidth'];
+	readonly cursorHeight?: EditorBrowserOptions['cursorHeight'];
+	readonly lineNumbers?: EditorBrowserOptions['lineNumbers'];
+	readonly guides?: EditorBrowserOptions['guides'];
 	readonly bracketPairColorization?: boolean;
 	readonly matchBrackets?: EditorBrowserOptions["matchBrackets"];
 	readonly stickyScroll?: boolean;
@@ -181,9 +186,14 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				fontLigatures: this.options.fontLigatures,
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
 				minimap: this.options.minimap,
-				activeLineHighlight: this.options.activeLineHighlight,
-				showLineNumbers: this.options.showLineNumbers,
-				showIndentationGuides: this.options.showIndentationGuides,
+				renderLineHighlight: this.options.renderLineHighlight,
+				renderLineHighlightOnlyWhenFocus: this.options.renderLineHighlightOnlyWhenFocus,
+				cursorStyle: this.options.cursorStyle,
+				cursorBlinking: this.options.cursorBlinking,
+				cursorWidth: this.options.cursorWidth,
+				cursorHeight: this.options.cursorHeight,
+				lineNumbers: this.options.lineNumbers,
+				guides: this.options.guides,
 				bracketPairColorization: this.options.bracketPairColorization,
 				matchBrackets: this.options.matchBrackets,
 				stickyScroll: this.options.stickyScroll,

@@ -21,6 +21,7 @@ export interface ViewLinesGpuOptions {
 	readonly paddingTop: number;
 	readonly viewLineOptions: ViewLineOptions;
 	readonly viewLines: ViewLines;
+	readonly requestRender: () => void;
 }
 
 interface PreparedGpuFrame {
@@ -47,13 +48,22 @@ export class ViewLinesGpu extends Disposable {
 	private lastRenderingContext: EditorRenderingContext | undefined;
 	private pendingRenderingContext: EditorRenderingContext | undefined;
 	private rendering = false;
+	private renderedGpuLineIndexes = new Set<number>();
 
 	constructor(private readonly options: ViewLinesGpuOptions) {
 		super();
 		this.context = this._register(new ViewGpuContext({ host: options.host }));
 		this._register(this.context.onDidChange(() => {
-			if (this.lastRenderingContext) this.render(this.lastRenderingContext);
+			if (this.lastRenderingContext) options.requestRender();
 		}));
+	}
+
+	public get gpuContext(): ViewGpuContext {
+		return this.context;
+	}
+
+	public get gpuLineIndexes(): ReadonlySet<number> {
+		return this.renderedGpuLineIndexes;
 	}
 
 	public render(context: EditorRenderingContext): void {
@@ -256,10 +266,12 @@ export class ViewLinesGpu extends Disposable {
 	}
 
 	private applyRenderedLines(renderedLines: ReadonlyMap<number, ViewLine>, gpuLineIndexes: ReadonlySet<number>): void {
+		this.renderedGpuLineIndexes = new Set(gpuLineIndexes);
 		for (const [visualLineIndex, line] of renderedLines) line.domNode.domNode.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
 	}
 
 	private showDomText(): void {
+		this.renderedGpuLineIndexes.clear();
 		for (const line of this.options.viewLines.renderedLines.values()) line.domNode.domNode.classList.remove('gpu-rendered');
 	}
 

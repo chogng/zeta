@@ -6,13 +6,14 @@ import { TextSelection, TextSelectionSet } from "../../../common/core/selection.
 import { TextPosition, type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
-import type { IContentWidget } from '../../editorBrowser.js';
+import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
 import { type EditorViewport } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../view/viewController.js";
 import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
+import { observableCodeEditor } from '../../observableCodeEditor.js';
 
 export type CodeEditorWidgetViewportOptions = EditorViewViewportOptions;
 
@@ -87,9 +88,11 @@ export class CodeEditorWidget extends Disposable {
 			this.ownerId = this.view.ownerId;
 			this.viewport = this.view.viewport;
 			this.userInputEvents = this.view.userInputEvents;
+			this._register(observableCodeEditor(this));
 			this.contributions = this._register(new CodeEditorContributions());
 			const instantiationService = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
 			this.contributions.initialize({
+				editor: this,
 				model: options.model,
 				selectionController: options.selectionController,
 				viewport: this.viewport,
@@ -126,6 +129,22 @@ export class CodeEditorWidget extends Disposable {
 
 	removeContentWidget(widget: IContentWidget): void {
 		this.viewport.removeContentWidget(widget);
+	}
+
+	addOverlayWidget(widget: IOverlayWidget): void {
+		this.viewport.addOverlayWidget(widget);
+	}
+
+	layoutOverlayWidget(widget: IOverlayWidget): void {
+		this.viewport.layoutOverlayWidget(widget);
+	}
+
+	removeOverlayWidget(widget: IOverlayWidget): void {
+		this.viewport.removeOverlayWidget(widget);
+	}
+
+	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void {
+		this.viewport.changeViewZones(callback);
 	}
 
 	announceAccessibilityStatus(message: string): void {

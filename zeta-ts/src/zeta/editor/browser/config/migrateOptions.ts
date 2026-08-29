@@ -11,9 +11,10 @@ export function migrateOptions<T extends object>(options: T): T {
 
 	const migrated = { ...options } as MutableOptions;
 	migrateAlias(migrated, 'wordWrap', 'lineWrapping', value => booleanOrNamed(value, EditorLineWrapping.On, EditorLineWrapping.Off));
-	migrateAlias(migrated, 'lineNumbers', 'showLineNumbers', value => booleanOrNamed(value, true, false));
-	migrateAlias(migrated, 'renderLineHighlight', 'activeLineHighlight', migrateActiveLineHighlight);
-	migrateAlias(migrated, 'renderIndentGuides', 'showIndentationGuides', booleanValue);
+	migrateAlias(migrated, 'showLineNumbers', 'lineNumbers', value => booleanOrNamed(value, 'on', 'off'));
+	migrateBooleanOption(migrated, 'lineNumbers', 'on', 'off');
+	migrateAlias(migrated, 'activeLineHighlight', 'renderLineHighlight', migrateRenderLineHighlight);
+	migrateAlias(migrated, 'renderIndentGuides', 'guides', value => ({ indentation: booleanValue(value) }));
 	migrateBooleanOption(migrated, 'renderWhitespace', 'boundary', 'none');
 	migrateBooleanOption(migrated, 'matchBrackets', 'always', 'never');
 	migrateBooleanOption(migrated, 'occurrencesHighlight', 'singleFile', 'off');
@@ -54,12 +55,12 @@ function booleanValue(value: unknown): boolean {
 	return value;
 }
 
-function migrateActiveLineHighlight(value: unknown): 'on' | 'off' {
-	if (value === false || value === 'none') {
-		return 'off';
+function migrateRenderLineHighlight(value: unknown): 'none' | 'line' {
+	if (value === false || value === 'off' || value === 'none') {
+		return 'none';
 	}
-	if (value === true || value === 'line' || value === 'gutter' || value === 'all') {
-		return 'on';
+	if (value === true || value === 'on' || value === 'line') {
+		return 'line';
 	}
 	throw new TypeError('Legacy active-line highlight option is invalid');
 }

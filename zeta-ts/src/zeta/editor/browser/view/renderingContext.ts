@@ -5,9 +5,6 @@ import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 
-/** Selects whether selection projection marks the cursor's logical line as active. */
-export type ActiveLineHighlight = 'on' | 'off';
-
 export interface EditorLineVisibleRange {
 	readonly visualLineIndex: number;
 	readonly left: number;
@@ -26,7 +23,8 @@ export interface EditorOverlayContext {
 	readonly renderLines: EditorViewportLayout['renderLines'];
 	readonly textLeft: number;
 	readonly textMeasurer: TextMeasurer;
-	readonly activeLineHighlight: ActiveLineHighlight;
+	readonly renderLineHighlight: 'none' | 'gutter' | 'line' | 'all';
+	readonly renderLineHighlightOnlyWhenFocus: boolean;
 	linesVisibleRangesForRange(range: TextRange, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined;
 	visibleRangeForPosition(position: TextPosition): EditorVisiblePosition | undefined;
 }

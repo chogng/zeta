@@ -160,7 +160,7 @@ class QuickDiffPeekView extends Disposable {
 			fontFamily: context.options.fontFamily,
 			fontSize: context.options.fontSize,
 			fontLigatures: context.options.fontLigatures,
-			showLineNumbers: context.options.showLineNumbers,
+			showLineNumbers: context.options.lineNumbers === undefined ? undefined : context.options.lineNumbers !== 'off',
 			originalAriaLabel: change.comparison.original.label,
 			modifiedAriaLabel: context.options.input.label ?? context.options.input.resource.toString(),
 		}));

@@ -20,6 +20,7 @@ test("Language bracket pairs resolve nested cross-line configured pairs", () => 
 		opening: TextRange.from(TextPosition.at(1, 14), TextPosition.at(1, 15)),
 		closing: TextRange.from(TextPosition.at(1, 16), TextPosition.at(1, 17)),
 	});
+	assert.deepEqual(bracketPairs.getBracketPairsInLineRange(1, 1).map(bracket => bracket.token), ['{', '[', '(']);
 });
 
 test("Language bracket pairs ignore strings and comments, and invalidate on edits", () => {

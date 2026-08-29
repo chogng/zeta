@@ -1,12 +1,15 @@
 import { type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
+import { type InternalGuidesOptions, type TextEditorCursorBlinkingStyle, type TextEditorCursorStyle } from '../../common/config/editorOptions.js';
 import { type TextRange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';
+import { type BracketColorizationSource } from '../viewparts/viewLines/viewLine.js';
 import { type DecorationSource } from '../viewparts/decorations/decorations.js';
 import { BlockDecorations } from '../viewparts/blockDecorations/blockDecorations.js';
 import { DecorationsOverlay } from '../viewparts/decorations/decorations.js';
 import { CurrentLineHighlightOverlay } from '../viewparts/currentLineHighlight/currentLineHighlight.js';
+import { GpuMarkOverlay } from '../viewparts/gpuMark/gpuMark.js';
 import { IndentGuidesOverlay } from '../viewparts/indentGuides/indentGuides.js';
 import { LinesDecorationsOverlay } from '../viewparts/linesDecorations/linesDecorations.js';
 import { MarginViewLineDecorationsOverlay } from '../viewparts/marginDecorations/marginDecorations.js';
@@ -20,10 +23,16 @@ export interface ViewOverlaysOptions {
 	readonly contentElement: HTMLDivElement;
 	readonly model: TextModel;
 	readonly selectionController: EditorSelectionController | undefined;
+	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly decorationSources: readonly DecorationSource[];
-	readonly showIndentationGuides: boolean;
+	readonly guides: InternalGuidesOptions;
 	readonly indentationTabSize: number;
 	readonly renderWhitespace: WhitespaceRenderingMode;
+	readonly cursorStyle: TextEditorCursorStyle;
+	readonly cursorBlinking: TextEditorCursorBlinkingStyle;
+	readonly cursorWidth: number;
+	readonly cursorHeight: number;
+	readonly readGpuLineIndexes?: () => ReadonlySet<number>;
 }
 
 /** Coordinates row and block overlays while keeping their concrete projections independent. */
@@ -36,7 +45,9 @@ export class ViewOverlays extends Disposable {
 	private readonly parts: DynamicViewOverlay[] = [];
 	private readonly selections: SelectionsOverlay;
 	private readonly currentLineHighlight: CurrentLineHighlightOverlay;
+	private readonly indentGuides: IndentGuidesOverlay;
 	private readonly viewCursors: ViewCursors;
+	private readonly whitespace: WhitespaceOverlay;
 
 	constructor(context: EditorViewContext, options: ViewOverlaysOptions) {
 		super();
@@ -54,24 +65,36 @@ export class ViewOverlays extends Disposable {
 			options.contentElement,
 		));
 		const marginDecorations = this.register(new MarginViewLineDecorationsOverlay(context, options.contentElement, this.decorations));
-		const indentGuides = this.register(new IndentGuidesOverlay(context, {
+		this.indentGuides = this.register(new IndentGuidesOverlay(context, {
 			host: options.contentElement,
-			showIndentationGuides: options.showIndentationGuides,
+			guides: options.guides,
 			tabSize: options.indentationTabSize,
+			bracketColorizationSource: options.bracketColorizationSource,
+			selectionController: options.selectionController,
 		}));
-		const whitespace = this.register(new WhitespaceOverlay(context, options.contentElement, options.model, options.renderWhitespace));
+		this.whitespace = this.register(new WhitespaceOverlay(context, options.contentElement, options.model, options.selectionController, options.renderWhitespace));
 		this.currentLineHighlight = this.register(new CurrentLineHighlightOverlay(context, options.contentElement, options.selectionController));
 		this.selections = this.register(new SelectionsOverlay(context, options.contentElement, options.selectionController));
-		this.viewCursors = this.register(new ViewCursors(context, options.contentElement, options.model, options.selectionController));
+		this.viewCursors = this.register(new ViewCursors(context, {
+			host: options.contentElement,
+			style: options.cursorStyle,
+			blinking: options.cursorBlinking,
+			lineWidth: options.cursorWidth,
+			lineHeight: options.cursorHeight,
+		}, options.model, options.selectionController));
+		const gpuMark = options.readGpuLineIndexes
+			? this.register(new GpuMarkOverlay(context, options.contentElement, options.readGpuLineIndexes))
+			: undefined;
 		this.domNodes = Object.freeze([
-			indentGuides.domNode,
-			whitespace.domNode,
+			this.indentGuides.domNode,
+			this.whitespace.domNode,
 			this.decorations.domNode,
 			this.currentLineHighlight.domNode,
 			this.selections.domNode,
 			this.viewCursors.domNode,
 			linesDecorations.domNode,
 			marginDecorations.domNode,
+			...(gpuMark ? [gpuMark.domNode] : []),
 		]);
 	}
 
@@ -88,6 +111,8 @@ export class ViewOverlays extends Disposable {
 	}
 
 	renderSelection(context: EditorRenderingContext): void {
+		this.indentGuides.renderNow(context);
+		this.whitespace.renderNow(context);
 		this.currentLineHighlight.renderNow(context);
 		this.selections.renderNow(context);
 		this.viewCursors.renderNow(context);

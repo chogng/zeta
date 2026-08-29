@@ -6,6 +6,9 @@ export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
 export type MatchBracketsSetting = "never" | "near" | "always";
 export type ColorDecoratorsActivatedOnSetting = "clickAndHover" | "click" | "hover";
 export type DefaultColorDecoratorsSetting = "auto" | "always" | "never";
+export type CursorStyleSetting = 'line' | 'block' | 'underline' | 'line-thin' | 'block-outline' | 'underline-thin';
+export type CursorBlinkingSetting = 'blink' | 'smooth' | 'phase' | 'expand' | 'solid';
+export type RenderLineHighlightSetting = 'none' | 'gutter' | 'line' | 'all';
 
 /** Typed user preferences owned by the Workbench code-editor integration. */
 export const CodeEditorConfiguration = Object.freeze({
@@ -98,11 +101,72 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, "editor.guides.indentation"),
 		setting: booleanSetting("Indentation guides", "Show vertical guides aligned with indentation levels."),
 	}),
+	bracketPairGuides: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: 'editor.guides.bracketPairs',
+		defaultValue: false,
+		parse: value => parseBoolean(value, 'editor.guides.bracketPairs'),
+		setting: booleanSetting('Bracket pair guides', 'Show vertical guides between matching bracket pairs.'),
+	}),
+	bracketPairHorizontalGuides: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: 'editor.guides.bracketPairsHorizontal',
+		defaultValue: true,
+		parse: value => parseBoolean(value, 'editor.guides.bracketPairsHorizontal'),
+		setting: booleanSetting('Horizontal bracket pair guides', 'Show a horizontal guide from the active vertical guide to its closing bracket.'),
+	}),
+	highlightActiveBracketPairGuide: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: 'editor.guides.highlightActiveBracketPair',
+		defaultValue: true,
+		parse: value => parseBoolean(value, 'editor.guides.highlightActiveBracketPair'),
+		setting: booleanSetting('Active bracket pair guide', 'Emphasize the bracket pair guide containing the primary cursor.'),
+	}),
+	highlightActiveIndentationGuide: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: 'editor.guides.highlightActiveIndentation',
+		defaultValue: true,
+		parse: value => parseBoolean(value, 'editor.guides.highlightActiveIndentation'),
+		setting: booleanSetting('Active indentation guide', 'Emphasize the indentation guide containing the primary cursor.'),
+	}),
 	bracketPairColorization: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "editor.bracketPairColorization.enabled",
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.bracketPairColorization.enabled"),
 		setting: booleanSetting("Bracket pair colorization", "Use matching colors to distinguish nested bracket pairs."),
+	}),
+	cursorStyle: ConfigurationsRegistry.registerConfiguration<CursorStyleSetting>({
+		key: 'editor.cursorStyle',
+		defaultValue: 'line',
+		parse: value => parseEnum(value, 'editor.cursorStyle', ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin']),
+		setting: selectSetting('Cursor style', 'Choose the shape of editor cursors.', [
+			{ value: 'line', label: 'Line' },
+			{ value: 'block', label: 'Block' },
+			{ value: 'underline', label: 'Underline' },
+			{ value: 'line-thin', label: 'Thin line' },
+			{ value: 'block-outline', label: 'Block outline' },
+			{ value: 'underline-thin', label: 'Thin underline' },
+		]),
+	}),
+	cursorBlinking: ConfigurationsRegistry.registerConfiguration<CursorBlinkingSetting>({
+		key: 'editor.cursorBlinking',
+		defaultValue: 'blink',
+		parse: value => parseEnum(value, 'editor.cursorBlinking', ['blink', 'smooth', 'phase', 'expand', 'solid']),
+		setting: selectSetting('Cursor blinking', 'Choose how editor cursors animate.', [
+			{ value: 'blink', label: 'Blink' },
+			{ value: 'smooth', label: 'Smooth' },
+			{ value: 'phase', label: 'Phase' },
+			{ value: 'expand', label: 'Expand' },
+			{ value: 'solid', label: 'Solid' },
+		]),
+	}),
+	cursorWidth: ConfigurationsRegistry.registerConfiguration<number>({
+		key: 'editor.cursorWidth',
+		defaultValue: 0,
+		parse: value => parseNonNegativeInteger(value, 'editor.cursorWidth'),
+		setting: numberSetting('Cursor width', 'Set the line cursor width in pixels; zero uses the editor default.', 0, 100),
+	}),
+	cursorHeight: ConfigurationsRegistry.registerConfiguration<number>({
+		key: 'editor.cursorHeight',
+		defaultValue: 0,
+		parse: value => parseNonNegativeInteger(value, 'editor.cursorHeight'),
+		setting: numberSetting('Cursor height', 'Set the cursor height in pixels; zero uses the full line height.', 0, 100),
 	}),
 	matchBrackets: ConfigurationsRegistry.registerConfiguration<MatchBracketsSetting>({
 		key: "editor.matchBrackets",
@@ -123,11 +187,22 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, "editor.stickyScroll.enabled"),
 		setting: booleanSetting("Sticky scroll", "Keep enclosing scopes visible at the top while scrolling."),
 	}),
-	highlightActiveLine: ConfigurationsRegistry.registerConfiguration<boolean>({
-		key: "editor.highlightActiveLine",
-		defaultValue: true,
-		parse: value => parseBoolean(value, "editor.highlightActiveLine"),
-		setting: booleanSetting("Highlight active line", "Give the line containing the cursor a subtle background highlight."),
+	renderLineHighlight: ConfigurationsRegistry.registerConfiguration<RenderLineHighlightSetting>({
+		key: 'editor.renderLineHighlight',
+		defaultValue: 'line',
+		parse: value => parseEnum(value, 'editor.renderLineHighlight', ['none', 'gutter', 'line', 'all']),
+		setting: selectSetting('Render line highlight', 'Choose where lines containing cursors are highlighted.', [
+			{ value: 'none', label: 'None' },
+			{ value: 'gutter', label: 'Gutter' },
+			{ value: 'line', label: 'Line' },
+			{ value: 'all', label: 'All' },
+		]),
+	}),
+	renderLineHighlightOnlyWhenFocus: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: 'editor.renderLineHighlightOnlyWhenFocus',
+		defaultValue: false,
+		parse: value => parseBoolean(value, 'editor.renderLineHighlightOnlyWhenFocus'),
+		setting: booleanSetting('Highlight current line only when focused', 'Hide current-line highlighting while the editor is not focused.'),
 	}),
 	unicodeHighlights: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "editor.unicodeHighlights",
@@ -320,4 +395,14 @@ function textSetting(title: string, description: string, placeholder: string) {
 function parseBoolean(value: unknown, key: string): boolean {
 	if (typeof value === "boolean") return value;
 	throw new TypeError(`${key} must be a boolean; received ${String(value)}`);
+}
+
+function parseEnum<T extends string>(value: unknown, key: string, values: readonly T[]): T {
+	if (typeof value === 'string' && values.includes(value as T)) return value as T;
+	throw new TypeError(`${key} must be one of ${values.join(', ')}; received ${String(value)}`);
+}
+
+function parseNonNegativeInteger(value: unknown, key: string): number {
+	if (Number.isSafeInteger(value) && (value as number) >= 0) return value as number;
+	throw new RangeError(`${key} must be a non-negative integer; received ${String(value)}`);
 }

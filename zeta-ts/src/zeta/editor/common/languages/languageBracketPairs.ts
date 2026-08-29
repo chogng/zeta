@@ -95,6 +95,16 @@ export class LanguageBracketPairs extends Disposable {
 		return this.ensureState().bracketsByLine[lineIndex]!;
 	}
 
+	getBracketPairsInLineRange(startLineIndex: number, endLineIndexInclusive: number): readonly LanguageBracketInfo[] {
+		this.assertNotDisposed();
+		if (!Number.isSafeInteger(startLineIndex) || !Number.isSafeInteger(endLineIndexInclusive) || startLineIndex < 0 || endLineIndexInclusive < startLineIndex || endLineIndexInclusive >= this.textModel.lineCount) {
+			throw new RangeError('Language bracket pair range is outside the text model');
+		}
+		return Object.freeze(this.ensureState().brackets.filter(bracket => bracket.action === 'open' && bracket.pair
+			&& bracket.pair.opening.start.lineIndex <= endLineIndexInclusive
+			&& bracket.pair.closing.end.lineIndex >= startLineIndex));
+	}
+
 	private findBracketAt(position: TextPosition): LanguageBracketInfo | undefined {
 		const brackets = this.ensureState().bracketsByLine[position.lineIndex]!;
 		const contained = brackets.find(bracket => bracket.range.start.columnIndex <= position.columnIndex && position.columnIndex < bracket.range.end.columnIndex);

@@ -40,8 +40,8 @@ test('DOM font info applies the shared editor font vocabulary', () => {
 test('browser editor option migration converts only supported legacy shapes without mutating the caller', () => {
 	const legacy = {
 		wordWrap: true,
-		lineNumbers: 'off',
-		renderLineHighlight: 'gutter',
+		showLineNumbers: false,
+		activeLineHighlight: 'on',
 		renderIndentGuides: false,
 		renderWhitespace: true,
 		matchBrackets: false,
@@ -51,9 +51,9 @@ test('browser editor option migration converts only supported legacy shapes with
 
 	assert.deepEqual(migrateOptions(legacy), {
 		lineWrapping: EditorLineWrapping.On,
-		showLineNumbers: false,
-		activeLineHighlight: 'on',
-		showIndentationGuides: false,
+		lineNumbers: 'off',
+		renderLineHighlight: 'line',
+		guides: { indentation: false },
 		renderWhitespace: 'boundary',
 		matchBrackets: 'never',
 		occurrencesHighlight: 'singleFile',
@@ -66,6 +66,7 @@ test('browser editor option migration preserves current values and rejects inval
 	assert.deepEqual(migrateOptions({ wordWrap: false, lineWrapping: EditorLineWrapping.On }), {
 		lineWrapping: EditorLineWrapping.On,
 	});
-	assert.throws(() => migrateOptions({ lineNumbers: 'relative' }), /boolean, on, or off/);
-	assert.throws(() => migrateOptions({ renderLineHighlight: 'blink' }), /highlight option is invalid/);
+	assert.deepEqual(migrateOptions({ lineNumbers: 'relative' }), { lineNumbers: 'relative' });
+	assert.deepEqual(migrateOptions({ renderLineHighlight: 'gutter' }), { renderLineHighlight: 'gutter' });
+	assert.throws(() => migrateOptions({ activeLineHighlight: 'blink' }), /highlight option is invalid/);
 });

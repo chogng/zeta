@@ -69,7 +69,7 @@ export class Rulers extends EditorViewPart {
 	}
 }
 
-function validateRuler(ruler: EditorRuler): EditorRuler {
+export function validateRuler(ruler: EditorRuler): EditorRuler {
 	if (!ruler || !Number.isSafeInteger(ruler.column) || ruler.column < 1) {
 		throw new RangeError("Stanza ruler columns must be positive safe integers");
 	}

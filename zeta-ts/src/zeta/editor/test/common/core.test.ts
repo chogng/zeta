@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { BugIndicatingError } from "../../../base/common/errors.js";
 import { Rect } from "../../common/core/2d/rect.js";
+import { ArrayEdit, ArrayReplacement } from "../../common/core/edits/arrayEdit.js";
 import { TextPosition } from "../../common/core/position.js";
 import { TextRange } from "../../common/core/range.js";
 import { StringEdit, StringReplacement } from "../../common/core/edits/stringEdit.js";
@@ -9,6 +10,8 @@ import { LineEdit, LineReplacement } from "../../common/core/edits/lineEdit.js";
 import { TextEdit } from "../../common/core/edits/textEdit.js";
 import { LineRange } from "../../common/core/ranges/lineRange.js";
 import { OffsetRange } from "../../common/core/ranges/offsetRange.js";
+import { RangeMapping, SingleRangeMapping } from "../../common/core/ranges/rangeMapping.js";
+import { RangeSingleLine } from "../../common/core/ranges/rangeSingleLine.js";
 import { PositionOffsetTransformer } from "../../common/core/text/positionToOffsetImpl.js";
 import { TextLength } from "../../common/core/text/textLength.js";
 import { StringText } from "../../common/core/text/abstractText.js";
@@ -39,6 +42,32 @@ test("core edit algebra applies, composes, and inverts string edits", () => {
 	assert.equal(composed.apply("abcdef"), "aYZef");
 	assert.equal(composed.inverse("abcdef").apply(composed.apply("abcdef")), "abcdef");
 	assert.equal(StringEdit.create([StringReplacement.insert(0, "a"), StringReplacement.insert(1, "b")]).apply(""), "ab");
+});
+
+test("array edits share the same composition algebra as string edits", () => {
+	const first = ArrayEdit.create([
+		new ArrayReplacement(new OffsetRange(1, 3), ["X"]),
+		new ArrayReplacement(new OffsetRange(4, 5), ["Y", "Z"]),
+	]);
+	const second = ArrayEdit.replace(new OffsetRange(1, 2), ["A", "B"]);
+	const source = ["0", "1", "2", "3", "4", "5"];
+	const composed = first.compose(second);
+
+	assert.deepEqual(first.apply(source), ["0", "X", "3", "Y", "Z", "5"]);
+	assert.deepEqual(composed.apply(source), second.apply(first.apply(source)));
+	assert.deepEqual(composed.inverse(source).apply(composed.apply(source)), source);
+});
+
+test("range mapping projects positions, ranges, and single-line ranges", () => {
+	const original = TextRange.from(position(1, 2), position(1, 4));
+	const modified = TextRange.from(position(2, 1), position(2, 6));
+	const mapping = new RangeMapping([new SingleRangeMapping(original, modified)]);
+
+	assert.deepEqual(mapping.mapPosition(position(1, 3)).range, modified);
+	assert.deepEqual(mapping.mapPosition(position(1, 5)).position, position(2, 7));
+	assert.deepEqual(mapping.reverse().mapRange(modified), original);
+	assert.deepEqual(RangeSingleLine.fromRange(original)?.toRange(), original);
+	assert.equal(RangeSingleLine.fromRange(TextRange.from(position(1, 0), position(2, 0))), undefined);
 });
 
 test("text edits map coordinate ranges and preserve multiline text", () => {

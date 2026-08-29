@@ -19,7 +19,7 @@ import { type EditorSelectionController } from '../common/cursor/editorSelection
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorViewportLayout } from '../common/viewLayout/viewLayout.js';
 import { type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
-import { CodeEditorWidget } from './widget/codeEditor/codeEditorWidget.js';
+import { type CodeEditorWidget } from './widget/codeEditor/codeEditorWidget.js';
 
 /** Returns the observable facade for one canonical Stanza code editor widget. */
 export function observableCodeEditor(editor: CodeEditorWidget): ObservableCodeEditor {
