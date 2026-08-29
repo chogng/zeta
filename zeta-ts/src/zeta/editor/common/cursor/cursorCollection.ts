@@ -3,8 +3,6 @@ import { normalizeTextLineEndings, type TextEdit } from "../core/text.js";
 import { TextModel } from "../model/textModel.js";
 import { type TextSelectionOffsets } from "../commands/editorEditCommand.js";
 
-const DEFAULT_SELECTION_HISTORY_LIMIT = 1_000;
-
 export function calculateResultLength(
 	model: TextModel,
 	edits: readonly TextEdit[],
@@ -85,18 +83,6 @@ export function selectionSetsEqual(
 			return selection.anchor.compareTo(other.anchor) === 0 &&
 				selection.active.compareTo(other.active) === 0;
 		});
-}
-
-export function readSelectionHistoryLimit(
-	value: number | undefined,
-): number {
-	const resolved = value ?? DEFAULT_SELECTION_HISTORY_LIMIT;
-	if (!Number.isSafeInteger(resolved) || resolved < 0) {
-		throw new RangeError(
-			"selectionHistoryLimit must be a non-negative safe integer",
-		);
-	}
-	return resolved;
 }
 
 function assertOffset(

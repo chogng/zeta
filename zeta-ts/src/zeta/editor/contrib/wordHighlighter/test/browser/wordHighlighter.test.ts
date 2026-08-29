@@ -6,7 +6,7 @@ import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.j
 import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
-import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
+import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
 import { DocumentHighlightKind } from '../../../../common/languages/documentHighlights.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';

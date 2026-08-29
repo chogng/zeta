@@ -7,7 +7,7 @@ import { LanguageBracketPairs } from "../../../../common/languages/languageBrack
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";

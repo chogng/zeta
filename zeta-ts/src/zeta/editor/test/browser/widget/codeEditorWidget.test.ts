@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
-import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { TextModel } from "../../../common/model/textModel.js";

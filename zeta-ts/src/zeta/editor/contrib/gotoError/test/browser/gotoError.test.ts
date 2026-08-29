@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";

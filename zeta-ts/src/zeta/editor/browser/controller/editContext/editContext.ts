@@ -4,8 +4,8 @@ import { Emitter, Event, type Event as EditorEvent } from "../../../../base/comm
 import { IME } from "../../../../base/common/ime.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
-import { type EditorCompositionSession } from "../../../common/cursor/editorComposition.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorCompositionSession } from "../../../common/cursor/oneCursor.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { normalizeTextLineEndings, type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../view.js";
 import { type EditorViewTextUpdateEvent, type ViewController } from "../../view/viewController.js";

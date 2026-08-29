@@ -1,7 +1,7 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
 import { type Event } from '../../base/common/event.js';
 import { type SyncDescriptor } from "../../platform/instantiation/common/instantiation.js";
-import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../common/cursor/cursor.js";
 import { type LanguageConfigurationSource } from "../common/languages/languageConfiguration.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";

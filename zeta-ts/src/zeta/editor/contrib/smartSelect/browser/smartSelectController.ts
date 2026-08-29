@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextRange, type TextSnapshot } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";

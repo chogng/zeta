@@ -1,5 +1,5 @@
 import './currentLineHighlight.css';
-import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
+import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';

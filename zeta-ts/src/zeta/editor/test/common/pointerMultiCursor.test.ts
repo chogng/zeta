@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PointerMultiCursorModifier, combineStanzaPointerSelection, isStanzaPointerMultiCursorGesture, readStanzaPointerMultiCursorModifier } from "../../common/cursor/pointerMultiCursor.js";
+import { PointerMultiCursorModifier, combineStanzaPointerSelection, isStanzaPointerMultiCursorGesture, readStanzaPointerMultiCursorModifier } from "../../common/cursor/cursorMoveCommands.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 

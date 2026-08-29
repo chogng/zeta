@@ -2,7 +2,7 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type VersionedLanguageResult } from "../../../common/languages/languageRequestCoordinator.js";
 import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
 import { assertLanguageCompletionCommitCharacter, LanguageCompletionInsertTextFormat, normalizeLanguageCompletionItemDetails, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "../../../common/languages/completion/languageCompletions.js";

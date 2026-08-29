@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { TextPosition } from "../../../common/core/text.js";

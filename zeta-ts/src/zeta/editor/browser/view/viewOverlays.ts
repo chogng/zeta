@@ -1,7 +1,7 @@
 import { type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorDomFontInfo } from '../config/domFontInfo.js';
-import { type EditorSelectionChangeReason, type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
+import { type EditorSelectionChangeReason, type EditorSelectionController } from '../../common/cursor/cursor.js';
 import { type InternalGuidesOptions, type TextEditorCursorBlinkingStyle, type TextEditorCursorStyle } from '../../common/config/editorOptions.js';
 import { type TextRange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';

@@ -1,7 +1,9 @@
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../commands/editorEditCommand.js";
 import { type TextSelectionSet } from "../core/selection.js";
-import { type TextRange, type TextEdit } from "../core/text.js";
+import { normalizeTextLineEndings, TextRange, type TextEdit } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
+import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
+import { advanceCursorAtomicPositionInLine } from "./cursorAtomicMoveOperations.js";
 
 interface SelectionReplacement {
 	readonly selectionIndex: number;
@@ -133,4 +135,16 @@ function validateNonOverlapping(replacements: readonly SelectionReplacement[]): 
 			);
 		}
 	}
+}
+
+export function createOvertypeTextCommand(model: TextModel, selections: TextSelectionSet, text: string): EditorEditCommand {
+	if (typeof text !== "string") throw new TypeError("Overtype text must be a string");
+	const normalized = normalizeTextLineEndings(text);
+	const graphemeCount = normalized.includes("\n") ? 0 : getTextGraphemeBoundaries(normalized).length - 1;
+	return createSelectionEditCommand(model, selections, selections.selections.map(selection => {
+		const range = selection.collapsed && graphemeCount > 0
+			? TextRange.from(selection.active, advanceCursorAtomicPositionInLine(model, selection.active, graphemeCount))
+			: selection.range;
+		return { range, text: normalized, anchorOffsetInText: normalized.length, activeOffsetInText: normalized.length };
+	}), EditorCommandHistoryMode.CoalesceTyping);
 }

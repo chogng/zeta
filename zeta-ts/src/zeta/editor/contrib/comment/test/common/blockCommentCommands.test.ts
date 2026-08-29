@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createToggleBlockCommentCommand } from "../../common/blockCommentCommands.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";

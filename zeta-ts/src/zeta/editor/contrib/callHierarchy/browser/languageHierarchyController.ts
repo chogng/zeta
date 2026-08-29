@@ -3,7 +3,7 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { type URI } from "../../../../base/common/uri.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
 import { PeekViewWidget } from "../../peekView/browser/peekViewWidget.js";

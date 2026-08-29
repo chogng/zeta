@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../base/browser/dom.js";
 import { type IDisposable } from "../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { registerEditorContribution } from "./editorExtensions.js";

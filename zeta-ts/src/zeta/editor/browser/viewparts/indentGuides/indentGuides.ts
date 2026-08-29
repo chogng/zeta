@@ -2,7 +2,7 @@ import "./indentGuides.css";
 import { h } from "../../../../base/browser/dom.js";
 import { type InternalGuidesOptions } from '../../../common/config/editorOptions.js';
 import { type TextPosition } from '../../../common/core/text.js';
-import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
+import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
 import { type EditorVisualLine } from '../../../common/viewModel/modelLineProjection.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";

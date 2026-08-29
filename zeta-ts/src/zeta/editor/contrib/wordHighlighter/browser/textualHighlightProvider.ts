@@ -3,7 +3,7 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { TextPosition } from '../../../common/core/text.js';
 import { getTextWordSegments } from '../../../common/core/textSegmentation.js';
-import { getWordSelectionRange } from '../../../common/cursor/wordBoundary.js';
+import { getWordSelectionRange } from '../../../common/cursor/cursorWordOperations.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type DocumentHighlightRequest, type DocumentHighlightTarget, type MultiDocumentHighlightProvider } from '../../../common/languages/documentHighlights.js';
 import { findTextMatches } from '../../../common/model/textModelSearch.js';
 import { type TextModel } from '../../../common/model/textModel.js';

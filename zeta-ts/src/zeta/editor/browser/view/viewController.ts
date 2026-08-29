@@ -4,14 +4,14 @@ import { Disposable, toDisposable, type IDisposable } from '../../../base/common
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
 import { EditorLineWrapping } from '../../common/config/editorOptions.js';
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from '../../common/cursor/cursorNavigation.js';
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from '../../common/cursor/cursorMoveOperations.js';
 import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from '../../common/cursor/cursorDeleteOperations.js';
 import { LanguageAutoClosingTracker } from '../../common/cursor/languageAutoClosingTracker.js';
 import { createLanguageEnterCommand } from '../../common/cursor/languageEnter.js';
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from '../../common/cursor/languagePairEditing.js';
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from '../../common/cursor/cursorWordOperations.js';
-import { type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
-import { createOvertypeTextCommand } from '../../common/cursor/cursorOvertype.js';
+import { type EditorSelectionController } from '../../common/cursor/cursor.js';
+import { createOvertypeTextCommand } from '../../common/cursor/cursorTypeEditOperations.js';
 import { createTypeTextCommand } from '../../common/cursor/cursorTypeOperations.js';
 import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
 import { type TextModelChange } from '../../common/core/text.js';

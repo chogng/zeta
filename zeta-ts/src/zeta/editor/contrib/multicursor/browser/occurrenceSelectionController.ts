@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences } from "../common/occurrenceSelection.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 export interface OccurrenceSelectionControllerOptions {

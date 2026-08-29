@@ -164,7 +164,7 @@ test("native screen-reader support follows logical EditContext focus through the
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const host = dom.window.document.querySelector("main")!;
 	using model = new TextModel("alpha\nbeta");
-	using selections = new (await import("../../../../common/cursor/editorSelectionController.js")).EditorSelectionController(
+	using selections = new (await import("../../../../common/cursor/cursor.js")).EditorSelectionController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))),
 	);
@@ -209,7 +209,7 @@ test("native screen-reader mirror follows viewport coordinates and scrolls to th
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const host = dom.window.document.querySelector("main")!;
 	using model = new TextModel("zero\none\ntwo\nthree");
-	using selections = new (await import("../../../../common/cursor/editorSelectionController.js")).EditorSelectionController(
+	using selections = new (await import("../../../../common/cursor/cursor.js")).EditorSelectionController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(2, 1))),
 	);

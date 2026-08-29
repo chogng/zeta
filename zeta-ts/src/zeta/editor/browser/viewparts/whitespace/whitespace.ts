@@ -1,6 +1,6 @@
 import './whitespace.css';
 import { h, reset } from '../../../../base/browser/dom.js';
-import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
+import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
 import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorIndentationKind } from "../../../../common/core/misc/indentation.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
 import { createLineIndentCommand, EditorLineIndentDirection } from "../../browser/lineIndentCommands.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";

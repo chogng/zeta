@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
-import { EditorSelectionChangeReason, EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { EditorSelectionChangeReason, EditorSelectionController } from "../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

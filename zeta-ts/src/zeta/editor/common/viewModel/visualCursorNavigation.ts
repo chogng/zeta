@@ -1,5 +1,5 @@
 import { clamp } from "../../../base/common/numbers.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorNavigation.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorMoveOperations.js";
 import { TextSelection, TextSelectionSet } from "../core/selection.js";
 import { TextPosition } from "../core/text.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";

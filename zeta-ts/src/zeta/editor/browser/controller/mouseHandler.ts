@@ -1,17 +1,17 @@
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../common/cursor/cursor.js";
 import { createEditorColumnSelectionSet } from "../../common/cursor/cursorColumnSelection.js";
 import { SelectionDirection, TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
-import { getWordSelectionRange } from "../../common/cursor/wordBoundary.js";
+import { getWordSelectionRange } from "../../common/cursor/cursorWordOperations.js";
 import { type EditorViewport } from "../view.js";
 import { DragScrolling } from "./dragScrolling.js";
 import { PointerHandler } from "./pointerHandler.js";
 import { MouseTargetFactory, MouseTargetKind } from "./mouseTarget.js";
 import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
-import { PointerMultiCursorModifier, combineStanzaPointerSelection, findStanzaPointerToggleCandidate, isStanzaPointerMultiCursorGesture, readStanzaPointerMultiCursorModifier } from "../../common/cursor/pointerMultiCursor.js";
+import { PointerMultiCursorModifier, combineStanzaPointerSelection, findStanzaPointerToggleCandidate, isStanzaPointerMultiCursorGesture, readStanzaPointerMultiCursorModifier } from "../../common/cursor/cursorMoveCommands.js";
 
 enum MouseSelectionKind {
 	Character = "character",

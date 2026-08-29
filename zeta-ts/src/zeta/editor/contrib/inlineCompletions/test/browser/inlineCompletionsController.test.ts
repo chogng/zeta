@@ -6,7 +6,7 @@ import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
+import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition } from '../../../../common/core/text.js';
 import { TextModel } from '../../../../common/model/textModel.js';

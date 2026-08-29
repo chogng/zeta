@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors, type EditorCursorNavigationResult } from "../../common/cursor/cursorNavigation.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors, type EditorCursorNavigationResult } from "../../common/cursor/cursorMoveOperations.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

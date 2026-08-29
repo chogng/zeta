@@ -1,8 +1,9 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import { EditorCompositionSession } from "./editorComposition.js";
-import { calculateResultLength, readSelectionHistoryLimit, selectionSetFromOffsets, selectionSetsEqual, validateSelectionOffsets, validateSelectionSet } from "./editorSelectionOperations.js";
+import { EditorCompositionSession } from "./oneCursor.js";
+import { calculateResultLength, selectionSetFromOffsets, selectionSetsEqual, validateSelectionOffsets, validateSelectionSet } from "./cursorCollection.js";
+import { CursorContext, type EditorSelectionControllerOptions } from "./cursorContext.js";
 import { SelectionDirection, TextSelection, TextSelectionSet } from "../core/selection.js";
 import { TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, type TextModelChange } from "../core/text.js";
 import { TextModel } from "../model/textModel.js";
@@ -11,14 +12,7 @@ import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOff
 
 export { EditorCommandHistoryMode } from "../commands/editorEditCommand.js";
 export type { EditorEditCommand, TextSelectionOffsets } from "../commands/editorEditCommand.js";
-
-export interface EditorSelectionControllerOptions {
-	readonly selectionHistoryLimit?: number;
-	/** Limits reversible cursor-only operations independently from text undo history. */
-	readonly cursorHistoryLimit?: number;
-	/** Prevents this editor instance from committing text commands while preserving navigation and selection. */
-	readonly readOnly?: boolean;
-}
+export type { EditorSelectionControllerOptions } from "./cursorContext.js";
 
 export enum EditorSelectionChangeReason {
 	Explicit = "explicit",
@@ -53,19 +47,6 @@ interface ActiveComposition {
 	valid: boolean;
 }
 
-const DEFAULT_CURSOR_HISTORY_LIMIT = 100;
-
-function readReadOnly(value: boolean | undefined): boolean {
-	if (value !== undefined && typeof value !== "boolean") throw new TypeError("Editor read-only mode must be boolean");
-	return value ?? false;
-}
-
-function readCursorHistoryLimit(value: number | undefined): number {
-	const limit = value ?? DEFAULT_CURSOR_HISTORY_LIMIT;
-	if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("Cursor history limit must be a non-negative safe integer");
-	return limit;
-}
-
 /**
  * Per-editor selection state for one shared `TextModel`.
  *
@@ -73,6 +54,7 @@ function readCursorHistoryLimit(value: number | undefined): number {
  * tracked selections and command-level selection history.
  */
 export class EditorSelectionController extends Disposable {
+	private readonly context: CursorContext;
 	private readonly changeEmitter =
 		this._register(new Emitter<EditorSelectionChange>());
 	private readonly trackedSelectionResources =
@@ -80,10 +62,7 @@ export class EditorSelectionController extends Disposable {
 	private readonly selectionHistory =
 		new Map<number, SelectionHistoryEntry>();
 	private readonly selectionHistoryOrder: number[] = [];
-	private readonly selectionHistoryLimit: number;
 	private readonly cursorHistory: TextSelectionSet[] = [];
-	private readonly cursorHistoryLimit: number;
-	private readonly readOnlyMode: boolean;
 	private trackedSelections: TrackedSelection[] = [];
 	private currentSelections: TextSelectionSet;
 	private activeHistoryGroup: TextEditHistoryGroup | undefined;
@@ -100,11 +79,7 @@ export class EditorSelectionController extends Disposable {
 		options: EditorSelectionControllerOptions = {},
 	) {
 		super();
-		this.selectionHistoryLimit = readSelectionHistoryLimit(
-			options.selectionHistoryLimit,
-		);
-		this.cursorHistoryLimit = readCursorHistoryLimit(options.cursorHistoryLimit);
-		this.readOnlyMode = readReadOnly(options.readOnly);
+		this.context = new CursorContext(model, options);
 		this.currentSelections = initialSelections;
 		try {
 			this.installSelections(initialSelections);
@@ -138,7 +113,7 @@ export class EditorSelectionController extends Disposable {
 	/** Whether this editor instance may submit document-changing commands. */
 	get readOnly(): boolean {
 		this.assertNotDisposed();
-		return this.readOnlyMode;
+		return this.context.readOnly;
 	}
 
 	setSelections(selections: TextSelectionSet): void {
@@ -183,7 +158,7 @@ export class EditorSelectionController extends Disposable {
 	execute(command: EditorEditCommand): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("execute a command");
-		if (this.readOnlyMode) return undefined;
+		if (this.context.readOnly) return undefined;
 		this.cursorHistory.length = 0;
 		const historyGroup = this.historyGroupFor(command.historyMode);
 		return this.executeCommand(
@@ -196,7 +171,7 @@ export class EditorSelectionController extends Disposable {
 	beginComposition(): EditorCompositionSession {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("begin another composition");
-		if (this.readOnlyMode) throw new Error("Cannot begin composition in a read-only editor");
+		if (this.context.readOnly) throw new Error("Cannot begin composition in a read-only editor");
 		if (!IME.enabled) {
 			throw new Error("IME composition is currently disabled");
 		}
@@ -342,7 +317,7 @@ export class EditorSelectionController extends Disposable {
 	undo(): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("undo");
-		if (this.readOnlyMode) return undefined;
+		if (this.context.readOnly) return undefined;
 		this.cursorHistory.length = 0;
 		this.breakHistoryGroup();
 		return this.model.undo();
@@ -351,7 +326,7 @@ export class EditorSelectionController extends Disposable {
 	redo(): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("redo");
-		if (this.readOnlyMode) return undefined;
+		if (this.context.readOnly) return undefined;
 		this.cursorHistory.length = 0;
 		this.breakHistoryGroup();
 		return this.model.redo();
@@ -469,7 +444,7 @@ export class EditorSelectionController extends Disposable {
 		this.selectionHistoryOrder.push(transactionId);
 		while (
 			this.selectionHistoryOrder.length >
-			this.selectionHistoryLimit
+			this.context.selectionHistoryLimit
 		) {
 			const oldest = this.selectionHistoryOrder.shift();
 			if (oldest !== undefined) this.selectionHistory.delete(oldest);
@@ -477,9 +452,9 @@ export class EditorSelectionController extends Disposable {
 	}
 
 	private rememberCursorSelections(selections: TextSelectionSet): void {
-		if (this.cursorHistoryLimit === 0) return;
+		if (this.context.cursorHistoryLimit === 0) return;
 		this.cursorHistory.push(selections);
-		while (this.cursorHistory.length > this.cursorHistoryLimit) this.cursorHistory.shift();
+		while (this.cursorHistory.length > this.context.cursorHistoryLimit) this.cursorHistory.shift();
 	}
 
 	private forgetSelectionHistory(transactionId: number): void {

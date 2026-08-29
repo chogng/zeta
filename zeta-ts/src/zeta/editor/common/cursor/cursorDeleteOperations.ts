@@ -3,7 +3,7 @@ import { createSelectionEditCommand, normalizeSelectionOffsets, type EditorSelec
 import { type TextSelectionSet } from "../core/selection.js";
 import { TextPosition, TextRange } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
-import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
+import { nextCursorAtomicPosition, previousCursorAtomicPosition } from "./cursorAtomicMoveOperations.js";
 
 /** Deletes the ranges selected by the clipboard owner as one isolated transaction. */
 export function createCutCommand(model: TextModel, selections: TextSelectionSet, cutRanges: readonly TextRange[]): EditorEditCommand {
@@ -65,27 +65,7 @@ export function createDeleteToLineEndCommand(model: TextModel, selections: TextS
 }
 
 export function getPreviousDeleteRange(model: TextModel, position: TextPosition): TextRange {
-	if (position.columnIndex > 0) {
-		const boundaries = getTextGraphemeBoundaries(
-			model.getLineContent(position.lineIndex),
-		);
-		return TextRange.from(
-			TextPosition.at(
-				position.lineIndex,
-				previousBoundary(boundaries, position.columnIndex),
-			),
-			position,
-		);
-	}
-	if (position.lineIndex === 0) return TextRange.emptyAt(position);
-	const previousLineIndex = position.lineIndex - 1;
-	return TextRange.from(
-		TextPosition.at(
-			previousLineIndex,
-			model.getLineContent(previousLineIndex).length,
-		),
-		position,
-	);
+	return TextRange.from(previousCursorAtomicPosition(model, position), position);
 }
 
 function createDeleteToLineBoundaryCommand(model: TextModel, selections: TextSelectionSet, boundary: "start" | "end"): EditorEditCommand {
@@ -117,36 +97,7 @@ function emptySelectionEdit(range: TextRange): EditorSelectionEdit {
 }
 
 function nextDeleteRange(model: TextModel, position: TextPosition): TextRange {
-	const line = model.getLineContent(position.lineIndex);
-	if (position.columnIndex < line.length) {
-		const boundaries = getTextGraphemeBoundaries(line);
-		return TextRange.from(
-			position,
-			TextPosition.at(
-				position.lineIndex,
-				nextBoundary(boundaries, position.columnIndex),
-			),
-		);
-	}
-	if (position.lineIndex + 1 >= model.lineCount) {
-		return TextRange.emptyAt(position);
-	}
-	return TextRange.from(
-		position,
-		TextPosition.at(position.lineIndex + 1, 0),
-	);
-}
-
-function previousBoundary(boundaries: readonly number[], column: number): number {
-	for (let index = boundaries.length - 1; index >= 0; index -= 1) {
-		if (boundaries[index]! < column) return boundaries[index]!;
-	}
-	return 0;
-}
-
-function nextBoundary(boundaries: readonly number[], column: number): number {
-	return boundaries.find(boundary => boundary > column) ??
-		boundaries[boundaries.length - 1]!;
+	return TextRange.from(position, nextCursorAtomicPosition(model, position));
 }
 
 interface OffsetDeletionRange {

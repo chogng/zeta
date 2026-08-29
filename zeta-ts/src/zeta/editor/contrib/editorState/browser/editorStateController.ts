@@ -2,7 +2,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { EditorStateModel } from "../common/editorState.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Binds browser focus, selection, and scroll events into the common editor-state model. */

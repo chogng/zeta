@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../common/cursor/cursorInsertion.js";
+import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../common/cursor/cursorMoveCommands.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

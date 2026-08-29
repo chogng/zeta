@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "./editorSelectionController.js";
+import { type EditorSelectionController } from "./cursor.js";
 import { type LanguageCharacterPair } from "../languages/languageConfiguration.js";
 import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from "./languagePairEditing.js";
 import { TextPosition, TextRange } from "../core/text.js";

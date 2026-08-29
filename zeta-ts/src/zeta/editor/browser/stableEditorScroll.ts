@@ -1,4 +1,4 @@
-import { type EditorSelectionController } from '../common/cursor/editorSelectionController.js';
+import { type EditorSelectionController } from '../common/cursor/cursor.js';
 import { TextPosition } from '../common/core/position.js';
 import { EditorViewport } from './view.js';
 

@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";

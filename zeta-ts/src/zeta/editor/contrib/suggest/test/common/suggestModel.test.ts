@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorCommandHistoryMode, EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorCommandHistoryMode, EditorSelectionController } from "../../../../common/cursor/cursor.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, LanguageCompletionSessionController } from "../../common/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "../../../../common/languages/completion/languageCompletions.js";

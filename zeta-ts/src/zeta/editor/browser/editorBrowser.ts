@@ -4,7 +4,7 @@ import { Emitter, type Event } from "../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import type { URI } from "../../base/common/uri.js";
-import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import type { IPosition } from '../common/core/position.js';
 import { TextPosition, type TextRange } from "../common/core/text.js";

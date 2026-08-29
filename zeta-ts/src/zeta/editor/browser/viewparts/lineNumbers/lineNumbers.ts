@@ -1,6 +1,6 @@
 import "./lineNumbers.css";
 import { h, reset } from "../../../../base/browser/dom.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";

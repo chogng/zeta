@@ -1,7 +1,7 @@
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, type TextSearchMatch } from "../../../common/model/textModelSearch.js";
-import { getWordSelectionRange } from "../../../common/cursor/wordBoundary.js";
+import { getWordSelectionRange } from "../../../common/cursor/cursorWordOperations.js";
 
 const MAX_OCCURRENCE_SELECTIONS = 100_000;
 

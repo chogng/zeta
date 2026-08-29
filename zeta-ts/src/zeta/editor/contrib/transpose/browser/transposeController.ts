@@ -2,8 +2,8 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
-import { createTransposeCharactersCommand } from "../../../common/cursor/cursorTranspose.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { createTransposeCharactersCommand } from "../common/transpose.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 

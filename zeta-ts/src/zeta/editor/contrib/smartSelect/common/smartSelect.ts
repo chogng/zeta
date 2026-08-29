@@ -1,7 +1,7 @@
 import { TextSelection } from "../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { getWordSelectionRange } from "../../../common/cursor/wordBoundary.js";
+import { getWordSelectionRange } from "../../../common/cursor/cursorWordOperations.js";
 
 /** Expands one selection through word, parser, enclosing-pair, line, and document scopes. */
 export function expandSmartSelection(model: TextModel, selection: TextSelection, wordPattern?: RegExp, syntaxRanges: readonly TextRange[] = []): TextSelection {

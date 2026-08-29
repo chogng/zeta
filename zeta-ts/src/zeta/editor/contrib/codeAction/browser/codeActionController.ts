@@ -2,7 +2,7 @@ import "./media/codeAction.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextRange } from "../../../common/core/text.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";

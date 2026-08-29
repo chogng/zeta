@@ -13,6 +13,26 @@ test("Editor keeps explicit feature files without index barrels", () => {
 	assert.deepEqual(indexFiles, []);
 });
 
+test("Cursor files keep the upstream owner layout plus Zeta language editing", () => {
+	assert.deepEqual(readdirSync(join(editorRoot, "common/cursor")).sort(), [
+		"cursor.ts",
+		"cursorAtomicMoveOperations.ts",
+		"cursorCollection.ts",
+		"cursorColumnSelection.ts",
+		"cursorContext.ts",
+		"cursorDeleteOperations.ts",
+		"cursorMoveCommands.ts",
+		"cursorMoveOperations.ts",
+		"cursorTypeEditOperations.ts",
+		"cursorTypeOperations.ts",
+		"cursorWordOperations.ts",
+		"languageAutoClosingTracker.ts",
+		"languageEnter.ts",
+		"languagePairEditing.ts",
+		"oneCursor.ts",
+	]);
+});
+
 test("Editor production code does not depend on Workbench or generated transport DTOs", () => {
 	for (const file of collectFiles(editorRoot)) {
 		if (!file.endsWith(".ts") || file.includes(`${join("editor", "test")}`)) continue;
@@ -130,7 +150,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/config/fontInfoFromSettings.ts",
 		"common/model/decorationCollection.ts",
 		"common/model/textModel.ts",
-		"common/cursor/editorSelectionController.ts",
+		"common/cursor/cursor.ts",
 		"common/services/editorBaseApi.ts",
 		"common/services/completionsEnablement.ts",
 		"common/services/languageConfigurationService.ts",

@@ -1,5 +1,5 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { createInsertFinalNewLineCommand } from "../common/insertFinalNewLine.js";
 
 /** Applies the final-newline policy immediately before a save operation. */

@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";

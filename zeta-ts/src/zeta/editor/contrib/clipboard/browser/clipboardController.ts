@@ -6,7 +6,7 @@ import { type IClipboardService } from '../../../../platform/clipboard/common/cl
 import { createCutCommand } from '../../../common/cursor/cursorDeleteOperations.js';
 import { createDistributedPasteTextCommand, createLinePasteCommand, createPasteTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type TextSelection, type TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { type TextModel } from "../../../common/model/textModel.js";

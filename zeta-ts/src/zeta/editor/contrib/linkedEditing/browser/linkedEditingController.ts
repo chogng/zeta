@@ -6,7 +6,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { extendEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { TextRange, type TextEdit } from "../../../common/core/text.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 import { LinkedEditingService } from "../common/linkedEditing.js";

@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
+import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";

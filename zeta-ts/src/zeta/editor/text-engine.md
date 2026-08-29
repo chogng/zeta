@@ -142,7 +142,7 @@ Browser controller 的职责是把一个 DOM event 解析成一个 editor intent
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
 - `PointerHandler`：pointer dispatch、drag session 和 native capture 的 browser adapter。
-- `MouseHandler`：把 mouse/pointer hit target 转换为 selection intent；`DragScrolling` 保持拖选期间的边缘滚动，纯 multi-cursor policy 位于 `common/cursor/pointerMultiCursor.ts`。
+- `MouseHandler`：把 mouse/pointer hit target 转换为 selection intent；`DragScrolling` 保持拖选期间的边缘滚动，多光标移动命令位于 `common/cursor/cursorMoveCommands.ts`。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。
@@ -210,7 +210,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | Symbol/file | Responsibility | 修改时同步检查 |
 | --- | --- | --- |
 | `common/model/textModel.ts` | transaction、version、history、snapshot | cursor、tracked range、language invalidation、model tests |
-| `common/cursor/editorSelectionController.ts` | editor-local selection 和 command execution | input、undo/redo、composition tests |
+| `common/cursor/cursor.ts` | editor-local selection 和 command execution | input、undo/redo、composition tests |
 | `common/viewLayout/viewLayout.ts`、`linesLayout.ts`、`lineHeights.ts` | viewport/scroll/layout snapshot、行集合与行高 | wrapping、folding、hit test、viewport tests |
 | `common/viewModel/modelLineProjection.ts` | immutable logical → visual line projection data | folding、selection geometry、navigation |
 | `common/viewModel/viewModelLines.ts` | wrapping、visibility 和 model-versioned visual-line collection | folding、viewport、line-count changes |

@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";

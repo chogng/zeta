@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createReadableClipboardData, readEditorClipboardText } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
-import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
+import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
 import { createPasteTextCommand } from '../../../common/cursor/cursorTypeOperations.js';
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { type TextPosition } from '../../../common/core/text.js';

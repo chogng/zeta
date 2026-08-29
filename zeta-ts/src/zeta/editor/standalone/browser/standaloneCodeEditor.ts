@@ -5,7 +5,7 @@ import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import { EditorBrowser, type EditorBrowserOptions, type EditorTextViewState, type IContentWidget, type IEditorBrowser, type IOverlayWidget, type IViewZoneChangeAccessor } from '../../browser/editorBrowser.js';
 import type { EditorView, EditorViewport } from '../../browser/view.js';
 import type { CodeEditorWidget } from '../../browser/widget/codeEditor/codeEditorWidget.js';
-import type { EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
+import type { EditorSelectionController } from '../../common/cursor/cursor.js';
 import type { TextRange } from '../../common/core/text.js';
 import type { TextModel } from '../../common/model/textModel.js';
 

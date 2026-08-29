@@ -7,7 +7,7 @@ import { ContentWidgetPositionPreference, type IContentWidgetPosition, OverlayWi
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorations.js";
 import { type BracketColorizationSource } from '../../browser/viewparts/viewLines/viewLine.js';
-import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";

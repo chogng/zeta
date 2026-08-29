@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Routes the signature-help shortcut and owns the accessible parameter widget. */

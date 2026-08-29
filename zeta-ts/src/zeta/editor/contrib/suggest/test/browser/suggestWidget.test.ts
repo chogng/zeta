@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem } from "../../../../common/languages/completion/languageCompletions.js";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
-import { createOvertypeTextCommand } from "../../common/cursor/cursorOvertype.js";
+import { EditorSelectionController } from "../../common/cursor/cursor.js";
+import { createOvertypeTextCommand } from "../../common/cursor/cursorTypeEditOperations.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

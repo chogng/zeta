@@ -4,7 +4,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../common/gotoLocation.js";
-import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { type EditorViewport } from "../../../browser/view.js";

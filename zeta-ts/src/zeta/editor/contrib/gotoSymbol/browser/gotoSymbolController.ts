@@ -2,7 +2,7 @@ import "./media/gotoSymbol.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/gotoSymbol.js";
 import { type EditorViewport } from "../../../browser/view.js";
 

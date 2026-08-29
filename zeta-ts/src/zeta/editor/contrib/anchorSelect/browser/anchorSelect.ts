@@ -5,7 +5,7 @@ import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '.
 import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
 import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
-import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
+import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { TextRange, type TextPosition } from '../../../common/core/text.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';

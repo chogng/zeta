@@ -1,5 +1,5 @@
 import "./selections.css";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext } from '../../view/renderingContext.js';

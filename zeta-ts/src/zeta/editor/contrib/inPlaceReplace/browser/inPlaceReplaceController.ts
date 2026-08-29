@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type IEditorWorkerClient } from "../../../common/services/editorWorker.js";
 import { DEFAULT_WORD_REGEXP } from "../../../common/core/wordHelper.js";

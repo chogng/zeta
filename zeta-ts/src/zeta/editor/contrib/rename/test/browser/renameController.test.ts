@@ -6,7 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { type EditorCommandExecutor } from '../../../../browser/editorExtensions.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
+import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
 import { TextModel } from '../../../../common/model/textModel.js';

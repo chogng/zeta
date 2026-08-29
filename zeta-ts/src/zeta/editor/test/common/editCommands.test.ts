@@ -3,7 +3,7 @@ import test from "node:test";
 import { createBackspaceCommand, createCutCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from "../../common/cursor/cursorDeleteOperations.js";
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from "../../common/cursor/cursorWordOperations.js";
 import { createDistributedPasteTextCommand, createPasteTextCommand, createTypeTextCommand } from "../../common/cursor/cursorTypeOperations.js";
-import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

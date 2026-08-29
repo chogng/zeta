@@ -8,7 +8,7 @@ import { runWhenWindowIdle } from '../../base/browser/scheduler.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { type IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
-import { type EditorSelectionController } from '../common/cursor/editorSelectionController.js';
+import { type EditorSelectionController } from '../common/cursor/cursor.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
 import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';

@@ -3,7 +3,7 @@ import { TextSelection, TextSelectionSet } from "../core/selection.js";
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
-import { getTextWordRanges } from "./wordBoundary.js";
+import { getTextWordRanges } from "./cursorWordOperations.js";
 
 export enum EditorCursorNavigationCommand {
 	CharacterLeft = "characterLeft",

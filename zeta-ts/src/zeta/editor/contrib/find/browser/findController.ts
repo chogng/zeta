@@ -3,7 +3,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";

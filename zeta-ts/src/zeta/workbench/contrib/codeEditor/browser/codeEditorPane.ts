@@ -26,7 +26,7 @@ import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorations.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
-import type { EditorSelectionController } from "../../../../editor/common/cursor/editorSelectionController.js";
+import type { EditorSelectionController } from "../../../../editor/common/cursor/cursor.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 

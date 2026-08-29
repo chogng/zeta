@@ -4,7 +4,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextRange } from "../../../common/core/text.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { InlineCompletionsService } from "../../../browser/services/inlineCompletionsService.js";
 import { type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
 import { type EditorViewport } from "../../../browser/view.js";

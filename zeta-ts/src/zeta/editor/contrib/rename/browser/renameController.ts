@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { RenameService } from "../common/rename.js";

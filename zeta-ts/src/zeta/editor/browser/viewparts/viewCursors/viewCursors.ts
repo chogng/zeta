@@ -3,7 +3,7 @@ import { h, reset } from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
-import { EditorSelectionChangeReason, type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
+import { EditorSelectionChangeReason, type EditorSelectionController } from '../../../common/cursor/cursor.js';
 import { type TextRange } from '../../../common/core/text.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';

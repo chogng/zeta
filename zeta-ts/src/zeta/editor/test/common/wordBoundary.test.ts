@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { getWordSelectionRange } from "../../common/cursor/wordBoundary.js";
+import { getWordSelectionRange } from "../../common/cursor/cursorWordOperations.js";
 
 test("Word selection distinguishes words, whitespace, and punctuation", () => {
 	using model = new TextModel("alpha  beta.\ntail");

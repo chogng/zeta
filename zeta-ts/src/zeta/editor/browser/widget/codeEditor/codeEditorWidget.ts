@@ -1,7 +1,7 @@
 import { isHTMLElement } from "../../../../base/browser/dom.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";

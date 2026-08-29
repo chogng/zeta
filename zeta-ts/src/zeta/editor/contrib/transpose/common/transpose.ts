@@ -1,8 +1,8 @@
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
-import { type TextSelectionSet } from "../core/selection.js";
-import { TextPosition, TextRange, type TextEdit } from "../core/text.js";
-import { type TextModel } from "../model/textModel.js";
-import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
+import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
+import { type TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition, TextRange, type TextEdit } from "../../../common/core/text.js";
+import { type TextModel } from "../../../common/model/textModel.js";
+import { nextCursorAtomicPosition, previousCursorAtomicPosition } from "../../../common/cursor/cursorAtomicMoveOperations.js";
 
 interface TransposeOperation {
 	readonly selectionIndex: number;
@@ -44,9 +44,9 @@ export function createTransposeCharactersCommand(model: TextModel, selections: T
 
 function createTransposeOperation(model: TextModel, position: TextPosition, selectionIndex: number): TransposeOperation | undefined {
 	const line = model.getLineContent(position.lineIndex);
-	const end = position.columnIndex === line.length ? position : nextGraphemePosition(model, position);
-	const middle = previousGraphemePosition(model, end);
-	const begin = previousGraphemePosition(model, middle);
+	const end = position.columnIndex === line.length ? position : nextCursorAtomicPosition(model, position);
+	const middle = previousCursorAtomicPosition(model, end);
+	const begin = previousCursorAtomicPosition(model, middle);
 	if (begin.compareTo(middle) === 0 || middle.compareTo(end) === 0) return undefined;
 	const range = TextRange.from(begin, end);
 	const left = model.getTextInRange(TextRange.from(begin, middle));
@@ -76,29 +76,3 @@ function selectNonOverlappingOperations(candidates: readonly TransposeOperation[
 	return Object.freeze(selected.sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset));
 }
 
-function previousGraphemePosition(model: TextModel, position: TextPosition): TextPosition {
-	if (position.columnIndex === 0) {
-		if (position.lineIndex === 0) return position;
-		const previousLineIndex = position.lineIndex - 1;
-		return TextPosition.at(previousLineIndex, model.getLineContent(previousLineIndex).length);
-	}
-	const boundaries = getTextGraphemeBoundaries(model.getLineContent(position.lineIndex));
-	for (let index = boundaries.length - 1; index >= 0; index -= 1) {
-		const boundary = boundaries[index]!;
-		if (boundary < position.columnIndex) return TextPosition.at(position.lineIndex, boundary);
-	}
-	return TextPosition.at(position.lineIndex, 0);
-}
-
-function nextGraphemePosition(model: TextModel, position: TextPosition): TextPosition {
-	const line = model.getLineContent(position.lineIndex);
-	if (position.columnIndex === line.length) {
-		return position.lineIndex + 1 < model.lineCount
-			? TextPosition.at(position.lineIndex + 1, 0)
-			: position;
-	}
-	for (const boundary of getTextGraphemeBoundaries(line)) {
-		if (boundary > position.columnIndex) return TextPosition.at(position.lineIndex, boundary);
-	}
-	return position;
-}
