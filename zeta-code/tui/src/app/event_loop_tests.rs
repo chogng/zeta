@@ -5,13 +5,14 @@ use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::frame;
-use crate::components::chat_input::SuggestView;
-use crate::components::chat_input_area::ChatInputAreaPointerTarget;
+use crate::app::frame::InputPointerTarget;
+use crate::components::chat_composer::ChatComposerPointerTarget;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
+use crate::components::suggest::SuggestView;
 use crate::mouse::MouseMode;
 use ratatui::layout::Rect;
 use std::collections::VecDeque;
@@ -81,7 +82,9 @@ fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
     'rows: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(ChatInputAreaPointerTarget::PaneItem(1))
+                == Some(InputPointerTarget::Composer(
+                    ChatComposerPointerTarget::PaneItem(1),
+                ))
             {
                 target = Some((column, row));
                 break 'rows;
@@ -118,7 +121,9 @@ fn pointer_click_switches_a_selection_tab() {
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
             if frame::input_pointer_target_at(&app, area, column, row)
-                == Some(ChatInputAreaPointerTarget::PaneTab(1))
+                == Some(InputPointerTarget::Composer(
+                    ChatComposerPointerTarget::PaneTab(1),
+                ))
             {
                 target = Some((column, row));
                 break 'cells;

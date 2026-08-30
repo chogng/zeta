@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 use zeta_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
@@ -7,6 +9,14 @@ use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchModeDto;
+
+static IN_PROCESS_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
+    IN_PROCESS_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {

@@ -1,11 +1,13 @@
+pub(crate) mod approval;
 pub(crate) mod config;
 pub(crate) mod connectors;
 pub(crate) mod dirs;
 pub(crate) mod file_search;
-pub(crate) mod interactions;
 pub(crate) mod keymap;
 pub(crate) mod mcp;
 pub(crate) mod models;
+pub(crate) mod query;
+pub(crate) mod queue;
 pub(crate) mod rewind;
 pub(crate) mod sessions;
 pub(crate) mod skills;

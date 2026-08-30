@@ -34,7 +34,7 @@ fn transcript_snapshot_replaces_local_rows_and_preserves_rendering() {
             .collect::<Vec<_>>(),
         vec![
             (MessageRole::User, "canonical prompt"),
-            (MessageRole::Reasoning, "inspect the code"),
+            (MessageRole::Reasoning, "Thought"),
             (MessageRole::Agent, "canonical response"),
         ]
     );
@@ -69,8 +69,8 @@ fn complete_upsert_replaces_one_stable_transcript_row() {
     assert_eq!(state.messages().len(), 1);
     assert_eq!(state.messages()[0].text, "complete text");
     assert_eq!(
-        state.messages()[0].source_id.as_deref(),
-        Some("item:item_stream")
+        state.messages()[0].cell_id.as_deref(),
+        Some("entry:item:item_stream")
     );
 }
 
@@ -132,7 +132,7 @@ fn structured_turn_plan_is_rendered_by_the_tui() {
     let plan = state.messages().last().unwrap();
     assert_eq!(plan.role, MessageRole::Plan);
     assert_eq!(plan.text, "Implementation plan\n[x] inspect\n[>] change");
-    assert_eq!(plan.source_id.as_deref(), Some("turn-plan:turn_1"));
+    assert_eq!(plan.cell_id.as_deref(), Some("entry:turn-plan:turn_1"));
 }
 
 #[test]

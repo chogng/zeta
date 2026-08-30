@@ -1,5 +1,6 @@
 use super::config_pane_spec;
 use super::provider_api_key_prompt;
+use crate::components::chat_input::ChatInputMode;
 use crate::components::list_selection::ListSelectionState;
 use crate::components::text_prompt::TextPrompt;
 use crate::components::text_prompt::TextPromptOutcome;
@@ -85,6 +86,18 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::SetTerminalSettings(edit)
             if edit.terminal.expected_revision == 7
                 && !edit.terminal.settings.mouse_interactions()
+    ));
+    let input_mode = &state.visible_items()[2];
+    assert_eq!(input_mode.label(), "Input mode");
+    assert_eq!(
+        input_mode.description(),
+        Some("Standard or Vim editing inside ChatInput Standard")
+    );
+    assert!(matches!(
+        view.actions.get(input_mode.id().unwrap()).unwrap(),
+        ConfigSelectionAction::ChooseInputMode { standard, vim }
+            if standard.terminal.settings.input_mode() == ChatInputMode::Standard
+                && vim.terminal.settings.input_mode() == ChatInputMode::Vim
     ));
     let follow_up = &state.visible_items()[1];
     assert_eq!(follow_up.label(), "Follow-up messages");

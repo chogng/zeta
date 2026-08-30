@@ -60,7 +60,7 @@ fn status_pane_renders_bold_labels_with_colons_and_plain_values() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| detail_list::draw(frame, frame.area(), &state))
+        .draw(|frame| detail_list::draw_scrolled(frame, frame.area(), &state, 0))
         .unwrap();
 
     let buffer = terminal.backend().buffer();

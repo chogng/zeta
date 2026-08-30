@@ -1,3 +1,4 @@
+use crate::components::chat_input::ChatInputMode;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
@@ -47,6 +48,10 @@ pub(crate) enum ConfigSelectionAction {
     ChooseFollowUpMode {
         queue: Box<ConfigEdit>,
         steer: Box<ConfigEdit>,
+    },
+    ChooseInputMode {
+        standard: Box<ConfigEdit>,
+        vim: Box<ConfigEdit>,
     },
     SetPermissions(PermissionEdit),
     OpenProviderApiKey {
@@ -122,6 +127,36 @@ pub(crate) fn config_pane_spec(
             dirs: dirs.clone(),
         }),
     );
+    let input_mode_id = ListSelectionItemId::new("terminal-input-mode");
+    let mut standard_terminal = terminal;
+    standard_terminal.set_input_mode(ChatInputMode::Standard);
+    let mut vim_terminal = terminal;
+    vim_terminal.set_input_mode(ChatInputMode::Vim);
+    actions.insert(
+        input_mode_id.clone(),
+        ConfigSelectionAction::ChooseInputMode {
+            standard: Box::new(ConfigEdit {
+                terminal: TerminalSettingsEdit {
+                    expected_revision: terminal_revision,
+                    settings: standard_terminal,
+                },
+                server_config: config.clone(),
+                providers: providers.clone(),
+                session_id: session_id.clone(),
+                dirs: dirs.clone(),
+            }),
+            vim: Box::new(ConfigEdit {
+                terminal: TerminalSettingsEdit {
+                    expected_revision: terminal_revision,
+                    settings: vim_terminal,
+                },
+                server_config: config.clone(),
+                providers: providers.clone(),
+                session_id: session_id.clone(),
+                dirs: dirs.clone(),
+            }),
+        },
+    );
     let follow_up_id = ListSelectionItemId::new("terminal-follow-up-mode");
     let mut queue_terminal = terminal;
     queue_terminal.set_follow_up_mode(FollowUpMode::Queue);
@@ -168,6 +203,16 @@ pub(crate) fn config_pane_spec(
                 match terminal.follow_up_mode() {
                     FollowUpMode::Queue => "Queue",
                     FollowUpMode::Steer => "Steer",
+                },
+            ),
+        ListSelectionItem::new("Input mode")
+            .with_id(input_mode_id)
+            .with_columns(
+                "Input mode",
+                "Standard or Vim editing inside ChatInput",
+                match terminal.input_mode() {
+                    ChatInputMode::Standard => "Standard",
+                    ChatInputMode::Vim => "Vim",
                 },
             ),
     ];

@@ -2,17 +2,20 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use crate::app::AppEvent;
+use crate::components::chat_composer::ChatComposerPaneView;
 use crate::components::chat_history::MessageRole;
 use crate::components::chat_input::ChatInputItem;
+use crate::components::chat_input::ChatInputMode;
 use crate::components::chat_input::ChatSubmission;
-use crate::components::chat_input::SuggestView;
 use crate::components::chat_input::built_in_slash_command_definitions;
-use crate::components::chat_input_area::ChatInputAreaHeightEntryView;
-use crate::components::chat_input_area::PaneEntryView;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneBodyView;
 use crate::components::pane::PaneSpec;
+use crate::components::suggest::SuggestView;
+use crate::features::approval::Approval;
+use crate::features::approval::ApprovalSpec;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use crate::features::config::config_pane_spec;
@@ -20,6 +23,10 @@ use crate::features::file_search::FileSearchManager;
 use crate::features::keymap::KeymapEditIntent;
 use crate::features::keymap::KeymapEditKind;
 use crate::features::keymap::keymap_pane_spec;
+use crate::features::query::Query;
+use crate::features::query::QueryChoice;
+use crate::features::query::QueryCustomAnswer;
+use crate::features::query::QueryQuestion;
 use crate::features::rewind::rewind_pane_spec;
 use crate::features::status_line::StatusLineItem;
 use crate::features::status_line::StatusLineResource;
@@ -80,6 +87,13 @@ fn no_directories() -> SessionDirListResult {
         dirs: Vec::new(),
     }
 }
+
+fn enter_test_session(app: &mut App) {
+    app.update(AppEvent::ThreadContextChanged {
+        session_id: SessionId::new("test-session").unwrap(),
+        thread_id: ThreadId::new("test-thread").unwrap(),
+    });
+}
 use zeta_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
@@ -109,6 +123,66 @@ fn blank_input_does_not_start_a_turn() {
     assert_eq!(action, None);
     assert!(app.messages().is_empty());
     assert_eq!(app.status(), &Status::Ready);
+}
+
+#[test]
+fn approval_preserves_the_hidden_draft_and_stays_open_after_submission_failure() {
+    let mut app = App::new();
+    enter_test_session(&mut app);
+    app.insert_text("draft");
+    app.update(AppEvent::ApprovalRequested(Approval::new(ApprovalSpec {
+        title: "Approval required".into(),
+        reason: "Run tests".into(),
+        details: Vec::new(),
+    })));
+
+    app.handle_paste("ignored".into());
+    let Some(AppCommand::ResolveThreadRequest(response)) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected an Approval response");
+    };
+    let request = response.identity();
+    app.update(AppEvent::ThreadRequestSubmissionFailed {
+        request,
+        error: "offline".into(),
+    });
+
+    assert_eq!(app.input(), "draft");
+    assert_eq!(
+        app.approval_view().and_then(|view| view.error),
+        Some("offline")
+    );
+}
+
+#[test]
+fn query_paste_uses_its_own_editor_without_changing_the_chat_draft() {
+    let mut app = App::new();
+    enter_test_session(&mut app);
+    app.insert_text("draft");
+    app.update(AppEvent::QueryRequested(
+        Query::new(vec![QueryQuestion {
+            id: "answer".into(),
+            header: "Answer".into(),
+            prompt: "What next?".into(),
+            choices: vec![QueryChoice {
+                label: "Default".into(),
+                description: "Use the default".into(),
+            }],
+            custom_answer: QueryCustomAnswer::Allowed,
+        }])
+        .unwrap(),
+    ));
+
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_paste("custom".into());
+
+    assert_eq!(app.input(), "draft");
+    assert_eq!(
+        app.query_view().and_then(|view| view.custom_answer),
+        Some("custom")
+    );
 }
 
 #[test]
@@ -772,9 +846,9 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
         None
     );
     assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Pane(PaneEntryView::KeyCapture(view))]
-            if view.body().title() == "Record shortcut"
+        app.input_pane_views().as_slice(),
+        [ChatComposerPaneView::Stacked(view)]
+            if matches!(view.body(), PaneBodyView::KeyCapture(body) if body.title() == "Record shortcut")
     ));
 
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
@@ -867,7 +941,7 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
     let mut app = App::for_dir_with_slash_commands(&dir, registry.clone());
     app.replace_chat_input_catalog(
         registry,
-        vec![crate::components::chat_input::SkillSelectorItem::new(
+        vec![crate::components::suggest::SkillSelectorItem::new(
             "commit".into(),
             "draft a commit message".into(),
             skill.clone(),
@@ -968,6 +1042,18 @@ fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
     app.update(AppEvent::ConfigSettingsReceived(settings));
 
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+}
+
+#[test]
+fn terminal_settings_apply_vim_mode_to_the_active_chat_input() {
+    let mut app = App::new();
+    let mut settings = TerminalSettings::default();
+    settings.set_input_mode(ChatInputMode::Vim);
+
+    app.update(AppEvent::ConfigSettingsReceived(settings));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert_eq!(app.thread_presentations.active().input.prompt(), "N ");
 }
 
 #[test]
@@ -1171,14 +1257,11 @@ fn enter_steers_the_working_turn_and_tracks_delivery() {
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text, "secondthird");
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Steer(view)] if view.items == ["secondthird"]
-    ));
+    assert!(app.input_pane_views().is_empty());
 
     app.update(AppEvent::SteerCompleted(steer_id));
 
-    assert!(app.input_height_entries().is_empty());
+    assert!(app.input_pane_views().is_empty());
     assert_eq!(app.status(), &Status::Working);
 }
 
@@ -1193,23 +1276,47 @@ fn enter_queues_a_new_turn_by_default_while_the_current_turn_is_working() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(action, None);
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].text == "next turn"
-    ));
+    assert_eq!(app.queue_view().items[0].text, "next turn");
     assert_eq!(app.status(), &Status::Working);
 
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert_eq!(app.input(), "next turn");
-    assert!(app.input_height_entries().is_empty());
+    assert_eq!(app.queue_view().items[0].text, "next turn");
+}
+
+#[test]
+fn queue_command_restores_the_selected_message_without_bare_up_interception() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.insert_text("restore me");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnCompleted);
+    app.insert_text("/queue");
+
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
     );
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].text == "next turn"
-    ));
+    assert_eq!(app.list_selection().unwrap().title(), "Queue");
+    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+
+    assert_eq!(app.input(), "restore me");
+    assert!(app.list_selection().is_none());
+    assert!(app.queue_view().items.is_empty());
+}
+
+#[test]
+fn sessions_and_agents_commands_open_the_manager_root() {
+    for command in ["/sessions", "/agents"] {
+        let mut app = App::new();
+        app.insert_text(command);
+
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            None
+        );
+        assert!(app.session_manager_view().is_some());
+    }
 }
 
 #[test]
@@ -1228,44 +1335,28 @@ fn queued_turn_stays_editable_when_automatic_submission_is_rejected() {
         panic!("expected queued Turn dispatch");
     };
     assert_eq!(submission.display_text, "keep this message");
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].sending
-    ));
+    assert!(app.queue_view().items[0].sending);
 
     app.update(AppEvent::QueueSubmissionFailed {
         queue_id,
         error: "server unavailable".into(),
     });
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Queue(view)] if !view.items[0].sending
-    ));
-
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    assert_eq!(app.input(), "keep this message");
-    assert!(app.input_height_entries().is_empty());
+    assert!(!app.queue_view().items[0].sending);
 }
 
 #[test]
-fn enter_sends_the_latest_queued_message_now_without_waiting_for_the_active_turn() {
+fn empty_enter_does_not_bypass_queue_dispatch_order() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("send this now");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     set_follow_up_mode(&mut app, FollowUpMode::Steer);
 
-    let Some(AppCommand::SteerTurn { submission, .. }) =
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-    else {
-        panic!("expected queued message to become an immediate steer");
-    };
-
-    assert_eq!(submission.display_text, "send this now");
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Steer(view)] if view.items == ["send this now"]
-    ));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.queue_view().items[0].text, "send this now");
 }
 
 #[test]
@@ -1277,11 +1368,7 @@ fn a_created_turn_does_not_claim_the_running_steer_action() {
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(action, None);
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Queue(view)]
-            if view.items[0].text == "after the queued turn"
-    ));
+    assert_eq!(app.queue_view().items[0].text, "after the queued turn");
     assert_eq!(app.status(), &Status::Working);
 }
 
@@ -1304,7 +1391,7 @@ fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
         error: "sequence conflict".into(),
     });
 
-    assert!(app.input_height_entries().is_empty());
+    assert!(app.input_pane_views().is_empty());
     assert_eq!(app.status(), &Status::Working);
     assert!(
         app.messages()

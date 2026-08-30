@@ -52,12 +52,12 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(rendered.contains("Try asking"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
-    let footer = rendered.lines().last().unwrap();
-    assert_eq!(footer.trim_end(), "⏸ ask permissions on");
+    let status_line = rendered.lines().last().unwrap();
+    assert_eq!(status_line.trim_end(), "⏸ ask permissions on");
 }
 
 #[test]
-fn pending_steer_is_drawn_above_the_persistent_chat_input() {
+fn pending_steer_is_shown_once_in_chat_history() {
     let mut app = App::new();
     set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("start");
@@ -68,12 +68,12 @@ fn pending_steer_is_drawn_above_the_persistent_chat_input() {
 
     let rendered = render(&app, 80, 20);
 
-    assert!(rendered.contains("Steer  1 sending"));
-    assert!(rendered.contains("↳ check the tests first"));
+    assert!(!rendered.contains("Steer  1 sending"));
+    assert_eq!(rendered.matches("check the tests first").count(), 1);
 }
 
 #[test]
-fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
+fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
     let mut app = App::new();
     let ask_permissions = render(&app, 80, 20)
         .lines()
@@ -109,7 +109,7 @@ fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
 }
 
 #[test]
-fn working_draft_explains_the_default_queue_action() {
+fn working_draft_keeps_runtime_state_in_status_line() {
     let mut app = App::new();
     app.insert_text("start");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -118,11 +118,11 @@ fn working_draft_explains_the_default_queue_action() {
 
     let rendered = render(&app, 80, 20);
 
-    assert_eq!(rendered.lines().last().unwrap().trim_end(), "enter queue");
+    assert!(rendered.lines().any(|line| line.trim_end() == "working"));
 }
 
 #[test]
-fn queued_message_explains_how_to_move_it_back_to_the_input() {
+fn queued_message_is_visible_inline_and_counted_in_status_line() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("edit this later");
@@ -130,36 +130,40 @@ fn queued_message_explains_how_to_move_it_back_to_the_input() {
 
     let rendered = render(&app, 80, 20);
 
-    assert_eq!(
-        rendered.lines().last().unwrap().trim_end(),
-        "↑ edit queued message"
+    assert!(rendered.contains("Queue 1: edit this later"));
+    assert!(
+        rendered
+            .lines()
+            .any(|line| line.trim_end() == "working · queue 1")
     );
 }
 
 #[test]
-fn steer_mode_explains_immediate_send_and_queued_send_now() {
+fn follow_up_mode_does_not_replace_runtime_status_line() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("change direction");
 
-    assert_eq!(
-        render(&app, 80, 20).lines().last().unwrap().trim_end(),
-        "enter steer"
+    assert!(
+        render(&app, 80, 20)
+            .lines()
+            .any(|line| line.trim_end() == "working")
     );
 
     set_follow_up_mode(&mut app, FollowUpMode::Queue);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     set_follow_up_mode(&mut app, FollowUpMode::Steer);
 
-    assert_eq!(
-        render(&app, 80, 20).lines().last().unwrap().trim_end(),
-        "enter send queued now · ↑ edit"
+    assert!(
+        render(&app, 80, 20)
+            .lines()
+            .any(|line| line.trim_end() == "working · queue 1")
     );
 }
 
 #[test]
-fn footer_uses_a_distinct_color_for_each_approval_mode_symbol() {
+fn status_line_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     let ask_permissions = render_buffer(&app, 80, 20);
     assert_eq!(ask_permissions[(0, 19)].fg, warning());
@@ -186,7 +190,7 @@ fn footer_uses_a_distinct_color_for_each_approval_mode_symbol() {
 }
 
 #[test]
-fn footer_colors_current_and_next_modes_independently() {
+fn status_line_colors_current_and_next_modes_independently() {
     let mut app = App::new();
     app.set_current_approval_mode(Some(zeta_protocol::ApprovalMode::AskPermissions));
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
@@ -210,7 +214,7 @@ fn path_is_only_visible_in_the_empty_welcome_banner() {
 }
 
 #[test]
-fn status_line_renders_model_in_the_footer() {
+fn status_line_renders_the_configured_model() {
     let mut app = App::new();
     app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
         provider: "anthropic".into(),
@@ -218,17 +222,17 @@ fn status_line_renders_model_in_the_footer() {
     })));
 
     let buffer = render_buffer(&app, 80, 20);
-    let footer = (0..80)
+    let status_line = (0..80)
         .map(|x| buffer[(x, 19)].symbol())
         .collect::<String>();
 
-    assert!(footer.starts_with("⏸ ask permissions on"));
-    assert!(footer.trim_end().ends_with("anthropic/claude-sonnet"));
+    assert!(status_line.starts_with("⏸ ask permissions on"));
+    assert!(status_line.trim_end().ends_with("anthropic/claude-sonnet"));
     assert_eq!(buffer[(0, 19)].fg, warning());
 }
 
 #[test]
-fn narrow_footer_keeps_the_first_configured_item() {
+fn narrow_status_line_keeps_the_first_configured_item() {
     let mut app = App::new();
     app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
         provider: "anthropic".into(),
@@ -236,10 +240,10 @@ fn narrow_footer_keeps_the_first_configured_item() {
     })));
 
     let rendered = render(&app, 24, 20);
-    let footer = rendered.lines().last().unwrap();
+    let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(footer.trim_end(), "⏸ ask permissions on");
-    assert!(!footer.contains("claude"));
+    assert_eq!(status_line.trim_end(), "⏸ ask permissions on");
+    assert!(!status_line.contains("claude"));
 }
 
 #[test]
@@ -272,16 +276,16 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
 }
 
 #[test]
-fn working_footer_keeps_the_configured_context_without_runtime_text() {
+fn working_status_line_keeps_configured_context_separate_from_runtime_text() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
 
     let rendered = render(&app, 80, 20);
-    let footer = rendered.lines().last().unwrap();
+    let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(footer.trim_end(), "⏸ ask permissions on");
-    assert!(!footer.contains("enter queue"));
-    assert!(!footer.contains("ctrl-c interrupt"));
+    assert_eq!(status_line.trim_end(), "⏸ ask permissions on");
+    assert!(!status_line.contains("enter queue"));
+    assert!(!status_line.contains("ctrl-c interrupt"));
 }
 
 #[test]
@@ -316,11 +320,11 @@ fn list_selection_pane_stacks_above_chat_input_and_keeps_history_visible() {
     assert!(!rendered.contains("enter send"));
     let rows = rendered.lines().collect::<Vec<_>>();
     let last_item_row = rows.iter().position(|row| row.contains("/model")).unwrap();
-    let footer_row = rows
+    let status_line_row = rows
         .iter()
         .position(|row| row.contains("Space search"))
         .unwrap();
-    assert_eq!(footer_row - last_item_row, 3);
+    assert_eq!(status_line_row - last_item_row, 3);
 }
 
 #[test]
@@ -362,11 +366,9 @@ fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
     let first = render_buffer(&app, 80, 24);
     let interaction_y = super::layout(&app, Rect::new(0, 0, 80, 24))
         .input
-        .height_entries
+        .panes
         .iter()
-        .find(|entry| {
-            entry.kind == crate::components::chat_input_area::ChatInputAreaHeightEntryKind::Pane
-        })
+        .find(|entry| entry.kind == crate::components::chat_composer::ChatComposerPaneKind::Stacked)
         .unwrap()
         .area
         .y;
@@ -380,7 +382,7 @@ fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
 }
 
 #[test]
-fn error_detail_is_rendered_once_and_the_footer_only_offers_recovery() {
+fn error_detail_is_rendered_once_and_status_line_only_offers_recovery() {
     let mut app = App::new();
     app.update(AppEvent::FailureReported(
         "The configured model is unavailable.".into(),
@@ -539,7 +541,7 @@ fn mention_popup_renders_paths_and_exposes_the_same_click_rows() {
     let terminal_area = Rect::new(0, 0, 80, 20);
 
     let buffer = render_buffer(&app, 80, 20);
-    let Some(crate::components::chat_input::SuggestView::Mention(popup)) = app.suggest() else {
+    let Some(crate::components::suggest::SuggestView::Mention(popup)) = app.suggest() else {
         panic!("expected mention suggestions");
     };
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
@@ -623,7 +625,7 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
         }
         if matches!(
             app.suggest(),
-            Some(crate::components::chat_input::SuggestView::Mention(popup))
+            Some(crate::components::suggest::SuggestView::Mention(popup))
                 if popup.matches.len() >= 2
         ) {
             return;

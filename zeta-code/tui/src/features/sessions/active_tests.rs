@@ -21,6 +21,7 @@ use crate::TuiRecoveryState;
 
 #[test]
 fn recovery_reopens_the_exact_durable_conversation() {
+    let _guard = crate::test_support::in_process_test_guard();
     let (mut client, state_root) = client();
     let conversation = ActiveConversation::start(&mut client, "recover exact".into()).unwrap();
     let state = TuiRecoveryState::new(
@@ -39,6 +40,7 @@ fn recovery_reopens_the_exact_durable_conversation() {
 
 #[test]
 fn recovery_keeps_the_explicit_branch_after_another_branch_is_created() {
+    let _guard = crate::test_support::in_process_test_guard();
     let (mut client, state_root) = client();
     let mut conversation =
         ActiveConversation::start(&mut client, "recover fallback".into()).unwrap();

@@ -1,5 +1,54 @@
-mod state;
-mod view;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct KeyCapture {
+    title: String,
+    lines: Vec<String>,
+}
 
-pub(crate) use state::KeyCapture;
-pub(crate) use view::draw;
+impl KeyCapture {
+    pub(crate) fn new(title: impl Into<String>, lines: Vec<String>) -> Self {
+        Self {
+            title: title.into(),
+            lines,
+        }
+    }
+
+    pub(crate) fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub(crate) fn lines(&self) -> &[String] {
+        &self.lines
+    }
+
+    pub(crate) fn desired_height(&self) -> u16 {
+        u16::try_from(self.lines.len().saturating_add(3)).unwrap_or(u16::MAX)
+    }
+}
+
+use crate::ui::highlight;
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Paragraph;
+
+pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, capture: &KeyCapture) {
+    frame.render_widget(
+        Paragraph::new(
+            capture
+                .lines()
+                .iter()
+                .map(|line| Line::from(line.as_str()))
+                .collect::<Vec<_>>(),
+        )
+        .block(
+            Block::default()
+                .title(capture.title())
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(highlight())),
+        ),
+        area,
+    );
+}

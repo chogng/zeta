@@ -5,15 +5,12 @@ use crate::components::chat_history::MessageRole;
 use crate::components::chat_input::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
-use crate::components::chat_input_area::ChatInputAreaHeightEntryView;
-use crate::components::chat_input_area::PaneEntryView;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -184,12 +181,8 @@ fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
         invocation(TuiSlashCommandAction::Status, ""),
         &mut app,
     );
-    assert!(matches!(
-        app.input_height_entries().as_slice(),
-        [ChatInputAreaHeightEntryView::Pane(PaneEntryView::DetailList(view))]
-            if view.body().title() == "Status"
-    ));
-    app.update(AppEvent::ListSelectionPaneClosed);
+    assert_eq!(app.quick_view().unwrap().title(), "Status");
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     conversation.execute(
         &mut client,
@@ -366,6 +359,7 @@ fn resume_and_model_without_arguments_open_actionable_panes() {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::ResumeSession {
             session_id: current_session,
+            preferred_thread_id: None,
         })
     );
     app.update(AppEvent::ListSelectionPaneClosed);
@@ -562,12 +556,8 @@ fn client_with_model_probe() -> (DispatchTestClient, PathBuf, Arc<OfflineOperati
     )
 }
 
-static DISPATCH_TEST_LOCK: Mutex<()> = Mutex::new(());
-
 fn dispatch_test_guard() -> MutexGuard<'static, ()> {
-    DISPATCH_TEST_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    crate::test_support::in_process_test_guard()
 }
 
 struct DispatchTestClient {

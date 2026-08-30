@@ -9,6 +9,7 @@ mod frame;
 mod help;
 mod recovery;
 mod request_completion;
+mod screen_layout;
 mod state;
 
 pub(crate) use crate::features::sessions::ActiveConversation;

@@ -7,6 +7,9 @@
 > 当前能力。
 > 三条产品线与宿主边界见 [`docs/product-lines.md`](../../docs/product-lines.md)。
 > 三端快捷键语义与端侧输入边界见 [`docs/keybindings.md`](../../docs/keybindings.md)。
+> 源码分层入口见 [`src/README.md`](src/README.md)，当前界面区域见 [`src/layout.md`](src/layout.md)。
+> Session、Thread、正文单元和请求布局决定见
+> [`docs/tui-chat-architecture-discussion-v15.md`](../../docs/tui-chat-architecture-discussion-v15.md)。
 
 `zeta-tui` 是 `zeta code` 产品线的 TUI 实现。它当前是 `AppServerSession` 上的 presentation
 shell：从 owned session 取得 cloneable typed request handle 与独立 `AppServerEvents`，创建或切换
@@ -20,7 +23,7 @@ Tool、approval policy 或 persistence。
 
 - 启动时创建一个 product Session 和 root Thread；
 - 最多显示六行正文的多行 `ChatInput`，支持 typing、Unicode-safe cursor/editing、Shift/Alt-Enter
-  换行、按行 Home/End/Up/Down、Unicode display-cell 软换行与 bracketed paste；超过 1000
+  换行、按行 Home/End/Up/Down、Unicode display-cell 软换行与 bracketed paste；Config 的 Input mode 可在 Standard 与局部 Vim 编辑间切换，Vim 状态只存在于每个 Thread 的 ChatInput 草稿，补全弹层优先消费按键；超过 1000
   个 Unicode scalar value 的 paste 会显示为原子占位符，并只在提交时展开；
 - 粘贴 PNG/JPEG/GIF/WEBP 本地文件路径时立即读取最多 16 MiB 的图片，显示可原子编辑的
   `[Image #N]` 占位符，并以结构化图片项提交；
@@ -30,9 +33,9 @@ Tool、approval policy 或 persistence。
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的 Tab completion、Esc dismiss、鼠标 hover 跟随选中与左键单击可见命令；
 - `$` 打开独立 Skill selector；enabled、compatible 且名称无歧义的 Skill 显示为 `$name`，Tab/Enter 或鼠标选中后作为原子文本插入。提交时保留 `$name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn 后按需加载；Skill 与 `/name` 命令不冲突，`skills/changed` 会刷新候选；
 - `/resume`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
-- command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、`/archive`、`/rewind`、`/clear`、`/config`、`/add-dir`、`/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new` 与 `/quit`；
-- `/status` 展示当前 Thread 最近一次 Turn 使用的模型、完整上下文窗口、扣除 output reservation、safety margin 与 auto-compaction 边界后的可用窗口、最近一次同模型调用后的剩余窗口，以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
-- `/help` 向 `ChatInputArea` 推入可搜索的 `ListSelection` Pane；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 逐层返回常驻 `ChatInput`；快捷键只由 `/shortcuts` 展示；
+- command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入 Session Manager，`/subagents` 聚焦常驻 SubagentPane，`/queue` 管理当前 Thread 的 Queue；Approval 和 Query 由各自请求直接打开，不提供总括页面；
+- `/status` 使用不改变正常布局高度的 QuickView，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
+- `/help` 向 `ChatComposer` 推入可搜索的 `ListSelection` Pane；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 逐层返回常驻 `ChatInput`；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
   All/Enabled/Disabled/Manage/Errors tabs、数量、搜索和 source-qualified metadata；只有 Manage
   tab 的动作通过 revision-checked `skill/enablement/set` 修改 enablement；该页面是目录管理入口，
@@ -47,7 +50,7 @@ Tool、approval policy 或 persistence。
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
 - `/resume` 提供 Session picker；`/archive` 通过 typed `session/request` 归档当前 Session，成功后退出 TUI，不创建新 Session；失败时保留当前会话并显示错误；
-- `/config` 异步读取服务端配置、供应商目录和当前 Session 的目录权限；Config 标签页包含本地 Mouse interactions 与 Follow-up messages，后者默认 Queue，可用左右选择 Queue/Steer 或 Enter 切换；Add-dir 标签页提供文件读取/修改/执行/监听、文件浏览/搜索、Instructions、Config、Skills、MCP、Language services、Hooks、Plugins 和 repository Permission，并在已有目录时追加目录级开关，使用 permissions revision 防止旧页面覆盖新选择。Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
+- `/config` 异步读取服务端配置、供应商目录和当前 Session 的目录权限；Config 标签页包含本地 Mouse interactions、Follow-up messages 与 Input mode，后两项分别选择 Queue/Steer 和 Standard/Vim；Add-dir 标签页提供文件读取/修改/执行/监听、文件浏览/搜索、Instructions、Config、Skills、MCP、Language services、Hooks、Plugins 和 repository Permission，并在已有目录时追加目录级开关，使用 permissions revision 防止旧页面覆盖新选择。Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
@@ -67,7 +70,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- footer 按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目，不显示 Turn 运行状态，也不常驻展示快捷键；Shift-Tab 在 `ask permissions on`、`auto review on` 与 `bypass permissions on` 之间切换下一次 Turn 要提交的模式。运行中 Turn 的冻结模式与下一次模式不同时，footer 同时标出 `current` 和 `next`；TUI 不解释策略结果，也不自行签发执行授权；
+- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与后台 Agent/Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；需要明确操作键时由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
 - 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各 component 拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -75,7 +78,7 @@ Tool、approval policy 或 persistence。
   合并页面；TUI 不保存 Thread history；
 - `/copy` 或 Ctrl-O 把最后一条 Agent response 写入系统剪贴板；`/export [relative-path]` 以
   Markdown 导出当前已加载的 transcript history window，路径限制在当前目录内且绝不覆盖已有文件；
-- 空会话 Welcome Banner 在 `Ready when you are` 下方显示以 `~` 缩写用户主目录的当前目录路径；`ChatInput` 上方不常驻目录信息。底部 Footer 区域由 status line 按配置显示权限模式、preferred model、typed Git branch 与变更数，并按宽度降级；Chord 等必须立即处理的提示临时覆盖 status line；
+- 空会话 Welcome Banner 在 `Ready when you are` 下方显示以 `~` 缩写用户主目录的当前目录路径；底部直接使用 StatusLine 或固定一行 KeyHints，不再套额外容器；
 - Ctrl-C 或 Ctrl-D（空输入）在 idle 时退出，active 时请求 interrupt；单次 Esc 在根界面保持
   inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
@@ -98,7 +101,7 @@ transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown
 折叠与虚拟化由
 [`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
 [`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 Slash/File/Plugin Suggest、多标签 `ListSelection` Pane 的左键切换和带可执行候选项的 `ListSelection` Pane；hover 复用选中态，左键复用 Enter 动作。Config 标签页中的 Mouse interactions item 可关闭鼠标交互，关闭后这些页面不捕获鼠标，任意屏幕文本框选由终端负责。
-`TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
+Vim 只改变 `ChatInput` 的文字编辑行为，不把 Normal/Visual 状态扩散到 Pane、正文选择或应用级快捷键。
 
 TUI 当前连接 CLI 提供的 profile/Directory-scoped local App Server authority，不提供 remote
 connection selector 或自动 reconnect；Desktop 与 app 在相同 authority partition 下可以实时读取
@@ -108,7 +111,7 @@ transport retry。File mention 插入当前目录的相对路径，Plugin mentio
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Add-dir、Providers 与 Language servers，其中 Mouse interactions、Follow-up messages 和 Add-dir 的新增目录默认授权保存在 `<profile>/zeta-code/terminal.json`。默认授权不保存路径；当前 Session 的目录授权也不写入该文件或 User Config。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Add-dir、Providers 与 Language servers，其中 Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认授权保存在 `<profile>/zeta-code/terminal.json`。默认授权不保存路径；当前 Session 的目录授权也不写入该文件或 User Config。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
 
 从 repository root 启动当前 TUI：
 
@@ -146,6 +149,8 @@ slash snapshot，并且只取一次 connection event stream。
 
 ```text
 src/
+├── README.md                       # source ownership and dependency direction
+├── layout.md                       # current frame, height-entry and overlay geometry
 ├── lib.rs                         # narrow public startup API; delegates to app::run
 ├── keymap.rs                      # runtime owner and module entry
 ├── keymap/
@@ -159,6 +164,7 @@ src/
 │   ├── event.rs / command.rs      # completed facts / typed side-effect intents
 │   ├── dispatch.rs                # built-in product command coordination
 │   ├── bootstrap.rs / help.rs     # startup registry validation / help model
+│   ├── layout.rs / navigation.rs  # page geometry / global focus and root movement
 │   └── frame.rs / frame_tests.rs  # top-level frame assembly and behavior tests
 ├── app.rs                         # application module root and public crate surface
 ├── client/
@@ -166,26 +172,29 @@ src/
 │   ├── notification.rs            # typed ServerNotification → ClientEvent mapping
 │   └── notification_source.rs     # AppServerEvents wait lifecycle
 ├── components/
-│   ├── chat_widget.rs             # ChatHistory + ChatInputArea + Footer geometry
 │   ├── chat_history.rs / chat_history/ # transcript rendering and scroll
-│   ├── chat_input.rs / chat_input/ # draft, editor, attachments and Suggest
-│   ├── chat_input_area.rs / chat_input_area/ # input routing, Pane stack and shared geometry
+│   ├── chat_composer.rs / chat_composer/ # ChatInput, Pane and temporary interaction coordination
+│   ├── chat_input.rs / chat_input/ # draft, editor, attachments and paste bindings
+│   ├── suggest.rs / suggest/       # Slash, Mention and Skill overlay state and drawing
 │   ├── pane.rs / pane/             # PaneSpec, Pane, PaneId and readonly PaneView
 │   ├── list_selection.rs / list_selection/ # reusable list selection state and drawing
-│   ├── approval.rs / query.rs      # one-shot overlay interactions
-│   ├── queue.rs / steer.rs / plan_progress.rs # independently sized entries above ChatInput
+│   ├── approval.rs / query.rs      # one-shot temporary-layer interactions
+│   ├── quick_view.rs               # read-only overlay with shared geometry
+│   ├── steer.rs                    # pending Steer delivery identity; no separate surface
 │   ├── tab_list.rs                # reusable horizontal tab state, mouse/keyboard input, wrapping and view
-│   └── detail_list.rs / text_prompt.rs / key_capture.rs # concrete Pane bodies
+│   └── detail_list.rs / text_prompt.rs / key_capture.rs # QuickView detail and concrete Pane bodies
 ├── features/
 │   ├── config.rs                  # config feature module root
 │   ├── config/                    # server config requests, terminal settings resource and pane mapping
 │   ├── sessions/                  # active Session/Thread selection and lifecycle requests
 │   ├── thread/                    # canonical snapshot, requests, subscription and presentation
+│   ├── queue.rs / queue/          # stable Queue identity, inline rows and management Pane
+│   ├── goal.rs / plan.rs          # one-row Thread-derived content
 │   ├── skills/                    # skill request and selection presentation mapping
 │   ├── keymap.rs                  # keymap resource, profile polling and atomic edits
 │   ├── keymap/                    # searchable view, action menu and key/chord capture
 │   ├── status_line.rs             # status-line module root
-│   ├── status_line/               # item settings, profile resource, setup view and pure footer view
+│   ├── status_line/               # runtime facts, item settings, resource, setup and bounded view
 │   ├── file_search.rs              # file-mention search module root
 │   └── file_search/                # bounded async file-search runtime
 ├── mouse.rs                        # shared mouse-mode contract for pages and terminal lifecycle
@@ -231,7 +240,7 @@ src/
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 `ChatInput` 编辑、`ListSelection` 导航、滚动、I/O 或命令副作用 |
 | `features::keymap::KeymapResource` | private | 有界读取产品 profile JSON、检测外部修改、revision 校验、原子保存，并在完整编译后替换 User rules | 不解析按键语法、不执行 action、不读取远程目录文件 |
 | `features::keymap::pane` | private | 从 `AppKeymap` 快照和固定操作目录生成 `/shortcuts` 的 Pane 创建数据、动作菜单和按键录制状态 | 不执行快捷键、不建立第二套 Resolver |
-| `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 `ChatInputArea` 并复用 command dispatch | 不计算 terminal geometry |
+| `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 `ChatComposer` 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
 | `app::EventPump` | crate-private | 合并 terminal、client 与 termination 三种独立来源，通过 1024 项有界队列唤醒单写者 loop | Tick 可合并；control/input 不静默丢失；不读取终端或解释服务端通知 |
 | `terminal::TerminalEventSource` | crate-private | 轮询 Crossterm input，并产生 input、Tick 或 terminal failure | 不依赖 `app`、feature、client 或产品 ID |
@@ -241,12 +250,17 @@ src/
 | `app::request_completion` | private module | 校验 request scope、安装 subscription/snapshot 并把 typed completion 映射为 `AppEvent` | 不执行 renderer、不复制 reducer |
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 agent request、skills/Git changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
 | `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
-| `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
-| `ChatInputArea` | crate-private | 保存常驻 `ChatInput`、Pane 栈、Queue/Steer/Plan 占高条目和当前覆盖交互，统一路由 key/paste/mouse | 本身不是 Pane 或弹层，不保存 Plugin/Session 等产品状态 |
+| `features::approval::Approval` | crate-private | 保存一次 Approval 的请求身份、选择、提交和错误状态，并生成准确响应 | 不拥有 ChatInput 草稿、不决定 policy 或 owner |
+| `features::query::Query` | crate-private | 保存一次 Query 的问题、选择、自定义文本、提交和错误状态，并生成准确响应 | 不借用 ChatInput 编辑答案、不决定 owner |
+| `features::thread::TranscriptProjection` | crate-private | 用稳定 `TranscriptCellId` 维护有序 `TranscriptCell`，单条 entry 和 Exec 分组采用确定性身份 | 不成为持久化层、不把 TUI 身份写成 Core 领域 ID、不从显示文字推断产品事实 |
+| `features::thread::ExecCell` | crate-private | 按 `ToolCallId` 路由调用、流式输出和结果，执行稳定分组与有界保留 | 不把输出接到“当前命令”、不推测缺失的退出码或时长 |
+| `ChatComposer` | crate-private | 协调 `ChatInput`、`Suggest` 与 stacked Pane，统一路由它们的 key/paste/mouse | 不保存 Approval、Query、Turn、Plan 等产品事实，不执行外部副作用 |
+| `components::pane::PaneStack` + 内部 `Pane` | crate-private | 分配 `PaneId`、管理页面栈，并把四种封闭 `PaneBody` 的输入、高度、绘制、按键提示和命中统一映射为 `PaneOutcome` | 不拥有 feature action、RPC、Tab/Search 等正文专属能力 |
 | `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理 Tab/Shift-Tab 循环切换与鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
 | `components::list_selection::ListSelectionState` | crate-private | 可选 search/preview、Space search mode、过滤索引、候选高亮、选择与循环导航，并组合 `TabListState<ListSelectionGroup>` 切换候选集合 | 只承载真正的列表选择，不执行产品 action |
-| `components::list_selection::view` | crate-private | 绘制 title/search/items/preview/caption/footer，并把 tab 区域委托给 `components::tab_list::draw` | 只读 `ListSelectionState`，不解释产品 action |
-| `ChatInput` | private | blank/trim/submit、多行换行、paste routing、`/`/`$`/`@` 输入路由、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
+| `components::list_selection::view` | crate-private | 绘制 title/search/items/preview/caption/key hints，并把 tab 区域委托给 `components::tab_list::draw` | 只读 `ListSelectionState`，不解释产品 action |
+| `ChatInput` | private | 草稿、多行编辑、Standard/Vim 局部模式、paste routing、附件、输入历史、原子绑定和结构化提交组装 | 不保存候选目录、不识别 Slash 提交、不执行产品动作、不把 Vim 状态提升到 App |
+| `Suggest` | private | 保存由 `/`、`@` 或 `$` 触发的唯一当前候选、选择状态和补全结果 | 不持有草稿、不打开 Pane、不执行请求 |
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 `ChatInput`、不发 RPC、不持久化临时文件 |
 | `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | command-based response copy 与目录边界内的 Markdown export | 不拥有 transcript、不覆盖文件、不实现任意屏幕文本 selection |
@@ -258,18 +272,18 @@ src/
 | `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
 | `features::sessions::ActiveConversation` | crate-private | 当前 `session_id`、选中 Thread identity、Thread sequence 与 typed create/fork/resume/rewind/archive lifecycle | 不把 Session 变成独立事件聚合，不解析 `ChatInput` 文本，不拥有批准策略或 App Server |
-| `TextArea` | private | UTF-8 多行 buffer、byte-safe line/cursor movement、原子元素 insert/delete 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
+| `TextArea` | private | UTF-8 多行 buffer、byte-safe line/cursor movement、原子元素 insert/delete | 不保存 paste payload，不解释 Enter submission、slash command 或应用级导航；Vim 状态由相邻 `vim.rs` 拥有 |
 | `features::thread::{submit_prompt,steer_prompt}` | private | 从显式 `ThreadRequestScope` 构造 typed `StartTurn` 或 `SteerTurn` 请求并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
-| `Steer` | private | 按稳定本地身份保存尚未收到服务端交付确认的 Steer 文案，并提供独立高度和绘制数据 | 不发送请求、不复制 canonical Turn、不长期保存已交付消息 |
+| `Steer` | private | 按稳定本地身份跟踪尚未收到服务端确认的 Steer | 不创建独立布局区域；消息和交付结果由 Thread 流程维护 |
 | `Queue` | private | 保存本地未发送的完整 ChatInput 草稿、稳定身份和 queued/sending 状态；支持 `↑` 取回及 FIFO 自动发送 | 不提前创建 canonical Turn、不在请求拒绝时丢弃草稿、不跨 Thread 搬运条目 |
-| `App::approval_mode_status` | crate-private | 保存 TUI 下一次 Turn 要提交的模式与 active Turn 的冻结模式，供 footer 展示 | 不把模式写进 Session，不判断或绕过批准策略 |
+| `App::approval_mode_status` | crate-private | 保存 TUI 下一次 Turn 要提交的模式与 active Turn 的冻结模式，供 StatusLine 展示 | 不把模式写进 Session，不判断或绕过批准策略 |
 | `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最早 nonterminal Turn 作为执行队首并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
 | `app::apply_active_turn_snapshot` | test-visible | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
 | `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
 | `client::new_command_id` | private | process ID + wall-clock nanos 分配 `CommandId` | 一次逻辑 command 一个新 ID |
 | `app::frame::draw` | crate-private | frame 分区并协调 feature/component renderer | 不改变 App state |
-| `app::frame::input_overlay_index_at` | crate-private | 复用当前 Suggest/Approval/Query 的覆盖区域映射可见行点击 | 不执行命令、不改变选择状态 |
+| `app::frame::input_pointer_target_at` | crate-private | 复用当前 Pane、Suggest、Approval、Query 与 ChatInput 区域映射可见行点击 | 不执行命令、不改变选择状态 |
 | `components::chat_history::row::estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
 | `TerminalSession::open` | crate-private | 进入 raw/alternate/paste mode 并创建 backend | partial failure 必须 rollback；默认不捕获鼠标 |
 | `MouseMode` | crate-private | 页面声明 `TerminalSelection` 或 `UiClick`，供 App 与终端共享同一鼠标模式契约 | 不执行终端副作用、不保存页面身份 |
@@ -311,24 +325,29 @@ run(session, options)
    ├─ TerminalSession::draw → app::frame::draw
    └─ terminal event
       ├─ key → App::handle_key
-      │  ├─ local input → ChatInputArea
-      │  │  ├─ Query custom answer → ChatInput 的独立回答草稿
-      │  │  ├─ Approval / Query → 当前一次性覆盖交互
+      │  ├─ Approval → feature-owned selection / response
+      │  ├─ Query → feature-owned selection / custom editor / response
+      │  ├─ selected TranscriptCell → select / expand / QuickView
+      │  ├─ local input → ChatComposer
       │  │  ├─ top Pane → ListSelection / DetailList / TextPrompt / KeyCapture
-      │  │  └─ ChatInput → Suggest 或 TextArea
+      │  │  ├─ Suggest → 候选导航或补全
+      │  │  └─ ChatInput → TextArea 编辑或提交
       │  ├─ ReadClipboardImage → clipboard::read_image → AppEvent → App::update
       │  ├─ Quit → return
       │  ├─ SubmitTurn → RequestTask(submit_prompt + canonical read)
       │  ├─ SubmitQueuedTurn → 保留 Queue 条目 → RequestTask(submit_prompt + canonical read)
       │  ├─ SteerTurn → RequestTask(steer_prompt + canonical read)
       │  └─ Interrupt → RequestTask(interrupt_turn + canonical read)
-      ├─ left mouse down → ChatInputArea 共享几何命中
+      ├─ left mouse down → frame 共享几何命中
       │  ├─ Pane item hit → PaneId 对应的 `PaneActions`
-      │  ├─ input overlay hit → Suggest / Approval / Query 各自激活
-      │  └─ PlanProgress hit → 展开/折叠
+      │  ├─ Approval / Query hit → 对应 feature 激活
+      │  ├─ Transcript marker/details hit → 展开或 QuickView
+      │  ├─ Suggest hit → 当前候选激活
       ├─ mouse moved → same hit testing → existing selected item
-      └─ Paste → App::handle_paste → ChatInputArea
-         ├─ Query custom answer → answer draft
+      └─ Paste → App::handle_paste
+         ├─ Approval → consumed without changing hidden draft
+         ├─ Query → feature-owned custom answer
+         ├─ otherwise → ChatComposer
          ├─ ListSelection / TextPrompt Pane → page-local input
          └─ ChatInput
             ├─ image path → Attachments + TextArea atomic placeholder
@@ -370,7 +389,7 @@ data URL 不进入 command receipt、durable Thread history 或 snapshot。当�
 KiB upload chunk、connection-owned upload session 与共享缓冲上限共同构成 RPC 保护边界；TUI
 不能建立私有附件 authority，也不能绕过共享远程 URL 安全导入。
 
-`ChatInput` 只解析光标下 whitespace-delimited `@token`；`Mentions` 先从 `plugin/list` 的 effective package catalog 生成 Plugin 候选，event loop 再从 `App` 读取当前
+`Suggest::Mentions` 解析光标下 whitespace-delimited `@token`，先从 `plugin/list` 的 effective package catalog 生成 Plugin 候选，event loop 再从 `App` 读取当前
 query 并同步给 `FileSearchManager` 生成 File 候选。manager 为 active token 保持一个 `PathSearchHandle`，后台 walker 使用
 Git 作用域内的 ignore 语义、不跟随 symlink，并跳过 `.git`、`.zeta`、`node_modules` 与
 `target`。完整 `nucleo` engine 在独立 matcher worker 中增量 reparse query；event loop 每轮通过
@@ -428,7 +447,7 @@ registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 
 Completed Turn 没有 Agent message 会被显示为 error。已知 stable Turn error（包括 interaction
 deadline）由
-`present_turn_error` 映射成面向用户的恢复提示，错误详情只在 transcript 出现一次；footer 只说明
+`present_turn_error` 映射成面向用户的恢复提示，错误详情只在 transcript 出现一次；StatusLine 只说明
 可以 retry 或退出。`features/thread/presentation.rs` 按 canonical Item 顺序映射所有 user/agent、
 reasoning、plan 与 Tool row；它不从展示内容判断 Turn terminal state。
 
@@ -442,7 +461,7 @@ transient 永远不决定 completed/failed/interrupted。
 
 下列根级组合由 `keymap.rs` 的单一静态声明注册到共享 `zeta-keybinding` Resolver，并由同一声明生成 `/shortcuts` 的可配置项。运行时结构叫 `AppKeymap`：多段 Chord prefix 在 component 前匹配，普通单键仍先经过当前 interaction/component，只有未消费事件进入应用级 fallback。组合精确匹配修饰键，因此 `Ctrl-Shift-V` 不会触发只声明为 `Ctrl-V` 的动作。
 
-`AppKeymap` 支持一至四段 Chord，pending 后在 footer 显示已输入前缀和 Esc cancel；1 秒超时、上下文变化、Esc 或 blocker 会清空 pending，错误后续键清空 pending 后继续作为普通输入透传。当前内建表仍只声明单段组合。`Esc Esc` rewind 是独立的根级状态，不属于通用 Chord，因此 Esc 可无歧义地取消 pending。
+`AppKeymap` 支持一至四段 Chord，pending 后用一行 KeyHints 显示已输入前缀和 Esc cancel；1 秒超时、上下文变化、Esc 或 blocker 会清空 pending，错误后续键清空 pending 后继续作为普通输入透传。当前内建表仍只声明单段组合。`Esc Esc` rewind 是独立的根级状态，不属于通用 Chord，因此 Esc 可无歧义地取消 pending。
 
 用户配置不是 `GlobalKeymap`。它以 `BindingSource::User` 合并进同一个 `AppKeymap`；省略 `when` 只表示该规则在 Zeta Code 的所有上下文中适用。`/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列展示应用级绑定和少量固定操作键，内部 command ID 不进入界面；通用方向键由各 component 拥有，不作为快捷键条目；选择可配置 action 后可替换该 action 的 User 项、追加单键或两段 Chord、清除 User 项，但不会移除 default 键位或 `command: null` blocker。直接编辑 JSON 仍支持一至四段 Chord、平台覆盖、`when` 和 blocker。保存先检查界面打开时的资源 revision，再完整编译临时规则并原子替换文件与运行时映射；失败不改变当前映射。完整契约见 [`docs/keybindings.md`](../../docs/keybindings.md)。
 
@@ -479,7 +498,7 @@ Cancelling
 
 Running 状态下 Suggest 可见时，Tab 仍完成 Slash、Mention 或 Skill 候选；候选关闭后 Tab 不提交消息。当前 Turn 的 Skill 已在开始时冻结，因此包含 `$skill` 绑定的草稿不能通过 Enter Steer，界面会保留草稿并提示切到 Queue 模式排队。
 
-Queue 保存 `TextArea`、附件、长粘贴占位绑定和 exact `SkillRef`，不是 canonical `Created` Turn 的文字摘要。Follow-up messages 是 host-local 持久化设置，Queue/Steer 二选一且默认 Queue。Steer 模式下，Running 时输入框为空可按 Enter 把最新 Queue 消息立即发送；`↑` 取回采用移动语义，输入框恢复成功后 Queue 条目才消失，修改后按 Enter 继续遵循当前模式。自动发送期间条目显示为 sending，只有 `StartTurn` 已被服务端接受才移除，请求拒绝后恢复为 queued，不做自动重试。
+Queue 保存 `TextArea`、附件、长粘贴占位绑定和 exact `SkillRef`，并由稳定 `QueueId` 标识。普通 Up 只进入 ChatInput 历史，不再拦截 Queue；`/queue` Pane 使用 `r` 恢复所选项、`d` 删除、Alt-Up/Down 调序、Ctrl-Enter 立即发送，Enter 打开完整内容 QuickView。恢复不会覆盖非空草稿；自动发送期间条目显示为 sending，服务端接受后才移除，请求拒绝后恢复为 queued。
 
 `AppEvent::InterruptFailed` 把状态恢复到 Working，使用户可以再次请求 interrupt；ordinary
 client failure 通过 `AppEvent::FailureReported` 进入 Error 并允许输入新 prompt。
@@ -519,19 +538,20 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 ## 渲染
 
-当前 layout 是底部锚定的三段：
+Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → SubagentPane` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 固定一行，SubagentPane 最多四行。几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面只保留列表正文、ChatInput 和 StatusLine/KeyHints。
 
-1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive Welcome Banner，宽终端使用双栏，窄终端降级为单栏，并在 `Ready when you are` 下方显示 home-relative directory 路径；
-2. `ChatInputArea`：底部常驻三至八行 `ChatInput`，上方可同时叠加栈顶 Pane、Queue、Steer 和 PlanProgress；`ChatInput` 正文随逻辑行增长、最多显示六行，超出后跟随光标纵向滚动；
-3. 一行 footer 布局区域；普通状态由 `features::status_line` 从左到右显示已启用的权限、模型、Git 分支和 Git 变更，宽度不足时使用短值并从右侧省略。Chord 等操作提示由 `app/frame.rs` 临时覆盖普通 status line。
+QuickView 和 Suggest 覆盖现有内容；stacked Pane 仍从 ChatInput 向上占高。每个 Thread 的草稿、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
 
-所有输入相关内容都以 terminal 底部为锚点。Footer 和 `ChatInput` 始终保留；栈顶 Pane、Queue、Steer 和 PlanProgress 各自占高并从 `ChatInput` 向上叠加。Suggest、Approval 和 Query 同时最多显示一个，从 `ChatInput` 上沿向上覆盖，不改变布局高度。`ListSelection` Pane 包含标题、可换行 Tabs、搜索框、可滚动窗口和按键提示；关闭后原聊天草稿仍然存在。
-
-Transcript marker 使用 user/agent/reasoning/plan/tool/error 等 role-specific color，正文和 Tool
-detail 仍是 plain text。PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢复
-follow-latest。`estimated_wrapped_rows` 使用
+正文由有序 `TranscriptCell` 构成，live/final 生命周期不改变单元种类。单条正文单元从 canonical entry identity 确定 `TranscriptCellId`，ExecCell 从分组中的首个 `ToolCallId` 确定，后续分组增长不改身份。ExecCell 按 `ToolCallId`
+接收调用、输出和结果，命令输出按 byte、行数和单行长度有界保留；折叠态、展开态与 QuickView
+详情都读取同一单元数据。QuickView 的“完整”指 TUI 可获得的完整保留表示，上游省略标记不会被隐藏。Space 切换展开，Enter 打开可滚动详情，鼠标只响应明确的展开或详情标记。
+PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢复 follow-latest。`estimated_wrapped_rows` 使用
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
 不处理完整 grapheme/reflow/Markdown layout。
+
+当前协议没有提供 SessionThread 的标题、耗时、attention/summary，也没有为每次工具执行提供可持久恢复的最终时长与退出码。SubagentPane 因此只展示协议已有身份和状态；ExecCell 也不会从输出文字猜这些字段。
+
+v15 接受 `inline_visualization` 的终端 fallback，但当前 protocol 没有 visualization artifact、结构化 fallback 或安全引用。TUI 因此不会解析任意 HTML；上游契约到位后，它进入普通 TranscriptCell/Expansion/QuickView 路径，而不是新增一套覆盖层。
 
 ## 方向偏差检查
 

@@ -1,17 +1,18 @@
 use crate::components::chat_input::ChatSubmission;
 use crate::components::chat_input::SlashCommandInvocation;
-use crate::components::queue::QueueId;
 use crate::components::steer::SteerId;
 use crate::features::config::ConfigEdit;
 use crate::features::config::PermissionEdit;
 use crate::features::config::ProviderApiKeyEdit;
-use crate::features::interactions::InteractionResponse;
 use crate::features::keymap::KeymapEdit;
+use crate::features::queue::QueueId;
 use crate::features::status_line::StatusLineEdit;
+use crate::features::thread::ThreadRequestResponse;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_protocol::SkillId;
+use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 
 /// A typed side-effect intent emitted by the single-writer application state.
@@ -53,8 +54,15 @@ pub(crate) enum AppCommand {
     },
     ResumeSession {
         session_id: String,
+        preferred_thread_id: Option<ThreadId>,
     },
-    ResolveInteraction(InteractionResponse),
+    CreateSessionAndEnter {
+        submission: ChatSubmission,
+    },
+    SwitchThread {
+        thread_id: ThreadId,
+    },
+    ResolveThreadRequest(ThreadRequestResponse),
     SetMcpEnablement {
         server_id: String,
         enablement: McpServerEnablementDto,

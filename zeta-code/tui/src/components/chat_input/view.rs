@@ -23,6 +23,7 @@ pub(crate) fn draw(
     input: &str,
     cursor_width: usize,
     cursor_line: usize,
+    prompt: &str,
     cursor: ChatInputCursor,
 ) {
     let wrapped = wrap_input(input, cursor_line, cursor_width, area.width);
@@ -31,7 +32,7 @@ pub(crate) fn draw(
         .iter()
         .enumerate()
         .map(|(index, line)| {
-            let prompt = if index == 0 { "❯ " } else { "  " };
+            let prompt = if index == 0 { prompt } else { "  " };
             Line::from(vec![
                 Span::styled(
                     prompt,

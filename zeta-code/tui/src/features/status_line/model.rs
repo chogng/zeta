@@ -10,6 +10,39 @@ use super::StatusLineSettings;
 
 const SEPARATOR: &str = " · ";
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct StatusLineRuntime {
+    pub(crate) state: Option<&'static str>,
+    pub(crate) plan: Option<(usize, usize)>,
+    pub(crate) queue: usize,
+    pub(crate) agents: usize,
+    pub(crate) subagents: usize,
+    pub(crate) waiting: usize,
+}
+
+impl StatusLineRuntime {
+    pub(crate) fn text(self) -> String {
+        let mut segments = Vec::new();
+        if let Some(state) = self.state {
+            segments.push(state.to_owned());
+        }
+        if let Some((completed, total)) = self.plan {
+            segments.push(format!("plan {completed}/{total}"));
+        }
+        for (label, count) in [
+            ("queue", self.queue),
+            ("agents", self.agents),
+            ("subagents", self.subagents),
+            ("waiting", self.waiting),
+        ] {
+            if count > 0 {
+                segments.push(format!("{label} {count}"));
+            }
+        }
+        segments.join(SEPARATOR)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct ApprovalModeDisplay {
     pub(super) icon: &'static str,
@@ -46,7 +79,7 @@ struct DisplayValue {
     compact: String,
 }
 
-/// Pure display model for the configured context rendered inside the footer.
+/// Pure display model for the configured context rendered inside StatusLine.
 ///
 /// Data acquisition remains with the application and the typed interfaces that own each value.
 /// This model only keeps display variants and selects the richest configured representation that

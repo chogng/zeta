@@ -4,21 +4,17 @@ use super::editor::TextArea;
 use super::editor::TextAreaOutcome;
 use super::editor::TextElementId;
 use super::pending_pastes::PendingPastes;
-use super::suggest::MentionPluginItem;
-use super::suggest::MentionPopupView;
-use super::suggest::Mentions;
-use super::suggest::SkillSelector;
-use super::suggest::SkillSelectorItem;
-use super::suggest::SkillSelectorView;
+use super::vim::ChatInputMode;
+use super::vim::VimOutcome;
+use super::vim::VimState;
 use super::wrap::wrap_input;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use zeta_file_search::PathSearchSnapshot;
+use std::ops::Range;
 use zeta_protocol::SkillRef;
 use zeta_slash_commands::{
-    SlashCommandCatalog, SlashCommandDefinition, SlashCommandInvocation as ParsedSlashCommand,
-    SlashCommandOrigin, SlashCommandsState, SlashCommandsView,
+    SlashCommandDefinition, SlashCommandInvocation as ParsedSlashCommand, SlashCommandOrigin,
 };
 
 const MAX_COMPOSER_HISTORY: usize = 100;
@@ -27,8 +23,6 @@ const MAX_COMPOSER_HISTORY: usize = 100;
 pub(crate) enum ChatInputOutcome {
     Command(SlashCommandInvocation),
     Consumed,
-    QueryAnswerCancelled,
-    QueryAnswerSubmitted(String),
     Submit(ChatSubmission),
     Unhandled,
 }
@@ -67,15 +61,12 @@ impl QueuedChatInput {
     pub(crate) fn submission(&self) -> &ChatSubmission {
         &self.submission
     }
-
-    pub(crate) fn into_submission(self) -> ChatSubmission {
-        self.submission
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 struct ChatInputDraft {
     textarea: TextArea,
+    vim: VimState,
     slash_command_element: Option<TextElementId>,
     skill_bindings: Vec<(TextElementId, SkillRef)>,
     pending_pastes: PendingPastes,
@@ -117,17 +108,15 @@ impl SlashCommandInvocation {
 
 /// Owns chat-input semantics around an editing-oriented [`TextArea`].
 ///
-/// Slash parsing belongs to `zeta-slash-commands`; this component applies its completion plans, owns popup
-/// key routing, and turns parsed submissions into command invocations. The text area remains
-/// responsible only for editing state and keymap behavior.
+/// Slash parsing and candidate interaction belong to [`Suggest`]; this component owns the editable
+/// draft and turns submissions into typed input.
 #[derive(Debug)]
 pub(crate) struct ChatInput {
     textarea: TextArea,
-    query_answer: Option<TextArea>,
-    slash_commands: SlashCommandsState,
+    input_mode: ChatInputMode,
+    vim: VimState,
     slash_command_element: Option<TextElementId>,
-    mentions: Mentions,
-    skills: SkillSelector,
+    skill_bindings: Vec<(TextElementId, SkillRef)>,
     pending_pastes: PendingPastes,
     attachments: Attachments,
     history: Vec<String>,
@@ -136,19 +125,13 @@ pub(crate) struct ChatInput {
 }
 
 impl ChatInput {
-    #[cfg(test)]
     pub(crate) fn new() -> Self {
-        Self::with_slash_commands(super::default_slash_command_catalog())
-    }
-
-    pub(crate) fn with_slash_commands(slash_commands: SlashCommandCatalog) -> Self {
         Self {
             textarea: TextArea::new(),
-            query_answer: None,
-            slash_commands: SlashCommandsState::new(slash_commands),
+            input_mode: ChatInputMode::Standard,
+            vim: VimState::default(),
             slash_command_element: None,
-            mentions: Mentions::default(),
-            skills: SkillSelector::default(),
+            skill_bindings: Vec::new(),
             pending_pastes: PendingPastes::default(),
             attachments: Attachments::default(),
             history: Vec::new(),
@@ -157,108 +140,17 @@ impl ChatInput {
         }
     }
 
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
-        if self.query_answer.is_some() {
-            return self.handle_query_answer_key(key);
-        }
-        if self.skills.view().is_some() {
-            match key.code {
-                KeyCode::Esc => {
-                    self.skills.dismiss();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Up => {
-                    self.skills.select_previous();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Down => {
-                    self.skills.select_next();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Tab => {
-                    self.skills.complete_selected(&mut self.textarea);
-                    self.sync_after_text_change();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Enter
-                    if key.modifiers.is_empty()
-                        && self.skills.complete_selected(&mut self.textarea) =>
-                {
-                    self.sync_after_text_change();
-                    return ChatInputOutcome::Consumed;
-                }
-                _ => {}
-            }
-        }
-
-        if self.mentions.view().is_some() {
-            match key.code {
-                KeyCode::Esc => {
-                    self.mentions.dismiss();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Up => {
-                    self.mentions.select_previous();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Down => {
-                    self.mentions.select_next();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Tab => {
-                    self.mentions.complete_selected(&mut self.textarea);
-                    self.sync_after_text_change();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Enter
-                    if key.modifiers.is_empty()
-                        && self.mentions.complete_selected(&mut self.textarea) =>
-                {
-                    self.sync_after_text_change();
-                    return ChatInputOutcome::Consumed;
-                }
-                _ => {}
-            }
-        }
-
-        if self.slash_commands.view().is_some() {
-            match key.code {
-                KeyCode::Esc => {
-                    self.slash_commands.dismiss();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Up => {
-                    self.slash_commands.select_previous();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Down => {
-                    self.slash_commands.select_next();
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Tab => {
-                    if let Some(command) = self.slash_commands.selected_command().cloned() {
-                        self.complete_slash_command(&command);
-                    }
-                    return ChatInputOutcome::Consumed;
-                }
-                KeyCode::Enter if key.modifiers.is_empty() => {
-                    if let Some(command) = self.slash_commands.selected_command().cloned() {
-                        self.complete_slash_command(&command);
-                        return self.submit_current();
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if is_newline_key(key) {
+    pub(in crate::components) fn handle_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
+        if self.input_mode == ChatInputMode::Vim
+            && self.vim.handle_key(&mut self.textarea, key) == VimOutcome::Consumed
+        {
             self.reset_history_navigation();
-            self.textarea.insert_newline();
-            self.sync_after_text_change();
             return ChatInputOutcome::Consumed;
         }
-        if key.code == KeyCode::Enter && key.modifiers.is_empty() {
-            return self.submit_current();
+        if is_newline_key(key) && self.accepts_submission_key() {
+            self.reset_history_navigation();
+            self.textarea.insert_newline();
+            return ChatInputOutcome::Consumed;
         }
         match key.code {
             KeyCode::Up if !self.textarea.can_move_up() => return self.previous_history(),
@@ -269,7 +161,6 @@ impl ChatInput {
         match self.textarea.handle_key(key) {
             TextAreaOutcome::Consumed => {
                 self.reset_history_navigation();
-                self.sync_after_text_change();
                 ChatInputOutcome::Consumed
             }
             TextAreaOutcome::Unhandled => ChatInputOutcome::Unhandled,
@@ -280,14 +171,9 @@ impl ChatInput {
     pub(crate) fn insert_text(&mut self, text: &str) {
         self.reset_history_navigation();
         self.textarea.insert_text(text);
-        self.sync_after_text_change();
     }
 
-    pub(crate) fn handle_paste(&mut self, pasted: String) -> Result<(), String> {
-        if let Some(query_answer) = self.query_answer.as_mut() {
-            query_answer.insert_text(&pasted);
-            return Ok(());
-        }
+    pub(in crate::components) fn handle_paste(&mut self, pasted: String) -> Result<(), String> {
         self.reset_history_navigation();
         match self
             .attachments
@@ -299,39 +185,56 @@ impl ChatInput {
             }
             ImagePasteOutcome::Rejected(error) => return Err(error),
         }
-        self.sync_after_text_change();
         Ok(())
     }
 
-    pub(crate) fn attach_image_bytes(&mut self, bytes: Vec<u8>) -> Result<(), String> {
-        if self.query_answer.is_some() {
-            return Err("images are unavailable while answering a question".into());
-        }
+    pub(in crate::components) fn attach_image_bytes(
+        &mut self,
+        bytes: Vec<u8>,
+    ) -> Result<(), String> {
         self.reset_history_navigation();
         self.attachments
             .attach_image_bytes(&mut self.textarea, bytes)?;
-        self.sync_after_text_change();
         Ok(())
     }
 
     pub(crate) fn text(&self) -> &str {
-        self.active_textarea().text()
+        self.textarea.text()
+    }
+
+    pub(crate) fn set_input_mode(&mut self, input_mode: ChatInputMode) {
+        if self.input_mode == input_mode {
+            return;
+        }
+        self.input_mode = input_mode;
+        self.vim.reset_draft();
+    }
+
+    pub(in crate::components) fn accepts_submission_key(&self) -> bool {
+        self.input_mode == ChatInputMode::Standard || self.vim.accepts_submission_key()
+    }
+
+    pub(crate) fn prompt(&self) -> &'static str {
+        match self.input_mode {
+            ChatInputMode::Standard => "❯ ",
+            ChatInputMode::Vim => self.vim.prompt(),
+        }
     }
 
     pub(crate) fn cursor_display_width(&self) -> usize {
-        self.active_textarea().cursor_display_width()
+        self.textarea.cursor_display_width()
     }
 
     pub(crate) fn cursor_line(&self) -> usize {
-        self.active_textarea().cursor_line()
+        self.textarea.cursor_line()
     }
 
     pub(crate) fn desired_height(&self, available_width: u16) -> u16 {
         const MAX_VISIBLE_LINES: usize = 6;
         let rows = wrap_input(
-            self.active_textarea().text(),
-            self.active_textarea().cursor_line(),
-            self.active_textarea().cursor_display_width(),
+            self.textarea.text(),
+            self.textarea.cursor_line(),
+            self.textarea.cursor_display_width(),
             available_width,
         )
         .lines
@@ -340,126 +243,14 @@ impl ChatInput {
         u16::try_from(rows.saturating_add(2)).unwrap_or(u16::MAX)
     }
 
-    pub(crate) fn slash_popup(&self) -> Option<SlashCommandsView<'_>> {
-        self.slash_commands.view()
-    }
-
-    pub(crate) fn mention_popup(&self) -> Option<MentionPopupView<'_>> {
-        self.mentions.view()
-    }
-
-    pub(crate) fn skill_popup(&self) -> Option<SkillSelectorView<'_>> {
-        self.skills.view()
-    }
-
-    pub(crate) fn mention_query(&self) -> Option<&str> {
-        self.mentions.query()
-    }
-
-    pub(crate) fn apply_file_search_snapshot(&mut self, snapshot: PathSearchSnapshot) {
-        self.mentions.apply_search_snapshot(snapshot);
-    }
-
-    pub(crate) fn activate_slash_command(&mut self, index: usize) -> Option<ChatInputOutcome> {
-        let command = self.slash_commands.command_at(index)?.clone();
-        self.complete_slash_command(&command);
-        Some(self.submit_current())
-    }
-
-    pub(crate) fn select_slash_command(&mut self, index: usize) -> bool {
-        self.slash_commands.select(index)
-    }
-
-    pub(crate) fn activate_mention(&mut self, index: usize) -> bool {
-        let completed = self.mentions.complete_at(&mut self.textarea, index);
-        if completed {
-            self.sync_after_text_change();
-        }
-        completed
-    }
-
-    pub(crate) fn select_mention(&mut self, index: usize) -> bool {
-        self.mentions.select(index)
-    }
-
-    pub(crate) fn activate_skill(&mut self, index: usize) -> bool {
-        let completed = self.skills.complete_at(&mut self.textarea, index);
-        if completed {
-            self.sync_after_text_change();
-        }
-        completed
-    }
-
-    pub(crate) fn select_skill(&mut self, index: usize) -> bool {
-        self.skills.select(index)
-    }
-
-    pub(crate) fn replace_chat_input_catalog(
+    pub(in crate::components) fn submit_current(
         &mut self,
-        slash_commands: SlashCommandCatalog,
-        skills: Vec<SkillSelectorItem>,
-        plugins: Vec<MentionPluginItem>,
-    ) {
-        self.slash_commands.set_catalog(slash_commands);
-        self.skills.replace_catalog(skills);
-        self.mentions.replace_plugin_catalog(plugins);
-        self.sync_after_text_change();
-    }
-
-    pub(crate) fn begin_query_answer(&mut self) {
-        self.query_answer = Some(TextArea::new());
-    }
-
-    pub(crate) fn query_answer_active(&self) -> bool {
-        self.query_answer.is_some()
-    }
-
-    fn active_textarea(&self) -> &TextArea {
-        self.query_answer.as_ref().unwrap_or(&self.textarea)
-    }
-
-    fn handle_query_answer_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
-        if key.code == KeyCode::Esc && key.modifiers.is_empty() {
-            self.query_answer = None;
-            return ChatInputOutcome::QueryAnswerCancelled;
-        }
-        if is_newline_key(key) {
-            if let Some(query_answer) = self.query_answer.as_mut() {
-                query_answer.insert_newline();
-            }
-            return ChatInputOutcome::Consumed;
-        }
-        if key.code == KeyCode::Enter && key.modifiers.is_empty() {
-            let answer = self
-                .query_answer
-                .as_ref()
-                .map(TextArea::text)
-                .unwrap_or_default()
-                .trim()
-                .to_owned();
-            if answer.is_empty() {
-                return ChatInputOutcome::Consumed;
-            }
-            self.query_answer = None;
-            return ChatInputOutcome::QueryAnswerSubmitted(answer);
-        }
-        match self
-            .query_answer
-            .as_mut()
-            .expect("query answer mode must own a text area")
-            .handle_key(key)
-        {
-            TextAreaOutcome::Consumed => ChatInputOutcome::Consumed,
-            TextAreaOutcome::Unhandled => ChatInputOutcome::Unhandled,
-        }
-    }
-
-    pub(crate) fn submit_current(&mut self) -> ChatInputOutcome {
+        command: Option<ParsedSlashCommand>,
+    ) -> ChatInputOutcome {
         let Some(submission) = self.prepare_submission() else {
             return ChatInputOutcome::Consumed;
         };
         self.record_submission_history(&submission);
-        let command = self.slash_commands.invocation(&submission.display_text);
         self.clear();
         match command {
             Some(command) => match into_command_invocation(submission, command) {
@@ -470,11 +261,14 @@ impl ChatInput {
         }
     }
 
-    pub(crate) fn queue_current(&mut self) -> ChatInputQueueOutcome {
+    pub(crate) fn queue_current(
+        &mut self,
+        command: Option<ParsedSlashCommand>,
+    ) -> ChatInputQueueOutcome {
         let Some(submission) = self.prepare_submission() else {
             return ChatInputQueueOutcome::Consumed;
         };
-        if let Some(command) = self.slash_commands.invocation(&submission.display_text) {
+        if let Some(command) = command {
             match into_command_invocation(submission.clone(), command) {
                 Ok(invocation) if invocation.origin == SlashCommandOrigin::Local => {
                     self.record_submission_history(&submission);
@@ -502,6 +296,11 @@ impl ChatInput {
         self.prepare_submission().is_none()
     }
 
+    pub(in crate::components) fn submission_display_text(&self) -> Option<String> {
+        self.prepare_submission()
+            .map(|submission| submission.display_text)
+    }
+
     pub(crate) fn restore_queued(
         &mut self,
         queued: QueuedChatInput,
@@ -512,11 +311,11 @@ impl ChatInput {
         let QueuedChatInput { draft, .. } = queued;
         self.clear();
         self.textarea = draft.textarea;
+        self.vim = draft.vim;
         self.slash_command_element = draft.slash_command_element;
-        self.skills.restore_bindings(draft.skill_bindings);
+        self.skill_bindings = draft.skill_bindings;
         self.pending_pastes = draft.pending_pastes;
         self.attachments = draft.attachments;
-        self.sync_after_text_change();
         Ok(())
     }
 
@@ -549,7 +348,11 @@ impl ChatInput {
                 });
             } else {
                 text.push_str(&raw_text[range.clone()]);
-                if let Some(skill) = self.skills.skill_for(element_id)
+                if let Some(skill) = self
+                    .skill_bindings
+                    .iter()
+                    .find(|(candidate, _)| *candidate == element_id)
+                    .map(|(_, skill)| skill)
                     && !selected_skills.contains(skill)
                 {
                     selected_skills.push(skill.clone());
@@ -575,13 +378,12 @@ impl ChatInput {
     fn take_draft(&mut self) -> ChatInputDraft {
         let draft = ChatInputDraft {
             textarea: std::mem::replace(&mut self.textarea, TextArea::new()),
+            vim: std::mem::take(&mut self.vim),
             slash_command_element: self.slash_command_element.take(),
-            skill_bindings: self.skills.take_bindings(),
+            skill_bindings: std::mem::take(&mut self.skill_bindings),
             pending_pastes: std::mem::take(&mut self.pending_pastes),
             attachments: std::mem::take(&mut self.attachments),
         };
-        self.slash_commands.clear();
-        self.mentions.clear();
         self.reset_history_navigation();
         draft
     }
@@ -598,44 +400,23 @@ impl ChatInput {
 
     fn clear(&mut self) {
         self.textarea.clear();
-        self.slash_commands.clear();
+        self.vim.reset_draft();
         self.slash_command_element = None;
-        self.mentions.clear();
-        self.skills.clear();
+        self.skill_bindings.clear();
         self.pending_pastes.clear();
         self.attachments.clear();
         self.reset_history_navigation();
     }
 
-    fn complete_slash_command(&mut self, command: &SlashCommandDefinition) -> bool {
-        let Some(completion) = self.slash_commands.completion(command) else {
-            return false;
-        };
-        self.textarea
-            .replace_range(completion.range, &completion.replacement);
-        self.sync_after_text_change();
-        true
-    }
-
-    fn sync_after_text_change(&mut self) {
+    pub(in crate::components) fn reconcile(&mut self, desired_command: Option<Range<usize>>) {
         self.pending_pastes.retain_present_in(&self.textarea);
         self.attachments.reconcile(&mut self.textarea);
-        self.sync_slash_command_element();
-        self.mentions.sync_textarea(&self.textarea);
-        self.skills.sync_textarea(&self.textarea);
-        if self.slash_command_element.is_some() {
-            self.slash_commands.clear();
-        } else {
-            self.slash_commands
-                .sync_input(self.textarea.text(), self.textarea.cursor());
-        }
+        self.skill_bindings
+            .retain(|(element_id, _)| self.textarea.has_element(*element_id));
+        self.sync_slash_command_element(desired_command);
     }
 
-    fn sync_slash_command_element(&mut self) {
-        let desired = self
-            .slash_commands
-            .command_element_range(self.textarea.text(), self.textarea.cursor());
-
+    fn sync_slash_command_element(&mut self, desired: Option<Range<usize>>) {
         if let Some(element_id) = self.slash_command_element {
             let current = self.textarea.element_range(element_id);
             if current.is_none() || current != desired {
@@ -677,20 +458,17 @@ impl ChatInput {
             self.history_index = None;
             self.textarea.replace_text(&self.history_draft);
             self.history_draft.clear();
-            self.sync_after_text_change();
         }
         ChatInputOutcome::Consumed
     }
 
     fn replace_with_history_entry(&mut self, index: usize) {
         self.textarea.replace_text(&self.history[index]);
+        self.vim.reset_draft();
         self.pending_pastes.clear();
         self.attachments.clear();
         self.slash_command_element = None;
-        self.mentions.clear();
-        self.skills.clear();
-        self.slash_commands.clear();
-        self.sync_after_text_change();
+        self.skill_bindings.clear();
     }
 
     fn record_history(&mut self, entry: String) {
@@ -705,6 +483,46 @@ impl ChatInput {
     fn reset_history_navigation(&mut self) {
         self.history_index = None;
         self.history_draft.clear();
+    }
+
+    pub(in crate::components) fn apply_text_completion(
+        &mut self,
+        range: Range<usize>,
+        replacement: &str,
+    ) {
+        self.textarea.replace_range(range, replacement);
+    }
+
+    pub(in crate::components) fn apply_element_completion(
+        &mut self,
+        range: Range<usize>,
+        value: &str,
+        skill: Option<SkillRef>,
+    ) {
+        self.textarea.replace_range(range, "");
+        let element_id = self.textarea.insert_element(value);
+        if let Some(skill) = skill {
+            self.skill_bindings.push((element_id, skill));
+        }
+        if !self.textarea.text()[self.textarea.cursor()..]
+            .chars()
+            .next()
+            .is_some_and(char::is_whitespace)
+        {
+            self.textarea.insert_text(" ");
+        }
+    }
+
+    pub(in crate::components) fn draft_text(&self) -> &str {
+        self.textarea.text()
+    }
+
+    pub(in crate::components) fn draft_cursor(&self) -> usize {
+        self.textarea.cursor()
+    }
+
+    pub(in crate::components) fn slash_command_active(&self) -> bool {
+        self.slash_command_element.is_some()
     }
 }
 
@@ -749,7 +567,3 @@ fn is_newline_key(key: KeyEvent) -> bool {
             .intersects(KeyModifiers::SHIFT | KeyModifiers::ALT))
         || matches!(key.code, KeyCode::Char('j')) && key.modifiers == KeyModifiers::CONTROL
 }
-
-#[cfg(test)]
-#[path = "state_tests.rs"]
-mod tests;

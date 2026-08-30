@@ -26,9 +26,13 @@ fn builtins_follow_enum_presentation_order() {
             ("theme", TuiSlashCommandAction::Theme),
             ("new", TuiSlashCommandAction::New),
             ("quit", TuiSlashCommandAction::Quit),
+            ("sessions", TuiSlashCommandAction::Sessions),
+            ("agents", TuiSlashCommandAction::Agents),
+            ("subagents", TuiSlashCommandAction::Subagents),
+            ("queue", TuiSlashCommandAction::Queue),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 20);
+    assert_eq!(built_in_slash_command_definitions().len(), 24);
 }
 
 #[test]

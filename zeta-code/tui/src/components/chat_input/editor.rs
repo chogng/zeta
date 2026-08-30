@@ -25,8 +25,8 @@ struct TextElement {
 
 /// Owns the editable text buffer, cursor, and editor keymap boundary.
 ///
-/// Vim modes, motions, and operators belong in this component when that capability is added.
-/// Chat-level submission stays in the parent chat_input; slash parsing stays in the shared core.
+/// Editing modes, motions, and operators stay beside this buffer. Chat-level submission stays in
+/// the parent chat_input; slash parsing stays in the shared core.
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct TextArea {
     text: String,
@@ -268,7 +268,7 @@ impl TextArea {
         self.cursor = previous;
     }
 
-    fn delete(&mut self) {
+    pub(super) fn delete(&mut self) {
         if let Some(range) = self
             .elements
             .iter()
@@ -285,7 +285,7 @@ impl TextArea {
         self.remove_range(self.cursor..next);
     }
 
-    fn move_left(&mut self) {
+    pub(super) fn move_left(&mut self) {
         if let Some(element) = self
             .elements
             .iter()
@@ -300,7 +300,7 @@ impl TextArea {
         }
     }
 
-    fn move_right(&mut self) {
+    pub(super) fn move_right(&mut self) {
         if let Some(element) = self
             .elements
             .iter()
@@ -315,7 +315,10 @@ impl TextArea {
         }
     }
 
-    fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
+        if !self.can_move_up() {
+            return;
+        }
         let target_width = self.cursor_display_width();
         let current_start = self.current_line_start();
         let previous_end = current_start.saturating_sub(1);
@@ -327,7 +330,10 @@ impl TextArea {
                 + previous_start;
     }
 
-    fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
+        if !self.can_move_down() {
+            return;
+        }
         let target_width = self.cursor_display_width();
         let next_start = self.current_line_end().saturating_add(1);
         let next_end = self.text[next_start..]
@@ -337,13 +343,13 @@ impl TextArea {
             boundary_for_display_width(&self.text[next_start..next_end], target_width) + next_start;
     }
 
-    fn current_line_start(&self) -> usize {
+    pub(super) fn current_line_start(&self) -> usize {
         self.text[..self.cursor]
             .rfind('\n')
             .map_or(0, |index| index + 1)
     }
 
-    fn current_line_end(&self) -> usize {
+    pub(super) fn current_line_end(&self) -> usize {
         self.text[self.cursor..]
             .find('\n')
             .map_or(self.text.len(), |offset| self.cursor + offset)
@@ -369,10 +375,32 @@ impl TextArea {
                 element.range.end -= removed_len;
                 true
             } else {
-                debug_assert_eq!(element.range, removed);
                 false
             }
         });
+    }
+
+    pub(super) fn set_cursor(&mut self, cursor: usize) {
+        assert!(cursor <= self.text.len() && self.text.is_char_boundary(cursor));
+        self.cursor = cursor;
+    }
+
+    pub(super) fn remove_editable_range(&mut self, range: Range<usize>) -> String {
+        let mut start = range.start.min(self.text.len());
+        let mut end = range.end.min(self.text.len());
+        for element in &self.elements {
+            if element.range.start < end && element.range.end > start {
+                start = start.min(element.range.start);
+                end = end.max(element.range.end);
+            }
+        }
+        if start >= end {
+            return String::new();
+        }
+        let removed = self.text[start..end].to_owned();
+        self.remove_range(start..end);
+        self.cursor = start;
+        removed
     }
 
     fn previous_boundary(&self) -> Option<usize> {

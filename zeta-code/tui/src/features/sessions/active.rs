@@ -118,6 +118,50 @@ impl ActiveConversation {
         self.thread_sequence = sequence;
     }
 
+    pub(crate) fn select_thread<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+        thread_id: ThreadId,
+    ) -> Result<ConversationChange, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        let session = client
+            .read_session(SessionReadParams {
+                session_id: self.session.session_id.clone(),
+            })?
+            .session;
+        let thread = session
+            .threads
+            .iter()
+            .find(|thread| thread.thread_id == thread_id && thread.status == ThreadStatus::Active)
+            .ok_or_else(|| {
+                SessionsError(format!(
+                    "Thread {thread_id} is not active in Session {}",
+                    session.session_id
+                ))
+            })?;
+        if thread.forked_from_id.is_some() {
+            return Err(SessionsError(format!(
+                "Thread {thread_id} is a fork, not an active Subagent"
+            )));
+        }
+        let snapshot = client
+            .read_session_thread(SessionThreadReadParams {
+                session_id: session.session_id.clone(),
+                thread_id: thread_id.clone(),
+                history: None,
+            })?
+            .thread;
+        self.session = session;
+        self.thread_id = thread_id;
+        self.thread_sequence = snapshot.sequence;
+        Ok(ConversationChange {
+            notice: format!("Switched to Thread {}.", self.thread_id),
+            transcript: ConversationTranscript::Replace,
+        })
+    }
+
     pub(crate) fn archive_session<T>(
         &mut self,
         client: &mut AppServerClient<T>,
@@ -251,6 +295,7 @@ impl ActiveConversation {
         &mut self,
         client: &mut AppServerClient<T>,
         arguments: &str,
+        preferred_thread_id: Option<&ThreadId>,
     ) -> Result<ResumeOutcome, SessionsError>
     where
         T: JsonRpcTransport,
@@ -280,7 +325,15 @@ impl ActiveConversation {
         let session = client
             .read_session(SessionReadParams { session_id })?
             .session;
-        let thread_id = current_conversation_thread(&session)
+        let thread_id = preferred_thread_id
+            .and_then(|preferred| {
+                session.threads.iter().find(|thread| {
+                    &thread.thread_id == preferred
+                        && thread.status == ThreadStatus::Active
+                        && is_conversation_thread(thread)
+                })
+            })
+            .or_else(|| current_conversation_thread(&session))
             .or_else(|| {
                 session.threads.iter().rev().find(|thread| {
                     thread.status == ThreadStatus::Active && is_conversation_thread(thread)

@@ -38,8 +38,6 @@ fn role_label(role: MessageRole) -> &'static str {
         MessageRole::Agent => "Zeta",
         MessageRole::Reasoning => "Reasoning",
         MessageRole::Plan => "Plan",
-        MessageRole::Tool => "Tool",
-        MessageRole::ToolError => "Tool error",
         MessageRole::Command => "Command",
         MessageRole::Notice => "Notice",
         MessageRole::Error => "Error",

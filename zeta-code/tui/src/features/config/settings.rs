@@ -1,3 +1,4 @@
+use crate::components::chat_input::ChatInputMode;
 use serde::Deserialize;
 use serde::Serialize;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
@@ -15,6 +16,7 @@ pub(crate) enum FollowUpMode {
 pub(crate) struct TerminalSettings {
     mouse_interactions: bool,
     follow_up_mode: FollowUpMode,
+    input_mode: ChatInputMode,
     dir_permissions: DirPermissionDefaults,
 }
 
@@ -33,6 +35,14 @@ impl TerminalSettings {
 
     pub(crate) fn set_follow_up_mode(&mut self, mode: FollowUpMode) {
         self.follow_up_mode = mode;
+    }
+
+    pub(crate) const fn input_mode(self) -> ChatInputMode {
+        self.input_mode
+    }
+
+    pub(crate) fn set_input_mode(&mut self, mode: ChatInputMode) {
+        self.input_mode = mode;
     }
 
     pub(crate) fn dir_permissions(self) -> Vec<PermissionDto> {
@@ -59,6 +69,7 @@ impl Default for TerminalSettings {
         Self {
             mouse_interactions: true,
             follow_up_mode: FollowUpMode::Queue,
+            input_mode: ChatInputMode::Standard,
             dir_permissions: DirPermissionDefaults::default(),
         }
     }

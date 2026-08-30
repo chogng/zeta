@@ -4,8 +4,6 @@ pub(crate) enum MessageRole {
     Agent,
     Reasoning,
     Plan,
-    Tool,
-    ToolError,
     Command,
     Notice,
     Error,
@@ -15,45 +13,72 @@ pub(crate) enum MessageRole {
 pub(crate) enum CommandStatus {
     Running,
     Succeeded,
+    Failed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Message {
-    pub(crate) source_id: Option<String>,
+    pub(crate) cell_id: Option<String>,
     pub(crate) role: MessageRole,
     pub(crate) text: String,
     pub(crate) detail: Option<String>,
     pub(crate) command_status: Option<CommandStatus>,
+    pub(crate) can_expand: bool,
+    pub(crate) expanded: bool,
+    pub(crate) has_details: bool,
+    pub(crate) selected: bool,
 }
 
 impl Message {
     pub(crate) fn plain(role: MessageRole, text: String) -> Self {
         Self {
-            source_id: None,
+            cell_id: None,
             role,
             text,
             detail: None,
             command_status: None,
+            can_expand: false,
+            expanded: false,
+            has_details: false,
+            selected: false,
         }
     }
 
     pub(crate) fn command(command: String, status: CommandStatus, detail: Option<String>) -> Self {
         Self {
-            source_id: None,
+            cell_id: None,
             role: MessageRole::Command,
             text: command,
             detail,
             command_status: Some(status),
+            can_expand: false,
+            expanded: false,
+            has_details: false,
+            selected: false,
         }
     }
 
-    pub(crate) fn with_source_id(mut self, source_id: impl Into<String>) -> Self {
-        self.source_id = Some(source_id.into());
+    pub(crate) fn with_cell_id(mut self, cell_id: impl Into<String>) -> Self {
+        self.cell_id = Some(cell_id.into());
         self
     }
 
     pub(crate) fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
+        self
+    }
+
+    pub(crate) fn with_cell_actions(
+        mut self,
+        can_expand: bool,
+        expanded: bool,
+        has_details: bool,
+        selected: bool,
+    ) -> Self {
+        self.can_expand = can_expand;
+        self.expanded = expanded;
+        self.has_details = has_details;
+        self.selected = selected;
         self
     }
 }

@@ -1,14 +1,17 @@
 use crate::app::App;
-use crate::app::Status;
+use crate::components::chat_composer;
+use crate::components::chat_composer::ChatComposerAreas;
+use crate::components::chat_composer::ChatComposerPointerTarget;
 use crate::components::chat_history;
 use crate::components::chat_input;
-use crate::components::chat_input_area;
-use crate::components::chat_input_area::ChatInputAreaAreas;
-use crate::components::chat_input_area::ChatInputAreaPointerTarget;
-use crate::components::chat_widget;
-use crate::components::chat_widget::ChatWidgetAreas;
-use crate::features::config::FollowUpMode;
+use crate::components::key_hint_bar;
+use crate::features::approval;
+use crate::features::query;
+use crate::features::queue;
+use crate::features::sessions;
 use crate::features::status_line;
+use crate::features::thread::goal;
+use crate::features::thread::plan;
 use crate::ui::background;
 use crate::ui::foreground;
 use crate::ui::highlight;
@@ -31,28 +34,61 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         .and_then(|view| view.presentation_highlight())
         .unwrap_or_else(highlight);
 
-    chat_history::draw(
-        frame,
-        areas.widget.chat_history,
-        app.messages(),
-        app.transcript_scroll(),
-        app.welcome(),
-        presentation_highlight,
-    );
+    if let Some(manager) = app.session_manager_view() {
+        sessions::draw_manager(frame, areas.session.transcript, manager);
+    } else {
+        let messages = app.transcript_views();
+        chat_history::draw(
+            frame,
+            areas.session.transcript,
+            &messages,
+            app.transcript_scroll(),
+            app.welcome(),
+            presentation_highlight,
+        );
+    }
     let cursor = if app.accepts_input() && app.chat_input_focused() {
         chat_input::ChatInputCursor::Visible
     } else {
         chat_input::ChatInputCursor::Hidden
     };
-    let input_view = app.chat_input_area_view();
-    chat_input_area::draw(
-        frame,
-        &areas.input,
-        overlay_area(&areas),
-        &input_view,
-        cursor,
-    );
-    draw_footer(frame, areas.widget.footer, app);
+    let input_view = app.chat_composer_view();
+    if let Some(approval) = app.approval_view() {
+        approval::draw(frame, areas.session.composer, approval);
+    } else {
+        chat_composer::draw(
+            frame,
+            &areas.input,
+            overlay_area(&areas),
+            &input_view,
+            cursor,
+        );
+    }
+    if let Some(query) = app.query_view() {
+        query::draw(frame, areas.session.request, query);
+    }
+    if app.session_manager_view().is_none() {
+        goal::draw(frame, areas.session.goal, app.goal_view());
+        plan::draw(frame, areas.session.plan, app.plan_view());
+        let queue_view = app.queue_view();
+        queue::draw(
+            frame,
+            areas.session.queue,
+            &queue_view,
+            queue::DEFAULT_MAX_VISIBLE_ITEMS,
+        );
+    }
+    draw_status_area(frame, areas.session.status, app);
+    if let Some(subagent_pane) = app.subagent_pane_view() {
+        crate::features::thread::draw_subagent_pane(
+            frame,
+            areas.session.subagent_pane,
+            subagent_pane,
+        );
+    }
+    if let Some(quick_view) = app.quick_view() {
+        crate::components::quick_view::draw(frame, overlay_area(&areas), quick_view);
+    }
 }
 
 #[cfg(test)]
@@ -63,9 +99,21 @@ pub(crate) fn input_overlay_index_at(
     row: u16,
 ) -> Option<usize> {
     match input_pointer_target_at(app, terminal_area, column, row) {
-        Some(ChatInputAreaPointerTarget::OverlayItem(index)) => Some(index),
+        Some(InputPointerTarget::Approval(index) | InputPointerTarget::Query(index)) => Some(index),
+        Some(InputPointerTarget::Composer(ChatComposerPointerTarget::SuggestItem(index))) => {
+            Some(index)
+        }
         _ => None,
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum InputPointerTarget {
+    Composer(ChatComposerPointerTarget),
+    Approval(usize),
+    Query(usize),
+    TranscriptToggle(String),
+    TranscriptDetails(String),
 }
 
 pub(crate) fn input_pointer_target_at(
@@ -73,39 +121,137 @@ pub(crate) fn input_pointer_target_at(
     terminal_area: Rect,
     column: u16,
     row: u16,
-) -> Option<ChatInputAreaPointerTarget> {
+) -> Option<InputPointerTarget> {
     let areas = layout(app, terminal_area);
-    let input_view = app.chat_input_area_view();
-    chat_input_area::pointer_target_at(&areas.input, overlay_area(&areas), &input_view, column, row)
+    if app.session_manager_view().is_none() {
+        let messages = app.transcript_views();
+        if let Some(target) = chat_history::pointer_target_at(
+            areas.session.transcript,
+            &messages,
+            app.transcript_scroll(),
+            column,
+            row,
+        ) {
+            return Some(match target {
+                chat_history::ChatHistoryPointerTarget::Toggle(entry_id) => {
+                    InputPointerTarget::TranscriptToggle(entry_id)
+                }
+                chat_history::ChatHistoryPointerTarget::Details(entry_id) => {
+                    InputPointerTarget::TranscriptDetails(entry_id)
+                }
+            });
+        }
+    }
+    if let Some(view) = app.approval_view() {
+        return approval::choice_index_at(areas.session.composer, view, column, row)
+            .map(InputPointerTarget::Approval);
+    }
+    if let Some(view) = app.query_view()
+        && let Some(index) = query::choice_index_at(areas.session.request, view, column, row)
+    {
+        return Some(InputPointerTarget::Query(index));
+    }
+    let input_view = app.chat_composer_view();
+    chat_composer::pointer_target_at(&areas.input, overlay_area(&areas), &input_view, column, row)
+        .map(InputPointerTarget::Composer)
 }
 
 pub(crate) struct FrameLayout {
-    pub(crate) widget: ChatWidgetAreas,
-    pub(crate) input: ChatInputAreaAreas,
+    pub(crate) session: super::screen_layout::SessionAreas,
+    pub(crate) input: ChatComposerAreas,
 }
 
 pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
-    let input_view = app.chat_input_area_view();
-    let desired_height = chat_input_area::view_desired_height(&input_view, terminal_area.width);
-    let widget = chat_widget::areas(terminal_area, desired_height);
-    let input = chat_input_area::view_areas(widget.chat_input_area, &input_view);
-    FrameLayout { widget, input }
+    let input_view = app.chat_composer_view();
+    let input_rows = chat_composer::view_desired_height(&input_view, terminal_area.width);
+    let approval_rows = app
+        .approval_view()
+        .map(approval::desired_height)
+        .unwrap_or_default();
+    let query_rows = app
+        .query_view()
+        .map(query::desired_height)
+        .unwrap_or_default();
+    let composer_rows = if approval_rows > 0 {
+        approval_rows
+    } else {
+        input_rows
+    };
+    let queue_rows = if app.session_manager_view().is_some() {
+        0
+    } else {
+        let queue_view = app.queue_view();
+        queue::desired_height(&queue_view, queue::DEFAULT_MAX_VISIBLE_ITEMS)
+    };
+    let session = super::screen_layout::session_areas(
+        terminal_area,
+        if app.session_manager_view().is_some() {
+            0
+        } else {
+            goal::desired_height(app.goal_view())
+        },
+        if app.session_manager_view().is_some() {
+            0
+        } else {
+            plan::desired_height(app.plan_view())
+        },
+        queue_rows,
+        query_rows,
+        composer_rows,
+        if app.thread_request_active()
+            || app.transcript_selection_active()
+            || app.subagent_pane_focused()
+            || app.pending_key_chord_label().is_some()
+            || app.viewed_thread_completed()
+        {
+            1
+        } else {
+            status_line::desired_rows(app.status_line_runtime(), 2)
+        },
+        app.subagent_pane_rows(),
+    );
+    let input = chat_composer::view_areas(session.composer, &input_view);
+    FrameLayout { session, input }
 }
 
 fn overlay_area(areas: &FrameLayout) -> Rect {
     Rect {
-        x: areas.widget.chat_history.x,
-        y: areas.widget.chat_history.y,
-        width: areas.widget.chat_history.width,
+        x: areas.session.transcript.x,
+        y: areas.session.transcript.y,
+        width: areas.session.transcript.width,
         height: areas
             .input
             .input
             .y
-            .saturating_sub(areas.widget.chat_history.y),
+            .saturating_sub(areas.session.transcript.y),
     }
 }
 
-fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
+fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    if app.approval_view().is_some() {
+        key_hint_bar::draw(frame, area, "↑↓ choose · enter confirm");
+        return;
+    }
+    if app.query_view().is_some() {
+        key_hint_bar::draw(
+            frame,
+            area,
+            "↑↓ choose · enter answer · esc cancel custom input",
+        );
+        return;
+    }
+    if app.transcript_selection_active() {
+        key_hint_bar::draw(
+            frame,
+            area,
+            "↑↓ select · space expand · enter details · esc input",
+        );
+        return;
+    }
+    if app.subagent_pane_focused() {
+        key_hint_bar::draw(frame, area, "↑↓ select · enter switch · esc input");
+        return;
+    }
     if let Some(prefix) = app.pending_key_chord_label() {
         frame.render_widget(
             Paragraph::new(format!("{prefix} … waiting for next key · esc cancel"))
@@ -114,31 +260,21 @@ fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
         );
         return;
     }
-    if matches!(app.status(), Status::Working) && !app.input().trim().is_empty() {
-        let hint = if app.steers_active_turn() && app.follow_up_mode() == FollowUpMode::Steer {
-            "enter steer"
-        } else {
-            "enter queue"
-        };
+    if app.viewed_thread_completed() {
         frame.render_widget(
-            Paragraph::new(hint).style(Style::default().fg(muted())),
+            Paragraph::new("completed · choose Main or another Subagent")
+                .style(Style::default().fg(muted())),
             area,
         );
         return;
     }
-    if app.has_editable_queue() && app.input().trim().is_empty() {
-        let hint = if app.steers_active_turn() && app.follow_up_mode() == FollowUpMode::Steer {
-            "enter send queued now · ↑ edit"
-        } else {
-            "↑ edit queued message"
-        };
-        frame.render_widget(
-            Paragraph::new(hint).style(Style::default().fg(muted())),
-            area,
-        );
-        return;
-    }
-    status_line::draw(frame, area, app.status_line(), app.approval_mode_status());
+    status_line::draw(
+        frame,
+        area,
+        app.status_line(),
+        app.approval_mode_status(),
+        app.status_line_runtime(),
+    );
 }
 
 #[cfg(test)]

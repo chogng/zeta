@@ -116,16 +116,25 @@ impl ActiveConversation {
         let mut output = CommandOutput::default();
 
         match command {
+            TuiSlashCommandAction::Sessions
+            | TuiSlashCommandAction::Agents
+            | TuiSlashCommandAction::Subagents
+            | TuiSlashCommandAction::Queue => {
+                return Err(CommandExecutionError(format!(
+                    "/{} must be handled by the TUI navigation layer",
+                    command.command()
+                )));
+            }
             TuiSlashCommandAction::Status => {
-                output
-                    .events
-                    .push(AppEvent::DetailPaneOpened(status::load_status_pane_spec(
+                output.events.push(AppEvent::StatusQuickViewOpened(
+                    status::load_status_pane_spec(
                         client,
                         status::StatusRequestScope {
                             session_id: self.session_id(),
                             thread_id: self.thread_id(),
                         },
-                    )?));
+                    )?,
+                ));
             }
             TuiSlashCommandAction::Skills => {
                 output
@@ -156,7 +165,7 @@ impl ActiveConversation {
                         )?));
                 } else {
                     match self
-                        .resume_session(client, &arguments)
+                        .resume_session(client, &arguments, None)
                         .map_err(session_error)?
                     {
                         ResumeOutcome::Listed(notice) => {

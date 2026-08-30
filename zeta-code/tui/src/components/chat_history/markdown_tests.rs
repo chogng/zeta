@@ -1,5 +1,6 @@
 use super::export_markdown;
 use super::latest_agent_response;
+use crate::components::chat_history::CommandStatus;
 use crate::components::chat_history::Message;
 use crate::components::chat_history::MessageRole;
 
@@ -7,7 +8,7 @@ use crate::components::chat_history::MessageRole;
 fn latest_agent_response_ignores_tools_and_notices() {
     let messages = vec![
         Message::plain(MessageRole::Agent, "first".into()),
-        Message::plain(MessageRole::Tool, "tool".into()),
+        Message::command("tool".into(), CommandStatus::Succeeded, None),
         Message::plain(MessageRole::Agent, "second".into()),
         Message::plain(MessageRole::Notice, "done".into()),
     ];

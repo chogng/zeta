@@ -1,0 +1,248 @@
+use crate::components::chat_input::ChatInput;
+use crate::components::chat_input::ChatSubmission;
+use crate::components::chat_input::QueuedChatInput;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
+use crate::ui::muted;
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::widgets::Paragraph;
+use std::collections::BTreeMap;
+
+pub(crate) const DEFAULT_MAX_VISIBLE_ITEMS: usize = 3;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct QueueId(u64);
+
+impl QueueId {
+    fn new(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct QueueEntry {
+    id: QueueId,
+    input: QueuedChatInput,
+    sending: bool,
+}
+
+#[derive(Debug, Default, Eq, PartialEq)]
+pub(crate) struct Queue {
+    next_id: u64,
+    entries: Vec<QueueEntry>,
+}
+
+impl Queue {
+    pub(crate) fn push(&mut self, input: QueuedChatInput) -> QueueId {
+        let id = QueueId::new(self.next_id);
+        self.next_id = self.next_id.saturating_add(1);
+        self.entries.push(QueueEntry {
+            id,
+            input,
+            sending: false,
+        });
+        id
+    }
+
+    pub(crate) fn restore(&mut self, id: QueueId, input: &mut ChatInput) -> Result<(), String> {
+        if !input.is_empty() {
+            return Err("clear the current draft before restoring a queued message".into());
+        }
+        let index = self
+            .entries
+            .iter()
+            .position(|entry| entry.id == id && !entry.sending)
+            .ok_or_else(|| "the queued message is no longer editable".to_owned())?;
+        let entry = self.entries.remove(index);
+        match input.restore_queued(entry.input) {
+            Ok(()) => Ok(()),
+            Err(queued) => {
+                self.entries.insert(
+                    index,
+                    QueueEntry {
+                        id,
+                        input: *queued,
+                        sending: false,
+                    },
+                );
+                Err("clear the current draft before restoring a queued message".into())
+            }
+        }
+    }
+
+    pub(crate) fn begin_next_send(&mut self) -> Option<(QueueId, ChatSubmission)> {
+        let entry = self.entries.iter_mut().find(|entry| !entry.sending)?;
+        entry.sending = true;
+        Some((entry.id, entry.input.submission().clone()))
+    }
+
+    pub(crate) fn begin_send(&mut self, id: QueueId) -> Option<ChatSubmission> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == id && !entry.sending)?;
+        entry.sending = true;
+        Some(entry.input.submission().clone())
+    }
+
+    pub(crate) fn delete(&mut self, id: QueueId) -> bool {
+        let Some(index) = self
+            .entries
+            .iter()
+            .position(|entry| entry.id == id && !entry.sending)
+        else {
+            return false;
+        };
+        self.entries.remove(index);
+        true
+    }
+
+    pub(crate) fn move_up(&mut self, id: QueueId) -> bool {
+        let Some(index) = self.entries.iter().position(|entry| entry.id == id) else {
+            return false;
+        };
+        if index == 0 || self.entries[index].sending {
+            return false;
+        }
+        self.entries.swap(index, index - 1);
+        true
+    }
+
+    pub(crate) fn move_down(&mut self, id: QueueId) -> bool {
+        let Some(index) = self.entries.iter().position(|entry| entry.id == id) else {
+            return false;
+        };
+        if index + 1 >= self.entries.len() || self.entries[index].sending {
+            return false;
+        }
+        self.entries.swap(index, index + 1);
+        true
+    }
+
+    pub(crate) fn finish_send(&mut self, id: QueueId) -> bool {
+        let previous_len = self.entries.len();
+        self.entries.retain(|entry| entry.id != id);
+        self.entries.len() != previous_len
+    }
+
+    pub(crate) fn fail_send(&mut self, id: QueueId) -> bool {
+        let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) else {
+            return false;
+        };
+        entry.sending = false;
+        true
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub(crate) fn view(&self) -> QueueView<'_> {
+        QueueView {
+            items: self
+                .entries
+                .iter()
+                .enumerate()
+                .map(|(index, entry)| QueueItemView {
+                    id: entry.id,
+                    position: index.saturating_add(1),
+                    text: entry.input.display_text(),
+                    sending: entry.sending,
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct QueueItemView<'a> {
+    pub(crate) id: QueueId,
+    pub(crate) position: usize,
+    pub(crate) text: &'a str,
+    pub(crate) sending: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum QueueSelectionAction {
+    Select(QueueId),
+}
+
+pub(crate) struct QueuePaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, QueueSelectionAction>,
+}
+
+pub(crate) fn pane_spec(view: &QueueView<'_>) -> QueuePaneSpec {
+    let mut actions = BTreeMap::new();
+    let items = view
+        .items
+        .iter()
+        .map(|item| {
+            let item_id = ListSelectionItemId::new(format!("queue-{}", item.position));
+            actions.insert(item_id.clone(), QueueSelectionAction::Select(item.id));
+            ListSelectionItem::new(item.text)
+                .with_id(item_id)
+                .with_description(if item.sending { "sending" } else { "queued" })
+        })
+        .collect();
+    QueuePaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
+                "Queue",
+                vec![ListSelectionGroup::new("Current Thread", items)],
+            )
+            .with_activation_mode(ListSelectionActivationMode::Enter)
+            .without_tab_bar()
+            .with_empty_message("Queue is empty"),
+            "Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send",
+        ),
+        actions,
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct QueueView<'a> {
+    pub(crate) items: Vec<QueueItemView<'a>>,
+}
+
+pub(crate) fn desired_height(view: &QueueView<'_>, max_visible_items: usize) -> u16 {
+    u16::try_from(view.items.len().min(max_visible_items)).unwrap_or(u16::MAX)
+}
+
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: &QueueView<'_>,
+    max_visible_items: usize,
+) {
+    let lines = view
+        .items
+        .iter()
+        .rev()
+        .take(max_visible_items)
+        .map(|item| {
+            let state = if item.sending { " · sending" } else { "" };
+            Line::styled(
+                format!("Queue {}: {}{state}", item.position, item.text),
+                Style::default().fg(muted()),
+            )
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(Paragraph::new(lines), area);
+}
+
+#[cfg(test)]
+#[path = "queue/state_tests.rs"]
+mod tests;

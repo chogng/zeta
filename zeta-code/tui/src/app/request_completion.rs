@@ -5,21 +5,22 @@ use super::chat_input_catalog_snapshot;
 use super::dispatch::ProductCommandOutput;
 use crate::TuiExit;
 use crate::components::chat_input::ChatSubmission;
-use crate::components::chat_input::MentionPluginItem;
-use crate::components::chat_input::SkillSelectorItem;
 use crate::components::chat_input::SlashCommandCatalog;
-use crate::components::chat_input_area::ChatInputAreaInteractionId;
-use crate::components::queue::QueueId;
 use crate::components::steer::SteerId;
+use crate::components::suggest::MentionPluginItem;
+use crate::components::suggest::SkillSelectorItem;
 use crate::features::config;
-use crate::features::interactions::InteractionResponse;
+use crate::features::queue::QueueId;
 use crate::features::sessions::ConversationChange;
 use crate::features::sessions::ConversationTranscript;
+use crate::features::sessions::NewConversationKind;
 use crate::features::skills;
 use crate::features::skills::SkillPaneSpec;
 use crate::features::thread::ActiveTurnUpdate;
 use crate::features::thread::LatestThreadSnapshot;
 use crate::features::thread::OlderThreadHistoryPage;
+use crate::features::thread::ThreadRequestIdentity;
+use crate::features::thread::ThreadRequestResponse;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadSwitch;
@@ -50,6 +51,8 @@ pub(super) enum RequestCompletion {
         command: String,
         result: Result<ConversationRequestCompletion, String>,
     },
+    ThreadChanged(Result<ConversationRequestCompletion, String>),
+    ManagerSessionCreated(Result<ManagerSessionCompletion, String>),
     ProductCommand(Result<ProductCommandCompletion, String>),
     Presentation(Result<AppEvent, String>),
     PreferredModelUpdated {
@@ -57,8 +60,8 @@ pub(super) enum RequestCompletion {
         result: Result<config::PreferredModelUpdate, String>,
     },
     SkillsRefreshed(Result<SkillRequestCompletion, String>),
-    InteractionResolved {
-        interaction_id: ChatInputAreaInteractionId,
+    ThreadRequestResolved {
+        request: ThreadRequestIdentity,
         result: Result<LatestThreadSnapshot, ClientError>,
     },
     ThreadRefreshed(Result<LatestThreadSnapshot, ClientError>),
@@ -88,6 +91,11 @@ pub(super) struct ConversationRequestCompletion {
     change: ConversationChange,
     subscription: ThreadSubscription,
     switch: ThreadSwitch,
+}
+
+pub(super) struct ManagerSessionCompletion {
+    conversation: ConversationRequestCompletion,
+    turn: TurnStartReadCompletion,
 }
 
 pub(super) struct ProductCommandCompletion {
@@ -132,10 +140,10 @@ pub(super) fn refresh_skills_and_registry(
     })
 }
 
-pub(super) fn resolve_interaction_and_read(
+pub(super) fn resolve_thread_request_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
-    response: InteractionResponse,
+    response: ThreadRequestResponse,
     history: ThreadSnapshotHistory,
 ) -> Result<LatestThreadSnapshot, ClientError> {
     let session_id = scope.session_id().clone();
@@ -213,6 +221,34 @@ pub(super) fn finish_conversation_request(
     })
 }
 
+pub(super) fn create_manager_session_and_start(
+    mut client: AppServerRequestHandle,
+    mut conversation: ActiveConversation,
+    subscription: ThreadSubscription,
+    submission: ChatSubmission,
+    approval_mode: ApprovalMode,
+) -> Result<ManagerSessionCompletion, String> {
+    let title = submission.display_text.clone();
+    let change = conversation
+        .replace_with_new(&mut client, NewConversationKind::New, &title)
+        .map_err(|error| error.to_string())?;
+    let conversation =
+        finish_conversation_request(&mut client, conversation, subscription, change)?;
+    let scope = ThreadRequestScope::new(
+        conversation.conversation.session_id(),
+        conversation.conversation.thread_id(),
+        conversation.conversation.thread_sequence(),
+    );
+    let turn = start_turn_and_read(
+        client,
+        scope,
+        submission,
+        approval_mode,
+        conversation.subscription.history(),
+    );
+    Ok(ManagerSessionCompletion { conversation, turn })
+}
+
 pub(super) fn finish_product_command_request(
     client: &mut AppServerRequestHandle,
     subscription: ThreadSubscription,
@@ -246,6 +282,58 @@ pub(super) fn apply_request_completion(
     app: &mut App,
 ) -> Option<TuiExit> {
     match completion {
+        RequestCompletion::ManagerSessionCreated(Ok(ManagerSessionCompletion {
+            conversation:
+                ConversationRequestCompletion {
+                    conversation: next_conversation,
+                    change,
+                    subscription,
+                    switch,
+                },
+            turn,
+        })) => {
+            *conversation = next_conversation;
+            *thread_subscription = subscription;
+            finish_conversation_change(
+                conversation,
+                active_turn,
+                app,
+                change,
+                switch,
+                ConversationCompletionPresentation::Notice,
+            );
+            apply_turn_start_completion(
+                turn,
+                None,
+                conversation,
+                active_turn,
+                thread_subscription,
+                app,
+            );
+        }
+        RequestCompletion::ManagerSessionCreated(Err(error)) => {
+            app.update(AppEvent::FailureReported(error));
+        }
+        RequestCompletion::ThreadChanged(Ok(ConversationRequestCompletion {
+            conversation: next_conversation,
+            change,
+            subscription,
+            switch,
+        })) => {
+            *conversation = next_conversation;
+            *thread_subscription = subscription;
+            finish_conversation_change(
+                conversation,
+                active_turn,
+                app,
+                change,
+                switch,
+                ConversationCompletionPresentation::Notice,
+            );
+        }
+        RequestCompletion::ThreadChanged(Err(error)) => {
+            app.update(AppEvent::FailureReported(error));
+        }
         RequestCompletion::ConversationChanged {
             command,
             result:
@@ -363,21 +451,21 @@ pub(super) fn apply_request_completion(
                 error: error.to_string(),
             });
         }
-        RequestCompletion::InteractionResolved {
-            interaction_id,
+        RequestCompletion::ThreadRequestResolved {
+            request,
             result: Ok(snapshot),
         } => {
             conversation.set_thread_sequence(snapshot.thread.sequence);
             thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-            app.update(AppEvent::InteractionResolved(interaction_id));
+            app.update(AppEvent::ThreadRequestResolved(request));
             apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
         }
-        RequestCompletion::InteractionResolved {
-            interaction_id,
+        RequestCompletion::ThreadRequestResolved {
+            request,
             result: Err(error),
         } => {
-            app.update(AppEvent::InteractionSubmissionFailed {
-                interaction_id,
+            app.update(AppEvent::ThreadRequestSubmissionFailed {
+                request,
                 error: error.to_string(),
             });
         }
@@ -526,6 +614,11 @@ pub(super) fn apply_thread_snapshot(
     snapshot: Thread,
     transcript: ThreadTranscriptSnapshot,
 ) {
+    app.update(AppEvent::ThreadContextChanged {
+        session_id: snapshot.session_id.clone(),
+        thread_id: snapshot.thread_id.clone(),
+    });
+    app.update(AppEvent::ThreadGoalChanged(snapshot.goal.clone()));
     if active_turn.is_none() {
         *active_turn = recover_active_turn(&snapshot.turns);
     }
@@ -594,7 +687,6 @@ fn finish_conversation_change(
     switch: ThreadSwitch,
     presentation: ConversationCompletionPresentation,
 ) {
-    app.clear_queued_submissions();
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
         app.update(AppEvent::ListSelectionPaneClosed);
     }

@@ -112,7 +112,8 @@
 [`design-tokens.md`](design-tokens.md)、[`theme-authoring-template.md`](theme-authoring-template.md)（模板）、
 [`menu-system.md`](menu-system.md)、[`icons.md`](icons.md)、[`search.md`](search.md)、
 [`keybindings.md`](keybindings.md)、
-[`tui-chat-input-area.md`](tui-chat-input-area.md)（当前架构）、
+[`tui-chat-architecture-discussion-v15.md`](tui-chat-architecture-discussion-v15.md)（Session/Thread/正文单元与布局决定）、
+[`tui-chat-composer.md`](tui-chat-composer.md)（当前架构）、
 [`code-intelligence.md`](code-intelligence.md)、
 [`codebase.md`](codebase.md)、
 [`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、

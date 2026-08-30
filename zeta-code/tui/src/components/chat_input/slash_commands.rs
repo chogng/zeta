@@ -32,6 +32,10 @@ pub(crate) enum TuiSlashCommandAction {
     Theme,
     New,
     Quit,
+    Sessions,
+    Agents,
+    Subagents,
+    Queue,
 }
 
 impl TuiSlashCommandAction {
@@ -42,7 +46,10 @@ impl TuiSlashCommandAction {
     pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Status => "show the active session, thread, and model",
-            Self::StatusLine => "choose the items shown in the footer status line",
+            Self::StatusLine => "choose the items shown in the status line",
+            Self::Sessions | Self::Agents => "open the Session Manager",
+            Self::Subagents => "focus the current Session Thread list",
+            Self::Queue => "manage queued messages for the current Thread",
             Self::Skills => "browse configured skill sources",
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",

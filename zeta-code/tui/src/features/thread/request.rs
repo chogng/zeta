@@ -34,6 +34,35 @@ use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ThreadRequestKind {
+    Approval,
+    Query,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ThreadRequestIdentity {
+    pub(crate) kind: ThreadRequestKind,
+    pub(crate) request_id: RequestId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ThreadRequestResponse {
+    pub(crate) kind: ThreadRequestKind,
+    pub(crate) turn_id: TurnId,
+    pub(crate) request_id: RequestId,
+    pub(crate) response: AgentResponse,
+}
+
+impl ThreadRequestResponse {
+    pub(crate) fn identity(&self) -> ThreadRequestIdentity {
+        ThreadRequestIdentity {
+            kind: self.kind,
+            request_id: self.request_id.clone(),
+        }
+    }
+}
+
 /// Identifies the aggregate and canonical sequence used by one typed Thread write.
 pub(crate) struct ThreadRequestScope {
     session_id: SessionId,

@@ -1,7 +1,7 @@
-use crate::components::chat_input::MentionPluginItem;
-use crate::components::chat_input::SkillSelectorItem;
 use crate::components::chat_input::SlashCommandCatalog;
 use crate::components::chat_input::built_in_slash_command_definitions;
+use crate::components::suggest::MentionPluginItem;
+use crate::components::suggest::SkillSelectorItem;
 use std::collections::BTreeMap;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageDto;

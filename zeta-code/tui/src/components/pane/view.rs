@@ -1,3 +1,10 @@
+use super::PaneBodyView;
+use super::PaneView;
+use crate::components::key_capture;
+use crate::components::key_hint_bar;
+use crate::components::list_selection;
+use crate::components::text_prompt;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 
 const BODY_KEY_HINT_GAP: u16 = 2;
@@ -6,6 +13,49 @@ const KEY_HINT_BAR_HEIGHT: u16 = 1;
 pub(crate) struct PaneAreas {
     pub(crate) body: Rect,
     pub(crate) key_hint_bar: Rect,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PanePointerTarget {
+    Tab(usize),
+    Item(usize),
+}
+
+pub(crate) fn view_desired_height(view: PaneView<'_>, available_width: u16) -> u16 {
+    let body_height = match view.body() {
+        PaneBodyView::KeyCapture(body) => body.desired_height(),
+        PaneBodyView::ListSelection(body) => body.desired_height(available_width),
+        PaneBodyView::TextPrompt(body) => body.desired_height(),
+    };
+    desired_height(body_height)
+}
+
+pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: PaneView<'_>) {
+    let pane_areas = areas(area);
+    match view.body() {
+        PaneBodyView::KeyCapture(body) => key_capture::draw(frame, pane_areas.body, body),
+        PaneBodyView::ListSelection(body) => list_selection::draw(frame, pane_areas.body, body),
+        PaneBodyView::TextPrompt(body) => text_prompt::draw(frame, pane_areas.body, body),
+    }
+    key_hint_bar::draw(frame, pane_areas.key_hint_bar, view.key_hints());
+}
+
+pub(crate) fn pointer_target_at(
+    area: Rect,
+    view: PaneView<'_>,
+    column: u16,
+    row: u16,
+) -> Option<PanePointerTarget> {
+    let PaneBodyView::ListSelection(body) = view.body() else {
+        return None;
+    };
+    let body_area = areas(area).body;
+    body.tab_index_at(body_area, column, row)
+        .map(PanePointerTarget::Tab)
+        .or_else(|| {
+            body.item_index_at(body_area, column, row)
+                .map(PanePointerTarget::Item)
+        })
 }
 
 pub(crate) fn desired_height(body_height: u16) -> u16 {

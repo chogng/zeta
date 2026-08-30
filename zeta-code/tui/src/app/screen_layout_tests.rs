@@ -1,0 +1,43 @@
+use super::session_areas;
+use ratatui::layout::Rect;
+
+#[test]
+fn session_layout_bounds_queue_and_preserves_transcript() {
+    let areas = session_areas(Rect::new(0, 0, 80, 20), 1, 1, 12, 0, 3, 2, 4);
+
+    assert_eq!(areas.transcript.height, 4);
+    assert_eq!(areas.goal.height, 0);
+    assert_eq!(areas.plan.height, 0);
+    assert_eq!(areas.queue.height, 7);
+    assert_eq!(areas.composer.height, 3);
+    assert_eq!(areas.status.height, 2);
+    assert_eq!(areas.subagent_pane.height, 4);
+}
+
+#[test]
+fn session_layout_uses_zero_height_for_absent_rows() {
+    let areas = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 1, 0);
+
+    assert_eq!(areas.queue.height, 0);
+    assert_eq!(areas.composer.y, areas.transcript.height);
+}
+
+#[test]
+fn session_layout_places_goal_plan_and_queue_above_input() {
+    let areas = session_areas(Rect::new(0, 0, 80, 20), 1, 1, 2, 0, 3, 1, 2);
+
+    assert_eq!(areas.goal.y, areas.transcript.height);
+    assert_eq!(areas.plan.y, areas.goal.y + areas.goal.height);
+    assert_eq!(areas.queue.y, areas.plan.y + areas.plan.height);
+    assert_eq!(areas.composer.y, areas.queue.y + areas.queue.height);
+    assert_eq!(areas.status.y, areas.composer.y + areas.composer.height);
+    assert_eq!(areas.subagent_pane.y, areas.status.y + areas.status.height);
+}
+
+#[test]
+fn session_layout_places_query_immediately_above_the_input_region() {
+    let areas = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 1, 3, 1, 0);
+
+    assert_eq!(areas.request.height, 1);
+    assert_eq!(areas.composer.y, areas.request.y + areas.request.height);
+}

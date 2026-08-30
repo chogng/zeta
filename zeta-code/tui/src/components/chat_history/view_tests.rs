@@ -1,12 +1,12 @@
 use super::message_lines;
+use crate::components::chat_history::CommandStatus;
 use crate::components::chat_history::Message;
-use crate::components::chat_history::MessageRole;
 use ratatui::style::Color;
 
 #[test]
 fn tool_output_renders_ansi_as_styled_spans() {
     let messages = vec![
-        Message::plain(MessageRole::Tool, "shell · stdout".into())
+        Message::command("shell · stdout".into(), CommandStatus::Running, None)
             .with_detail("plain \x1b[31mred\x1b[0m"),
     ];
 

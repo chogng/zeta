@@ -1,5 +1,6 @@
 use super::ConfigResource;
 use super::TerminalSettingsEdit;
+use crate::components::chat_input::ChatInputMode;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use std::fs;
@@ -72,6 +73,26 @@ fn existing_terminal_settings_without_follow_up_mode_load_as_queue() {
 
     assert!(!settings.mouse_interactions());
     assert_eq!(settings.follow_up_mode(), FollowUpMode::Queue);
+    assert_eq!(settings.input_mode(), ChatInputMode::Standard);
+}
+
+#[test]
+fn vim_input_mode_is_persisted_and_reloaded() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("terminal.json");
+    let mut resource = ConfigResource::new(path.clone());
+    resource.refresh().unwrap();
+    let mut settings = TerminalSettings::default();
+    settings.set_input_mode(ChatInputMode::Vim);
+    resource
+        .apply_edit(&TerminalSettingsEdit {
+            expected_revision: 1,
+            settings,
+        })
+        .unwrap();
+
+    let mut reloaded = ConfigResource::new(path);
+    assert_eq!(reloaded.refresh().unwrap().input_mode(), ChatInputMode::Vim);
 }
 
 #[test]

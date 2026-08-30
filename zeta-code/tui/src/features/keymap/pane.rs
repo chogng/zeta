@@ -81,7 +81,7 @@ pub(crate) fn keymap_pane_spec(
             .collect(),
         "No keymap diagnostics",
     );
-    let footer = format!(
+    let key_hints = format!(
         "Space search  ·  Tab/Shift-Tab tabs  ·  Enter edit  ·  Esc back  ·  {}",
         resource_path.display()
     );
@@ -97,7 +97,7 @@ pub(crate) fn keymap_pane_spec(
             )
             .with_search(SearchBoxModel::new("Search shortcuts"))
             .with_empty_message("No matching shortcuts"),
-            footer,
+            key_hints,
         ),
         actions: item_actions,
     }
