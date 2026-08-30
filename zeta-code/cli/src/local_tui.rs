@@ -13,6 +13,23 @@ use crate::reconnect;
 use crate::reconnect::Failure;
 
 pub(super) fn run(dir_root: PathBuf, profile_root: PathBuf) -> Result<(), String> {
+    run_entry(dir_root, profile_root, Entry::New)
+}
+
+pub(super) fn resume(
+    dir_root: PathBuf,
+    profile_root: PathBuf,
+    recovery: zeta_tui::TuiRecoveryState,
+) -> Result<(), String> {
+    run_entry(dir_root, profile_root, Entry::Resume(recovery))
+}
+
+enum Entry {
+    New,
+    Resume(zeta_tui::TuiRecoveryState),
+}
+
+fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(), String> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Err(
             "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
@@ -22,7 +39,10 @@ pub(super) fn run(dir_root: PathBuf, profile_root: PathBuf) -> Result<(), String
         .map_err(|error| format!("could not resolve zeta executable: {error}"))?;
     let mut session =
         connect(&executable, &dir_root, &profile_root).map_err(|error| error.to_string())?;
-    let mut recovery = None;
+    let mut recovery = match entry {
+        Entry::New => None,
+        Entry::Resume(recovery) => Some(recovery),
+    };
     loop {
         let mut options = zeta_tui::TuiOptions::new("TUI conversation")
             .with_dir_root(&dir_root)
@@ -40,16 +60,33 @@ pub(super) fn run(dir_root: PathBuf, profile_root: PathBuf) -> Result<(), String
                 reason,
             } => {
                 eprintln!("Local App Server disconnected: {reason}");
+                session =
+                    reconnect(&executable, &dir_root, &profile_root, &reason).map_err(|error| {
+                        reconnect::recovery_error(error, &recovery_command(&next_recovery))
+                    })?;
                 recovery = Some(next_recovery);
-                session = reconnect(&executable, &dir_root, &profile_root, &reason)?;
             }
-            zeta_tui::TuiExit::ConnectionLost { kind, reason, .. } => {
-                return Err(format!(
-                    "Local App Server recovery stopped after {kind:?}: {reason}"
+            zeta_tui::TuiExit::ConnectionLost {
+                kind,
+                recovery,
+                reason,
+            } => {
+                return Err(reconnect::recovery_error(
+                    format!("Local App Server recovery stopped after {kind:?}: {reason}"),
+                    &recovery_command(&recovery),
                 ));
             }
         }
     }
+}
+
+fn recovery_command(recovery: &zeta_tui::TuiRecoveryState) -> Vec<String> {
+    vec![
+        "zeta".into(),
+        "resume".into(),
+        recovery.session_id().to_string(),
+        recovery.thread_id().to_string(),
+    ]
 }
 
 fn connect(

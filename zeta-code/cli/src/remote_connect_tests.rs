@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use super::RemoteConnectEntry;
 use super::RemoteConnectMode;
 use super::RemoteConnectTarget;
 use super::parse;
@@ -35,6 +36,7 @@ fn direct_connect_requires_a_credential_free_host_and_absolute_dir() {
         Some(Path::new("/usr/bin/ssh"))
     );
     assert_eq!(options.mode, RemoteConnectMode::Check);
+    assert_eq!(options.entry, RemoteConnectEntry::New);
 
     assert!(
         parse(&strings([
@@ -60,6 +62,7 @@ fn named_connect_is_exclusive_and_interactive_by_default() {
         RemoteConnectRuntimeSelection::Managed(RemoteRuntimeCatalogSelection::ProductPackage)
     );
     assert_eq!(options.mode, RemoteConnectMode::Interactive);
+    assert_eq!(options.entry, RemoteConnectEntry::New);
 
     assert!(
         parse(&strings([
@@ -78,6 +81,40 @@ fn named_connect_is_exclusive_and_interactive_by_default() {
         parse(&strings(["--name", "production", "--check", "--check"]))
             .unwrap_err()
             .contains("only once")
+    );
+}
+
+#[test]
+fn remote_resume_requires_durable_identity_and_interactive_mode() {
+    let options = parse(&strings([
+        "--host",
+        "build-linux",
+        "--dir",
+        "/srv/project",
+        "--resume",
+        "session-1",
+        "thread-1",
+    ]))
+    .unwrap();
+    let RemoteConnectEntry::Resume(recovery) = options.entry else {
+        panic!("expected resume entry");
+    };
+    assert_eq!(recovery.session_id().as_str(), "session-1");
+    assert_eq!(recovery.thread_id().as_str(), "thread-1");
+
+    assert!(
+        parse(&strings([
+            "--host",
+            "build-linux",
+            "--dir",
+            "/srv/project",
+            "--resume",
+            "session-1",
+            "thread-1",
+            "--check",
+        ]))
+        .unwrap_err()
+        .contains("cannot be combined")
     );
 }
 

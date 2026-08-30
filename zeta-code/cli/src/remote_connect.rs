@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use zeta_app_server_client::local_profile_root;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
@@ -26,7 +28,8 @@ const CONNECT_USAGE: &str = concat!(
     "[--ssh <openssh-path>] ",
     "[--runtime-catalog <local-catalog> --runtime-catalog-sha256 <digest> | ",
     "--runtime-catalog-url <https-catalog.json> --runtime-catalog-sha256 <digest> ",
-    "[--runtime-cache <absolute-local-path>]] [--check]"
+    "[--runtime-cache <absolute-local-path>]] ",
+    "[--resume <session-id> <thread-id> | --check]"
 );
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -35,6 +38,7 @@ pub(super) struct RemoteConnectOptions {
     runtime: RemoteConnectRuntimeSelection,
     pub(super) ssh_executable: Option<PathBuf>,
     pub(super) mode: RemoteConnectMode,
+    pub(super) entry: RemoteConnectEntry,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -49,6 +53,12 @@ pub(super) enum RemoteConnectMode {
     Check,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum RemoteConnectEntry {
+    New,
+    Resume(zeta_tui::TuiRecoveryState),
+}
+
 pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectOptions, String> {
     let mut name = None;
     let mut host = None;
@@ -60,12 +70,32 @@ pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectOptions, String
     let mut runtime_catalog_sha256 = None;
     let mut runtime_cache = None;
     let mut mode = None;
+    let mut entry = None;
     let mut index = 0;
     while index < arguments.len() {
         let option = arguments[index].as_str();
         index += 1;
         if option == "--check" {
             assign_once(&mut mode, RemoteConnectMode::Check, option)?;
+            continue;
+        }
+        if option == "--resume" {
+            let session_id = arguments
+                .get(index)
+                .ok_or_else(|| format!("{option} requires a Session ID\n\n{CONNECT_USAGE}"))?;
+            index += 1;
+            let thread_id = arguments
+                .get(index)
+                .ok_or_else(|| format!("{option} requires a Thread ID\n\n{CONNECT_USAGE}"))?;
+            index += 1;
+            assign_once(
+                &mut entry,
+                RemoteConnectEntry::Resume(zeta_tui::TuiRecoveryState::new(
+                    SessionId::new(session_id).map_err(string_error)?,
+                    ThreadId::new(thread_id).map_err(string_error)?,
+                )),
+                option,
+            )?;
             continue;
         }
         let value = arguments
@@ -123,6 +153,13 @@ pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectOptions, String
             ));
         }
     };
+    let mode = mode.unwrap_or(RemoteConnectMode::Interactive);
+    let entry = entry.unwrap_or(RemoteConnectEntry::New);
+    if mode == RemoteConnectMode::Check && entry != RemoteConnectEntry::New {
+        return Err(format!(
+            "--resume cannot be combined with --check\n\n{CONNECT_USAGE}"
+        ));
+    }
     Ok(RemoteConnectOptions {
         target,
         runtime: RemoteConnectRuntimeSelection::parse(RemoteConnectRuntimeInput {
@@ -134,7 +171,8 @@ pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectOptions, String
         })
         .map_err(|error| format!("{error}\n\n{CONNECT_USAGE}"))?,
         ssh_executable,
-        mode: mode.unwrap_or(RemoteConnectMode::Interactive),
+        mode,
+        entry,
     })
 }
 
@@ -144,6 +182,7 @@ pub(super) fn run(options: RemoteConnectOptions) -> Result<(), String> {
         runtime,
         ssh_executable,
         mode,
+        entry,
     } = options;
     if mode == RemoteConnectMode::Interactive
         && (!std::io::stdin().is_terminal() || !std::io::stdout().is_terminal())
@@ -174,7 +213,7 @@ pub(super) fn run(options: RemoteConnectOptions) -> Result<(), String> {
         }
         RemoteConnectMode::Interactive => {
             store.activate(&ready.profile).map_err(string_error)?;
-            tui::run(ready, ssh_executable)
+            tui::run(ready, ssh_executable, entry)
         }
     }
 }

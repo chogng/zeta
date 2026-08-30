@@ -708,7 +708,7 @@ completion 是控制面 barrier：应用 completion 前必须消费或明确作�
 buffer overflow、receiver lag 或 cursor gap 立即把对应 projection 标为需要 resync，不能静默
 丢弃 Must-deliver 语义。
 
-当前实现的三层上限是 App Server 每 connection 4096 条 notification、共享 client 1024 条 event、TUI EventPump 1024 条 runtime event；App Server 满载时先清 transient，control-only overflow 关闭 connection。Thread projection 每个 transient row 限 256 KiB、最多 1024 个 identity。TUI 不拥有自动重连：连接关闭后交还持久化的 Session/Thread 身份，并丢弃本代 pending request 与 queued action；本地和 Remote CLI 宿主在 30 秒有界窗口内重建 transport，之后由新的 TUI generation 读取权威 snapshot。连接级恢复与 cursor-gap snapshot resync 是两个不同层级，不能在 TUI 内合并为一套状态机。
+当前实现的三层上限是 App Server 每 connection 4096 条 notification、共享 client 1024 条 event、TUI EventPump 1024 条 runtime event；App Server 满载时先清 transient，control-only overflow 关闭 connection。Thread projection 每个 transient row 限 256 KiB、最多 1024 个 identity。TUI 不拥有自动重连：连接关闭后交还持久化的 Session/Thread 身份，并丢弃本代 pending request 与 queued action；本地和 Remote CLI 宿主在 30 秒有界窗口内重建 transport，之后由新的 TUI generation 读取权威 snapshot。重连耗尽或遇到协议、服务端终止错误时，CLI 输出带原 Session/Thread 身份的可执行恢复命令；本地使用 `zeta resume`，Remote 使用绑定原 host、目录、已验证 runtime 和 SSH executable 的 `zeta remote connect --resume`。连接级恢复与 cursor-gap snapshot resync 是两个不同层级，不能在 TUI 内合并为一套状态机。
 
 ### 13.3 展示映射
 

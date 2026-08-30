@@ -104,7 +104,7 @@ transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown
 [`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的鼠标交互覆盖所有页面：拖动选择当前 frame 中可见的字符并在松手时自动复制，没有拖动的左键手势才进入 Slash/File/Plugin Suggest、Pane、Approval、Query 与 transcript marker 的命中路径；hover 继续复用候选选中态。Config 标签页中的 Mouse interactions item 可关闭全部 TUI 鼠标捕获，关闭后框选与复制行为由终端负责。
 Vim 只改变 `ChatInput` 的文字编辑行为，不把 Normal/Visual 状态扩散到 Pane、正文选择或应用级快捷键。
 
-TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，不拥有 connection selector 或 transport retry。连接中断时，TUI 丢弃本代 pending request 和 queued action，只向 CLI 交还持久化的 Session/Thread 身份；本地和 Remote CLI 宿主都在 30 秒有界窗口内重建连接，再让 TUI 从权威 snapshot 恢复。Desktop 与 app 在相同 authority partition 下可以实时读取同一份 Session catalog 和 Thread event。File mention 插入当前目录的相对路径，Plugin mention 插入 effective package 的原子 `@plugin-id`；TUI 不另造 `app://`/`plugin://` 协议身份。
+TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，不拥有 connection selector 或 transport retry。连接中断时，TUI 丢弃本代 pending request 和 queued action，只向 CLI 交还持久化的 Session/Thread 身份；本地和 Remote CLI 宿主都在 30 秒有界窗口内重建连接，再让 TUI 从权威 snapshot 恢复。重连失败时，CLI 分别输出 `zeta resume SESSION_ID THREAD_ID` 或绑定原 Remote 连接的 `zeta remote connect ... --resume SESSION_ID THREAD_ID`，不会丢掉可恢复身份。Desktop 与 app 在相同 authority partition 下可以实时读取同一份 Session catalog 和 Thread event。File mention 插入当前目录的相对路径，Plugin mention 插入 effective package 的原子 `@plugin-id`；TUI 不另造 `app://`/`plugin://` 协议身份。
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
@@ -129,6 +129,7 @@ cargo run --manifest-path Cargo.toml -p zeta-cli
 | `TuiOptions::new` | 提供 Session/Thread title，并默认以当前目录作为 file mention root |
 | `TuiOptions::with_dir_root` | 显式覆盖有界 file mention root |
 | `TuiOptions::with_profile_root` | 启用 host-local、产品作用域的 `zeta-code/keybindings.json`、`zeta-code/statusline.json` 与 `zeta-code/terminal.json` 资源 |
+| `TuiRecoveryState::new` | 从 CLI 参数构造需要重新读取的持久化 Session/Thread 身份，不携带 connection 或待执行请求 |
 | `run` | 接管 ready `AppServerSession`，校验 initialize snapshot、驱动 terminal/client events，并在退出时显式 shutdown |
 | `TuiExit::UserRequested` | 用户通过按键或 command 请求正常退出 |
 | `TuiExit::TerminationRequested` | Unix host termination signal 请求正常退出 |

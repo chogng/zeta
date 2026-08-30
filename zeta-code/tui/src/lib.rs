@@ -139,7 +139,8 @@ pub enum TuiConnectionLossKind {
 }
 
 impl TuiRecoveryState {
-    pub(crate) fn new(session_id: SessionId, thread_id: ThreadId) -> Self {
+    /// Selects the durable Session and Thread that a new TUI connection must reload.
+    pub fn new(session_id: SessionId, thread_id: ThreadId) -> Self {
         Self {
             session_id,
             thread_id,

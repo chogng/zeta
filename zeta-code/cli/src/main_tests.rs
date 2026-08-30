@@ -67,3 +67,16 @@ fn exec_arguments_reject_conflicting_authority_and_entry_modes() {
         .is_err()
     );
 }
+
+#[test]
+fn interactive_resume_requires_exact_durable_identity() {
+    let recovery = parse_resume_arguments(vec!["session-1".into(), "thread-1".into()]).unwrap();
+    assert_eq!(recovery.session_id().as_str(), "session-1");
+    assert_eq!(recovery.thread_id().as_str(), "thread-1");
+
+    assert!(parse_resume_arguments(vec!["session-1".into()]).is_err());
+    assert!(
+        parse_resume_arguments(vec!["session-1".into(), "thread-1".into(), "extra".into()])
+            .is_err()
+    );
+}

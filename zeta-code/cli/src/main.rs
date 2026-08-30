@@ -32,6 +32,7 @@ fn main() {
         Some(command) => match command.as_str() {
             "ask" => ask(arguments.collect::<Vec<_>>().join(" ")),
             "exec" => execute(arguments.collect()),
+            "resume" => resume(arguments.collect()),
             "app-server" => app_server_command(arguments.collect()).map_err(CliError::failure),
             "mcp-server" => mcp_server_command(arguments.collect()).map_err(CliError::failure),
             "remote" => remote::run(arguments.collect()).map_err(CliError::failure),
@@ -63,6 +64,22 @@ fn ask(prompt: String) -> Result<(), CliError> {
 
 fn interactive() -> Result<(), String> {
     local_tui::run(configured_dir()?, local_profile_root())
+}
+
+fn resume(arguments: Vec<String>) -> Result<(), CliError> {
+    let recovery = parse_resume_arguments(arguments)?;
+    let dir_root = configured_dir().map_err(CliError::failure)?;
+    local_tui::resume(dir_root, local_profile_root(), recovery).map_err(CliError::failure)
+}
+
+fn parse_resume_arguments(arguments: Vec<String>) -> Result<zeta_tui::TuiRecoveryState, CliError> {
+    let [session_id, thread_id] = arguments.as_slice() else {
+        return Err(CliError::usage("usage: zeta resume SESSION_ID THREAD_ID"));
+    };
+    Ok(zeta_tui::TuiRecoveryState::new(
+        parse_session_id(session_id)?,
+        parse_thread_id(thread_id)?,
+    ))
 }
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {

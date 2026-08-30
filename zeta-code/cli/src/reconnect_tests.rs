@@ -5,6 +5,7 @@ use std::time::Duration;
 use super::Failure;
 use super::WINDOW;
 use super::delay;
+use super::recovery_error;
 use super::retry;
 
 #[test]
@@ -83,4 +84,22 @@ fn exhausted_window_does_not_start_an_unbounded_attempt() {
     assert!(error.contains("within 30 seconds after 0 attempts"));
     assert!(error.contains("stream closed"));
     assert_eq!(delay(10), Duration::from_secs(2));
+}
+
+#[test]
+fn recovery_error_prints_a_copyable_shell_command() {
+    let error = recovery_error(
+        "connection failed",
+        &[
+            "zeta".into(),
+            "resume".into(),
+            "session with spaces".into(),
+            "thread'quoted".into(),
+        ],
+    );
+
+    assert_eq!(
+        error,
+        "connection failed\nReconnect: zeta resume 'session with spaces' 'thread'\\''quoted'"
+    );
 }

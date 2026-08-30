@@ -9,6 +9,30 @@ pub(super) enum Failure {
     Terminal(String),
 }
 
+pub(super) fn recovery_error(error: impl std::fmt::Display, command: &[String]) -> String {
+    format!("{error}\nReconnect: {}", format_command(command))
+}
+
+fn format_command(command: &[String]) -> String {
+    command
+        .iter()
+        .map(|argument| quote_argument(argument))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn quote_argument(argument: &str) -> String {
+    if !argument.is_empty()
+        && argument.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/' | b':' | b'@')
+        })
+    {
+        argument.to_owned()
+    } else {
+        format!("'{}'", argument.replace('\'', "'\\''"))
+    }
+}
+
 pub(super) fn retry<T>(
     connection_name: &str,
     initial_reason: &str,

@@ -5,6 +5,7 @@ use std::time::Instant;
 use zeta_remote::RemoteProfile;
 use zeta_remote_connections::RemoteConnectionFailureKind;
 
+use super::RemoteConnectEntry;
 use super::runtime;
 use super::runtime::ReadyRemoteRuntime;
 use crate::reconnect;
@@ -13,10 +14,14 @@ use crate::reconnect::Failure;
 pub(super) fn run(
     ready: ReadyRemoteRuntime,
     ssh_executable: Option<PathBuf>,
+    entry: RemoteConnectEntry,
 ) -> Result<(), String> {
     let profile = ready.profile;
     let mut session = ready.session;
-    let mut recovery = None;
+    let mut recovery = match entry {
+        RemoteConnectEntry::New => None,
+        RemoteConnectEntry::Resume(recovery) => Some(recovery),
+    };
     loop {
         let mut options =
             zeta_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
@@ -35,16 +40,58 @@ pub(super) fn run(
                 reason,
             } => {
                 eprintln!("Remote App Server disconnected: {reason}");
+                session = reconnect(&profile, ssh_executable.as_deref(), &reason)
+                    .map_err(|error| {
+                        reconnect::recovery_error(
+                            error,
+                            &recovery_command(&profile, ssh_executable.as_deref(), &next_recovery),
+                        )
+                    })?
+                    .session;
                 recovery = Some(next_recovery);
-                session = reconnect(&profile, ssh_executable.as_deref(), &reason)?.session;
             }
-            zeta_tui::TuiExit::ConnectionLost { kind, reason, .. } => {
-                return Err(format!(
-                    "Remote App Server recovery stopped after {kind:?}: {reason}"
+            zeta_tui::TuiExit::ConnectionLost {
+                kind,
+                recovery,
+                reason,
+            } => {
+                return Err(reconnect::recovery_error(
+                    format!("Remote App Server recovery stopped after {kind:?}: {reason}"),
+                    &recovery_command(&profile, ssh_executable.as_deref(), &recovery),
                 ));
             }
         }
     }
+}
+
+fn recovery_command(
+    profile: &RemoteProfile,
+    ssh_executable: Option<&std::path::Path>,
+    recovery: &zeta_tui::TuiRecoveryState,
+) -> Vec<String> {
+    let mut command = vec![
+        "zeta".into(),
+        "remote".into(),
+        "connect".into(),
+        "--host".into(),
+        profile.target().host().as_str().into(),
+        "--dir".into(),
+        profile.target().dir().as_str().into(),
+        "--runtime".into(),
+        profile.runtime().executable().into(),
+    ];
+    if let Some(ssh_executable) = ssh_executable {
+        command.extend([
+            "--ssh".into(),
+            ssh_executable.to_string_lossy().into_owned(),
+        ]);
+    }
+    command.extend([
+        "--resume".into(),
+        recovery.session_id().to_string(),
+        recovery.thread_id().to_string(),
+    ]);
+    command
 }
 
 fn reconnect(
@@ -75,3 +122,7 @@ fn reconnect(
         },
     )
 }
+
+#[cfg(test)]
+#[path = "remote_connect_tui_tests.rs"]
+mod tests;
