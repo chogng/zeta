@@ -12,6 +12,8 @@ use ts_rs::TS;
 use zeta_protocol::AgentTreeProjection;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::WorkAttemptId;
+use zeta_protocol::WorkConflictId;
+use zeta_protocol::WorkDecisionId;
 use zeta_protocol::WorkRelationId;
 use zeta_protocol::WorkRunId;
 
@@ -129,6 +131,70 @@ pub struct WorkRunGoalReviseParams {
     pub objective: String,
     pub acceptance_conditions: Vec<String>,
     pub exclusions: Vec<String>,
+}
+
+/// Records an immutable decision made by a user or another authorized work owner.
+///
+/// Agent messages and summaries are not decisions. Only a trusted product host may submit this
+/// command after establishing the named authority outside the Agent execution boundary.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkRunDecisionRecordParams {
+    pub command_id: CommandId,
+    pub work_run_id: WorkRunId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub decision_id: WorkDecisionId,
+    pub authority: String,
+    pub scope: String,
+    pub statement: String,
+}
+
+/// Stops one exact Attempt and records why its immutable contract is no longer sufficient.
+///
+/// This request does not enlarge the contract. Continuing requires a new contract version and a
+/// new Attempt.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkRunAttemptScopeExpansionRequestParams {
+    pub command_id: CommandId,
+    pub work_run_id: WorkRunId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub attempt_id: WorkAttemptId,
+    #[schemars(length(min = 1))]
+    pub evidence: Vec<String>,
+}
+
+/// Records a discovered overlap and stops every exact Attempt named by the conflict.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkRunConflictRecordParams {
+    pub command_id: CommandId,
+    pub work_run_id: WorkRunId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub conflict_id: WorkConflictId,
+    #[schemars(length(min = 1))]
+    pub attempt_ids: Vec<WorkAttemptId>,
+    pub resource: String,
+    #[schemars(length(min = 1))]
+    pub evidence: Vec<String>,
+}
+
+/// Resolves an open conflict with an existing authoritative decision.
+///
+/// Resolution makes the affected Attempts stale; it never resumes them under their old
+/// contracts.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkRunConflictResolveParams {
+    pub command_id: CommandId,
+    pub work_run_id: WorkRunId,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub conflict_id: WorkConflictId,
+    pub decision_id: WorkDecisionId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

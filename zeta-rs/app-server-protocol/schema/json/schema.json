@@ -2727,6 +2727,70 @@
         {
           "properties": {
             "method": {
+              "const": "workRun/decision/record",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunDecisionRecordParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/attempt/scopeExpansion/request",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunAttemptScopeExpansionRequestParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/conflict/record",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunConflictRecordParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/conflict/resolve",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunConflictResolveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "workRun/cancel",
               "type": "string"
             },
@@ -6396,6 +6460,70 @@
           "properties": {
             "method": {
               "const": "workRun/goal/revise",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/decision/record",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/attempt/scopeExpansion/request",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/conflict/record",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/conflict/resolve",
               "type": "string"
             },
             "result": {
@@ -29496,6 +29624,41 @@
       ],
       "type": "object"
     },
+    "WorkRunAttemptScopeExpansionRequestParams": {
+      "additionalProperties": false,
+      "description": "Stops one exact Attempt and records why its immutable contract is no longer sufficient.\n\nThis request does not enlarge the contract. Continuing requires a new contract version and a\nnew Attempt.",
+      "properties": {
+        "attemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "attemptId",
+        "evidence"
+      ],
+      "type": "object"
+    },
     "WorkRunCancelParams": {
       "properties": {
         "commandId": {
@@ -29547,6 +29710,84 @@
       ],
       "type": "string"
     },
+    "WorkRunConflictRecordParams": {
+      "additionalProperties": false,
+      "description": "Records a discovered overlap and stops every exact Attempt named by the conflict.",
+      "properties": {
+        "attemptIds": {
+          "items": {
+            "$ref": "#/$defs/WorkAttemptId"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "conflictId": {
+          "$ref": "#/$defs/WorkConflictId"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "resource": {
+          "type": "string"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "conflictId",
+        "attemptIds",
+        "resource",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "WorkRunConflictResolveParams": {
+      "additionalProperties": false,
+      "description": "Resolves an open conflict with an existing authoritative decision.\n\nResolution makes the affected Attempts stale; it never resumes them under their old\ncontracts.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "conflictId": {
+          "$ref": "#/$defs/WorkConflictId"
+        },
+        "decisionId": {
+          "$ref": "#/$defs/WorkDecisionId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "conflictId",
+        "decisionId"
+      ],
+      "type": "object"
+    },
     "WorkRunCreateParams": {
       "properties": {
         "acceptanceConditions": {
@@ -29585,6 +29826,45 @@
         "objective",
         "acceptanceConditions",
         "exclusions"
+      ],
+      "type": "object"
+    },
+    "WorkRunDecisionRecordParams": {
+      "additionalProperties": false,
+      "description": "Records an immutable decision made by a user or another authorized work owner.\n\nAgent messages and summaries are not decisions. Only a trusted product host may submit this\ncommand after establishing the named authority outside the Agent execution boundary.",
+      "properties": {
+        "authority": {
+          "type": "string"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "decisionId": {
+          "$ref": "#/$defs/WorkDecisionId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "decisionId",
+        "authority",
+        "scope",
+        "statement"
       ],
       "type": "object"
     },

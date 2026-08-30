@@ -671,11 +671,15 @@ use crate::protocol::work_run_model::WorkVerificationDto;
 use crate::protocol::work_run_model::WorkVerificationInputDto;
 use crate::protocol::work_run_model::WorkVerificationStatusDto;
 use crate::protocol::work_run_model::WorkWaitConditionDto;
+use crate::protocol::work_runs::WorkRunAttemptScopeExpansionRequestParams;
 use crate::protocol::work_runs::WorkRunCancelParams;
 use crate::protocol::work_runs::WorkRunChanged;
 use crate::protocol::work_runs::WorkRunCollaborationModeDto;
 use crate::protocol::work_runs::WorkRunCommandDispositionDto;
+use crate::protocol::work_runs::WorkRunConflictRecordParams;
+use crate::protocol::work_runs::WorkRunConflictResolveParams;
 use crate::protocol::work_runs::WorkRunCreateParams;
+use crate::protocol::work_runs::WorkRunDecisionRecordParams;
 use crate::protocol::work_runs::WorkRunGoalReviseParams;
 use crate::protocol::work_runs::WorkRunIntegrationRequestParams;
 use crate::protocol::work_runs::WorkRunListParams;
@@ -1283,6 +1287,26 @@ client_methods! {
     },
     WorkRunGoalRevise => "workRun/goal/revise" {
         params: WorkRunGoalReviseParams,
+        response: WorkRunMutationResult,
+        serialization: GlobalExclusive,
+    },
+    WorkRunDecisionRecord => "workRun/decision/record" {
+        params: WorkRunDecisionRecordParams,
+        response: WorkRunMutationResult,
+        serialization: GlobalExclusive,
+    },
+    WorkRunAttemptScopeExpansionRequest => "workRun/attempt/scopeExpansion/request" {
+        params: WorkRunAttemptScopeExpansionRequestParams,
+        response: WorkRunMutationResult,
+        serialization: GlobalExclusive,
+    },
+    WorkRunConflictRecord => "workRun/conflict/record" {
+        params: WorkRunConflictRecordParams,
+        response: WorkRunMutationResult,
+        serialization: GlobalExclusive,
+    },
+    WorkRunConflictResolve => "workRun/conflict/resolve" {
+        params: WorkRunConflictResolveParams,
         response: WorkRunMutationResult,
         serialization: GlobalExclusive,
     },
@@ -3065,6 +3089,10 @@ typescript_bindings! {
     WorkRunParticipantAddParams,
     WorkRunRelationCreateParams,
     WorkRunGoalReviseParams,
+    WorkRunDecisionRecordParams,
+    WorkRunAttemptScopeExpansionRequestParams,
+    WorkRunConflictRecordParams,
+    WorkRunConflictResolveParams,
     WorkRunCancelParams,
     WorkRunVerificationRequestParams,
     WorkRunIntegrationRequestParams,

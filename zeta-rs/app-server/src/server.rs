@@ -151,6 +151,10 @@ mod work_run_operations;
 #[path = "server/work_run_operations_tests.rs"]
 mod work_run_operations_tests;
 mod work_run_projection;
+mod work_run_steering_operations;
+#[cfg(test)]
+#[path = "server/work_run_steering_operations_tests.rs"]
+mod work_run_steering_operations_tests;
 mod work_serializability;
 mod work_verification;
 mod work_wait;
@@ -1839,6 +1843,18 @@ impl AppServer {
             }
             Some(ClientMethod::WorkRunGoalRevise) => {
                 self.work_run_goal_revise(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunDecisionRecord) => {
+                self.work_run_decision_record(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunAttemptScopeExpansionRequest) => {
+                self.work_run_attempt_scope_expansion_request(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunConflictRecord) => {
+                self.work_run_conflict_record(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunConflictResolve) => {
+                self.work_run_conflict_resolve(connection, &request.params)
             }
             Some(ClientMethod::WorkRunCancel) => self.work_run_cancel(connection, &request.params),
             Some(ClientMethod::WorkRunVerificationRequest) => {

@@ -2,7 +2,7 @@
 
 > 文档所有权：本文是同一 Session 子 Agent、跨 Session 独立 Agent 以及 Team 在一个或多个项目根中共同开发时，工作契约、动态范围、跨 Agent 冲突、验证证据和最终集成语义的权威设计。
 >
-> 状态：部分具备（Current with limitations，2026-08-30）。后端已经实现持久化 WorkRun、工作契约与尝试、同 Session 与跨 Session 参与者、精确等待关系、Project 多根目录表、任意多根隔离工作目录、ChangeSet 来源绑定、验证与集成状态机以及受信 App Server 接口。Team 产品流程、完整工作契约/尝试 RPC、全部平台资格测试、完整参考状态机、验证器变异测试和真实任务对照仍未完成；生产验证器因此保持 `indeterminate`，当前系统不能宣称已经具备可靠的自动并行开发闭环。
+> 状态：部分具备（Current with limitations，2026-08-30）。后端已经实现持久化 WorkRun、工作契约与尝试、同 Session 与跨 Session 参与者、精确等待关系、Project 多根目录表、任意多根隔离工作目录、ChangeSet 来源绑定、验证与集成状态机，以及受信 App Server 的决定、范围扩张请求和冲突处理接口。Team 产品流程、完整工作契约/尝试 RPC、全部平台资格测试、完整参考状态机、验证器变异测试和真实任务对照仍未完成；生产验证器因此保持 `indeterminate`，当前系统不能宣称已经具备可靠的自动并行开发闭环。
 >
 > Agent 创建、消息、等待、取消和恢复由 [`core-multi-agent.md`](core-multi-agent.md) 拥有；Turn ChangeSet 与受管目录的当前产品语义由 [`chat-session-inspector.md`](chat-session-inspector.md) 拥有；动作授权与操作系统强制执行分别由 [`permissions.md`](permissions.md) 和 [`sandboxing.md`](sandboxing.md) 拥有；当前 App Server 方法由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 拥有。本文不重复这些系统的内部实现。
 
@@ -60,14 +60,14 @@
 | 不可变差异重放、目标分支条件更新和中断恢复 | 后端已实现有序多根重放、条件更新和 journal 恢复 | [`chat-session-inspector.md`](chat-session-inspector.md)、[`git.md`](git.md) | 生产验证器通过资格门前不会产生可发布结论 |
 | 动作摘要、能力集合、策略版本和批准 | 已实现 | [`permissions.md`](permissions.md) | 工作契约的授权边界必须落到每次实际动作，不能停留在提示词中 |
 | 文件、网络和进程边界的操作系统强制执行 | 部分具备 | [`sandboxing.md`](sandboxing.md) | 所有支持平台都要证明 Agent 无法写同级 Agent 工作区、目标 ref 和验证资源 |
-| 工作契约、工作尝试和范围扩张 | 后端已实现 | 本文 | 仍需完成产品创建流程和全部迁移的参考模型覆盖 |
+| 工作契约、工作尝试和范围扩张 | 后端已实现；受信 App Server 可请求停止一个需要扩张范围的精确尝试 | 本文 | 仍需完成新契约与新尝试的产品创建流程和全部迁移的参考模型覆盖 |
 | 跨 Session 观察、等待、另开方向、移交和结果依赖 | 关系领域已实现；精确等待可由 host 恢复并自动收敛 | 本文 | 任意长进程条件、独立 Session 创建/移交产品流程仍未完成 |
 | Team 产品闭环 | 部分具备；App Server 可把 WorkRun 与 canonical Agent tree 组合成只读视图 | 本文 | Desktop、CLI、TUI 的创建、冲突处理和证据界面尚未实现 |
 | Project 持久实体、多根目录表与 WorkRun 入口 | 后端已实现；Project 只保存弱关联 | [`domain-model.md`](domain-model.md#11-project多根与共同工作)、本文 | 产品根选择与跨 Environment 交互尚未实现 |
-| 跨 Agent 路径、契约、决定和资源冲突 | 依赖图、显式冲突和实际读写可串行化分析已实现 | 本文 | 自动把 host 发现映射为用户可处理冲突的产品闭环尚未实现 |
+| 跨 Agent 路径、契约、决定和资源冲突 | 依赖图、显式冲突和实际读写可串行化分析已实现；受信 App Server 可登记冲突并用已有决定解决 | 本文 | 自动把 host 发现映射为用户可处理冲突的产品闭环尚未实现 |
 | 独立证据包与验证结论 | 部分具备；精确输入、失效和不可变重放已实现 | 本文 | 验收验证器和平台隔离未取得资格，生产结论保持无法确认 |
 | 多 ChangeSet 集成门禁 | 后端状态机与 Git 多根有序发布已实现 | 本文 | 只有外部注入的测试资格记录能走成功路径；生产自动发布仍关闭 |
-| App Server 和产品界面的工作协调视图 | 后端方法、通知和受信 host 门禁已实现；产品界面未实现 | [`zeta-app-server-api.md`](zeta-app-server-api.md) | 客户端仍需消费权威视图，不能自行推断结论 |
+| App Server 和产品界面的工作协调视图 | 后端读取、关系、决定、范围扩张、冲突、验证与集成请求及受信 host 门禁已实现；产品界面未实现 | [`zeta-app-server-api.md`](zeta-app-server-api.md) | 客户端仍需消费权威视图，不能自行推断结论 |
 
 当前后端已经能拒绝没有精确契约、错误执行代次、循环等待、过期验证和目标移动，并能重建多根候选状态；但验收验证器、平台矩阵、产品流程和完整资格测试未完成，因此仍不能证明任意多个 Agent 的修改共同构成一个正确、无冲突、可发布的开发结果。“Agent 都结束了”和“每个 Agent 自己的测试都通过了”仍然不是完成证据。
 
@@ -83,7 +83,7 @@
 - 尝试与等待迁移的独立可执行参考模型：[`reference_model_tests.rs`](../zeta-rs/work-coordination/src/reference_model_tests.rs)；
 - 原子提交前失败与提交后回执丢失：[`persistence_fault_tests.rs`](../zeta-rs/work-coordination/src/persistence_fault_tests.rs)；
 - SQLite WorkRun/Project 回执、损坏拒绝和全局 Thread writer：[`work_coordination_store_tests.rs`](../zeta-rs/state/src/work_coordination_store_tests.rs) 与 [`project_store_tests.rs`](../zeta-rs/state/src/project_store_tests.rs)；
-- App Server 的真实多根工作目录、Git 重放、目标移动、恢复、等待与 Project 权限分离：[`work_attempt_workspace_tests.rs`](../zeta-rs/app-server/src/server/work_attempt_workspace_tests.rs)、[`work_wait_tests.rs`](../zeta-rs/app-server/src/server/work_wait_tests.rs) 与 [`project_operations_tests.rs`](../zeta-rs/app-server/src/server/project_operations_tests.rs)。
+- App Server 的真实多根工作目录、Git 重放、目标移动、恢复、等待、受信协调命令与 Project 权限分离：[`work_attempt_workspace_tests.rs`](../zeta-rs/app-server/src/server/work_attempt_workspace_tests.rs)、[`work_wait_tests.rs`](../zeta-rs/app-server/src/server/work_wait_tests.rs)、[`work_run_steering_operations_tests.rs`](../zeta-rs/app-server/src/server/work_run_steering_operations_tests.rs) 与 [`project_operations_tests.rs`](../zeta-rs/app-server/src/server/project_operations_tests.rs)。
 
 这些测试证明当前后端边界，不等于第 9 节的完整资格结论。参考模型目前覆盖尝试、等待、错误唤醒和范围扩张，没有覆盖所有契约、冲突、验证与集成迁移；平台逃逸、验证器变异、UI 重连和版本化真实任务对照也尚未完成。
 
@@ -660,6 +660,7 @@ Project 的显示名称、描述和归类不进入验证身份。Project 根目�
 | 重试与持久化边界 | 故障存储分别在原子提交前失败和提交成功后丢失回执；SQLite 测试验证完整记录、原命令回执、损坏拒绝和跨 WorkRun Thread writer 租约 | 已证明当前 WorkRun/Project store contract；尚未覆盖第 9.4 节列出的每个外部持久化边界 |
 | 多根结果组合 | App Server 纵向测试使用真实两个 Git 根完成隔离目录、精确 ChangeSet 来源、不可变重放、目标移动失效、多仓库部分状态和 journal 恢复 | 已证明测试场景；不等于所有仓库布局、平台和工具已经取得资格 |
 | 等待与诱导防护 | 等待只绑定精确 WorkAttempt、ExecutionId 和条件；循环、错误代次、活动目标假唤醒、终态伪造摘要和不同精确结果均被状态机拒绝或导出失败 | 已证明当前等待状态机；任意外部长进程观察仍是缺口 |
+| 协调控制面 | 普通连接不能调用工作决定、范围扩张和冲突命令；所有修改绑定 `commandId + expectedRevision`，重放不重复提交；范围扩张与冲突会停止精确尝试，冲突解决会使旧尝试过期 | 已证明当前 App Server 边界；Team、CLI、TUI 的用户确认与冲突界面仍是缺口 |
 | Project 权限隔离 | Project 根只能从受信 host 已解析的 Session `Dir` 创建；Project mutation 不推进 Grant revision，删除 Grant 后 Project 记录不能恢复访问 | 已证明后端组织关系不授予权限；产品根选择和跨 Environment 交互未完成 |
 | 独立验证与发布 | 候选结果绑定目标、根、实际 ChangeSet、授权、控制资源、验证器和环境摘要；目标移动使旧结论过期 | 生产验收验证器和平台隔离未取得资格，结论固定为 `indeterminate`，因此自动发布关闭 |
 
@@ -691,11 +692,20 @@ Project 的显示名称、描述和归类不进入验证身份。Project 根目�
 
 ### 11.1 当前协议语义与产品缺口
 
-App Server 已经提供 `workRun/list`、`workRun/read`、`workRun/view/read`、创建、参与者、关系、目标修订、取消、验证请求和集成请求，并提供 Project 的读取、根目录表、Session/WorkRun 弱关联和生命周期方法。所有方法都同时要求服务端授予产品宿主连接身份，并在初始化时协商 `workCoordinationHost`；普通连接伪造同样的能力字段会被拒绝，Renderer 不能直接调用。通知只投递已提交结果，重放不产生第二次变化。
+App Server 已经提供 `workRun/list`、`workRun/read`、`workRun/view/read`、创建、参与者、关系、目标修订、不可变决定、范围扩张请求、冲突登记与解决、取消、验证请求和集成请求，并提供 Project 的读取、根目录表、Session/WorkRun 弱关联和生命周期方法。所有方法都同时要求服务端授予产品宿主连接身份，并在初始化时协商 `workCoordinationHost`；普通连接伪造同样的能力字段会被拒绝，Renderer 不能直接调用。通知只投递已提交结果，重放不产生第二次变化。
 
 连接身份由创建入口决定，不由 JSON 请求决定。产品直接启动的标准输入输出，以及位于当前用户私有目录、权限收紧到当前用户的后台套接字，可以创建产品宿主连接；通用进程内连接和通用 JSONL 入口只能创建普通连接。这一边界防止 Renderer、扩展或协议对端靠自报升级权限，但不把已经控制当前系统账号或未受约束宿主进程的攻击者当成可隔离对象；Agent 工具进程仍必须由 SandboxScope 阻断产品 profile 和协调套接字。
 
-当前方法只覆盖后端 host 协调面。工作契约、工作尝试创建与执行仍由进程内 host 路径驱动，没有完整外部 RPC；冲突解决、Team 创建、跨 Session 移交、产品订阅恢复以及 Desktop、CLI、TUI 的用户操作尚未闭环。`workRun/view/read` 只组合 canonical Agent tree 与 WorkRun，不保存 Team 私有事实。
+当前协调入口把“消息”“执行控制”和“工作决定”分开：Agent 消息只提供说法或建议，不改变 WorkRun；中断、恢复和取消只改变 Thread 或 Attempt 生命周期；下面四个方法才修改受版本保护的工作事实。
+
+| 方法 | 当前确定语义 | 不会做什么 |
+| --- | --- | --- |
+| `workRun/decision/record` | 记录有负责人、作用域、正文和内容摘要的不可变决定 | 不把 Agent 消息或多数意见自动提升为决定 |
+| `workRun/attempt/scopeExpansion/request` | 保存证据并立即停止精确 Attempt，状态变为 `expansionRequested` | 不扩大旧契约，也不允许旧 Attempt 继续写 |
+| `workRun/conflict/record` | 记录资源、证据和精确 Attempt 集合，并停止所有受影响 Attempt | 不根据文件能否自动合并猜测没有语义冲突 |
+| `workRun/conflict/resolve` | 只接受已经记录的决定；解决后所有旧 Attempt 变为 `stale` | 不在旧契约下恢复执行，也不直接产生验证或集成结论 |
+
+当前方法只覆盖后端 host 协调面。工作契约、工作尝试创建与执行仍由进程内 host 路径驱动，没有完整外部 RPC；Team 创建、跨 Session 移交、产品订阅恢复以及 Desktop、CLI、TUI 的决定确认、冲突处理和证据操作尚未闭环。`workRun/view/read` 只组合 canonical Agent tree 与 WorkRun，不保存 Team 私有事实。
 
 当前 RPC、DTO、稳定错误和通知由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 详细拥有。后续方法仍必须遵守 schema、幂等命令、受信 host 和订阅门禁，不能为产品缺口增加进程内旁路。
 

@@ -289,7 +289,7 @@ impl AppServer {
         result(&response)
     }
 
-    fn apply_work_run(
+    pub(super) fn apply_work_run(
         &self,
         connection: &ConnectionState,
         request: WorkRunCommandRequest,
