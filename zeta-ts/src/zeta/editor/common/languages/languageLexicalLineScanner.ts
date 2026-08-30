@@ -1,5 +1,5 @@
-import { type LanguageCharacterPair } from "./languageConfiguration.js";
-import { type ResolvedLanguageCommentConfiguration } from "./ownedLanguageConfigurationContributions.js";
+import { type CharacterPair } from './languageConfiguration.js';
+import { type ICommentsConfiguration } from './languageConfigurationRegistry.js';
 import { LanguageDiagnosticSeverity } from "./languageResults.js";
 
 export type LanguageLexicalState = "normal" | "blockComment" | "multilineString" | `rawString:${number}`;
@@ -45,8 +45,8 @@ export interface LanguageLexicalLineResult {
 }
 
 export interface LanguageLexicalScannerConfiguration {
-	readonly comments: ResolvedLanguageCommentConfiguration;
-	readonly brackets: readonly LanguageCharacterPair[];
+	readonly comments: ICommentsConfiguration | null;
+	readonly brackets: readonly CharacterPair[];
 	readonly keywords: readonly string[];
 	readonly stringQuotes: readonly string[];
 	readonly multilineStringQuote?: string;
@@ -66,7 +66,7 @@ interface CompiledBracket {
 
 /** Immutable line scanner compiled from one language-specific lexical profile. */
 export class LanguageLexicalLineScanner {
-	private readonly comments: ResolvedLanguageCommentConfiguration;
+	private readonly comments: LanguageLexicalComments;
 	private readonly keywords: ReadonlySet<string>;
 	private readonly stringQuotes: ReadonlySet<string>;
 	private readonly multilineStringQuote: string | undefined;
@@ -291,9 +291,20 @@ const IDENTIFIER_START = /[\p{ID_Start}_$]/u;
 const IDENTIFIER_CONTINUE = /[\p{ID_Continue}_$\u200c\u200d]/u;
 const OPERATOR_CHARACTER = /[+\-*/%=!<>?&|^~:]/;
 
-function normalizeComments(comments: ResolvedLanguageCommentConfiguration): ResolvedLanguageCommentConfiguration {
-	if (typeof comments !== "object" || comments === null) throw new TypeError("Language lexical comments must be an object");
-	return comments;
+interface LanguageLexicalComments {
+	readonly lineComment?: string;
+	readonly blockComment?: { readonly open: string; readonly close: string };
+}
+
+function normalizeComments(comments: ICommentsConfiguration | null): LanguageLexicalComments {
+	if (comments === null) return {};
+	if (typeof comments !== 'object') throw new TypeError('Language lexical comments must be an object');
+	return {
+		...(comments.lineCommentToken ? { lineComment: comments.lineCommentToken } : {}),
+		...(comments.blockCommentStartToken && comments.blockCommentEndToken
+			? { blockComment: { open: comments.blockCommentStartToken, close: comments.blockCommentEndToken } }
+			: {}),
+	};
 }
 
 function normalizeTokens(tokens: readonly string[], owner: string): readonly string[] {
@@ -320,16 +331,16 @@ function normalizeRegularExpressionSyntax(value: unknown): "ecmascript" {
 	return value;
 }
 
-function compileBrackets(pairs: readonly LanguageCharacterPair[]): readonly CompiledBracket[] {
+function compileBrackets(pairs: readonly CharacterPair[]): readonly CompiledBracket[] {
 	if (!Array.isArray(pairs)) throw new TypeError("Language lexical brackets must be an array");
 	const result: CompiledBracket[] = [];
 	for (const pair of pairs) {
-		if (typeof pair !== "object" || pair === null || typeof pair.open !== "string" || typeof pair.close !== "string") {
+		if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || typeof pair[1] !== 'string') {
 			throw new TypeError("Language lexical bracket pair is invalid");
 		}
 		result.push(
-			Object.freeze({ action: "open", token: pair.open, matchingToken: pair.close }),
-			Object.freeze({ action: "close", token: pair.close, matchingToken: pair.open }),
+			Object.freeze({ action: "open", token: pair[0], matchingToken: pair[1] }),
+			Object.freeze({ action: "close", token: pair[1], matchingToken: pair[0] }),
 		);
 	}
 	result.sort((left, right) => right.token.length - left.token.length);

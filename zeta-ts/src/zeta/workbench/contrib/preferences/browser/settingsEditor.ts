@@ -5,7 +5,8 @@ import type { IContextViewProvider } from '../../../../base/browser/ui/contextvi
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import type { IConfigurationKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/preferencesModels.js';
@@ -176,8 +177,8 @@ export class SettingsEditorPane extends Disposable implements IPreferencesEditor
 	private isModified(id: string): boolean {
 		const setting = this.settingsModel.settings.find(candidate => candidate.id === id);
 		if (!setting) return false;
-		const key = setting.key as IConfigurationKey<unknown>;
-		return JSON.stringify(key.serialize(this.configurationService.getValue(key))) !== JSON.stringify(key.serialize(key.defaultValue));
+		const configuration = setting.configuration as IRegisteredConfiguration<unknown>;
+		return JSON.stringify(configuration.serialize(this.configurationService.getValue(configuration.key))) !== JSON.stringify(configuration.serialize(configuration.defaultValue));
 	}
 
 	focus(): void {

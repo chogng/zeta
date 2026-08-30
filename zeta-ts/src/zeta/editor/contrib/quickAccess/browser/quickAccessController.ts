@@ -139,7 +139,7 @@ registerTextEditorCapabilityContribution({
 	id: "editor.contrib.quickAccess",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new GotoLineController(context.view.element, context.viewport, context.selections));
+		context.register(new GotoLineController(context.view.element, context.viewport, context.viewModel));
 	},
 });
 

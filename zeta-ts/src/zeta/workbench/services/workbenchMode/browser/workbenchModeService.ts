@@ -1,5 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ILifecycleService } from '../../../../platform/lifecycle/common/lifecycleService.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from '../../../common/workbenchMode.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
@@ -50,7 +50,7 @@ export class WorkbenchModeService extends Disposable implements IWorkbenchModeSe
 	}
 
 	private async performSwitch(modeId: WorkbenchModeId, reset: boolean): Promise<void> {
-		if (reset) await this.configurationService.resetValue(WorkbenchConfiguration.mode);
+		if (reset) await this.configurationService.updateValue(WorkbenchConfiguration.mode, undefined);
 		else await this.configurationService.updateValue(WorkbenchConfiguration.mode, modeId);
 		if (modeId === this.currentModeId) return;
 		await this.lifecycleService.shutdown('reload');

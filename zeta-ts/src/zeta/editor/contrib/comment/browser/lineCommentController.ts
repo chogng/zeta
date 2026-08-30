@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { createToggleLineCommentCommand } from "../common/lineCommentCommands.js";
-import { type LanguageConfigurationSource } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { type View } from "../../../browser/view.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
@@ -11,7 +11,7 @@ export const ToggleLineCommentCommandId = 'editor.action.commentLine';
 
 export interface LineCommentControllerOptions {
 	readonly languageId: string;
-	readonly configurations: LanguageConfigurationSource;
+	readonly configurations: ILanguageConfigurationService;
 	readonly insertSpace?: boolean;
 	readonly lexicalContext?: LanguageLexicalContextSource;
 }
@@ -42,7 +42,7 @@ export class LineCommentController extends Disposable {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key !== "/") return;
 		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections.primary.getPosition()) ?? this.options.languageId;
-		const lineComment = this.options.configurations.getLanguageConfiguration(languageId).comments.lineComment;
+		const lineComment = this.options.configurations.getLanguageConfiguration(languageId).comments?.lineCommentToken;
 		if (!lineComment) return;
 		stopEvent(event);
 		const command = createToggleLineCommentCommand(

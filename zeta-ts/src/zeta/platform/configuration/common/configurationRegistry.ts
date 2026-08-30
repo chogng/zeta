@@ -1,4 +1,3 @@
-import type { IConfigurationKey } from "./configurationService.js";
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
 
 export interface IConfigurationPropertySchema extends JsonSchema {
@@ -40,8 +39,11 @@ export type ConfigurationSettingSchemaFor<T> =
 			: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
 				: never;
 
-export interface IRegisteredConfiguration {
-	readonly key: IConfigurationKey<unknown>;
+export interface IRegisteredConfiguration<T = unknown> {
+	readonly key: string;
+	readonly defaultValue: T;
+	readonly parse: (value: unknown) => T;
+	readonly serialize: (value: T) => unknown;
 	readonly setting?: IConfigurationSettingSchema;
 }
 
@@ -64,7 +66,7 @@ export class ConfigurationRegistry {
 
 	registerConfiguration<T>(
 		definition: IConfigurationKeyDefinition<T>,
-	): IConfigurationKey<T> {
+	): string {
 		if (!isConfigurationKey(definition.key)) {
 			throw new TypeError(`Invalid configuration key: ${definition.key}`);
 		}
@@ -73,21 +75,19 @@ export class ConfigurationRegistry {
 				`Configuration key is already registered: ${definition.key}`,
 			);
 		}
-		const key: IConfigurationKey<T> = Object.freeze({
+		const configuration: IRegisteredConfiguration<T> = Object.freeze({
 			key: definition.key,
 			defaultValue: definition.defaultValue,
 			parse: definition.parse,
 			serialize: definition.serialize ?? ((value: T) => value),
-		});
-		this.configurations.set(definition.key, {
-			key: key as IConfigurationKey<unknown>,
 			setting: definition.setting as IConfigurationSettingSchema | undefined,
 		});
-		return key;
+		this.configurations.set(definition.key, configuration as IRegisteredConfiguration);
+		return definition.key;
 	}
 
-	getConfigurations(): readonly IConfigurationKey<unknown>[] {
-		return [...this.configurations.values()].map(configuration => configuration.key);
+	getConfigurations(): readonly string[] {
+		return [...this.configurations.keys()];
 	}
 
 	getRegisteredConfigurations(): readonly IRegisteredConfiguration[] {
@@ -98,8 +98,8 @@ export class ConfigurationRegistry {
 		return this.configurations.get(key);
 	}
 
-	owns<T>(key: IConfigurationKey<T>): boolean {
-		return this.configurations.get(key.key)?.key === key;
+	owns(key: string): boolean {
+		return this.configurations.has(key);
 	}
 }
 

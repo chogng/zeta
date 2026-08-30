@@ -6,7 +6,7 @@ import { type TextEditorContributionContext, type TextEditorRuntimeContribution 
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { EditorPeekViewWidget } from '../../../../editor/contrib/peekView/browser/editorPeekViewWidget.js';
-import { type IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IQuickDiffEditorController, type IQuickDiffEditorControllerService, type IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
 

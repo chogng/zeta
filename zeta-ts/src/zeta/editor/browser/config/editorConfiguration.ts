@@ -13,6 +13,12 @@ import {
 import { type FontInfo } from '../../common/config/fontInfo.js';
 import { type IDimension } from '../../common/core/2d/dimension.js';
 
+/** Options supplied while constructing a browser code editor. */
+export interface IEditorConstructionOptions extends IEditorOptions {
+	readonly dimension?: IDimension;
+	readonly overflowWidgetsDomNode?: HTMLElement;
+}
+
 /** Browser owner for mutable editor options consumed by view and cursor configuration. */
 export class EditorConfiguration extends Disposable implements IEditorConfiguration {
 	private readonly _onDidChange = this._register(new Emitter<ConfigurationChangedEvent>());

@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
-import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
 
@@ -53,7 +53,7 @@ const stanza = await import("../../editor.main.js");
 test.after(() => browserEnvironment.window.close());
 
 test("standalone service collection honors explicit first-scope overrides", () => {
-	const languageConfigurations = new ComposableLanguageConfigurationService();
+	const languageConfigurations = new TestLanguageConfigurationService();
 	const languages = new LanguageFeaturesService(languageConfigurations);
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
@@ -142,7 +142,7 @@ test("standalone languages API feeds the shared editor registries", async () => 
 	});
 	const services = StandaloneServices.get();
 	assert.equal(services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }), 'stanza-public-test');
-	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments.lineComment, '//');
+	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments?.lineCommentToken, '//');
 	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));
 	assert.equal(model instanceof stanza.TextModel, true);
 	if (!(model instanceof stanza.TextModel)) throw new Error('Expected the standalone model implementation');
@@ -289,7 +289,7 @@ test("standalone editor rejects unregistered models and conflicting model option
 	const registered = stanza.editor.createModel("registered", "plaintext", URI.parse("inmemory://stanza/conflict.txt"));
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
 	registered.dispose();
-	const lateConfigurations = new ComposableLanguageConfigurationService();
+	const lateConfigurations = new TestLanguageConfigurationService();
 	const lateOverride = new LanguageFeaturesService(lateConfigurations);
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();

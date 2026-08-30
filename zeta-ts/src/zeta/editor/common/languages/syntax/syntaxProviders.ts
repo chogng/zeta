@@ -1,4 +1,5 @@
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
@@ -37,6 +38,8 @@ export interface RegisteredSyntaxProvider {
 /** Caller-owned registry for snapshot tokenization and diagnostic providers. */
 export class SyntaxProviderRegistry extends Disposable {
 	private readonly providers = new Map<string, RegisteredSyntaxProvider>();
+	private readonly changeEmitter = this._register(new Emitter<void>());
+	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor() {
 		super();
@@ -63,10 +66,16 @@ export class SyntaxProviderRegistry extends Disposable {
 			identities.add(provider.id);
 		}
 		for (const provider of registered) this.providers.set(provider.id, provider);
+		this.changeEmitter.fire();
 		return toDisposable(() => {
+			let changed = false;
 			for (const provider of registered) {
-				if (this.providers.get(provider.id) === provider) this.providers.delete(provider.id);
+				if (this.providers.get(provider.id) === provider) {
+					this.providers.delete(provider.id);
+					changed = true;
+				}
 			}
+			if (changed) this.changeEmitter.fire();
 		});
 	}
 

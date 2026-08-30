@@ -1,7 +1,7 @@
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";

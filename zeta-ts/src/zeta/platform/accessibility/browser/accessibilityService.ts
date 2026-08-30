@@ -2,8 +2,8 @@ import { AriaLiveRegion } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { IContextKey, IContextKeyService } from "../../contextkey/common/contextkey.js";
-import { IConfigurationService } from "../../configuration/common/configurationService.js";
-import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService } from "../common/accessibility.js";
+import { IConfigurationService } from "../../configuration/common/configuration.js";
+import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from "../common/accessibility.js";
 
 /** Inputs required by the browser-independent accessibility policy. */
 export interface AccessibilityServiceOptions {
@@ -24,8 +24,8 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 	private readonly onDidChangeReducedTransparencyEmitter = this._register(new Emitter<void>());
 	private readonly onDidChangeLinkUnderlinesEmitter = this._register(new Emitter<void>());
 	private accessibilitySupport: AccessibilitySupport;
-	private configMotionReduced: "auto" | "off" | "on";
-	private configTransparencyReduced: "auto" | "off" | "on";
+	private configMotionReduced: AccessibilityReductionConfiguration;
+	private configTransparencyReduced: AccessibilityReductionConfiguration;
 	private systemMotionReduced: boolean;
 	private systemTransparencyReduced: boolean;
 	private linkUnderlinesEnabled: boolean;
@@ -41,9 +41,9 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 		this.root = options.root;
 		this.configurationService = options.configurationService;
 		this.accessibilitySupport = options.initialAccessibilitySupport ?? AccessibilitySupport.Unknown;
-		this.configMotionReduced = options.configurationService.getValue(AccessibilityConfiguration.reduceMotion);
-		this.configTransparencyReduced = options.configurationService.getValue(AccessibilityConfiguration.reduceTransparency);
-		this.linkUnderlinesEnabled = options.configurationService.getValue(AccessibilityConfiguration.underlineLinks);
+		this.configMotionReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceMotion);
+		this.configTransparencyReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceTransparency);
+		this.linkUnderlinesEnabled = options.configurationService.getValue<boolean>(AccessibilityConfiguration.underlineLinks);
 		this.systemMotionReduced = false;
 		this.systemTransparencyReduced = false;
 		this.accessibilityModeEnabledContext = CONTEXT_ACCESSIBILITY_MODE_ENABLED.bindTo(options.contextKeyService);
@@ -79,17 +79,17 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 				this.onDidChangeScreenReaderOptimizedEmitter.fire();
 			}
 			if (event.affectsConfiguration(AccessibilityConfiguration.reduceMotion)) {
-				this.configMotionReduced = options.configurationService.getValue(AccessibilityConfiguration.reduceMotion);
+				this.configMotionReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceMotion);
 				this.updateMotionClasses();
 				this.onDidChangeReducedMotionEmitter.fire();
 			}
 			if (event.affectsConfiguration(AccessibilityConfiguration.reduceTransparency)) {
-				this.configTransparencyReduced = options.configurationService.getValue(AccessibilityConfiguration.reduceTransparency);
+				this.configTransparencyReduced = options.configurationService.getValue<AccessibilityReductionConfiguration>(AccessibilityConfiguration.reduceTransparency);
 				this.updateTransparencyClass();
 				this.onDidChangeReducedTransparencyEmitter.fire();
 			}
 			if (event.affectsConfiguration(AccessibilityConfiguration.underlineLinks)) {
-				this.linkUnderlinesEnabled = options.configurationService.getValue(AccessibilityConfiguration.underlineLinks);
+				this.linkUnderlinesEnabled = options.configurationService.getValue<boolean>(AccessibilityConfiguration.underlineLinks);
 				this.updateLinkUnderlineClass();
 				this.onDidChangeLinkUnderlinesEmitter.fire();
 			}
@@ -106,7 +106,7 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 	}
 
 	isScreenReaderOptimized(): boolean {
-		const configured = this.configurationService.getValue(AccessibilityConfiguration.editorAccessibilitySupport);
+		const configured = this.configurationService.getValue<AccessibilitySupportConfiguration>(AccessibilityConfiguration.editorAccessibilitySupport);
 		return configured === "on" || (configured === "auto" && this.accessibilitySupport === AccessibilitySupport.Enabled);
 	}
 

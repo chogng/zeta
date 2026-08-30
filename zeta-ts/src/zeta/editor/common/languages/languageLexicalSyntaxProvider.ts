@@ -1,17 +1,17 @@
 import { LanguageLexicalSyntaxCache, type LanguageLexicalCacheUpdateObserver } from "./languageLexicalSyntaxCache.js";
 import { type SyntaxProvider, type SyntaxProviderRequest } from "./syntax/syntaxProviders.js";
-import { BUILTIN_LANGUAGE_IDS, createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
-import { type LanguageConfigurationSource, type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
+import { BUILTIN_LANGUAGE_IDS, createBuiltinLanguageConfigurationService } from './languageBuiltinConfigurations.js';
+import { type ILanguageConfigurationService, type ResolvedLanguageConfiguration } from './languageConfigurationRegistry.js';
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { type LanguageWorkerDocumentSynchronization } from '../services/textModelSync/textModelSync.protocol.js';
 
 export interface LanguageLexicalSyntaxProviderOptions {
 	readonly onDidUpdateCache?: LanguageLexicalCacheUpdateObserver;
-	readonly languageConfigurations?: LanguageConfigurationSource;
+	readonly languageConfigurations?: ILanguageConfigurationService;
 }
 
 interface LanguageCacheEntry {
-	readonly configuration: MergedLanguageConfiguration;
+	readonly configuration: ResolvedLanguageConfiguration;
 	readonly cache: LanguageLexicalSyntaxCache;
 }
 
@@ -20,7 +20,7 @@ export function createLanguageLexicalSyntaxProvider(options: LanguageLexicalSynt
 	if (typeof options !== "object" || options === null) {
 		throw new TypeError("Language lexical syntax provider options must be an object");
 	}
-	const languageConfigurations = options.languageConfigurations ?? createBuiltinLanguageConfigurationSource();
+	const languageConfigurations = options.languageConfigurations ?? createBuiltinLanguageConfigurationService();
 	if (!languageConfigurations || typeof languageConfigurations.getLanguageConfiguration !== "function") {
 		throw new TypeError("Language lexical syntax provider requires a language configuration source");
 	}

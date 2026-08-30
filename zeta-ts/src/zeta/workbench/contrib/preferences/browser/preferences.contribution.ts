@@ -1,5 +1,5 @@
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';

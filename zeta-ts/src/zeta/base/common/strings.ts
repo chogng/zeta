@@ -1,5 +1,19 @@
 import { CharCode } from './charCode.js';
 
+/** Encodes a literal value for use in an HTML attribute. */
+export function htmlAttributeEncodeValue(value: string): string {
+	return value.replace(/[<>"'&]/g, ch => {
+		switch (ch) {
+			case '<': return '&lt;';
+			case '>': return '&gt;';
+			case '"': return '&quot;';
+			case '\'': return '&apos;';
+			case '&': return '&amp;';
+		}
+		return ch;
+	});
+}
+
 /** Produces `a`-`z`, then `A`-`Z`, and repeats. */
 export function singleLetterHash(n: number): string {
 	const letterCount = CharCode.Z - CharCode.A + 1;

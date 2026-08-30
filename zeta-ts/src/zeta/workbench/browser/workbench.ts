@@ -32,7 +32,7 @@ import type {
 import { MenuId } from "../../platform/actions/common/actions.js";
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationResourceService } from "../../platform/configuration/common/configurationResourceService.js";
-import { IConfigurationService } from "../../platform/configuration/common/configurationService.js";
+import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { BrowserLayoutService } from "../../platform/layout/browser/layoutService.js";
 import { ILayoutService } from "../../platform/layout/common/layoutService.js";
@@ -162,7 +162,7 @@ import { ILanguageFeaturesService } from '../../editor/common/services/languageF
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
-import { IComposableLanguageConfigurationService, ComposableLanguageConfigurationService } from '../../editor/common/languages/ownedLanguageConfigurationContributions.js';
+import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
 import { WorkbenchLanguageFeatures } from '../services/language/browser/workbenchLanguageFeatures.js';
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
@@ -389,21 +389,31 @@ export class Workbench extends Disposable {
 		const workingCopyBackups = this._register(new IndexedDbWorkingCopyBackupService(workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
+		const configuration = this._register(new WorkbenchConfigurationService({
+			api: configurationApi,
+		}));
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IConfigurationResourceService, configuration);
+		const languageService = this._register(new LanguageService());
+		services.registerInstance(ILanguageService, languageService);
+		const languageConfigurationService = this._register(new LanguageConfigurationService(configuration, languageService));
+		services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
+		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
+		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+		const textMateService = this._register(new BrowserTextMateService());
+		services.registerInstance(ITextMateService, textMateService);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
-		const textModelService = this._register(getBrowserTextModelService(textResourceStore));
+		const textModelService = this._register(getBrowserTextModelService(textResourceStore, {
+			languageService,
+			languageFeaturesService,
+			syntaxService: { workerFactory: textMateService.syntaxWorkerFactory },
+			onDidChangeLanguageSupport: textMateService.onDidChange,
+		}));
 		services.registerInstance(ITextModelResourceService, textModelService);
 		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
 		services.registerInstance(IWorkspaceEditService, workspaceEditService);
 		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));
 		services.registerInstance(IBulkEditService, bulkEditService);
-		const textMateService = this._register(new BrowserTextMateService());
-		services.registerInstance(ITextMateService, textMateService);
-		const languageService = this._register(new LanguageService());
-		services.registerInstance(ILanguageService, languageService);
-		const languageConfigurationService = this._register(new ComposableLanguageConfigurationService());
-		services.registerInstance(IComposableLanguageConfigurationService, languageConfigurationService);
-		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
-		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		this._register(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: dirPermissionsService, events: api.events }));
 		const diffService = new AppServerDiffService(api.diff);
@@ -453,11 +463,6 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(ILayoutService, layoutService);
 
-		const configuration = this._register(new WorkbenchConfigurationService({
-			api: configurationApi,
-		}));
-		services.registerInstance(IConfigurationService, configuration);
-		services.registerInstance(IConfigurationResourceService, configuration);
 		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
 		services.registerInstance(IChatService, chatService);
 		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));

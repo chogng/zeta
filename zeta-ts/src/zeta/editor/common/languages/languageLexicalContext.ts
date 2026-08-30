@@ -1,6 +1,10 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type MergedLanguageConfigurationChangeEvent, type LanguageConfigurationSource, type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
+import {
+	type ILanguageConfigurationService,
+	type LanguageConfigurationServiceChangeEvent,
+	type ResolvedLanguageConfiguration,
+} from './languageConfigurationRegistry.js';
 import { assertLanguageId } from "./languageId.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { type LanguageLexicalBracketEvent, type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
@@ -39,13 +43,13 @@ export interface LanguageStructuralBracketSource extends LanguageLexicalContextS
  */
 export class LanguageLexicalContextIndex extends Disposable implements LanguageStructuralBracketSource {
 	private readonly changeEmitter = this._register(new Emitter<void>());
-	private configuration: MergedLanguageConfiguration | undefined;
+	private configuration: ResolvedLanguageConfiguration | undefined;
 	private scanner: LanguageLexicalLineScanner | undefined;
 	private bracketTokens: readonly string[] = Object.freeze([]);
 	private lineResults: LanguageLexicalLineResult[] = [];
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-	constructor(readonly textModel: TextModel, readonly languageId: string, private readonly configurations: LanguageConfigurationSource) {
+	constructor(readonly textModel: TextModel, readonly languageId: string, private readonly configurations: ILanguageConfigurationService) {
 		super();
 		assertLanguageId(languageId);
 		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") {
@@ -53,9 +57,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 			throw new TypeError("Language lexical context requires a configuration source");
 		}
 		this._register(textModel.onDidChangeContent(change => this.acceptModelChange(change)));
-		if (configurations.onDidChange) {
-			this._register(configurations.onDidChange(event => this.acceptConfigurationChange(event)));
-		}
+		this._register(configurations.onDidChange(event => this.acceptConfigurationChange(event)));
 		this._register(toDisposable(() => {
 			this.configuration = undefined;
 			this.scanner = undefined;
@@ -102,7 +104,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 		if (columnIndex === line.length && result.outputState !== "normal" && result.outputState !== "blockComment") return "string";
 		const last = result.tokens.at(-1);
 		if (columnIndex !== line.length || last?.endColumn !== line.length) return undefined;
-		const lineComment = this.configuration!.comments.lineComment;
+		const lineComment = this.configuration!.comments?.lineCommentToken;
 		if (last.tokenType === "comment" && result.inputState !== "blockComment" && lineComment && line.startsWith(lineComment, last.startColumn)) {
 			return "comment";
 		}
@@ -151,8 +153,8 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 		this.changeEmitter.fire();
 	}
 
-	private acceptConfigurationChange(event: MergedLanguageConfigurationChangeEvent): void {
-		if (event.languageId !== this.languageId) return;
+	private acceptConfigurationChange(event: LanguageConfigurationServiceChangeEvent): void {
+		if (!event.affects(this.languageId)) return;
 		this.configuration = undefined;
 		this.scanner = undefined;
 		this.bracketTokens = Object.freeze([]);
@@ -169,7 +171,7 @@ export class TokenAwareLanguageLexicalContext extends Disposable implements Lang
 	readonly languageId;
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-	constructor(private readonly fallback: LanguageStructuralBracketSource, private readonly tokenization: LanguageTokenizationSource, private readonly configurations: LanguageConfigurationSource) {
+	constructor(private readonly fallback: LanguageStructuralBracketSource, private readonly tokenization: LanguageTokenizationSource, private readonly configurations: ILanguageConfigurationService) {
 		super();
 		this.textModel = fallback.textModel;
 		this.languageId = fallback.languageId;
@@ -222,8 +224,8 @@ export class TokenAwareLanguageLexicalContext extends Disposable implements Lang
 		for (const token of embedded) {
 			if (excludedFromStructure(token)) continue;
 			const languageId = token.languageId!;
-			const pairs = this.configurations.getLanguageConfiguration(languageId).brackets;
-			const candidates = pairs.flatMap(pair => [{ token: pair.open, matchingToken: pair.close, action: "open" as const }, { token: pair.close, matchingToken: pair.open, action: "close" as const }]).sort((left, right) => right.token.length - left.token.length);
+			const pairs = this.configurations.getLanguageConfiguration(languageId).underlyingConfig.brackets ?? [];
+			const candidates = pairs.flatMap(([open, close]) => [{ token: open, matchingToken: close, action: "open" as const }, { token: close, matchingToken: open, action: "close" as const }]).sort((left, right) => right.token.length - left.token.length);
 			let column = token.range.startColumn - 1;
 			while (column < token.range.endColumn - 1) {
 				const candidate = candidates.find(value => line.startsWith(value.token, column) && column + value.token.length <= token.range.endColumn - 1);
@@ -251,8 +253,8 @@ function contains(token: LanguageToken, startColumn: number, endColumn: number):
 	return token.range.startColumn - 1 <= startColumn && token.range.endColumn - 1 >= endColumn;
 }
 
-function structuralBracketTokens(configuration: MergedLanguageConfiguration): readonly string[] {
-	return Object.freeze([...new Set(configuration.brackets.flatMap(pair => [pair.open, pair.close]))].sort((left, right) => right.length - left.length));
+function structuralBracketTokens(configuration: ResolvedLanguageConfiguration): readonly string[] {
+	return Object.freeze([...new Set((configuration.underlyingConfig.brackets ?? []).flatMap(([open, close]) => [open, close]))].sort((left, right) => right.length - left.length));
 }
 
 function removeTokens(text: string, tokens: readonly string[]): string {

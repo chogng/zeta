@@ -24,6 +24,6 @@ registerTextEditorCapabilityContribution({
 	id: "editor.contrib.lineSelection",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new LineSelectionController(context.view.element, context.viewport, context.selections));
+		context.register(new LineSelectionController(context.view.element, context.viewport, context.viewModel));
 	},
 });

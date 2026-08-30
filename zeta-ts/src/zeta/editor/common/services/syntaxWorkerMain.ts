@@ -5,14 +5,18 @@ import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
 import { SyntaxProviderWorker } from '../languages/syntax/syntaxService.js';
 import { syntaxWireCodec } from '../languages/syntax/syntaxWire.js';
 import { registerBuiltinLanguageConfigurations } from '../languages/languageBuiltinConfigurations.js';
-import { OwnedLanguageConfigurationContributions } from '../languages/ownedLanguageConfigurationContributions.js';
+import { LanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
 import { LanguageWorkerWireServer } from '../languages/languageWorkerWire.js';
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { LanguageService } from './languageService.js';
 
 start(({ port, resources }) => {
 	const registry = resources.add(new SyntaxProviderRegistry());
 	const modules = resources.add(new SyntaxProviderModuleRegistry());
-	const languageConfigurations = resources.add(new OwnedLanguageConfigurationContributions());
+	const configurationService = resources.add(new InMemoryConfigurationService());
+	const languageService = resources.add(new LanguageService());
+	const languageConfigurations = resources.add(new LanguageConfigurationService(configurationService, languageService));
 	resources.add(registerBuiltinLanguageConfigurations(languageConfigurations));
 	resources.add(modules.register({
 		id: 'language.lexical',

@@ -2,7 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import type { KeybindingEvent } from '../../../../base/common/keybindings.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { KeyboardConfiguration } from '../../../../platform/keyboardLayout/common/keyboardConfiguration.js';
 import {
 	KeyboardDispatchMode,
@@ -90,8 +90,8 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		this.dispatchOverride = options.dispatch;
 		this.mapAltGrOverride = options.mapAltGrToCtrlAlt;
 		this.configuration = Object.freeze({
-			dispatch: options.dispatch ?? options.configurationService?.getValue(KeyboardConfiguration.dispatch) ?? KeyboardDispatchMode.Code,
-			mapAltGrToCtrlAlt: options.mapAltGrToCtrlAlt ?? options.configurationService?.getValue(KeyboardConfiguration.mapAltGrToCtrlAlt) ?? false,
+			dispatch: options.dispatch ?? options.configurationService?.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch) ?? KeyboardDispatchMode.Code,
+			mapAltGrToCtrlAlt: options.mapAltGrToCtrlAlt ?? options.configurationService?.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt) ?? false,
 		});
 		this.configuredLayout = options.layout;
 		this.additionalLayouts = options.additionalLayouts ?? [];
@@ -267,9 +267,9 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 				event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
 			if (mapperChanged) {
 				this.configuration = Object.freeze({
-					dispatch: this.dispatchOverride ?? this.configurationService!.getValue(KeyboardConfiguration.dispatch),
+					dispatch: this.dispatchOverride ?? this.configurationService!.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch),
 					mapAltGrToCtrlAlt: this.mapAltGrOverride ??
-						this.configurationService!.getValue(KeyboardConfiguration.mapAltGrToCtrlAlt),
+						this.configurationService!.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt),
 				});
 				this.mapper = this.createMapper();
 				this._onDidChangeKeyboardLayout.fire();
@@ -349,7 +349,7 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 
 	private selectConfiguredLayout(): boolean {
-		const requested = this.configurationService?.getValue(KeyboardConfiguration.layout) ?? 'autodetect';
+		const requested = this.configurationService?.getValue<string>(KeyboardConfiguration.layout) ?? 'autodetect';
 		if (requested === 'autodetect') {
 			if (this.configuredLayout) {
 				this.installLayout(this.configuredLayout.layout, this.configuredLayout.mapping);
@@ -377,7 +377,7 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 
 	private hasExplicitLayoutSelection(): boolean {
-		const requested = this.configurationService?.getValue(KeyboardConfiguration.layout) ?? 'autodetect';
+		const requested = this.configurationService?.getValue<string>(KeyboardConfiguration.layout) ?? 'autodetect';
 		return requested !== 'autodetect' || Boolean(this.configuredLayout);
 	}
 

@@ -79,6 +79,6 @@ registerTextEditorCapabilityContribution({
 	install: context => {
 		if (context.kind !== "text") return;
 		const selectionRanges = context.register(new SelectionRangeService(context.model, context.languageFeaturesService.selectionRangeProvider, context.options.input.resource));
-		context.register(new SmartSelectController(context.view.element, context.viewport, context.selections, context.languageId, selectionRanges, context.onLanguageError));
+		context.register(new SmartSelectController(context.view.element, context.viewport, context.viewModel, context.languageId, selectionRanges, context.onLanguageError));
 	},
 });

@@ -1,6 +1,6 @@
 import "./media/sectionHeaders.css";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageConfigurationSource } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 import { findSectionHeaders, type FindSectionHeaderOptions } from "../../../common/services/findSectionHeaders.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -13,7 +13,7 @@ export class SectionHeadersController extends Disposable {
 		private readonly viewport: View,
 		private readonly model: TextModel,
 		private readonly languageId: string,
-		private readonly configurations: LanguageConfigurationSource,
+		private readonly configurations: ILanguageConfigurationService,
 		private readonly lexicalContext: LanguageLexicalContextSource,
 		private readonly options: Omit<FindSectionHeaderOptions, "foldingRules">,
 	) {
@@ -28,7 +28,7 @@ export class SectionHeadersController extends Disposable {
 		const configuration = this.configurations.getLanguageConfiguration(this.languageId);
 		const headers = new Map(findSectionHeaders(this.model, {
 			...this.options,
-			foldingRules: configuration.foldingMarkers ? { markers: configuration.foldingMarkers } : undefined,
+			foldingRules: configuration.foldingRules,
 		}).filter(header => !header.shouldBeInComments || this.lexicalContext.getTokenTypeAt(new Position(header.range.startLineNumber, header.range.startColumn)) === "comment")
 			.map(header => [header.range.startLineNumber - 1, header]));
 		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".view-line")]) {

@@ -1,5 +1,5 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Emitter } from "../../../../base/common/event.js";
+import { Emitter, type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
@@ -8,6 +8,9 @@ import { TextResourceConflictError, type TextResourceChangeEvent, type ITextReso
 import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/common/model/textModel.js";
 import { RetainedModelUndoRedoHistory } from '../../../../editor/common/services/retainedModelUndoRedoHistory.js';
+import { type IZetaLanguageService } from '../../../../editor/common/languages/language.js';
+import { type ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { type SyntaxServiceOptions } from '../../../../editor/common/languages/syntax/syntaxService.js';
 
 interface TextModelEntry {
 	readonly resource: URI;
@@ -34,6 +37,10 @@ enum ExternalLineEnding {
 export interface BrowserTextModelServiceOptions {
 	/** Browser-owned maintenance policy applied to newly acquired text models. */
 	readonly maintenance?: TextModelMaintenanceOptions;
+	readonly languageService?: IZetaLanguageService;
+	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly syntaxService?: SyntaxServiceOptions;
+	readonly onDidChangeLanguageSupport?: Event<void>;
 }
 
 /** Shares text models by exact resource identity while references are open. */
@@ -69,6 +76,15 @@ export class BrowserTextModelService implements ITextModelResourceService {
 		if (concurrent) return this.reference(key, concurrent);
 		const model = new TextModel(content.text, {
 			maintenance: this.options.maintenance,
+			...(this.options.languageService && this.options.languageFeaturesService ? {
+					tokenization: {
+						languageIdCodec: this.options.languageService.languageIdCodec,
+						syntaxProviderRegistry: this.options.languageFeaturesService.syntaxProvider,
+						semanticTokensProvider: this.options.languageFeaturesService.semanticTokensProvider,
+						...(this.options.syntaxService ? { syntaxService: this.options.syntaxService } : {}),
+						...(this.options.onDidChangeLanguageSupport ? { onDidChangeLanguageSupport: this.options.onDidChangeLanguageSupport } : {}),
+					},
+			} : {}),
 		});
 		this.undoRedoParticipant.restore(input.resource, model);
 		const dirtyEmitter = new Emitter<void>();
@@ -240,8 +256,9 @@ export class BrowserTextModelService implements ITextModelResourceService {
 }
 
 /** Returns a browser model service with the renderer's idle maintenance policy. */
-export function createBrowserTextModelService(resourceStore: ITextResourceStore): BrowserTextModelService {
+export function createBrowserTextModelService(resourceStore: ITextResourceStore, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
 	return new BrowserTextModelService(resourceStore, {
+		...options,
 		maintenance: {
 			schedule: callback => runWhenWindowIdle(
 				window,
@@ -255,10 +272,10 @@ export function createBrowserTextModelService(resourceStore: ITextResourceStore)
 const modelServices = new WeakMap<ITextResourceStore, BrowserTextModelService>();
 
 /** Shares model ownership for every pane backed by one resource store. */
-export function getBrowserTextModelService(resourceStore: ITextResourceStore): BrowserTextModelService {
+export function getBrowserTextModelService(resourceStore: ITextResourceStore, options: BrowserTextModelServiceOptions = {}): BrowserTextModelService {
 	const existing = modelServices.get(resourceStore);
 	if (existing) return existing;
-	const service = createBrowserTextModelService(resourceStore);
+	const service = createBrowserTextModelService(resourceStore, options);
 	modelServices.set(resourceStore, service);
 	return service;
 }

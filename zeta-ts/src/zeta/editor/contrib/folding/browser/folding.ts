@@ -43,7 +43,7 @@ export class EditorFoldingController extends Disposable {
 	) {
 		super();
 		this.viewport = context.viewport;
-		this.selections = context.selections;
+		this.selections = context.viewModel;
 		this.folding = context.getCapability(TextEditorCapability.folding);
 		this.mouseTargets = new SemanticMouseTargetFactory(this.viewport);
 		try {

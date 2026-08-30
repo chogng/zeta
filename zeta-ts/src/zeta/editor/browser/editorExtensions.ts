@@ -1,17 +1,15 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
 import { type Event } from '../../base/common/event.js';
 import { type ServiceConstructionDescriptor } from "../../platform/instantiation/common/instantiation.js";
-import { type CursorsController } from "../common/cursor/cursor.js";
-import { type LanguageConfigurationSource } from "../common/languages/ownedLanguageConfigurationContributions.js";
+import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
 import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
 import type { IResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokens.js';
-import type { ISemanticTokensStylingService } from '../common/services/semanticTokensStyling.js';
 import { type DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
-import { type ConfiguredCodeEditorOptions } from './configuredCodeEditor.js';
+import { type CodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
 import { type EditorView } from './editorView.js';
 import { type View } from "./view.js";
 import { type DecorationSource } from "./viewParts/decorations/decorations.js";
@@ -21,6 +19,7 @@ import { type BracketColorizationSource, type SemanticTokenSource } from "./view
 import { type TabFocus } from "./config/tabFocus.js";
 import { type IVersionedEditorWorkerClient } from "./services/editorWorkerService.js";
 import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
+import { type ViewModel } from '../common/viewModel/viewModelImpl.js';
 
 export interface EditorCommandEvent {
 	readonly commandId: string;
@@ -42,15 +41,13 @@ export interface EditorCapability<T> {
 /** Pre-widget assembly seam for extensions that supply model projection inputs. */
 export interface TextEditorContributionConfigurationContext {
 	readonly kind: "text";
-	readonly options: ConfiguredCodeEditorOptions;
+	readonly options: CodeEditorWidgetOptions;
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly semanticTokensStylingService: ISemanticTokensStylingService;
 	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;
-	readonly configurations: LanguageConfigurationSource;
-	readonly selections: CursorsController;
+	readonly configurations: ILanguageConfigurationService;
 	readonly tabFocus: TabFocus;
 	readonly onLanguageError: (error: unknown) => void;
 	readonly getCapability: <T>(capability: EditorCapability<T>) => T;
@@ -66,22 +63,22 @@ export interface TextEditorContributionConfigurationContext {
 
 export interface TextEditorContributionContext {
 	readonly kind: "text";
-	readonly options: ConfiguredCodeEditorOptions;
+	readonly options: CodeEditorWidgetOptions;
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly configurations: LanguageConfigurationSource;
+	readonly configurations: ILanguageConfigurationService;
 	readonly view: EditorView;
 	readonly viewport: View;
-	readonly selections: CursorsController;
+	readonly viewModel: ViewModel;
 	readonly tabFocus: TabFocus;
 	readonly onLanguageError: (error: unknown) => void;
 	readonly onDidExecuteCommand: Event<EditorCommandEvent>;
 	readonly executeCommand: EditorCommandExecutor;
 	readonly getCapability: <T>(capability: EditorCapability<T>) => T;
 	readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
-	readonly registerBeforeSave: (hook: () => void | Promise<void>) => IDisposable;
+	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
 	readonly register: <T extends IDisposable>(value: T) => T;
 }
 

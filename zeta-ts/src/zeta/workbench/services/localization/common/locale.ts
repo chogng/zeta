@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
 
@@ -70,7 +70,7 @@ export class WorkbenchLocaleService extends Disposable implements ILocaleService
 	}
 
 	private async initialize(): Promise<void> {
-		await this.configuration.reload();
+		await this.configuration.reloadConfiguration();
 		await this.languagePacks.whenReady;
 		this.applyLocale(this.configuration.getValue(LocalizationConfiguration.locale));
 	}

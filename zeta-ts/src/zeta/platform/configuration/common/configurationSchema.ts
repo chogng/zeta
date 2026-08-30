@@ -8,10 +8,10 @@ export const ConfigurationSchemaId = 'zeta://schemas/user-configuration';
 export function createConfigurationSchema(registry: ConfigurationRegistry = ConfigurationsRegistry): JsonSchema {
 	const properties: Record<string, JsonSchema> = {};
 	for (const configuration of registry.getRegisteredConfigurations()) {
-		const defaultValue = validateJsonValue(configuration.key.serialize(configuration.key.defaultValue), {
-			path: `configuration default ${configuration.key.key}`,
+		const defaultValue = validateJsonValue(configuration.serialize(configuration.defaultValue), {
+			path: `configuration default ${configuration.key}`,
 		});
-		properties[configuration.key.key] = configurationPropertySchema(defaultValue, configuration.setting);
+		properties[configuration.key] = configurationPropertySchema(defaultValue, configuration.setting);
 	}
 	return Object.freeze({
 		id: ConfigurationSchemaId,

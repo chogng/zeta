@@ -3,12 +3,9 @@ import { type LanguageDiagnostic } from "../common/languages/languageResults.js"
 import { type TextDecorationCollection } from "../common/model/decorationCollection.js";
 import { type LanguageBracketPairs } from "../common/languages/languageBracketPairs.js";
 import { type EditorFoldingModel } from "./folding/browser/foldingModel.js";
-import { type LanguageTokenLineIndexPart } from "./tokenization/common/languageTokenLineIndexPart.js";
 import { type UnicodeHighlight } from "./unicodeHighlighter/common/unicodeHighlights.js";
-import { type SyntaxService } from "../common/languages/syntax/syntaxService.js";
 import { type SemanticTokenSource } from "../browser/viewParts/viewLines/viewLine.js";
 import { type LanguageStructuralBracketSource } from "../common/languages/languageLexicalContext.js";
-import { type SemanticTokensModelPart, type SemanticTokensService } from "./semanticTokens/common/semanticTokens.js";
 
 /** Typed identities for shared runtime objects consumed by independently selected text-editor contributions. */
 export const TextEditorCapability = Object.freeze({
@@ -19,10 +16,6 @@ export const TextEditorCapability = Object.freeze({
 	languageLexicalContext: capability<LanguageStructuralBracketSource>("editor.capability.languageLexicalContext"),
 	searchDecorations: capability<TextDecorationCollection<void>>("editor.capability.searchDecorations"),
 	semanticTokenSource: capability<SemanticTokenSource>("editor.capability.semanticTokenSource"),
-	semanticTokens: capability<SemanticTokensService>("editor.capability.semanticTokens"),
-	semanticTokenOverlay: capability<SemanticTokensModelPart>("editor.capability.semanticTokenOverlay"),
-	syntax: capability<SyntaxService>("editor.capability.syntax"),
-	tokenization: capability<LanguageTokenLineIndexPart>("editor.capability.tokenization"),
 	unicodeDecorations: capability<TextDecorationCollection<UnicodeHighlight>>("editor.capability.unicodeDecorations"),
 	unusualLineTerminatorDecorations: capability<TextDecorationCollection<void>>("editor.capability.unusualLineTerminatorDecorations"),
 });

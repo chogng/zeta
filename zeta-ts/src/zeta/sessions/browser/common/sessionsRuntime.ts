@@ -1,7 +1,7 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
-import type { IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../../platform/configuration/common/configuration.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
 import { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import { AppServerSessionsManagementService } from "../../services/sessions/browser/appServerSessionsManagementService.js";

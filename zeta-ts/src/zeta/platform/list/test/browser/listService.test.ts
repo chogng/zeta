@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../base/common/event.js";
-import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../configuration/common/configurationService.js";
+import { InMemoryConfigurationService } from "../../../configuration/common/inMemoryConfigurationService.js";
 import { ConfigurationsRegistry } from "../../../configuration/common/configurationRegistry.js";
 import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../browser/listService.js";
-import { ListConfiguration, type ListOpenMode } from "../../common/listConfiguration.js";
+import { ListConfiguration } from "../../common/listConfiguration.js";
 import { h } from "../../../../base/browser/dom.js";
 
 interface TestItem {
@@ -14,14 +13,16 @@ interface TestItem {
 
 test("Platform List owns and validates the shared open-mode configuration", () => {
 	assert.equal(ConfigurationsRegistry.owns(ListConfiguration.openMode), true);
-	assert.equal(ListConfiguration.openMode.defaultValue, "singleClick");
-	assert.equal(ListConfiguration.openMode.parse("doubleClick"), "doubleClick");
-	assert.throws(() => ListConfiguration.openMode.parse("hover"), /Unknown list open mode/);
+	const configuration = ConfigurationsRegistry.getConfiguration(ListConfiguration.openMode);
+	assert.ok(configuration);
+	assert.equal(configuration.defaultValue, "singleClick");
+	assert.equal(configuration.parse("doubleClick"), "doubleClick");
+	assert.throws(() => configuration.parse("hover"), /Unknown list open mode/);
 });
 
 test("WorkbenchObjectTree derives preview, pinned, and side-by-side open intent", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	using configuration = new TestConfigurationService();
+	using configuration = new InMemoryConfigurationService();
 	using tree = new WorkbenchObjectTree<TestItem>(dom.window.document.body, {
 		ariaLabel: "Resources",
 		configurationService: configuration,
@@ -78,33 +79,4 @@ function mouse(dom: JSDOM, type: string, init: MouseEventInit): MouseEvent {
 
 function keyboard(dom: JSDOM, key: string, init: KeyboardEventInit = {}): KeyboardEvent {
 	return new dom.window.KeyboardEvent("keydown", { bubbles: true, key, ...init }) as unknown as KeyboardEvent;
-}
-
-class TestConfigurationService implements IConfigurationService {
-	private readonly changes = new Emitter<IConfigurationChangeEvent>();
-	private listOpenMode: ListOpenMode = "singleClick";
-
-	readonly onDidChangeConfiguration = this.changes.event;
-
-	getValue<T>(key: IConfigurationKey<T>): T {
-		return (key === ListConfiguration.openMode ? this.listOpenMode : key.defaultValue) as T;
-	}
-
-	async updateValue<T>(key: IConfigurationKey<T>, value: T): Promise<void> {
-		if (key === ListConfiguration.openMode) this.listOpenMode = value as ListOpenMode;
-		this.changes.fire({
-			keys: new Set([key.key]),
-			affectsConfiguration: (candidate) => candidate.key === key.key,
-		});
-	}
-
-	async resetValue<T>(key: IConfigurationKey<T>): Promise<void> {
-		if (key === ListConfiguration.openMode) this.listOpenMode = ListConfiguration.openMode.defaultValue;
-	}
-
-	async reload(): Promise<void> {}
-
-	[Symbol.dispose](): void {
-		this.changes.dispose();
-	}
 }

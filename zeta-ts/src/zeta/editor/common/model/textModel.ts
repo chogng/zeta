@@ -1,7 +1,11 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
+import { Color } from '../../../base/common/color.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
+import type { IMarkdownString } from '../../../base/common/htmlContent.js';
 import { DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import * as strings from '../../../base/common/strings.js';
+import type { ThemeColor } from '../../../base/common/themables.js';
 import { URI } from "../../../base/common/uri.js";
 import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
 import { TextEdit } from '../core/edits/textEdit.js';
@@ -33,11 +37,21 @@ import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockC
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
 import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationOptions, type IModelDeltaDecoration, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
+import * as model from '../model.js';
 import * as languages from '../languages.js';
-import type { IModelDecorationsChangedEvent, IModelLanguageChangedEvent, IModelOptionsChangedEvent } from '../textModelEvents.js';
+import { LineInjectedText, type IModelContentChangedEvent, type IModelDecorationsChangedEvent, type IModelLanguageChangedEvent, type IModelOptionsChangedEvent } from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
+import { createBuiltinLanguageConfigurationService } from '../languages/languageBuiltinConfigurations.js';
+import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
+import type { IBracketPairsTextModelPart } from '../textModelBracketPairs.js';
+import { BracketPairsTextModelPart } from './bracketPairsTextModelPart/bracketPairsImpl.js';
+import { TokenizationTextModelPart, type TokenizationTextModelPartOptions } from './tokens/tokenizationTextModelPart.js';
+import { LineTokens, TokenArray } from '../tokens/lineTokens.js';
+import type { IColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { isDarkColorScheme } from '../../../platform/theme/common/theme.js';
+import { GuidesTextModelPart } from './guidesTextModelPart.js';
 
 interface OffsetEdit extends OffsetTextEdit {}
 
@@ -57,7 +71,7 @@ interface ModelDecorationEntry {
 	readonly id: string;
 	readonly ownerId: number;
 	readonly trackedRange: TrackedRange;
-	readonly options: IModelDecorationOptions;
+	readonly options: ModelDecorationOptions;
 }
 
 interface CommitContext {
@@ -112,6 +126,8 @@ export interface TextModelOptions {
 	readonly defaultEOL?: DefaultEndOfLine;
 	readonly trimAutoWhitespace?: boolean;
 	readonly bracketPairColorizationOptions?: BracketPairColorizationOptions;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly tokenization?: TokenizationTextModelPartOptions;
 }
 
 export interface TextModelBlockInitialization extends TextModelBlockOptions {
@@ -138,6 +154,7 @@ export interface TextModelUndoRedoSnapshot {
 const DEFAULT_HISTORY_TRANSACTIONS = 1_000;
 const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
 const LONG_LINE_BOUNDARY = 10_000;
+const LINE_HEIGHT_CEILING = 300;
 let MODEL_ID = 0;
 
 /**
@@ -189,6 +206,10 @@ export class TextModel implements ITextModel {
 	readonly id: string;
 	readonly uri: URI;
 	readonly isForSimpleWidget: boolean;
+	private readonly _bracketPairs: BracketPairsTextModelPart;
+	get bracketPairs(): IBracketPairsTextModelPart { return this._bracketPairs; }
+	readonly guides: GuidesTextModelPart;
+	readonly tokenization: TokenizationTextModelPart;
 
 	readonly onDidChangeContent: Event<TextModelChange> = this.changeEmitter.event;
 	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent> = this.languageEmitter.event;
@@ -254,6 +275,21 @@ export class TextModel implements ITextModel {
 				publishTextChange: change => this.changeEmitter.fire(change),
 			},
 		)) : undefined;
+		const languageConfigurationService = options.languageConfigurationService ?? this._register(createBuiltinLanguageConfigurationService());
+		this._bracketPairs = this._register(new BracketPairsTextModelPart(this, languageConfigurationService));
+		this.guides = this._register(new GuidesTextModelPart(this, languageConfigurationService));
+		this.tokenization = this._register(new TokenizationTextModelPart(this, options.tokenization));
+		this._register(languageConfigurationService.onDidChange(event => this._bracketPairs.handleLanguageConfigurationServiceChange(event)));
+		this._register(this.onDidChangeLanguage(event => this._bracketPairs.handleDidChangeLanguage(event)));
+		this._register(this.onDidChangeOptions(event => this._bracketPairs.handleDidChangeOptions(event)));
+		this._register(this.onDidChangeContent(change => this._bracketPairs.handleDidChangeContent(toModelContentChangedEvent(change))));
+		this._register(this.tokenization.onDidChange(() => {
+			this._bracketPairs.handleDidChangeTokens({
+				semanticTokensApplied: false,
+				ranges: [{ fromLineNumber: 1, toLineNumber: this.getLineCount() }],
+			});
+			this._bracketPairs.handleDidChangeBackgroundTokenizationState();
+		}));
 		this._register(toDisposable(() => {
 			this.history.dispose();
 			this.buffer.dispose();
@@ -881,8 +917,7 @@ export class TextModel implements ITextModel {
 	}
 
 	getLanguageIdAtPosition(lineNumber: number, column: number): string {
-		this.validatePosition({ lineNumber, column });
-		return this.getLanguageId();
+		return this.tokenization.getLanguageIdAtPosition(lineNumber, column);
 	}
 
 	getWordAtPosition(position: IPosition): IWordAtPosition | null {
@@ -1006,6 +1041,63 @@ export class TextModel implements ITextModel {
 	getDecorationRange(id: string): Range | null {
 		this.assertNotDisposed();
 		return this.modelDecorations.get(id)?.trackedRange.range ?? null;
+	}
+
+	getDecorationsInRange(
+		range: IRange,
+		ownerId = 0,
+		filterOutValidation = false,
+		filterFontDecorations = false,
+		_onlyMinimapDecorations = false,
+		onlyMarginDecorations = false,
+	): model.IModelDecoration[] {
+		this.assertNotDisposed();
+		const validatedRange = this.validateRange(range);
+		const result: model.IModelDecoration[] = [];
+		for (const entry of this.modelDecorations.values()) {
+			if (ownerId !== 0 && entry.ownerId !== 0 && entry.ownerId !== ownerId) continue;
+			if (filterOutValidation && isValidationDecoration(entry.options)) continue;
+			if (filterFontDecorations && entry.options.affectsFont) continue;
+			if (onlyMarginDecorations && !entry.options.glyphMarginClassName) continue;
+			const decorationRange = entry.trackedRange.range;
+			if (!Range.areIntersectingOrTouching(validatedRange, decorationRange)) continue;
+			result.push({
+				id: entry.id,
+				ownerId: entry.ownerId,
+				range: decorationRange,
+				options: entry.options,
+			});
+		}
+		return result;
+	}
+
+	getLineInjectedText(lineNumber: number, ownerId = 0): LineInjectedText[] {
+		this.assertNotDisposed();
+		if (lineNumber < 1 || lineNumber > this.getLineCount()) return [];
+		const decorations = this.getDecorationsInRange(
+			new Range(lineNumber, 1, lineNumber, this.getLineMaxColumn(lineNumber)),
+			ownerId,
+		);
+		return LineInjectedText.fromDecorations(decorations).filter(text => text.lineNumber === lineNumber);
+	}
+
+	getOverviewRulerDecorations(ownerId = 0, filterOutValidation = false, filterFontDecorations = false): model.IModelDecoration[] {
+		return this.getDecorationsInRange(this.getFullModelRange(), ownerId, filterOutValidation, filterFontDecorations)
+			.filter(decoration => !!decoration.options.overviewRuler?.color);
+	}
+
+	getFontDecorationsInRange(range: IRange, ownerId = 0): model.IModelDecoration[] {
+		return this.getDecorationsInRange(range, ownerId).filter(decoration => !!decoration.options.affectsFont);
+	}
+
+	getCustomLineHeightsDecorations(ownerId = 0): model.IModelDecoration[] {
+		return this.getDecorationsInRange(this.getFullModelRange(), ownerId)
+			.filter(decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined);
+	}
+
+	getCustomLineHeightsDecorationsInRange(range: Range, ownerId = 0): model.IModelDecoration[] {
+		return this.getDecorationsInRange(range, ownerId)
+			.filter(decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined);
 	}
 
 	private emitDecorationsChanged(entries: Iterable<ModelDecorationEntry>): void {
@@ -1811,6 +1903,22 @@ export class TextModel implements ITextModel {
 		if (this.disposed) throw new ReferenceError('TextModel is already disposed');
 	}
 
+}
+
+function toModelContentChangedEvent(change: TextModelChange): IModelContentChangedEvent {
+	const changes = change.changes.map(contentChange => ({ ...contentChange }));
+	const detailedReasons = [...change.detailedReasons];
+	return {
+		changes,
+		eol: change.eol,
+		versionId: change.version,
+		isUndoing: change.reason === TextModelChangeReason.Undo,
+		isRedoing: change.reason === TextModelChangeReason.Redo,
+		isFlush: change.reason === TextModelChangeReason.Reset,
+		isEolChange: change.isEolChange,
+		detailedReasons,
+		detailedReasonsChangeLengths: detailedReasons.map((_, index) => index === 0 ? changes.length : 0),
+	};
 }
 
 function compareOffsetEdits(left: OffsetEdit, right: OffsetEdit): number {

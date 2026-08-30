@@ -6,7 +6,7 @@ import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegi
 import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
 import type { DocumentHighlightProvider, MultiDocumentHighlightProvider } from '../languages.js';
 import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
-import type { LanguageConfigurationSource } from '../languages/ownedLanguageConfigurationContributions.js';
+import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
@@ -25,7 +25,7 @@ import type { LanguageLinkProvider } from '../../contrib/links/common/languageLi
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
 import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';
-import type { LanguageSemanticTokensProvider } from '../../contrib/semanticTokens/common/semanticTokens.js';
+import type { LanguageSemanticTokensProvider } from '../languages.js';
 import type { ILanguageFeaturesService, LanguageProviderBatch, LanguageProviderBatchEntry, LanguageProviderBatchRegistration } from './languageFeatures.js';
 
 /** Owns the Editor provider registries without knowing their Workbench implementations. */
@@ -60,7 +60,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public readonly multiDocumentHighlightProvider: LanguageFeatureRegistry<MultiDocumentHighlightProvider>;
 	private _notebookTypeResolver: NotebookInfoResolver | undefined;
 
-	constructor(languageConfigurations: LanguageConfigurationSource) {
+	constructor(languageConfigurations: ILanguageConfigurationService) {
 		super();
 		this.syntaxProvider = this._register(new SyntaxProviderRegistry());
 		this._register(this.syntaxProvider.register(createLanguageLexicalSyntaxProvider({ languageConfigurations })));

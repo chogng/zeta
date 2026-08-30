@@ -14,9 +14,9 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.multicursor", con
 	context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => resolveSelectionHighlightPresentation(decoration.metadata)));
 }, install: context => {
 	if (context.kind !== "text") return;
-	context.register(new MultiCursorController(context.view.element, context.viewport, context.selections));
-	context.register(new OccurrenceSelectionController(context.view.element, context.viewport, context.selections));
-	if (!context.model.largeFile.tooLargeForTokenization) context.register(new EditorSelectionHighlighter(context.view, context.selections, context.getCapability(selectionHighlightDecorations), {
+	context.register(new MultiCursorController(context.view.element, context.viewport, context.viewModel));
+	context.register(new OccurrenceSelectionController(context.view.element, context.viewport, context.viewModel));
+	if (!context.model.largeFile.tooLargeForTokenization) context.register(new EditorSelectionHighlighter(context.view, context.viewModel, context.getCapability(selectionHighlightDecorations), {
 		languageId: context.languageId,
 		languageFeaturesService: context.languageFeaturesService,
 		enabled: context.options.selectionHighlight,

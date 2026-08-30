@@ -18,7 +18,7 @@ import { type Position } from '../../common/core/position.js';
 import { SelectionSet } from '../../common/cursor/selectionSet.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
-import { type LanguageConfigurationSource } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { type ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '../../common/languages/languageLexicalContext.js';
 import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
@@ -297,7 +297,7 @@ export class LanguageEditingAdapter extends Disposable implements EditorLanguage
 	private readonly autoClosingTracker: LanguageAutoClosingTracker;
 	private readonly lexicalContext: LanguageLexicalContextSource;
 
-	constructor(readonly textModel: TextModel, private readonly selections: CursorsController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
+	constructor(readonly textModel: TextModel, private readonly selections: CursorsController, private readonly languageId: string, private readonly configurations: ILanguageConfigurationService, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
 		super();
 		assertLanguageId(languageId);
 		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");

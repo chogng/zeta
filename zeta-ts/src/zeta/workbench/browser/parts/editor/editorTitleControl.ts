@@ -6,7 +6,8 @@ import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/act
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { ConfigurationsRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";
 import {
 	EditorBreadcrumbsEnabledConfiguration,
 	EditorTabsModeConfiguration,
@@ -19,7 +20,7 @@ import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import { NoEditorTabsControl } from "./noEditorTabsControl.js";
 import { SingleEditorTabsControl } from "./singleEditorTabsControl.js";
 import { h } from "../../../../base/browser/dom.js";
-import { WorkbenchConfiguration } from '../../../common/configuration.js';
+import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 
 /** Platform services used to populate the Editor title toolbar. */
 export interface EditorTitleActions {
@@ -55,8 +56,8 @@ export class EditorTitleControl extends Disposable {
 		super();
 		this.delegate = delegate;
 		this.configurationService = configurationService;
-		this.tabsMode = configurationService?.getValue(EditorTabsModeConfiguration) ?? EditorTabsModeConfiguration.defaultValue;
-		this.breadcrumbsEnabled = configurationService?.getValue(EditorBreadcrumbsEnabledConfiguration) ?? EditorBreadcrumbsEnabledConfiguration.defaultValue;
+		this.tabsMode = configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
+		this.breadcrumbsEnabled = configurationService?.getValue<boolean>(EditorBreadcrumbsEnabledConfiguration) ?? configurationDefault<boolean>(EditorBreadcrumbsEnabledConfiguration);
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, "div");
 		this.domNode.className = "zeta-editor-title-control";
@@ -93,13 +94,13 @@ export class EditorTitleControl extends Disposable {
 		if (configurationService) {
 			this._register(configurationService.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration(EditorTabsModeConfiguration)) {
-					this.tabsMode = configurationService.getValue(EditorTabsModeConfiguration);
+					this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
 					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 					this.updateTabsLayoutStyle();
 					this.tabs.setEditors(this.editors, this.activeInput);
 				}
 				if (event.affectsConfiguration(EditorBreadcrumbsEnabledConfiguration)) {
-					this.breadcrumbsEnabled = configurationService.getValue(EditorBreadcrumbsEnabledConfiguration);
+					this.breadcrumbsEnabled = configurationService.getValue<boolean>(EditorBreadcrumbsEnabledConfiguration);
 					this.updateBreadcrumbVisibility();
 				}
 				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.updateTabsLayoutStyle();
@@ -136,7 +137,7 @@ export class EditorTitleControl extends Disposable {
 
 	private updateTabsLayoutStyle(): void {
 		if (!(this.tabs instanceof MultiEditorTabsControl)) return;
-		const style = this.configurationService?.getValue(WorkbenchConfiguration.layoutStyle) ?? WorkbenchConfiguration.layoutStyle.defaultValue;
+		const style = this.configurationService?.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle) ?? configurationDefault<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
 		this.tabs.setPresentation(style === 'modern' ? 'inset' : 'flush');
 	}
 
@@ -153,6 +154,12 @@ export class EditorTitleControl extends Disposable {
 		this.domNode.classList.toggle("zeta-editor-title-with-breadcrumbs", visible);
 		if (visible !== wasVisible) this.heightEmitter.fire();
 	}
+}
+
+function configurationDefault<T>(key: string): T {
+	const configuration = ConfigurationsRegistry.getConfiguration(key) as IRegisteredConfiguration<T> | undefined;
+	if (!configuration) throw new RangeError(`Unknown configuration: ${key}`);
+	return configuration.defaultValue;
 }
 
 const emptyEditorToolbarContextMenuProvider: IContextMenuProvider = {

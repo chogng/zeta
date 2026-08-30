@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
@@ -33,9 +33,9 @@ test("Block comment shortcut toggles the active language pair locally", () => {
 	using selections = new CursorsController(model, SelectionSet.single(
 		Selection.fromPositions(new Position((0) + 1, (6) + 1), new Position((0) + 1, (10) + 1)),
 	));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using registration = configurations.register("typescript", {
-		comments: { blockComment: { open: "/*", close: "*/" } },
+		comments: { blockComment: ["/*", "*/"] },
 	});
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 20 });
@@ -58,7 +58,7 @@ test("Block comment shortcut leaves languages without a block pair alone", () =>
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("alpha");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

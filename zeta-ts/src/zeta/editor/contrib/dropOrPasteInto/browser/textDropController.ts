@@ -71,7 +71,7 @@ registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.dropOrPasteInto',
 	install: context => {
 		if (context.kind !== 'text') return;
-		context.register(new TextDropController(context.viewport, context.selections));
+		context.register(new TextDropController(context.viewport, context.viewModel));
 	},
 });
 

@@ -3,8 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DndCssClasses } from "../../../base/browser/ui/dnd/dnd.js";
 import { URI } from "../../../base/common/uri.js";
-import { Emitter } from "../../../base/common/event.js";
-import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
+import { InMemoryConfigurationService } from "../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { EditorTabsDelegate } from "../../browser/parts/editor/editorTabsControl.js";
 import type { EditorInput } from "../../browser/parts/editor/editorInput.js";
 import { MultiEditorTabsControl } from "../../browser/parts/editor/multiEditorTabsControl.js";
@@ -87,7 +86,7 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
 
 test("EditorTitleControl switches tab modes and breadcrumbs from configuration", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const configuration = new TestConfigurationService();
+	const configuration = new InMemoryConfigurationService();
 	const control = new EditorTitleControl(dom.window.document.body, inertDelegate, undefined, configuration);
 	const first = input("folder/first");
 	const second = input("folder/second");
@@ -129,38 +128,6 @@ const inertDelegate: EditorTabsDelegate = {
 	dropExternal: () => undefined,
 	endDrag: () => undefined,
 };
-
-class TestConfigurationService implements IConfigurationService, Disposable {
-	private readonly values = new Map<string, unknown>();
-	private readonly changeEmitter = new Emitter<IConfigurationChangeEvent>();
-	readonly onDidChangeConfiguration = this.changeEmitter.event;
-
-	getValue<T>(key: IConfigurationKey<T>): T {
-		return (this.values.has(key.key) ? this.values.get(key.key) : key.defaultValue) as T;
-	}
-
-	async updateValue<T>(key: IConfigurationKey<T>, value: T): Promise<void> {
-		this.values.set(key.key, value);
-		this.changeEmitter.fire({
-			keys: new Set([key.key]),
-			affectsConfiguration: candidate => candidate.key === key.key,
-		});
-	}
-
-	async resetValue<T>(key: IConfigurationKey<T>): Promise<void> {
-		this.values.delete(key.key);
-	}
-
-	async reload(): Promise<void> {}
-
-	dispose(): void {
-		this.changeEmitter.dispose();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
-}
 
 function input(name: string): EditorInput {
 	return { resource: URI.parse(`untitled:/${name}`), label: name };

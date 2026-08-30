@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Event } from "../../../base/common/event.js";
-import { OwnedLanguageConfigurationContributions } from "../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex, TokenAwareLanguageLexicalContext } from "../../common/languages/languageLexicalContext.js";
 import { type LanguageToken } from "../../common/tokens/languageTokens.js";
 import { Position } from "../../common/core/position.js";
@@ -10,16 +10,16 @@ import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical context removes only structural brackets inside strings and comments", () => {
 	using model = new TextModel("const code = { value: \"}\" }; // {\n/* {\nstill }\n*/ const after = {};");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using language = configurations.register("typescript", {
 		comments: {
 			lineComment: "//",
-			blockComment: { open: "/*", close: "*/" },
+			blockComment: ["/*", "*/"],
 		},
 		brackets: [
-			{ open: "{", close: "}" },
-			{ open: "[", close: "]" },
-			{ open: "(", close: ")" },
+			["{", "}"],
+			["[", "]"],
+			["(", ")"],
 		],
 	});
 	using context = new LanguageLexicalContextIndex(model, "typescript", configurations);
@@ -38,10 +38,10 @@ test("Lexical context removes only structural brackets inside strings and commen
 
 test("Lexical context invalidates changed suffixes and recomputes multiline state", () => {
 	using model = new TextModel("/*\n{\n*/\n{");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using language = configurations.register("typescript", {
-		comments: { blockComment: { open: "/*", close: "*/" } },
-		brackets: [{ open: "{", close: "}" }],
+		comments: { blockComment: ["/*", "*/"] },
+		brackets: [["{", "}"]],
 	});
 	using context = new LanguageLexicalContextIndex(model, "typescript", configurations);
 
@@ -56,22 +56,22 @@ test("Lexical context invalidates changed suffixes and recomputes multiline stat
 
 test("Lexical context recompiles when the language configuration revision changes", () => {
 	using model = new TextModel("\"<\" \"{\"");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using base = configurations.register("demo", {
-		brackets: [{ open: "{", close: "}" }],
+		brackets: [["{", "}"]],
 	});
 	using context = new LanguageLexicalContextIndex(model, "demo", configurations);
 	assert.equal(context.getStructuralLineContent(0), "\"<\" \"\"");
 
 	using override = configurations.register("demo", {
-		brackets: [{ open: "<", close: ">" }],
-	}, { priority: 1 });
+		brackets: [["<", ">"]],
+	}, 1);
 	assert.equal(context.getStructuralLineContent(0), "\"\" \"{\"");
 });
 
 test("Lexical context validates slices and disposal without owning borrowed state", () => {
 	using model = new TextModel("value");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	const context = new LanguageLexicalContextIndex(model, "plaintext", configurations);
 
 	assert.throws(() => context.getStructuralLineContent(1), /outside/);
@@ -84,7 +84,7 @@ test("Lexical context validates slices and disposal without owning borrowed stat
 
 test("Lexical context distinguishes closed and unterminated string boundaries", () => {
 	using model = new TextModel("\"closed\"\n\"open");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using context = new LanguageLexicalContextIndex(model, "typescript", configurations);
 
 	assert.equal(context.getTokenTypeAt(new Position((0) + 1, (4) + 1)), "string");
@@ -95,10 +95,10 @@ test("Lexical context distinguishes closed and unterminated string boundaries", 
 test("Lexical context retains multiline identity on empty continuation lines", () => {
 	using commentModel = new TextModel("/*\n\n");
 	using stringModel = new TextModel("`\n\n");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = configurations.register("typescript", {
-		comments: { blockComment: { open: "/*", close: "*/" } },
-		brackets: [{ open: "{", close: "}" }],
+		comments: { blockComment: ["/*", "*/"] },
+		brackets: [["{", "}"]],
 	});
 	using commentContext = new LanguageLexicalContextIndex(commentModel, "typescript", configurations);
 	using stringContext = new LanguageLexicalContextIndex(stringModel, "typescript", configurations);
@@ -109,11 +109,11 @@ test("Lexical context retains multiline identity on empty continuation lines", (
 
 test("Lexical context distinguishes line-comment and closed block-comment ends", () => {
 	using model = new TextModel("// value\n/* value */");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using language = configurations.register("typescript", {
 		comments: {
 			lineComment: "//",
-			blockComment: { open: "/*", close: "*/" },
+			blockComment: ["/*", "*/"],
 		},
 	});
 	using context = new LanguageLexicalContextIndex(model, "typescript", configurations);
@@ -124,9 +124,9 @@ test("Lexical context distinguishes line-comment and closed block-comment ends",
 
 test("Rust raw strings do not contribute structural brackets", () => {
 	using model = new TextModel("let raw = r#\"{\n} \"#;\n{");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using language = configurations.register("rust", {
-		brackets: [{ open: "{", close: "}" }],
+		brackets: [["{", "}"]],
 	});
 	using context = new LanguageLexicalContextIndex(model, "rust", configurations);
 
@@ -138,9 +138,9 @@ test("Rust raw strings do not contribute structural brackets", () => {
 
 test("ECMAScript regular-expression literals do not contribute structural brackets", () => {
 	using model = new TextModel("const matcher = /[{]/;\n{");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using language = configurations.register("typescript", {
-		brackets: [{ open: "{", close: "}" }],
+		brackets: [["{", "}"]],
 	});
 	using context = new LanguageLexicalContextIndex(model, "typescript", configurations);
 
@@ -151,9 +151,9 @@ test("ECMAScript regular-expression literals do not contribute structural bracke
 
 test("Token-aware lexical context selects embedded languages and their structural brackets", () => {
 	using model = new TextModel("<script>{ value }</script>");
-	using configurations = new OwnedLanguageConfigurationContributions();
-	using html = configurations.register("html", { brackets: [{ open: "<", close: ">" }] });
-	using javascript = configurations.register("javascript", { comments: { lineComment: "//" }, brackets: [{ open: "{", close: "}" }] });
+	using configurations = new TestLanguageConfigurationService();
+	using html = configurations.register("html", { brackets: [["<", ">"]] });
+	using javascript = configurations.register("javascript", { comments: { lineComment: "//" }, brackets: [["{", "}"]] });
 	using fallback = new LanguageLexicalContextIndex(model, "html", configurations);
 	const embedded = token(model, 0, 8, 17, "source", { languageId: "javascript" });
 	const tokenization = { textModel: model, modelVersion: model.version, onDidChange: Event.None, getLineTokens: () => [embedded] };
@@ -166,8 +166,8 @@ test("Token-aware lexical context selects embedded languages and their structura
 
 test("Token-aware lexical context excludes grammar-declared unbalanced ranges", () => {
 	using model = new TextModel("{ ignored } real {}");
-	using configurations = new OwnedLanguageConfigurationContributions();
-	using language = configurations.register("demo", { brackets: [{ open: "{", close: "}" }] });
+	using configurations = new TestLanguageConfigurationService();
+	using language = configurations.register("demo", { brackets: [["{", "}"]] });
 	using fallback = new LanguageLexicalContextIndex(model, "demo", configurations);
 	const excluded = token(model, 0, 0, 11, "source", { balancedBrackets: false });
 	using context = new TokenAwareLanguageLexicalContext(fallback, { textModel: model, modelVersion: model.version, onDidChange: Event.None, getLineTokens: () => [excluded] }, configurations);

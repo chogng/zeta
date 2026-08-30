@@ -3,9 +3,9 @@ import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type Ob
 import type { AsyncTreeDataSource } from "../../../base/browser/ui/tree/tree.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../configuration/common/configuration.js";
 import type { EditorActivationOptions } from "../../editor/common/editor.js";
-import { ListConfiguration } from "../common/listConfiguration.js";
+import { ListConfiguration, type ListOpenMode } from "../common/listConfiguration.js";
 
 export interface ResourceOpenEvent<T> {
 	readonly element: T;
@@ -92,7 +92,7 @@ class TreeResourceNavigator<T> extends Disposable {
 	}
 
 	private shouldOpenOnSingleClick(): boolean {
-		return this.openOnSingleClick ?? this.configurationService.getValue(ListConfiguration.openMode) === "singleClick";
+		return this.openOnSingleClick ?? this.configurationService.getValue<ListOpenMode>(ListConfiguration.openMode) === "singleClick";
 	}
 
 	private open(element: T, editorOptions: Required<Pick<EditorActivationOptions, "pinned" | "preserveFocus">>, sideBySide: boolean, browserEvent: MouseEvent | KeyboardEvent): void {

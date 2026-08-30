@@ -4,10 +4,10 @@ import { type IEditorConfiguration } from '../../common/config/editorConfigurati
 import { EditorOption, editorOptionsRegistry, type ConfigurationChangedEvent, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions } from '../../common/config/editorOptions.js';
 import { FontInfo } from '../../common/config/fontInfo.js';
 import { CursorConfiguration } from '../../common/cursorCommon.js';
-import { type IComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { type ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { type TextModel } from '../../common/model/textModel.js';
 
-export function createTestCursorConfiguration(model: TextModel, languageConfigurationService: IComposableLanguageConfigurationService, rawOptions: IEditorOptions = {}): CursorConfiguration {
+export function createTestCursorConfiguration(model: TextModel, languageConfigurationService: ILanguageConfigurationService, rawOptions: IEditorOptions = {}): CursorConfiguration {
 	const fontInfo = new FontInfo({
 		pixelRatio: 1,
 		fontFamily: 'monospace',

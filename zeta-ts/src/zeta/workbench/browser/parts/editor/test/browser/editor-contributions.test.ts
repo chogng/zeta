@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../../base/common/event.js";
-import { Disposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
-import type { IConfigurationKey, IConfigurationService } from "../../../../../../platform/configuration/common/configurationService.js";
+import { InMemoryConfigurationService } from "../../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { BrowserWorkingCopyService } from "../../../../../services/workingCopy/browser/browserWorkingCopyService.js";
 import type { IWorkingCopy } from "../../../../../services/workingCopy/common/workingCopyService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../../../services/statusbar/browser/statusbar.js";
@@ -24,7 +24,7 @@ test("EditorAutoSaveContribution saves dirty copies after the configured delay a
 		activePane: undefined,
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
-	const configuration = new TestConfigurationService();
+	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "afterDelay");
 	await configuration.updateValue(EditorAutoSaveDelayConfiguration, 100);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -55,7 +55,7 @@ test("EditorAutoSaveContribution observes auxiliary editor window blur", async (
 		activePane: undefined,
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
-	const configuration = new TestConfigurationService();
+	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "onWindowChange");
 	using workingCopies = new BrowserWorkingCopyService();
 	using workingCopy = new TestWorkingCopy(URI.file("C:\\project\\auxiliary-auto-save.ts"));
@@ -84,7 +84,7 @@ test("EditorAutoSaveContribution clears a delay timer through the window that cr
 		activePane: undefined,
 		onDidChangeEditors: editorChanges.event,
 	} as unknown as IEditorPart;
-	const configuration = new TestConfigurationService();
+	const configuration = new InMemoryConfigurationService();
 	await configuration.updateValue(EditorAutoSaveConfiguration, "afterDelay");
 	await configuration.updateValue(EditorAutoSaveDelayConfiguration, 100);
 	using workingCopies = new BrowserWorkingCopyService();
@@ -141,26 +141,6 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	editorChanges.dispose();
 	dom.window.close();
 });
-
-class TestConfigurationService implements IConfigurationService, IDisposable {
-	private readonly values = new Map<string, unknown>();
-	private readonly changeEmitter = new Emitter<{ readonly keys: ReadonlySet<string>; affectsConfiguration<T>(key: IConfigurationKey<T>): boolean }>();
-	readonly onDidChangeConfiguration = this.changeEmitter.event;
-
-	getValue<T>(key: IConfigurationKey<T>): T {
-		return (this.values.has(key.key) ? this.values.get(key.key) : key.defaultValue) as T;
-	}
-
-	async updateValue<T>(key: IConfigurationKey<T>, value: T): Promise<void> {
-		this.values.set(key.key, value);
-		this.changeEmitter.fire({ keys: new Set([key.key]), affectsConfiguration: candidate => candidate.key === key.key });
-	}
-
-	async resetValue<T>(key: IConfigurationKey<T>): Promise<void> { this.values.delete(key.key); }
-	async reload(): Promise<void> {}
-	dispose(): void { this.changeEmitter.dispose(); }
-	[Symbol.dispose](): void { this.dispose(); }
-}
 
 class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyEmitter = this._register(new Emitter<void>());

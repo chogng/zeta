@@ -8,13 +8,13 @@ import { Cursor } from '../../common/cursor/oneCursor.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { Selection } from '../../common/core/selection.js';
-import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { createTestCursorConfiguration } from './testCursorConfiguration.js';
 
 test('Cursor keeps corresponding model and view states and recovers from markers', () => {
 	using model = new TextModel('abcdef');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const context = createContext(model, languageConfigurationService);
 	const cursor = new Cursor(context);
 
@@ -31,7 +31,7 @@ test('Cursor keeps corresponding model and view states and recovers from markers
 
 test('CursorCollection keeps the primary cursor first and normalizes overlaps', () => {
 	using model = new TextModel('abcdef\nsecond');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const context = createContext(model, languageConfigurationService);
 	const cursors = new CursorCollection(context);
 
@@ -50,7 +50,7 @@ test('CursorCollection keeps the primary cursor first and normalizes overlaps', 
 	cursors.dispose();
 });
 
-function createContext(model: TextModel, languageConfigurationService: ComposableLanguageConfigurationService): CursorContext {
+function createContext(model: TextModel, languageConfigurationService: TestLanguageConfigurationService): CursorContext {
 	return new CursorContext(
 		model,
 		model,

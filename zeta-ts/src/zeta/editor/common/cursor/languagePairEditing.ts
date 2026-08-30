@@ -1,8 +1,8 @@
 import { SelectionSetDeleteOperations } from './selectionSetDeleteOperations.js';
 import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
-import { type LanguageAutoClosingPair, type LanguageCharacterPair } from "../languages/languageConfiguration.js";
-import { type MergedLanguageConfiguration } from "../languages/ownedLanguageConfigurationContributions.js";
+import { type IAutoClosingPair, type IAutoClosingPairConditional } from '../languages/languageConfiguration.js';
+import { type ResolvedLanguageConfiguration } from '../languages/languageConfigurationRegistry.js';
 import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
 import { type Selection } from "../core/selection.js";
 import type { SelectionSet } from "./selectionSet.js";
@@ -26,7 +26,7 @@ export interface LanguageAutoClosingAction {
 
 export interface LanguageAutoClosingTrust {
 	canOvertype(position: Position, close: string): boolean;
-	canDeletePair(position: Position, pair: LanguageCharacterPair): boolean;
+	canDeletePair(position: Position, pair: IAutoClosingPair): boolean;
 }
 
 export interface LanguagePairTypeOptions {
@@ -37,19 +37,21 @@ export interface LanguagePairTypeOptions {
 interface PairTypeEdit {
 	readonly edit: SelectionEdit;
 	readonly didInsertText: boolean;
-	readonly autoClosingPair?: LanguageAutoClosingPair;
+	readonly autoClosingPair?: IAutoClosingPairConditional;
 }
 
 /** Creates language-aware surround, auto-close, or closing-token overtype. */
-export function createLanguagePairTypeCommand(model: TextModel, selections: SelectionSet, text: string, configuration: MergedLanguageConfiguration, options: LanguagePairTypeOptions = {}): LanguagePairTypeCommand | undefined {
+export function createLanguagePairTypeCommand(model: TextModel, selections: SelectionSet, text: string, configuration: ResolvedLanguageConfiguration, options: LanguagePairTypeOptions = {}): LanguagePairTypeCommand | undefined {
 	if (typeof text !== "string") throw new TypeError("Language pair input text must be a string");
 	assertConfiguration(configuration);
 	assertOptions(model, configuration, options);
-	const surroundingPair = configuration.surroundingPairs.find(pair => pair.open === text);
-	const autoClosingPair = configuration.autoClosingPairs.find(pair => pair.open === text);
-	const closingPairs = configuration.autoClosingPairs.filter(pair => pair.close === text);
+	const surroundingPair = configuration.getSurroundingPairs().find(pair => pair.open === text);
+	const autoClosingPairs = configuration.characterPair.getAutoClosingPairs();
+	const autoClosingPair = autoClosingPairs.find(pair => pair.open === text);
+	const closingPairs = autoClosingPairs.filter(pair => pair.close === text);
 	if (!surroundingPair && !autoClosingPair && closingPairs.length === 0) return undefined;
-	const pairEdits = selections.selections.map(selection => createPairTypeEdit(model, selection, text, configuration, surroundingPair, autoClosingPair, closingPairs, options));
+	const autoCloseBefore = configuration.getAutoCloseBeforeSet(text === "'" || text === '"' || text === '`');
+	const pairEdits = selections.selections.map(selection => createPairTypeEdit(model, selection, text, surroundingPair, autoClosingPair, closingPairs, autoCloseBefore, options));
 	const command = TypeWithoutInterceptorsOperation.getEdits(model, selections, pairEdits.map(result => result.edit), EditorCommandHistoryMode.CoalesceTyping);
 	return Object.freeze({
 		command,
@@ -59,12 +61,12 @@ export function createLanguagePairTypeCommand(model: TextModel, selections: Sele
 }
 
 /** Deletes both sides of an empty configured pair, falling back per selection. */
-export function createLanguagePairBackspaceCommand(model: TextModel, selections: SelectionSet, configuration: MergedLanguageConfiguration, trust?: LanguageAutoClosingTrust): EditorEditCommand | undefined {
+export function createLanguagePairBackspaceCommand(model: TextModel, selections: SelectionSet, configuration: ResolvedLanguageConfiguration, trust?: LanguageAutoClosingTrust): EditorEditCommand | undefined {
 	assertConfiguration(configuration);
 	let paired = false;
 	const edits = selections.selections.map(selection => {
 		if (!selection.isEmpty()) return collapsedEdit(selection);
-		const pairRange = getEmptyPairRange(model, selection.getPosition(), configuration.autoClosingPairs, trust);
+		const pairRange = getEmptyPairRange(model, selection.getPosition(), configuration.characterPair.getAutoClosingPairs(), trust);
 		if (pairRange) {
 			paired = true;
 			return collapsedEdit(pairRange);
@@ -75,7 +77,7 @@ export function createLanguagePairBackspaceCommand(model: TextModel, selections:
 	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.CoalesceBackspace);
 }
 
-function createPairTypeEdit(model: TextModel, selection: Selection, text: string, configuration: MergedLanguageConfiguration, surroundingPair: LanguageCharacterPair | undefined, autoClosingPair: LanguageAutoClosingPair | undefined, closingPairs: readonly LanguageAutoClosingPair[], options: LanguagePairTypeOptions): PairTypeEdit {
+function createPairTypeEdit(model: TextModel, selection: Selection, text: string, surroundingPair: IAutoClosingPair | undefined, autoClosingPair: IAutoClosingPairConditional | undefined, closingPairs: readonly IAutoClosingPairConditional[], autoCloseBefore: string, options: LanguagePairTypeOptions): PairTypeEdit {
 	if (!selection.isEmpty() && surroundingPair) {
 		const selectedText = model.getTextInRange(selection);
 		const replacement = surroundingPair.open + selectedText + surroundingPair.close;
@@ -107,7 +109,7 @@ function createPairTypeEdit(model: TextModel, selection: Selection, text: string
 				didInsertText: false,
 			};
 		}
-		if (autoClosingPair && shouldAutoClose(line, columnIndex, configuration.autoCloseBefore) && isAutoClosingAllowed(selection.getPosition(), autoClosingPair, options.lexicalContext)) {
+		if (autoClosingPair && shouldAutoClose(line, columnIndex, autoCloseBefore) && isAutoClosingAllowed(selection.getPosition(), autoClosingPair, options.lexicalContext)) {
 			return {
 				edit: {
 					range: selection,
@@ -131,7 +133,7 @@ function createPairTypeEdit(model: TextModel, selection: Selection, text: string
 	};
 }
 
-function getEmptyPairRange(model: TextModel, position: Position, pairs: readonly LanguageCharacterPair[], trust: LanguageAutoClosingTrust | undefined): Range | undefined {
+function getEmptyPairRange(model: TextModel, position: Position, pairs: readonly IAutoClosingPair[], trust: LanguageAutoClosingTrust | undefined): Range | undefined {
 	const line = model.getLineContent(position.lineNumber);
 	const columnIndex = position.column - 1;
 	const pair = [...pairs].sort((left, right) => right.open.length - left.open.length).find(candidate => (
@@ -189,19 +191,19 @@ function shouldAutoClose(line: string, column: number, autoCloseBefore: string):
 	return autoCloseBefore.includes(next);
 }
 
-function assertConfiguration(configuration: MergedLanguageConfiguration): void {
-	if (typeof configuration !== "object" || configuration === null || !Array.isArray(configuration.autoClosingPairs) || !Array.isArray(configuration.surroundingPairs) || typeof configuration.autoCloseBefore !== "string") {
+function assertConfiguration(configuration: ResolvedLanguageConfiguration): void {
+	if (typeof configuration !== 'object' || configuration === null || typeof configuration.getAutoClosingPairs !== 'function') {
 		throw new TypeError("Language pair editing requires a resolved language configuration");
 	}
 }
 
-function isAutoClosingAllowed(position: Position, pair: LanguageAutoClosingPair, lexicalContext: LanguageLexicalContextSource | undefined): boolean {
+function isAutoClosingAllowed(position: Position, pair: IAutoClosingPairConditional, lexicalContext: LanguageLexicalContextSource | undefined): boolean {
 	if (!pair.notIn || pair.notIn.length === 0 || !lexicalContext) return true;
 	const tokenType = lexicalContext.getTokenTypeAt(position);
 	return tokenType !== "string" && tokenType !== "comment" || !pair.notIn.includes(tokenType);
 }
 
-function assertOptions(model: TextModel, configuration: MergedLanguageConfiguration, options: LanguagePairTypeOptions): void {
+function assertOptions(model: TextModel, configuration: ResolvedLanguageConfiguration, options: LanguagePairTypeOptions): void {
 	if (typeof options !== "object" || options === null) throw new TypeError("Language pair editing options must be an object");
 	const lexicalContext = options.lexicalContext;
 	if (lexicalContext && (

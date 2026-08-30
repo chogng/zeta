@@ -12,7 +12,7 @@ import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, t
 import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
@@ -23,7 +23,7 @@ import { type ITextFileService } from "../../../services/textfile/common/textFil
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
@@ -111,7 +111,7 @@ export interface IEditorPartOptions {
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;

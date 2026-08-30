@@ -21,7 +21,8 @@ for (const [name, value] of Object.entries({
 }
 
 const { ServiceContainer } = await import("../../../../../platform/instantiation/common/instantiation.js");
-const { IConfigurationService } = await import("../../../../../platform/configuration/common/configurationService.js");
+const { IConfigurationService } = await import("../../../../../platform/configuration/common/configuration.js");
+const { ConfigurationsRegistry } = await import("../../../../../platform/configuration/common/configurationRegistry.js");
 const { ILayoutService } = await import("../../../../../platform/layout/common/layoutService.js");
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import("../../../../../workbench/common/contributions.js");
 const { SashConfiguration } = await import("../../../../../workbench/contrib/sash/common/sash.js");
@@ -32,15 +33,19 @@ await import("../../../../../workbench/contrib/sash/browser/sash.contribution.js
 type LayoutService = import("../../../../../platform/layout/common/layoutService.js").ILayoutService;
 
 test("Sash configuration validates its public range", () => {
-	assert.equal(SashConfiguration.size.defaultValue, 4);
-	assert.equal(SashConfiguration.hoverDelay.defaultValue, 300);
-	assert.equal(SashConfiguration.size.parse(1), 1);
-	assert.equal(SashConfiguration.size.parse(20), 20);
-	assert.equal(SashConfiguration.hoverDelay.parse(0), 0);
-	assert.equal(SashConfiguration.hoverDelay.parse(2_000), 2_000);
-	assert.throws(() => SashConfiguration.size.parse(0), /between 1 and 20/);
+	const size = ConfigurationsRegistry.getConfiguration(SashConfiguration.size);
+	const hoverDelay = ConfigurationsRegistry.getConfiguration(SashConfiguration.hoverDelay);
+	assert.ok(size);
+	assert.ok(hoverDelay);
+	assert.equal(size.defaultValue, 4);
+	assert.equal(hoverDelay.defaultValue, 300);
+	assert.equal(size.parse(1), 1);
+	assert.equal(size.parse(20), 20);
+	assert.equal(hoverDelay.parse(0), 0);
+	assert.equal(hoverDelay.parse(2_000), 2_000);
+	assert.throws(() => size.parse(0), /between 1 and 20/);
 	assert.throws(
-		() => SashConfiguration.hoverDelay.parse(2_001),
+		() => hoverDelay.parse(2_001),
 		/between 0 and 2000/,
 	);
 });

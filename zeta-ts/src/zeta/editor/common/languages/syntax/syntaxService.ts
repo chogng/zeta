@@ -123,6 +123,10 @@ export class SyntaxService extends Disposable {
 		]);
 		return Object.freeze({ tokens, diagnostics });
 	}
+
+	restartWorker(): void {
+		this.coordinator.restartWorker();
+	}
 }
 
 /** Gives explicitly prioritized renderer providers precedence over a host Worker. */

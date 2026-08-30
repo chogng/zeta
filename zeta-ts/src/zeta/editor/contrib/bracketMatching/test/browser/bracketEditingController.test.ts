@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { Selection } from "../../../../common/core/selection.js";
@@ -88,9 +88,9 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 }
 
-function configurationsForBrackets(): OwnedLanguageConfigurationContributions {
-	const configurations = new OwnedLanguageConfigurationContributions();
-	configurations.register("typescript", { brackets: [{ open: "(", close: ")" }] });
+function configurationsForBrackets(): TestLanguageConfigurationService {
+	const configurations = new TestLanguageConfigurationService();
+	configurations.register("typescript", { brackets: [["(", ")"]] });
 	return configurations;
 }
 

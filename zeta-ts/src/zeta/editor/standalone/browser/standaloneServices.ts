@@ -1,7 +1,7 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
-import { IConfigurationService } from '../../../platform/configuration/common/configurationService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createEditorBrowserServices } from '../../browser/services/contribution.js';
 import { type IWidgetCodeEditorRegistry } from '../../browser/services/codeEditorService.js';
@@ -14,7 +14,7 @@ import { ILanguageFeaturesService } from '../../common/services/languageFeatures
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageService, type IZetaLanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
-import { IComposableLanguageConfigurationService, ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { ILanguageConfigurationService, LanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { IModelService } from '../../common/services/model.js';
 import { ModelService } from '../../common/services/modelService.js';
 import { ITextResourcePropertiesService, type ITextResourcePropertiesService as ITextResourcePropertiesServiceContract } from '../../common/services/textResourceConfiguration.js';
@@ -26,7 +26,7 @@ import { NamedEditorThemeService } from "./namedEditorThemeService.js";
 
 export interface StandaloneServiceOverrides {
 	readonly languageService?: IZetaLanguageService;
-	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
@@ -38,7 +38,7 @@ export class StandaloneServiceCollection extends Disposable {
 	readonly instantiationService: ServiceContainer;
 	readonly modelService: ModelService;
 	readonly languageService: IZetaLanguageService;
-	readonly languageConfigurationService: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService: ILanguageConfigurationService;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly themeService: INamedEditorThemeService;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
@@ -49,28 +49,6 @@ export class StandaloneServiceCollection extends Disposable {
 	constructor(overrides: StandaloneServiceOverrides) {
 		super();
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
-		const configurationService = this._register(new InMemoryConfigurationService());
-		instantiationService.registerInstance(IConfigurationService, configurationService);
-		instantiationService.registerSingleton(ITextResourcePropertiesService, accessor => new StandaloneResourcePropertiesService(accessor.get(IConfigurationService)));
-		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError("Standalone language feature overrides require a language configuration service");
-		if (overrides.languageService) instantiationService.registerInstance(ILanguageService, overrides.languageService);
-		else instantiationService.registerSingleton(ILanguageService, () => new LanguageService());
-		if (overrides.languageConfigurationService) instantiationService.registerInstance(IComposableLanguageConfigurationService, overrides.languageConfigurationService);
-		else instantiationService.registerSingleton(IComposableLanguageConfigurationService, () => new ComposableLanguageConfigurationService());
-		if (overrides.languageFeaturesService) instantiationService.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
-		else instantiationService.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(IComposableLanguageConfigurationService)));
-		instantiationService.registerSingleton(IThemeService, () => new NamedEditorThemeService(window));
-		this.themeService = instantiationService.get(IThemeService) as INamedEditorThemeService;
-		instantiationService.registerSingleton(IModelService, accessor => new ModelService(
-			accessor.get(IConfigurationService),
-			accessor.get(ITextResourcePropertiesService),
-		));
-		this.modelService = instantiationService.get(IModelService) as ModelService;
-		this.languageService = instantiationService.get(ILanguageService);
-		this.languageConfigurationService = instantiationService.get(IComposableLanguageConfigurationService);
-		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
-		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
-		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService.configurations));
 		const browserServices = createEditorBrowserServices();
 		this._register(browserServices.codeEditors);
 		this.codeEditorService = browserServices.codeEditors;
@@ -78,6 +56,35 @@ export class StandaloneServiceCollection extends Disposable {
 		this.editorWorkerFactory = overrides.editorWorkerFactory ?? workers.editorWorkerFactory;
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory ?? workers.syntaxWorkerFactory;
 		this.completionWorkerFactory = overrides.completionWorkerFactory;
+		const configurationService = this._register(new InMemoryConfigurationService());
+		instantiationService.registerInstance(IConfigurationService, configurationService);
+		instantiationService.registerSingleton(ITextResourcePropertiesService, accessor => new StandaloneResourcePropertiesService(accessor.get(IConfigurationService)));
+		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError("Standalone language feature overrides require a language configuration service");
+		if (overrides.languageService) instantiationService.registerInstance(ILanguageService, overrides.languageService);
+		else instantiationService.registerSingleton(ILanguageService, () => new LanguageService());
+		if (overrides.languageConfigurationService) instantiationService.registerInstance(ILanguageConfigurationService, overrides.languageConfigurationService);
+		else instantiationService.registerSingleton(ILanguageConfigurationService, accessor => new LanguageConfigurationService(
+			accessor.get(IConfigurationService),
+			accessor.get(ILanguageService),
+		));
+		if (overrides.languageFeaturesService) instantiationService.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
+		else instantiationService.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(ILanguageConfigurationService)));
+		instantiationService.registerSingleton(IThemeService, () => new NamedEditorThemeService(window));
+		this.themeService = instantiationService.get(IThemeService) as INamedEditorThemeService;
+		instantiationService.registerSingleton(IModelService, accessor => new ModelService(
+			accessor.get(IConfigurationService),
+			accessor.get(ITextResourcePropertiesService),
+			accessor.get(ILanguageService),
+			accessor.get(ILanguageFeaturesService),
+			accessor.get(ILanguageConfigurationService),
+			{ syntaxService: { workerFactory: this.syntaxWorkerFactory } },
+		));
+		this.modelService = instantiationService.get(IModelService) as ModelService;
+		this.languageService = instantiationService.get(ILanguageService);
+		this.languageConfigurationService = instantiationService.get(ILanguageConfigurationService);
+		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
+		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
+		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService));
 	}
 }
 
@@ -87,7 +94,7 @@ class StandaloneResourcePropertiesService implements ITextResourcePropertiesServ
 	constructor(private readonly configurationService: IConfigurationService) {}
 
 	getEOL(resource: URI, language?: string): string {
-		const eol = this.configurationService.getValue(EditorModelConfiguration.filesEol, { overrideIdentifier: language, resource });
+		const eol = this.configurationService.getValue<'auto' | '\n' | '\r\n'>(EditorModelConfiguration.filesEol, { overrideIdentifier: language, resource });
 		return eol === 'auto' ? (isLinux || isMacintosh ? '\n' : '\r\n') : eol;
 	}
 }

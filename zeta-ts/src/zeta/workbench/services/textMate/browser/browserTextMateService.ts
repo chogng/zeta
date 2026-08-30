@@ -1,4 +1,5 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
 import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
 import { type ITextMateService } from "../common/textMateService.js";
 import { type TextMateGrammarDefinition } from "../common/textMateGrammarRegistry.js";
@@ -8,10 +9,12 @@ import { createTextMateSyntaxWorkerFactory } from "./textMateSyntaxWorkerClient.
 
 /** Browser implementation of the Workbench TextMate service. */
 export class BrowserTextMateService extends Disposable implements ITextMateService {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	readonly grammars = this._register(new BrowserTextMateGrammarService());
 	readonly scopeTheme: TextMateScopeThemeSource;
 	readonly mutableScopeTheme: TextMateScopeThemeModel | undefined;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
+	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(contributions: readonly TextMateGrammarDefinition[] = [], scopeTheme?: TextMateScopeThemeSource) {
 		super();
@@ -26,6 +29,8 @@ export class BrowserTextMateService extends Disposable implements ITextMateServi
 			this.mutableScopeTheme = scopeTheme === undefined ? this._register(new TextMateScopeThemeModel()) : undefined;
 			this.scopeTheme = scopeTheme ?? this.mutableScopeTheme!;
 			this.syntaxWorkerFactory = createTextMateSyntaxWorkerFactory(this.grammars, this.scopeTheme);
+			this._register(this.grammars.onDidChangeCatalog(() => this.changeEmitter.fire()));
+			this._register(this.scopeTheme.onDidChangeTheme(() => this.changeEmitter.fire()));
 			for (const contribution of contributions) this.grammars.registerGrammar(contribution);
 		} catch (error) {
 			this.dispose();

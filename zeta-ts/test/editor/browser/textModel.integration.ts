@@ -40,10 +40,10 @@ const resource = URI.parse("inmemory://editor/main.rs");
 const files = new MemoryTextFiles(resource, "fn main() {\n  answer();\n}\n");
 disposables.add(toDisposable(() => files.dispose()));
 const resourceStore = new BrowserTextResourceStore(files);
-const models = disposables.add(new BrowserTextModelService(resourceStore));
 const languageService = disposables.add(new LanguageService());
 const languageConfigurationService = disposables.add(new LanguageConfigurationService());
 const languageFeaturesService = disposables.add(new LanguageFeaturesService(languageConfigurationService));
+const models = disposables.add(new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService }));
 disposables.add(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 let syntaxAnalysisCount = 0;
 disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {

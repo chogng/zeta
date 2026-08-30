@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../../../platform/configuration/common/configurationService.js";
+import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import type { IMarketplaceService } from "../../../../../platform/marketplace/common/marketplaceService.js";
 import { MarketplaceLanguagePackService } from "../../../../../platform/languagePacks/browser/marketplaceLanguagePackService.js";
 import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
@@ -16,7 +16,7 @@ test("locale resolution prefers exact, base-language, and English fallback match
 });
 
 test("locale selection is client-local and only accepts installed packs", async () => {
-	using configuration = new TestConfigurationService();
+	using configuration = new InMemoryConfigurationService();
 	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
 	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
 
@@ -28,7 +28,7 @@ test("locale selection is client-local and only accepts installed packs", async 
 });
 
 test("localization lookup falls back to English and formats parameters", async () => {
-	using configuration = new TestConfigurationService();
+	using configuration = new InMemoryConfigurationService();
 	const languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
 	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
 	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
@@ -56,37 +56,4 @@ function createMarketplace(): IMarketplaceService {
 		releaseCapability: async () => {},
 		openResource: () => Promise.reject(new Error("unused")),
 	};
-}
-
-class TestConfigurationService implements IConfigurationService {
-	private readonly changes = new Emitter<IConfigurationChangeEvent>();
-	private readonly values = new Map<string, unknown>();
-
-	readonly onDidChangeConfiguration = this.changes.event;
-
-	getValue<T>(key: IConfigurationKey<T>): T {
-		return (this.values.get(key.key) ?? key.defaultValue) as T;
-	}
-
-	async updateValue<T>(key: IConfigurationKey<T>, value: T): Promise<void> {
-		this.values.set(key.key, key.parse(key.serialize(value)));
-		this.changes.fire({
-			keys: new Set([key.key]),
-			affectsConfiguration: candidate => candidate.key === key.key,
-		});
-	}
-
-	async resetValue<T>(key: IConfigurationKey<T>): Promise<void> {
-		this.values.delete(key.key);
-		this.changes.fire({
-			keys: new Set([key.key]),
-			affectsConfiguration: candidate => candidate.key === key.key,
-		});
-	}
-
-	async reload(): Promise<void> {}
-
-	[Symbol.dispose](): void {
-		this.changes.dispose();
-	}
 }

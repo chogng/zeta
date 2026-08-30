@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
-import { OwnedLanguageConfigurationContributions } from "../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { type SyntaxProviderRequest } from "../../common/languages/syntax/syntaxProviders.js";
 import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical caches remain isolated by language identity at one model version", async () => {
 	using model = new TextModel("// comment\n`value`");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
 	const snapshot = model.createVersionedSnapshot();
@@ -21,7 +21,7 @@ test("Lexical caches remain isolated by language identity at one model version",
 
 test("A language configuration revision replaces same-version lexical state", async () => {
 	using model = new TextModel("# comment\n<% value");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
 	const snapshot = model.createVersionedSnapshot();
@@ -29,8 +29,8 @@ test("A language configuration revision replaces same-version lexical state", as
 	assert.deepEqual(await tokenTypes(provider, request(1, "json", snapshot)), ["variable", "operator", "variable"]);
 	using custom = configurations.register("json", {
 		comments: { lineComment: "#" },
-		brackets: [{ open: "<%", close: "%>" }],
-	}, { priority: 10 });
+		brackets: [["<%", "%>"]],
+	}, 10);
 
 	assert.deepEqual(await tokenTypes(provider, request(2, "json", snapshot)), ["comment", "variable"]);
 	const diagnostics = await provider.provideDiagnostics!(request(3, "json", snapshot), new AbortController().signal);
@@ -38,21 +38,21 @@ test("A language configuration revision replaces same-version lexical state", as
 });
 
 test("Built-in lexical configuration registrations release without owning the registry", () => {
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	const registrations = registerBuiltinLanguageConfigurations(configurations);
 
-	assert.equal(configurations.getLanguageConfiguration("typescript").comments.lineComment, "//");
-	assert.equal(configurations.getLanguageConfiguration("json").comments.lineComment, undefined);
-	assert.equal(configurations.getLanguageConfiguration("jsonc").comments.lineComment, "//");
-	assert.equal(configurations.getLanguageConfiguration("rust").comments.lineComment, "//");
+	assert.equal(configurations.getLanguageConfiguration("typescript").comments?.lineCommentToken, "//");
+	assert.equal(configurations.getLanguageConfiguration("json").comments?.lineCommentToken, undefined);
+	assert.equal(configurations.getLanguageConfiguration("jsonc").comments?.lineCommentToken, "//");
+	assert.equal(configurations.getLanguageConfiguration("rust").comments?.lineCommentToken, "//");
 	assert.deepEqual(
-		configurations.getLanguageConfiguration("rust").autoClosingPairs.map(pair => pair.open),
+		configurations.getLanguageConfiguration("rust").characterPair.getAutoClosingPairs().map(pair => pair.open),
 		["(", "[", "{", "\""],
 	);
 
 	registrations.dispose();
-	assert.deepEqual(configurations.getLanguageConfiguration("typescript").comments, {});
-	assert.deepEqual(configurations.getLanguageConfiguration("typescript").brackets, []);
+	assert.equal(configurations.getLanguageConfiguration("typescript").comments, null);
+	assert.equal(configurations.getLanguageConfiguration("typescript").underlyingConfig.brackets, undefined);
 });
 
 test("Rust lexical analysis recognizes Rust comments, keywords, strings, and structural diagnostics", async () => {

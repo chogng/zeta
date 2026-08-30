@@ -1,13 +1,13 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
-import type { LanguageConfigurationContributionInput, LanguageConfigurationRegistration } from "../../../../editor/common/languages/ownedLanguageConfigurationContributions.js";
+import type { LanguageConfiguration } from '../../../../editor/common/languages/languageConfiguration.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { parseLanguageConfiguration } from "./languageConfigurationParser.js";
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/languages/languageRegistry.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { IZetaLanguageService } from '../../../../editor/common/languages/language.js';
-import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
@@ -32,8 +32,14 @@ export interface AppServerExtensionServiceOptions {
 	readonly eventApi?: IServerEventApi;
 	readonly textMateService: ITextMateService;
 	readonly languageService?: IZetaLanguageService;
-	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
+}
+
+interface LanguageConfigurationContribution {
+	readonly languageId: string;
+	readonly configuration: LanguageConfiguration;
+	readonly priority?: number;
 }
 
 /** Loads Rust-discovered declarative extensions and projects their grammar contributions into TextMate. */
@@ -49,7 +55,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private reloadQueued = false;
 	private readonly grammarRegistration: TextMateGrammarRegistration;
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
-	private readonly languageConfigurationRegistration: LanguageConfigurationRegistration | undefined;
+	private languageConfigurationRegistrations = new DisposableStore();
 	private readonly completionRegistration: LanguageCompletionProviderRegistration | undefined;
 	private readonly workbenchThemeRegistration: WorkbenchThemeRegistration;
 	private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
@@ -58,7 +64,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly debugAdapterRegistry: ExtensionDebugAdapterRegistry;
 	private activeGrammars: readonly TextMateGrammarDefinition[] = Object.freeze([]);
 	private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
-	private activeLanguageConfigurations: readonly LanguageConfigurationContributionInput[] = Object.freeze([]);
+	private activeLanguageConfigurations: readonly LanguageConfigurationContribution[] = Object.freeze([]);
 	private activeCompletionProviders: readonly LanguageCompletionProvider[] = Object.freeze([]);
 	private activeWorkbenchThemes: readonly IColorTheme[] = Object.freeze([]);
 	private activeDebugAdapterFactories: readonly DebugAdapterFactory[] = Object.freeze([]);
@@ -72,6 +78,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	constructor(private readonly options: AppServerExtensionServiceOptions) {
 		super();
 		this._register(toDisposable(() => { this.reloadQueued = false; }));
+		this._register(toDisposable(() => this.languageConfigurationRegistrations.dispose()));
 		this.themeRegistry = this._register(new ExtensionThemeRegistry());
 		this.fileTemplateRegistry = this._register(new ExtensionFileTemplateRegistry());
 		this.debugAdapterRegistry = this._register(new ExtensionDebugAdapterRegistry());
@@ -102,7 +109,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			throw new TypeError('App Server extension language contributions require language, configuration, and feature services');
 		}
 		this.languageRegistration = options.languageService ? this._register(options.languageService.registerLanguages([])) : undefined;
-		this.languageConfigurationRegistration = options.languageConfigurationService ? this._register(options.languageConfigurationService.registerMany([])) : undefined;
 		this.completionRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.completionProvider.registerGroup([])) : undefined;
 		this.workbenchThemeRegistration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
@@ -156,7 +162,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 
 	private async loadAndRegister(): Promise<void> {
 		const languages: LanguageDescriptionContribution[] = [];
-		const languageConfigurations: LanguageConfigurationContributionInput[] = [];
+		const languageConfigurations: LanguageConfigurationContribution[] = [];
 		const completionProviders: LanguageCompletionProvider[] = [];
 		const grammars: TextMateGrammarDefinition[] = [];
 		const resources = new Map<string, Promise<Uint8Array>>();
@@ -195,7 +201,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						languageConfigurationResources.set(key, configuration);
 						const resolvedConfiguration = await configuration;
 						if (this.isDisposed) return;
-						languageConfigurations.push({ languageId: language.id, configuration: resolvedConfiguration, options: { priority: 100 } });
+						languageConfigurations.push({ languageId: language.id, configuration: resolvedConfiguration, priority: 100 });
 					}
 				}
 				for (const [snippetIndex, snippet] of manifest.contributes.snippets.entries()) {
@@ -271,13 +277,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 	}
 
-	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContributionInput[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[]): void {
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[]): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
 		try {
 			this.languageRegistration?.replace(languages);
-			this.languageConfigurationRegistration?.replace(languageConfigurations);
+			this.replaceLanguageConfigurations(languageConfigurations);
 			this.completionRegistration?.replace(completionProviders);
 			this.workbenchThemeRegistration.replace(workbenchThemes);
 			this.themeRegistry.replace(themes);
@@ -287,7 +293,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		} catch (error) {
 			try {
 				this.languageRegistration?.replace(this.activeLanguages);
-				this.languageConfigurationRegistration?.replace(this.activeLanguageConfigurations);
+				this.replaceLanguageConfigurations(this.activeLanguageConfigurations);
 				this.completionRegistration?.replace(this.activeCompletionProviders);
 				this.workbenchThemeRegistration.replace(this.activeWorkbenchThemes);
 				this.themeRegistry.replace(previousThemes);
@@ -299,6 +305,26 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			}
 			throw error;
 		}
+	}
+
+	private replaceLanguageConfigurations(contributions: readonly LanguageConfigurationContribution[]): void {
+		const service = this.options.languageConfigurationService;
+		if (!service) {
+			if (contributions.length > 0) throw new Error('Extension language configurations require a language configuration service');
+			return;
+		}
+		const next = new DisposableStore();
+		try {
+			for (const contribution of contributions) {
+				next.add(service.register(contribution.languageId, contribution.configuration, contribution.priority));
+			}
+		} catch (error) {
+			next.dispose();
+			throw error;
+		}
+		const previous = this.languageConfigurationRegistrations;
+		this.languageConfigurationRegistrations = next;
+		previous.dispose();
 	}
 
 	private validateContributions(themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[]): void {

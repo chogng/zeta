@@ -1,4 +1,4 @@
-import { type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
+import { type ResolvedLanguageConfiguration } from './languageConfigurationRegistry.js';
 import { assertLanguageId } from "./languageId.js";
 import { LanguageLexicalLineScanner } from "./languageLexicalLineScanner.js";
 
@@ -24,7 +24,7 @@ const RUST_KEYWORDS = Object.freeze([
 	"unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ]);
 
-export function createLanguageLexicalLineScanner(languageId: string, configuration: MergedLanguageConfiguration): LanguageLexicalLineScanner {
+export function createLanguageLexicalLineScanner(languageId: string, configuration: ResolvedLanguageConfiguration): LanguageLexicalLineScanner {
 	assertLanguageId(languageId);
 	if (configuration.languageId !== languageId) {
 		throw new Error("Language lexical configuration identity does not match its language");
@@ -32,7 +32,7 @@ export function createLanguageLexicalLineScanner(languageId: string, configurati
 	if (ECMASCRIPT_LANGUAGE_IDS.has(languageId)) {
 		return new LanguageLexicalLineScanner({
 			comments: configuration.comments,
-			brackets: configuration.brackets,
+			brackets: configuration.underlyingConfig.brackets ?? [],
 			keywords: ECMASCRIPT_KEYWORDS,
 			stringQuotes: ["'", "\""],
 			multilineStringQuote: "`",
@@ -42,7 +42,7 @@ export function createLanguageLexicalLineScanner(languageId: string, configurati
 	if (JSON_LANGUAGE_IDS.has(languageId)) {
 		return new LanguageLexicalLineScanner({
 			comments: configuration.comments,
-			brackets: configuration.brackets,
+			brackets: configuration.underlyingConfig.brackets ?? [],
 			keywords: JSON_KEYWORDS,
 			stringQuotes: ["\""],
 		});
@@ -50,7 +50,7 @@ export function createLanguageLexicalLineScanner(languageId: string, configurati
 	if (RUST_LANGUAGE_IDS.has(languageId)) {
 		return new LanguageLexicalLineScanner({
 			comments: configuration.comments,
-			brackets: configuration.brackets,
+			brackets: configuration.underlyingConfig.brackets ?? [],
 			keywords: RUST_KEYWORDS,
 			stringQuotes: ["\""],
 			rawStringPrefixes: ["br", "r"],
@@ -59,7 +59,7 @@ export function createLanguageLexicalLineScanner(languageId: string, configurati
 	}
 	return new LanguageLexicalLineScanner({
 		comments: configuration.comments,
-		brackets: configuration.brackets,
+		brackets: configuration.underlyingConfig.brackets ?? [],
 		keywords: [],
 		stringQuotes: ["'", "\""],
 	});

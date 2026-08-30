@@ -1,15 +1,18 @@
-import { CursorColumns } from './core/cursorColumns.js';
-import { normalizeIndentation } from './core/misc/indentation.js';
+import { ConfigurationChangedEvent, EditorAutoClosingEditStrategy, EditorAutoClosingStrategy, EditorAutoIndentStrategy, EditorAutoSurroundStrategy, EditorOption } from './config/editorOptions.js';
+import { LineTokens } from './tokens/lineTokens.js';
 import { Position } from './core/position.js';
 import { Range } from './core/range.js';
-import { type ISelection, Selection } from './core/selection.js';
-import { type IEditorConfiguration } from './config/editorConfiguration.js';
-import { EditorOption } from './config/editorOptions.js';
-import { type TextModelResolvedOptions, PositionAffinity } from './model.js';
-import { InputMode } from './inputMode.js';
+import { ISelection, Selection } from './core/selection.js';
+import { ICommand } from './editorCommon.js';
+import { IEditorConfiguration } from './config/editorConfiguration.js';
+import { PositionAffinity, TextModelResolvedOptions } from './model.js';
 import { AutoClosingPairs } from './languages/languageConfiguration.js';
-import { type IComposableLanguageConfigurationService } from './languages/ownedLanguageConfigurationContributions.js';
-import type { ICommand } from './editorCommon.js';
+import { ILanguageConfigurationService } from './languages/languageConfigurationRegistry.js';
+import { createScopedLineTokens } from './languages/supports.js';
+import { IElectricAction } from './languages/supports/electricCharacter.js';
+import { CursorColumns } from './core/cursorColumns.js';
+import { normalizeIndentation } from './core/misc/indentation.js';
+import { InputMode } from './inputMode.js';
 
 export interface IColumnSelectData {
 	isReal: boolean;
@@ -19,6 +22,10 @@ export interface IColumnSelectData {
 	toViewVisualColumn: number;
 }
 
+/**
+ * This is an operation type that will be recorded for undo/redo purposes.
+ * The goal is to introduce an undo stop when the controller switches between different operation types.
+ */
 export const enum EditOperationType {
 	Other = 0,
 	DeletingLeft = 2,
@@ -32,11 +39,10 @@ export interface CharacterMap {
 	[char: string]: string;
 }
 
-const autoCloseAlways = (): boolean => true;
-const autoCloseNever = (): boolean => false;
-const autoCloseBeforeWhitespace = (character: string): boolean => character === ' ' || character === '\t';
+const autoCloseAlways = () => true;
+const autoCloseNever = () => false;
+const autoCloseBeforeWhitespace = (chr: string) => (chr === ' ' || chr === '\t');
 
-/** Cursor policy resolved from the model, editor configuration, and language configuration. */
 export class CursorConfiguration {
 	_cursorMoveConfigurationBrand: void = undefined;
 
@@ -56,32 +62,58 @@ export class CursorConfiguration {
 	public readonly multiCursorMergeOverlapping: boolean;
 	public readonly multiCursorPaste: 'spread' | 'full';
 	public readonly multiCursorLimit: number;
-	public readonly autoClosingBrackets;
-	public readonly autoClosingComments;
-	public readonly autoClosingQuotes;
-	public readonly autoClosingDelete;
-	public readonly autoClosingOvertype;
-	public readonly autoSurround;
-	public readonly autoIndent;
+	public readonly autoClosingBrackets: EditorAutoClosingStrategy;
+	public readonly autoClosingComments: EditorAutoClosingStrategy;
+	public readonly autoClosingQuotes: EditorAutoClosingStrategy;
+	public readonly autoClosingDelete: EditorAutoClosingEditStrategy;
+	public readonly autoClosingOvertype: EditorAutoClosingEditStrategy;
+	public readonly autoSurround: EditorAutoSurroundStrategy;
+	public readonly autoIndent: EditorAutoIndentStrategy;
 	public readonly autoClosingPairs: AutoClosingPairs;
 	public readonly surroundingPairs: CharacterMap;
 	public readonly blockCommentStartToken: string | null;
-	public readonly shouldAutoCloseBefore: { quote: (character: string) => boolean; bracket: (character: string) => boolean; comment: (character: string) => boolean };
+	public readonly shouldAutoCloseBefore: { quote: (ch: string) => boolean; bracket: (ch: string) => boolean; comment: (ch: string) => boolean };
 	public readonly wordSegmenterLocales: string[];
 	public readonly overtypeOnPaste: boolean;
 
-	private readonly languageId: string;
+	private readonly _languageId: string;
+	private _electricChars: { [key: string]: boolean } | null;
+
+	public static shouldRecreate(e: ConfigurationChangedEvent): boolean {
+		return (
+			e.hasChanged(EditorOption.layoutInfo)
+			|| e.hasChanged(EditorOption.wordSeparators)
+			|| e.hasChanged(EditorOption.emptySelectionClipboard)
+			|| e.hasChanged(EditorOption.multiCursorMergeOverlapping)
+			|| e.hasChanged(EditorOption.multiCursorPaste)
+			|| e.hasChanged(EditorOption.multiCursorLimit)
+			|| e.hasChanged(EditorOption.autoClosingBrackets)
+			|| e.hasChanged(EditorOption.autoClosingComments)
+			|| e.hasChanged(EditorOption.autoClosingQuotes)
+			|| e.hasChanged(EditorOption.autoClosingDelete)
+			|| e.hasChanged(EditorOption.autoClosingOvertype)
+			|| e.hasChanged(EditorOption.autoSurround)
+			|| e.hasChanged(EditorOption.useTabStops)
+			|| e.hasChanged(EditorOption.trimWhitespaceOnDelete)
+			|| e.hasChanged(EditorOption.fontInfo)
+			|| e.hasChanged(EditorOption.readOnly)
+			|| e.hasChanged(EditorOption.wordSegmenterLocales)
+			|| e.hasChanged(EditorOption.overtypeOnPaste)
+		);
+	}
 
 	constructor(
 		languageId: string,
 		modelOptions: TextModelResolvedOptions,
 		configuration: IEditorConfiguration,
-		public readonly languageConfigurationService: IComposableLanguageConfigurationService,
+		public readonly languageConfigurationService: ILanguageConfigurationService
 	) {
-		this.languageId = languageId;
+		this._languageId = languageId;
+
 		const options = configuration.options;
 		const layoutInfo = options.get(EditorOption.layoutInfo);
 		const fontInfo = options.get(EditorOption.fontInfo);
+
 		this.readOnly = options.get(EditorOption.readOnly);
 		this.tabSize = modelOptions.tabSize;
 		this.indentSize = modelOptions.indentSize;
@@ -105,58 +137,114 @@ export class CursorConfiguration {
 		this.autoClosingOvertype = options.get(EditorOption.autoClosingOvertype);
 		this.autoSurround = options.get(EditorOption.autoSurround);
 		this.autoIndent = options.get(EditorOption.autoIndent);
-		this.wordSegmenterLocales = [...options.get(EditorOption.wordSegmenterLocales)];
+		this.wordSegmenterLocales = options.get(EditorOption.wordSegmenterLocales);
 		this.overtypeOnPaste = options.get(EditorOption.overtypeOnPaste);
 
-		const language = languageConfigurationService.getLanguageConfiguration(languageId);
-		this.autoClosingPairs = new AutoClosingPairs(language.autoClosingPairs);
-		this.surroundingPairs = Object.fromEntries(language.surroundingPairs.map(pair => [pair.open, pair.close]));
-		this.blockCommentStartToken = language.comments.blockComment?.open ?? null;
+		this.surroundingPairs = {};
+		this._electricChars = null;
+
 		this.shouldAutoCloseBefore = {
-			quote: this.getShouldAutoClose(this.autoClosingQuotes, true),
-			comment: this.getShouldAutoClose(this.autoClosingComments, false),
-			bracket: this.getShouldAutoClose(this.autoClosingBrackets, false),
+			quote: this._getShouldAutoClose(languageId, this.autoClosingQuotes, true),
+			comment: this._getShouldAutoClose(languageId, this.autoClosingComments, false),
+			bracket: this._getShouldAutoClose(languageId, this.autoClosingBrackets, false),
 		};
+
+		this.autoClosingPairs = this.languageConfigurationService.getLanguageConfiguration(languageId).getAutoClosingPairs();
+
+		const surroundingPairs = this.languageConfigurationService.getLanguageConfiguration(languageId).getSurroundingPairs();
+		if (surroundingPairs) {
+			for (const pair of surroundingPairs) {
+				this.surroundingPairs[pair.open] = pair.close;
+			}
+		}
+
+		const commentsConfiguration = this.languageConfigurationService.getLanguageConfiguration(languageId).comments;
+		this.blockCommentStartToken = commentsConfiguration?.blockCommentStartToken ?? null;
 	}
 
-	public get electricChars(): Record<string, boolean> {
-		return {};
+	public get electricChars() {
+		if (!this._electricChars) {
+			this._electricChars = {};
+			const electricChars = this.languageConfigurationService.getLanguageConfiguration(this._languageId).electricCharacter?.getElectricCharacters();
+			if (electricChars) {
+				for (const char of electricChars) {
+					this._electricChars[char] = true;
+				}
+			}
+		}
+		return this._electricChars;
 	}
 
 	public get inputMode(): 'insert' | 'overtype' {
 		return InputMode.getInputMode();
 	}
 
-	public onElectricCharacter(_character: string, _context: unknown, _column: number): null {
-		return null;
+	/**
+	 * Should return opening bracket type to match indentation with
+	 */
+	public onElectricCharacter(character: string, context: LineTokens, column: number): IElectricAction | null {
+		const scopedLineTokens = createScopedLineTokens(context, column - 1);
+		const electricCharacterSupport = this.languageConfigurationService.getLanguageConfiguration(scopedLineTokens.languageId).electricCharacter;
+		if (!electricCharacterSupport) {
+			return null;
+		}
+		return electricCharacterSupport.onElectricCharacter(character, scopedLineTokens, column - scopedLineTokens.firstCharOffset);
 	}
 
-	public normalizeIndentation(value: string): string {
-		return normalizeIndentation(value, this.indentSize, this.insertSpaces);
+	public normalizeIndentation(str: string): string {
+		return normalizeIndentation(str, this.indentSize, this.insertSpaces);
 	}
 
+	private _getShouldAutoClose(languageId: string, autoCloseConfig: EditorAutoClosingStrategy, forQuotes: boolean): (ch: string) => boolean {
+		switch (autoCloseConfig) {
+			case 'beforeWhitespace':
+				return autoCloseBeforeWhitespace;
+			case 'languageDefined':
+				return this._getLanguageDefinedShouldAutoClose(languageId, forQuotes);
+			case 'always':
+				return autoCloseAlways;
+			case 'never':
+				return autoCloseNever;
+		}
+	}
+
+	private _getLanguageDefinedShouldAutoClose(languageId: string, forQuotes: boolean): (ch: string) => boolean {
+		const autoCloseBeforeSet = this.languageConfigurationService.getLanguageConfiguration(languageId).getAutoCloseBeforeSet(forQuotes);
+		return c => autoCloseBeforeSet.indexOf(c) !== -1;
+	}
+
+	/**
+	 * Returns a visible column from a column.
+	 * @see {@link CursorColumns}
+	 */
 	public visibleColumnFromColumn(model: ICursorSimpleModel, position: Position): number {
 		return CursorColumns.visibleColumnFromColumn(model.getLineContent(position.lineNumber), position.column, this.tabSize);
 	}
 
+	/**
+	 * Returns a visible column from a column.
+	 * @see {@link CursorColumns}
+	 */
 	public columnFromVisibleColumn(model: ICursorSimpleModel, lineNumber: number, visibleColumn: number): number {
-		const column = CursorColumns.columnFromVisibleColumn(model.getLineContent(lineNumber), visibleColumn, this.tabSize);
-		return Math.min(model.getLineMaxColumn(lineNumber), Math.max(model.getLineMinColumn(lineNumber), column));
-	}
+		const result = CursorColumns.columnFromVisibleColumn(model.getLineContent(lineNumber), visibleColumn, this.tabSize);
 
-	private getShouldAutoClose(strategy: typeof this.autoClosingQuotes, forQuotes: boolean): (character: string) => boolean {
-		switch (strategy) {
-			case 'always': return autoCloseAlways;
-			case 'never': return autoCloseNever;
-			case 'beforeWhitespace': return autoCloseBeforeWhitespace;
-			case 'languageDefined': {
-				const autoCloseBefore = this.languageConfigurationService.getLanguageConfiguration(this.languageId).autoCloseBefore;
-				return character => autoCloseBefore.includes(character) || (forQuotes && character.length === 0);
-			}
+		const minColumn = model.getLineMinColumn(lineNumber);
+		if (result < minColumn) {
+			return minColumn;
 		}
+
+		const maxColumn = model.getLineMaxColumn(lineNumber);
+		if (result > maxColumn) {
+			return maxColumn;
+		}
+
+		return result;
 	}
 }
 
+/**
+ * Represents a simple model (either the model or the view model).
+ */
 export interface ICursorSimpleModel {
 	getLineCount(): number;
 	getLineContent(lineNumber: number): string;
@@ -165,6 +253,11 @@ export interface ICursorSimpleModel {
 	getLineFirstNonWhitespaceColumn(lineNumber: number): number;
 	getLineLastNonWhitespaceColumn(lineNumber: number): number;
 	normalizePosition(position: Position, affinity: PositionAffinity): Position;
+
+	/**
+	 * Gets the column at which indentation stops at a given line.
+	 * @internal
+	 */
 	getLineIndentColumn(lineNumber: number): number;
 }
 
@@ -183,47 +276,64 @@ export class CursorState {
 
 	public static fromModelSelection(modelSelection: ISelection): PartialModelCursorState {
 		const selection = Selection.liftSelection(modelSelection);
-		return CursorState.fromModelState(new SingleCursorState(
+		const modelState = new SingleCursorState(
 			Range.fromPositions(selection.getSelectionStart()),
-			SelectionStartKind.Simple,
-			0,
-			selection.getPosition(),
-			0,
-		));
+			SelectionStartKind.Simple, 0,
+			selection.getPosition(), 0
+		);
+		return CursorState.fromModelState(modelState);
 	}
 
 	public static fromModelSelections(modelSelections: readonly ISelection[]): PartialModelCursorState[] {
-		return modelSelections.map(selection => this.fromModelSelection(selection));
+		const states: PartialModelCursorState[] = [];
+		for (let i = 0, len = modelSelections.length; i < len; i++) {
+			states[i] = this.fromModelSelection(modelSelections[i]);
+		}
+		return states;
 	}
 
-	constructor(
-		public readonly modelState: SingleCursorState,
-		public readonly viewState: SingleCursorState,
-	) {}
+	readonly modelState: SingleCursorState;
+	readonly viewState: SingleCursorState;
+
+	constructor(modelState: SingleCursorState, viewState: SingleCursorState) {
+		this.modelState = modelState;
+		this.viewState = viewState;
+	}
 
 	public equals(other: CursorState): boolean {
-		return this.viewState.equals(other.viewState) && this.modelState.equals(other.modelState);
+		return (this.viewState.equals(other.viewState) && this.modelState.equals(other.modelState));
 	}
 }
 
 export class PartialModelCursorState {
-	public readonly viewState = null;
+	readonly modelState: SingleCursorState;
+	readonly viewState: null;
 
-	constructor(public readonly modelState: SingleCursorState) {}
+	constructor(modelState: SingleCursorState) {
+		this.modelState = modelState;
+		this.viewState = null;
+	}
 }
 
 export class PartialViewCursorState {
-	public readonly modelState = null;
+	readonly modelState: null;
+	readonly viewState: SingleCursorState;
 
-	constructor(public readonly viewState: SingleCursorState) {}
+	constructor(viewState: SingleCursorState) {
+		this.modelState = null;
+		this.viewState = viewState;
+	}
 }
 
 export const enum SelectionStartKind {
 	Simple,
 	Word,
-	Line,
+	Line
 }
 
+/**
+ * Represents the cursor state on either the model or on the view model.
+ */
 export class SingleCursorState {
 	_singleCursorStateBrand: void = undefined;
 
@@ -239,29 +349,48 @@ export class SingleCursorState {
 		this.selection = SingleCursorState._computeSelection(this.selectionStart, this.position);
 	}
 
-	public equals(other: SingleCursorState): boolean {
-		return this.selectionStartLeftoverVisibleColumns === other.selectionStartLeftoverVisibleColumns
+	public equals(other: SingleCursorState) {
+		return (
+			this.selectionStartLeftoverVisibleColumns === other.selectionStartLeftoverVisibleColumns
 			&& this.leftoverVisibleColumns === other.leftoverVisibleColumns
 			&& this.selectionStartKind === other.selectionStartKind
 			&& this.position.equals(other.position)
-			&& this.selectionStart.equalsRange(other.selectionStart);
+			&& this.selectionStart.equalsRange(other.selectionStart)
+		);
 	}
 
 	public hasSelection(): boolean {
-		return !this.selection.isEmpty() || !this.selectionStart.isEmpty();
+		return (!this.selection.isEmpty() || !this.selectionStart.isEmpty());
 	}
 
 	public move(inSelectionMode: boolean, lineNumber: number, column: number, leftoverVisibleColumns: number): SingleCursorState {
 		if (inSelectionMode) {
-			return new SingleCursorState(this.selectionStart, this.selectionStartKind, this.selectionStartLeftoverVisibleColumns, new Position(lineNumber, column), leftoverVisibleColumns);
+			// move just position
+			return new SingleCursorState(
+				this.selectionStart,
+				this.selectionStartKind,
+				this.selectionStartLeftoverVisibleColumns,
+				new Position(lineNumber, column),
+				leftoverVisibleColumns
+			);
+		} else {
+			// move everything
+			return new SingleCursorState(
+				new Range(lineNumber, column, lineNumber, column),
+				SelectionStartKind.Simple,
+				leftoverVisibleColumns,
+				new Position(lineNumber, column),
+				leftoverVisibleColumns
+			);
 		}
-		return new SingleCursorState(new Range(lineNumber, column, lineNumber, column), SelectionStartKind.Simple, leftoverVisibleColumns, new Position(lineNumber, column), leftoverVisibleColumns);
 	}
 
 	private static _computeSelection(selectionStart: Range, position: Position): Selection {
-		return selectionStart.isEmpty() || !position.isBeforeOrEqual(selectionStart.getStartPosition())
-			? Selection.fromPositions(selectionStart.getStartPosition(), position)
-			: Selection.fromPositions(selectionStart.getEndPosition(), position);
+		if (selectionStart.isEmpty() || !position.isBeforeOrEqual(selectionStart.getStartPosition())) {
+			return Selection.fromPositions(selectionStart.getStartPosition(), position);
+		} else {
+			return Selection.fromPositions(selectionStart.getEndPosition(), position);
+		}
 	}
 }
 
@@ -273,14 +402,21 @@ export class EditOperationResult {
 	readonly shouldPushStackElementBefore: boolean;
 	readonly shouldPushStackElementAfter: boolean;
 
-	constructor(type: EditOperationType, commands: Array<ICommand | null>, options: { shouldPushStackElementBefore: boolean; shouldPushStackElementAfter: boolean }) {
+	constructor(
+		type: EditOperationType,
+		commands: Array<ICommand | null>,
+		opts: {
+			shouldPushStackElementBefore: boolean;
+			shouldPushStackElementAfter: boolean;
+		}
+	) {
 		this.type = type;
 		this.commands = commands;
-		this.shouldPushStackElementBefore = options.shouldPushStackElementBefore;
-		this.shouldPushStackElementAfter = options.shouldPushStackElementAfter;
+		this.shouldPushStackElementBefore = opts.shouldPushStackElementBefore;
+		this.shouldPushStackElementAfter = opts.shouldPushStackElementAfter;
 	}
 }
 
-export function isQuote(character: string): boolean {
-	return character === "'" || character === '"' || character === '`';
+export function isQuote(ch: string): boolean {
+	return (ch === '\'' || ch === '"' || ch === '`');
 }

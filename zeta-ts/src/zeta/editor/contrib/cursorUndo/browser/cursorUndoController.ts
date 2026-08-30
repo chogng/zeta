@@ -36,7 +36,7 @@ export class CursorUndoController extends Disposable {
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.cursorUndo", install: context => {
 	if (context.kind !== "text") return;
-	context.register(new CursorUndoController(context.view.element, context.viewport, context.selections));
+	context.register(new CursorUndoController(context.view.element, context.viewport, context.viewModel));
 } });
 
 /** Resolves Stanza's cursor-only undo shortcut without accepting unrelated modifiers. */

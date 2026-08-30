@@ -14,7 +14,7 @@ import { CursorState, SelectionStartKind, SingleCursorState } from '../../common
 import { CursorContext } from '../../common/cursor/cursorContext.js';
 import { Cursor } from '../../common/cursor/oneCursor.js';
 import { Selection } from '../../common/core/selection.js';
-import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 import { createTestCursorConfiguration } from '../common/testCursorConfiguration.js';
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
@@ -101,7 +101,7 @@ test('Cursor keeps model and wrapped view states in their own coordinate domains
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 	});
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const context = new CursorContext(
 		model,
 		lines,

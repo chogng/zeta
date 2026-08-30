@@ -1,7 +1,7 @@
 import { Hover, type HoverContent } from "../../../base/browser/ui/hover/hover.js";
 import { addDisposableListener, isHTMLElement } from "../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../configuration/common/configuration.js";
 import type { IContextMenuService } from "../../contextview/browser/contextView.js";
 import type { IContextViewService } from "../../contextview/browser/contextView.js";
 import { HoverConfiguration, type HoverDelayMode, type HoverSetupOptions, type IHoverService, type IManagedHover } from "../common/hoverService.js";
@@ -92,7 +92,7 @@ export class HoverService extends Disposable implements IHoverService {
 
 	private resolveDelay(mode: HoverDelayMode | undefined, groupId: string | undefined): number {
 		if (mode === "instant" || this.shouldSkipDelay(groupId)) return 0;
-		return this.configurationService.getValue(
+		return this.configurationService.getValue<number>(
 			mode === "reduced"
 				? HoverConfiguration.reducedDelay
 				: HoverConfiguration.delay,

@@ -44,6 +44,24 @@ export type Mutable<T> = {
 	-readonly [K in keyof T]: T[K];
 };
 
+export function isString(value: unknown): value is string {
+	return typeof value === 'string';
+}
+
+export function isNumber(value: unknown): value is number {
+	return typeof value === 'number' && !Number.isNaN(value);
+}
+
+export function isBoolean(value: unknown): value is boolean {
+	return value === true || value === false;
+}
+
+export function isUndefined(value: unknown): value is undefined {
+	return typeof value === 'undefined';
+}
+
+export type TypeConstraint = string | Function;
+
 export function isFunction(value: unknown): value is (...args: never[]) => unknown {
 	return typeof value === 'function';
 }

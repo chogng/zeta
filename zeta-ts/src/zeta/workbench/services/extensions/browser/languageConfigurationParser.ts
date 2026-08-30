@@ -1,22 +1,33 @@
-import { LanguageIndentAction, type LanguageAutoClosingPair, type LanguageCharacterPair, type LanguageConfigurationInput, type LanguageCommentConfiguration, type LanguageEnterAction, type LanguageFoldingMarkers, type LanguageIndentationRules, type LanguageOnEnterRule } from "../../../../editor/common/languages/languageConfiguration.js";
+import {
+	IndentAction,
+	type CharacterPair,
+	type CommentRule,
+	type EnterAction,
+	type FoldingRules,
+	type IAutoClosingPair,
+	type IAutoClosingPairConditional,
+	type IndentationRule,
+	type LanguageConfiguration,
+	type OnEnterRule,
+} from '../../../../editor/common/languages/languageConfiguration.js';
 
 /** Converts a VS Code-compatible JSON language configuration into editor rules. */
-export function parseLanguageConfiguration(value: unknown, owner: string): LanguageConfigurationInput {
+export function parseLanguageConfiguration(value: unknown, owner: string): LanguageConfiguration {
 	const document = record(value, owner);
 	return Object.freeze({
 		...(document.comments === undefined ? {} : { comments: parseComments(document.comments, `${owner}.comments`) }),
 		...(document.brackets === undefined ? {} : { brackets: parsePairList(document.brackets, `${owner}.brackets`) }),
 		...(document.autoClosingPairs === undefined ? {} : { autoClosingPairs: parseAutoClosingPairs(document.autoClosingPairs, `${owner}.autoClosingPairs`) }),
-		...(document.surroundingPairs === undefined ? {} : { surroundingPairs: parsePairList(document.surroundingPairs, `${owner}.surroundingPairs`) }),
+		...(document.surroundingPairs === undefined ? {} : { surroundingPairs: parseSurroundingPairs(document.surroundingPairs, `${owner}.surroundingPairs`) }),
 		...(document.autoCloseBefore === undefined ? {} : { autoCloseBefore: boundedString(document.autoCloseBefore, `${owner}.autoCloseBefore`, 512) }),
 		...(document.indentationRules === undefined ? {} : { indentationRules: parseIndentationRules(document.indentationRules, `${owner}.indentationRules`) }),
-		...(document.folding === undefined ? {} : { foldingMarkers: parseFoldingMarkers(document.folding, `${owner}.folding`) }),
+		...(document.folding === undefined ? {} : { folding: parseFoldingRules(document.folding, `${owner}.folding`) }),
 		...(document.onEnterRules === undefined ? {} : { onEnterRules: parseOnEnterRules(document.onEnterRules, `${owner}.onEnterRules`) }),
 		...(document.wordPattern === undefined ? {} : { wordPattern: regularExpression(document.wordPattern, `${owner}.wordPattern`) }),
 	});
 }
 
-function parseComments(value: unknown, owner: string): LanguageCommentConfiguration {
+function parseComments(value: unknown, owner: string): CommentRule {
 	const comments = record(value, owner);
 	const lineComment = comments.lineComment === undefined ? undefined : text(comments.lineComment, `${owner}.lineComment`, 64);
 	return Object.freeze({
@@ -25,7 +36,7 @@ function parseComments(value: unknown, owner: string): LanguageCommentConfigurat
 	});
 }
 
-function parseIndentationRules(value: unknown, owner: string): LanguageIndentationRules {
+function parseIndentationRules(value: unknown, owner: string): IndentationRule {
 	const rules = record(value, owner);
 	return Object.freeze({
 		decreaseIndentPattern: regularExpression(rules.decreaseIndentPattern, `${owner}.decreaseIndentPattern`),
@@ -35,19 +46,23 @@ function parseIndentationRules(value: unknown, owner: string): LanguageIndentati
 	});
 }
 
-function parseFoldingMarkers(value: unknown, owner: string): LanguageFoldingMarkers | null {
+function parseFoldingRules(value: unknown, owner: string): FoldingRules {
 	const folding = record(value, owner);
-	if (folding.markers === undefined) return null;
+	const offSide = folding.offSide === undefined ? undefined : boolean(folding.offSide, `${owner}.offSide`);
+	if (folding.markers === undefined) return offSide === undefined ? {} : { offSide };
 	const markers = record(folding.markers, `${owner}.markers`);
-	return Object.freeze({
-		start: regularExpression(markers.start, `${owner}.markers.start`),
-		end: regularExpression(markers.end, `${owner}.markers.end`),
-	});
+	return {
+		...(offSide === undefined ? {} : { offSide }),
+		markers: {
+			start: regularExpression(markers.start, `${owner}.markers.start`),
+			end: regularExpression(markers.end, `${owner}.markers.end`),
+		},
+	};
 }
 
-function parseOnEnterRules(value: unknown, owner: string): readonly LanguageOnEnterRule[] {
+function parseOnEnterRules(value: unknown, owner: string): OnEnterRule[] {
 	if (!Array.isArray(value)) throw new TypeError(`${owner} must be an array`);
-	return Object.freeze(value.map((candidate, index) => {
+	return value.map((candidate, index) => {
 		const rule = record(candidate, `${owner}[${index}]`);
 		return Object.freeze({
 			beforeText: regularExpression(rule.beforeText, `${owner}[${index}].beforeText`),
@@ -55,10 +70,10 @@ function parseOnEnterRules(value: unknown, owner: string): readonly LanguageOnEn
 			...optionalRegularExpressionProperty(rule.previousLineText, `${owner}[${index}].previousLineText`, "previousLineText"),
 			action: parseEnterAction(rule.action, `${owner}[${index}].action`),
 		});
-	}));
+	});
 }
 
-function parseEnterAction(value: unknown, owner: string): LanguageEnterAction {
+function parseEnterAction(value: unknown, owner: string): EnterAction {
 	const action = record(value, owner);
 	const indent = text(action.indent, `${owner}.indent`, 32);
 	if (!(indent in INDENT_ACTIONS)) throw new TypeError(`${owner}.indent is unsupported`);
@@ -75,10 +90,10 @@ function optionalRegularExpressionProperty(value: unknown, owner: string, key: "
 	return key === "afterText" ? { afterText: expression } : { previousLineText: expression };
 }
 
-function parseAutoClosingPairs(value: unknown, owner: string): readonly LanguageAutoClosingPair[] {
+function parseAutoClosingPairs(value: unknown, owner: string): IAutoClosingPairConditional[] {
 	if (!Array.isArray(value)) throw new TypeError(`${owner} must be an array`);
-	return Object.freeze(value.map((candidate, index) => {
-		if (Array.isArray(candidate)) return parsePair(candidate, `${owner}[${index}]`)!;
+	return value.map((candidate, index) => {
+		if (Array.isArray(candidate)) return pairObject(candidate, `${owner}[${index}]`);
 		const pair = record(candidate, `${owner}[${index}]`);
 		const notIn = pair.notIn === undefined ? undefined : parseTextList(pair.notIn, `${owner}[${index}].notIn`, 32);
 		return Object.freeze({
@@ -86,26 +101,36 @@ function parseAutoClosingPairs(value: unknown, owner: string): readonly Language
 			close: text(pair.close, `${owner}[${index}].close`, 128),
 			...(notIn === undefined ? {} : { notIn }),
 		});
-	}));
+	});
 }
 
-function parsePairList(value: unknown, owner: string): readonly LanguageCharacterPair[] {
+function parsePairList(value: unknown, owner: string): CharacterPair[] {
 	if (!Array.isArray(value)) throw new TypeError(`${owner} must be an array`);
-	return Object.freeze(value.map((candidate, index) => parsePair(candidate, `${owner}[${index}]`)!));
+	return value.map((candidate, index) => parsePair(candidate, `${owner}[${index}]`));
 }
 
-function parsePair(value: unknown, owner: string): LanguageCharacterPair {
+function parseSurroundingPairs(value: unknown, owner: string): IAutoClosingPair[] {
+	if (!Array.isArray(value)) throw new TypeError(`${owner} must be an array`);
+	return value.map((candidate, index) => pairObject(candidate, `${owner}[${index}]`));
+}
+
+function parsePair(value: unknown, owner: string): CharacterPair {
 	if (Array.isArray(value)) {
 		if (value.length !== 2) throw new RangeError(`${owner} must contain exactly two strings`);
-		return Object.freeze({ open: text(value[0], `${owner}[0]`, 128), close: text(value[1], `${owner}[1]`, 128) });
+		return [text(value[0], `${owner}[0]`, 128), text(value[1], `${owner}[1]`, 128)];
 	}
 	const pair = record(value, owner);
-	return Object.freeze({ open: text(pair.open, `${owner}.open`, 128), close: text(pair.close, `${owner}.close`, 128) });
+	return [text(pair.open, `${owner}.open`, 128), text(pair.close, `${owner}.close`, 128)];
 }
 
-function parseTextList(value: unknown, owner: string, maximum: number): readonly string[] {
+function pairObject(value: unknown, owner: string): IAutoClosingPair {
+	const [open, close] = parsePair(value, owner);
+	return { open, close };
+}
+
+function parseTextList(value: unknown, owner: string, maximum: number): string[] {
 	if (!Array.isArray(value)) throw new TypeError(`${owner} must be an array`);
-	return Object.freeze(value.map((candidate, index) => text(candidate, `${owner}[${index}]`, maximum)));
+	return value.map((candidate, index) => text(candidate, `${owner}[${index}]`, maximum));
 }
 
 function optionalRegularExpression(value: unknown, owner: string): RegExp | null {
@@ -146,6 +171,11 @@ function boundedString(value: unknown, owner: string, maximum: number): string {
 	return value;
 }
 
+function boolean(value: unknown, owner: string): boolean {
+	if (typeof value !== 'boolean') throw new TypeError(`${owner} must be a boolean`);
+	return value;
+}
+
 function nonNegativeInteger(value: unknown, owner: string): number {
 	if (!Number.isSafeInteger(value) || (value as number) < 0) throw new RangeError(`${owner} must be a non-negative integer`);
 	return value as number;
@@ -157,8 +187,8 @@ function record(value: unknown, owner: string): Record<string, unknown> {
 }
 
 const INDENT_ACTIONS = Object.freeze({
-	none: LanguageIndentAction.None,
-	indent: LanguageIndentAction.Indent,
-	indentOutdent: LanguageIndentAction.IndentOutdent,
-	outdent: LanguageIndentAction.Outdent,
+	none: IndentAction.None,
+	indent: IndentAction.Indent,
+	indentOutdent: IndentAction.IndentOutdent,
+	outdent: IndentAction.Outdent,
 });

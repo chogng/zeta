@@ -8,12 +8,12 @@ import { FontInfo } from '../../common/config/fontInfo.js';
 import { IdentityCoordinatesConverter } from '../../common/coordinatesConverter.js';
 import { CursorConfiguration } from '../../common/cursorCommon.js';
 import { CursorContext } from '../../common/cursor/cursorContext.js';
-import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 test('CursorContext keeps the model, view model, coordinates, and cursor configuration identities', () => {
 	using model = new TextModel('value', { languageId: 'plaintext' });
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const editorConfiguration = createEditorConfiguration();
 	const cursorConfig = new CursorConfiguration(model.getLanguageId(), model.getOptions(), editorConfiguration, languageConfigurationService);
 	const coordinatesConverter = new IdentityCoordinatesConverter(model);

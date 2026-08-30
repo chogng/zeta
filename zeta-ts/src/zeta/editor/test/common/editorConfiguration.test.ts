@@ -159,12 +159,12 @@ test('diff editor options merge nested defaults and validate limits', () => {
 });
 
 test('editor settings are registered by the common configuration owner', () => {
-	assert.equal(CodeEditorConfiguration.fontSize.defaultValue, 13);
-	assert.equal(CodeEditorConfiguration.wordWrap.defaultValue, EditorLineWrapping.Off);
-	assert.equal(CodeEditorConfiguration.colorDecorators.defaultValue, true);
-	assert.equal(CodeEditorConfiguration.colorDecoratorsActivatedOn.defaultValue, 'clickAndHover');
-	assert.equal(CodeEditorConfiguration.colorDecoratorsLimit.defaultValue, 500);
-	assert.equal(CodeEditorConfiguration.defaultColorDecorators.defaultValue, 'auto');
+	assert.equal(ConfigurationsRegistry.getConfiguration(CodeEditorConfiguration.fontSize)?.defaultValue, 13);
+	assert.equal(ConfigurationsRegistry.getConfiguration(CodeEditorConfiguration.wordWrap)?.defaultValue, EditorLineWrapping.Off);
+	assert.equal(ConfigurationsRegistry.getConfiguration(CodeEditorConfiguration.colorDecorators)?.defaultValue, true);
+	assert.equal(ConfigurationsRegistry.getConfiguration(CodeEditorConfiguration.colorDecoratorsActivatedOn)?.defaultValue, 'clickAndHover');
+	assert.equal(ConfigurationsRegistry.getConfiguration(CodeEditorConfiguration.colorDecoratorsLimit)?.defaultValue, 500);
+	assert.equal(ConfigurationsRegistry.getConfiguration(CodeEditorConfiguration.defaultColorDecorators)?.defaultValue, 'auto');
 	assert.equal(ConfigurationsRegistry.getConfiguration('editor.fontSize')?.key, CodeEditorConfiguration.fontSize);
 	assert.equal(ConfigurationsRegistry.getConfiguration('editor.colorDecorators')?.key, CodeEditorConfiguration.colorDecorators);
 	assert.equal(ConfigurationsRegistry.getConfiguration('diffEditor.showInlineChanges')?.key, CodeEditorConfiguration.diffShowInlineChanges);

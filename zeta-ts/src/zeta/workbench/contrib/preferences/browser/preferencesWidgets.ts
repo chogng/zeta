@@ -11,7 +11,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/preferencesModels.js';
@@ -294,12 +294,12 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 	private readonly toggle: Toggle;
 
 	constructor(container: HTMLElement, descriptor: IBooleanSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.key), options, 'toggle');
+		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'toggle');
 		this.toggle = this._register(this.presentation === 'general'
 			? new Checkbox(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' })
 			: new Switch(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' }));
 		this.toggle.element.classList.add(`zeta-${this.presentation}-toggle-control`);
-		this.toggle.input.dataset.configurationKey = descriptor.key.key;
+		this.toggle.input.dataset.configurationKey = descriptor.configuration.key;
 		this.bindState(state => {
 			this.toggle.checked = state.value;
 			this.toggle.busy = state.isPending;
@@ -317,7 +317,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 	private readonly inputBox: InputBox | undefined;
 
 	constructor(container: HTMLElement, descriptor: INumberSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.key), options);
+		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options);
 		this.domNode.append(this.copyDomNode);
 		if (this.presentation === 'editor') {
 			this.inputBox = this._register(new InputBox(this.domNode, {
@@ -336,7 +336,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 			this.input.step = '1';
 			this.domNode.append(this.input);
 		}
-		this.input.dataset.configurationKey = descriptor.key.key;
+		this.input.dataset.configurationKey = descriptor.configuration.key;
 		this.updateControl(descriptor);
 		this.bindState(state => {
 			this.input.value = String(state.value);
@@ -368,7 +368,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string> 
 	private readonly select: SelectBox;
 
 	constructor(container: HTMLElement, descriptor: ISelectSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.key), options, 'select');
+		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options, 'select');
 		this.select = this._register(new SelectBox(this.domNode, {
 			options: descriptor.options,
 			ariaLabel: descriptor.title,
@@ -399,11 +399,11 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 	private readonly input: HTMLInputElement;
 
 	constructor(container: HTMLElement, descriptor: ITextSetting, options: SettingWidgetOptions) {
-		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.key), options);
+		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.configuration), options);
 		this.input = h(this.domNode.ownerDocument, 'input');
 		this.input.className = `zeta-${this.presentation}-setting-text`;
 		this.input.type = 'text';
-		this.input.dataset.configurationKey = descriptor.key.key;
+		this.input.dataset.configurationKey = descriptor.configuration.key;
 		this.domNode.append(this.copyDomNode, this.input);
 		this.updateControl(descriptor);
 		this.bindState(state => {

@@ -42,9 +42,9 @@ registerTextEditorCapabilityContribution({
 		context.register(new InPlaceReplaceController(
 			context.view.element,
 			context.viewport,
-			context.selections,
+			context.viewModel,
 			context.editorWorker,
-			() => context.configurations.getLanguageConfiguration(context.languageId).wordPattern ?? DEFAULT_WORD_REGEXP,
+			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,
 		));
 	},

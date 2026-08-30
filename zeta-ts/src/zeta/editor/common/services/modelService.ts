@@ -1,19 +1,27 @@
-import { Emitter } from "../../../base/common/event.js";
+import { Emitter, type Event } from "../../../base/common/event.js";
 import { StringSHA1 } from '../../../base/common/hash.js';
 import { Disposable, DisposableMap, type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { isLinux, isMacintosh } from '../../../base/common/platform.js';
-import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationOverrides, IConfigurationService } from '../../../platform/configuration/common/configurationService.js';
+import type { IConfigurationChangeEvent, IConfigurationOverrides, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { EditorModelConfiguration } from '../config/editorModelConfiguration.js';
 import { EditOperation, type ISingleEditOperation } from '../core/editOperation.js';
 import { Range } from '../core/range.js';
 import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, type ITextBuffer, type ITextBufferFactory, type ITextModel, type ITextModelCreationOptions } from '../model.js';
 import { createPieceTreeTextBuffer } from '../model/textBufferFactory.js';
 import { TextModel, type TextModelUndoRedoSnapshot } from "../model/textModel.js";
-import type { ILanguageSelection } from '../languages/language.js';
+import type { ILanguageSelection, IZetaLanguageService } from '../languages/language.js';
+import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
+import type { ILanguageFeaturesService } from './languageFeatures.js';
+import type { SyntaxServiceOptions } from '../languages/syntax/syntaxService.js';
 import type { IModelService } from "./model.js";
 import type { TextModelEditSource } from '../textModelEditSource.js';
 import type { ITextResourcePropertiesService } from './textResourceConfiguration.js';
+
+export interface ModelServiceTokenizationOptions {
+	readonly syntaxService?: SyntaxServiceOptions;
+	readonly onDidChangeLanguageSupport?: Event<void>;
+}
 
 /** Resource and language registry for caller-owned TextModels. */
 export class ModelService extends Disposable implements IModelService {
@@ -35,6 +43,10 @@ export class ModelService extends Disposable implements IModelService {
 	constructor(
 		private readonly _configurationService: IConfigurationService,
 		private readonly _resourcePropertiesService: ITextResourcePropertiesService,
+		private readonly _languageService?: IZetaLanguageService,
+		private readonly _languageFeaturesService?: ILanguageFeaturesService,
+		private readonly _languageConfigurationService?: ILanguageConfigurationService,
+		private readonly _tokenizationOptions: ModelServiceTokenizationOptions = {},
 	) {
 		super();
 		this._register(this._configurationService.onDidChangeConfiguration(event => this._updateModelOptions(event)));
@@ -54,6 +66,15 @@ export class ModelService extends Disposable implements IModelService {
 			defaultEOL: creationOptions.defaultEOL,
 			trimAutoWhitespace: creationOptions.trimAutoWhitespace,
 			bracketPairColorizationOptions: creationOptions.bracketPairColorizationOptions,
+			languageConfigurationService: this._languageConfigurationService,
+			...(this._languageService && this._languageFeaturesService ? {
+					tokenization: {
+						languageIdCodec: this._languageService.languageIdCodec,
+						syntaxProviderRegistry: this._languageFeaturesService.syntaxProvider,
+						semanticTokensProvider: this._languageFeaturesService.semanticTokensProvider,
+						...this._tokenizationOptions,
+					},
+			} : {}),
 		});
 		if (creationOptions.detectIndentation) model.detectIndentation(creationOptions.insertSpaces, creationOptions.tabSize);
 		if (languageSelection) model.setLanguage(languageSelection);
@@ -115,14 +136,14 @@ export class ModelService extends Disposable implements IModelService {
 		if (!options) {
 			const overrides: IConfigurationOverrides = { overrideIdentifier: language, resource };
 			options = ModelService._readModelOptions({
-				tabSize: this._configurationService.getValue(EditorModelConfiguration.tabSize, overrides),
-				indentSize: this._configurationService.getValue(EditorModelConfiguration.indentSize, overrides),
-				insertSpaces: this._configurationService.getValue(EditorModelConfiguration.insertSpaces, overrides),
-				detectIndentation: this._configurationService.getValue(EditorModelConfiguration.detectIndentation, overrides),
-				trimAutoWhitespace: this._configurationService.getValue(EditorModelConfiguration.trimAutoWhitespace, overrides),
-				largeFileOptimizations: this._configurationService.getValue(EditorModelConfiguration.largeFileOptimizations, overrides),
-				bracketPairColorizationEnabled: this._configurationService.getValue(EditorModelConfiguration.bracketPairColorizationEnabled, overrides),
-				bracketPairColorizationIndependentColorPool: this._configurationService.getValue(EditorModelConfiguration.bracketPairColorizationIndependentColorPool, overrides),
+				tabSize: this._configurationService.getValue<number>(EditorModelConfiguration.tabSize, overrides),
+				indentSize: this._configurationService.getValue<number | 'tabSize'>(EditorModelConfiguration.indentSize, overrides),
+				insertSpaces: this._configurationService.getValue<boolean>(EditorModelConfiguration.insertSpaces, overrides),
+				detectIndentation: this._configurationService.getValue<boolean>(EditorModelConfiguration.detectIndentation, overrides),
+				trimAutoWhitespace: this._configurationService.getValue<boolean>(EditorModelConfiguration.trimAutoWhitespace, overrides),
+				largeFileOptimizations: this._configurationService.getValue<boolean>(EditorModelConfiguration.largeFileOptimizations, overrides),
+				bracketPairColorizationEnabled: this._configurationService.getValue<boolean>(EditorModelConfiguration.bracketPairColorizationEnabled, overrides),
+				bracketPairColorizationIndependentColorPool: this._configurationService.getValue<boolean>(EditorModelConfiguration.bracketPairColorizationIndependentColorPool, overrides),
 				eol: this._getEOL(resource, language),
 			}, isForSimpleWidget);
 			this._modelCreationOptionsByLanguageAndResource[cacheKey] = options;
@@ -149,12 +170,12 @@ export class ModelService extends Disposable implements IModelService {
 
 	private _getEOL(resource: URI | undefined, language: string): string {
 		if (resource) return this._resourcePropertiesService.getEOL(resource, language);
-		const configured = this._configurationService.getValue(EditorModelConfiguration.filesEol, { overrideIdentifier: language });
+		const configured = this._configurationService.getValue<'auto' | '\n' | '\r\n'>(EditorModelConfiguration.filesEol, { overrideIdentifier: language });
 		return configured === 'auto' ? (isLinux || isMacintosh ? '\n' : '\r\n') : configured;
 	}
 
 	private _shouldRestoreUndoStack(): boolean {
-		return this._configurationService.getValue(EditorModelConfiguration.restoreUndoStack);
+		return this._configurationService.getValue<boolean>(EditorModelConfiguration.restoreUndoStack);
 	}
 
 	private _updateModelOptions(event: IConfigurationChangeEvent): void {
@@ -314,7 +335,7 @@ interface RawModelConfiguration {
 	readonly eol: string;
 }
 
-const MODEL_CONFIGURATION_KEYS: readonly IConfigurationKey<unknown>[] = Object.freeze([
+const MODEL_CONFIGURATION_KEYS: readonly string[] = Object.freeze([
 	EditorModelConfiguration.tabSize,
 	EditorModelConfiguration.indentSize,
 	EditorModelConfiguration.insertSpaces,

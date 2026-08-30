@@ -17,7 +17,7 @@ import { type LanguageFormattingProvider, type LanguageFormattingRequest } from 
 import { type LanguageParameterHintsProvider, type LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import { type LanguageInlayHintsProvider, type LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/languageInlayHints.js";
 import { type LanguageLinkedEditingProvider, type LanguageLinkedEditingRequest } from "../../../../editor/contrib/linkedEditing/common/languageLinkedEditing.js";
-import { type LanguageSemanticTokensProvider, type LanguageSemanticTokensRequest } from "../../../../editor/contrib/semanticTokens/common/semanticTokens.js";
+import { type LanguageSemanticTokensProvider, type LanguageSemanticTokensRequest } from "../../../../editor/common/languages.js";
 import { type LanguageCodeLens, type LanguageCodeLensProvider, type LanguageCodeLensRequest } from "../../../../editor/contrib/codelens/common/languageCodeLenses.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js";
 import { type LanguageLink, type LanguageLinkProvider, type LanguageLinkRequest } from "../../../../editor/contrib/links/common/languageLinks.js";

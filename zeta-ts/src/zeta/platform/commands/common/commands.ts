@@ -2,6 +2,9 @@ import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.j
 import type { Event } from "../../../base/common/event.js";
 import type { ServicesAccessor } from "../../instantiation/common/instantiation.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { JsonSchema } from '../../../base/common/jsonSchema.js';
+import type { TypeConstraint } from '../../../base/common/types.js';
+import type { ILocalizedString } from '../../action/common/action.js';
 
 export type CommandId = string;
 export type CommandHandler = (
@@ -12,6 +15,18 @@ export type CommandHandler = (
 export interface CommandDefinition {
 	readonly id: CommandId;
 	readonly handler: CommandHandler;
+}
+
+export interface ICommandMetadata {
+	readonly description: ILocalizedString | string;
+	readonly args?: ReadonlyArray<{
+		readonly name: string;
+		readonly isOptional?: boolean;
+		readonly description?: string;
+		readonly constraint?: TypeConstraint;
+		readonly schema?: JsonSchema;
+	}>;
+	readonly returns?: string;
 }
 
 /** One caller-owned command set that can be atomically replaced. */

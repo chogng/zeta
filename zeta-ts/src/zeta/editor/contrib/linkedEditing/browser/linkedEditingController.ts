@@ -124,5 +124,5 @@ function matchesEntirePattern(pattern: RegExp, value: string): boolean {
 registerTextEditorCapabilityContribution({ id: "editor.contrib.linkedEditing", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new LinkedEditingService(context.model, context.languageFeaturesService.linkedEditingProvider, context.options.input.resource));
-	context.register(new LinkedEditingController(context.view, context.view.element, context.viewport, context.selections, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
+	context.register(new LinkedEditingController(context.view, context.view.element, context.viewport, context.viewModel, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(), context.onLanguageError));
 } });

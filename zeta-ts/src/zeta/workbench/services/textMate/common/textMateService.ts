@@ -1,4 +1,5 @@
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
 import { type ITextMateGrammarService } from "./textMateGrammarService.js";
@@ -15,6 +16,7 @@ export interface ITextMateService extends IDisposable {
 	readonly grammars: ITextMateGrammarService;
 	readonly scopeTheme: TextMateScopeThemeSource;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
+	readonly onDidChange: Event<void>;
 }
 
 export const ITextMateService = createServiceIdentifier<ITextMateService>("textMateService");

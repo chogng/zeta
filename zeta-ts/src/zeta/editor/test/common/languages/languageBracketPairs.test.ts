@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { OwnedLanguageConfigurationContributions } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
@@ -58,27 +59,26 @@ test("Language bracket pairs expose enclosing, next, and invalid bracket structu
 
 test("Language bracket pairs invalidate when the language configuration changes", () => {
 	using model = new TextModel("{}");
-	using configurations = new OwnedLanguageConfigurationContributions();
-	using registration = configurations.registerMany([{
-		languageId: "typescript",
-		configuration: { brackets: [{ open: "{", close: "}" }] },
-	}]);
+	using configurations = new TestLanguageConfigurationService();
+	using registration = new DisposableStore();
+	registration.add(configurations.register("typescript", { brackets: [["{", "}"]] }));
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	assert.equal(bracketPairs.getLineBrackets(0).length, 2);
 
-	registration.replace([{ languageId: "typescript", configuration: { brackets: [] } }]);
+	registration.clear();
+	registration.add(configurations.register("typescript", { brackets: [] }));
 	assert.deepEqual(bracketPairs.getLineBrackets(0), []);
 });
 
-function bracketConfigurations(): OwnedLanguageConfigurationContributions {
-	const configurations = new OwnedLanguageConfigurationContributions();
+function bracketConfigurations(): TestLanguageConfigurationService {
+	const configurations = new TestLanguageConfigurationService();
 	configurations.register("typescript", {
-		comments: { lineComment: "//", blockComment: { open: "/*", close: "*/" } },
+		comments: { lineComment: "//", blockComment: ["/*", "*/"] },
 		brackets: [
-			{ open: "(", close: ")" },
-			{ open: "[", close: "]" },
-			{ open: "{", close: "}" },
+			["(", ")"],
+			["[", "]"],
+			["{", "}"],
 		],
 	});
 	return configurations;

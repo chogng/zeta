@@ -269,7 +269,7 @@ registerTextEditorCapabilityContribution({
 		context.register(new ColorPickerController(
 			context.view.element,
 			context.viewport,
-			context.selections,
+			context.viewModel,
 			capability.service,
 			capability.detector,
 			context.languageId,

@@ -3,13 +3,28 @@ import { type URI } from '../../base/common/uri.js';
 import { EditOperation, type ISingleEditOperation } from './core/editOperation.js';
 import { type Position } from './core/position.js';
 import { type IRange, Range } from './core/range.js';
+import { type TextSnapshot } from './core/textChange.js';
 import { type LanguageId } from './encodedTokenAttributes.js';
 import { type LanguageSelector } from './languageSelector.js';
 import * as model from './model.js';
+import { type TextModel } from './model/textModel.js';
+import { type LanguageTokenResult } from './tokens/languageTokens.js';
 
 type Thenable<T> = PromiseLike<T>;
 
 export type ProviderResult<T> = T | undefined | null | Thenable<T | undefined | null>;
+
+export interface LanguageSemanticTokensRequest {
+	readonly requestId: number;
+	readonly model: TextModel;
+	readonly snapshot: TextSnapshot;
+	readonly languageId: string;
+	readonly resource?: URI;
+}
+
+export interface LanguageSemanticTokensProvider {
+	provideSemanticTokens(request: LanguageSemanticTokensRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
+}
 
 /** @internal */
 export interface ILanguageIdCodec {

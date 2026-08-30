@@ -5,13 +5,13 @@ import { SelectionStartKind, SingleCursorState } from '../../common/cursorCommon
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { Selection } from '../../common/core/selection.js';
-import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { createTestCursorConfiguration } from './testCursorConfiguration.js';
 
 test('MoveOperations collapses a selection at the movement edge', () => {
 	using model = new TextModel('abcdef');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const configuration = createTestCursorConfiguration(model, languageConfigurationService);
 	const cursor = cursorState(1, 2, 1, 5);
 
@@ -33,7 +33,7 @@ test('MoveOperations collapses a selection at the movement edge', () => {
 
 test('MoveOperations preserves the target visible column across a short line', () => {
 	using model = new TextModel('abcdef\nx\nabcdef');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const configuration = createTestCursorConfiguration(model, languageConfigurationService);
 	const first = cursorState(1, 6, 1, 6);
 
@@ -55,7 +55,7 @@ test('MoveOperations preserves the target visible column across a short line', (
 
 test('MoveOperations toggles line start between indentation and the minimum column', () => {
 	using model = new TextModel('   value');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const configuration = createTestCursorConfiguration(model, languageConfigurationService);
 	const cursor = cursorState(1, 7, 1, 7);
 
@@ -73,7 +73,7 @@ test('MoveOperations toggles line start between indentation and the minimum colu
 
 test('MoveOperations translates both selection endpoints with their visible columns', () => {
 	using model = new TextModel('abcdef\nx\nabcdef');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const configuration = createTestCursorConfiguration(model, languageConfigurationService);
 	const cursor = cursorState(1, 6, 2, 2);
 

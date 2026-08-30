@@ -24,8 +24,7 @@ export type { IStandaloneLanguagesApi } from './standalone/browser/standaloneLan
 export type { LanguageDescription, LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration, LanguageRegistrationOptions } from './common/languages/languageRegistry.js';
 export type { TextResourceLanguageInput } from '../platform/language/common/textResourceLanguage.js';
 export type { LanguageProviderBatch, LanguageProviderBatchRegistration } from './common/services/languageFeatures.js';
-export type { LanguageConfigurationInput } from './common/languages/languageConfiguration.js';
-export type { LanguageConfigurationRegistrationOptions } from './common/languages/ownedLanguageConfigurationContributions.js';
+export type { CharacterPair, IAutoClosingPair, IAutoClosingPairConditional, LanguageConfiguration } from './common/languages/languageConfiguration.js';
 export { RGBA8 } from './common/core/misc/rgba.js';
 export type { DocumentColorProvider, IColor, IColorInformation, IColorPresentation, TextEdit } from './common/languages.js';
 export type { TextSnapshot } from './common/core/textChange.js';
@@ -58,7 +57,7 @@ export type { LanguageLink, LanguageLinkProvider, LanguageLinkRequest } from './
 export type { LanguageParameterHints, LanguageParameterHintsContext, LanguageParameterHintsProvider, LanguageParameterHintsRequest, LanguageParameterInformation, LanguageSignatureInformation } from './contrib/parameterHints/common/languageParameterHints.js';
 export type { LanguageRenamePreparation, LanguageRenameProvider, LanguageRenameRequest } from './contrib/rename/common/languageRename.js';
 export type { LanguageSelectionRangeProvider, LanguageSelectionRangeRequest } from './contrib/smartSelect/common/selectionRanges.js';
-export type { LanguageSemanticTokensProvider, LanguageSemanticTokensRequest } from './contrib/semanticTokens/common/semanticTokens.js';
+export type { LanguageSemanticTokensProvider, LanguageSemanticTokensRequest } from './common/languages.js';
 export type { StandaloneServiceOverrides } from "./standalone/browser/standaloneServices.js";
 export type { NamedEditorThemeData } from "./standalone/common/namedEditorTheme.js";
 export const Position = baseApi.Position;

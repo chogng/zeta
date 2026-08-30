@@ -8,14 +8,14 @@ import { assertDefined } from "../../../../base/common/types.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
 import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
-import { ConfiguredCodeEditor, isEditorTextViewState, type ConfiguredCodeEditorOptions, type EditorTextViewState } from '../../../../editor/browser/configuredCodeEditor.js';
+import { CodeEditorWidget, isCodeEditorViewState, type CodeEditorViewState, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { type ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
@@ -37,19 +37,18 @@ export interface EditorPanePart extends IDisposable {
 	focus(): void;
 	getValue(): string;
 	revealRange?(range: Range): void;
-	getViewState?(): EditorTextViewState;
-	restoreViewState?(state: EditorTextViewState): void;
+	saveViewState?(): CodeEditorViewState;
+	restoreViewState?(state: CodeEditorViewState): void;
 	announceAccessibilityStatus?(message: string): void;
-	prepareSave?(): Promise<void>;
 }
 
-export interface EditorPanePartOptions extends ConfiguredCodeEditorOptions {
+export interface EditorPanePartOptions extends CodeEditorWidgetOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly instantiationService?: ConfiguredCodeEditorOptions["instantiationService"];
+	readonly instantiationService?: CodeEditorWidgetOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 }
 
@@ -59,10 +58,10 @@ export interface EditorPaneOptions {
 	readonly createPart?: (options: EditorPanePartOptions) => EditorPanePart;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly instantiationService?: ConfiguredCodeEditorOptions["instantiationService"];
+	readonly instantiationService?: CodeEditorWidgetOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: WrappingIndent;
@@ -70,44 +69,44 @@ export interface EditorPaneOptions {
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
-	readonly experimentalGpuAcceleration?: ConfiguredCodeEditorOptions["experimentalGpuAcceleration"];
-	readonly minimap?: ConfiguredCodeEditorOptions["minimap"];
-	readonly renderLineHighlight?: ConfiguredCodeEditorOptions['renderLineHighlight'];
-	readonly renderLineHighlightOnlyWhenFocus?: ConfiguredCodeEditorOptions['renderLineHighlightOnlyWhenFocus'];
-	readonly cursorStyle?: ConfiguredCodeEditorOptions['cursorStyle'];
-	readonly cursorBlinking?: ConfiguredCodeEditorOptions['cursorBlinking'];
-	readonly cursorSmoothCaretAnimation?: ConfiguredCodeEditorOptions['cursorSmoothCaretAnimation'];
-	readonly cursorWidth?: ConfiguredCodeEditorOptions['cursorWidth'];
-	readonly cursorHeight?: ConfiguredCodeEditorOptions['cursorHeight'];
-	readonly lineNumbers?: ConfiguredCodeEditorOptions['lineNumbers'];
-	readonly guides?: ConfiguredCodeEditorOptions['guides'];
+	readonly experimentalGpuAcceleration?: CodeEditorWidgetOptions["experimentalGpuAcceleration"];
+	readonly minimap?: CodeEditorWidgetOptions["minimap"];
+	readonly renderLineHighlight?: CodeEditorWidgetOptions['renderLineHighlight'];
+	readonly renderLineHighlightOnlyWhenFocus?: CodeEditorWidgetOptions['renderLineHighlightOnlyWhenFocus'];
+	readonly cursorStyle?: CodeEditorWidgetOptions['cursorStyle'];
+	readonly cursorBlinking?: CodeEditorWidgetOptions['cursorBlinking'];
+	readonly cursorSmoothCaretAnimation?: CodeEditorWidgetOptions['cursorSmoothCaretAnimation'];
+	readonly cursorWidth?: CodeEditorWidgetOptions['cursorWidth'];
+	readonly cursorHeight?: CodeEditorWidgetOptions['cursorHeight'];
+	readonly lineNumbers?: CodeEditorWidgetOptions['lineNumbers'];
+	readonly guides?: CodeEditorWidgetOptions['guides'];
 	readonly bracketPairColorization?: boolean;
-	readonly matchBrackets?: ConfiguredCodeEditorOptions["matchBrackets"];
+	readonly matchBrackets?: CodeEditorWidgetOptions["matchBrackets"];
 	readonly stickyScroll?: boolean;
-	readonly suggestions?: ConfiguredCodeEditorOptions["suggestions"];
-	readonly inlineCompletions?: ConfiguredCodeEditorOptions["inlineCompletions"];
+	readonly suggestions?: CodeEditorWidgetOptions["suggestions"];
+	readonly inlineCompletions?: CodeEditorWidgetOptions["inlineCompletions"];
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: boolean;
 	readonly codeLens?: boolean;
-	readonly colorDecorators?: ConfiguredCodeEditorOptions["colorDecorators"];
-	readonly colorDecoratorsActivatedOn?: ConfiguredCodeEditorOptions["colorDecoratorsActivatedOn"];
-	readonly colorDecoratorsLimit?: ConfiguredCodeEditorOptions["colorDecoratorsLimit"];
-	readonly defaultColorDecorators?: ConfiguredCodeEditorOptions["defaultColorDecorators"];
+	readonly colorDecorators?: CodeEditorWidgetOptions["colorDecorators"];
+	readonly colorDecoratorsActivatedOn?: CodeEditorWidgetOptions["colorDecoratorsActivatedOn"];
+	readonly colorDecoratorsLimit?: CodeEditorWidgetOptions["colorDecoratorsLimit"];
+	readonly defaultColorDecorators?: CodeEditorWidgetOptions["defaultColorDecorators"];
 	readonly formatOnSave?: boolean;
-	readonly find?: ConfiguredCodeEditorOptions["find"];
-	readonly indentation?: ConfiguredCodeEditorOptions["indentation"];
+	readonly find?: CodeEditorWidgetOptions["find"];
+	readonly indentation?: CodeEditorWidgetOptions["indentation"];
 	/** Browser paragraph direction forwarded to every created editor part. */
 	readonly textDirection?: EditorTextDirection;
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
-	readonly onShowContextMenu?: ConfiguredCodeEditorOptions["onShowContextMenu"];
-	readonly onExecuteEditorCommand?: ConfiguredCodeEditorOptions["onExecuteEditorCommand"];
+	readonly onShowContextMenu?: CodeEditorWidgetOptions["onShowContextMenu"];
+	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly insertFinalNewLine?: boolean;
-	readonly fontZoom?: ConfiguredCodeEditorOptions["fontZoom"];
+	readonly fontZoom?: CodeEditorWidgetOptions["fontZoom"];
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly onSaveError?: (error: unknown) => void;
 }
@@ -125,6 +124,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 	private saving = false;
+	private beforeSaveHooks: Array<() => void | Promise<void>> = [];
 	private languageId: string | undefined;
 	readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
@@ -143,7 +143,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			throw new TypeError("Code editor pane requires a text model service");
 		}
 		this.modelService = options.modelService;
-		this.createPart = options.createPart ?? (partOptions => new ConfiguredCodeEditor(partOptions));
+		this.createPart = options.createPart ?? (partOptions => new CodeEditorWidget(partOptions));
 	}
 
 	create(parent: HTMLElement): void {
@@ -165,6 +165,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		const modelReference = await this.modelService.acquire(input, signal);
 		let part: EditorPanePart | undefined;
 		let workingCopy: EditorWorkingCopy | undefined;
+		const beforeSaveHooks: Array<() => void | Promise<void>> = [];
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
 			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent((0) + 1) }, this.options.languageResolver);
@@ -222,6 +223,13 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				showUnicodeHighlights: this.options.showUnicodeHighlights,
 				insertFinalNewLine: this.options.insertFinalNewLine,
 				fontZoom: this.options.fontZoom,
+				registerBeforeSave: hook => {
+					beforeSaveHooks.push(hook);
+					return toDisposable(() => {
+						const index = beforeSaveHooks.indexOf(hook);
+						if (index >= 0) beforeSaveHooks.splice(index, 1);
+					});
+				},
 			});
 			workingCopy = new EditorWorkingCopy(
 				modelReference,
@@ -239,6 +247,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		}
 		this.statusListener.clear();
 		this.part.value = part;
+		this.beforeSaveHooks = beforeSaveHooks;
 		this.workingCopySlot.value = workingCopy;
 		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent((0) + 1) }, this.options.languageResolver);
 		const statusListeners = new DisposableStore();
@@ -255,6 +264,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	clearInput(): void {
 		this.statusListener.clear();
 		this.part.clear();
+		this.beforeSaveHooks = [];
 		this.workingCopySlot.clear();
 		this.languageId = undefined;
 		this.statusChangeEmitter.fire();
@@ -300,7 +310,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	}
 
 	async save(): Promise<void> {
-		await this.part.value?.prepareSave?.();
+		for (const hook of [...this.beforeSaveHooks]) await hook();
 		await this.workingCopy?.save(new AbortController().signal);
 	}
 
@@ -313,11 +323,11 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	}
 
 	saveViewState(): unknown {
-		return this.part.value?.getViewState?.();
+		return this.part.value?.saveViewState?.();
 	}
 
 	restoreViewState(state: unknown): void {
-		if (!isEditorTextViewState(state)) throw new TypeError("Invalid Stanza code editor view state");
+		if (!isCodeEditorViewState(state)) throw new TypeError("Invalid Stanza code editor view state");
 		const part = this.part.value;
 		if (!part?.restoreViewState) throw new Error("Stanza code editor view-state restoration is unavailable");
 		part.restoreViewState(state);

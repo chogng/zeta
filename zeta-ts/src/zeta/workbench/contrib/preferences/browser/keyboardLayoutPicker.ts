@@ -2,7 +2,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeyboardConfiguration } from '../../../../platform/keyboardLayout/common/keyboardConfiguration.js';
 import { IKeyboardLayoutService, type IKeyboardLayoutInfo } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';

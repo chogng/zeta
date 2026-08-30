@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { jumpToMatchingBrackets, selectToMatchingBrackets } from "../../common/bracketNavigation.js";
-import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { Selection } from "../../../../common/core/selection.js";
@@ -41,11 +41,11 @@ test("Bracket navigation leaves selections without a lexical match unchanged", (
 	assert.equal(selectToMatchingBrackets(bracketPairs, selections), selections);
 });
 
-function bracketConfigurations(): OwnedLanguageConfigurationContributions {
-	const configurations = new OwnedLanguageConfigurationContributions();
+function bracketConfigurations(): TestLanguageConfigurationService {
+	const configurations = new TestLanguageConfigurationService();
 	configurations.register("typescript", {
-		comments: { lineComment: "//", blockComment: { open: "/*", close: "*/" } },
-		brackets: [{ open: "(", close: ")" }, { open: "{", close: "}" }],
+		comments: { lineComment: "//", blockComment: ["/*", "*/"] },
+		brackets: [["(", ")"], ["{", "}"]],
 	});
 	return configurations;
 }

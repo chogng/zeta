@@ -8,7 +8,7 @@ import { LineDiffKind, type LineDiffRow } from '../../../../editor/common/diff/l
 import { TextDecorationCollection } from '../../../../editor/common/model/decorationCollection.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
 
-import { type IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IQuickDiffModelService, type QuickDiffComparison } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
 import { TrackedRangeStickiness } from '../../../../editor/common/model.js';

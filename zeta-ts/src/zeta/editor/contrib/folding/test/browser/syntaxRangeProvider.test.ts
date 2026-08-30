@@ -3,13 +3,13 @@ import test from "node:test";
 import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
 import { computeEditorIndentFoldingRanges } from "../../browser/indentRangeProvider.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
-import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "../../browser/syntaxRangeProvider.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Language folding follows lexical braces, brackets, and block comments", () => {
 	using model = new TextModel("const matcher = /[{]/;\nfunction sample() {\nvalues = [\n1,\n];\n}\n/*\ncomment {\n*/");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 
 	assert.deepEqual(computeEditorLanguageFoldingRanges(model, "typescript", configurations), [
@@ -21,7 +21,7 @@ test("Language folding follows lexical braces, brackets, and block comments", ()
 
 test("Language folding recognizes nested configured comment regions without mistaking source text for a marker", () => {
 	using model = new TextModel("// #region outer\nconst marker = '#region';\n// region inner\nvalue();\n// endregion inner\n// #endregion outer");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 
 	assert.deepEqual(computeEditorLanguageFoldingRanges(model, "typescript", configurations), [
@@ -32,9 +32,9 @@ test("Language folding recognizes nested configured comment regions without mist
 
 test("Language folding accepts caller-contributed region marker patterns", () => {
 	using model = new TextModel("; region first\nvalue\n; endregion first");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using registration = configurations.register("demo", {
-		foldingMarkers: { start: /^\s*;\s*region\b/iu, end: /^\s*;\s*endregion\b/iu },
+		folding: { markers: { start: /^\s*;\s*region\b/iu, end: /^\s*;\s*endregion\b/iu } },
 	});
 
 	assert.deepEqual(computeEditorLanguageFoldingRanges(model, "demo", configurations), [range(0, 2)]);
@@ -42,7 +42,7 @@ test("Language folding accepts caller-contributed region marker patterns", () =>
 
 test("Language and indentation folds merge deterministically without crossing ranges", () => {
 	using model = new TextModel("if {\n  child\n}\nplain\n  indented");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 
 	assert.deepEqual(mergeEditorFoldingRanges(

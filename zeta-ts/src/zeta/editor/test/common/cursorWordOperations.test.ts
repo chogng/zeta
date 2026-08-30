@@ -6,7 +6,7 @@ import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { Selection } from '../../common/core/selection.js';
 import { getMapForWordSeparators } from '../../common/core/wordCharacterClassifier.js';
-import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { createTestCursorConfiguration } from './testCursorConfiguration.js';
 
@@ -27,7 +27,7 @@ test('WordOperations moves between word starts and resolves the word at a positi
 
 test('WordOperations creates and extends an upstream cursor word selection', () => {
 	using model = new TextModel('alpha beta');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const configuration = createTestCursorConfiguration(model, languageConfigurationService, { wordSeparators: ' ' });
 	const cursor = new SingleCursorState(new Range(1, 8, 1, 8), SelectionStartKind.Simple, 0, new Position(1, 8), 0);
 
@@ -42,7 +42,7 @@ test('WordOperations creates and extends an upstream cursor word selection', () 
 
 test('WordOperations computes a word deletion range without mutating the model', () => {
 	using model = new TextModel('alpha beta');
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	const configuration = createTestCursorConfiguration(model, languageConfigurationService, { wordSeparators: ' ' });
 	const range = WordOperations.deleteWordLeft({
 		wordSeparators: getMapForWordSeparators(configuration.wordSeparators, configuration.wordSegmenterLocales),

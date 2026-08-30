@@ -112,5 +112,5 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.inlineCompletions
 }, install: context => {
 	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnablementEnabled(context.options.inlineCompletions, context.languageId))) return;
 	const service = context.register(new InlineCompletionProviderService(context.model, context.languageFeaturesService.inlineCompletionsProvider));
-	context.register(new EditorInlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
+	context.register(new EditorInlineCompletionsController(context.view.element, context.viewport, context.viewModel, service, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
 } });

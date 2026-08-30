@@ -2,7 +2,8 @@ import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import type { IContentSearchQuery, IContentSearchService, ContentSearchMatch, ContentSearchMatchRange } from "../../../../platform/search/common/search.js";
-import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { ConfigurationsRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ContentSearchConfiguration } from "../common/searchConfiguration.js";
 
@@ -191,8 +192,10 @@ export class SearchViewPane extends ViewPane {
 		this.excludeInput.value = this.configurationValue(ContentSearchConfiguration.excludePatterns);
 	}
 
-	private configurationValue<T>(key: IConfigurationKey<T>): T {
-		return this.configurationService?.getValue(key) ?? key.defaultValue;
+	private configurationValue<T>(key: string): T {
+		const configuration = ConfigurationsRegistry.getConfiguration(key) as IRegisteredConfiguration<T> | undefined;
+		if (!configuration) throw new RangeError(`Unknown configuration: ${key}`);
+		return this.configurationService?.getValue<T>(key) ?? configuration.defaultValue;
 	}
 
 	private appendMatches(matches: readonly ContentSearchMatch[]): void {

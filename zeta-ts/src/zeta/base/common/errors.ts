@@ -99,6 +99,15 @@ export class BugIndicatingError extends Error {
 	}
 }
 
+export class NotSupportedError extends Error {
+	constructor(message?: string) {
+		super('NotSupported');
+		if (message) {
+			this.message = message;
+		}
+	}
+}
+
 /** Preserves Error instances and wraps any other thrown value as an Error. */
 export function toError(value: unknown): Error {
 	return value instanceof Error ? value : new Error(String(value));

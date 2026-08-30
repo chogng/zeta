@@ -37,9 +37,9 @@ for (const [name, value] of Object.entries({
 const { h } = await import('../../../../../base/browser/dom.js');
 const { Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
-const { ConfigurationRegistry } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
+const { ConfigurationRegistry, ConfigurationsRegistry } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
-const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configurationService.js');
+const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configuration.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
@@ -121,14 +121,14 @@ test('settingsLayout is the single projection from registered settings to catego
 		'hooks',
 	]);
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
-	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks.key), 'general');
-	assert.equal(findSettingCategory(layout, HoverConfiguration.delay.key), 'general');
-	assert.equal(findSettingCategory(layout, SashConfiguration.size.key), 'general');
-	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme.key), 'appearance');
-	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle.key), 'appearance');
-	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor.key), 'editor');
-	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily.key), 'editor');
-	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults.key), 'editor');
+	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'general');
+	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
+	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
+	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor');
+	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily), 'editor');
+	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'editor');
 	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text'].includes(setting.valueType)), true);
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
@@ -162,8 +162,8 @@ test('SettingsLayout validates stable configuration identities', () => {
 	}]);
 
 	assert.equal(layout.nodes[0]?.element.id, 'editor.group.typography');
-	assert.equal(layout.nodes[0]?.children?.[0]?.element.id, CodeEditorConfiguration.fontFamily.key);
-	assert.deepEqual(layout.nodes[0]?.children?.[0]?.element.keywords, [CodeEditorConfiguration.fontFamily.key]);
+	assert.equal(layout.nodes[0]?.children?.[0]?.element.id, CodeEditorConfiguration.fontFamily);
+	assert.deepEqual(layout.nodes[0]?.children?.[0]?.element.keywords, [CodeEditorConfiguration.fontFamily]);
 	assert.throws(() => new SettingsLayout('editor', [{
 		id: 'typography',
 		title: 'Typography',
@@ -323,34 +323,34 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	assert.equal(agentsGroup.textContent, 'Agents');
 	assert.equal(agentsGroup.closest('.zeta-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
-	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks.key}"]`));
-	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay.key}"]`));
+	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`));
+	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
 
-	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks.key}"]`);
+	const underline = root.querySelector<HTMLInputElement>(`[data-configuration-key="${AccessibilityConfiguration.underlineLinks}"]`);
 	assert.ok(underline);
 	underline.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(AccessibilityConfiguration.underlineLinks), true);
-	const underlineIndicator = root.querySelector<HTMLElement>(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks.key}"] .zeta-settings-indicators`);
+	const underlineIndicator = root.querySelector<HTMLElement>(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"] .zeta-settings-indicators`);
 	assert.equal(underlineIndicator?.textContent, 'Modified');
 	assert.equal(underlineIndicator?.getAttribute('aria-label'), 'Setting has been modified');
 
-	const hoverDelay = root.querySelector<HTMLInputElement>(`[data-configuration-key="${HoverConfiguration.delay.key}"]`);
+	const hoverDelay = root.querySelector<HTMLInputElement>(`[data-configuration-key="${HoverConfiguration.delay}"]`);
 	assert.ok(hoverDelay);
 	hoverDelay.value = '750';
 	hoverDelay.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
 	assert.equal(configuration.getValue(HoverConfiguration.delay), 750);
 
-	root.querySelector<HTMLButtonElement>(`[data-settings-item-id="${HoverConfiguration.delay.key}"] .zeta-setting-item-actions-trigger`)?.click();
+	root.querySelector<HTMLButtonElement>(`[data-settings-item-id="${HoverConfiguration.delay}"] .zeta-setting-item-actions-trigger`)?.click();
 	const copyAction = menuActions.find(action => action.id === 'settings.copySettingId');
 	const resetAction = menuActions.find(action => action.id === 'settings.resetSetting');
 	assert.ok(copyAction);
 	assert.ok(resetAction);
 	await copyAction.run();
-	assert.deepEqual(copied, [HoverConfiguration.delay.key]);
+	assert.deepEqual(copied, [HoverConfiguration.delay]);
 	await resetAction.run();
-	assert.equal(configuration.getValue(HoverConfiguration.delay), HoverConfiguration.delay.defaultValue);
+	assert.equal(configuration.getValue(HoverConfiguration.delay), ConfigurationsRegistry.getConfiguration(HoverConfiguration.delay)?.defaultValue);
 
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.zeta-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
@@ -380,10 +380,10 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 
 	root.querySelector<HTMLElement>('[data-settings-category-id="editor"]')?.click();
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'editor');
-	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily.key}"]`));
-	assert.ok(root.querySelector(`[data-configuration-key="${EditorSelectionConfiguration.defaultNewDocumentEditor.key}"]`));
+	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
+	assert.ok(root.querySelector(`[data-configuration-key="${EditorSelectionConfiguration.defaultNewDocumentEditor}"]`));
 	assert.equal(root.querySelector('[data-settings-item-id^="models.item."]'), null);
-	const fontFamily = root.querySelector<HTMLInputElement>(`[data-configuration-key="${CodeEditorConfiguration.fontFamily.key}"]`);
+	const fontFamily = root.querySelector<HTMLInputElement>(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`);
 	assert.ok(fontFamily);
 	fontFamily.value = 'Fira Code';
 	fontFamily.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
@@ -395,8 +395,8 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	await modifiedFilter.run();
 	hideMenu?.(false);
 	assert.equal(search.value, '@modified');
-	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily.key}"]`));
-	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontSize.key}"]`), null);
+	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
+	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontSize}"]`), null);
 	root.querySelector<HTMLButtonElement>('.zeta-settings-search-filter')?.click();
 	const clearFilters = menuActions.find(action => action.id === 'settings.search.clearFilters');
 	assert.ok(clearFilters);
@@ -408,8 +408,8 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.equal(root.querySelectorAll('.zeta-settings-content-tree [data-settings-item-id]').length, 1);
-	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily.key}"]`));
-	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily.key}"]`), fontFamily);
+	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`));
+	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 	assert.equal(root.querySelector('.zeta-settings-navigation-tree')?.contains(ownerDocument.activeElement), true);
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));

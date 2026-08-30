@@ -125,7 +125,7 @@ registerTextEditorCapabilityContribution({
 	},
 	install: context => {
 		if (context.kind !== 'text') return;
-		context.register(new SelectionAnchorController(context.view.element, context.viewport, context.selections, context.getCapability(selectionAnchorDecorations)));
+		context.register(new SelectionAnchorController(context.view.element, context.viewport, context.viewModel, context.getCapability(selectionAnchorDecorations)));
 	},
 });
 

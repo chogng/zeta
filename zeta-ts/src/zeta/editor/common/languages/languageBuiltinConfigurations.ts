@@ -1,77 +1,87 @@
-import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
-import { DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE, LanguageIndentAction, type LanguageAutoClosingPair, type LanguageAutoClosingTokenContext, type LanguageCharacterPair, type LanguageConfigurationInput, type LanguageFoldingMarkers, type LanguageIndentationRules, type LanguageOnEnterRule } from "./languageConfiguration.js";
-import { OwnedLanguageConfigurationContributions, type LanguageConfigurationSource, type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
-import { assertLanguageId } from "./languageId.js";
+import { DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { LanguageService } from '../services/languageService.js';
+import { CharacterPairSupport } from './supports/characterPair.js';
+import {
+	IndentAction,
+	type CharacterPair,
+	type FoldingMarkers,
+	type IAutoClosingPairConditional,
+	type IndentationRule,
+	type LanguageConfiguration,
+	type OnEnterRule,
+} from './languageConfiguration.js';
+import {
+	type ILanguageConfigurationService,
+	LanguageConfigurationService,
+} from './languageConfigurationRegistry.js';
 
 export const BUILTIN_LANGUAGE_IDS = Object.freeze([
-	"typescript",
-	"typescriptreact",
-	"javascript",
-	"javascriptreact",
-	"json",
-	"jsonc",
-	"rust",
+	'typescript',
+	'typescriptreact',
+	'javascript',
+	'javascriptreact',
+	'json',
+	'jsonc',
+	'rust',
 ]);
 
-const ECMASCRIPT_LANGUAGE_IDS = new Set(["typescript", "typescriptreact", "javascript", "javascriptreact"]);
-const BRACKETS = Object.freeze([
-	pair("(", ")"),
-	pair("[", "]"),
-	pair("{", "}"),
-]);
-const JSON_BRACKETS = Object.freeze([BRACKETS[1]!, BRACKETS[2]!]);
-const ECMASCRIPT_PAIRS = Object.freeze([
-	...BRACKETS,
-	autoPair("'", "'", ["string", "comment"]),
-	autoPair("\"", "\"", ["string"]),
-	autoPair("`", "`", ["string", "comment"]),
-]);
-const JSON_PAIRS = Object.freeze([
-	...JSON_BRACKETS,
-	autoPair("\"", "\"", ["string"]),
-]);
-const RUST_PAIRS = Object.freeze([
-	...BRACKETS,
-	autoPair("\"", "\"", ["string"]),
-]);
-const ECMASCRIPT_SURROUNDING_PAIRS = Object.freeze(ECMASCRIPT_PAIRS.map(value => pair(value.open, value.close)));
-const JSON_SURROUNDING_PAIRS = Object.freeze(JSON_PAIRS.map(value => pair(value.open, value.close)));
-const RUST_SURROUNDING_PAIRS = Object.freeze(RUST_PAIRS.map(value => pair(value.open, value.close)));
-const ECMASCRIPT_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
+const ECMASCRIPT_LANGUAGE_IDS = new Set(['typescript', 'typescriptreact', 'javascript', 'javascriptreact']);
+const BRACKETS: CharacterPair[] = [
+	['(', ')'],
+	['[', ']'],
+	['{', '}'],
+];
+const JSON_BRACKETS: CharacterPair[] = [BRACKETS[1]!, BRACKETS[2]!];
+const ECMASCRIPT_PAIRS: IAutoClosingPairConditional[] = [
+	...pairsFromBrackets(BRACKETS),
+	autoPair("'", "'", ['string', 'comment']),
+	autoPair('"', '"', ['string']),
+	autoPair('`', '`', ['string', 'comment']),
+];
+const JSON_PAIRS: IAutoClosingPairConditional[] = [
+	...pairsFromBrackets(JSON_BRACKETS),
+	autoPair('"', '"', ['string']),
+];
+const RUST_PAIRS: IAutoClosingPairConditional[] = [
+	...pairsFromBrackets(BRACKETS),
+	autoPair('"', '"', ['string']),
+];
+const ECMASCRIPT_INDENTATION_RULES: IndentationRule = {
 	decreaseIndentPattern: /^\s*[\}\]\)].*$/,
 	increaseIndentPattern: /^.*(\{[^}]*|\([^)]*|\[[^\]]*)$/,
 	indentNextLinePattern: /^((.*=>\s*)|((.*[^\w]+|\s*)((if|while|for)\s*\(.*\)\s*|else\s*)))$/,
 	unIndentedLinePattern: /^(\t|[ ])*[ ]\*[^/]*\*\/\s*$|^(\t|[ ])*[ ]\*\/\s*$|^(\t|[ ])*\*([ ]([^\*]|\*(?!\/))*)?$/,
-});
-const JSON_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
+};
+const JSON_INDENTATION_RULES: IndentationRule = {
 	increaseIndentPattern: /({+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"}]*)$)|(\[+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"\]]*)$)/,
 	decreaseIndentPattern: /^\s*[}\]],?\s*$/,
-});
-const RUST_INDENTATION_RULES: LanguageIndentationRules = Object.freeze({
+};
+const RUST_INDENTATION_RULES: IndentationRule = {
 	decreaseIndentPattern: /^\s*[\}\]\)].*$/,
 	increaseIndentPattern: /^.*(\{[^}]*|\([^)]*|\[[^\]]*)$/,
-});
-const LINE_COMMENT_REGION_MARKERS: LanguageFoldingMarkers = Object.freeze({
+};
+const LINE_COMMENT_REGION_MARKERS: FoldingMarkers = {
 	start: /^\s*\/\/\s*#?region\b/iu,
 	end: /^\s*\/\/\s*#?endregion\b/iu,
-});
-const ECMASCRIPT_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
-	onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, LanguageIndentAction.IndentOutdent, { afterText: /^\s*\*\/$/, appendText: " * " }),
-	onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, LanguageIndentAction.None, { appendText: " * " }),
-	onEnter(/^(\t|[ ])*\*([ ]([^\*]|\*(?!\/))*)?$/, LanguageIndentAction.None, { previousLineText: /(?=^(\s*(\/\*\*|\*)).*)(?=(?!(\s*\*\/)))/, appendText: "* " }),
-	onEnter(/^(\t|[ ])*[ ]\*\/\s*$/, LanguageIndentAction.None, { removeText: 1 }),
-	onEnter(/^(\t|[ ])*[ ]\*[^/]*\*\/\s*$/, LanguageIndentAction.None, { removeText: 1 }),
-	onEnter(/^\s*(\bcase\s.+:|\bdefault:)$/, LanguageIndentAction.Indent, { afterText: /^(?!\s*(\bcase\b|\bdefault\b))/ }),
-]);
-const JSONC_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
-	onEnter(/^\s*\/\/\s*\S|\s\/\/\s+\S/, LanguageIndentAction.None, { afterText: /^(?!\s*$)/, appendText: "// " }),
-]);
-const RUST_ON_ENTER_RULES: readonly LanguageOnEnterRule[] = Object.freeze([
-	onEnter(/^\s*\/\/\/.*$/, LanguageIndentAction.None, { appendText: "/// " }),
-	onEnter(/^\s*\/\/!.*$/, LanguageIndentAction.None, { appendText: "//! " }),
-	onEnter(/^\s*\/\/.*$/, LanguageIndentAction.None, { appendText: "// " }),
+};
+const ECMASCRIPT_ON_ENTER_RULES: OnEnterRule[] = [
+	onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, IndentAction.IndentOutdent, { afterText: /^\s*\*\/$/, appendText: ' * ' }),
+	onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, IndentAction.None, { appendText: ' * ' }),
+	onEnter(/^(\t|[ ])*\*([ ]([^\*]|\*(?!\/))*)?$/, IndentAction.None, { previousLineText: /(?=^(\s*(\/\*\*|\*)).*)(?=(?!(\s*\*\/)))/, appendText: '* ' }),
+	onEnter(/^(\t|[ ])*[ ]\*\/\s*$/, IndentAction.None, { removeText: 1 }),
+	onEnter(/^(\t|[ ])*[ ]\*[^/]*\*\/\s*$/, IndentAction.None, { removeText: 1 }),
+	onEnter(/^\s*(\bcase\s.+:|\bdefault:)$/, IndentAction.Indent, { afterText: /^(?!\s*(\bcase\b|\bdefault\b))/ }),
+];
+const JSONC_ON_ENTER_RULES: OnEnterRule[] = [
+	onEnter(/^\s*\/\/\s*\S|\s\/\/\s+\S/, IndentAction.None, { afterText: /^(?!\s*$)/, appendText: '// ' }),
+];
+const RUST_ON_ENTER_RULES: OnEnterRule[] = [
+	onEnter(/^\s*\/\/\/.*$/, IndentAction.None, { appendText: '/// ' }),
+	onEnter(/^\s*\/\/!.*$/, IndentAction.None, { appendText: '//! ' }),
+	onEnter(/^\s*\/\/.*$/, IndentAction.None, { appendText: '// ' }),
 	...ECMASCRIPT_ON_ENTER_RULES,
-]);
+];
 const PROGRAMMING_WORD_PATTERN = /[$\p{ID_Start}_][$\p{ID_Continue}]*/u;
 
 interface BuiltinOnEnterOptions {
@@ -81,151 +91,78 @@ interface BuiltinOnEnterOptions {
 	readonly removeText?: number;
 }
 
-const ECMASCRIPT_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
-	comments: Object.freeze({
-		lineComment: "//",
-		blockComment: pair("/*", "*/"),
-	}),
+const ECMASCRIPT_CONFIGURATION: LanguageConfiguration = {
+	comments: { lineComment: '//', blockComment: ['/*', '*/'] },
 	brackets: BRACKETS,
 	autoClosingPairs: ECMASCRIPT_PAIRS,
-	surroundingPairs: ECMASCRIPT_SURROUNDING_PAIRS,
+	surroundingPairs: ECMASCRIPT_PAIRS,
 	indentationRules: ECMASCRIPT_INDENTATION_RULES,
-	foldingMarkers: LINE_COMMENT_REGION_MARKERS,
+	folding: { markers: LINE_COMMENT_REGION_MARKERS },
 	onEnterRules: ECMASCRIPT_ON_ENTER_RULES,
 	wordPattern: PROGRAMMING_WORD_PATTERN,
-});
-const JSON_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
+};
+const JSON_CONFIGURATION: LanguageConfiguration = {
 	brackets: JSON_BRACKETS,
 	autoClosingPairs: JSON_PAIRS,
-	surroundingPairs: JSON_SURROUNDING_PAIRS,
+	surroundingPairs: JSON_PAIRS,
 	indentationRules: JSON_INDENTATION_RULES,
 	wordPattern: PROGRAMMING_WORD_PATTERN,
-});
-const JSONC_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
-	comments: Object.freeze({
-		lineComment: "//",
-		blockComment: pair("/*", "*/"),
-	}),
+};
+const JSONC_CONFIGURATION: LanguageConfiguration = {
+	comments: { lineComment: '//', blockComment: ['/*', '*/'] },
 	brackets: JSON_BRACKETS,
 	autoClosingPairs: JSON_PAIRS,
-	surroundingPairs: JSON_SURROUNDING_PAIRS,
+	surroundingPairs: JSON_PAIRS,
 	indentationRules: JSON_INDENTATION_RULES,
-	foldingMarkers: LINE_COMMENT_REGION_MARKERS,
+	folding: { markers: LINE_COMMENT_REGION_MARKERS },
 	onEnterRules: JSONC_ON_ENTER_RULES,
 	wordPattern: PROGRAMMING_WORD_PATTERN,
-});
-const RUST_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
-	comments: Object.freeze({
-		lineComment: "//",
-		blockComment: pair("/*", "*/"),
-	}),
+};
+const RUST_CONFIGURATION: LanguageConfiguration = {
+	comments: { lineComment: '//', blockComment: ['/*', '*/'] },
 	brackets: BRACKETS,
 	autoClosingPairs: RUST_PAIRS,
-	surroundingPairs: RUST_SURROUNDING_PAIRS,
+	surroundingPairs: RUST_PAIRS,
 	indentationRules: RUST_INDENTATION_RULES,
-	foldingMarkers: LINE_COMMENT_REGION_MARKERS,
+	folding: { markers: LINE_COMMENT_REGION_MARKERS },
 	onEnterRules: RUST_ON_ENTER_RULES,
 	wordPattern: PROGRAMMING_WORD_PATTERN,
-});
+};
 
-/** Registers built-in editing rules into one caller-owned realm. */
-export function registerBuiltinLanguageConfigurations(registry: OwnedLanguageConfigurationContributions): IDisposable {
-	if (!(registry instanceof OwnedLanguageConfigurationContributions)) {
-		throw new TypeError("Built-in language configurations require a language configuration registry");
-	}
+export function registerBuiltinLanguageConfigurations(service: ILanguageConfigurationService): IDisposable {
 	const registrations = new DisposableStore();
-	for (const languageId of ECMASCRIPT_LANGUAGE_IDS) registrations.add(registry.register(languageId, ECMASCRIPT_CONFIGURATION));
-	registrations.add(registry.register("json", JSON_CONFIGURATION));
-	registrations.add(registry.register("jsonc", JSONC_CONFIGURATION));
-	registrations.add(registry.register("rust", RUST_CONFIGURATION));
+	for (const languageId of ECMASCRIPT_LANGUAGE_IDS) registrations.add(service.register(languageId, ECMASCRIPT_CONFIGURATION));
+	registrations.add(service.register('json', JSON_CONFIGURATION));
+	registrations.add(service.register('jsonc', JSONC_CONFIGURATION));
+	registrations.add(service.register('rust', RUST_CONFIGURATION));
 	return registrations;
 }
 
-/** Resolves built-in rules for isolated providers that receive no registry. */
-export function createBuiltinLanguageConfigurationSource(): LanguageConfigurationSource {
-	const configurations = new Map<string, MergedLanguageConfiguration>();
-	for (const languageId of ECMASCRIPT_LANGUAGE_IDS) configurations.set(languageId, resolved(languageId, ECMASCRIPT_CONFIGURATION));
-	configurations.set("json", resolved("json", JSON_CONFIGURATION));
-	configurations.set("jsonc", resolved("jsonc", JSONC_CONFIGURATION));
-	configurations.set("rust", resolved("rust", RUST_CONFIGURATION));
-	return Object.freeze({
-		getLanguageConfiguration(languageId: string): MergedLanguageConfiguration {
-			assertLanguageId(languageId);
-			return configurations.get(languageId) ?? resolved(languageId, {});
-		},
-	});
+export function createBuiltinLanguageConfigurationService(): LanguageConfigurationService {
+	const service = new LanguageConfigurationService(new InMemoryConfigurationService(), new LanguageService());
+	registerBuiltinLanguageConfigurations(service);
+	return service;
 }
 
-function pair(open: string, close: string): LanguageCharacterPair {
-	return Object.freeze({ open, close });
+function pairsFromBrackets(brackets: readonly CharacterPair[]): IAutoClosingPairConditional[] {
+	return brackets.map(([open, close]) => ({ open, close }));
 }
 
-function autoPair(open: string, close: string, notIn: readonly LanguageAutoClosingTokenContext[]): LanguageAutoClosingPair {
-	return Object.freeze({ open, close, notIn: Object.freeze([...notIn]) });
+function autoPair(open: string, close: string, notIn: string[]): IAutoClosingPairConditional {
+	return { open, close, notIn };
 }
 
-function resolved(languageId: string, configuration: LanguageConfigurationInput): MergedLanguageConfiguration {
-	const comments = configuration.comments && {
-		...(configuration.comments.lineComment ? { lineComment: configuration.comments.lineComment } : {}),
-		...(configuration.comments.blockComment ? { blockComment: configuration.comments.blockComment } : {}),
-	};
-	return Object.freeze({
-		languageId,
-		revision: 1,
-		comments: Object.freeze(comments ?? {}),
-		brackets: configuration.brackets ?? Object.freeze([]),
-		autoClosingPairs: configuration.autoClosingPairs ?? configuration.brackets ?? Object.freeze([]),
-		surroundingPairs: configuration.surroundingPairs ?? Object.freeze((configuration.autoClosingPairs ?? configuration.brackets ?? []).map(value => pair(value.open, value.close))),
-		autoCloseBefore: configuration.autoCloseBefore ?? DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE,
-		...(configuration.indentationRules ? { indentationRules: copyIndentationRules(configuration.indentationRules) } : {}),
-		...(configuration.foldingMarkers ? { foldingMarkers: copyFoldingMarkers(configuration.foldingMarkers) } : {}),
-		onEnterRules: Object.freeze((configuration.onEnterRules ?? []).map(copyOnEnterRule)),
-	});
-}
-
-function copyFoldingMarkers(markers: LanguageFoldingMarkers): LanguageFoldingMarkers {
-	return Object.freeze({
-		start: copyPattern(markers.start),
-		end: copyPattern(markers.end),
-	});
-}
-
-function onEnter(beforeText: RegExp, indentAction: LanguageIndentAction, options: BuiltinOnEnterOptions = {}): LanguageOnEnterRule {
-	const { afterText, previousLineText, appendText, removeText } = options;
-	return Object.freeze({
+function onEnter(beforeText: RegExp, indentAction: IndentAction, options: BuiltinOnEnterOptions = {}): OnEnterRule {
+	return {
 		beforeText,
-		...(afterText === undefined ? {} : { afterText }),
-		...(previousLineText === undefined ? {} : { previousLineText }),
-		action: Object.freeze({
+		...(options.afterText === undefined ? {} : { afterText: options.afterText }),
+		...(options.previousLineText === undefined ? {} : { previousLineText: options.previousLineText }),
+		action: {
 			indentAction,
-			...(appendText === undefined ? {} : { appendText }),
-			...(removeText === undefined ? {} : { removeText }),
-		}),
-	});
+			...(options.appendText === undefined ? {} : { appendText: options.appendText }),
+			...(options.removeText === undefined ? {} : { removeText: options.removeText }),
+		},
+	};
 }
 
-function copyIndentationRules(rules: LanguageIndentationRules): LanguageIndentationRules {
-	return Object.freeze({
-		decreaseIndentPattern: copyPattern(rules.decreaseIndentPattern),
-		increaseIndentPattern: copyPattern(rules.increaseIndentPattern),
-		...(rules.indentNextLinePattern === undefined ? {} : {
-			indentNextLinePattern: rules.indentNextLinePattern === null ? null : copyPattern(rules.indentNextLinePattern),
-		}),
-		...(rules.unIndentedLinePattern === undefined ? {} : {
-			unIndentedLinePattern: rules.unIndentedLinePattern === null ? null : copyPattern(rules.unIndentedLinePattern),
-		}),
-	});
-}
-
-function copyOnEnterRule(rule: LanguageOnEnterRule): LanguageOnEnterRule {
-	return onEnter(copyPattern(rule.beforeText), rule.action.indentAction, {
-		...(rule.afterText === undefined ? {} : { afterText: copyPattern(rule.afterText) }),
-		...(rule.previousLineText === undefined ? {} : { previousLineText: copyPattern(rule.previousLineText) }),
-		...(rule.action.appendText === undefined ? {} : { appendText: rule.action.appendText }),
-		...(rule.action.removeText === undefined ? {} : { removeText: rule.action.removeText }),
-	});
-}
-
-function copyPattern(pattern: RegExp): RegExp {
-	return Object.freeze(new RegExp(pattern.source, pattern.flags));
-}
+export const DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE = CharacterPairSupport.DEFAULT_AUTOCLOSE_BEFORE_LANGUAGE_DEFINED_BRACKETS;

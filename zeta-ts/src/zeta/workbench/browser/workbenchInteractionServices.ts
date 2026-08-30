@@ -2,7 +2,7 @@ import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
 import { Disposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { IMenuService, MenuService } from "../../platform/actions/common/menuService.js";
 import { ICommandService } from "../../platform/commands/common/commands.js";
-import { type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configurationService.js";
+import { type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configuration.js";
 import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/common/contextkey.js";
 import { BrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
@@ -147,7 +147,7 @@ export class WorkbenchInteractionServices extends Disposable {
 		container.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
 
-		void options.configurationService.reload().catch((error: unknown) => {
+		void options.configurationService.reloadConfiguration().catch((error: unknown) => {
 			console.error("Failed to initialize configuration", error);
 		});
 		void keybindingsResourceService.reload().catch((error: unknown) => {

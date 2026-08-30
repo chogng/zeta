@@ -1,19 +1,20 @@
 import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference } from "../../browser/editorBrowser.js";
-import { type ConfiguredCodeEditorOptions } from '../../browser/configuredCodeEditor.js';
+import { type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import { PositionAffinity, type ITextModel } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type NamedEditorThemeData } from "../common/namedEditorTheme.js";
 import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 
-type StandaloneConfiguredCodeEditorOptions = Omit<ConfiguredCodeEditorOptions,
+type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
 	"container" | "input" | "languageId" | "model" | "languageFeaturesService" |
-	"languageConfigurationService" | "editorWorkerFactory" | "syntaxWorkerFactory" | "completionWorkerFactory" | "instantiationService" | "codeEditorService"
+	"languageConfigurationService" | "editorWorkerFactory" | "completionWorkerFactory" | "instantiationService" | "codeEditorService" |
+	"registerBeforeSave" | "formatOnSave" | "insertFinalNewLine"
 >;
 
-export interface IStandaloneEditorConstructionOptions extends StandaloneConfiguredCodeEditorOptions {
+export interface IStandaloneEditorConstructionOptions extends StandaloneCodeEditorOptions {
 	readonly model?: ITextModel;
 	readonly value?: string;
 	readonly language?: string;
@@ -101,7 +102,7 @@ export function create(
 	const ownsModel = suppliedModel === undefined;
 	try {
 		if (services.modelService.getModel(model.uri) !== model) throw new ReferenceError('Standalone editor model is not registered with the model service');
-		const editorOptions: ConfiguredCodeEditorOptions = {
+		const editorOptions: CodeEditorWidgetOptions = {
 			...browserOptions,
 			container: domElement,
 			input: { resource: model.uri, label, readOnly },
@@ -110,7 +111,6 @@ export function create(
 			languageFeaturesService: services.languageFeaturesService,
 			languageConfigurationService: services.languageConfigurationService,
 			editorWorkerFactory: services.editorWorkerFactory,
-			syntaxWorkerFactory: services.syntaxWorkerFactory,
 			instantiationService: services.instantiationService,
 		};
 		const editor = services.completionWorkerFactory

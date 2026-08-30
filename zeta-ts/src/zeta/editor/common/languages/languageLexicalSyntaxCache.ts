@@ -1,6 +1,6 @@
 import { commonArraySuffixLength, commonPrefixLength } from "../../../base/common/arrays.js";
 import { type LanguageWorkerDocumentSynchronization } from '../services/textModelSync/textModelSync.protocol.js';
-import { createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
+import { createBuiltinLanguageConfigurationService } from './languageBuiltinConfigurations.js';
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { LanguageLexicalLineScanner, type LanguageLexicalLineResult, type LanguageLexicalMultilineEvent, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "./languageResults.js";
@@ -212,7 +212,7 @@ function unterminatedMultilineMessage(kind: LanguageLexicalMultilineEvent["lexic
 	return "Unterminated raw string literal";
 }
 
-const defaultConfigurationSource = createBuiltinLanguageConfigurationSource();
+const defaultConfigurationSource = createBuiltinLanguageConfigurationService();
 const DEFAULT_SCANNER = createLanguageLexicalLineScanner("typescript", defaultConfigurationSource.getLanguageConfiguration("typescript"));
 
 function lineRange(lineIndex: number, startColumn: number, endColumn: number): Range {

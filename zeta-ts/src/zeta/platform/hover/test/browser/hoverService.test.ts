@@ -4,8 +4,9 @@ import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../base/common/event.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/common/layout.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../configuration/common/configurationService.js";
+import { InMemoryConfigurationService } from "../../../configuration/common/inMemoryConfigurationService.js";
 import type { IContextMenuService } from "../../../contextview/browser/contextView.js";
+import { HoverConfiguration } from "../../common/hoverService.js";
 import { h } from "../../../../base/browser/dom.js";
 
 const environment = new JSDOM("<!doctype html><html><body><main><button id='first'>First</button><button id='second'>Second</button></main></body></html>");
@@ -33,8 +34,10 @@ test("HoverService coordinates grouped Hovers and context menus", async () => {
 	assert.ok(contextViewElement);
 	contextViewElement.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
 	const contextMenus = new TestContextMenuService();
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(HoverConfiguration.delay, 1_000);
 	const hoverService = new HoverService(
-		new TestConfigurationService(1_000),
+		configuration,
 		contextViews,
 		contextMenus,
 	);
@@ -99,7 +102,9 @@ test("HoverService suppresses replacement Hovers until the pointer moves after a
 	assert.ok(contextViewElement);
 	contextViewElement.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
 	const contextMenus = new TestContextMenuService();
-	const hoverService = new HoverService(new TestConfigurationService(0), contextViews, contextMenus);
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(HoverConfiguration.delay, 0);
+	const hoverService = new HoverService(configuration, contextViews, contextMenus);
 	const previousHover = hoverService.setupHover({ target: previousTarget, content: "Previous Action Hover", groupId: "actions" });
 	const hover = hoverService.setupHover({ target, content: "Action Hover", groupId: "actions" });
 
@@ -139,23 +144,6 @@ test("HoverService suppresses replacement Hovers until the pointer moves after a
 	target.remove();
 	replacementTarget.remove();
 });
-
-class TestConfigurationService implements IConfigurationService {
-	private readonly _onDidChangeConfiguration = new Emitter<IConfigurationChangeEvent>();
-	readonly onDidChangeConfiguration = this._onDidChangeConfiguration.event;
-
-	constructor(private readonly standardDelay: number) {}
-
-	getValue<T>(key: IConfigurationKey<T>): T {
-		return (key.key === "workbench.hover.delay"
-			? this.standardDelay
-			: key.defaultValue) as T;
-	}
-
-	async updateValue<T>(_key: IConfigurationKey<T>, _value: T): Promise<void> {}
-	async resetValue<T>(_key: IConfigurationKey<T>): Promise<void> {}
-	async reload(): Promise<void> {}
-}
 
 class TestContextMenuService extends Disposable implements IContextMenuService {
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());

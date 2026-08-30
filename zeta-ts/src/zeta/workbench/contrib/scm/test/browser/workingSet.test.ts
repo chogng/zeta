@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Emitter } from '../../../../../base/common/event.js';
-import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { StorageScope, type IStorageService } from '../../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import type { EditorWorkingSet, EditorWorkingSetTarget } from '../../../../services/editor/common/editorWorkingSet.js';
@@ -10,9 +10,9 @@ import { ScmWorkingSetController } from '../../browser/workingSet.js';
 import { ScmConfiguration } from '../../common/scmConfiguration.js';
 
 test('SCM working sets save and restore editor state across branch changes', async () => {
-	using configuration = new TestConfigurationService();
-	configuration.values.set(ScmConfiguration.workingSetsEnabled.key, true);
-	configuration.values.set(ScmConfiguration.workingSetsDefault.key, 'empty');
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(ScmConfiguration.workingSetsEnabled, true);
+	await configuration.updateValue(ScmConfiguration.workingSetsDefault, 'empty');
 	using git = new TestGitService(status('main', 1));
 	const storage = new TestStorageService();
 	const saved: string[] = [];
@@ -28,7 +28,7 @@ test('SCM working sets save and restore editor state across branch changes', asy
 		},
 	} as unknown as IEditorPart;
 	using controller = new ScmWorkingSetController({
-		configurationService: configuration as unknown as IConfigurationService,
+		configurationService: configuration,
 		editorPart,
 		gitService: git as unknown as IGitService,
 		storageService: storage as unknown as IStorageService,
@@ -46,7 +46,7 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	assert.deepEqual(saved, ['main', 'feature']);
 	assert.deepEqual(applied, ['empty', workingSet('main')]);
 
-	configuration.set(ScmConfiguration.workingSetsEnabled, false);
+	await configuration.updateValue(ScmConfiguration.workingSetsEnabled, false);
 	assert.equal(storage.get('scm.workingSets', StorageScope.WORKSPACE), undefined);
 	git.accept(status('other', 4));
 	await nextTask();
@@ -92,29 +92,6 @@ class TestGitService implements Disposable {
 	dispose(): void {
 		this.statusChanged.dispose();
 		this.becameReady.dispose();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
-}
-
-class TestConfigurationService implements Disposable {
-	readonly values = new Map<string, unknown>();
-	private readonly changed = new Emitter<IConfigurationChangeEvent>();
-	readonly onDidChangeConfiguration = this.changed.event;
-
-	getValue<T>(key: IConfigurationKey<T>): T {
-		return (this.values.get(key.key) ?? key.defaultValue) as T;
-	}
-
-	set<T>(key: IConfigurationKey<T>, value: T): void {
-		this.values.set(key.key, value);
-		this.changed.fire({ keys: new Set([key.key]), affectsConfiguration: candidate => candidate.key === key.key });
-	}
-
-	dispose(): void {
-		this.changed.dispose();
 	}
 
 	[Symbol.dispose](): void {

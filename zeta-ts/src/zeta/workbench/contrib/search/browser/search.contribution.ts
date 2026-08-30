@@ -1,7 +1,7 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IContentSearchService } from "../../../../platform/search/common/search.js";
-import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { SearchViewPane } from "./searchViewPane.js";
 import "./media/search.css";

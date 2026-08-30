@@ -1,6 +1,6 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableMap, Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration, type EditorAutoSaveMode } from "../../../services/editor/common/editorConfiguration.js";
 import type { IWorkingCopy, IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPart } from "./editorPart.js";

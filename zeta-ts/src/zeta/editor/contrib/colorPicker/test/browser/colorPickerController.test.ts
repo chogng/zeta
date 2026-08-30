@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 }
 
 await import('../../browser/colorPickerController.js');
-const { ConfiguredCodeEditor } = await import('../../../../browser/configuredCodeEditor.js');
+const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -39,7 +39,7 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('const color = #ff000080;');
 	const errors: unknown[] = [];
-	using editor = new ConfiguredCodeEditor({
+	using editor = new CodeEditorWidget({
 		container,
 		input: { resource: URI.file('C:\\project\\colors.css'), label: 'colors.css' },
 		languageId: 'css',

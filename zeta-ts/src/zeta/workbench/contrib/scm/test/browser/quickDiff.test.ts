@@ -4,7 +4,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { DecorationPresentation } from '../../../../../editor/browser/viewParts/decorations/decorations.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
-import { type IConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { type IDiffApi } from '../../../../../platform/diff/common/diffApi.js';
 import { AppServerDiffService } from '../../../../services/diff/browser/appServerDiffService.js';
 import { type GitStatus, type IGitService } from '../../../../services/git/common/gitService.js';
@@ -12,6 +12,7 @@ import { GitQuickDiffProvider } from '../../browser/gitQuickDiffProvider.js';
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
 import { QuickDiffModelService } from '../../browser/quickDiffModel.js';
 import { WorkbenchQuickDiffService } from '../../browser/workbenchQuickDiffService.js';
+import { ScmConfiguration } from '../../common/scmConfiguration.js';
 
 test('Git Quick Diff supplies the index for a live worktree change', async () => {
 	const fixture = gitFixture();
@@ -36,12 +37,14 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	assert.equal(firstReference.object, secondReference.object);
 	firstReference.dispose();
+	using configuration = new InMemoryConfigurationService();
+	await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
 
 	using source = new QuickDiffDecorator(
 		URI.file('/workspace/src/file.ts'),
 		model,
 		modelService,
-		configurationService('all'),
+		configuration,
 	);
 	await waitFor(() => source.decorations.length === 2);
 
@@ -116,16 +119,6 @@ function gitFixture(): { readonly gitService: IGitService; readonly diffApi: IDi
 			becameReady.dispose();
 		},
 	};
-}
-
-function configurationService(value: 'all'): IConfigurationService {
-	return {
-		onDidChangeConfiguration: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
-		getValue: () => value,
-		updateValue: async () => undefined,
-		resetValue: async () => undefined,
-		reload: async () => undefined,
-	} as IConfigurationService;
 }
 
 async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise<void> {

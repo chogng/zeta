@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewParts/decorations/decorations.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
-import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
@@ -32,9 +32,9 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("function value() {\n}");
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using registration = configurations.register("typescript", {
-		brackets: [{ open: "(", close: ")" }, { open: "{", close: "}" }],
+		brackets: [["(", ")"], ["{", "}"]],
 	});
 	using selections = new CursorsController(model, SelectionSet.single(
 		Selection.fromPositions(new Position((0) + 1, (17) + 1)),
@@ -80,8 +80,8 @@ test("Bracket match controller projects current pairs and clears them for a rang
 
 test("Bracket match controller distinguishes near, always, and never modes", () => {
 	using model = new TextModel("{ value }");
-	using configurations = new OwnedLanguageConfigurationContributions();
-	using registration = configurations.register("typescript", { brackets: [{ open: "{", close: "}" }] });
+	using configurations = new TestLanguageConfigurationService();
+	using registration = configurations.register("typescript", { brackets: [["{", "}"]] });
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1))));

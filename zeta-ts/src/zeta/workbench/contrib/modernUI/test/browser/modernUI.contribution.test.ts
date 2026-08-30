@@ -12,7 +12,7 @@ Object.defineProperty(globalThis, 'document', { configurable: true, value: brows
 
 const { Emitter, Event } = await import('../../../../../base/common/event.js');
 const { Disposable } = await import('../../../../../base/common/lifecycle.js');
-const { IConfigurationService } = await import('../../../../../platform/configuration/common/configurationService.js');
+const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
 const { WorkbenchConfiguration } = await import('../../../../common/configuration.js');
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');

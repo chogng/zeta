@@ -1,277 +1,77 @@
-import { strict as assert } from "node:assert";
-import test from "node:test";
-import { createBuiltinLanguageConfigurationSource } from "../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageIndentAction } from "../../common/languages/languageConfiguration.js";
-import { OwnedLanguageConfigurationContributions } from "../../common/languages/ownedLanguageConfigurationContributions.js";
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IndentAction, StandardAutoClosingPairConditional } from '../../common/languages/languageConfiguration.js';
+import { LanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
+import { LanguageService } from '../../common/services/languageService.js';
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
+import { StandardTokenType } from '../../common/encodedTokenAttributes.js';
 
-test("Language configurations compose by field, priority, and registration order", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	const revisions: number[] = [];
-	using listener = registry.onDidChange(event => revisions.push(event.configuration.revision));
-	using base = registry.register("typescript", {
-		comments: {
-			lineComment: "//",
-			blockComment: { open: "/*", close: "*/" },
-		},
-		brackets: [
-			{ open: "(", close: ")" },
-			{ open: "{", close: "}" },
-		],
+test('language configuration contributions compose by priority and unregister independently', () => {
+	using service = new TestLanguageConfigurationService();
+	using base = service.register('demo', {
+		comments: { lineComment: '//' },
+		brackets: [['(', ')']],
 	});
-	const override = registry.register("typescript", {
-		comments: { lineComment: "#" },
-	}, { priority: 10 });
+	const changes: Array<string | undefined> = [];
+	using listener = service.onDidChange(event => changes.push(event.languageId));
+	const override = service.register('demo', {
+		comments: { lineComment: '#' },
+		folding: { markers: { start: /^region$/u, end: /^endregion$/u } },
+	}, 10);
 
-	const composed = registry.getLanguageConfiguration("typescript");
-	assert.equal(composed.comments.lineComment, "#");
-	assert.deepEqual(composed.comments.blockComment, { open: "/*", close: "*/" });
-	assert.deepEqual(composed.brackets, [{ open: "(", close: ")" }, { open: "{", close: "}" }]);
-	assert.equal(Object.isFrozen(composed), true);
-	assert.equal(Object.isFrozen(composed.brackets), true);
+	let resolved = service.getLanguageConfiguration('demo');
+	assert.equal(resolved.comments?.lineCommentToken, '#');
+	assert.deepEqual(resolved.underlyingConfig.brackets, [['(', ')']]);
+	assert.equal(resolved.foldingRules.markers?.start.source, '^region$');
 
 	override.dispose();
-	const restored = registry.getLanguageConfiguration("typescript");
-	assert.equal(restored.comments.lineComment, "//");
-	assert.equal(restored.revision, 3);
-	assert.deepEqual(revisions, [1, 2, 3]);
+	resolved = service.getLanguageConfiguration('demo');
+	assert.equal(resolved.comments?.lineCommentToken, '//');
+	assert.deepEqual(changes, ['demo', 'demo']);
 });
 
-test("Language configuration contributions may explicitly clear inherited fields", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	using base = registry.register("json", {
-		comments: { lineComment: "//" },
-		brackets: [{ open: "{", close: "}" }],
-	});
-	const clearing = registry.register("json", {
-		comments: null,
-		brackets: null,
-	}, { priority: 1 });
-
-	assert.deepEqual(registry.getLanguageConfiguration("json").comments, {});
-	assert.deepEqual(registry.getLanguageConfiguration("json").brackets, []);
-
-	clearing.dispose();
-	assert.equal(registry.getLanguageConfiguration("json").comments.lineComment, "//");
-	assert.deepEqual(registry.getLanguageConfiguration("json").brackets, [{ open: "{", close: "}" }]);
-});
-
-test("Language word patterns compose, clone, and clear with language ownership", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	const source = /[A-Za-z:]+/gi;
-	using base = registry.register("rust", { wordPattern: source });
-	const resolved = registry.getLanguageConfiguration("rust").wordPattern!;
-	assert.equal(resolved.source, source.source);
-	assert.equal(resolved.flags, source.flags);
-	assert.notEqual(resolved, source);
-	using clear = registry.register("rust", { wordPattern: null }, { priority: 1 });
-	assert.equal(registry.getLanguageConfiguration("rust").wordPattern, undefined);
-	clear.dispose();
-	assert.equal(registry.getLanguageConfiguration("rust").wordPattern?.source, source.source);
-});
-
-test("Language configuration validation is atomic and identities stay language-owned", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	const initial = registry.getLanguageConfiguration("plaintext");
-
-	assert.throws(() => registry.register("plaintext", {
-		comments: { lineComment: "" },
-	}), /non-empty/);
-	assert.throws(() => registry.register("plaintext", {
-		brackets: [
-			{ open: "(", close: ")" },
-			{ open: ")", close: "}" },
-		],
-	}), /unambiguous/);
-	assert.throws(() => registry.register("*", {}), /Language ID/);
-
-	assert.equal(registry.getLanguageConfiguration("plaintext"), initial);
-	assert.equal(initial.revision, 0);
-});
-
-test("a language configuration group replaces itself after validating the full candidate", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	using group = registry.registerMany([{ languageId: "demo", configuration: { comments: { lineComment: "//" } } }]);
-
-	assert.throws(() => group.replace([{ languageId: "demo", configuration: { comments: { lineComment: "" } } }]), /non-empty/);
-	assert.equal(registry.getLanguageConfiguration("demo").comments.lineComment, "//");
-
-	group.replace([{ languageId: "demo", configuration: { comments: { lineComment: "#" } } }]);
-	assert.equal(registry.getLanguageConfiguration("demo").comments.lineComment, "#");
-});
-
-test("Language configuration registration and registry lifecycles are independent", () => {
-	const registry = new OwnedLanguageConfigurationContributions();
-	const registration = registry.register("typescript", {
-		comments: { lineComment: "//" },
-	});
-
-	registration.dispose();
-	registration.dispose();
-	assert.deepEqual(registry.getLanguageConfiguration("typescript").comments, {});
-
-	registry.dispose();
-	assert.throws(() => registry.getLanguageConfiguration("typescript"), /already disposed/);
-	registration.dispose();
-});
-
-test("Auto-closing and surrounding pairs fall back canonically and accept quote pairs", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	using brackets = registry.register("demo", {
-		brackets: [{ open: "(", close: ")" }],
-	});
-
-	const fallback = registry.getLanguageConfiguration("demo");
-	assert.deepEqual(fallback.autoClosingPairs, [{ open: "(", close: ")" }]);
-	assert.deepEqual(fallback.surroundingPairs, [{ open: "(", close: ")" }]);
-
-	const quotes = registry.register("demo", {
-		autoClosingPairs: [{ open: "\"", close: "\"" }],
-		autoCloseBefore: " ",
-	}, { priority: 1 });
-	const overridden = registry.getLanguageConfiguration("demo");
-	assert.deepEqual(overridden.autoClosingPairs, [{ open: "\"", close: "\"" }]);
-	assert.deepEqual(overridden.surroundingPairs, [{ open: "\"", close: "\"" }]);
-	assert.equal(overridden.autoCloseBefore, " ");
-
-	quotes.dispose();
-	assert.deepEqual(registry.getLanguageConfiguration("demo").autoClosingPairs, [{ open: "(", close: ")" }]);
-	assert.throws(() => registry.register("demo", {
-		autoClosingPairs: [
-			{ open: "<", close: ">" },
-			{ open: "<", close: "/>" },
-		],
-	}), /open tokens must be unique/);
-});
-
-test("Auto-closing token exclusions are immutable and validate their closed vocabulary", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	using pairs = registry.register("demo", {
-		autoClosingPairs: [{
-			open: "\"",
-			close: "\"",
-			notIn: ["string", "comment"],
-		}],
-	});
-	const pair = registry.getLanguageConfiguration("demo").autoClosingPairs[0]!;
-	assert.deepEqual(pair, { open: "\"", close: "\"", notIn: ["string", "comment"] });
-	assert.equal(Object.isFrozen(pair.notIn), true);
-
-	assert.throws(() => registry.register("demo", {
-		autoClosingPairs: [{
-			open: "'",
-			close: "'",
-			notIn: ["regex" as "string"],
-		}],
-	}), /string or comment/);
-	assert.throws(() => registry.register("demo", {
-		autoClosingPairs: [{
-			open: "'",
-			close: "'",
-			notIn: ["string", "string"],
-		}],
-	}), /must be unique/);
-});
-
-test("Indentation, folding, and on-enter rules compose, clone, clear, and restore atomically", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	const increase = /\{$/g;
-	const regionStart = /^\s*\/\/\s*#region\b/giu;
-	using base = registry.register("demo", {
-		indentationRules: {
-			increaseIndentPattern: increase,
-			decreaseIndentPattern: /^\s*\}/,
-		},
+test('resolved language configuration exposes canonical pair and enter supports', () => {
+	using service = new TestLanguageConfigurationService();
+	using registration = service.register('demo', {
+		comments: { blockComment: ['/*', '*/'] },
+		brackets: [['{', '}']],
+		autoClosingPairs: [{ open: '"', close: '"', notIn: ['string'] }],
+		surroundingPairs: [{ open: '<', close: '>' }],
+		autoCloseBefore: ';',
 		onEnterRules: [{
-			beforeText: /\/\*\*$/,
-			afterText: /^\s*\*\//,
-			action: {
-				indentAction: LanguageIndentAction.IndentOutdent,
-				appendText: " * ",
-			},
+			beforeText: /\{$/u,
+			action: { indentAction: IndentAction.Indent, appendText: 'next' },
 		}],
-		foldingMarkers: {
-			start: regionStart,
-			end: /^\s*\/\/\s*#endregion\b/iu,
-		},
 	});
-	const resolved = registry.getLanguageConfiguration("demo");
-	assert.notEqual(resolved.indentationRules?.increaseIndentPattern, increase);
-	assert.equal(resolved.indentationRules?.increaseIndentPattern.source, "\\{$");
-	assert.equal(Object.isFrozen(resolved.indentationRules?.increaseIndentPattern), true);
-	assert.equal(Object.isFrozen(resolved.onEnterRules), true);
-	assert.equal(Object.isFrozen(resolved.onEnterRules[0]?.action), true);
-	assert.notEqual(resolved.foldingMarkers?.start, regionStart);
-	assert.equal(resolved.foldingMarkers?.start.source, "^\\s*\\/\\/\\s*#region\\b");
-	assert.equal(Object.isFrozen(resolved.foldingMarkers?.start), true);
+	const resolved = service.getLanguageConfiguration('demo');
 
-	const clearing = registry.register("demo", {
-		indentationRules: null,
-		foldingMarkers: null,
-		onEnterRules: null,
-	}, { priority: 1 });
-	assert.equal(registry.getLanguageConfiguration("demo").indentationRules, undefined);
-	assert.equal(registry.getLanguageConfiguration("demo").foldingMarkers, undefined);
-	assert.deepEqual(registry.getLanguageConfiguration("demo").onEnterRules, []);
-
-	clearing.dispose();
-	assert.equal(registry.getLanguageConfiguration("demo").indentationRules?.increaseIndentPattern.source, "\\{$");
-	assert.equal(registry.getLanguageConfiguration("demo").foldingMarkers?.start.source, "^\\s*\\/\\/\\s*#region\\b");
-	assert.equal(registry.getLanguageConfiguration("demo").onEnterRules.length, 1);
+	assert.equal(resolved.comments?.blockCommentStartToken, '/*');
+	assert.equal(resolved.comments?.blockCommentEndToken, '*/');
+	assert.equal(resolved.characterPair.getAutoClosingPairs()[0]?.open, '"');
+	assert.deepEqual(resolved.getSurroundingPairs(), [{ open: '<', close: '>' }]);
+	assert.equal(resolved.getAutoCloseBeforeSet(false), ';');
+	assert.equal(resolved.brackets?.brackets.length, 1);
 });
 
-test("Indentation, folding, and on-enter configuration rejects invalid values before registration", () => {
-	using registry = new OwnedLanguageConfigurationContributions();
-	const initial = registry.getLanguageConfiguration("demo");
+test('language configuration service applies per-language bracket overrides', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languages = new LanguageService();
+	using language = languages.registerLanguage({ id: 'demo' });
+	using service = new LanguageConfigurationService(configuration, languages);
+	using registration = service.register('demo', { brackets: [['(', ')']] });
+	const changes: Array<string | undefined> = [];
+	using listener = service.onDidChange(event => changes.push(event.languageId));
 
-	assert.throws(() => registry.register("demo", {
-		foldingMarkers: {
-			start: "region" as unknown as RegExp,
-			end: /endregion/,
-		},
-	}), /RegExp/);
-	assert.throws(() => registry.register("demo", {
-		indentationRules: {
-			increaseIndentPattern: "{" as unknown as RegExp,
-			decreaseIndentPattern: /}/,
-		},
-	}), /RegExp/);
-	assert.throws(() => registry.register("demo", {
-		onEnterRules: [{
-			beforeText: /x/,
-			action: { indentAction: "sideways" as LanguageIndentAction },
-		}],
-	}), /unknown indentation action/);
-	assert.throws(() => registry.register("demo", {
-		onEnterRules: [{
-			beforeText: /x/,
-			action: { indentAction: LanguageIndentAction.None, appendText: "\n" },
-		}],
-	}), /single-line/);
-	assert.throws(() => registry.register("demo", {
-		onEnterRules: [{
-			beforeText: /x/,
-			action: { indentAction: LanguageIndentAction.None, removeText: -1 },
-		}],
-	}), /non-negative/);
-
-	assert.equal(registry.getLanguageConfiguration("demo"), initial);
+	await configuration.updateValue('editor.language.brackets', [['[', ']']], { overrideIdentifiers: ['demo'] });
+	assert.deepEqual(service.getLanguageConfiguration('demo').underlyingConfig.brackets, [['[', ']']]);
+	assert.deepEqual(changes, ['demo']);
 });
 
-test("Isolated built-in sources expose immutable Enter, indentation, and folding rules", () => {
-	const source = createBuiltinLanguageConfigurationSource();
-	const typescript = source.getLanguageConfiguration("typescript");
-	const json = source.getLanguageConfiguration("json");
-
-	assert.ok(typescript.indentationRules);
-	assert.equal(typescript.onEnterRules.length > 0, true);
-	assert.equal(Object.isFrozen(typescript.indentationRules), true);
-	assert.equal(Object.isFrozen(typescript.indentationRules.increaseIndentPattern), true);
-	assert.equal(Object.isFrozen(typescript.onEnterRules), true);
-	assert.equal(Object.isFrozen(typescript.onEnterRules[0]?.beforeText), true);
-	assert.ok(typescript.foldingMarkers);
-	assert.equal(Object.isFrozen(typescript.foldingMarkers?.start), true);
-	assert.deepEqual(typescript.autoClosingPairs.find(pair => pair.open === "'")?.notIn, ["string", "comment"]);
-	assert.equal("notIn" in typescript.surroundingPairs.find(pair => pair.open === "'")!, false);
-	assert.equal(json.onEnterRules.length, 0);
-	assert.ok(json.indentationRules);
+test('standard auto-closing pairs honor token exclusions', () => {
+	const pair = new StandardAutoClosingPairConditional({ open: '"', close: '"', notIn: ['string', 'comment'] });
+	assert.equal(pair.isOK(StandardTokenType.Other), true);
+	assert.equal(pair.isOK(StandardTokenType.String), false);
+	assert.equal(pair.isOK(StandardTokenType.Comment), false);
+	assert.equal(pair.isOK(StandardTokenType.RegEx), true);
 });

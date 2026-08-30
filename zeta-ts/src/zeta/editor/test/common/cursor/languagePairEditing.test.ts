@@ -3,7 +3,7 @@ import test from "node:test";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
-import { OwnedLanguageConfigurationContributions } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../../../common/cursor/languagePairEditing.js";
 import { Selection } from "../../../common/core/selection.js";
@@ -14,7 +14,7 @@ import { TextModel } from "../../../common/model/textModel.js";
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel("call");
 	using selections = new CursorsController(model, SelectionSet.single(caret(4)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -43,7 +43,7 @@ test("Language pair typing auto-closes and overtypes one existing closer", () =>
 test("Language pair backspace removes both empty sides and remains one undo step", () => {
 	using model = new TextModel("");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -67,7 +67,7 @@ test("Language pair typing surrounds directional selections and auto-closes coll
 	using model = new TextModel("alpha beta");
 	const backward = Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (0) + 1));
 	using selections = new CursorsController(model, SelectionSet.withPrimary([backward, caret(10)], 1));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const result = createLanguagePairTypeCommand(model, selections.selections, "\"", configurations.getLanguageConfiguration("typescript"));
 
@@ -87,7 +87,7 @@ test("Language pair typing surrounds directional selections and auto-closes coll
 test("Auto-closing respects following text and supports multi-token pairs", () => {
 	using model = new TextModel("name");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using custom = configurations.register("template", {
 		autoClosingPairs: [{ open: "<%", close: "%>" }],
 		surroundingPairs: [{ open: "<%", close: "%>" }],
@@ -113,7 +113,7 @@ test("Auto-closing respects following text and supports multi-token pairs", () =
 });
 
 test("Auto-closing notIn keeps string and comment input single while code still pairs", () => {
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const configuration = configurations.getLanguageConfiguration("typescript");
 

@@ -7,7 +7,7 @@ import { LanguageCompletionTriggerKind, type LanguageCompletionProvider } from '
 import { DocumentHighlightKind, type MultiDocumentHighlightProvider } from '../../common/languages.js';
 import * as languages from '../../common/languages.js';
 import { selectLanguageIds, type LanguageSelector } from '../../common/languageSelector.js';
-import { LanguageConfigurationInput } from '../../common/languages/languageConfiguration.js';
+import { type LanguageConfiguration } from '../../common/languages/languageConfiguration.js';
 import type { ILanguageExtensionPoint } from '../../common/languages/language.js';
 import type { LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../common/languages/languageRegistry.js';
 import { LanguageDiagnosticSeverity } from '../../common/languages/languageResults.js';
@@ -29,7 +29,7 @@ import type { LanguageLinkProvider } from '../../contrib/links/common/languageLi
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
 import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';
-import type { LanguageSemanticTokensProvider } from '../../contrib/semanticTokens/common/semanticTokens.js';
+import type { LanguageSemanticTokensProvider } from '../../common/languages.js';
 import type { LanguageProviderBatch, LanguageProviderBatchRegistration } from '../../common/services/languageFeatures.js';
 import { StandaloneServices } from './standaloneServices.js';
 
@@ -91,7 +91,7 @@ export function resolveLanguageId(input: TextResourceLanguageInput): string | un
 
 export const onDidChangeLanguages: Event<LanguageDescriptionChangeEvent> = listener => StandaloneServices.get().languageService.languages.onDidChange(listener);
 
-export function setLanguageConfiguration(languageId: string, configuration: LanguageConfigurationInput): IDisposable {
+export function setLanguageConfiguration(languageId: string, configuration: LanguageConfiguration): IDisposable {
 	return StandaloneServices.get().languageConfigurationService.register(languageId, configuration);
 }
 

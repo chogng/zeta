@@ -112,7 +112,7 @@ class TestTextResourcePropertiesService implements ITextResourcePropertiesServic
 	constructor(private readonly configuration: InMemoryConfigurationService) {}
 
 	getEOL(resource: URI, language?: string): string {
-		const eol = this.configuration.getValue(EditorModelConfiguration.filesEol, { resource, overrideIdentifier: language });
+		const eol = this.configuration.getValue<string>(EditorModelConfiguration.filesEol, { resource, overrideIdentifier: language });
 		return eol === 'auto' ? (process.platform === 'win32' ? '\r\n' : '\n') : eol;
 	}
 }

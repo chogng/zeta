@@ -78,7 +78,7 @@ flowchart LR
 
 一个 `TextModel` 可以由多个编辑器共享，但 selection、cursor 和 composition 状态属于各自的 `ViewModelImpl`。目标生产链固定为 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor`；模型只保存文本、装饰和 undo/redo 数据，不保存某个编辑器的 cursor 状态。
 
-当前实现尚未达到这条链。`ConfiguredCodeEditor` 直接创建本地 `CursorsController`，生产调用仍依赖 `SelectionSet + SelectionSetTracker + EditorEditCommand`；同路径的 `CursorCollection`、`CursorContext` 和 `Cursor` 尚未接入生产。`cursorNavigation.ts`、`selectionSetDeleteOperations.ts`、`selectionSetWordOperations.ts`、`languageEnter.ts`、`languagePairEditing.ts` 与 `languageAutoClosingTracker.ts` 又分别占用了 `CursorMoveCommands`、`DeleteOperations`、`WordOperations`、`TypeOperations` 和 `CursorsController` 的职责。它们都是待迁移并删除的重复 owner，不是长期扩展点。
+当前实现尚未达到这条链。`CodeEditorWidget` 仍直接创建 `CursorsController`，生产调用仍依赖 `SelectionSet + SelectionSetTracker + EditorEditCommand`；同路径的 `CursorCollection`、`CursorContext` 和 `Cursor` 尚未完整接入生产。`cursorNavigation.ts`、`selectionSetDeleteOperations.ts`、`selectionSetWordOperations.ts`、`languageEnter.ts`、`languagePairEditing.ts` 与 `languageAutoClosingTracker.ts` 又分别占用了 `CursorMoveCommands`、`DeleteOperations`、`WordOperations`、`TypeOperations` 和 `CursorsController` 的职责。它们都是待迁移并删除的重复 owner，不是长期扩展点。
 
 `common/cursor` 的目标文件集合与 VS Code 保持一致：12 个同路径文件，不保留额外的 SelectionSet、导航或语言输入 owner。当前 12 个同路径文件中有 8 个正文一致，但除 `ColumnSelection` 外，多数仍缺生产调用闭环；文件内容一致不代表完成。完成状态以 [`api-alignment-status.md`](./api-alignment-status.md) 的调用者与生命周期证据为准。
 
@@ -208,7 +208,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备 | 异步版本边界存在；language service 与 tokenization owner 尚未对齐 |
 | Diff editor 与 App Server diff | 部分具备 | 本地 review widget 可用；canonical DiffEditorWidget/MultiDiffEditorWidget 契约尚未完成 |
 | `ViewContext → ViewPart → View` | 尚未完成 | 当前仍由 `EditorViewContext` 与手动 coordinator 调度 |
-| `ViewModelImpl → CursorsController` | 尚未完成 | 当前 controller 由 `ConfiguredCodeEditor` 直接创建 |
+| `ViewModelImpl → CursorsController` | 尚未完成 | 当前 controller 仍由 `CodeEditorWidget` 直接创建 |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |
 
 ## 关键实现入口

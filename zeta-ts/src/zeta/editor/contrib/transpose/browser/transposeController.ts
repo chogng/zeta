@@ -53,7 +53,7 @@ registerTextEditorCapabilityContribution({
 	commands: [{ id: TransposeCommandId, canTriggerInlineEdits: true }],
 	install: context => {
 	if (context.kind !== "text") return;
-	context.register(new TransposeController(context.view.element, context.viewport, context.selections, {}, context.executeCommand));
+	context.register(new TransposeController(context.view.element, context.viewport, context.viewModel, {}, context.executeCommand));
 } });
 
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {

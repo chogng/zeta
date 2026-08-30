@@ -19,11 +19,11 @@ export interface CoreTextEditorCommandContext {
 
 /** Executes the built-in text-editor Select All command. */
 export function selectAll(context: CoreTextEditorCommandContext): void {
-	if (context.model !== context.viewport.textModel || context.model !== context.selections.textModel) {
+	if (context.model !== context.viewport.textModel || context.model !== context.viewModel.textModel) {
 		throw new TypeError("Editor core command dependencies must share one text model");
 	}
 	const end = context.model.positionAt(context.model.createVersionedSnapshot().length);
-	context.selections.setSelections(SelectionSet.single(Selection.fromPositions(context.model.positionAt(0), end)));
+	context.viewModel.setSelections(SelectionSet.single(Selection.fromPositions(context.model.positionAt(0), end)));
 	context.viewport.revealPosition(end);
 }
 
@@ -49,6 +49,6 @@ registerTextEditorCapabilityContribution({
 	id: EditorCoreCommandId.selectAll,
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(installCoreTextEditorCommands(context.view.element, context.viewport, context.selections));
+		context.register(installCoreTextEditorCommands(context.view.element, context.viewport, context.viewModel));
 	},
 });

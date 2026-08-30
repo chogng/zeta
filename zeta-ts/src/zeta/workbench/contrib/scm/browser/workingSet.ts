@@ -1,5 +1,5 @@
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import type { GitStatus, IGitService } from '../../../services/git/common/gitService.js';

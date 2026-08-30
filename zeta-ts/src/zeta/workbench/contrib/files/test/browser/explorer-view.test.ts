@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
-import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../../../platform/configuration/common/configurationService.js";
+import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
@@ -90,15 +89,8 @@ test("ExplorerViewPane opens workspace files on single click", async () => {
 		},
 		focusActiveEditor() { editorFocusCount += 1; },
 	};
-	const configurationChanges = new Emitter<IConfigurationChangeEvent>();
-	const configurationService: IConfigurationService = {
-		onDidChangeConfiguration: configurationChanges.event,
-		getValue: <T>(key: IConfigurationKey<T>) =>
-			(key === ListConfiguration.openMode ? "doubleClick" : key.defaultValue) as T,
-		updateValue: async () => {},
-		resetValue: async () => {},
-		reload: async () => {},
-	};
+	using configurationService = new InMemoryConfigurationService();
+	await configurationService.updateValue(ListConfiguration.openMode, "doubleClick");
 	const fileIconThemeService: IFileIconThemeService = {
 		onDidFileIconThemeChange: () => ({
 			dispose() {},
@@ -256,7 +248,6 @@ test("ExplorerViewPane opens workspace files on single click", async () => {
 		);
 		assert.deepEqual(rowLabels(pane.element), ["next.txt"]);
 	} finally {
-		configurationChanges.dispose();
 		browser.window.close();
 		for (const name of installedGlobals) {
 			Reflect.deleteProperty(globalThis, name);

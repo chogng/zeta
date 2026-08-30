@@ -1,5 +1,5 @@
 import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
-import { type LanguageConfigurationSource } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { assertLanguageId } from "../../../common/languages/languageId.js";
 import { createLanguageLexicalLineScanner } from "../../../common/languages/languageLexicalConfiguration.js";
 import { type LanguageLexicalState } from "../../../common/languages/languageLexicalLineScanner.js";
@@ -23,7 +23,7 @@ interface OpenMarkerFold {
  * these provider-owned ranges with indentation folds without exposing scanner state to
  * browser code.
  */
-export function computeEditorLanguageFoldingRanges(model: TextModel, languageId: string, configurations: LanguageConfigurationSource): readonly EditorFoldingRange[] {
+export function computeEditorLanguageFoldingRanges(model: TextModel, languageId: string, configurations: ILanguageConfigurationService): readonly EditorFoldingRange[] {
 	assertLanguageId(languageId);
 	if (!configurations || typeof configurations.getLanguageConfiguration !== "function") {
 		throw new TypeError("Language folding requires language configurations");
@@ -39,10 +39,10 @@ export function computeEditorLanguageFoldingRanges(model: TextModel, languageId:
 		const line = model.getLineContent((lineIndex) + 1);
 		const result = scanner.scan(line, state);
 		state = result.outputState;
-		if (matchesMarker(configuration.foldingMarkers?.end, line)) {
+		if (matchesMarker(configuration.foldingRules.markers?.end, line)) {
 			const start = markerStarts.pop();
 			if (start) appendRange(ranges, start.startLineIndex, lineIndex);
-		} else if (matchesMarker(configuration.foldingMarkers?.start, line)) {
+		} else if (matchesMarker(configuration.foldingRules.markers?.start, line)) {
 			markerStarts.push(Object.freeze({ startLineIndex: lineIndex }));
 		}
 		for (const event of result.events) {

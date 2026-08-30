@@ -2,6 +2,24 @@ const URI_SCHEME = /^[A-Za-z][A-Za-z\d+.-]*:/;
 const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/;
 const WINDOWS_URI_DRIVE_PATH = /^\/[A-Za-z]:\//;
 
+export interface UriComponents {
+	readonly scheme: string;
+	readonly authority?: string;
+	readonly path?: string;
+	readonly query?: string;
+	readonly fragment?: string;
+}
+
+export function isUriComponents(value: unknown): value is UriComponents {
+	if (!value || typeof value !== 'object') return false;
+	const candidate = value as UriComponents;
+	return typeof candidate.scheme === 'string'
+		&& (candidate.authority === undefined || typeof candidate.authority === 'string')
+		&& (candidate.path === undefined || typeof candidate.path === 'string')
+		&& (candidate.query === undefined || typeof candidate.query === 'string')
+		&& (candidate.fragment === undefined || typeof candidate.fragment === 'string');
+}
+
 function parseUrl(value: string): URL {
 	if (WINDOWS_DRIVE_PATH.test(value)) {
 		throw new TypeError(

@@ -1,7 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { ConfigurationsRegistry, type ConfigurationRegistry, type IConfigurationSettingSchema } from '../../../../platform/configuration/common/configurationRegistry.js';
-import type { IConfigurationKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import { ConfigurationsRegistry, type ConfigurationRegistry, type IConfigurationSettingSchema, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
 
 export interface SettingState<T> {
@@ -82,16 +82,16 @@ export class SettingModel<T> extends Disposable implements SettingReference {
 	}
 }
 
-export function configurationSettingBinding<T>(configurationService: IConfigurationService, key: IConfigurationKey<T>): SettingValueBinding<T> {
+export function configurationSettingBinding<T>(configurationService: IConfigurationService, configuration: IRegisteredConfiguration<T>): SettingValueBinding<T> {
 	return {
-		id: key.key,
-		defaultValue: key.defaultValue,
+		id: configuration.key,
+		defaultValue: configuration.defaultValue,
 		onDidChange: listener => configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(key)) listener();
+			if (event.affectsConfiguration(configuration.key)) listener();
 		}),
-		getValue: () => configurationService.getValue(key),
-		updateValue: value => configurationService.updateValue(key, value),
-		resetValue: () => configurationService.resetValue(key),
+		getValue: () => configurationService.getValue<T>(configuration.key),
+		updateValue: value => configurationService.updateValue(configuration.key, value),
+		resetValue: () => configurationService.updateValue(configuration.key, undefined),
 	};
 }
 
@@ -102,7 +102,7 @@ export class DefaultSettings {
 	constructor(registry: ConfigurationRegistry = ConfigurationsRegistry) {
 		for (const configuration of registry.getRegisteredConfigurations()) {
 			if (!configuration.setting) continue;
-			this.settings.set(configuration.key.key, registeredSetting(configuration.key, configuration.setting));
+			this.settings.set(configuration.key, registeredSetting(configuration, configuration.setting));
 		}
 	}
 
@@ -110,34 +110,34 @@ export class DefaultSettings {
 		return [...this.settings.values()];
 	}
 
-	public get<T>(key: IConfigurationKey<T>): ISetting {
-		const setting = this.settings.get(key.key);
-		if (!setting) throw new RangeError(`Configuration '${key.key}' does not declare Settings metadata`);
+	public get(key: string): ISetting {
+		const setting = this.settings.get(key);
+		if (!setting) throw new RangeError(`Configuration '${key}' does not declare Settings metadata`);
 		return setting;
 	}
 }
 
-function registeredSetting(key: IConfigurationKey<unknown>, schema: IConfigurationSettingSchema): ISetting {
+function registeredSetting(configuration: IRegisteredConfiguration, schema: IConfigurationSettingSchema): ISetting {
 	const base = {
-		id: key.key,
+		id: configuration.key,
 		title: schema.title,
 		description: schema.description,
 		keywords: schema.keywords,
 	};
 	switch (schema.valueType) {
 		case 'boolean':
-			return { ...base, valueType: 'boolean', key: key as IConfigurationKey<boolean> };
+			return { ...base, valueType: 'boolean', configuration: configuration as IRegisteredConfiguration<boolean> };
 		case 'number':
-			return { ...base, valueType: 'number', key: key as IConfigurationKey<number>, minimum: schema.minimum, maximum: schema.maximum };
+			return { ...base, valueType: 'number', configuration: configuration as IRegisteredConfiguration<number>, minimum: schema.minimum, maximum: schema.maximum };
 		case 'select':
 			return {
 				...base,
 				valueType: 'select',
-				key: key as IConfigurationKey<string>,
+				configuration: configuration as IRegisteredConfiguration<string>,
 				get options() { return schema.options; },
 			};
 		case 'text':
-			return { ...base, valueType: 'text', key: key as IConfigurationKey<string>, placeholder: schema.placeholder };
+			return { ...base, valueType: 'text', configuration: configuration as IRegisteredConfiguration<string>, placeholder: schema.placeholder };
 	}
 }
 

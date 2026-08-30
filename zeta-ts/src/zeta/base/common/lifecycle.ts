@@ -621,11 +621,12 @@ export function combinedDisposable(
 	return store;
 }
 
-export function dispose<T extends IDisposable>(resource: T): T;
-export function dispose<T extends IDisposable>(resource: T | undefined): T | undefined;
-export function dispose<T extends IDisposable, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
-export function dispose<T extends IDisposable>(resources: readonly T[]): readonly T[];
-export function dispose<T extends IDisposable>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
+export function dispose<T extends { dispose(): void }>(resource: T): T;
+export function dispose<T extends { dispose(): void }>(resource: T | undefined): T | undefined;
+export function dispose<T extends { dispose(): void }, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
+export function dispose<T extends { dispose(): void }>(resources: Array<T>): Array<T>;
+export function dispose<T extends { dispose(): void }>(resources: ReadonlyArray<T>): ReadonlyArray<T>;
+export function dispose<T extends { dispose(): void }>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
 	if (!value) {
 		return value;
 	}

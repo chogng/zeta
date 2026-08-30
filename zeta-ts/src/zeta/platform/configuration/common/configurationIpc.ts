@@ -7,6 +7,12 @@ export const CONFIGURATION_CHANGED_CHANNEL = "zeta:configuration:changed";
 
 export type ConfigurationValue = JsonValue;
 
+export interface IConfigurationOverrideValues {
+	readonly key: string;
+	readonly identifiers: readonly string[];
+	readonly values: Readonly<Record<string, ConfigurationValue>>;
+}
+
 /** Versioned Desktop configuration persisted by the host. */
 export interface IConfigurationDocument {
 	readonly version: 1;
@@ -53,17 +59,63 @@ export function validateConfigurationDocument(value: unknown): IConfigurationDoc
 /** Parses the canonical JSONC source into a validated configuration-value projection. */
 export function configurationValues(document: IConfigurationDocument): Readonly<Record<string, ConfigurationValue>> {
 	const parsed = parseJsonc(document.source, 'configuration source');
-	return validateConfigurationValues(parsed);
+	return validateConfigurationValues(parsed).values;
 }
 
-function validateConfigurationValues(value: unknown): Readonly<Record<string, ConfigurationValue>> {
+export function configurationOverrideValues(document: IConfigurationDocument): readonly IConfigurationOverrideValues[] {
+	const parsed = parseJsonc(document.source, 'configuration source');
+	return validateConfigurationValues(parsed).overrides;
+}
+
+function validateConfigurationValues(value: unknown): { readonly values: Readonly<Record<string, ConfigurationValue>>; readonly overrides: readonly IConfigurationOverrideValues[] } {
 	const values = record(value, 'configuration source');
 	const validated: Record<string, ConfigurationValue> = {};
+	const overrides: IConfigurationOverrideValues[] = [];
 	for (const [key, candidate] of Object.entries(values)) {
-		if (!/^[A-Za-z][A-Za-z0-9.-]{0,127}$/.test(key)) throw new Error(`invalid configuration key: ${key}`);
+		const identifiers = overrideIdentifiersFromKey(key);
+		if (identifiers) {
+			const overrideValues = record(candidate, `configuration source.${key}`);
+			const validatedOverride: Record<string, ConfigurationValue> = {};
+			for (const [overrideKey, overrideValue] of Object.entries(overrideValues)) {
+				assertConfigurationKey(overrideKey);
+				validatedOverride[overrideKey] = validateJsonValue(overrideValue, { path: `configuration source.${key}.${overrideKey}` });
+			}
+			overrides.push(Object.freeze({ key, identifiers: Object.freeze(identifiers), values: Object.freeze(validatedOverride) }));
+			continue;
+		}
+		assertConfigurationKey(key);
 		validated[key] = validateJsonValue(candidate, { path: `configuration source.${key}` });
 	}
-	return validated;
+	return Object.freeze({ values: Object.freeze(validated), overrides: Object.freeze(overrides) });
+}
+
+export function overrideIdentifiersFromKey(key: string): string[] | undefined {
+	if (!key.startsWith('[')) return undefined;
+	const identifiers: string[] = [];
+	let offset = 0;
+	while (offset < key.length) {
+		if (key.charCodeAt(offset) !== 91) throw new Error(`invalid configuration override key: ${key}`);
+		const end = key.indexOf(']', offset + 1);
+		if (end < 0) throw new Error(`invalid configuration override key: ${key}`);
+		const identifier = key.slice(offset + 1, end);
+		if (!/^[A-Za-z0-9][A-Za-z0-9+_.-]{0,127}$/u.test(identifier)) throw new Error(`invalid configuration override identifier: ${identifier}`);
+		if (!identifiers.includes(identifier)) identifiers.push(identifier);
+		offset = end + 1;
+	}
+	if (identifiers.length === 0) throw new Error(`invalid configuration override key: ${key}`);
+	return identifiers;
+}
+
+export function overrideKeyFromIdentifiers(identifiers: readonly string[]): string {
+	if (identifiers.length === 0) throw new RangeError('Configuration override identifiers must not be empty');
+	const key = identifiers.map(identifier => `[${identifier}]`).join('');
+	const normalized = overrideIdentifiersFromKey(key)!;
+	if (normalized.length !== identifiers.length) throw new RangeError('Configuration override identifiers must be unique');
+	return key;
+}
+
+function assertConfigurationKey(key: string): void {
+	if (!/^[A-Za-z][A-Za-z0-9.-]{0,127}$/.test(key)) throw new Error(`invalid configuration key: ${key}`);
 }
 
 export function validateConfigurationSnapshot(value: unknown): IConfigurationSnapshot {

@@ -1,4 +1,4 @@
-import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";

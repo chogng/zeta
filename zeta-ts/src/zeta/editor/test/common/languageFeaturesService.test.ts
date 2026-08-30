@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { URI } from '../../../base/common/uri.js';
 import { LanguageFeatureRegistry } from '../../common/languageFeatureRegistry.js';
-import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { LanguageService } from '../../common/services/languageService.js';
 
 test('language identity, configuration, and feature providers have separate owners', () => {
 	using languageService = new LanguageService();
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
 	using model = new TextModel('', { languageId: 'demo' });
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), undefined);
-	assert.equal(languageConfigurationService.getLanguageConfiguration('typescript').comments.lineComment, undefined);
+	assert.equal(languageConfigurationService.getLanguageConfiguration('typescript').comments?.lineCommentToken, undefined);
 	assert.deepEqual(languageFeaturesService.hoverProvider.ordered(model), []);
 
 	using language = languageService.registerLanguage({ id: 'demo', extensions: ['.demo'] });
@@ -22,12 +22,12 @@ test('language identity, configuration, and feature providers have separate owne
 	using hover = languageFeaturesService.hoverProvider.register('demo', { provideHover: () => undefined });
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.demo') }), 'demo');
-	assert.equal(languageConfigurationService.getLanguageConfiguration('demo').comments.lineComment, '//');
+	assert.equal(languageConfigurationService.getLanguageConfiguration('demo').comments?.lineCommentToken, '//');
 	assert.equal(languageFeaturesService.hoverProvider.ordered(model).length, 1);
 });
 
 test('language feature registries report effective provider changes', () => {
-	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	using languageConfigurationService = new TestLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
 	let changes = 0;
 	using listener = languageFeaturesService.colorProvider.onDidChange(() => changes += 1);

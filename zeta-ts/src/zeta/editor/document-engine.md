@@ -117,7 +117,7 @@ Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。�
 
 - 不创建第二个 `TextModel` 或 embedded-editor factory；
 - 输入转换成 owning TextModel 的 transaction；
-- Academic code-region rendering 不 import `CodeEditorPane`、`ConfiguredCodeEditor` 或 `workbench/contrib/codeEditor`；
+- Academic code-region rendering 不 import `CodeEditorPane`、`CodeEditorWidget` 或 `workbench/contrib/codeEditor`；
 - 高亮、gutter 与 line layout 如果复用 Code 实现，只能作为父模型 region projection。
 
 ## Profile、codec 与持久化

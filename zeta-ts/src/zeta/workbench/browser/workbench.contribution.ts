@@ -46,7 +46,7 @@ import { IEditorPart } from "./parts/editor/editorPart.js";
 import { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 import { EditorAutoSaveContribution } from "./parts/editor/editorAutoSave.js";
 import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
-import { IConfigurationService } from "../../platform/configuration/common/configurationService.js";
+import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";
 

@@ -7,12 +7,12 @@ import type {
 import type { URI } from "../../../../base/common/uri.js";
 import type {
 	IConfigurationService,
-} from "../../../../platform/configuration/common/configurationService.js";
+} from "../../../../platform/configuration/common/configuration.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import type { EditorInput } from "./editorInput.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -117,7 +117,7 @@ export interface EditorPaneCreationOptions {
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;

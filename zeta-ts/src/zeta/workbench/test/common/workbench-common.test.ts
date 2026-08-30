@@ -156,20 +156,22 @@ test("workbench configuration resolves registered color themes", () => {
 		ConfigurationsRegistry.owns(WorkbenchConfiguration.colorTheme),
 		true,
 	);
+	const colorTheme = ConfigurationsRegistry.getConfiguration(WorkbenchConfiguration.colorTheme);
+	assert.ok(colorTheme);
 	assert.equal(
-		WorkbenchConfiguration.colorTheme.defaultValue,
+		colorTheme.defaultValue,
 		SystemColorThemePreference,
 	);
 	assert.equal(
-		WorkbenchConfiguration.colorTheme.parse(SystemColorThemePreference),
+		colorTheme.parse(SystemColorThemePreference),
 		SystemColorThemePreference,
 	);
 	assert.equal(
-		WorkbenchConfiguration.colorTheme.parse(lightColorTheme.id),
+		colorTheme.parse(lightColorTheme.id),
 		lightColorTheme.id,
 	);
 	assert.throws(
-		() => WorkbenchConfiguration.colorTheme.parse("missing-theme"),
+		() => colorTheme.parse("missing-theme"),
 		/Unknown workbench color theme preference/,
 	);
 	assert.equal(
@@ -180,11 +182,13 @@ test("workbench configuration resolves registered color themes", () => {
 
 test("workbench configuration exposes modern and flat layout styles", () => {
 	assert.equal(ConfigurationsRegistry.owns(WorkbenchConfiguration.layoutStyle), true);
-	assert.equal(WorkbenchConfiguration.layoutStyle.defaultValue, "modern");
-	assert.equal(WorkbenchConfiguration.layoutStyle.parse("modern"), "modern");
-	assert.equal(WorkbenchConfiguration.layoutStyle.parse("flat"), "flat");
+	const layoutStyle = ConfigurationsRegistry.getConfiguration(WorkbenchConfiguration.layoutStyle);
+	assert.ok(layoutStyle);
+	assert.equal(layoutStyle.defaultValue, "modern");
+	assert.equal(layoutStyle.parse("modern"), "modern");
+	assert.equal(layoutStyle.parse("flat"), "flat");
 	assert.throws(
-		() => WorkbenchConfiguration.layoutStyle.parse("classic"),
+		() => layoutStyle.parse("classic"),
 		/Unknown Workbench layout style/,
 	);
 });

@@ -1,6 +1,6 @@
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type CursorsController } from "./cursor.js";
-import { type LanguageCharacterPair } from "../languages/languageConfiguration.js";
+import { type IAutoClosingPair } from '../languages/languageConfiguration.js';
 import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from "./languagePairEditing.js";
 import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
@@ -69,7 +69,7 @@ export class LanguageAutoClosingTracker extends Disposable implements LanguageAu
 		});
 	}
 
-	canDeletePair(position: Position, pair: LanguageCharacterPair): boolean {
+	canDeletePair(position: Position, pair: IAutoClosingPair): boolean {
 		this.assertNotDisposed();
 		this.pruneInvalidEntries();
 		return this.entries.some(entry => {

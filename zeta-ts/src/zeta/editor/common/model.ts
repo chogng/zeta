@@ -10,7 +10,7 @@ export enum PositionAffinity {
 /** Configures text projected into a view without changing model contents. */
 export interface InjectedTextOptions {
 	readonly content: string;
-	readonly tokens?: unknown | null;
+	readonly tokens?: TokenArray | null;
 	readonly inlineClassName?: string | null;
 	readonly inlineClassNameAffectsLetterSpacing?: boolean;
 	readonly widthInEm?: number;
@@ -36,6 +36,13 @@ export enum GlyphMarginLane {
 	Left = 1,
 	Center = 2,
 	Right = 3,
+}
+
+export interface IGlyphMarginLanesModel {
+	readonly requiredLanes: number;
+	getLanesAtLine(lineNumber: number): GlyphMarginLane[];
+	reset(maxLine: number): void;
+	push(lane: GlyphMarginLane, range: Range, persist?: boolean): void;
 }
 
 export enum OverviewRulerLane {
@@ -362,6 +369,9 @@ export function isITextSnapshot(value: unknown): value is ITextSnapshot {
  * capabilities while preserving VS Code's ownership and method names.
  */
 export interface ITextModel extends IDisposable {
+	readonly guides: IGuidesTextModelPart;
+	readonly bracketPairs: IBracketPairsTextModelPart;
+	readonly tokenization: ITokenizationTextModelPart;
 	readonly uri: URI;
 	readonly id: string;
 	readonly isForSimpleWidget: boolean;
@@ -382,6 +392,12 @@ export interface ITextModel extends IDisposable {
 	_setTrackedRange(id: string | null, newRange: Range, newStickiness: TrackedRangeStickiness): string;
 	deltaDecorations(oldDecorations: string[], newDecorations: IModelDeltaDecoration[], ownerId?: number): string[];
 	getDecorationRange(id: string): Range | null;
+	getDecorationsInRange(range: IRange, ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean, onlyMinimapDecorations?: boolean, onlyMarginDecorations?: boolean): IModelDecoration[];
+	getLineInjectedText(lineNumber: number, ownerId?: number): LineInjectedText[];
+	getOverviewRulerDecorations(ownerId?: number, filterOutValidation?: boolean, filterFontDecorations?: boolean): IModelDecoration[];
+	getFontDecorationsInRange(range: IRange, ownerId?: number): IModelDecoration[];
+	getCustomLineHeightsDecorations(ownerId?: number): IModelDecoration[];
+	getCustomLineHeightsDecorationsInRange(range: Range, ownerId?: number): IModelDecoration[];
 	pushStackElement(): void;
 	popStackElement(): void;
 	edit(edit: TextEdit, options?: { reason?: TextModelEditSource }): void;
@@ -468,3 +484,8 @@ import type { IModelDecorationsChangedEvent, IModelLanguageChangedEvent, IModelO
 import { TextChange, type TextModelChange, type TextModelContentChange } from './core/textChange.js';
 import type { TextModelEditSource } from './textModelEditSource.js';
 import type { UndoRedoGroup } from '../../platform/undoRedo/common/undoRedo.js';
+import type { ITokenizationTextModelPart } from './tokenizationTextModelPart.js';
+import type { IGuidesTextModelPart } from './textModelGuides.js';
+import type { IBracketPairsTextModelPart } from './textModelBracketPairs.js';
+import type { LineInjectedText } from './textModelEvents.js';
+import type { TokenArray } from './tokens/lineTokens.js';

@@ -79,13 +79,13 @@ export class ArrayQueue<T> {
 		return this.peek();
 	}
 
-	takeWhile(predicate: (item: T) => boolean): readonly T[] | null {
+	takeWhile(predicate: (item: T) => boolean): T[] | null {
 		const start = this.firstIndex;
 		while (this.firstIndex <= this.lastIndex && predicate(this.items[this.firstIndex]!)) this.firstIndex += 1;
 		return start === this.firstIndex ? null : this.items.slice(start, this.firstIndex);
 	}
 
-	takeFromEndWhile(predicate: (item: T) => boolean): readonly T[] | null {
+	takeFromEndWhile(predicate: (item: T) => boolean): T[] | null {
 		const previousEnd = this.lastIndex;
 		while (this.lastIndex >= this.firstIndex && predicate(this.items[this.lastIndex]!)) this.lastIndex -= 1;
 		if (this.lastIndex === previousEnd) return null;
@@ -107,7 +107,7 @@ export class ArrayQueue<T> {
 		this.lastIndex -= 1;
 		return result;
 	}
-	takeCount(count: number): readonly T[] {
+	takeCount(count: number): T[] {
 		if (!Number.isSafeInteger(count) || count < 0 || count > this.length) throw new RangeError('Queue count is outside the remaining items');
 		const result = this.items.slice(this.firstIndex, this.firstIndex + count);
 		this.firstIndex += count;
@@ -243,4 +243,10 @@ export class CallbackIterable<T> {
 		});
 		return result;
 	}
+}
+
+export function arrayInsert<T>(target: T[], insertIndex: number, insertArr: T[]): T[] {
+	const before = target.slice(0, insertIndex);
+	const after = target.slice(insertIndex);
+	return before.concat(insertArr, after);
 }

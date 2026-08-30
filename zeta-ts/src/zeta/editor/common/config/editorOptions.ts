@@ -1131,6 +1131,7 @@ interface EditorOptionValueMap {
 	[EditorOption.autoClosingOvertype]: EditorAutoClosingEditStrategy;
 	[EditorOption.autoClosingQuotes]: EditorAutoClosingStrategy;
 	[EditorOption.autoIndent]: EditorAutoIndentStrategy;
+	[EditorOption.autoSurround]: EditorAutoSurroundStrategy;
 	[EditorOption.autoIndentOnPaste]: boolean;
 	[EditorOption.autoIndentOnPasteWithinString]: boolean;
 	[EditorOption.automaticLayout]: boolean;
@@ -1209,7 +1210,7 @@ interface EditorOptionValueMap {
 	[EditorOption.multiCursorLimit]: number;
 	[EditorOption.occurrencesHighlight]: 'off' | 'singleFile' | 'multiFile';
 	[EditorOption.occurrencesHighlightDelay]: number;
-	[EditorOption.wordSegmenterLocales]: readonly string[];
+	[EditorOption.wordSegmenterLocales]: string[];
 	[EditorOption.wordSeparators]: string;
 	[EditorOption.wordWrapColumn]: number;
 	[EditorOption.wordWrapOverride1]: 'off' | 'on' | 'inherit';
@@ -1745,7 +1746,7 @@ const editorOptions = {
 	overtypeCursorStyle: register(new EditorOptionDefinition(EditorOption.overtypeCursorStyle, 'overtypeCursorStyle', TextEditorCursorStyle.Block, input => validateCursorStyle(input, TextEditorCursorStyle.Block))),
 	mouseStyle: register(new EditorOptionDefinition(EditorOption.mouseStyle, 'mouseStyle', 'text' as const, input => enumValue(input, 'text' as const, ['text', 'default', 'copy'] as const))),
 	multiCursorModifier: register(new EditorOptionDefinition(EditorOption.multiCursorModifier, 'multiCursorModifier', isMacintosh ? 'altKey' as const : 'altKey' as const, validateMultiCursorModifier)),
-	wordSegmenterLocales: register(new EditorOptionDefinition(EditorOption.wordSegmenterLocales, 'wordSegmenterLocales', Object.freeze([]) as readonly string[], validateWordSegmenterLocales)),
+	wordSegmenterLocales: register(new EditorOptionDefinition(EditorOption.wordSegmenterLocales, 'wordSegmenterLocales', [] as string[], validateWordSegmenterLocales)),
 	wrappingIndent: register(new EditorOptionDefinition(EditorOption.wrappingIndent, 'wrappingIndent', WrappingIndent.Same, validateWrappingIndent, undefined, (environment, options, value) => options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Enabled ? WrappingIndent.None : value)),
 	codeLens: register(new EditorOptionDefinition(EditorOption.codeLens, 'codeLens', true, input => booleanValue(input, true))),
 	folding: register(new EditorOptionDefinition(EditorOption.folding, 'folding', true, input => booleanValue(input, true))),
@@ -2146,7 +2147,7 @@ function validateWrappingIndent(input: unknown): WrappingIndent {
 	}
 }
 
-function validateWordSegmenterLocales(input: unknown): readonly string[] {
+function validateWordSegmenterLocales(input: unknown): string[] {
 	const locales = typeof input === 'string' ? [input] : Array.isArray(input) ? input : [];
 	const validLocales: string[] = [];
 	for (const locale of locales) {
@@ -2157,7 +2158,7 @@ function validateWordSegmenterLocales(input: unknown): readonly string[] {
 			// Ignore invalid BCP 47 tags.
 		}
 	}
-	return Object.freeze(validLocales);
+	return validLocales;
 }
 
 function validateFontSize(input: unknown): number {

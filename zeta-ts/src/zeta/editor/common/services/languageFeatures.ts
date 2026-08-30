@@ -22,7 +22,7 @@ import type { LanguageLinkProvider } from '../../contrib/links/common/languageLi
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
 import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';
-import type { LanguageSemanticTokensProvider } from '../../contrib/semanticTokens/common/semanticTokens.js';
+import type { LanguageSemanticTokensProvider } from '../languages.js';
 
 /** Provider registries shared by standalone callers and Workbench adapters. */
 export interface ILanguageFeaturesService extends IDisposable {

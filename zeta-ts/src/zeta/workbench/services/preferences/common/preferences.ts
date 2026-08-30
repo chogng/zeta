@@ -1,6 +1,6 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import type { IConfigurationKey } from '../../../../platform/configuration/common/configurationService.js';
+import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 export type SettingValueType = 'boolean' | 'number' | 'select' | 'text';
@@ -33,25 +33,25 @@ export interface ISettingBase {
 
 export interface IBooleanSetting extends ISettingBase {
 	readonly valueType: 'boolean';
-	readonly key: IConfigurationKey<boolean>;
+	readonly configuration: IRegisteredConfiguration<boolean>;
 }
 
 export interface INumberSetting extends ISettingBase {
 	readonly valueType: 'number';
-	readonly key: IConfigurationKey<number>;
+	readonly configuration: IRegisteredConfiguration<number>;
 	readonly minimum: number;
 	readonly maximum: number;
 }
 
 export interface ISelectSetting extends ISettingBase {
 	readonly valueType: 'select';
-	readonly key: IConfigurationKey<string>;
+	readonly configuration: IRegisteredConfiguration<string>;
 	readonly options: readonly ISelectSettingOption[];
 }
 
 export interface ITextSetting extends ISettingBase {
 	readonly valueType: 'text';
-	readonly key: IConfigurationKey<string>;
+	readonly configuration: IRegisteredConfiguration<string>;
 	readonly placeholder: string;
 }
 

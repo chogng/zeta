@@ -4,12 +4,12 @@ import { ColumnSelection } from "../../common/cursor/cursorColumnSelection.js";
 import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { ComposableLanguageConfigurationService } from "../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { createTestCursorConfiguration } from "./testCursorConfiguration.js";
 
 test("Column selection creates directional same-column selections for every physical line", () => {
 	using model = new TextModel("abcdef\nab\n12345\nxy");
-	using configurations = new ComposableLanguageConfigurationService();
+	using configurations = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, configurations);
 	const result = ColumnSelection.columnSelect(
 		config,
@@ -31,7 +31,7 @@ test("Column selection creates directional same-column selections for every phys
 
 test("Column selection validates both positions against its text model", () => {
 	using model = new TextModel("one");
-	using configurations = new ComposableLanguageConfigurationService();
+	using configurations = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, configurations);
 	assert.throws(() => ColumnSelection.columnSelect(config, model, 1, 0, 2, 0), /lineNumber/);
 });

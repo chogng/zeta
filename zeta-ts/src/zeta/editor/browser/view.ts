@@ -15,7 +15,8 @@ import { type Range } from '../common/core/range.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type IAttachedView } from '../common/model.js';
 import { CursorConfiguration } from '../common/cursorCommon.js';
-import { ComposableLanguageConfigurationService, type IComposableLanguageConfigurationService } from '../common/languages/ownedLanguageConfigurationContributions.js';
+import { createBuiltinLanguageConfigurationService } from '../common/languages/languageBuiltinConfigurations.js';
+import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
 import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
@@ -117,7 +118,7 @@ export interface EditorViewportOptions {
 	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
 	readonly cursorOptions?: IEditorOptions;
 	readonly languageId?: string;
-	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 }
 
 export interface EditorContentPosition {
@@ -314,7 +315,7 @@ export class View extends Disposable {
 			wsmiddotWidth: this.textMeasurer.measureLineWidth('･'),
 			maxDigitWidth: Math.max(...'0123456789'.split('').map(digit => this.textMeasurer.measureLineWidth(digit))),
 		}, true);
-		const languageConfigurationService = options.languageConfigurationService ?? this._register(new ComposableLanguageConfigurationService());
+		const languageConfigurationService = options.languageConfigurationService ?? this._register(createBuiltinLanguageConfigurationService());
 		const editorConfiguration = this._register(new EditorConfiguration(options.cursorOptions ?? {}, fontInfo, options.container));
 		this.cursorConfig = new CursorConfiguration(options.languageId ?? this.model.getLanguageId(), this.model.getOptions(), editorConfiguration, languageConfigurationService);
 		const cursorWidth = Math.min(

@@ -1,97 +1,210 @@
-import { getOrSet } from '../../../base/common/map.js';
-import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from '../commands/editorEditCommand.js';
-import type { SelectionSet } from './selectionSet.js';
-import { Position } from '../core/position.js';
+import { ShiftCommand } from '../commands/shiftCommand.js';
+import { CompositionSurroundSelectionCommand } from '../commands/surroundSelectionCommand.js';
+import { CursorConfiguration, EditOperationResult, EditOperationType, ICursorSimpleModel, isQuote } from '../cursorCommon.js';
 import { Range } from '../core/range.js';
-import { normalizeTextLineEndings } from '../core/textChange.js';
-
-import { type TextModel } from '../model/textModel.js';
-import { normalizeSelectionOffsets, TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
-import { type TextEdit } from '../languages.js';
+import { Selection } from '../core/selection.js';
+import { Position } from '../core/position.js';
+import { ICommand } from '../editorCommon.js';
+import { ITextModel } from '../model.js';
+import { AutoClosingOpenCharTypeOperation, AutoClosingOvertypeOperation, AutoClosingOvertypeWithInterceptorsOperation, AutoIndentOperation, CompositionOperation, CompositionEndOvertypeOperation, EnterOperation, InterceptorElectricCharOperation, PasteOperation, shiftIndent, shouldSurroundChar, SimpleCharacterTypeOperation, SurroundSelectionOperation, TabOperation, TypeWithoutInterceptorsOperation, unshiftIndent } from './cursorTypeEditOperations.js';
 
 export class TypeOperations {
-	public static typeWithoutInterceptors(model: TextModel, selections: SelectionSet, text: string): EditorEditCommand {
-		if (typeof text !== 'string') throw new TypeError('Typed text must be a string');
-		const normalized = normalizeTextLineEndings(text);
-		return TypeWithoutInterceptorsOperation.getEdits(
-			model,
-			selections,
-			selections.selections.map(selection => textEdit(selection, normalized, normalized.length)),
-			EditorCommandHistoryMode.CoalesceTyping,
-		);
-	}
 
-	public static paste(model: TextModel, selections: SelectionSet, text: string): EditorEditCommand {
-		if (typeof text !== 'string') throw new TypeError('Pasted text must be a string');
-		const normalized = normalizeTextLineEndings(text);
-		return TypeWithoutInterceptorsOperation.getEdits(
-			model,
-			selections,
-			selections.selections.map(selection => textEdit(selection, normalized, normalized.length)),
-			EditorCommandHistoryMode.Isolated,
-		);
-	}
-
-	public static distributedPaste(model: TextModel, selections: SelectionSet, texts: readonly string[]): EditorEditCommand {
-		if (texts.length !== selections.selections.length) throw new RangeError('Distributed paste text must match the selection count');
-		const normalized = texts.map(text => {
-			if (typeof text !== 'string') throw new TypeError('Distributed paste text must contain only strings');
-			return normalizeTextLineEndings(text);
-		});
-		return TypeWithoutInterceptorsOperation.getEdits(
-			model,
-			selections,
-			selections.selections.map((selection, selectionIndex) => textEdit(
-				selection,
-				normalized[selectionIndex]!,
-				normalized[selectionIndex]!.length,
-			)),
-			EditorCommandHistoryMode.Isolated,
-		);
-	}
-
-	public static linePaste(model: TextModel, selections: SelectionSet, texts: readonly string[]): EditorEditCommand {
-		if (texts.length !== selections.selections.length) throw new RangeError('Line paste text must match the selection count');
-		const normalized = texts.map(text => {
-			if (typeof text !== 'string') throw new TypeError('Line paste text must contain only strings');
-			const value = normalizeTextLineEndings(text);
-			if (!value.endsWith('\n')) throw new RangeError('Line paste text must end with a line break');
-			return value;
-		});
-		const groups = new Map<number, { readonly lineNumber: number; readonly selectionIndices: number[]; text: string }>();
-		for (let selectionIndex = 0; selectionIndex < selections.selections.length; selectionIndex += 1) {
-			const selection = selections.selections[selectionIndex]!;
-			if (!selection.isEmpty()) throw new RangeError('Line paste requires collapsed selections');
-			const lineNumber = selection.getPosition().lineNumber;
-			const group = getOrSet(groups, lineNumber, { lineNumber, selectionIndices: [], text: '' });
-			group.selectionIndices.push(selectionIndex);
-			group.text += normalized[selectionIndex]!;
+	public static indent(config: CursorConfiguration, model: ICursorSimpleModel | null, selections: Selection[] | null): ICommand[] {
+		if (model === null || selections === null) {
+			return [];
 		}
-		const sorted = [...groups.values()].sort((left, right) => left.lineNumber - right.lineNumber);
-		const selectionsAfter = new Array<TextSelectionOffsets>(selections.selections.length);
-		const edits: TextEdit[] = [];
-		let cumulativeDelta = 0;
-		for (const group of sorted) {
-			const position = new Position(group.lineNumber, 1);
-			const startOffset = model.offsetAt(position);
-			edits.push({ range: Range.fromPositions(position), text: group.text });
-			for (const selectionIndex of group.selectionIndices) {
-				const columnIndex = selections.selections[selectionIndex]!.getPosition().column - 1;
-				const caretOffset = startOffset + cumulativeDelta + group.text.length + columnIndex;
-				selectionsAfter[selectionIndex] = { anchorOffset: caretOffset, activeOffset: caretOffset };
+
+		const commands: ICommand[] = [];
+		for (let i = 0, len = selections.length; i < len; i++) {
+			commands[i] = new ShiftCommand(selections[i], {
+				isUnshift: false,
+				tabSize: config.tabSize,
+				indentSize: config.indentSize,
+				insertSpaces: config.insertSpaces,
+				useTabStops: config.useTabStops,
+				autoIndent: config.autoIndent
+			}, config.languageConfigurationService);
+		}
+		return commands;
+	}
+
+	public static outdent(config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[]): ICommand[] {
+		const commands: ICommand[] = [];
+		for (let i = 0, len = selections.length; i < len; i++) {
+			commands[i] = new ShiftCommand(selections[i], {
+				isUnshift: true,
+				tabSize: config.tabSize,
+				indentSize: config.indentSize,
+				insertSpaces: config.insertSpaces,
+				useTabStops: config.useTabStops,
+				autoIndent: config.autoIndent
+			}, config.languageConfigurationService);
+		}
+		return commands;
+	}
+
+	public static shiftIndent(config: CursorConfiguration, indentation: string, count?: number): string {
+		return shiftIndent(config, indentation, count);
+	}
+
+	public static unshiftIndent(config: CursorConfiguration, indentation: string, count?: number): string {
+		return unshiftIndent(config, indentation, count);
+	}
+
+	public static paste(config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[], text: string, pasteOnNewLine: boolean, multicursorText: string[]): EditOperationResult {
+		return PasteOperation.getEdits(config, model, selections, text, pasteOnNewLine, multicursorText);
+	}
+
+	public static tab(config: CursorConfiguration, model: ITextModel, selections: Selection[]): ICommand[] {
+		return TabOperation.getCommands(config, model, selections);
+	}
+
+	public static compositionType(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ITextModel, selections: Selection[], text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): EditOperationResult {
+		return CompositionOperation.getEdits(prevEditOperationType, config, model, selections, text, replacePrevCharCnt, replaceNextCharCnt, positionDelta);
+	}
+
+	/**
+	 * This is very similar with typing, but the character is already in the text buffer!
+	 */
+	public static compositionEndWithInterceptors(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ITextModel, compositions: CompositionOutcome[] | null, selections: Selection[], autoClosedCharacters: Range[]): EditOperationResult | null {
+		if (!compositions) {
+			// could not deduce what the composition did
+			return null;
+		}
+
+		let insertedText: string | null = null;
+		for (const composition of compositions) {
+			if (insertedText === null) {
+				insertedText = composition.insertedText;
+			} else if (insertedText !== composition.insertedText) {
+				// not all selections agree on what was typed
+				return null;
 			}
-			cumulativeDelta += group.text.length;
 		}
-		const normalizedSelections = normalizeSelectionOffsets(selectionsAfter, selections.primaryIndex);
-		return {
-			edits: Object.freeze(edits),
-			selectionsAfter: normalizedSelections.selections,
-			primarySelectionIndex: normalizedSelections.primaryIndex,
-			historyMode: EditorCommandHistoryMode.Isolated,
-		};
+
+		if (!insertedText || insertedText.length !== 1) {
+			// we're only interested in the case where a single character was inserted
+			return CompositionEndOvertypeOperation.getEdits(config, compositions);
+		}
+
+		const ch = insertedText;
+
+		let hasDeletion = false;
+		for (const composition of compositions) {
+			if (composition.deletedText.length !== 0) {
+				hasDeletion = true;
+				break;
+			}
+		}
+
+		if (hasDeletion) {
+			// Check if this could have been a surround selection
+
+			if (!shouldSurroundChar(config, ch) || !config.surroundingPairs.hasOwnProperty(ch)) {
+				return null;
+			}
+
+			const isTypingAQuoteCharacter = isQuote(ch);
+
+			for (const composition of compositions) {
+				if (composition.deletedSelectionStart !== 0 || composition.deletedSelectionEnd !== composition.deletedText.length) {
+					// more text was deleted than was selected, so this could not have been a surround selection
+					return null;
+				}
+				if (/^[ \t]+$/.test(composition.deletedText)) {
+					// deleted text was only whitespace
+					return null;
+				}
+				if (isTypingAQuoteCharacter && isQuote(composition.deletedText)) {
+					// deleted text was a quote
+					return null;
+				}
+			}
+
+			const positions: Position[] = [];
+			for (const selection of selections) {
+				if (!selection.isEmpty()) {
+					return null;
+				}
+				positions.push(selection.getPosition());
+			}
+
+			if (positions.length !== compositions.length) {
+				return null;
+			}
+
+			const commands: ICommand[] = [];
+			for (let i = 0, len = positions.length; i < len; i++) {
+				commands.push(new CompositionSurroundSelectionCommand(positions[i], compositions[i].deletedText, config.surroundingPairs[ch]));
+			}
+			return new EditOperationResult(EditOperationType.TypingOther, commands, {
+				shouldPushStackElementBefore: true,
+				shouldPushStackElementAfter: false
+			});
+		}
+
+		const autoClosingOvertypeEdits = AutoClosingOvertypeWithInterceptorsOperation.getEdits(config, model, selections, autoClosedCharacters, ch);
+		if (autoClosingOvertypeEdits !== undefined) {
+			return autoClosingOvertypeEdits;
+		}
+
+		const autoClosingOpenCharEdits = AutoClosingOpenCharTypeOperation.getEdits(config, model, selections, ch, true, false);
+		if (autoClosingOpenCharEdits !== undefined) {
+			return autoClosingOpenCharEdits;
+		}
+
+		return CompositionEndOvertypeOperation.getEdits(config, compositions);
+	}
+
+	public static typeWithInterceptors(isDoingComposition: boolean, prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ITextModel, selections: Selection[], autoClosedCharacters: Range[], ch: string): EditOperationResult {
+
+		const enterEdits = EnterOperation.getEdits(config, model, selections, ch, isDoingComposition);
+		if (enterEdits !== undefined) {
+			return enterEdits;
+		}
+
+		const autoIndentEdits = AutoIndentOperation.getEdits(config, model, selections, ch, isDoingComposition);
+		if (autoIndentEdits !== undefined) {
+			return autoIndentEdits;
+		}
+
+		const autoClosingOverTypeEdits = AutoClosingOvertypeOperation.getEdits(prevEditOperationType, config, model, selections, autoClosedCharacters, ch);
+		if (autoClosingOverTypeEdits !== undefined) {
+			return autoClosingOverTypeEdits;
+		}
+
+		const autoClosingOpenCharEdits = AutoClosingOpenCharTypeOperation.getEdits(config, model, selections, ch, false, isDoingComposition);
+		if (autoClosingOpenCharEdits !== undefined) {
+			return autoClosingOpenCharEdits;
+		}
+
+		const surroundSelectionEdits = SurroundSelectionOperation.getEdits(config, model, selections, ch, isDoingComposition);
+		if (surroundSelectionEdits !== undefined) {
+			return surroundSelectionEdits;
+		}
+
+		const interceptorElectricCharOperation = InterceptorElectricCharOperation.getEdits(prevEditOperationType, config, model, selections, ch, isDoingComposition);
+		if (interceptorElectricCharOperation !== undefined) {
+			return interceptorElectricCharOperation;
+		}
+
+		return SimpleCharacterTypeOperation.getEdits(config, prevEditOperationType, selections, ch, isDoingComposition);
+	}
+
+	public static typeWithoutInterceptors(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ITextModel, selections: Selection[], str: string): EditOperationResult {
+		return TypeWithoutInterceptorsOperation.getEdits(prevEditOperationType, selections, str);
 	}
 }
 
-function textEdit(range: Range, text: string, caretOffsetInText: number): SelectionEdit {
-	return { range, text, anchorOffsetInText: caretOffsetInText, activeOffsetInText: caretOffsetInText };
+export class CompositionOutcome {
+	constructor(
+		public readonly deletedText: string,
+		public readonly deletedSelectionStart: number,
+		public readonly deletedSelectionEnd: number,
+		public readonly insertedText: string,
+		public readonly insertedSelectionStart: number,
+		public readonly insertedSelectionEnd: number,
+		public readonly insertedTextRange: Range,
+	) { }
 }

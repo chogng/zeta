@@ -1,8 +1,8 @@
 import { getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../core/misc/indentation.js";
 import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
-import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule } from "../languages/languageConfiguration.js";
-import { type MergedLanguageConfiguration } from "../languages/ownedLanguageConfigurationContributions.js";
+import { IndentAction, type EnterAction, type OnEnterRule } from '../languages/languageConfiguration.js';
+import { type ResolvedLanguageConfiguration } from '../languages/languageConfigurationRegistry.js';
 import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
 import { type Selection } from "../core/selection.js";
 import type { SelectionSet } from "./selectionSet.js";
@@ -14,7 +14,7 @@ export interface LanguageEnterCommandOptions {
 }
 
 /** Creates one language-aware Enter transaction for every current selection. */
-export function createLanguageEnterCommand(model: TextModel, selections: SelectionSet, configuration: MergedLanguageConfiguration, options: LanguageEnterCommandOptions = {}): EditorEditCommand {
+export function createLanguageEnterCommand(model: TextModel, selections: SelectionSet, configuration: ResolvedLanguageConfiguration, options: LanguageEnterCommandOptions = {}): EditorEditCommand {
 	assertConfiguration(configuration);
 	assertOptions(model, configuration, options);
 	const resolvedIndentation = resolveEditorIndentationOptions(options.indentation);
@@ -22,7 +22,7 @@ export function createLanguageEnterCommand(model: TextModel, selections: Selecti
 	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.BeginCoalescedTyping);
 }
 
-function createEnterEdit(model: TextModel, selection: Selection, configuration: MergedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): SelectionEdit {
+function createEnterEdit(model: TextModel, selection: Selection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): SelectionEdit {
 	const startLine = model.getLineContent(selection.getStartPosition().lineNumber);
 	const endLine = model.getLineContent(selection.getEndPosition().lineNumber);
 	const originalBeforeText = startLine.slice(0, selection.startColumn - 1);
@@ -41,29 +41,29 @@ function createEnterEdit(model: TextModel, selection: Selection, configuration: 
 	};
 }
 
-function resolveEnterAction(configuration: MergedLanguageConfiguration, previousLineText: string, beforeText: string, afterText: string): LanguageEnterAction {
-	const explicit = configuration.onEnterRules.find(rule => matchesOnEnterRule(rule, previousLineText, beforeText, afterText));
+function resolveEnterAction(configuration: ResolvedLanguageConfiguration, previousLineText: string, beforeText: string, afterText: string): EnterAction {
+	const explicit = (configuration.underlyingConfig.onEnterRules ?? []).find(rule => matchesOnEnterRule(rule, previousLineText, beforeText, afterText));
 	if (explicit) return explicit.action;
-	const bracketPairs = [...configuration.brackets].sort((left, right) => right.open.length - left.open.length);
-	for (const pair of bracketPairs) {
-		if (!endsWithToken(beforeText, pair.open)) continue;
-		return startsWithToken(afterText, pair.close)
-			? { indentAction: LanguageIndentAction.IndentOutdent }
-			: { indentAction: LanguageIndentAction.Indent };
+	const bracketPairs = [...(configuration.underlyingConfig.brackets ?? [])].sort((left, right) => right[0].length - left[0].length);
+	for (const [open, close] of bracketPairs) {
+		if (!endsWithToken(beforeText, open)) continue;
+		return startsWithToken(afterText, close)
+			? { indentAction: IndentAction.IndentOutdent }
+			: { indentAction: IndentAction.Indent };
 	}
 	const rules = configuration.indentationRules;
 	if (rules && !testPattern(rules.unIndentedLinePattern, beforeText)) {
 		if (testPattern(rules.increaseIndentPattern, beforeText) || testPattern(rules.indentNextLinePattern, beforeText)) {
-			return { indentAction: LanguageIndentAction.Indent };
+			return { indentAction: IndentAction.Indent };
 		}
 		if (testPattern(rules.decreaseIndentPattern, afterText)) {
-			return { indentAction: LanguageIndentAction.Outdent };
+			return { indentAction: IndentAction.Outdent };
 		}
 	}
-	return { indentAction: LanguageIndentAction.None };
+	return { indentAction: IndentAction.None };
 }
 
-function createEnterInsertion(beforeText: string, action: LanguageEnterAction, indentation: ResolvedEditorIndentationOptions): {
+function createEnterInsertion(beforeText: string, action: EnterAction, indentation: ResolvedEditorIndentationOptions): {
 	readonly text: string;
 	readonly caretOffset: number;
 } {
@@ -71,15 +71,15 @@ function createEnterInsertion(beforeText: string, action: LanguageEnterAction, i
 	const removeText = Math.min(action.removeText ?? 0, leading.length);
 	const baseIndentation = normalizeEditorIndentation(leading.slice(0, leading.length - removeText), indentation);
 	const unit = getEditorIndentationUnit(indentation);
-	if (action.indentAction === LanguageIndentAction.IndentOutdent) {
+	if (action.indentAction === IndentAction.IndentOutdent) {
 		const firstLine = normalizeEditorIndentationText(baseIndentation + (action.appendText ?? unit), indentation);
 		const text = "\n" + firstLine + "\n" + baseIndentation;
 		return { text, caretOffset: 1 + firstLine.length };
 	}
-	const target = action.indentAction === LanguageIndentAction.Outdent
+	const target = action.indentAction === IndentAction.Outdent
 		? unshiftEditorIndentation(baseIndentation, indentation) + (action.appendText ?? "")
 		: baseIndentation + (
-			action.indentAction === LanguageIndentAction.Indent
+			action.indentAction === IndentAction.Indent
 				? unit + (action.appendText ?? "")
 				: action.appendText ?? ""
 		);
@@ -87,7 +87,7 @@ function createEnterInsertion(beforeText: string, action: LanguageEnterAction, i
 	return { text: "\n" + normalized, caretOffset: 1 + normalized.length };
 }
 
-function matchesOnEnterRule(rule: LanguageOnEnterRule, previousLineText: string, beforeText: string, afterText: string): boolean {
+function matchesOnEnterRule(rule: OnEnterRule, previousLineText: string, beforeText: string, afterText: string): boolean {
 	return testPattern(rule.beforeText, beforeText) &&
 		(rule.afterText === undefined || testPattern(rule.afterText, afterText)) &&
 		(rule.previousLineText === undefined || testPattern(rule.previousLineText, previousLineText));
@@ -106,13 +106,13 @@ function startsWithToken(text: string, token: string): boolean {
 	return text.trimStart().startsWith(token);
 }
 
-function assertConfiguration(configuration: MergedLanguageConfiguration): void {
-	if (typeof configuration !== "object" || configuration === null || !Array.isArray(configuration.brackets) || !Array.isArray(configuration.onEnterRules)) {
+function assertConfiguration(configuration: ResolvedLanguageConfiguration): void {
+	if (typeof configuration !== 'object' || configuration === null || typeof configuration.getAutoClosingPairs !== 'function') {
 		throw new TypeError("Language Enter requires a resolved language configuration");
 	}
 }
 
-function assertOptions(model: TextModel, configuration: MergedLanguageConfiguration, options: LanguageEnterCommandOptions): void {
+function assertOptions(model: TextModel, configuration: ResolvedLanguageConfiguration, options: LanguageEnterCommandOptions): void {
 	if (typeof options !== "object" || options === null) throw new TypeError("Language Enter options must be an object");
 	const lexicalContext = options.lexicalContext;
 	if (!lexicalContext) return;

@@ -3,7 +3,7 @@ import test from "node:test";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
-import { OwnedLanguageConfigurationContributions } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type LanguagePairTypeCommand } from "../../../common/cursor/languagePairEditing.js";
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
@@ -15,7 +15,7 @@ import { TextModel } from "../../../common/model/textModel.js";
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
 	using model = new TextModel("x");
 	using selections = new CursorsController(model, SelectionSet.single(caret(1)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -32,7 +32,7 @@ test("Auto-closing trust follows external edits and rejects a changed closer", (
 test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 	using model = new TextModel("");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -47,7 +47,7 @@ test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	using model = new TextModel("()");
 	using selections = new CursorsController(model, SelectionSet.single(caret(1)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -64,7 +64,7 @@ test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 test("Multi-selection auto-closing entries retain independent ownership", () => {
 	using model = new TextModel("a b");
 	using selections = new CursorsController(model, SelectionSet.withPrimary([caret(1), caret(3)], 0));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -81,7 +81,7 @@ test("Multi-selection auto-closing entries retain independent ownership", () => 
 test("Undo removes provenance and redo does not invent it again", () => {
 	using model = new TextModel("");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
@@ -98,7 +98,7 @@ test("Undo removes provenance and redo does not invent it again", () => {
 test("Stale recording is ignored and disposal leaves borrowed dependencies alive", () => {
 	using model = new TextModel("");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
-	using configurations = new OwnedLanguageConfigurationContributions();
+	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
