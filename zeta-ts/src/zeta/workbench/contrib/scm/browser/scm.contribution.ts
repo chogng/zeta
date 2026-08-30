@@ -16,7 +16,7 @@ import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { ScmGraphViewPane } from "./scmGraphViewPane.js";
 import { GIT_GRAPH_VIEW_ID } from "./scmGraphTitleActions.js";
 import { ScmStatusContribution } from "./scmStatus.js";
-import { ScmViewPane } from "./scmViewPane.js";
+import { GIT_VIEW_ID, ScmViewPane } from "./scmViewPane.js";
 import "./media/scm.css";
 import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
@@ -27,9 +27,9 @@ import { IChatContextPickService } from "../../../services/chat/common/chatConte
 import "../common/scmConfiguration.js";
 import "./quickDiff.contribution.js";
 
-export const GIT_VIEW_ID = "zeta.gitView";
 export const GIT_AGENT_REVIEW_VIEW_ID = "zeta.gitAgentReview";
 export { GIT_GRAPH_VIEW_ID };
+export { GIT_VIEW_ID };
 
 /** Registers the Git Sidebar container and its initial pane. */
 export function registerGitViews(

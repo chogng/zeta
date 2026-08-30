@@ -45,6 +45,7 @@
 	color: inherit;
 	background: color-mix(in srgb, var(--zeta-editor-background) 92%, var(--zeta-foreground));
 	border-bottom: 1px solid var(--zeta-widget-border);
+	cursor: pointer;
 }
 
 .stanza-multi-diff-editor-header:hover {
@@ -58,6 +59,7 @@
 	box-sizing: border-box;
 	height: 100%;
 	min-width: 0;
+	gap: 6px;
 	padding: 0 10px;
 	color: inherit;
 	font: inherit;
@@ -65,6 +67,22 @@
 	background: transparent;
 	border: 0;
 	cursor: pointer;
+}
+
+.stanza-multi-diff-editor-chevron {
+	display: inline-flex;
+	flex: none;
+	width: 16px;
+	height: 16px;
+}
+
+.stanza-multi-diff-editor-chevron.collapsed-icon,
+.stanza-multi-diff-editor-section.collapsed .stanza-multi-diff-editor-chevron.expanded-icon {
+	display: none;
+}
+
+.stanza-multi-diff-editor-section.collapsed .stanza-multi-diff-editor-chevron.collapsed-icon {
+	display: inline-flex;
 }
 
 .stanza-multi-diff-editor-header-toggle:focus-visible {

@@ -70,8 +70,12 @@ test('EditorMultiDiffWidget presents ordered file sections with one outer viewpo
 	assert.ok(editor.domNode.querySelectorAll('.stanza-diff-editor-row').length < 102);
 	assert.equal(editor.domNode.querySelectorAll('.stanza-multi-diff-editor-file-actions').length, 2);
 	assert.equal(editor.domNode.querySelectorAll('button button').length, 0);
+	assert.equal(editor.domNode.querySelectorAll('.stanza-multi-diff-editor-chevron.expanded-icon').length, 2);
+	assert.equal(editor.domNode.querySelectorAll('.stanza-multi-diff-editor-chevron.collapsed-icon').length, 2);
 
 	const firstHeader = requiredElement<HTMLButtonElement>(editor.domNode, '.stanza-multi-diff-editor-header-toggle');
+	requiredElement<HTMLButtonElement>(editor.domNode, '.stanza-multi-diff-editor-file-actions button').click();
+	assert.equal(firstHeader.getAttribute('aria-expanded'), 'true');
 	editor.collapseAll();
 	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every((header) => header.getAttribute('aria-expanded') === 'false'));
 	editor.expandAll();

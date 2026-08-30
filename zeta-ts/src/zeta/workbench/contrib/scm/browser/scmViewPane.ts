@@ -20,6 +20,8 @@ import { gitErrorMessage } from "./scmError.js";
 type GitChangeSide = "index" | "worktree";
 type GitPathAction = "stage" | "unstage" | "discard";
 
+export const GIT_VIEW_ID = 'zeta.gitView';
+
 /** Git status and user mutations routed through the workspace App Server. */
 export class ScmViewPane extends ViewPane {
 	private readonly gitService: IGitService;

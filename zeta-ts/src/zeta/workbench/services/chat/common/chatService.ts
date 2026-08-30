@@ -274,6 +274,14 @@ export interface TurnChangeDetails {
 	readonly draftMessage?: string;
 }
 
+export interface TurnChangeFileContents {
+	readonly path: string;
+	readonly binary: boolean;
+	readonly truncated: boolean;
+	readonly before?: string;
+	readonly after?: string;
+}
+
 export interface TurnChangesUpdate {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
@@ -306,6 +314,7 @@ export interface IChatService {
 	resolveInteraction(options: ResolveInteractionOptions): Promise<void>;
 	listTurnChanges(sessionId: SessionId, threadId: ThreadId): Promise<readonly TurnChangeSetSummary[]>;
 	readTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string): Promise<TurnChangeDetails>;
+	readTurnChangeFile(sessionId: SessionId, threadId: ThreadId, changeSetId: string, path: string): Promise<TurnChangeFileContents>;
 	generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
 	updateTurnChangeDraft(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number, message: string): Promise<readonly TurnChangeSetSummary[]>;
 	commitTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;

@@ -112,6 +112,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		async resolveInteraction() {},
 		async listTurnChanges() { return []; },
 		async readTurnChange() { throw new Error("No ChangeSet"); },
+		async readTurnChangeFile() { throw new Error("No ChangeSet file"); },
 		async generateTurnChangeMessage() { return []; },
 		async updateTurnChangeDraft() { return []; },
 		async commitTurnChange() { return []; },

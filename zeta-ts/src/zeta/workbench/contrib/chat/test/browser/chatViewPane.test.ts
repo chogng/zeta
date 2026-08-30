@@ -142,6 +142,7 @@ function unavailableChatService(): IChatService {
 		resolveInteraction: () => pending as Promise<void>,
 		listTurnChanges: () => pending,
 		readTurnChange: () => pending,
+		readTurnChangeFile: () => pending,
 		generateTurnChangeMessage: () => pending,
 		updateTurnChangeDraft: () => pending,
 		commitTurnChange: () => pending,

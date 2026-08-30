@@ -195,6 +195,10 @@ export class ChatService extends Disposable implements IChatService {
 		return toTurnChangeDetails(await this.options.turnChangesApi.read({ sessionId, threadId, changeSetId }));
 	}
 
+	async readTurnChangeFile(sessionId: SessionId, threadId: ThreadId, changeSetId: string, path: string) {
+		return { ...await this.options.turnChangesApi.readFile({ sessionId, threadId, changeSetId, path }) };
+	}
+
 	async generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]> {
 		const result = await this.options.turnChangesApi.generateMessage({ commandId: commandId("turn-changes-message"), sessionId, threadId, changeSetId, expectedRevision });
 		return result.changeSets.map(toTurnChangeSummary);

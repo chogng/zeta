@@ -22,7 +22,7 @@ export class MultiDiffGoToFileAction extends Action2 {
 			id: MultiDiffGoToFileCommandId,
 			title: 'Open File',
 			tooltip: 'Open File',
-			icon: lxiconsLibrary.fileText,
+			icon: lxiconsLibrary.linkExternal,
 			precondition: MultiDiffEditorActive,
 			menu: { id: MenuId.MultiDiffEditorFileToolbar, when: MultiDiffEditorActive, group: 'navigation', order: 22 },
 		});

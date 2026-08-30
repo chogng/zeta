@@ -2,10 +2,12 @@ import './style.css';
 import '../diffEditor/style.css';
 import { addDisposableListener, fragment as createFragment, getWindow, h, isHTMLElement, reset, stopEvent } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
 import { getClientArea } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
@@ -312,13 +314,20 @@ class MultiDiffSection extends Disposable {
 		this.toggleDomNode.type = 'button';
 		this.toggleDomNode.className = 'stanza-multi-diff-editor-header-toggle';
 		this.toggleDomNode.setAttribute('aria-expanded', 'true');
+		this.toggleDomNode.setAttribute('aria-label', `Collapse ${item.label}`);
+		const collapsedIconDomNode = h(ownerDocument, 'span');
+		collapsedIconDomNode.className = 'stanza-multi-diff-editor-chevron collapsed-icon';
+		appendIcon(lxiconsLibrary.chevronRight, collapsedIconDomNode);
+		const expandedIconDomNode = h(ownerDocument, 'span');
+		expandedIconDomNode.className = 'stanza-multi-diff-editor-chevron expanded-icon';
+		appendIcon(lxiconsLibrary.chevronDown, expandedIconDomNode);
 		const titleDomNode = h(ownerDocument, 'span');
 		titleDomNode.className = 'stanza-multi-diff-editor-title';
 		titleDomNode.textContent = item.label;
 		const labelsDomNode = h(ownerDocument, 'span');
 		labelsDomNode.className = 'stanza-multi-diff-editor-labels';
 		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel].filter((label) => label !== undefined).join(' ↔ ');
-		this.toggleDomNode.append(titleDomNode, labelsDomNode);
+		this.toggleDomNode.append(collapsedIconDomNode, expandedIconDomNode, titleDomNode, labelsDomNode);
 		this.headerDomNode.append(this.toggleDomNode);
 		if (createItemActions) {
 			const actionsDomNode = h(ownerDocument, 'div');
@@ -337,7 +346,10 @@ class MultiDiffSection extends Disposable {
 		this.domNode.append(this.headerDomNode, this.bodyDomNode);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(addDisposableListener(this.toggleDomNode, 'click', toggle));
+		this._register(addDisposableListener(this.headerDomNode, 'click', (event) => {
+			if ((event.target as Element | null)?.closest('.stanza-multi-diff-editor-file-actions')) return;
+			toggle();
+		}));
 	}
 
 	public layout(layout: MultiDiffSectionLayout): void {
@@ -349,6 +361,7 @@ class MultiDiffSection extends Disposable {
 	public setCollapsed(collapsed: boolean): void {
 		this.domNode.classList.toggle('collapsed', collapsed);
 		this.toggleDomNode.setAttribute('aria-expanded', String(!collapsed));
+		this.toggleDomNode.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${this.item.label}`);
 		if (collapsed) this.clearRows();
 	}
 

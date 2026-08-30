@@ -1,7 +1,133 @@
 .stanza-multi-diff-editor-pane {
+	position: relative;
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
 	min-width: 0;
 	min-height: 0;
+}
+
+.stanza-multi-diff-editor-session {
+	position: relative;
+	display: flex;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+}
+
+.stanza-multi-diff-editor-host {
+	position: relative;
+	min-width: 0;
+	min-height: 0;
+	flex: 1;
+}
+
+.stanza-multi-diff-editor-toolbar {
+	display: flex;
+	box-sizing: border-box;
+	width: 100%;
+	height: 40px;
+	min-height: 40px;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 8px;
+	background: var(--zeta-editor-background);
+	border-bottom: 1px solid var(--zeta-widget-border);
+}
+
+.stanza-multi-diff-editor-toolbar-left,
+.stanza-multi-diff-editor-toolbar-right {
+	display: flex;
+	align-items: center;
+}
+
+.stanza-multi-diff-editor-toolbar-right {
+	margin-left: auto;
+}
+
+.stanza-multi-diff-editor-toolbar-status {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--zeta-description-foreground);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stanza-multi-diff-editor-toolbar.busy .zeta-button {
+	pointer-events: none;
+	opacity: .6;
+}
+
+.stanza-multi-diff-editor-source-toolbar .zeta-dropdown-with-primary-primary > .zeta-button,
+.stanza-multi-diff-editor-repository-toolbar .zeta-dropdown-with-primary-primary > .zeta-button {
+	min-width: 104px;
+	border-radius: 4px 0 0 4px;
+}
+
+.stanza-multi-diff-editor-file-actions .zeta-toolbar {
+	margin: 0;
+}
+
+.stanza-multi-diff-editor-empty {
+	display: flex;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	padding: 32px;
+	color: var(--zeta-description-foreground);
+}
+
+.stanza-multi-diff-commit-overlay {
+	position: absolute;
+	z-index: 20;
+	inset: 0;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding-top: 56px;
+	background: color-mix(in srgb, var(--zeta-editor-background) 55%, transparent);
+}
+
+.stanza-multi-diff-commit-dialog {
+	display: flex;
+	box-sizing: border-box;
+	width: min(560px, calc(100% - 32px));
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	color: var(--zeta-foreground);
+	background: var(--zeta-widget-background, var(--zeta-editor-background));
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 8px;
+	box-shadow: 0 8px 28px rgb(0 0 0 / 30%);
+}
+
+.stanza-multi-diff-commit-dialog h2 {
+	margin: 0;
+	font-size: 14px;
+}
+
+.stanza-multi-diff-commit-editor {
+	height: 112px;
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.stanza-multi-diff-include-unstaged {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.stanza-multi-diff-commit-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
 }
