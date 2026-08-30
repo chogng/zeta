@@ -92,7 +92,14 @@ impl<'a> TabContainer<'a> {
         dispatch: &'a UiDispatch,
     ) -> Self {
         match placement {
-            TabContainerPlacement::Body => bounds = content_bounds,
+            TabContainerPlacement::Body => {
+                bounds = Rect::from_xywh(
+                    bounds.origin.x,
+                    content_bounds.origin.y,
+                    bounds.size.width,
+                    content_bounds.size.height,
+                );
+            }
             TabContainerPlacement::Titlebar => {
                 let width = groups
                     .iter()
@@ -185,7 +192,7 @@ impl<'a> TabContainer<'a> {
             TabContainerPlacement::Body => self.scroll_view().viewport().content_origin().y,
             TabContainerPlacement::Titlebar => self.content_bounds.origin.x,
         };
-        let body_content_x = self.scroll_view().viewport().content_origin().x;
+        let body_content_x = self.content_bounds.origin.x;
         self.groups
             .iter()
             .map(|group| {
@@ -265,12 +272,16 @@ impl<'a> TabContainer<'a> {
     pub(crate) fn scroll_view(&self) -> ScrollView {
         let content_size = match self.placement {
             TabContainerPlacement::Body => {
-                Size::new(self.content_bounds.size.width, self.body_content_height())
+                Size::new(self.bounds.size.width, self.body_content_height())
             }
             TabContainerPlacement::Titlebar => self.content_bounds.size,
         };
+        let viewport_bounds = match self.placement {
+            TabContainerPlacement::Body => self.bounds,
+            TabContainerPlacement::Titlebar => self.content_bounds,
+        };
         ScrollView::new(
-            self.content_bounds,
+            viewport_bounds,
             content_size,
             self.scroll,
             ScrollAxis::Vertical,

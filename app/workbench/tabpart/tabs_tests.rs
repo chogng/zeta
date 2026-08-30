@@ -16,6 +16,7 @@ use crate::ScrollCommand;
 use crate::ScrollState;
 use crate::ScrollbarPresentation;
 use crate::ScrollbarState;
+use crate::TabContainerToolbar;
 use crate::TabGroupId;
 use crate::TabInput;
 use crate::TabInputKey;
@@ -182,15 +183,38 @@ fn body_mount_scrolls_overflowing_tabs_inside_its_viewport() {
     let first = mounted_tab_element_id(&part, &keys[0], TabContainerPlacement::Body).unwrap();
     let last = mounted_tab_element_id(&part, &keys[7], TabContainerPlacement::Body).unwrap();
     let dispatch = UiDispatch::default();
-    let bounds = Rect::from_xywh(0.0, 36.0, 220.0, 180.0);
+    let bounds = Rect::from_xywh(0.0, 0.0, 220.0, 180.0);
+    let content_bounds = TabContainerToolbar::content_bounds(bounds);
     let initial = TabContainer::from_tab_part(
         bounds,
-        bounds,
+        content_bounds,
         &part,
         Some(&keys[0]),
         TabContainerPlacement::Body,
         test_style(),
         &dispatch,
+    );
+    let scroll_view = initial.scroll_view();
+    assert_eq!(
+        scroll_view.bounds(),
+        Rect::from_xywh(
+            bounds.origin.x,
+            content_bounds.origin.y,
+            bounds.size.width,
+            content_bounds.size.height,
+        )
+    );
+    assert_eq!(
+        scroll_view
+            .vertical_scrollbar()
+            .expect("overflowing tab list scrollbar")
+            .track_bounds()
+            .right(),
+        bounds.right()
+    );
+    assert_eq!(
+        initial.group_layouts()[0].tab_list.bounds().right(),
+        content_bounds.right()
     );
     let mut scroll = ScrollState::default();
     assert!(scroll.apply(
@@ -201,7 +225,7 @@ fn body_mount_scrolls_overflowing_tabs_inside_its_viewport() {
     drop(initial);
     let scrolled = TabContainer::from_tab_part(
         bounds,
-        bounds,
+        content_bounds,
         &part,
         Some(&keys[0]),
         TabContainerPlacement::Body,
@@ -214,6 +238,24 @@ fn body_mount_scrolls_overflowing_tabs_inside_its_viewport() {
 
     frame.draw_component(&scrolled);
 
+    let inspected_scrollbar = frame
+        .scene()
+        .inspection()
+        .target_at(Point::new(
+            bounds.right() - 1.0,
+            content_bounds.origin.y + 1.0,
+        ))
+        .expect("tab container scrollbar should be inspectable");
+    assert_eq!(
+        frame
+            .scene()
+            .inspection()
+            .ancestry(inspected_scrollbar.id())
+            .iter()
+            .map(|node| node.name())
+            .collect::<Vec<_>>(),
+        ["TabContainer", "ScrollView", "VerticalScrollbar"]
+    );
     assert!(frame.interaction().node(first).is_none());
     assert!(frame.interaction().node(last).is_some());
     assert!(
