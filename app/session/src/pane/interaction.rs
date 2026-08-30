@@ -8,7 +8,7 @@ pub const COMPOSER: ElementId = ElementId::scoped(16, 3);
 pub const CONTEXT_TOOLBAR: ElementId = ElementId::scoped(16, 4);
 pub const THREAD_TIMELINE: ElementId = ElementId::scoped(16, 5);
 pub const COMPOSER_INTERACTION: ElementId = ElementId::scoped(16, 6);
-pub const COMPOSER_INFO_BAR: ElementId = ElementId::scoped(16, 7);
+pub const COMPOSER_KEY_HINT_BAR: ElementId = ElementId::scoped(16, 7);
 
 pub const CONTEXT_LOCATION: ElementId = ElementId::scoped(16, 8);
 pub const CONTEXT_WORKING_DIRECTORY: ElementId = ElementId::scoped(16, 9);

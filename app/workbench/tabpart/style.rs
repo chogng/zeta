@@ -1,5 +1,6 @@
 use crate::Color;
 use crate::Icon;
+use crate::ScrollViewStyle;
 use crate::SearchBoxStyle;
 use zeta_icons::icons;
 use zeta_ui_theme::UiTheme;
@@ -36,6 +37,7 @@ pub struct WorkbenchColors {
 pub struct WorkbenchUiStyle {
     pub(super) colors: WorkbenchColors,
     pub(super) search: SearchBoxStyle,
+    pub(super) scroll_view: ScrollViewStyle,
     pub(super) settings_icon: Icon,
     pub(super) add_icon: Icon,
     pub(super) close_icon: Icon,
@@ -73,6 +75,7 @@ impl WorkbenchUiStyle {
                 error: theme.error,
             },
             theme.search_box_style(),
+            theme.tab_container_scroll_view_style(),
             icons::GEAR,
             icons::ADD,
             icons::CLOSE,
@@ -86,6 +89,7 @@ impl WorkbenchUiStyle {
     pub fn new(
         colors: WorkbenchColors,
         search: SearchBoxStyle,
+        scroll_view: ScrollViewStyle,
         settings_icon: Icon,
         add_icon: Icon,
         close_icon: Icon,
@@ -97,6 +101,7 @@ impl WorkbenchUiStyle {
         Self {
             colors,
             search,
+            scroll_view,
             settings_icon,
             add_icon,
             close_icon,

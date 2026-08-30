@@ -10533,6 +10533,9 @@
           "minimum": 0,
           "type": "integer"
         },
+        "gui": {
+          "$ref": "#/$defs/FrontendConfigDto"
+        },
         "hooks": {
           "additionalProperties": {
             "$ref": "#/$defs/HookConfigDto"
@@ -10591,7 +10594,7 @@
           "$ref": "#/$defs/ToolSearchConfigDto"
         },
         "tui": {
-          "$ref": "#/$defs/TuiConfigDto"
+          "$ref": "#/$defs/FrontendConfigDto"
         }
       },
       "required": [
@@ -10601,6 +10604,7 @@
         "commitMessageActiveDirAuthorized",
         "toolMode",
         "agentGrepBackend",
+        "gui",
         "providers",
         "mcpServers",
         "skillSources",
@@ -10655,6 +10659,16 @@
           "minimum": 0,
           "type": "integer"
         },
+        "gui": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrontendConfigDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "preferredModel": {
           "anyOf": [
             {
@@ -10675,10 +10689,14 @@
             }
           ]
         },
-        "tuiTheme": {
-          "type": [
-            "string",
-            "null"
+        "tui": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrontendConfigDto"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -14398,6 +14416,11 @@
           "type": "object"
         }
       ]
+    },
+    "FrontendConfigDto": {
+      "additionalProperties": true,
+      "description": "One frontend-owned root table whose keys are opaque to App Server.",
+      "type": "object"
     },
     "FrozenAgentDefinitionRef": {
       "description": "Durable identity of the exact Agent definition consumed by a child seed.",
@@ -27728,18 +27751,6 @@
           "type": "object"
         }
       ]
-    },
-    "TuiConfigDto": {
-      "description": "Configuration owned by terminal products.",
-      "properties": {
-        "theme": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "theme"
-      ],
-      "type": "object"
     },
     "Turn": {
       "description": "Canonical readable state for one user-intent-driven Agent execution.",

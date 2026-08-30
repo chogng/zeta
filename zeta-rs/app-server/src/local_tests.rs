@@ -993,7 +993,8 @@ fn select_model(
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
-                tui_theme: Patch::Missing,
+                gui: Patch::Missing,
+                tui: Patch::Missing,
             }),
         })
         .unwrap()

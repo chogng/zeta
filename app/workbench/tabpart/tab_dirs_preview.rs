@@ -246,8 +246,7 @@ impl Component for TabDirsPreview<'_> {
                         preview_control_background(&self.style),
                         preview_muted_foreground(&self.style),
                     )
-                    .with_thickness(6.0)
-                    .with_inset(1.0),
+                    .with_thickness(6.0),
                 ),
             );
             scroll_view.draw_components(context, |context, viewport| {

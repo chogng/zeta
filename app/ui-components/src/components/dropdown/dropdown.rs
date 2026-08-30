@@ -1,46 +1,31 @@
-use std::ops::Range;
-
 use crate::{
-    Color, Component, ComponentContext, ComponentElement, ContextView, ContextViewPlacement,
-    ContextViewStyle, CornerRadii, Element, ListView, Point, Rect, ScrollMetrics, ScrollState,
-    ScrollViewStyle, Size, UiScene,
+    Color, Component, ComponentContext, ComponentElement, ComputedElement, ContextView,
+    ContextViewPlacement, ContextViewStyle, Element, ElementId, Point, Rect, ScrollMetrics,
+    ScrollState, ScrollViewStyle, UiScene,
 };
 
-use super::{
-    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
-    ButtonSelection, ButtonState, ButtonStyle,
-};
+use super::menu::MenuScrollConfiguration;
+use super::{Menu, MenuIds, MenuItem, MenuSelection, MenuStyle};
 
-/// One label item projected into a [`Dropdown`].
+/// Placement and menu presentation used by a [`Dropdown`].
 #[derive(Clone, Debug, PartialEq)]
-pub struct DropdownItem {
-    label: String,
-    state: ButtonState,
+pub struct DropdownStyle {
+    menu: MenuStyle,
+    placement: ContextViewPlacement,
 }
 
-impl DropdownItem {
-    pub fn new(label: impl Into<String>, state: ButtonState) -> Self {
+impl DropdownStyle {
+    pub fn new(menu: MenuStyle) -> Self {
         Self {
-            label: label.into(),
-            state,
+            menu,
+            placement: ContextViewPlacement::new(),
         }
     }
 
-    const fn is_enabled(&self) -> bool {
-        !matches!(self.state, ButtonState::Disabled)
+    pub const fn with_placement(mut self, placement: ContextViewPlacement) -> Self {
+        self.placement = placement;
+        self
     }
-}
-
-/// Selection policy used when a dropdown is presented.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum DropdownSelection {
-    /// Selects the first enabled item. This is the default open-state behavior.
-    #[default]
-    FirstEnabled,
-    /// Selects one item by its presentation index.
-    Item(usize),
-    /// Presents the dropdown without a selected item.
-    None,
 }
 
 /// Retained state, viewport limit, and scrollbar style for a scrollable [`Dropdown`].
@@ -63,279 +48,153 @@ impl DropdownScrollConfiguration {
             style,
         }
     }
-}
 
-/// Shared surface, item, and anchor presentation for a [`Dropdown`].
-#[derive(Clone, Debug, PartialEq)]
-pub struct DropdownStyle {
-    background: Color,
-    corner_radii: CornerRadii,
-    button_style: ButtonStyle,
-    item_size: Size,
-    header_height: f32,
-    placement: ContextViewPlacement,
-}
-
-impl DropdownStyle {
-    pub fn new(background: Color, button_style: ButtonStyle, item_size: Size) -> Self {
-        Self {
-            background,
-            corner_radii: CornerRadii::uniform(0.0),
-            button_style,
-            item_size,
-            header_height: 0.0,
-            placement: ContextViewPlacement::new(),
-        }
-    }
-
-    pub const fn with_corner_radii(mut self, corner_radii: CornerRadii) -> Self {
-        self.corner_radii = corner_radii;
-        self
-    }
-
-    /// Reserves a leading row that the product host can paint with [`Dropdown::paint_with_header`].
-    pub const fn with_header_height(mut self, header_height: f32) -> Self {
-        self.header_height = header_height;
-        self
-    }
-
-    pub const fn with_placement(mut self, placement: ContextViewPlacement) -> Self {
-        self.placement = placement;
-        self
+    const fn menu(self) -> MenuScrollConfiguration {
+        MenuScrollConfiguration::new(self.state, self.style)
     }
 }
 
-/// Presentation-only anchored dropdown with a selected item and shared item geometry.
+/// Anchors reusable [`Menu`] content in a topmost context view.
 ///
-/// Dropdown composes [`ContextView`] placement with a vertical [`ActionBar`]. Its surface is
-/// intentionally borderless and has no outer padding, so item bounds fill the floating surface.
-/// The product host owns retained open state, selected identity, input routing, accessibility,
-/// dismissal, and command execution.
+/// Dropdown owns viewport-aware placement and overlay composition. Menu owns the surface, item
+/// geometry, interaction, accessibility, and optional scrolling. The host owns the trigger, open
+/// state, dismissal, focus restoration, and command execution.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dropdown {
     context_view: ContextView,
-    item_bounds: Rect,
-    header_bounds: Option<Rect>,
-    items: Vec<DropdownItem>,
-    list_view: Option<ListView>,
-    style: DropdownStyle,
-    selection: DropdownSelection,
+    menu: Menu,
 }
 
 impl Dropdown {
     pub fn new(
         viewport: Rect,
         anchor: Rect,
-        items: Vec<DropdownItem>,
+        accessibility_label: impl Into<String>,
+        items: Vec<MenuItem>,
+        ids: MenuIds,
         style: DropdownStyle,
     ) -> Self {
-        Self::build(viewport, anchor, items, style, None)
+        Self::build(
+            viewport,
+            anchor,
+            accessibility_label,
+            items,
+            ids,
+            style,
+            None,
+        )
     }
 
     pub fn new_scrollable(
         viewport: Rect,
         anchor: Rect,
-        items: Vec<DropdownItem>,
+        accessibility_label: impl Into<String>,
+        items: Vec<MenuItem>,
+        ids: MenuIds,
         style: DropdownStyle,
         scroll: DropdownScrollConfiguration,
     ) -> Self {
-        Self::build(viewport, anchor, items, style, Some(scroll))
+        Self::build(
+            viewport,
+            anchor,
+            accessibility_label,
+            items,
+            ids,
+            style,
+            Some(scroll),
+        )
     }
 
     fn build(
         viewport: Rect,
         anchor: Rect,
-        items: Vec<DropdownItem>,
+        accessibility_label: impl Into<String>,
+        items: Vec<MenuItem>,
+        ids: MenuIds,
         style: DropdownStyle,
         scroll: Option<DropdownScrollConfiguration>,
     ) -> Self {
-        let visible_item_count = scroll
-            .map(|scroll| items.len().min(scroll.maximum_visible_items))
-            .unwrap_or(items.len());
-        let desired_content_size = Size::new(
-            style.item_size.width.max(0.0),
-            style.header_height.max(0.0)
-                + style.item_size.height.max(0.0) * visible_item_count as f32,
+        let desired_size = Menu::desired_size(
+            &items,
+            &style.menu,
+            scroll.map(|scroll| scroll.maximum_visible_items),
         );
         let context_view = ContextView::new(
             viewport,
             anchor,
-            desired_content_size,
+            desired_size,
             style.placement,
-            ContextViewStyle::new(style.background).with_corner_radii(style.corner_radii),
+            ContextViewStyle::new(Color::TRANSPARENT),
         );
-        let content_bounds = context_view.content_bounds();
-        let header_height = style.header_height.max(0.0).min(content_bounds.size.height);
-        let header_bounds = (header_height > 0.0).then(|| {
-            Rect::from_xywh(
-                content_bounds.origin.x,
-                content_bounds.origin.y,
-                content_bounds.size.width,
-                header_height,
-            )
-        });
-        let item_bounds = Rect::from_xywh(
-            content_bounds.origin.x,
-            content_bounds.origin.y + header_height,
-            content_bounds.size.width,
-            (content_bounds.size.height - header_height).max(0.0),
-        );
-        let list_view = scroll.map(|scroll| {
-            ListView::new(
-                item_bounds,
-                items.len(),
-                style.item_size.height.max(f32::EPSILON),
-                scroll.state,
-                scroll.style,
-            )
-            .with_overscan_items(1)
-        });
-        Self {
-            context_view,
-            item_bounds,
-            header_bounds,
-            items,
-            list_view,
-            style,
-            selection: DropdownSelection::default(),
-        }
+        let menu = match scroll {
+            Some(scroll) => Menu::new_scrollable(
+                context_view.content_bounds(),
+                accessibility_label,
+                items,
+                ids,
+                style.menu,
+                scroll.menu(),
+            ),
+            None => Menu::new(
+                context_view.content_bounds(),
+                accessibility_label,
+                items,
+                ids,
+                style.menu,
+            ),
+        };
+        Self { context_view, menu }
     }
 
-    pub const fn with_selection(mut self, selection: DropdownSelection) -> Self {
-        self.selection = selection;
+    pub fn with_selection(mut self, selection: MenuSelection) -> Self {
+        self.menu = self.menu.with_selection(selection);
         self
     }
 
+    pub const fn menu_root(&self) -> ElementId {
+        self.menu.root()
+    }
+
+    /// Returns the interactive menu surface, excluding its visual shadow.
     pub const fn bounds(&self) -> Rect {
-        self.context_view.bounds()
+        self.menu.bounds()
     }
 
+    /// Returns the item layout bounds inset by the menu's canonical padding.
     pub const fn content_bounds(&self) -> Rect {
-        self.context_view.content_bounds()
+        self.menu.content_bounds()
     }
 
-    /// Returns the clipped viewport occupied by item rows, excluding the optional header.
-    pub const fn item_viewport_bounds(&self) -> Rect {
-        self.item_bounds
-    }
-
-    /// Returns the host-owned leading row, when one was reserved by the style.
+    /// Returns the caller-owned leading row, when one was reserved by the menu style.
     pub const fn header_bounds(&self) -> Option<Rect> {
-        self.header_bounds
+        self.menu.header_bounds()
     }
 
-    pub fn selected_index(&self) -> Option<usize> {
-        match self.selection {
-            DropdownSelection::FirstEnabled => self.items.iter().position(DropdownItem::is_enabled),
-            DropdownSelection::Item(index) => self
-                .items
-                .get(index)
-                .filter(|item| item.is_enabled())
-                .map(|_| index),
-            DropdownSelection::None => None,
-        }
-    }
-
-    pub fn item_bounds(&self, index: usize) -> Option<Rect> {
-        Some(
-            self.unclipped_item_bounds(index)?
-                .intersection(self.item_bounds),
-        )
-    }
-
-    pub fn interactive_item_bounds(&self, index: usize) -> Option<Rect> {
-        let item = self.items.get(index)?;
-        if !item.is_enabled() {
-            return None;
-        }
-        self.item_bounds(index)
-    }
-
-    pub fn hit_test(&self, point: Point) -> Option<usize> {
-        if !self.item_bounds.contains(point) {
-            return None;
-        }
-        let index = if let Some(list_view) = &self.list_view {
-            list_view.item_at(point)?
-        } else {
-            let item_height = self.style.item_size.height;
-            if item_height <= 0.0 {
-                return None;
-            }
-            ((point.y - self.item_bounds.origin.y) / item_height).floor() as usize
-        };
-        self.items
-            .get(index)
-            .is_some_and(DropdownItem::is_enabled)
-            .then_some(index)
+    pub const fn item_viewport_bounds(&self) -> Rect {
+        self.menu.item_viewport_bounds()
     }
 
     pub fn scroll_metrics(&self) -> Option<ScrollMetrics> {
-        self.list_view
-            .as_ref()
-            .map(|list_view| list_view.scroll_view().metrics())
+        self.menu.scroll_metrics()
     }
 
-    fn unclipped_item_bounds(&self, index: usize) -> Option<Rect> {
-        self.items.get(index)?;
-        if let Some(list_view) = &self.list_view {
-            return list_view.item_bounds(index);
-        }
-        Some(Rect::from_xywh(
-            self.item_bounds.origin.x,
-            self.item_bounds.origin.y + self.style.item_size.height * index as f32,
-            self.item_bounds.size.width,
-            self.style.item_size.height.max(0.0),
-        ))
+    pub fn selected_index(&self) -> Option<usize> {
+        self.menu.selected_index()
     }
 
-    fn projected_range(&self) -> Range<usize> {
-        let Some(list_view) = &self.list_view else {
-            return 0..self.items.len();
-        };
-        let scroll_view = list_view.scroll_view();
-        list_view.layout().projected_range(scroll_view.viewport())
+    pub fn item_bounds(&self, index: usize) -> Option<Rect> {
+        self.menu.item_bounds(index)
     }
 
-    fn action_bar(&self, range: Range<usize>) -> ActionBar {
-        let selected_index = self.selected_index();
-        let items = self
-            .items
-            .get(range.clone())
-            .unwrap_or_default()
-            .iter()
-            .enumerate()
-            .map(|(local_index, item)| {
-                let index = range.start + local_index;
-                ActionBarItem::Action(
-                    ActionViewItem::label(item.label.clone(), item.state).with_selection(
-                        if selected_index == Some(index) {
-                            ButtonSelection::Selected
-                        } else {
-                            ButtonSelection::Unselected
-                        },
-                    ),
-                )
-            })
-            .collect();
-        let origin = self
-            .unclipped_item_bounds(range.start)
-            .map_or(self.item_bounds.origin, |bounds| bounds.origin);
-        let bounds = Rect::from_xywh(
-            origin.x,
-            origin.y,
-            self.item_bounds.size.width,
-            self.style.item_size.height.max(0.0) * range.len() as f32,
-        );
-        ActionBar::new(
-            bounds,
-            ActionBarOrientation::Vertical,
-            items,
-            ActionBarStyle::new(self.style.button_style.clone(), self.style.item_size),
-        )
+    pub fn interactive_item_bounds(&self, index: usize) -> Option<Rect> {
+        self.menu.interactive_item_bounds(index)
     }
 
-    /// Paints the canonical dropdown and items with product-owned content in its header row.
+    pub fn hit_test(&self, point: Point) -> Option<usize> {
+        self.menu.hit_test(point)
+    }
+
+    /// Paints the anchored menu with caller-owned content in its header row.
     pub fn paint_with_header(
         &self,
         scene: &mut UiScene,
@@ -346,52 +205,36 @@ impl Dropdown {
         });
     }
 
-    /// Composes the dropdown and a product-owned header through one shared component context.
+    /// Composes the anchored menu and caller-owned header through one interaction tree.
     pub fn draw_components_with_header(
         &self,
         context: &mut ComponentContext<'_, '_>,
         draw_header: impl FnOnce(&mut ComponentContext<'_, '_>, Rect),
     ) {
-        context.with_element(self.element_tree(), |context, _element| {
-            let action_bar = self.action_bar(self.projected_range());
-            self.context_view
-                .draw_components(context, |context, _bounds| {
-                    if let Some(header_bounds) = self.header_bounds {
-                        draw_header(context, header_bounds);
-                    }
-                    if let Some(list_view) = &self.list_view {
-                        list_view
-                            .scroll_view()
-                            .draw_components(context, |context, _viewport| {
-                                context.draw_component(&action_bar);
-                            });
-                    } else {
-                        context.draw_component(&action_bar);
-                    }
-                });
+        context.with_component(self, |context, _element| {
+            self.compose_contents(context, draw_header)
         });
     }
 
     fn element_tree(&self) -> ComponentElement {
-        Element::leaf("Dropdown")
-            .corner_radii(self.style.corner_radii)
-            .in_bounds(self.context_view.bounds())
+        Element::leaf("Dropdown").in_bounds(self.bounds())
     }
 
     fn paint_contents(&self, scene: &mut UiScene, paint_header: impl FnOnce(&mut UiScene, Rect)) {
-        let action_bar = self.action_bar(self.projected_range());
-        self.context_view.draw(scene, |scene, _content_bounds| {
-            if let Some(header_bounds) = self.header_bounds {
-                paint_header(scene, header_bounds);
-            }
-            if let Some(list_view) = &self.list_view {
-                list_view.scroll_view().draw(scene, |scene, _viewport| {
-                    scene.draw_component(&action_bar);
-                });
-            } else {
-                scene.draw_component(&action_bar);
-            }
+        self.context_view.draw_overflow(scene, |scene, _bounds| {
+            self.menu.paint_with_header(scene, paint_header)
         });
+    }
+
+    fn compose_contents(
+        &self,
+        context: &mut ComponentContext<'_, '_>,
+        draw_header: impl FnOnce(&mut ComponentContext<'_, '_>, Rect),
+    ) {
+        self.context_view
+            .draw_components_overflow(context, |context, _bounds| {
+                self.menu.draw_components_with_header(context, draw_header)
+            });
     }
 }
 
@@ -400,7 +243,11 @@ impl Component for Dropdown {
         self.element_tree()
     }
 
-    fn paint(&self, scene: &mut UiScene) {
+    fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
+        self.compose_contents(context, |_context, _bounds| {});
+    }
+
+    fn paint_element(&self, scene: &mut UiScene, _element: &ComputedElement) {
         self.paint_contents(scene, |_scene, _bounds| {});
     }
 }

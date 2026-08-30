@@ -385,7 +385,9 @@ impl WorkbenchApplication {
             MouseScrollDelta::LineDelta(_, vertical) => FileEditorWheelDelta::Lines(vertical),
             MouseScrollDelta::PixelDelta(position) => FileEditorWheelDelta::Pixels(position.y),
         };
-        let rows = self.file_editor_input.wheel_rows(delta);
+        let rows = self
+            .file_editor_input
+            .wheel_rows(delta, self.code_editor_style.row_height());
         let Some((row_count, capacity)) = self.file_editor_scroll_metrics() else {
             return true;
         };

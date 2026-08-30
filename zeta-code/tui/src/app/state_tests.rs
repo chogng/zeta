@@ -670,7 +670,7 @@ fn theme_slash_command_is_owned_by_the_tui_host() {
 }
 
 #[test]
-fn inline_theme_selection_requests_a_shared_config_edit() {
+fn inline_theme_selection_requests_a_tui_config_edit() {
     let mut app = App::new();
     app.insert_text("/theme zeta-code-light");
 
@@ -686,13 +686,13 @@ fn inline_theme_selection_requests_a_shared_config_edit() {
 
 #[test]
 fn config_mouse_selection_emits_a_revision_bound_edit() {
-    let config = empty_config_snapshot();
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
     let mut app = App::new();
     app.update(AppEvent::ConfigPaneOpened(config_pane_spec(
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
-        7,
         &config_session(),
         &no_directories(),
     )));
@@ -702,20 +702,20 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
     assert!(matches!(
         action,
         Some(AppCommand::EditConfig(edit))
-            if edit.terminal.expected_revision == 7
-                && !edit.terminal.settings.mouse_interactions()
+            if edit.server_config.revision == 7
+                && !edit.terminal.mouse_interactions()
     ));
 }
 
 #[test]
 fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
-    let config = empty_config_snapshot();
+    let mut config = empty_config_snapshot();
+    config.revision = 7;
     let mut app = App::new();
     app.update(AppEvent::ConfigPaneOpened(config_pane_spec(
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
-        7,
         &config_session(),
         &no_directories(),
     )));
@@ -724,25 +724,25 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
         Some(AppCommand::EditConfig(edit))
-            if edit.terminal.expected_revision == 7
-                && edit.terminal.settings.follow_up_mode() == FollowUpMode::Steer
+            if edit.server_config.revision == 7
+                && edit.terminal.follow_up_mode() == FollowUpMode::Steer
     ));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
         Some(AppCommand::EditConfig(edit))
-            if edit.terminal.settings.follow_up_mode() == FollowUpMode::Queue
+            if edit.terminal.follow_up_mode() == FollowUpMode::Queue
     ));
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::EditConfig(edit))
-            if edit.terminal.settings.follow_up_mode() == FollowUpMode::Steer
+            if edit.terminal.follow_up_mode() == FollowUpMode::Steer
     ));
 
     set_follow_up_mode(&mut app, FollowUpMode::Steer);
     assert!(matches!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::EditConfig(edit))
-            if edit.terminal.settings.follow_up_mode() == FollowUpMode::Queue
+            if edit.terminal.follow_up_mode() == FollowUpMode::Queue
     ));
 }
 
@@ -762,7 +762,6 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
-        7,
         &config_session(),
         &directories,
     )));
@@ -799,7 +798,6 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         &config,
         &providers,
         TerminalSettings::default(),
-        7,
         &config_session(),
         &no_directories(),
     )));
@@ -828,7 +826,6 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
             &config,
             &providers,
             TerminalSettings::default(),
-            7,
             &config_session(),
             &no_directories(),
         ),
@@ -853,7 +850,6 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         &config,
         &providers,
         TerminalSettings::default(),
-        7,
         &config_session(),
         &no_directories(),
     )));

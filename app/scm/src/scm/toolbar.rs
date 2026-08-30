@@ -15,8 +15,8 @@ use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonSelection;
 use zeta_ui_components::ButtonState;
 use zeta_ui_components::ButtonStyle;
-use zeta_ui_components::ContextMenu;
-use zeta_ui_components::ContextMenuStyle;
+use zeta_ui_components::Dropdown;
+use zeta_ui_components::DropdownStyle;
 use zeta_ui_components::InteractionRegion;
 use zeta_ui_components::MenuIds;
 use zeta_ui_components::MenuItem;
@@ -493,8 +493,8 @@ impl<'a> ChangesToolbar<'a> {
         (left, right)
     }
 
-    fn menu_style(&self, width: f32) -> ContextMenuStyle {
-        ContextMenuStyle::new(MenuStyle::new(
+    fn menu_style(&self, width: f32) -> DropdownStyle {
+        DropdownStyle::new(MenuStyle::new(
             self.style.menu,
             self.button_style(),
             Size::new(width, MENU_ITEM_HEIGHT),
@@ -511,7 +511,7 @@ impl<'a> ChangesToolbar<'a> {
         ids: impl Fn(usize) -> ElementId,
         width: f32,
     ) {
-        let menu = ContextMenu::new(
+        let menu = Dropdown::new(
             self.viewport,
             anchor,
             accessibility_label,
@@ -520,7 +520,10 @@ impl<'a> ChangesToolbar<'a> {
                 .enumerate()
                 .map(|(index, label)| {
                     let id = ids(index);
-                    MenuItem::new(id, *label, self.button_state(id, true))
+                    MenuItem::action(
+                        id,
+                        ActionViewItem::label(*label, self.button_state(id, true)),
+                    )
                 })
                 .collect(),
             MenuIds::new(CHANGES_TOOLBAR, root),

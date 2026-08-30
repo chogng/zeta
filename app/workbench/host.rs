@@ -21,11 +21,15 @@ use crate::Workbench;
 use crate::WorkbenchLayoutState;
 use std::time::Instant;
 use zeta_ui_components::SashOrientation;
-use zeta_ui_components::SashPointerPresence;
 use zeta_ui_components::SashState;
 use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::ScrollMetrics;
+use zeta_ui_components::ScrollView;
+use zeta_ui_components::ScrollbarController;
+use zeta_ui_components::ScrollbarInteractionOutcome;
+use zeta_ui_components::ScrollbarPresentation;
 use zui::ui::ElementId;
+use zui::ui::HoverPresence;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;
 use zui::ui::TextInputCommand;
@@ -236,6 +240,7 @@ pub struct WorkbenchHost<B> {
     workbench: Workbench,
     pane_host: PaneHost<B>,
     layout: WorkbenchLayoutState,
+    tab_container_scrollbar: ScrollbarController,
     pane_resize: Option<PaneResizeState>,
     tab_context_menu: TabContextMenuState,
 }
@@ -262,6 +267,7 @@ impl<B> WorkbenchHost<B> {
             workbench: Workbench::new(),
             pane_host: PaneHost::new(),
             layout: WorkbenchLayoutState::default(),
+            tab_container_scrollbar: ScrollbarController::default(),
             pane_resize: None,
             tab_context_menu: TabContextMenuState::default(),
         }
@@ -407,10 +413,87 @@ impl<B> WorkbenchHost<B> {
 
     pub fn toggle_tab_container(&mut self) {
         self.layout.toggle_tab_container();
+        self.tab_container_scrollbar.cancel();
+        self.sync_tab_container_scrollbar_presentation();
     }
 
     pub fn scroll_tab_container(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
         self.layout.scroll_tab_container(command, metrics)
+    }
+
+    pub fn tab_container_scrollbar_pointer_moved(
+        &mut self,
+        view: ScrollView,
+        point: Point,
+        now: Instant,
+    ) -> ScrollbarInteractionOutcome {
+        let outcome = self.tab_container_scrollbar.pointer_moved(
+            view,
+            self.layout.tab_container_scroll_state_mut(),
+            point,
+            now,
+        );
+        self.sync_tab_container_scrollbar_presentation();
+        outcome
+    }
+
+    pub fn press_tab_container_scrollbar(
+        &mut self,
+        view: ScrollView,
+        point: Point,
+        now: Instant,
+    ) -> ScrollbarInteractionOutcome {
+        let outcome = self.tab_container_scrollbar.press(
+            view,
+            self.layout.tab_container_scroll_state_mut(),
+            point,
+            now,
+        );
+        self.sync_tab_container_scrollbar_presentation();
+        outcome
+    }
+
+    pub fn release_tab_container_scrollbar(
+        &mut self,
+        view: ScrollView,
+        point: Point,
+        now: Instant,
+    ) -> ScrollbarInteractionOutcome {
+        let outcome = self.tab_container_scrollbar.release(view, point, now);
+        self.sync_tab_container_scrollbar_presentation();
+        outcome
+    }
+
+    pub fn tab_container_scrollbar_pointer_left(&mut self, now: Instant) -> bool {
+        let changed = self.tab_container_scrollbar.pointer_left(now);
+        self.sync_tab_container_scrollbar_presentation();
+        changed
+    }
+
+    pub fn tab_container_scrollbar_activity(&mut self, now: Instant) {
+        self.tab_container_scrollbar.activity(now);
+        self.sync_tab_container_scrollbar_presentation();
+    }
+
+    pub fn advance_tab_container_scrollbar(&mut self, now: Instant) -> bool {
+        let changed = self.tab_container_scrollbar.advance(now);
+        self.sync_tab_container_scrollbar_presentation();
+        changed
+    }
+
+    pub const fn tab_container_scrollbar_deadline(&self) -> Option<Instant> {
+        self.tab_container_scrollbar.next_deadline()
+    }
+
+    pub fn cancel_tab_container_scrollbar(&mut self) {
+        self.tab_container_scrollbar.cancel();
+        self.sync_tab_container_scrollbar_presentation();
+    }
+
+    fn sync_tab_container_scrollbar_presentation(&mut self) {
+        let presentation: ScrollbarPresentation = self.tab_container_scrollbar.presentation();
+        self.layout
+            .set_tab_container_scrollbar_presentation(presentation);
     }
 
     pub fn expand_inspector(&mut self) {
@@ -443,11 +526,7 @@ impl<B> WorkbenchHost<B> {
         self.layout.resize_tab_container(point)
     }
 
-    pub fn finish_tab_container_resize(
-        &mut self,
-        presence: SashPointerPresence,
-        now: Instant,
-    ) -> bool {
+    pub fn finish_tab_container_resize(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.layout.finish_tab_container_resize(presence, now)
     }
 
@@ -468,7 +547,7 @@ impl<B> WorkbenchHost<B> {
         self.layout.resize_inspector(point)
     }
 
-    pub fn finish_inspector_resize(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn finish_inspector_resize(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.layout.finish_inspector_resize(presence, now)
     }
 
@@ -476,17 +555,13 @@ impl<B> WorkbenchHost<B> {
         self.layout.cancel_inspector_resize()
     }
 
-    pub fn tab_sash_pointer_presence(
-        &mut self,
-        presence: SashPointerPresence,
-        now: Instant,
-    ) -> bool {
+    pub fn tab_sash_pointer_presence(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.layout.tab_sash_pointer_presence(presence, now)
     }
 
     pub fn inspector_sash_pointer_presence(
         &mut self,
-        presence: SashPointerPresence,
+        presence: HoverPresence,
         now: Instant,
     ) -> bool {
         self.layout.inspector_sash_pointer_presence(presence, now)
@@ -554,7 +629,7 @@ impl<B> WorkbenchHost<B> {
         self.workbench.resize_split(&tab, split, ratio)
     }
 
-    pub fn finish_pane_resize(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn finish_pane_resize(&mut self, presence: HoverPresence, now: Instant) -> bool {
         let Some(mut resize) = self.pane_resize.take() else {
             return false;
         };

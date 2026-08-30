@@ -5,15 +5,17 @@ use crate::Point;
 use crate::Rect;
 use crate::Resizable;
 use crate::SashOrientation;
-use crate::SashPointerPresence;
 use crate::SashState;
 use crate::ScrollAxis;
 use crate::ScrollCommand;
 use crate::ScrollMetrics;
 use crate::ScrollState;
+use crate::ScrollbarPresentation;
+use crate::ScrollbarState;
 use crate::TabContainerLayout;
 use crate::TabContainerLayoutSpec;
 use std::time::Instant;
+use zui::ui::HoverPresence;
 
 const DEFAULT_WIDTH: f32 = 200.0;
 const MINIMUM_WIDTH: f32 = 160.0;
@@ -37,6 +39,7 @@ pub struct TabContainerState {
     preferred_width: f32,
     resizable: Resizable,
     scroll: ScrollState,
+    scrollbar_presentation: ScrollbarPresentation,
 }
 
 impl Default for TabContainerState {
@@ -46,6 +49,7 @@ impl Default for TabContainerState {
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
             scroll: ScrollState::default(),
+            scrollbar_presentation: ScrollbarPresentation::new(ScrollbarState::Resting, 0.0),
         }
     }
 }
@@ -58,6 +62,7 @@ impl TabContainerState {
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
             scroll: ScrollState::default(),
+            scrollbar_presentation: ScrollbarPresentation::new(ScrollbarState::Resting, 0.0),
         }
     }
 
@@ -68,6 +73,7 @@ impl TabContainerState {
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
             scroll: ScrollState::default(),
+            scrollbar_presentation: ScrollbarPresentation::new(ScrollbarState::Resting, 0.0),
         }
     }
 
@@ -83,11 +89,23 @@ impl TabContainerState {
         self.scroll
     }
 
+    pub const fn scrollbar_presentation(self) -> ScrollbarPresentation {
+        self.scrollbar_presentation
+    }
+
+    pub(crate) fn scroll_state_mut(&mut self) -> &mut ScrollState {
+        &mut self.scroll
+    }
+
+    pub(crate) fn set_scrollbar_presentation(&mut self, presentation: ScrollbarPresentation) {
+        self.scrollbar_presentation = presentation;
+    }
+
     pub fn scroll(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
         self.scroll.apply(command, metrics, ScrollAxis::Vertical)
     }
 
-    pub fn sash_pointer_presence(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn sash_pointer_presence(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.resizable.pointer_presence(presence, now)
     }
 
@@ -153,7 +171,7 @@ impl TabContainerState {
         true
     }
 
-    pub fn finish_resizing(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn finish_resizing(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.resizable.end_drag(presence, now)
     }
 

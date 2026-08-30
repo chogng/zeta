@@ -1,6 +1,7 @@
 use crate::components::chat_input::ChatInputMode;
 use serde::Deserialize;
 use serde::Serialize;
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -21,6 +22,49 @@ pub(crate) struct TerminalSettings {
 }
 
 impl TerminalSettings {
+    const KEYS: [&'static str; 4] = [
+        "mouseInteractions",
+        "followUpMode",
+        "inputMode",
+        "dirPermissions",
+    ];
+
+    pub(crate) fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
+        let defaults = serde_json::to_value(Self::default())
+            .map_err(|error| format!("could not build TUI defaults: {error}"))?;
+        let mut values = defaults
+            .as_object()
+            .cloned()
+            .ok_or_else(|| "TUI defaults must serialize as an object".to_owned())?;
+        for key in Self::KEYS {
+            if let Some(value) = section.0.get(key) {
+                values.insert(key.into(), value.clone());
+            }
+        }
+        serde_json::from_value::<Self>(values.into())
+            .map_err(|error| format!("invalid [tui] configuration: {error}"))?
+            .validate()
+    }
+
+    pub(crate) fn write_to_tui(
+        self,
+        section: &FrontendConfigDto,
+    ) -> Result<FrontendConfigDto, String> {
+        let encoded = serde_json::to_value(self)
+            .map_err(|error| format!("could not encode [tui] configuration: {error}"))?;
+        let fields = encoded
+            .as_object()
+            .ok_or_else(|| "TUI configuration must serialize as an object".to_owned())?;
+        let mut values = section.0.clone();
+        for key in Self::KEYS {
+            let value = fields
+                .get(key)
+                .ok_or_else(|| format!("TUI configuration did not encode {key}"))?;
+            values.insert(key.into(), value.clone());
+        }
+        Ok(FrontendConfigDto(values))
+    }
+
     pub(crate) const fn mouse_interactions(self) -> bool {
         self.mouse_interactions
     }
@@ -165,3 +209,7 @@ impl Default for DirPermissionDefaults {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "settings_tests.rs"]
+mod tests;

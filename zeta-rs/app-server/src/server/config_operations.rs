@@ -20,6 +20,7 @@ use zeta_app_server_protocol::protocol::config::ConfigCommandDispositionDto;
 use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 use zeta_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use zeta_app_server_protocol::protocol::config::LanguageServerConfigureParams;
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
@@ -45,7 +46,6 @@ use zeta_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchConfigureParams;
 use zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchModeDto;
-use zeta_app_server_protocol::protocol::config::TuiConfigDto;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::AgentGrepBackend;
 use zeta_config::ApprovalReviewModelSelection;
@@ -163,7 +163,8 @@ impl AppServer {
                     commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     tool_mode: params.tool_mode,
                     grep_backend: params.agent_grep_backend.map(agent_grep_backend_from_dto),
-                    tui_theme: params.tui_theme,
+                    gui: params.gui.map(|config| config.0),
+                    tui: params.tui.map(|config| config.0),
                 }),
             })
             .map_err(config_operation_error)?;
@@ -189,7 +190,8 @@ impl AppServer {
                     commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
                     grep_backend: Patch::Value(AgentGrepBackend::Ripgrep),
-                    tui_theme: Patch::Missing,
+                    gui: Patch::Missing,
+                    tui: Patch::Missing,
                 }),
             })
             .map_err(config_operation_error)?;
@@ -574,6 +576,7 @@ fn config_read_result(
         commit_message_active_dir_authorized,
         tool_mode: snapshot.values.tool_mode,
         agent_grep_backend: agent_grep_backend_dto(snapshot.values.agent_grep_backend),
+        gui: FrontendConfigDto(snapshot.values.gui),
         providers: snapshot
             .values
             .providers
@@ -624,9 +627,7 @@ fn config_read_result(
             .into_iter()
             .map(exec_policy_rule_dto)
             .collect(),
-        tui: TuiConfigDto {
-            theme: snapshot.values.tui.theme,
-        },
+        tui: FrontendConfigDto(snapshot.values.tui),
     }
 }
 

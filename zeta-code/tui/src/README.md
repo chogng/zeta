@@ -22,7 +22,7 @@
 - `features/queue.rs` 拥有稳定 `QueueId`、顺序、发送状态、Inline 与 `/queue` Pane；ChatInput 只返回完整待排队内容。
 - `features/approval.rs` 和 `features/query.rs` 分别拥有自己的请求绑定、选择、提交和错误状态；Query 的自定义文本不进入 ChatInput。
 - `features/status_line/` 把运行状态、plan/queue 数量、后台 Agent/Subagent 数量和配置项组成最多两行；`features/status/` 单独提供 `/status` QuickView。
-- `features/config/` 通过 App Server 读写 `config.toml` 的 `[tui].theme`，并从 `<profile>/zeta-code/terminal.json` 读取其他终端设置；`features/theme/` 只读取 `zeta-code/themes/*.json`，`render/theme.rs` 定义 TUI 调色板。它们都不依赖图形界面主题链。
+- `features/config/` 解释并通过 App Server 读写 `config.toml` 的完整 `[tui]` 表；`features/theme/` 只读取 `zeta-code/themes/*.json`，`render/theme.rs` 定义 TUI 调色板。它们都不依赖图形界面主题链。
 - `components/chat_input/completion/` 与 `vim.rs` 分别拥有 ChatInput 的 Slash/Mention/Skill 补全和 Insert/Normal/Visual 编辑状态；补全先处理按键，Vim 不接管应用级导航。
 
 ## `ChatComposer` 边界

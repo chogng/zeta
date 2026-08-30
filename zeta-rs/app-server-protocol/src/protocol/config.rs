@@ -380,12 +380,12 @@ pub struct ExecPolicyRuleDto {
     pub justification: Option<String>,
 }
 
-/// Configuration owned by terminal products.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct TuiConfigDto {
-    pub theme: String,
-}
+/// One frontend-owned root table whose keys are opaque to App Server.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(transparent)]
+pub struct FrontendConfigDto(
+    #[ts(type = "Record<string, unknown>")] pub BTreeMap<String, serde_json::Value>,
+);
 
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -403,6 +403,7 @@ pub struct ConfigReadResult {
     pub commit_message_active_dir_authorized: bool,
     pub tool_mode: ToolMode,
     pub agent_grep_backend: AgentGrepBackendDto,
+    pub gui: FrontendConfigDto,
     pub providers: BTreeMap<String, ProviderConfigDto>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
@@ -412,7 +413,7 @@ pub struct ConfigReadResult {
     pub tool_search: ToolSearchConfigDto,
     pub codebase: CodebaseConfigDto,
     pub exec_policy_rules: Vec<ExecPolicyRuleDto>,
-    pub tui: TuiConfigDto,
+    pub tui: FrontendConfigDto,
 }
 
 /// Creates or replaces one durable User execution-policy rule.
@@ -544,9 +545,13 @@ pub struct ConfigUpdateParams {
     #[ts(as = "Option<AgentGrepBackendDto>", optional = nullable)]
     pub agent_grep_backend: Patch<AgentGrepBackendDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<String>")]
-    #[ts(as = "Option<String>", optional = nullable)]
-    pub tui_theme: Patch<String>,
+    #[schemars(with = "Option<FrontendConfigDto>")]
+    #[ts(as = "Option<FrontendConfigDto>", optional = nullable)]
+    pub gui: Patch<FrontendConfigDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<FrontendConfigDto>")]
+    #[ts(as = "Option<FrontendConfigDto>", optional = nullable)]
+    pub tui: Patch<FrontendConfigDto>,
 }
 
 /// Creates or replaces one user-owned language-server preference.

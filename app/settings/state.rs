@@ -7,9 +7,6 @@ use zeta_ui_components::ScrollAxis;
 use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::ScrollState;
 use zeta_ui_components::ScrollbarController;
-use zeta_ui_components::ScrollbarDrag;
-use zeta_ui_components::ScrollbarPart;
-use zeta_ui_components::ScrollbarPointerPresence;
 use zeta_ui_components::ScrollbarPresentation;
 use zui::input::ElementState;
 use zui::input::Key;
@@ -42,19 +39,12 @@ pub enum SettingsActivation {
     Close,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum SettingsScrollbarCapture {
-    Thumb(ScrollbarDrag),
-    Track,
-}
-
 pub struct SettingsState {
     section: SettingsPageSection,
     search: TextInput,
     keyboard_shortcuts: KeyboardShortcutsState,
     keybindings_scroll: ScrollState,
     keybindings_scrollbar: ScrollbarController,
-    keybindings_scrollbar_capture: Option<SettingsScrollbarCapture>,
 }
 
 impl Default for SettingsState {
@@ -65,7 +55,6 @@ impl Default for SettingsState {
             keyboard_shortcuts: KeyboardShortcutsState::default(),
             keybindings_scroll: ScrollState::default(),
             keybindings_scrollbar: ScrollbarController::default(),
-            keybindings_scrollbar_capture: None,
         }
     }
 }
@@ -138,38 +127,14 @@ impl SettingsState {
         viewport: SettingsKeybindingsViewport,
         now: Instant,
     ) -> SettingsScrollbarPointerOutcome {
-        let previous_presentation = self.keybindings_scrollbar.presentation();
-        match self.keybindings_scrollbar_capture {
-            Some(SettingsScrollbarCapture::Thumb(drag)) => {
-                let view = viewport.list(
-                    self.keybindings_scroll,
-                    self.keybindings_scrollbar.presentation(),
-                );
-                let offset_changed = self.keybindings_scroll.apply(
-                    drag.command_at(point),
-                    view.scroll_view().metrics(),
-                    ScrollAxis::Vertical,
-                );
-                SettingsScrollbarPointerOutcome {
-                    handled: true,
-                    presentation_changed: offset_changed
-                        || self.keybindings_scrollbar.presentation() != previous_presentation,
-                }
-            }
-            Some(SettingsScrollbarCapture::Track) => SettingsScrollbarPointerOutcome {
-                handled: true,
-                presentation_changed: false,
-            },
-            None => {
-                let presence = self.keybindings_scrollbar_presence(point, viewport);
-                self.keybindings_scrollbar.pointer_presence(presence, now);
-                SettingsScrollbarPointerOutcome {
-                    handled: false,
-                    presentation_changed: self.keybindings_scrollbar.presentation()
-                        != previous_presentation,
-                }
-            }
-        }
+        let view = viewport
+            .list(
+                self.keybindings_scroll,
+                self.keybindings_scrollbar.presentation(),
+            )
+            .scroll_view();
+        self.keybindings_scrollbar
+            .pointer_moved(view, &mut self.keybindings_scroll, point, now)
     }
 
     pub fn press_keybindings_scrollbar(
@@ -183,32 +148,8 @@ impl SettingsState {
             self.keybindings_scrollbar.presentation(),
         );
         let scroll_view = view.scroll_view();
-        let Some(hit) = scroll_view.hit_test_scrollbar(point) else {
-            return SettingsScrollbarPointerOutcome::default();
-        };
-        let previous_presentation = self.keybindings_scrollbar.presentation();
-        let mut offset_changed = false;
-        self.keybindings_scrollbar_capture = match hit.part() {
-            ScrollbarPart::Thumb => scroll_view
-                .begin_scrollbar_drag(hit, point)
-                .map(SettingsScrollbarCapture::Thumb),
-            ScrollbarPart::Track => {
-                if let Some(command) = scroll_view.track_click_command(hit, point) {
-                    offset_changed = self.keybindings_scroll.apply(
-                        command,
-                        scroll_view.metrics(),
-                        ScrollAxis::Vertical,
-                    );
-                }
-                Some(SettingsScrollbarCapture::Track)
-            }
-        };
-        self.keybindings_scrollbar.begin_drag(now);
-        SettingsScrollbarPointerOutcome {
-            handled: true,
-            presentation_changed: offset_changed
-                || self.keybindings_scrollbar.presentation() != previous_presentation,
-        }
+        self.keybindings_scrollbar
+            .press(scroll_view, &mut self.keybindings_scroll, point, now)
     }
 
     pub fn release_keybindings_scrollbar(
@@ -217,31 +158,20 @@ impl SettingsState {
         viewport: SettingsKeybindingsViewport,
         now: Instant,
     ) -> SettingsScrollbarPointerOutcome {
-        if self.keybindings_scrollbar_capture.take().is_none() {
-            return SettingsScrollbarPointerOutcome::default();
-        }
-        let previous_presentation = self.keybindings_scrollbar.presentation();
-        let presence = self.keybindings_scrollbar_presence(point, viewport);
-        self.keybindings_scrollbar.end_drag(presence, now);
-        SettingsScrollbarPointerOutcome {
-            handled: true,
-            presentation_changed: self.keybindings_scrollbar.presentation()
-                != previous_presentation,
-        }
+        let view = viewport
+            .list(
+                self.keybindings_scroll,
+                self.keybindings_scrollbar.presentation(),
+            )
+            .scroll_view();
+        self.keybindings_scrollbar.release(view, point, now)
     }
 
     pub fn keybindings_scrollbar_pointer_left(&mut self, now: Instant) -> bool {
-        if self.keybindings_scrollbar_capture.is_some() {
-            return false;
-        }
-        let previous = self.keybindings_scrollbar.presentation();
-        self.keybindings_scrollbar
-            .pointer_presence(ScrollbarPointerPresence::Outside, now);
-        self.keybindings_scrollbar.presentation() != previous
+        self.keybindings_scrollbar.pointer_left(now)
     }
 
     pub fn cancel_keybindings_scrollbar(&mut self) {
-        self.keybindings_scrollbar_capture = None;
         self.keybindings_scrollbar.cancel();
     }
 
@@ -251,22 +181,6 @@ impl SettingsState {
 
     pub const fn keybindings_scrollbar_deadline(&self) -> Option<Instant> {
         self.keybindings_scrollbar.next_deadline()
-    }
-
-    fn keybindings_scrollbar_presence(
-        &self,
-        point: Point,
-        viewport: SettingsKeybindingsViewport,
-    ) -> ScrollbarPointerPresence {
-        let view = viewport.list(
-            self.keybindings_scroll,
-            self.keybindings_scrollbar.presentation(),
-        );
-        if view.scroll_view().hit_test_scrollbar(point).is_some() {
-            ScrollbarPointerPresence::Over
-        } else {
-            ScrollbarPointerPresence::Outside
-        }
     }
 
     pub fn selected_search_text(&self) -> Option<&str> {

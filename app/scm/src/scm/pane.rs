@@ -10,8 +10,7 @@ use zeta_editor::{
 use zeta_icons::icons;
 use zeta_ui_components::{
     ButtonSelection, ButtonState, ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics,
-    ScrollState, ScrollbarController, ScrollbarDrag, ScrollbarPart, ScrollbarPointerPresence,
-    ScrollbarPresentation,
+    ScrollState, ScrollbarController, ScrollbarInteractionOutcome, ScrollbarPresentation,
 };
 use zui::ui::{
     AccessibilityRole, Border, Component, ComponentContext, ComponentElement, ComputedElement,
@@ -111,7 +110,6 @@ pub struct EditorPaneState {
     diffs: Vec<EditorDiff>,
     scroll_state: ScrollState,
     scrollbar: ScrollbarController,
-    scrollbar_capture: Option<ScrollbarCapture>,
     measured_layout: MultiDiffEditorLayout,
     style: MultiDiffEditorStyle,
     diff_identities: BTreeMap<String, MultiDiffEditorItemIdentity>,
@@ -125,7 +123,6 @@ impl Default for EditorPaneState {
             diffs: Vec::new(),
             scroll_state: ScrollState::default(),
             scrollbar: ScrollbarController::default(),
-            scrollbar_capture: None,
             measured_layout: MultiDiffEditorLayout::default(),
             style: MultiDiffEditorStyle::light_cards(),
             diff_identities: BTreeMap::new(),
@@ -135,22 +132,15 @@ impl Default for EditorPaneState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ScrollbarCapture {
-    Thumb(ScrollbarDrag),
-    Track,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ScrollbarPointerOutcome {
-    pub handled: bool,
-    pub presentation_changed: bool,
-}
+pub type ScrollbarPointerOutcome = ScrollbarInteractionOutcome;
 
 impl EditorPaneState {
     pub fn set_style(&mut self, style: MultiDiffEditorStyle) {
+        let preserves_layout = self.style.same_layout_as(&style);
         self.style = style;
-        self.remeasure();
+        if !preserves_layout {
+            self.remeasure();
+        }
     }
 
     fn style(&self) -> MultiDiffEditorStyle {
@@ -299,7 +289,7 @@ impl EditorPaneState {
             })
             .collect();
         self.rebuild_diff_indices();
-        self.scrollbar_capture = None;
+        self.scrollbar.cancel();
         if previous_identities.is_empty() {
             self.remeasure();
         } else {
@@ -396,32 +386,9 @@ impl EditorPaneState {
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
-        let previous_presentation = self.scrollbar.presentation();
-        match self.scrollbar_capture {
-            Some(ScrollbarCapture::Thumb(drag)) => {
-                let metrics = self.scroll_view(bounds).metrics();
-                let offset_changed =
-                    self.scroll_state
-                        .apply(drag.command_at(point), metrics, ScrollAxis::Vertical);
-                ScrollbarPointerOutcome {
-                    handled: true,
-                    presentation_changed: offset_changed
-                        || self.scrollbar.presentation() != previous_presentation,
-                }
-            }
-            Some(ScrollbarCapture::Track) => ScrollbarPointerOutcome {
-                handled: true,
-                presentation_changed: false,
-            },
-            None => {
-                let presence = self.scrollbar_presence(point, bounds);
-                self.scrollbar.pointer_presence(presence, now);
-                ScrollbarPointerOutcome {
-                    handled: false,
-                    presentation_changed: self.scrollbar.presentation() != previous_presentation,
-                }
-            }
-        }
+        let view = self.scroll_view(bounds);
+        self.scrollbar
+            .pointer_moved(view, &mut self.scroll_state, point, now)
     }
 
     pub fn press_scrollbar(
@@ -431,30 +398,8 @@ impl EditorPaneState {
         now: Instant,
     ) -> ScrollbarPointerOutcome {
         let view = self.scroll_view(bounds);
-        let Some(hit) = view.hit_test_scrollbar(point) else {
-            return ScrollbarPointerOutcome::default();
-        };
-        let previous_presentation = self.scrollbar.presentation();
-        let mut offset_changed = false;
-        self.scrollbar_capture = match hit.part() {
-            ScrollbarPart::Thumb => view
-                .begin_scrollbar_drag(hit, point)
-                .map(ScrollbarCapture::Thumb),
-            ScrollbarPart::Track => {
-                if let Some(command) = view.track_click_command(hit, point) {
-                    offset_changed =
-                        self.scroll_state
-                            .apply(command, view.metrics(), ScrollAxis::Vertical);
-                }
-                Some(ScrollbarCapture::Track)
-            }
-        };
-        self.scrollbar.begin_drag(now);
-        ScrollbarPointerOutcome {
-            handled: true,
-            presentation_changed: offset_changed
-                || self.scrollbar.presentation() != previous_presentation,
-        }
+        self.scrollbar
+            .press(view, &mut self.scroll_state, point, now)
     }
 
     pub fn release_scrollbar(
@@ -463,30 +408,15 @@ impl EditorPaneState {
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
-        if self.scrollbar_capture.take().is_none() {
-            return ScrollbarPointerOutcome::default();
-        }
-        let previous_presentation = self.scrollbar.presentation();
-        let presence = self.scrollbar_presence(point, bounds);
-        self.scrollbar.end_drag(presence, now);
-        ScrollbarPointerOutcome {
-            handled: true,
-            presentation_changed: self.scrollbar.presentation() != previous_presentation,
-        }
+        let view = self.scroll_view(bounds);
+        self.scrollbar.release(view, point, now)
     }
 
     pub fn scrollbar_pointer_left(&mut self, now: Instant) -> bool {
-        if self.scrollbar_capture.is_some() {
-            return false;
-        }
-        let previous = self.scrollbar.presentation();
-        self.scrollbar
-            .pointer_presence(ScrollbarPointerPresence::Outside, now);
-        self.scrollbar.presentation() != previous
+        self.scrollbar.pointer_left(now)
     }
 
     pub fn cancel_scrollbar_interaction(&mut self) {
-        self.scrollbar_capture = None;
         self.scrollbar.cancel();
     }
 
@@ -667,14 +597,6 @@ impl EditorPaneState {
             self.diffs.len(),
             "changed-file identities must be unique"
         );
-    }
-
-    fn scrollbar_presence(&self, point: zui::ui::Point, bounds: Rect) -> ScrollbarPointerPresence {
-        if self.scroll_view(bounds).hit_test_scrollbar(point).is_some() {
-            ScrollbarPointerPresence::Over
-        } else {
-            ScrollbarPointerPresence::Outside
-        }
     }
 }
 

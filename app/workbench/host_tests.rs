@@ -1,12 +1,21 @@
 use super::PaneKey;
 use super::TabContextMenuOutcome;
 use super::WorkbenchHost;
+use crate::Color;
 use crate::PaneInput;
 use crate::PaneSplitDirection;
+use crate::Rect;
+use crate::ScrollAxis;
+use crate::ScrollView;
+use crate::ScrollViewStyle;
+use crate::ScrollbarState;
+use crate::ScrollbarStyle;
+use crate::Size;
 use crate::TabInput;
 use crate::TabInputKey;
 use crate::TabInputMetadata;
 use crate::TabStatus;
+use std::time::Instant;
 use zui::ui::Point;
 use zui::ui::TextInputCommand;
 
@@ -242,4 +251,82 @@ fn tab_menu_routes_group_selection_and_rename_through_the_workbench_host() {
     assert!(host.commit_tab_rename());
     let input = host.workbench().tab_part().input(&first_tab).unwrap();
     assert_eq!(host.workbench().tab_part().tab_name(input), "Build fixes");
+}
+
+#[test]
+fn tab_container_scrollbar_follows_viewport_hover_and_keeps_drag_geometry() {
+    let now = Instant::now();
+    let mut host = WorkbenchHost::<()>::new();
+    let view = ScrollView::new(
+        Rect::from_xywh(0.0, 0.0, 100.0, 100.0),
+        Size::new(100.0, 400.0),
+        host.tab_container_state().scroll_state(),
+        ScrollAxis::Vertical,
+        ScrollViewStyle::new(ScrollbarStyle::new(
+            Color::TRANSPARENT,
+            Color::rgb(100, 100, 100),
+        )),
+    );
+
+    assert_eq!(
+        host.tab_container_state()
+            .scrollbar_presentation()
+            .opacity(),
+        0.0
+    );
+    assert!(
+        host.tab_container_scrollbar_pointer_moved(view, Point::new(50.0, 50.0), now)
+            .presentation_changed
+    );
+    assert_eq!(
+        host.tab_container_state().scrollbar_presentation().state(),
+        ScrollbarState::Hovered
+    );
+    let mut visible_at = now;
+    while let Some(deadline) = host.tab_container_scrollbar_deadline() {
+        visible_at = deadline;
+        host.advance_tab_container_scrollbar(deadline);
+    }
+    assert_eq!(
+        host.tab_container_state()
+            .scrollbar_presentation()
+            .opacity(),
+        1.0
+    );
+
+    let scrollbar = view.vertical_scrollbar().expect("overflowing viewport");
+    assert_eq!(scrollbar.track_bounds().right(), view.bounds().right());
+    let thumb = scrollbar.thumb_bounds();
+    let pointer = Point::new(thumb.origin.x + 1.0, thumb.origin.y + 1.0);
+    assert!(
+        host.press_tab_container_scrollbar(view, pointer, visible_at)
+            .handled
+    );
+    assert!(
+        host.tab_container_scrollbar_pointer_moved(
+            view,
+            Point::new(pointer.x, scrollbar.track_bounds().bottom() - 1.0),
+            visible_at,
+        )
+        .handled
+    );
+    assert_eq!(
+        host.tab_container_state().scroll_state().vertical_offset(),
+        300.0
+    );
+
+    host.release_tab_container_scrollbar(view, Point::new(101.0, 50.0), visible_at);
+    assert_eq!(
+        host.tab_container_state().scrollbar_presentation().state(),
+        ScrollbarState::Resting
+    );
+    while let Some(deadline) = host.tab_container_scrollbar_deadline() {
+        host.advance_tab_container_scrollbar(deadline);
+    }
+    assert_eq!(
+        host.tab_container_state()
+            .scrollbar_presentation()
+            .opacity(),
+        0.0
+    );
 }

@@ -5,7 +5,7 @@ use std::ops::Range;
 use zui::ui::{Color, PaintRect, Point, Rect, UiScene};
 
 use super::text_metrics::display_columns_until;
-use super::{CELL_WIDTH, CONTENT_HORIZONTAL_PADDING, CodeEditor, CodeEditorPosition, ROW_HEIGHT};
+use super::{CodeEditor, CodeEditorPosition};
 
 /// Diagnostic importance used by CodeEditor presentation without importing a language protocol.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -126,10 +126,10 @@ impl<'a> CodeEditor<'a> {
                 if diagnostic.range.is_empty() {
                     let column = display_columns_until(text, local.start);
                     let x = layout.content.origin.x
-                        + CONTENT_HORIZONTAL_PADDING
+                        + self.content_horizontal_padding
                         + (column as isize - self.horizontal_origin_column(line) as isize) as f32
-                            * CELL_WIDTH;
-                    return x <= point.x && point.x < x + CELL_WIDTH;
+                            * self.style.cell_width();
+                    return x <= point.x && point.x < x + self.style.cell_width();
                 }
                 contains_offset(&diagnostic.range, offset)
             })
@@ -181,13 +181,13 @@ impl<'a> CodeEditor<'a> {
             let end_column = display_columns_until(text, visible.end.min(text.len()));
             let width_columns = end_column.saturating_sub(start_column).max(1);
             let x = bounds.origin.x
-                + CONTENT_HORIZONTAL_PADDING
-                + (start_column as isize - origin_column as isize) as f32 * CELL_WIDTH;
+                + self.content_horizontal_padding
+                + (start_column as isize - origin_column as isize) as f32 * self.style.cell_width();
             paint_squiggle(
                 scene,
                 x,
-                bounds.origin.y + ROW_HEIGHT - 3.0,
-                width_columns as f32 * CELL_WIDTH,
+                bounds.origin.y + self.style.row_height() - 3.0,
+                width_columns as f32 * self.style.cell_width(),
                 self.style.diagnostic_color(diagnostic.severity),
             );
         }

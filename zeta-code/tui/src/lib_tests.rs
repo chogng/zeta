@@ -69,10 +69,6 @@ fn profile_root_selects_product_scoped_tui_resources() {
         options.status_line_path,
         Some(profile_root.join("zeta-code").join("statusline.json"))
     );
-    assert_eq!(
-        options.terminal_settings_path,
-        Some(profile_root.join("zeta-code").join("terminal.json"))
-    );
     assert_eq!(options.theme_root, Some(profile_root.join("zeta-code")));
 }
 

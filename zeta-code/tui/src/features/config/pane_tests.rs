@@ -59,7 +59,6 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
         &config,
         &providers,
         TerminalSettings::default(),
-        7,
         &session_id(),
         &no_directories(),
     );
@@ -84,8 +83,8 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     assert!(matches!(
         view.actions.get(mouse.id().unwrap()).unwrap(),
         ConfigSelectionAction::SetTerminalSettings(edit)
-            if edit.terminal.expected_revision == 7
-                && !edit.terminal.settings.mouse_interactions()
+            if edit.server_config.revision == 4
+                && !edit.terminal.mouse_interactions()
     ));
     let input_mode = &state.visible_items()[2];
     assert_eq!(input_mode.label(), "Input mode");
@@ -96,8 +95,8 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     assert!(matches!(
         view.actions.get(input_mode.id().unwrap()).unwrap(),
         ConfigSelectionAction::ChooseInputMode { standard, vim }
-            if standard.terminal.settings.input_mode() == ChatInputMode::Standard
-                && vim.terminal.settings.input_mode() == ChatInputMode::Vim
+            if standard.terminal.input_mode() == ChatInputMode::Standard
+                && vim.terminal.input_mode() == ChatInputMode::Vim
     ));
     let follow_up = &state.visible_items()[1];
     assert_eq!(follow_up.label(), "Follow-up messages");
@@ -108,9 +107,9 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     assert!(matches!(
         view.actions.get(follow_up.id().unwrap()).unwrap(),
         ConfigSelectionAction::ChooseFollowUpMode { queue, steer }
-            if queue.terminal.expected_revision == 7
-                && queue.terminal.settings.follow_up_mode() == FollowUpMode::Queue
-                && steer.terminal.settings.follow_up_mode() == FollowUpMode::Steer
+            if queue.server_config.revision == 4
+                && queue.terminal.follow_up_mode() == FollowUpMode::Queue
+                && steer.terminal.follow_up_mode() == FollowUpMode::Steer
     ));
 
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -122,7 +121,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
             .get(state.visible_items()[5].id().unwrap())
             .unwrap(),
         ConfigSelectionAction::SetTerminalSettings(edit)
-            if edit.terminal.settings.dir_permissions() == vec![
+            if edit.terminal.dir_permissions() == vec![
                 PermissionDto::ReadFiles,
                 PermissionDto::WriteFiles,
                 PermissionDto::SearchFiles,
@@ -156,7 +155,6 @@ fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabl
         &empty_config_snapshot(),
         &providers(),
         terminal,
-        0,
         &session_id(),
         &no_directories(),
     );
@@ -182,7 +180,6 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
         &empty_config_snapshot(),
         &providers(),
         TerminalSettings::default(),
-        0,
         &session_id(),
         &directories,
     );

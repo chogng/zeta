@@ -152,7 +152,7 @@ impl ContextViewLayout {
 ///
 /// The context view owns placement, viewport flipping and clamping, shell paint, and content
 /// clipping. The product host owns visibility, input routing, dismissal, focus restoration, and
-/// the interaction semantics of the hosted dropdown, hover, picker, or menu.
+/// the interaction semantics of the hosted hover view, picker, or menu.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ContextView {
     layout: ContextViewLayout,

@@ -16,17 +16,14 @@ use zui::ui::Color;
 use zui::ui::Component;
 use zui::ui::ComponentElement;
 use zui::ui::Element;
-use zui::ui::FontFamily;
 use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::TextBlock;
 use zui::ui::TextInputCompositionEvent;
-use zui::ui::TextStyle;
 use zui::ui::UiScene;
 
 const MAX_VISIBLE_ROWS: usize = 8;
 const EDITOR_VERTICAL_PADDING: f32 = 12.0;
-const PLACEHOLDER_HORIZONTAL_INSET: f32 = 12.0;
 
 /// Focus state used by the compact ChatInput editor.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -91,7 +88,7 @@ impl ChatInputEditor {
     }
 
     pub fn preferred_height(&self) -> f32 {
-        self.visible_row_count() as f32 * CodeEditor::row_height() + EDITOR_VERTICAL_PADDING * 2.0
+        self.visible_row_count() as f32 * self.style.row_height() + EDITOR_VERTICAL_PADDING * 2.0
     }
 
     pub(crate) fn apply(&mut self, command: CodeEditorCommand) {
@@ -227,6 +224,7 @@ impl ChatInputEditor {
             self.style.clone(),
         )
         .with_presentation(CodeEditorPresentation::Compact)
+        .with_content_horizontal_padding(0.0)
         .with_caret_visibility(caret_visibility)
         .with_caret_style(CodeEditorCaretStyle::Block)
     }
@@ -274,16 +272,14 @@ impl Component for ChatInputView<'_> {
                 scene.draw_text(TextBlock::new(
                     self.placeholder,
                     Point::new(
-                        self.bounds.origin.x + PLACEHOLDER_HORIZONTAL_INSET,
+                        self.bounds.origin.x,
                         self.bounds.origin.y + EDITOR_VERTICAL_PADDING,
                     ),
                     zui::ui::Size::new(
-                        (self.bounds.size.width - PLACEHOLDER_HORIZONTAL_INSET).max(0.0),
+                        self.bounds.size.width,
                         (self.bounds.size.height - EDITOR_VERTICAL_PADDING * 2.0).max(0.0),
                     ),
-                    TextStyle::new(13.0, self.placeholder_color)
-                        .with_family(FontFamily::Monospace)
-                        .with_line_height(CodeEditor::row_height()),
+                    self.input.style.text_with_color(self.placeholder_color),
                 ));
             });
         }

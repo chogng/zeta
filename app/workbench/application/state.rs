@@ -34,6 +34,7 @@ pub(crate) struct WorkbenchApplication {
     pub(super) text_layout: TextInputLayoutEngine,
     pub(super) caret_blink: CaretBlinkController,
     pub(super) code_editor_style: CodeEditorStyle,
+    pub(super) gui: GuiConfig,
     pub(super) event_proxy: zui::app::AppProxy<WorkbenchEvent>,
     pub(super) clipboard: ClipboardHandle,
     pub(super) cursor_position: Option<Point>,
@@ -48,6 +49,7 @@ pub(crate) struct WorkbenchApplication {
     pub(super) failed: bool,
     pub(super) palette: UiTheme,
     pub(super) theme_scheme: ColorScheme,
+    pub(super) system_theme_scheme: ColorScheme,
     pub(super) theme_follows_system: bool,
 }
 
@@ -149,6 +151,7 @@ impl WorkbenchApplication {
             text_layout: TextInputLayoutEngine::new(),
             caret_blink: CaretBlinkController::default(),
             code_editor_style: CodeEditorStyle::light(),
+            gui: GuiConfig::default(),
             event_proxy,
             clipboard,
             cursor_position: None,
@@ -163,6 +166,7 @@ impl WorkbenchApplication {
             failed: false,
             palette: DEFAULT_UI_THEME,
             theme_scheme: ColorScheme::Light,
+            system_theme_scheme: ColorScheme::Light,
             theme_follows_system: true,
         }
     }

@@ -30,16 +30,16 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | Workbench TabPart、TabGroup、TabInput 的逻辑身份、分组和 active selection | `zeta-workbench` + product host | 委托；模型不含方向和 `ElementId`，横向/纵向 Tab surface 与具体内容由 host 的 projection/scene 负责 |
 | PaneInput 类型、逻辑 identity 与 Pane binding | `zeta-workbench` | 委托；具体 Terminal/Agent/Files/Diff/Settings runtime 仍由产品模块负责 |
 | Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeta-files` / `zeta-scm` / `zeta-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui-components` |
-| Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui-components::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
+| Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui-components::{Sash,SashController,Resizable}` | ✅；基础 hover 复用 `zui::ui::Hover`，pointer capture、identity、preferred size 与产品 resize transition 归 host |
 | 单轴滚动条几何、绘制和交互映射 | `zeta-ui-components::{HorizontalScrollbar,VerticalScrollbar}` | ✅；两个方向由类型确定，共享标量 metrics、hover/active/fade、thumb drag 和 track paging；pointer capture 与调度归 host |
 | 通用像素滚动状态、viewport 裁剪与内容坐标 | `zeta-ui-components::ScrollState` / `ScrollView` | ✅；`ScrollView` 组合启用方向对应的滚动条；平台事件路由、pointer capture 与产品内容归 host |
 | 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui-components::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用写时复制的平衡分块树，单项更新、按偏移定位和区间 splice 不重建无关分支，并支持稀疏展示覆盖和 item-relative scroll anchor；identity、selection、键盘语义与产品数据归 host |
 | 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui-components::TreeView` | ✅；普通文件树复用固定高度 ListView，展开式编辑器可接入保留的可变高度布局；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
 | 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui-components::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
-| 菜单外壳、纵向菜单项、选择、命中、键盘导航和无障碍结构 | `zeta-ui-components::Menu` | ✅；产品 identity 由 host 提供，打开状态、关闭与 command 归 host |
-| 锚定菜单的 viewport 翻转、约束与浮层组合 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/Menu，不重复菜单内容和交互结构 |
-| 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui-components::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
-| 带搜索框的锚定候选列表、滚动、选择展示与 accessibility | `zeta-ui-components::Picker` | ✅；调用界面保留打开状态、查询、过滤、输入路由和选择结果执行 |
+| 菜单外壳、纵向菜单项、选择、滚动、命中、键盘导航和无障碍结构 | `zeta-ui-components::Menu` | ✅；可滚动菜单复用 ListView 的可见范围投影，产品 identity 由 host 提供，打开状态、关闭与 command 归 host |
+| 右键菜单的 viewport 翻转、约束与浮层组合 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/Menu，保留右键菜单语义；打开、关闭和焦点恢复归调用界面 |
+| 按钮或选择器触发的锚定菜单 | `zeta-ui-components::Dropdown` | ✅；组合 ContextView/Menu，不重复菜单内容和交互结构；触发与关闭策略归调用界面 |
+| 带搜索框的锚定候选列表、滚动、选择展示与 accessibility | `zeta-ui-components::Picker` | ✅；组合 Dropdown/Menu 与 SearchBox，调用界面保留打开状态、查询、过滤、输入路由和选择结果执行 |
 | Icon+text label 的内部布局 | `zeta-ui-components::IconLabel` | ✅ |
 | 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui-components::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
 | Renderer-independent icon identity、SVG definition 与 rendering mode | `zui::{Icon,IconDefinition}` | 委托 |
@@ -90,7 +90,7 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `NavBar` 导航容器 | proposed composition boundary | 组合横向/纵向导航 shell 与 `TabList`；尚未形成 public API，具体方向见 [`LAYOUT.md`](../LAYOUT.md) |
 | `components::tab_list::{TabStyle, TabBackgrounds}` | public | 定义 border、corner radii 及普通/selected 的状态背景 |
 | `components::sash::{Sash, SashStyle, SashState}` | public | 从零面积 separator track 推导共享 drag target 与 feedback line，并绘制 host 投影的 hover/active 状态 |
-| `components::resizable::{SashController, SashPointerPresence, Resizable}` | public | 延迟 hover、active presentation、deadline 与基于 `SplitViewResizeSnapshot` 的 drag-start-relative resize；不拥有 pointer capture、产品 identity 或 pane state |
+| `components::resizable::{SashController, Resizable}` | public | 组合 `zui::ui::Hover` 的延迟 hover、active presentation、deadline 与基于 `SplitViewResizeSnapshot` 的 drag-start-relative resize；不拥有 pointer capture、产品 identity 或 pane state |
 | `components::context_view::ContextView` | public | 计算锚点附近的浮层 bounds/content bounds，并把通用外壳与调用方内容画入独立浮层 |
 | `components::context_view::{ContextViewPlacement, ContextViewStyle}` | public | 分别定义锚定轴/方向/对齐/gap/viewport margin，以及 background/radius/padding；ContextView 天然无 border |
 | `components::context_view::ContextViewLayout` | public | 暴露实际 bounds、content bounds 及翻转后的方向/对齐，供 host 注册命中和组合内容 |
@@ -98,7 +98,7 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::scroll_view::{ScrollState, ScrollMetrics, ScrollCommand}` | public | 保存 logical-pixel offset，根据 viewport/content metrics 执行按像素、首尾和 ensure-visible transition |
 | `components::scroll_view::{ScrollView, ScrollViewport}` | public | 约束有效 offset，裁剪调用方内容，并公开 translated content origin 与 visible content bounds |
 | `components::scrollbar::{HorizontalScrollbar, VerticalScrollbar, ScrollbarMetrics}` | public | 以类型固定方向，消费单轴 viewport/content/offset，拥有 track/thumb 几何、绘制、命中、轨道翻页和拖动映射 |
-| `components::scrollbar::{ScrollbarController, ScrollbarPresentation, ScrollbarStyle}` | public | 计算 hover/active 与 fade-in/hold/fade-out deadline 并选择语义颜色；不安装 timer 或持有平台 pointer capture |
+| `components::scrollbar::{ScrollbarController, ScrollbarInteractionOutcome, ScrollbarPresentation, ScrollbarStyle}` | public | 组合 `zui::ui::Hover`，并使用 ScrollView 的同源几何统一处理横纵 scrollbar 的显隐、track page、thumb capture、active 与 fade-in/hold/fade-out deadline；不安装 timer 或读取平台 pointer event |
 | `components::list_view::{VirtualListLayout, ListView}` | public | 固定 extent 使用 O(1) geometry；可变 extent 使用平衡分块树，以 O(log n) 定位范围和更新单项高度，并通过 `splice_item_extents` 保留区间外的共享分支；稀疏高度覆盖不复制 retained index；组合 ScrollView 且只调用可见及 overscan item paint |
 | `components::list_view::extent_tree::VariableExtentTree` | private | 以写时复制的平衡分块树保存叶子高度、子树 item count 与总高度，负责 O(log n) 查询/单点更新和 O(log n + k) 区间 splice；不拥有 item 内容或 identity |
 | `components::list_view::extent_overrides::ListItemExtentOverrides` | private | 保存少量展示期高度覆盖及累计差值，用于动画而不改动或复制保留的高度树 |
@@ -107,13 +107,12 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::list_view::ListItemLayout` | public | 为一个 projected index 暴露 translated item bounds；不携带产品 identity 或内容 |
 | `components::tree_view::{TreeView, TreeViewStyle}` | public | 在 host-flattened visible node sequence 上组合 ListView；`new` 保留固定高度快速路径，`from_layout` 接收可变高度保留布局；拥有 depth indentation、disclosure/content geometry 与虚拟化 |
 | `components::tree_view::{TreeItem, TreeItemExpansion, TreeItemLayout}` | public | 分别表达可见节点的 depth/Leaf/Collapsed/Expanded 结构状态，以及同源 row/disclosure/content bounds |
-| `components::menu::{Menu, MenuItem, MenuIds}` | public | 绘制带柔和 BoxShadow 的无边框菜单外壳，以 host 提供的稳定 identity 建立菜单与菜单项的同一交互/无障碍树，并公开同源 item bounds/hit-test |
-| `components::menu::{MenuSelection, MenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style 和可选 header height，padding 固定为 2px、radius 固定为 4px |
-| `components::context_menu::{ContextMenu, ContextMenuStyle}` | public | 组合 ContextView 与 Menu，只定义锚点 placement、viewport 翻转/约束和浮层合成，并把菜单几何与 header 组合入口原样公开给 host |
-| `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item；可滚动模式只为 visible/overscan range 构建 ActionBar，同时以 O(1) 固定高度几何公开全部 item/interactive bounds，供 host 保留键盘与 accessibility identity |
-| `components::dropdown::{DropdownSelection, DropdownStyle}` | public | 默认选择首个 enabled item，并定义 borderless surface、item size/style、可选 header height、圆角和锚点 placement |
-| `components::dropdown::DropdownScrollConfiguration` | public | 让 host 以 retained `ScrollState`、最大可见项数与 `ScrollViewStyle` 为 Dropdown 的 item region 启用独立滚动；header 保持固定 |
-| `components::picker::{Picker, PickerIds, PickerItem, PickerStyle}` | public | 组合 Dropdown 与 SearchBox，统一锚定 picker 的浮层几何、候选行、滚动、选择展示和 accessibility；不拥有业务候选、查询状态或 action |
+| `components::menu::{Menu, MenuItem, MenuIds}` | public | `MenuItem::Action` 组合 host identity 与 `ActionViewItem`，`MenuItem::Separator` 复用 ActionBar 分隔项；Menu 建立菜单交互/无障碍树并公开同源 item bounds/hit-test |
+| `components::menu::{MenuSelection, MenuStyle}` | public | 默认选择首个 enabled action；定义 surface color、item size/style、separator style 和可选 header height，padding 固定为 2px、radius 固定为 4px |
+| `components::context_menu::{ContextMenu, ContextMenuStyle}` | public | 直接组合 ContextView 与 Menu，保留右键菜单组件边界；context-click、关闭和焦点恢复归调用界面 |
+| `components::dropdown::{Dropdown, DropdownStyle}` | public | 组合 ContextView 与 Menu，只定义锚点 placement、viewport 翻转/约束和浮层合成，并把菜单几何、滚动 metrics 与 header 组合入口原样公开给 host |
+| `components::dropdown::DropdownScrollConfiguration` | public | 让 host 以 retained `ScrollState`、最大可见项数与 `ScrollViewStyle` 为 Dropdown 中的 Menu item region 启用独立滚动；header 和菜单外壳保持固定 |
+| `components::picker::{Picker, PickerIds, PickerItem, PickerStyle}` | public | 组合 Dropdown/Menu 与 SearchBox，统一锚定 picker 的浮层几何、候选行、滚动、选择展示和 accessibility；不拥有业务候选、查询状态或 action |
 | `components::icon_label::{IconLabel, IconLabelStyle}` | public | 对齐 semantic icon 与单行 text；不选择产品 icon |
 | `components::keycap::{Keycap, KeycapSequence, KeycapStyle}` | public | 绘制 caller 提供 label 的按键块，并区分同一 Chord 内按键间距与多段 Chord 间距；不解析快捷键或选择平台 label |
 | `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
@@ -153,13 +152,12 @@ host
           │   ├─ floating shell rect
           │   └─ caller content inside content-bounds clip
           ├─ Menu → shadow/menu surface + vertical ActionBar + interaction regions
-          │   └─ MenuIds/MenuItem → Menu/MenuItem accessibility + vertical navigation
-          ├─ ContextMenu → ContextView + Menu
+          │   ├─ MenuItem::Action(identity + ActionViewItem) / Separator → ActionBarItem
+          │   └─ optional ListView projected range + fixed header
+          ├─ Dropdown → ContextView + Menu
           │   └─ anchored placement + viewport constraint + overlay composition
-          ├─ Dropdown → ContextView + ListView projected range + vertical ActionBar
-          │   └─ visible/overscan selected item → Button selection presentation
-          ├─ Picker → Dropdown + SearchBox + host-owned item identities
-          │   └─ anchored searchable candidates + Menu accessibility
+          ├─ Picker → Dropdown/Menu + SearchBox + host-owned item identities
+          │   └─ anchored searchable candidates + shared Menu accessibility
           ├─ ScrollView → viewport clip + translated content geometry
           │   ├─ HorizontalScrollbar → horizontal track/thumb component
           │   └─ VerticalScrollbar → vertical track/thumb component
@@ -236,7 +234,7 @@ Pane 的 preferred size 与 visibility，传入 `SplitViewPane`；布局只计�
 effective size，因此窗口临时缩小不能覆盖用户首选尺寸。`SplitViewSashLayout` 的
 `resize_snapshot` 固定一次拖动开始时相邻 Pane 的尺寸与约束；`Resizable` 保存 drag-start
 pointer 与 snapshot，并始终以相对 delta 调用 `resize`，不能逐 pointer move 累加 delta。
-`SashController` 负责 host 投影的 hover/active presentation 与 deadline；`Sash` 使用同一个
+`SashController` 组合 `zui::ui::Hover`，负责 host 投影的 hover/active presentation 与 deadline；`Sash` 使用同一个
 zero-area track 推导 interaction bounds 和 feedback bounds。Host 用前者注册 identity、cursor、
 accessibility 与 pointer capture，再把 `Resizable` 返回的 pane size 写回产品状态。若 Host
 另行计算命中区域或直接在产品 scene 中画反馈线，说明 Sash geometry ownership 已漂移。
@@ -247,7 +245,7 @@ orientation、children 与 preferred sizes 都来自 Host；布局只输出当�
 并自行处理 add/remove/move、active Pane、Session binding 与序列化。若 `zeta-ui-components` 开始创建
 Terminal Session、决定 split command 或跨帧修改树，说明 Grid ownership 已漂移。
 
-`ScrollState` 是 logical-pixel offset primitive，不读取 `winit::MouseScrollDelta`。Host 把平台 wheel、键盘或 scrollbar drag 归一化为 `ScrollCommand`，再使用同一 `ScrollMetrics` 更新 retained state。`ScrollView::draw` 把调用方内容裁剪到 viewport，并通过 `ScrollViewport` 返回 translated content origin 和 content-coordinate visible bounds；启用横向或纵向滚动时分别组合 `HorizontalScrollbar` 或 `VerticalScrollbar`，滚动条用自己的 `ScrollbarMetrics` 计算同源 track/thumb paint 与交互几何。
+`ScrollState` 是 logical-pixel offset primitive，不读取 `winit::MouseScrollDelta`。Host 把平台 wheel 和键盘归一化为 `ScrollCommand`；pointer event 则把逻辑坐标、当前 `ScrollView` 和 `ScrollState` 交给 `ScrollbarController`。`ScrollbarController` 使用 `zui::ui::Hover` 维护基础 hover，并用同一几何维护显隐、track page 和 thumb capture。`ScrollView::draw` 把调用方内容裁剪到 viewport，并通过 `ScrollViewport` 返回 translated content origin 和 content-coordinate visible bounds；启用横向或纵向滚动时分别组合 `HorizontalScrollbar` 或 `VerticalScrollbar`，滚动条用自己的 `ScrollbarMetrics` 计算同源 track/thumb paint 与交互几何。
 
 `ListView` 在这层基座上为固定或可变高度数据提供 content height、可见/overscan range、item bounds、point hit-test 和 ensure-visible command；固定高度不分配逐项 geometry，可变高度使用写时复制的平衡分块树。`VirtualListLayout::update_item_extent` 以 O(log n) 更新一个已索引高度，`splice_item_extents` 以 O(log n + k) 替换连续区间并共享无关分支，按滚动偏移定位 item 为 O(log n)，`with_item_extent_overrides` 为少量动画项叠加稀疏高度而不复制整张索引，`ListScrollAnchor` 在高度变化或调用方按稳定 identity 解析新 index 后恢复 item-relative scroll position。固定高度布局插入相同高度仍为 O(1)；第一次写入不同高度时会一次性建立可变索引，因此确定包含编辑器的列表应从 `VirtualListLayout::variable` 开始。ListView 只请求可见及 overscan index，不拥有 item、identity、selection、键盘策略或产品数据。
 `TreeView` 把 host 已按展开状态扁平化的 visible node sequence 映射为 ListView items，计算 depth indentation 与 disclosure/content bounds；普通文件树通过 `TreeView::new` 保留固定高度快速路径，承载 CodeEditor 或 DiffEditor 的展开节点通过 `TreeView::from_layout` 使用可变高度，宿主在展开或收起子树时同步 splice 节点序列和 `VirtualListLayout`。TreeView 不读取 children、不持有展开状态，也不生成产品节点 identity。
@@ -262,17 +260,11 @@ Session navigation 和后续 Editor tabs 可以复用同一 surface/排列 primi
 布局与 active panel 生命周期。
 `ContextView::new` 接收同一逻辑坐标空间中的 viewport、anchor 和期望 content size。它先把 padding 加入外壳尺寸，再按 `ContextViewPlacement` 尝试首选侧和对齐；首选位置不适合时先翻转，仍无法完整放入时贴紧 inset viewport 并约束外壳和内容尺寸。`ContextView::draw` 把外壳与调用方 closure 发出的任意 primitive 放入同一个新浮层；该层不继承 host component 的 clip，因此可以越过锚点所在控件的边界，调用方内容再单独裁剪到 `content_bounds`。Host 必须使用同一 `ContextViewLayout` 注册命中区域，并自行管理 open/close、outside click、Escape、focus restoration 和锚定内容的领域交互；这些 retained lifecycle 不进入 scene component。当前 `ContextViewStyle` 不暴露 border：浮层天然无边框；若某个具体浮层需要描边，应由其内容组件拥有并绘制，不能改变 ContextView 的定位几何。
 
-`Menu` 拥有无边框菜单外壳、与 macOS 原生弹出菜单同量级的单层下落阴影、2px padding、4px radius、纵向 `ActionBar`、选择展示和 item bounds/hit-test。`MenuIds` 与 `MenuItem` 接收 host 提供的稳定 identity，`Menu::compose` 用同一几何建立 `Menu`/`MenuItem` 无障碍节点、激活动作和纵向导航；host 只保留打开状态、关闭、焦点恢复与命令执行。`MenuStyle::with_header_height` 保留调用界面拥有的 header geometry，`Menu::{paint_with_header,draw_components_with_header}` 保证 header 与菜单项处于同一组件树。
+`Menu` 拥有无边框菜单外壳、与 macOS 原生弹出菜单同量级的单层下落阴影、2px padding、4px radius、纵向 `ActionBar`、选择展示和 item bounds/hit-test。`MenuItem::Action` 只把 host 提供的稳定 identity 绑定到 `ActionViewItem`，图标、文字、状态、可访问名称和可选主轴尺寸仍由 `ActionViewItem` 单独拥有；`MenuItem::Separator` 直接变成 `ActionBarItem::Separator`，不进入交互或无障碍树。`Dropdown::new_scrollable` 使用 `DropdownScrollConfiguration` 把 Menu 的 item region 组合进 ListView，只绘制可见和 overscan 条目，header 和外壳不随内容滚动。`Menu::compose` 用同一几何建立 `Menu`/`MenuItem` 无障碍节点、激活动作和纵向导航；host 只保留打开状态、关闭、焦点恢复与命令执行。`MenuStyle::{with_header_height,with_separator_style}` 分别定义调用界面拥有的 header geometry 与分隔项样式，`Menu::{paint_with_header,draw_components_with_header}` 保证 header 与菜单项处于同一组件树。
 
-`ContextMenu` 使用 `ContextView` 定位一个完整 `Menu`，只增加锚定、viewport 翻转/约束和浮层层级。标签菜单与 SCM 工具栏菜单直接提供 `MenuIds`/`MenuItem`，不再分别创建菜单项交互节点；标签菜单的重命名输入仍通过 header 入口组合，状态和输入语义保留在 Workbench。
-`Dropdown` 是另一层 ContextView 组合：它使用无外层 padding 的浮层外壳，
-用垂直 ActionBar 排列 label item，并默认选择第一个 enabled item。Host 可以用
-`DropdownSelection::Item` 投影 hover/focus/pressed 对应的唯一选择，用 Dropdown 返回的同源
-bounds 注册交互。`DropdownStyle::with_header_height` 与 `Dropdown::paint_with_header` 为
-选择器保留 product-owned header，但不拥有查询或输入状态；Native 的工作区目录 picker 通过
-这条契约组合 SearchBox。`Dropdown::new_scrollable` 进一步把 item region 组合进 ScrollView，
-并以 `DropdownScrollConfiguration` 限制可见行数；header 不随内容滚动。selected identity、
-open/close、平台滚轮路由和 command 不进入组件。
+`Dropdown` 使用 `ContextView` 定位一个完整 `Menu`，只增加锚定、viewport 翻转/约束和浮层层级。标签右键菜单与 SCM 工具栏菜单直接提供 `MenuIds`/`MenuItem`；右键或按钮触发、打开状态与关闭策略保留在各自调用界面。标签菜单的重命名输入仍通过 header 入口组合，状态和输入语义保留在 Workbench。`Dropdown::new_scrollable` 原样组合 Menu 的滚动能力并公开 item viewport 与 scroll metrics。
+
+`Picker` 直接组合可滚动 `Dropdown` 与 `SearchBox`。候选项转换为带稳定 identity 的 `MenuItem::Action`，因此菜单外壳、阴影、padding、选择展示、命中、纵向导航和无障碍结构全部复用 `Menu`；Picker 只增加搜索输入区域和 modal root。候选数据、查询、过滤、open/close、平台滚轮路由和选择结果执行保留在调用界面。
 `TextInput` 拥有 local editing state 和 composition，但不拥有 focus、platform IME lifecycle、
 component chrome 或产品 reducer。`InputBox::new` 使用 `TextInputLayoutEngine` 从 base state
 生成 immutable layout，再组合 background、border、placeholder、selection、caret 和 preedit
@@ -292,8 +284,7 @@ bazel test //app/ui-components:ui-unit-tests
 ScrollState 的 axis clamp、绝对 offset、首尾和
 ensure-visible transition，水平/垂直 Scrollbar 的独立类型、比例 thumb geometry、track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ScrollView 的内容坐标、裁剪和 visibility policy，ListView 的固定/可变高度 visible/overscan range、平衡分块高度索引、O(log n) 单项更新、O(log n + k) 区间 splice、稀疏高度覆盖、scroll anchor、gap/padding、translated bounds、hit-test、ensure-visible 与 visible/overscan-only paint，TreeView 的固定/可变 item、depth/disclosure geometry、命中与 visible/overscan-only paint，
 ContextView 的纵/横锚定、
-翻转、对齐、viewport 约束、外壳/内容裁剪，Dropdown 的默认/显式选择、无外层 inset 与命中，
-Menu 的柔和阴影、2px padding、4px radius、默认/显式选择、命中、纵向导航与无障碍父子关系，ContextMenu 的锚定浮层组合，ActionBar 排列与命中、
+翻转、对齐、viewport 约束、外壳/内容裁剪，Menu 的柔和阴影、2px padding、4px radius、默认/显式选择、滚动投影、命中、纵向导航与无障碍父子关系，Dropdown 的锚定浮层组合，ActionBar 排列与命中、
 TabList 横纵排列与
 surface 状态、按钮、图标标签和输入框的状态/样式/布局。GPU conversion、shader、atlas 与 input
 validation 测试属于具体 backend crate。
@@ -319,16 +310,14 @@ validation 测试属于具体 backend crate。
   leading icon，但尚无独立 focus ring、trailing content 或额外的 component-specific accessibility action；
 - `ActionBar` 当前支持 horizontal/vertical Button 与 Separator、同源 item bounds 和 hit-test，
   但尚无 roving focus、keyboard navigation、overflow 或 custom representation；
-- `Dropdown` 当前只支持单列 label item、固定 item size、单项 selection 与非虚拟化滚动；icon、
-  separator、submenu、typeahead、打开/关闭与 accessibility scope 尚无；
-- `BoxShadow` 当前支持单个圆角矩形阴影的 color、offset、blur radius 与 spread；尚无 inset 或多重 shadow。`Menu` 暂不内建 icon、separator、submenu、typeahead 或超高菜单滚动；
+- `BoxShadow` 当前支持单个圆角矩形阴影的 color、offset、blur radius 与 spread；尚无 inset 或多重 shadow。`Menu` 已通过 `ActionViewItem` 支持 label、icon、icon+label、styled label、separator 和可滚动列表，暂不内建 submenu 或 typeahead；
 - `TabList` 当前只拥有固定 item size、gap 和 Tab surface paint；custom content、动态宽度、
   overflow、close action、identity、interaction 与 tabpanel 均由 composed control/host 拥有；
 - `NavBar` 当前尚未作为独立 component 存在；在出现稳定的横向 Titlebar TabList 消费者后，才评估是否把方向、slot 和 overflow/scroll geometry 收敛为 `zeta-ui-components` presentation contract；
 - `ContextView` 不拥有 shadow、arrow/callout，也不拥有 outside click、Escape、focus
   restoration 或 accessibility scope；overflow shadow 由托管内容的 `PaintRect` 拥有，
   lifecycle/interaction 由 host 与 `zui` 组合；
-- `HorizontalScrollbar` 与 `VerticalScrollbar` 当前提供 overlay scrollbar 的同源 paint/hit/track-page/thumb-drag geometry，`ScrollbarController` 提供 hover/active/fade presentation，`ScrollView` 只决定启用方向与 visibility policy；平台事件接线、pointer capture、滚动惯性、overscroll 和 scroll-specific accessibility action 仍由 host/dispatch 扩展；
+- `HorizontalScrollbar` 与 `VerticalScrollbar` 当前提供 overlay scrollbar 的同源 paint/hit/track-page/thumb-drag geometry，`ScrollbarController` 统一保留 hover/active/fade presentation 和 pointer capture，`ScrollView` 只决定启用方向与 visibility policy；平台事件接线、滚动惯性、overscroll 和 scroll-specific accessibility action 仍由 host/dispatch 扩展；
 - `ListView` 支持固定和可变 item extent，但不主动测量 item 内容；caller 把测量值写入 retained `VirtualListLayout`，并负责以稳定 identity 处理 reorder anchor。Selection、键盘导航与 focus anchor 仍由 composed control 拥有；
 - `TreeView` 只消费 host-flattened visible nodes；宿主负责让节点 splice 与高度 splice 使用同一范围。异步 child loading、展开状态持久化、稳定节点 identity、selection、重命名、拖放和文件打开仍属于产品 Tree model/host；
 - `Sash` 与 `Resizable` 当前提供 presentation geometry、hover timing 和通用 split snapshot
@@ -345,4 +334,4 @@ validation 测试属于具体 backend crate。
 - `FontWeight` 与 `FontStyle` 只有常用 semantic variants；
 - CoreText 只做 catalog，不做 shaping/raster，也没有 app font registration；
 
-扩展点：出现第二个需要 secondary action/overflow 的真实消费者后，可以在 `ActionBar` 上组合独立 `ToolBar`；出现 Dropdown 或 custom representation 后，再扩展 `ActionViewItem` 的具体展示，不把产品 action identity、命令或 callback 下沉到通用控件。出现真实编辑器/终端消费者后，还可以分别增加可增长或可回收的图标图集、保留式段落缓存、平台字体注册、RGBA 图像/路径 primitives 与统一 display list。是否采用 CoreText shaping 应由跨平台 metrics/fallback 一致性测试决定，不是当前 API 的既定承诺。
+扩展点：出现第二个需要 secondary action/overflow 的真实消费者后，可以在 `ActionBar` 上组合独立 `ToolBar`；出现新的菜单项展示需求后，再扩展 `ActionViewItem` 的具体展示，不把产品 action identity、命令或 callback 下沉到通用控件。出现真实编辑器/终端消费者后，还可以分别增加可增长或可回收的图标图集、保留式段落缓存、平台字体注册、RGBA 图像/路径 primitives 与统一 display list。是否采用 CoreText shaping 应由跨平台 metrics/fallback 一致性测试决定，不是当前 API 的既定承诺。

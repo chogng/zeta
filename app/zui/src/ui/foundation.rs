@@ -3,6 +3,7 @@
 mod animation;
 mod color;
 mod geometry;
+mod hover;
 mod icon;
 mod identity;
 mod interaction;
@@ -19,6 +20,8 @@ pub use geometry::Edges;
 pub use geometry::Point;
 pub use geometry::Rect;
 pub use geometry::Size;
+pub use hover::Hover;
+pub use hover::HoverPresence;
 pub use icon::Icon;
 pub use icon::IconDefinition;
 pub use icon::IconId;

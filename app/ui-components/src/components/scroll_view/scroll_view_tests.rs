@@ -107,11 +107,11 @@ fn automatic_vertical_scrollbar_uses_proportional_clamped_thumb_geometry() {
 
     assert_eq!(
         scrollbar.track_bounds(),
-        Rect::from_xywh(90.0, 2.0, 8.0, 96.0)
+        Rect::from_xywh(92.0, 0.0, 8.0, 100.0)
     );
     assert_eq!(
         scrollbar.thumb_bounds(),
-        Rect::from_xywh(90.0, 74.0, 8.0, 24.0)
+        Rect::from_xywh(92.0, 75.0, 8.0, 25.0)
     );
     assert!(view.horizontal_scrollbar().is_none());
 }

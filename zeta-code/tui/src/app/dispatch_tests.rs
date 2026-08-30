@@ -345,12 +345,15 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
 }
 
 #[test]
-fn theme_selection_uses_the_shared_config_authority() {
+fn theme_selection_updates_the_tui_toml_section() {
     let (mut client, state_root) = client();
 
     crate::features::config::set_tui_theme(&mut client, "zeta-code-light".into()).unwrap();
 
-    assert_eq!(client.read_config().unwrap().tui.theme, "zeta-code-light");
+    assert_eq!(
+        crate::features::config::tui_theme(&client.read_config().unwrap()),
+        "zeta-code-light"
+    );
     drop(client);
     let _ = fs::remove_dir_all(state_root);
 }

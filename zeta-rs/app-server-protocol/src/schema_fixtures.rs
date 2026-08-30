@@ -546,19 +546,22 @@ fn config_patch_distinguishes_missing_null_and_value() {
         "preferredModel": null,
         "approvalReviewModel": null,
         "agentGrepBackend": null,
-        "tuiTheme": null
+        "gui": null,
+        "tui": null
     }))
     .unwrap();
 
     assert_eq!(missing.preferred_model, Patch::Missing);
     assert_eq!(missing.approval_review_model, Patch::Missing);
     assert_eq!(missing.agent_grep_backend, Patch::Missing);
-    assert_eq!(missing.tui_theme, Patch::Missing);
+    assert_eq!(missing.gui, Patch::Missing);
+    assert_eq!(missing.tui, Patch::Missing);
     assert_eq!(missing.expected_revision, 0);
     assert_eq!(null.preferred_model, Patch::Null);
     assert_eq!(null.approval_review_model, Patch::Null);
     assert_eq!(null.agent_grep_backend, Patch::Null);
-    assert_eq!(null.tui_theme, Patch::Null);
+    assert_eq!(null.gui, Patch::Null);
+    assert_eq!(null.tui, Patch::Null);
     assert_eq!(
         serde_json::to_value(missing).unwrap(),
         serde_json::json!({"commandId": "missing", "expectedRevision": 0})
@@ -571,7 +574,8 @@ fn config_patch_distinguishes_missing_null_and_value() {
             "preferredModel": null,
             "approvalReviewModel": null,
             "agentGrepBackend": null,
-            "tuiTheme": null
+            "gui": null,
+            "tui": null
         })
     );
 }

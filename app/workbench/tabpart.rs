@@ -46,7 +46,10 @@ pub(crate) use tab_context_menu::TAB_CONTEXT_MENU;
 
 #[cfg(test)]
 fn test_style() -> WorkbenchUiStyle {
-    use crate::{Color, Edges, InputBoxStateColors, InputBoxStyle, SearchBoxStyle, TextStyle};
+    use crate::{
+        Color, Edges, InputBoxStateColors, InputBoxStyle, ScrollViewStyle, ScrollbarStyle,
+        SearchBoxStyle, TextStyle,
+    };
     use zeta_icons::icons;
 
     let input = InputBoxStyle::new(
@@ -82,6 +85,12 @@ fn test_style() -> WorkbenchUiStyle {
             error: Color::rgb(180, 38, 38),
         },
         SearchBoxStyle::new(input, icons::SEARCH, Color::rgb(126, 126, 132)).with_icon_size(18.0),
+        ScrollViewStyle::new(
+            ScrollbarStyle::new(Color::TRANSPARENT, Color::rgb(126, 126, 132))
+                .with_thickness(6.0)
+                .with_hovered_colors(Color::TRANSPARENT, Color::rgb(90, 90, 96))
+                .with_active_colors(Color::TRANSPARENT, Color::rgb(64, 64, 70)),
+        ),
         icons::GEAR,
         icons::ADD,
         icons::CLOSE,

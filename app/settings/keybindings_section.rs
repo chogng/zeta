@@ -62,11 +62,7 @@ impl SettingsKeybindingsViewport {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct SettingsScrollbarPointerOutcome {
-    pub handled: bool,
-    pub presentation_changed: bool,
-}
+pub type SettingsScrollbarPointerOutcome = zeta_ui_components::ScrollbarInteractionOutcome;
 
 pub(crate) struct KeybindingsSection<'a> {
     bounds: Rect,

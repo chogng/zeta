@@ -4,8 +4,8 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::text_metrics::display_columns;
 use super::{
-    CELL_WIDTH, CONTENT_HORIZONTAL_PADDING, CodeEditor, CodeEditorLineWrapping,
-    CodeEditorNavigation, CodeEditorPosition, CodeEditorRowSource, TAB_WIDTH,
+    CodeEditor, CodeEditorLineWrapping, CodeEditorNavigation, CodeEditorPosition,
+    CodeEditorRowSource, TAB_WIDTH,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -142,8 +142,9 @@ impl CodeEditor<'_> {
 
     fn wrap_column_capacity(&self) -> usize {
         let layout = self.layout();
-        ((layout.content.size.width - CONTENT_HORIZONTAL_PADDING * 2.0).max(CELL_WIDTH)
-            / CELL_WIDTH)
+        let cell_width = self.style.cell_width();
+        ((layout.content.size.width - self.content_horizontal_padding * 2.0).max(cell_width)
+            / cell_width)
             .floor() as usize
     }
 

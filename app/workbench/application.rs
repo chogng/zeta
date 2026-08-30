@@ -30,6 +30,7 @@ use crate::{
     terminal_grid_size_for_bounds, terminal_grid_size_for_viewport,
     terminal_pane_bounds_for_viewport, terminal_pane_sash_for_viewport,
 };
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 use zeta_editor::CodeEditorStyle;
 use zeta_editor_host::FILE_EDITOR_DOCUMENT;
 use zeta_editor_host::FileEditorHost;
@@ -50,9 +51,12 @@ use zeta_terminal_runtime::TerminalPaneViewState;
 use zeta_terminal_runtime::TerminalPaneViews;
 use zeta_terminal_runtime::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, default_device_root};
-use zeta_ui_components::{SashOrientation, SashPointerPresence};
+use zeta_ui_components::SashOrientation;
 use zeta_ui_theme::{DEFAULT_UI_THEME, UiTheme};
-use zui::ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
+use zui::ui::{
+    CaretBlinkAdvance, CaretBlinkController, Color, FontFamily, Point, TextInputLayoutEngine,
+    TextStyle,
+};
 use zui::ui::{SplitViewOrientation, SplitViewResizeSnapshot};
 
 type TerminalRuntime =
@@ -79,6 +83,7 @@ use zui::ui::FrameDeadlineSet;
 use zui::ui::FrameInvalidation;
 use zui::ui::FrameSchedule;
 use zui::ui::FrameScheduler;
+use zui::ui::HoverPresence;
 use zui::ui::RetainedRuntime;
 use zui::ui::UiDispatch;
 use zui::ui::UiIntent;
@@ -162,6 +167,10 @@ pub(crate) mod remote_tunnel_process;
 mod run;
 #[path = "application/runtime.rs"]
 mod runtime;
+use self::runtime::GuiConfig;
+#[cfg(test)]
+#[path = "application/runtime_tests.rs"]
+mod runtime_tests;
 #[path = "application/scm_input.rs"]
 mod scm_input;
 #[path = "agent/session_host.rs"]

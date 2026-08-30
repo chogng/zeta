@@ -29,7 +29,7 @@ use zeta_scm::GitBranchPickerState;
 use zeta_scm::{CHANGES_PANE, CHANGES_TOOLBAR, MULTI_DIFF_EDITOR, ScmDiff, ScmState};
 use zeta_session::SessionPaneState;
 use zeta_session::interaction::{
-    COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, ContextAction, SESSION_HEADER, THREAD_TIMELINE,
+    COMPOSER, COMPOSER_KEY_HINT_BAR, COMPOSER_PANEL, ContextAction, SESSION_HEADER, THREAD_TIMELINE,
 };
 use zeta_settings::RemoteConnectionManagerState;
 use zeta_settings::RemoteConnectionPickerState;
@@ -543,7 +543,7 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
     assert_eq!(layout.main().bottom(), 700.0);
     assert_eq!(layout.output.bottom(), layout.composer_panel.origin.y);
     assert_eq!(layout.composer_panel.origin.y, 572.0);
-    assert_eq!(layout.composer_info_bar.origin.y, 580.0);
+    assert_eq!(layout.composer_key_hint_bar.origin.y, 580.0);
     assert_eq!(layout.composer.origin.y, 612.0);
     assert_eq!(layout.composer.bottom(), 656.0);
     assert_eq!(layout.composer_toolbar.origin.y, 664.0);
@@ -655,7 +655,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
 }
 
 #[test]
-fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
+fn multiline_composer_grows_upward_between_key_hints_and_bottom_toolbar() {
     let layout = WorkbenchSceneLayout::for_viewport_with_composer_height(
         viewport(),
         TabContainerState::collapsed(),
@@ -668,7 +668,7 @@ fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
     assert_eq!(layout.composer_panel.size.height, 244.0);
     assert_eq!(
         layout.composer.origin.y,
-        layout.composer_info_bar.bottom() + 8.0
+        layout.composer_key_hint_bar.bottom() + 8.0
     );
     assert_eq!(
         layout.composer.bottom() + 8.0,
@@ -693,7 +693,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
         .iter()
         .find(|rect| rect.bounds() == layout.composer_panel)
         .unwrap();
-    let info_editor_separator = presentation
+    let hint_editor_separator = presentation
         .frame()
         .scene()
         .rects()
@@ -703,7 +703,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
                 == layout
                     .session_pane_layout
                     .composer()
-                    .info_editor_separator()
+                    .hint_editor_separator()
         })
         .unwrap();
 
@@ -714,7 +714,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
     assert_eq!(composer_panel.fill(), Color::WHITE);
     assert_eq!(composer_panel.border().widths().top, 1.0);
     assert_eq!(
-        info_editor_separator.fill(),
+        hint_editor_separator.fill(),
         zeta_ui_theme::DEFAULT_UI_THEME.border
     );
     let intentional_pills = presentation
@@ -1363,9 +1363,9 @@ fn open_tab_context_menu_keeps_target_action_bar_visible_in_the_tab_container() 
 fn primary_presentation_publishes_current_control_semantics_and_focus() {
     let (presentation, dispatch) = presentation_with_dispatch(None, 0);
     let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
-    let info_bar = accessibility_nodes
+    let key_hint_bar = accessibility_nodes
         .iter()
-        .find(|node| node.id == COMPOSER_INFO_BAR)
+        .find(|node| node.id == COMPOSER_KEY_HINT_BAR)
         .unwrap();
     let composer = accessibility_nodes
         .iter()
@@ -1376,27 +1376,32 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
         .find(|node| node.id == ContextAction::Location.element_id())
         .unwrap();
 
-    assert_eq!(info_bar.role, AccessibilityRole::Group);
-    assert_eq!(info_bar.label, "/ for commands");
-    let inspected_info_bar = presentation
+    assert_eq!(key_hint_bar.role, AccessibilityRole::Group);
+    assert_eq!(key_hint_bar.label, "/ for commands");
+    let inspected_key_hint_bar = presentation
         .frame()
         .scene()
         .inspection()
         .target_at(Point::new(
-            info_bar.bounds.origin.x + 100.0,
-            info_bar.bounds.origin.y + info_bar.bounds.size.height / 2.0,
+            key_hint_bar.bounds.origin.x + 100.0,
+            key_hint_bar.bounds.origin.y + key_hint_bar.bounds.size.height / 2.0,
         ))
-        .expect("composer info bar should expose its inspection hierarchy");
+        .expect("composer key hint bar should expose its inspection hierarchy");
     assert_eq!(
         presentation
             .frame()
             .scene()
             .inspection()
-            .ancestry(inspected_info_bar.id())
+            .ancestry(inspected_key_hint_bar.id())
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        vec!["MainSurface", "ComposerPanel", "ComposerInfoBar"]
+        vec![
+            "MainSurface",
+            "ComposerPanel",
+            "ComposerContent",
+            "KeyHintBar"
+        ]
     );
     assert_eq!(composer.role, AccessibilityRole::TextInput);
     assert_eq!(composer.label, "Command input");
@@ -1405,6 +1410,24 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
     assert_eq!(location.role, AccessibilityRole::Button);
     assert_eq!(location.label, "Environment: Local");
     assert!(!location.focused);
+    for (name, bounds) in [("editor", composer.bounds), ("toolbar", location.bounds)] {
+        let inspected = presentation
+            .frame()
+            .scene()
+            .inspection()
+            .target_at(Point::new(bounds.origin.x + 1.0, bounds.origin.y + 1.0))
+            .unwrap_or_else(|| panic!("composer {name} should be inspectable"));
+        assert!(
+            presentation
+                .frame()
+                .scene()
+                .inspection()
+                .ancestry(inspected.id())
+                .iter()
+                .any(|node| node.name() == "ComposerContent"),
+            "composer {name} should be inside ComposerContent"
+        );
+    }
 }
 
 #[test]

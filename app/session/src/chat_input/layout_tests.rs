@@ -14,28 +14,35 @@ fn interaction_expands_chat_input_upward_and_preserves_fixed_rows() {
     assert_eq!(closed.panel().bottom(), main.bottom());
     assert_eq!(open.panel().bottom(), main.bottom());
     assert!(open.panel().origin.y < closed.panel().origin.y);
-    assert_eq!(open.info_bar(), closed.info_bar());
+    assert_eq!(open.key_hint_bar(), closed.key_hint_bar());
     assert_eq!(open.editor(), closed.editor());
     assert_eq!(open.toolbar(), closed.toolbar());
     assert!(open.output().size.height < closed.output().size.height);
 }
 
 #[test]
-fn fixed_rows_place_info_above_editor_and_toolbar_at_the_bottom() {
+fn fixed_rows_place_key_hints_above_editor_and_toolbar_at_the_bottom() {
     let main = Rect::from_xywh(0.0, 0.0, 800.0, 600.0);
     let layout = ComposerPanelLayout::for_main(main, 44.0, 0.0);
 
-    assert!(layout.info_bar().bottom() < layout.editor().origin.y);
+    assert!(layout.key_hint_bar().bottom() < layout.editor().origin.y);
     assert_eq!(
-        layout.info_editor_separator().bottom(),
+        layout.hint_editor_separator().bottom(),
         layout.editor().origin.y
     );
     assert_eq!(
-        layout.info_editor_separator().size.width,
+        layout.hint_editor_separator().size.width,
         layout.panel().size.width
     );
     assert!(layout.editor().bottom() < layout.toolbar().origin.y);
     assert!(layout.toolbar().bottom() < layout.panel().bottom());
+    assert_eq!(layout.content().origin.x, layout.panel().origin.x + 24.0);
+    assert_eq!(layout.content().origin.y, layout.key_hint_bar().origin.y);
+    assert_eq!(layout.content().bottom(), layout.toolbar().bottom());
+    for child in [layout.key_hint_bar(), layout.editor(), layout.toolbar()] {
+        assert_eq!(child.origin.x, layout.content().origin.x);
+        assert_eq!(child.size.width, layout.content().size.width);
+    }
 }
 
 #[test]

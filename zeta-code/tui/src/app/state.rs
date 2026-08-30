@@ -880,6 +880,10 @@ impl App {
         }
     }
 
+    pub(crate) const fn terminal_settings(&self) -> TerminalSettings {
+        self.terminal_settings
+    }
+
     pub(crate) fn update_pointer_hover(&mut self, target: Option<InputPointerTarget>) {
         self.pointer.update_hover(target);
     }
@@ -1484,6 +1488,18 @@ impl App {
                 }
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
+            }
+            AppEvent::ConfigUpdated(result) => {
+                self.terminal_settings = result.settings;
+                if !result.settings.mouse_interactions() {
+                    self.screen_selection.clear();
+                }
+                self.thread_presentations
+                    .set_input_mode(result.settings.input_mode());
+                self.replace_list_selection_pane(
+                    result.pane_spec.model,
+                    PaneActions::Config(result.pane_spec.actions),
+                );
             }
             AppEvent::ConfigPaneOpened(view) => {
                 self.push_list_selection_pane(view.model, PaneActions::Config(view.actions))

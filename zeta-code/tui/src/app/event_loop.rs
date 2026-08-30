@@ -32,7 +32,6 @@ use crate::components::chat_composer::ChatComposerPointerTarget;
 use crate::components::chat_input::ChatInputCatalog;
 use crate::features::approval::Approval;
 use crate::features::config;
-use crate::features::config::ConfigResource;
 use crate::features::dirs;
 use crate::features::file_search::FileSearchManager;
 use crate::features::keymap::KeymapResource;
@@ -88,7 +87,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         host_file_search_root,
         keybindings_path,
         status_line_path,
-        terminal_settings_path,
         theme_root,
         recovery,
     } = options;
@@ -135,15 +133,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     };
     let mut file_search = host_file_search_root.map(FileSearchManager::new);
     let mut app = App::for_dir_with_input_catalog(&display_dir_root, input_catalog);
-    let mut config_resource = terminal_settings_path.map(ConfigResource::new);
-    match config::refresh_terminal_settings(config_resource.as_mut()) {
-        Ok(terminal) => app.update(AppEvent::ConfigSettingsReceived(terminal.settings)),
-        Err(error) => app.update(AppEvent::FailureReported(error)),
-    }
     let initial_config = client.read_config();
     let theme_preference = initial_config
         .as_ref()
-        .map(|config| config.tui.theme.as_str())
+        .map(config::tui_theme)
         .unwrap_or("system");
     match theme_resource.load(theme_preference) {
         Ok(loaded) => {
@@ -155,9 +148,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         Err(error) => app.update(AppEvent::FailureReported(error)),
     }
     match initial_config {
-        Ok(config) => app.update(AppEvent::PreferredModelReceived(config.preferred_model)),
+        Ok(config) => {
+            match config::TerminalSettings::from_tui(&config.tui) {
+                Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
+                Err(error) => app.update(AppEvent::FailureReported(error)),
+            }
+            app.update(AppEvent::PreferredModelReceived(config.preferred_model));
+        }
         Err(error) => app.update(AppEvent::FailureReported(format!(
-            "could not read shared configuration: {error}"
+            "could not read server configuration: {error}"
         ))),
     }
     match sessions::load_catalog(&mut client) {
@@ -451,11 +450,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             let mut request_client = client.clone();
                             let next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
-                            let dir_permissions = config_resource
-                                .as_ref()
-                                .map(ConfigResource::settings)
-                                .unwrap_or_default()
-                                .dir_permissions();
+                            let dir_permissions = app.terminal_settings().dir_permissions();
                             pending_request = spawn_request(
                                 "zeta-tui-product-command",
                                 move || {
@@ -531,42 +526,41 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::OpenConfigPane => {
-                        match config::refresh_terminal_settings(config_resource.as_mut()) {
-                            Ok(terminal) => {
-                                app.update(AppEvent::ConfigSettingsReceived(terminal.settings));
-                                if pending_request.is_none() {
-                                    let mut request_client = client.clone();
-                                    let session_id = conversation.session_id().clone();
-                                    pending_request = spawn_request(
-                                        "zeta-tui-read-config",
-                                        move || {
-                                            RequestCompletion::Presentation(
-                                                config::read_config_pane(
-                                                    &mut request_client,
-                                                    &session_id,
-                                                    terminal,
-                                                )
-                                                .map(AppEvent::ConfigPaneOpened)
-                                                .map_err(|error| error.to_string()),
-                                            )
-                                        },
-                                        &mut app,
-                                    );
-                                }
-                            }
-                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let session_id = conversation.session_id().clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-read-config",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        config::read_config_pane(
+                                            &mut request_client,
+                                            &session_id,
+                                        )
+                                        .map(AppEvent::ConfigPaneOpened)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
                         }
                     }
-                    AppCommand::EditConfig(edit) => match config::apply_config_edit(
-                        config_resource.as_mut(),
-                        &edit,
-                    ) {
-                        Ok(result) => {
-                            app.update(AppEvent::ConfigSettingsReceived(result.settings));
-                            app.update(AppEvent::ConfigPaneReplaced(result.pane_spec));
+                    AppCommand::EditConfig(edit) => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-set-config",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        config::set_terminal_settings(&mut request_client, edit)
+                                            .map(AppEvent::ConfigUpdated)
+                                            .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
                         }
-                        Err(error) => app.update(AppEvent::FailureReported(error)),
-                    },
+                    }
                     AppCommand::EditPermissions(edit) => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
@@ -587,16 +581,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::SetProviderApiKey(edit) => {
-                        let terminal = config_resource
-                            .as_ref()
-                            .map(|resource| config::TerminalSettingsSnapshot {
-                                settings: resource.settings(),
-                                revision: resource.revision(),
-                            })
-                            .unwrap_or(config::TerminalSettingsSnapshot {
-                                settings: config::TerminalSettings::default(),
-                                revision: 0,
-                            });
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
@@ -607,7 +591,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         config::set_provider_api_key(
                                             &mut request_client,
                                             edit,
-                                            terminal,
                                             &session_id,
                                         )
                                         .map(|update| AppEvent::ConfigApiKeySaved {
@@ -728,7 +711,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             .map_err(|error| error.to_string())
                                             .and_then(|config| {
                                                 request_theme_resource
-                                                    .catalog(&config.tui.theme)
+                                                    .catalog(config::tui_theme(&config))
                                                     .map(|catalog| {
                                                         AppEvent::ThemePaneOpened(
                                                             theme_feature::theme_pane_spec(&catalog),
@@ -754,7 +737,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             .map_err(|error| error.to_string())
                                             .and_then(|config| {
                                                 request_theme_resource
-                                                    .catalog(&config.tui.theme)
+                                                    .catalog(config::tui_theme(&config))
                                                     .map(|catalog| {
                                                         AppEvent::ThemePaneOpened(
                                                             theme_feature::custom_theme_pane_spec(

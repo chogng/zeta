@@ -50,6 +50,7 @@ fn toolbar_projects_four_real_context_values_as_action_buttons() {
         ["Local", "~/Desktop/zeta", "main", "Changes 7 • +7 -0"]
     );
     assert_eq!(scene.rects().len(), 4);
+    assert_eq!(toolbar.item_bounds(0).unwrap().origin.x, 24.0);
     assert!(scene.text_blocks().iter().all(|block| {
         block
             .spans()

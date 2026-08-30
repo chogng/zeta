@@ -108,6 +108,8 @@ impl WorkbenchApplication {
             .workbench
             .scroll_tab_container(tab_container_scroll_command(delta), metrics)
         {
+            self.workbench
+                .tab_container_scrollbar_activity(Instant::now());
             self.rebuild_presentation_on_next_redraw();
         }
         true

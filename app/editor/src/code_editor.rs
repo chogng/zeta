@@ -17,17 +17,16 @@ pub use self::folding::{CodeEditorFoldControl, CodeEditorFoldState, CodeEditorFo
 pub use self::indentation::CodeEditorIndentation;
 use self::layout::{CodeEditorLayout, build_layout};
 pub use self::search::{CodeEditorCaseSensitivity, CodeEditorSearchMatch, CodeEditorSearchQuery};
-pub use self::style::{CodeEditorPalette, CodeEditorStyle};
+pub use self::style::{
+    CodeEditorPalette, CodeEditorStyle, CodeEditorTypography, CodeEditorTypographyError,
+};
 pub use self::syntax::{CodeEditorSyntaxPalette, CodeEditorSyntaxToken, CodeEditorTokenRole};
-use self::text_metrics::{display_columns, expand_tabs, visit_display_cell_runs};
+use self::text_metrics::visit_display_cell_runs;
 use self::wrapping::{CodeEditorVisualLine, CodeEditorVisualProjection};
 
-const HEADER_HEIGHT: f32 = 32.0;
-const ROW_HEIGHT: f32 = 20.0;
-const CELL_WIDTH: f32 = 8.0;
 const MARKER_WIDTH: f32 = 16.0;
 const GUTTER_HORIZONTAL_PADDING: f32 = 8.0;
-const CONTENT_HORIZONTAL_PADDING: f32 = 8.0;
+const DEFAULT_CONTENT_HORIZONTAL_PADDING: f32 = 8.0;
 const TAB_WIDTH: usize = 4;
 
 fn paint_text_block(
@@ -36,6 +35,7 @@ fn paint_text_block(
     origin: Point,
     bounds: Size,
     style: TextStyle,
+    cell_width: f32,
 ) {
     let text = text.into();
     if text.is_empty() || bounds.width <= 0.0 || bounds.height <= 0.0 {
@@ -50,6 +50,7 @@ fn paint_text_block(
             run.column,
             run.columns,
             &style,
+            cell_width,
         );
     });
 }
@@ -62,6 +63,7 @@ fn paint_cell_run(
     column: usize,
     columns: usize,
     style: &TextStyle,
+    cell_width: f32,
 ) {
     if text.is_empty() || columns == 0 {
         return;
@@ -69,8 +71,8 @@ fn paint_cell_run(
     scene.draw_text(
         TextBlock::new(
             text,
-            Point::new(origin.x + column as f32 * CELL_WIDTH, origin.y),
-            Size::new(columns as f32 * CELL_WIDTH, height),
+            Point::new(origin.x + column as f32 * cell_width, origin.y),
+            Size::new(columns as f32 * cell_width, height),
             style.clone(),
         )
         .with_wrap(TextBlockWrap::None),
@@ -195,10 +197,10 @@ impl Default for CodeEditorNavigation {
 }
 
 impl CodeEditorHeader<'_> {
-    const fn height(self) -> f32 {
+    fn height(self, style: &CodeEditorStyle) -> f32 {
         match self {
             Self::Hidden => 0.0,
-            Self::Label(_) => HEADER_HEIGHT,
+            Self::Label(_) => style.header_height(),
         }
     }
 }
@@ -433,6 +435,7 @@ pub struct CodeEditor<'a> {
     header: CodeEditorHeader<'a>,
     style: CodeEditorStyle,
     presentation: CodeEditorPresentation,
+    content_horizontal_padding: f32,
     line_wrapping: CodeEditorLineWrapping,
     visual_projection: CodeEditorVisualProjection,
     caret_visibility: CaretVisibility,
@@ -442,13 +445,16 @@ pub struct CodeEditor<'a> {
 }
 
 impl<'a> CodeEditor<'a> {
-    /// Returns the vertical metric shared by row paint and host-owned viewport sizing.
-    pub const fn row_height() -> f32 {
-        ROW_HEIGHT
+    pub fn row_height(&self) -> f32 {
+        self.style.row_height()
     }
 
-    pub(crate) fn content_height_for_rows(header: CodeEditorHeader<'_>, row_count: usize) -> f32 {
-        header.height() + row_count as f32 * ROW_HEIGHT
+    pub(crate) fn content_height_for_rows(
+        header: CodeEditorHeader<'_>,
+        row_count: usize,
+        style: &CodeEditorStyle,
+    ) -> f32 {
+        header.height(style) + row_count as f32 * style.row_height()
     }
 
     pub fn new(
@@ -468,6 +474,7 @@ impl<'a> CodeEditor<'a> {
             header,
             style,
             presentation: CodeEditorPresentation::Document,
+            content_horizontal_padding: DEFAULT_CONTENT_HORIZONTAL_PADDING,
             line_wrapping: CodeEditorLineWrapping::None,
             visual_projection,
             caret_visibility: CaretVisibility::Visible,
@@ -480,6 +487,13 @@ impl<'a> CodeEditor<'a> {
     /// Selects a named geometry contract without changing the row source.
     pub fn with_presentation(mut self, presentation: CodeEditorPresentation) -> Self {
         self.presentation = presentation;
+        self.rebuild_visual_projection();
+        self
+    }
+
+    /// Sets the horizontal space between the content bounds and editor text.
+    pub fn with_content_horizontal_padding(mut self, padding: f32) -> Self {
+        self.content_horizontal_padding = padding.max(0.0);
         self.rebuild_visual_projection();
         self
     }
@@ -520,12 +534,12 @@ impl<'a> CodeEditor<'a> {
     }
 
     pub fn visible_row_capacity(&self) -> usize {
-        let body_height = (self.bounds.size.height - self.header.height()).max(0.0);
-        (body_height / ROW_HEIGHT).floor() as usize
+        let body_height = (self.bounds.size.height - self.header.height(&self.style)).max(0.0);
+        (body_height / self.style.row_height()).floor() as usize
     }
 
     pub fn content_height(&self) -> f32 {
-        Self::content_height_for_rows(self.header, self.visual_projection.len())
+        Self::content_height_for_rows(self.header, self.visual_projection.len(), &self.style)
     }
 
     pub fn visible_row_range(&self) -> Range<usize> {
@@ -544,10 +558,11 @@ impl<'a> CodeEditor<'a> {
         if visible.is_empty() || painted_body.is_empty() {
             return visible.start..visible.start;
         }
+        let row_height = self.style.row_height();
         let first_offset =
-            ((painted_body.origin.y - layout.body.origin.y) / ROW_HEIGHT).floor() as usize;
+            ((painted_body.origin.y - layout.body.origin.y) / row_height).floor() as usize;
         let end_offset =
-            ((painted_body.bottom() - layout.body.origin.y) / ROW_HEIGHT).ceil() as usize;
+            ((painted_body.bottom() - layout.body.origin.y) / row_height).ceil() as usize;
         visible.start.saturating_add(first_offset).min(visible.end)
             ..visible.start.saturating_add(end_offset).min(visible.end)
     }
@@ -559,7 +574,7 @@ impl<'a> CodeEditor<'a> {
         }
         let visible = self.visible_row_range();
         let visual_row = visible.start
-            + ((point.y - layout.body.origin.y) / ROW_HEIGHT)
+            + ((point.y - layout.body.origin.y) / self.style.row_height())
                 .floor()
                 .max(0.0) as usize;
         let line = self.visual_projection.line(self.rows, visual_row)?;
@@ -576,11 +591,12 @@ impl<'a> CodeEditor<'a> {
         let line = self.visual_projection.line(self.rows, location.row_index)?;
         let row = self.rows.row(line.row_index)?;
         let text = row.text?;
-        let local_column = if point.x <= layout.content.origin.x + CONTENT_HORIZONTAL_PADDING {
+        let local_column = if point.x <= layout.content.origin.x + self.content_horizontal_padding {
             0
         } else {
-            ((point.x - layout.content.origin.x - CONTENT_HORIZONTAL_PADDING) / CELL_WIDTH).floor()
-                as usize
+            ((point.x - layout.content.origin.x - self.content_horizontal_padding)
+                / self.style.cell_width())
+            .floor() as usize
         };
         let visual_column = self
             .horizontal_origin_column(line)
@@ -610,9 +626,9 @@ impl<'a> CodeEditor<'a> {
                 let bounds = Rect::from_xywh(
                     layout.gutter.right() - MARKER_WIDTH,
                     layout.body.origin.y
-                        + visual_row.saturating_sub(visible.start) as f32 * ROW_HEIGHT,
+                        + visual_row.saturating_sub(visible.start) as f32 * self.style.row_height(),
                     MARKER_WIDTH,
-                    ROW_HEIGHT,
+                    self.style.row_height(),
                 );
                 Some(CodeEditorFoldControl::new(range, bounds, state))
             })
@@ -627,7 +643,11 @@ impl<'a> CodeEditor<'a> {
     }
 
     fn layout(&self) -> CodeEditorLayout {
-        build_layout(self.bounds, self.gutter_width(), self.header.height())
+        build_layout(
+            self.bounds,
+            self.gutter_width(),
+            self.header.height(&self.style),
+        )
     }
 
     fn gutter_width(&self) -> f32 {
@@ -636,7 +656,7 @@ impl<'a> CodeEditor<'a> {
         }
         let largest_line = self.rows.largest_line_number().max(1);
         let digits = largest_line.ilog10() as f32 + 1.0;
-        MARKER_WIDTH + GUTTER_HORIZONTAL_PADDING * 2.0 + digits * CELL_WIDTH
+        MARKER_WIDTH + GUTTER_HORIZONTAL_PADDING * 2.0 + digits * self.style.cell_width()
     }
 
     fn paint_header(&self, scene: &mut UiScene, layout: CodeEditorLayout) {
@@ -645,9 +665,9 @@ impl<'a> CodeEditor<'a> {
         };
         scene.draw_rect(self.style.header_rect(layout.header));
         let label_bounds = Rect::from_xywh(
-            layout.header.origin.x + CONTENT_HORIZONTAL_PADDING,
+            layout.header.origin.x + self.content_horizontal_padding,
             layout.header.origin.y,
-            (layout.header.size.width - CONTENT_HORIZONTAL_PADDING * 2.0).max(0.0),
+            (layout.header.size.width - self.content_horizontal_padding * 2.0).max(0.0),
             layout.header.size.height,
         );
         paint_text_block(
@@ -656,6 +676,7 @@ impl<'a> CodeEditor<'a> {
             label_bounds.origin,
             label_bounds.size,
             self.style.header_text_style().clone(),
+            self.style.cell_width(),
         );
     }
 
@@ -668,11 +689,13 @@ impl<'a> CodeEditor<'a> {
         line: CodeEditorVisualLine,
         row: CodeEditorRow<'_>,
     ) {
+        let row_height = self.style.row_height();
+        let cell_width = self.style.cell_width();
         let row_bounds = Rect::from_xywh(
             layout.body.origin.x,
-            layout.body.origin.y + visible_row as f32 * ROW_HEIGHT,
+            layout.body.origin.y + visible_row as f32 * row_height,
             layout.body.size.width,
-            ROW_HEIGHT,
+            row_height,
         );
         scene.draw_rect(PaintRect::new(
             row_bounds,
@@ -690,7 +713,7 @@ impl<'a> CodeEditor<'a> {
                 row_bounds.origin.x,
                 row_bounds.origin.y,
                 layout.gutter.size.width,
-                ROW_HEIGHT,
+                row_height,
             );
             scene.draw_rect(PaintRect::new(gutter_bounds, self.style.gutter()));
             let number_width =
@@ -702,13 +725,13 @@ impl<'a> CodeEditor<'a> {
                 let number = format!(
                     "{:>width$}",
                     line_number,
-                    width = (number_width / CELL_WIDTH).floor() as usize
+                    width = (number_width / cell_width).floor() as usize
                 );
                 let number_bounds = Rect::from_xywh(
                     layout.gutter.origin.x + GUTTER_HORIZONTAL_PADDING,
                     row_bounds.origin.y,
                     number_width,
-                    ROW_HEIGHT,
+                    row_height,
                 );
                 paint_text_block(
                     scene,
@@ -716,6 +739,7 @@ impl<'a> CodeEditor<'a> {
                     number_bounds.origin,
                     number_bounds.size,
                     self.style.muted_text_style(),
+                    cell_width,
                 );
             }
             let fold = line
@@ -734,7 +758,7 @@ impl<'a> CodeEditor<'a> {
                     layout.gutter.right() - MARKER_WIDTH,
                     row_bounds.origin.y,
                     MARKER_WIDTH,
-                    ROW_HEIGHT,
+                    row_height,
                 );
                 paint_text_block(
                     scene,
@@ -742,6 +766,7 @@ impl<'a> CodeEditor<'a> {
                     marker_bounds.origin,
                     marker_bounds.size,
                     self.style.muted_text_style(),
+                    cell_width,
                 );
             } else if line.first_for_row
                 && let Some(marker) = row.marker
@@ -750,7 +775,7 @@ impl<'a> CodeEditor<'a> {
                     layout.gutter.right() - MARKER_WIDTH,
                     row_bounds.origin.y,
                     MARKER_WIDTH,
-                    ROW_HEIGHT,
+                    row_height,
                 );
                 paint_text_block(
                     scene,
@@ -758,6 +783,7 @@ impl<'a> CodeEditor<'a> {
                     marker_bounds.origin,
                     marker_bounds.size,
                     self.style.text_with_color(marker.color),
+                    cell_width,
                 );
             }
         }
@@ -766,7 +792,7 @@ impl<'a> CodeEditor<'a> {
             layout.content.origin.x,
             row_bounds.origin.y,
             layout.content.size.width,
-            ROW_HEIGHT,
+            row_height,
         );
         scene.with_clip(content_row_bounds, |scene| {
             let origin_column = self.horizontal_origin_column(line);
@@ -778,19 +804,7 @@ impl<'a> CodeEditor<'a> {
                 &row.inline_highlights,
                 origin_column,
             );
-            let text_origin = Point::new(
-                layout.content.origin.x + CONTENT_HORIZONTAL_PADDING
-                    - origin_column as f32 * CELL_WIDTH,
-                row_bounds.origin.y,
-            );
-            paint_text_block(
-                scene,
-                expand_tabs(text),
-                text_origin,
-                Size::new(display_columns(text) as f32 * CELL_WIDTH, ROW_HEIGHT),
-                self.style.text_style().clone(),
-            );
-            self.paint_syntax_tokens(
+            self.paint_code_text(
                 scene,
                 content_row_bounds,
                 text,

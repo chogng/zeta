@@ -1,5 +1,5 @@
 use crate::AccessibilityRole;
-use crate::AccessibilitySelection;
+use crate::ActionViewItem;
 use crate::ButtonState;
 use crate::ButtonStyle;
 use crate::CaretVisibility;
@@ -10,21 +10,21 @@ use crate::ComponentElement;
 use crate::ComputedElement;
 use crate::ContextViewAnchorPosition;
 use crate::ContextViewPlacement;
-use crate::CornerRadii;
 use crate::CursorFeedback;
 use crate::Dropdown;
-use crate::DropdownItem;
 use crate::DropdownScrollConfiguration;
-use crate::DropdownSelection;
 use crate::DropdownStyle;
 use crate::Element;
 use crate::ElementId;
 use crate::FocusBehavior;
 use crate::InputBoxState;
 use crate::InteractionRegion;
+use crate::MenuIds;
+use crate::MenuItem;
+use crate::MenuSelection;
+use crate::MenuStyle;
 use crate::NavigationAxis;
 use crate::NavigationGroupId;
-use crate::NodeAction;
 use crate::Rect;
 use crate::ScrollMetrics;
 use crate::ScrollState;
@@ -35,7 +35,6 @@ use crate::Size;
 use crate::TextInput;
 use crate::TextInputLayoutEngine;
 use crate::UiDispatch;
-use crate::UiNode;
 use crate::UiScene;
 
 const SEARCH_ROW_HEIGHT: f32 = 36.0;
@@ -133,10 +132,8 @@ impl PickerStyle {
 pub struct Picker {
     dropdown: Dropdown,
     search_box: SearchBox,
-    search_value: String,
-    items: Vec<PickerItem>,
-    ids: PickerIds,
-    accessibility_label: String,
+    search_region: InteractionRegion,
+    root: ElementId,
 }
 
 impl Picker {
@@ -155,7 +152,8 @@ impl Picker {
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
-        let dropdown_items = items
+        let accessibility_label = accessibility_label.into();
+        let menu_items = items
             .iter()
             .map(|item| {
                 let state = if !item.enabled {
@@ -169,7 +167,10 @@ impl Picker {
                 } else {
                     ButtonState::Resting
                 };
-                DropdownItem::new(item.label.clone(), state)
+                MenuItem::action(
+                    item.element,
+                    ActionViewItem::label(item.label.clone(), state),
+                )
             })
             .collect();
         let selection = items
@@ -181,21 +182,24 @@ impl Picker {
                         || dispatch.is_hovered(item.element))
             })
             .or_else(|| items.iter().position(|item| item.enabled && item.selected))
-            .map(DropdownSelection::Item)
-            .unwrap_or(DropdownSelection::None);
+            .map(MenuSelection::Item)
+            .unwrap_or(MenuSelection::None);
         let dropdown = Dropdown::new_scrollable(
             viewport,
             anchor,
-            dropdown_items,
-            DropdownStyle::new(style.background, style.button, style.item_size)
-                .with_corner_radii(CornerRadii::uniform(4.0))
-                .with_header_height(SEARCH_ROW_HEIGHT)
-                .with_placement(
-                    ContextViewPlacement::new()
-                        .with_position(ContextViewAnchorPosition::Before)
-                        .with_gap(ANCHOR_GAP)
-                        .with_viewport_margin(VIEWPORT_MARGIN),
-                ),
+            accessibility_label.clone(),
+            menu_items,
+            MenuIds::new(ids.parent, ids.root),
+            DropdownStyle::new(
+                MenuStyle::new(style.background, style.button, style.item_size)
+                    .with_header_height(SEARCH_ROW_HEIGHT),
+            )
+            .with_placement(
+                ContextViewPlacement::new()
+                    .with_position(ContextViewAnchorPosition::Before)
+                    .with_gap(ANCHOR_GAP)
+                    .with_viewport_margin(VIEWPORT_MARGIN),
+            ),
             DropdownScrollConfiguration::new(
                 scroll,
                 style.maximum_visible_items,
@@ -227,13 +231,22 @@ impl Picker {
             search_input,
             text_layout,
         );
+        let search_region = InteractionRegion::new(
+            "PickerSearchInput",
+            ids.search,
+            search_box.bounds(),
+            AccessibilityRole::TextInput,
+            format!("Search {accessibility_label}"),
+        )
+        .with_cursor(CursorFeedback::Text)
+        .with_focus(FocusBehavior::TabStop)
+        .with_navigation(NavigationGroupId::new(ids.root), NavigationAxis::Vertical)
+        .with_value(search_input.text());
         Self {
             dropdown,
             search_box,
-            search_value: search_input.text().to_owned(),
-            items,
-            ids,
-            accessibility_label: accessibility_label.into(),
+            search_region,
+            root: ids.root,
         }
     }
 
@@ -260,80 +273,20 @@ impl Picker {
     pub fn item_bounds(&self, index: usize) -> Option<Rect> {
         self.dropdown.item_bounds(index)
     }
-
-    fn child_interaction_regions(&self) -> Vec<InteractionRegion> {
-        let navigation = NavigationGroupId::new(self.ids.root);
-        let mut regions = vec![
-            InteractionRegion::new(
-                "PickerSearchInput",
-                self.ids.search,
-                self.search_box.bounds(),
-                AccessibilityRole::TextInput,
-                format!("Search {}", self.accessibility_label),
-            )
-            .with_cursor(CursorFeedback::Text)
-            .with_focus(FocusBehavior::TabStop)
-            .with_navigation(navigation, NavigationAxis::Vertical)
-            .with_value(&self.search_value),
-        ];
-        for (index, item) in self.items.iter().enumerate() {
-            if !item.enabled {
-                continue;
-            }
-            let Some(bounds) = self.dropdown.interactive_item_bounds(index) else {
-                continue;
-            };
-            regions.push(
-                InteractionRegion::new(
-                    "PickerItem",
-                    item.element,
-                    bounds,
-                    AccessibilityRole::MenuItem,
-                    item.label.clone(),
-                )
-                .with_cursor(CursorFeedback::Pointer)
-                .with_focus(FocusBehavior::TabStop)
-                .with_action(NodeAction::Activate)
-                .with_navigation(navigation, NavigationAxis::Vertical)
-                .with_selection(if self.dropdown.selected_index() == Some(index) {
-                    AccessibilitySelection::Selected
-                } else {
-                    AccessibilitySelection::Unselected
-                }),
-            );
-        }
-        regions
-    }
 }
 
 impl Component for Picker {
     fn element(&self) -> ComponentElement {
-        Element::leaf("Picker")
-            .in_bounds(self.dropdown.bounds())
-            .with_identity(self.ids.root)
-    }
-
-    fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
-        Some(
-            UiNode::new(
-                self.ids.root,
-                element.bounds(),
-                AccessibilityRole::Menu,
-                self.accessibility_label.clone(),
-            )
-            .with_parent(self.ids.parent),
-        )
+        Element::leaf("Picker").in_bounds(self.dropdown.bounds())
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        context.set_modal_root(self.ids.root);
-        for region in self.child_interaction_regions() {
-            context.draw_component(&region);
-        }
         self.dropdown
             .draw_components_with_header(context, |context, _bounds| {
+                context.draw_component(&self.search_region);
                 context.draw_component(&self.search_box);
             });
+        context.set_modal_root(self.root);
     }
 
     fn paint(&self, scene: &mut UiScene) {

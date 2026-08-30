@@ -1,110 +1,85 @@
-use super::{
-    Dropdown, DropdownItem, DropdownScrollConfiguration, DropdownSelection, DropdownStyle,
-};
+use super::{Dropdown, DropdownStyle};
 use crate::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, Color, Component, CornerRadii, Point, Rect,
-    ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, ScrollViewStyle, ScrollbarStyle, Size,
-    TextStyle, UiScene,
+    ActionViewItem, ButtonBackgrounds, ButtonState, ButtonStyle, Color, ElementId, MenuIds,
+    MenuItem, MenuSelection, MenuStyle, PaintRect, Point, Rect, Size, TextStyle, UiDispatch,
+    UiFrame, UiScene,
 };
+use zui::ui::InteractionFrame;
 
+const PARENT: ElementId = ElementId::scoped(92, 1);
+const ROOT: ElementId = ElementId::scoped(92, 2);
+const FIRST: ElementId = ElementId::scoped(92, 3);
+const SECOND: ElementId = ElementId::scoped(92, 4);
 const SURFACE: Color = Color::rgb(240, 241, 242);
-const SELECTED: Color = Color::rgb(210, 211, 212);
+const HEADER: Color = Color::rgb(210, 211, 212);
 
-fn dropdown(items: Vec<DropdownItem>) -> Dropdown {
-    let button_style = ButtonStyle::new(
-        ButtonBackgrounds::new(Color::TRANSPARENT),
-        TextStyle::new(13.0, Color::rgb(0, 0, 0)),
-    )
-    .with_selected_backgrounds(ButtonBackgrounds::new(SELECTED));
-    Dropdown::new(
-        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
-        Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
-        items,
-        DropdownStyle::new(SURFACE, button_style, Size::new(120.0, 28.0))
-            .with_corner_radii(CornerRadii::uniform(6.0)),
+fn style() -> MenuStyle {
+    MenuStyle::new(
+        SURFACE,
+        ButtonStyle::new(
+            ButtonBackgrounds::new(Color::TRANSPARENT),
+            TextStyle::new(13.0, Color::rgb(0, 0, 0)),
+        ),
+        Size::new(120.0, 28.0),
     )
 }
 
 #[test]
-fn defaults_to_the_first_enabled_item() {
-    let dropdown = dropdown(vec![
-        DropdownItem::new("Disabled", ButtonState::Disabled),
-        DropdownItem::new("First enabled", ButtonState::Resting),
-        DropdownItem::new("Last", ButtonState::Resting),
-    ]);
-    let mut scene = UiScene::new(Color::TRANSPARENT);
-
-    dropdown.paint(&mut scene);
-
-    assert_eq!(dropdown.selected_index(), Some(1));
-    assert_eq!(scene.rects()[2].fill(), SELECTED);
-}
-
-#[test]
-fn borderless_surface_has_no_outer_padding() {
-    let dropdown = dropdown(vec![
-        DropdownItem::new("Pin", ButtonState::Resting),
-        DropdownItem::new("Close", ButtonState::Resting),
-    ]);
-    let mut scene = UiScene::new(Color::TRANSPARENT);
-
-    dropdown.paint(&mut scene);
-
-    assert_eq!(dropdown.bounds(), dropdown.content_bounds());
-    assert_eq!(
-        dropdown.item_bounds(0).unwrap().origin,
-        dropdown.bounds().origin
-    );
-    assert_eq!(
-        dropdown.item_bounds(0).unwrap().size.width,
-        dropdown.bounds().size.width
-    );
-    assert_eq!(
-        scene.rects()[0].border().widths(),
-        crate::Edges::uniform(0.0)
-    );
-}
-
-#[test]
-fn explicit_selection_drives_paint_and_hit_geometry() {
-    let dropdown = dropdown(vec![
-        DropdownItem::new("Pin", ButtonState::Resting),
-        DropdownItem::new("Close", ButtonState::Focused),
-    ])
-    .with_selection(DropdownSelection::Item(1));
-    let selected_bounds = dropdown.item_bounds(1).unwrap();
-    let mut scene = UiScene::new(Color::TRANSPARENT);
-
-    dropdown.paint(&mut scene);
-
-    assert_eq!(dropdown.selected_index(), Some(1));
-    assert_eq!(scene.rects()[2].fill(), SELECTED);
-    assert_eq!(
-        dropdown.hit_test(Point::new(
-            selected_bounds.origin.x + 1.0,
-            selected_bounds.origin.y + 1.0
-        )),
-        Some(1)
-    );
-}
-
-#[test]
-fn reserved_header_shifts_items_and_paints_inside_the_dropdown() {
-    let button_style = ButtonStyle::new(
-        ButtonBackgrounds::new(Color::TRANSPARENT),
-        TextStyle::new(13.0, Color::rgb(0, 0, 0)),
-    );
+fn anchors_menu_content_and_keeps_its_interaction_tree() {
     let dropdown = Dropdown::new(
         Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
         Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
-        vec![DropdownItem::new("Folder", ButtonState::Resting)],
-        DropdownStyle::new(SURFACE, button_style, Size::new(120.0, 28.0)).with_header_height(36.0),
+        "Tab actions",
+        vec![
+            MenuItem::action(
+                FIRST,
+                ActionViewItem::label("Pin", ButtonState::Resting).with_main_axis_extent(32.0),
+            ),
+            MenuItem::separator(),
+            MenuItem::action(SECOND, ActionViewItem::label("Close", ButtonState::Resting)),
+        ],
+        MenuIds::new(PARENT, ROOT),
+        DropdownStyle::new(style()),
+    )
+    .with_selection(MenuSelection::None);
+    let dispatch = UiDispatch::default();
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+
+    frame.draw_component(&dropdown);
+
+    assert_eq!(dropdown.menu_root(), ROOT);
+    assert_eq!(dropdown.bounds().origin, Point::new(30.0, 21.0));
+    assert_eq!(dropdown.bounds().size.height, 72.0);
+    assert_eq!(dropdown.content_bounds().origin, Point::new(32.0, 23.0));
+    assert_eq!(
+        dropdown.item_bounds(0).unwrap().origin,
+        dropdown.content_bounds().origin
+    );
+    assert_eq!(dropdown.item_bounds(1), None);
+    let nodes = frame.interaction().accessibility_nodes(&dispatch);
+    assert!(nodes.iter().any(|node| node.id == ROOT));
+    assert!(nodes.iter().any(|node| node.id == FIRST));
+    assert!(nodes.iter().any(|node| node.id == SECOND));
+}
+
+#[test]
+fn header_content_is_composed_inside_the_anchored_menu() {
+    let dropdown = Dropdown::new(
+        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
+        Rect::from_xywh(30.0, 260.0, 80.0, 24.0),
+        "Branches",
+        vec![MenuItem::action(
+            FIRST,
+            ActionViewItem::label("main", ButtonState::Resting),
+        )],
+        MenuIds::new(PARENT, ROOT),
+        DropdownStyle::new(style().with_header_height(36.0)),
     );
     let header_bounds = dropdown.header_bounds().unwrap();
     let mut scene = UiScene::new(Color::TRANSPARENT);
 
     dropdown.paint_with_header(&mut scene, |scene, bounds| {
-        scene.draw_rect(crate::PaintRect::new(bounds, SELECTED));
+        scene.draw_rect(PaintRect::new(bounds, HEADER));
     });
 
     assert_eq!(header_bounds.origin, dropdown.content_bounds().origin);
@@ -112,86 +87,6 @@ fn reserved_header_shifts_items_and_paints_inside_the_dropdown() {
         dropdown.item_bounds(0).unwrap().origin.y,
         header_bounds.bottom()
     );
-    assert_eq!(dropdown.bounds().size.height, 64.0);
-    assert!(scene.rects().iter().any(|rect| rect.fill() == SELECTED));
-}
-
-#[test]
-fn scrollable_dropdown_caps_height_and_translates_item_geometry() {
-    let items = (0..5)
-        .map(|index| DropdownItem::new(format!("Folder {index}"), ButtonState::Resting))
-        .collect::<Vec<_>>();
-    let metrics = ScrollMetrics::new(Size::new(120.0, 56.0), Size::new(120.0, 140.0));
-    let mut scroll_state = ScrollState::default();
-    assert!(scroll_state.apply(
-        ScrollCommand::ToEnd(ScrollAxis::Vertical),
-        metrics,
-        ScrollAxis::Vertical,
-    ));
-    let dropdown = Dropdown::new_scrollable(
-        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
-        Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
-        items,
-        DropdownStyle::new(
-            SURFACE,
-            ButtonStyle::new(
-                ButtonBackgrounds::new(Color::TRANSPARENT),
-                TextStyle::new(13.0, Color::rgb(0, 0, 0)),
-            ),
-            Size::new(120.0, 28.0),
-        )
-        .with_header_height(36.0),
-        DropdownScrollConfiguration::new(
-            scroll_state,
-            2,
-            ScrollViewStyle::new(ScrollbarStyle::new(Color::TRANSPARENT, SELECTED)),
-        ),
-    );
-
-    assert_eq!(dropdown.bounds().size.height, 92.0);
-    assert_eq!(dropdown.scroll_metrics(), Some(metrics));
-    assert!(dropdown.item_bounds(0).unwrap().is_empty());
-    assert_eq!(
-        dropdown.item_bounds(3).unwrap().origin.y,
-        dropdown.header_bounds().unwrap().bottom()
-    );
-    assert!(!dropdown.item_bounds(4).unwrap().is_empty());
-}
-
-#[test]
-fn scrollable_dropdown_only_builds_projected_item_content() {
-    let items = (0..100)
-        .map(|index| DropdownItem::new(format!("Folder {index}"), ButtonState::Resting))
-        .collect::<Vec<_>>();
-    let dropdown = Dropdown::new_scrollable(
-        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
-        Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
-        items,
-        DropdownStyle::new(
-            SURFACE,
-            ButtonStyle::new(
-                ButtonBackgrounds::new(Color::TRANSPARENT),
-                TextStyle::new(13.0, Color::rgb(0, 0, 0)),
-            ),
-            Size::new(120.0, 28.0),
-        ),
-        DropdownScrollConfiguration::new(
-            ScrollState::default(),
-            2,
-            ScrollViewStyle::new(ScrollbarStyle::new(Color::TRANSPARENT, SELECTED)),
-        ),
-    );
-    let mut scene = UiScene::new(Color::TRANSPARENT);
-
-    dropdown.paint(&mut scene);
-
-    assert_eq!(
-        scene
-            .text_blocks()
-            .iter()
-            .map(|block| block.text())
-            .collect::<Vec<_>>(),
-        ["Folder 0", "Folder 1"]
-    );
-    assert!(dropdown.interactive_item_bounds(99).unwrap().is_empty());
+    assert_eq!(dropdown.bounds().size.height, 68.0);
+    assert!(scene.rects().iter().any(|rect| rect.fill() == HEADER));
 }

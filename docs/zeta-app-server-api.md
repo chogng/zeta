@@ -802,6 +802,10 @@ connection 会接收这些 child Thread 的实时 update。产品宿主应先应
 - `null`：清除；
 - value：替换。
 
+`gui` 与 `tui` patch 分别原子替换完整的前端键值表；App Server 不解释其中字段。客户端修改已知键前
+必须读取当前表并保留未知键，`null` 清除整张表，缺失字段的默认值由对应前端决定。Settings 与手工
+TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知链。
+
 `execPolicy/rule/upsert` 接收完整 typed rule：selector 支持 action digest/kind、trusted source、
 tokenized command prefix、structured network target、capability scope 和显式 `all`；effect 支持
 `continue`、`allowUnsandboxed`、`requireApproval`、`requireSandbox` 与带理由的 `deny`。
@@ -814,8 +818,8 @@ notification 是重新 `config/read` 的失效提示，不包含完整 desired d
 exact replay 不推进 revision/generation，也不发布 change。外部 TOML 编辑与同一 profile 的其他
 SQLite connection 提交也会被观察并投影。
 
-`config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
-request、declarative Hook、language-server mode/path preference、semantic Codebase 配置和 Tool
+`config/read` 当前返回 Agent preference、原样的 `gui` 与 `tui` 表、Provider、standalone MCP、
+Skill source、exact Plugin request、declarative Hook、language-server mode/path preference、semantic Codebase 配置和 Tool
 Search 配置，以及 User `execPolicyRules`。`toolSearch.embeddingStatus` 明确区分 `disabled`、`ready` 和带脱敏原因的
 `unavailable`；不能只根据 desired `mode` 推断 embedding 已可用。Plugin request 的 `enabled` 只表示期望参与未来 activation；
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由

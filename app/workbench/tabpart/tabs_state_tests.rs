@@ -4,11 +4,11 @@ use std::time::Instant;
 
 use super::{MINIMUM_MAIN_WIDTH, TabContainerState};
 use crate::Point;
-use crate::SashPointerPresence;
 use crate::ScrollAxis;
 use crate::ScrollCommand;
 use crate::ScrollMetrics;
 use crate::Size;
+use zui::ui::HoverPresence;
 
 #[test]
 fn tab_container_is_expanded_by_default_and_can_still_be_collapsed() {
@@ -39,7 +39,7 @@ fn resizing_clamps_the_preferred_width_and_preserves_it_across_visibility() {
 
     assert!(tab_container.start_resizing(1_000.0, Point::new(200.0, 0.0), now));
     assert!(tab_container.resize_to(Point::new(360.0, 0.0)));
-    assert!(tab_container.finish_resizing(SashPointerPresence::Outside, now));
+    assert!(tab_container.finish_resizing(HoverPresence::Outside, now));
     assert_eq!(tab_container.visible_width(1_000.0), Some(360.0));
 
     tab_container.toggle();
@@ -60,7 +60,7 @@ fn viewport_constraints_do_not_replace_the_preferred_width() {
     let mut tab_container = TabContainerState::expanded();
     assert!(tab_container.start_resizing(1_000.0, Point::new(200.0, 0.0), now));
     assert!(tab_container.resize_to(Point::new(420.0, 0.0)));
-    assert!(tab_container.finish_resizing(SashPointerPresence::Outside, now));
+    assert!(tab_container.finish_resizing(HoverPresence::Outside, now));
 
     assert_eq!(
         tab_container.visible_width(500.0),
@@ -74,7 +74,7 @@ fn viewport_constraints_do_not_replace_the_preferred_width() {
 
     assert!(tab_container.start_resizing(500.0, Point::new(260.0, 0.0), now));
     assert!(!tab_container.resize_to(Point::new(320.0, 0.0)));
-    assert!(tab_container.finish_resizing(SashPointerPresence::Outside, now));
+    assert!(tab_container.finish_resizing(HoverPresence::Outside, now));
     assert_eq!(tab_container.visible_width(1_000.0), Some(420.0));
 }
 

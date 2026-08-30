@@ -2899,6 +2899,78 @@ fn typst_source_errors_are_typed_results_not_server_failures() {
 }
 
 #[test]
+fn gui_config_updates_round_trip_without_backend_field_interpretation() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-gui-config-{}.sqlite3",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let updated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"config/update",
+            "params":{
+                "commandId":"configure-gui","expectedRevision":0,
+                "gui":{
+                    "theme":"zeta-dark",
+                    "editorFontFamily":"JetBrains Mono",
+                    "editorFontSize":15,
+                    "editorLineHeight":24
+                }
+            }
+        }),
+    );
+    assert_eq!(updated["result"]["revision"], 1);
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(
+        read["result"]["gui"],
+        serde_json::json!({
+            "theme":"zeta-dark",
+            "editorFontFamily":"JetBrains Mono",
+            "editorFontSize":15,
+            "editorLineHeight":24
+        })
+    );
+
+    let reset = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"config/update",
+            "params":{
+                "commandId":"reset-gui","expectedRevision":1,
+                "gui":null
+            }
+        }),
+    );
+    assert_eq!(reset["result"]["revision"], 2);
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["gui"], serde_json::json!({}));
+
+    drop(connection);
+    drop(server);
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path.with_extension("toml"));
+    let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+}
+
+#[test]
 fn config_updates_use_typed_command_ids() {
     let path = std::env::temp_dir().join(format!(
         "zeta-app-server-config-{}.sqlite3",
@@ -2936,6 +3008,7 @@ fn config_updates_use_typed_command_ids() {
         read["result"]["approvalReviewModel"],
         serde_json::json!({"type":"automatic"})
     );
+    assert_eq!(read["result"]["gui"], serde_json::json!({}));
     let mcp = call(
         &server,
         &mut connection,
@@ -3137,7 +3210,7 @@ fn config_updates_use_typed_command_ids() {
 }
 
 #[test]
-fn config_update_persists_and_reads_the_shared_tui_theme() {
+fn config_update_persists_and_reads_the_tui_section() {
     let path = std::env::temp_dir().join(format!(
         "zeta-app-server-tui-theme-{}.sqlite3",
         SystemTime::now()
@@ -3157,7 +3230,7 @@ fn config_update_persists_and_reads_the_shared_tui_theme() {
             "params":{
                 "commandId":"select-tui-theme",
                 "expectedRevision":0,
-                "tuiTheme":"zeta-code-light"
+                "tui":{"theme":"zeta-code-light"}
             }
         }),
     );

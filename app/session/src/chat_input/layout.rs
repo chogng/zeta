@@ -4,12 +4,12 @@ use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::VirtualListLayout;
 use zui::ui::{Rect, Size};
 
-const PANEL_HORIZONTAL_INSET: f32 = 24.0;
+const CONTENT_HORIZONTAL_INSET: f32 = 24.0;
 const PANEL_TOP_INSET: f32 = 8.0;
 const PANEL_BOTTOM_INSET: f32 = 12.0;
 const PANEL_SECTION_GAP: f32 = 8.0;
-const INFO_BAR_HEIGHT: f32 = 24.0;
-const INFO_EDITOR_SEPARATOR_HEIGHT: f32 = 1.0;
+const KEY_HINT_BAR_HEIGHT: f32 = 24.0;
+const HINT_EDITOR_SEPARATOR_HEIGHT: f32 = 1.0;
 const TOOLBAR_HEIGHT: f32 = 24.0;
 const MIN_OUTPUT_HEIGHT: f32 = 40.0;
 const INTERACTION_HEADER_HEIGHT: f32 = 30.0;
@@ -27,8 +27,9 @@ pub const INTERACTION_ROW_HEIGHT: f32 = 34.0;
 pub struct ComposerPanelLayout {
     panel: Rect,
     interaction: Option<Rect>,
-    info_bar: Rect,
-    info_editor_separator: Rect,
+    content: Rect,
+    key_hint_bar: Rect,
+    hint_editor_separator: Rect,
     editor: Rect,
     toolbar: Rect,
     output: Rect,
@@ -43,7 +44,7 @@ impl ComposerPanelLayout {
     ) -> Self {
         let editor_height = preferred_editor_height.max(1.0);
         let base_height = PANEL_TOP_INSET
-            + INFO_BAR_HEIGHT
+            + KEY_HINT_BAR_HEIGHT
             + PANEL_SECTION_GAP
             + editor_height
             + PANEL_SECTION_GAP
@@ -72,8 +73,8 @@ impl ComposerPanelLayout {
             main.size.width,
             panel_height,
         );
-        let content_x = main.origin.x + PANEL_HORIZONTAL_INSET;
-        let content_width = (main.size.width - PANEL_HORIZONTAL_INSET * 2.0).max(1.0);
+        let content_x = main.origin.x + CONTENT_HORIZONTAL_INSET;
+        let content_width = (main.size.width - CONTENT_HORIZONTAL_INSET * 2.0).max(1.0);
         let interaction = (interaction_height > 0.0).then(|| {
             Rect::from_xywh(
                 content_x,
@@ -94,17 +95,23 @@ impl ComposerPanelLayout {
             content_width,
             editor_height,
         );
-        let info_bar = Rect::from_xywh(
+        let key_hint_bar = Rect::from_xywh(
             content_x,
-            editor.origin.y - PANEL_SECTION_GAP - INFO_BAR_HEIGHT,
+            editor.origin.y - PANEL_SECTION_GAP - KEY_HINT_BAR_HEIGHT,
             content_width,
-            INFO_BAR_HEIGHT,
+            KEY_HINT_BAR_HEIGHT,
         );
-        let info_editor_separator = Rect::from_xywh(
+        let content = Rect::from_xywh(
+            content_x,
+            key_hint_bar.origin.y,
+            content_width,
+            toolbar.bottom() - key_hint_bar.origin.y,
+        );
+        let hint_editor_separator = Rect::from_xywh(
             panel.origin.x,
-            editor.origin.y - INFO_EDITOR_SEPARATOR_HEIGHT,
+            editor.origin.y - HINT_EDITOR_SEPARATOR_HEIGHT,
             panel.size.width,
-            INFO_EDITOR_SEPARATOR_HEIGHT,
+            HINT_EDITOR_SEPARATOR_HEIGHT,
         );
         let output = Rect::from_xywh(
             main.origin.x,
@@ -115,8 +122,9 @@ impl ComposerPanelLayout {
         Self {
             panel,
             interaction,
-            info_bar,
-            info_editor_separator,
+            content,
+            key_hint_bar,
+            hint_editor_separator,
             editor,
             toolbar,
             output,
@@ -133,14 +141,19 @@ impl ComposerPanelLayout {
         self.interaction
     }
 
-    /// Returns the information-bar bounds.
-    pub const fn info_bar(self) -> Rect {
-        self.info_bar
+    /// Returns the shared content bounds containing the key hints, editor, and toolbar.
+    pub const fn content(self) -> Rect {
+        self.content
     }
 
-    /// Returns the one-pixel separator immediately above the editor.
-    pub const fn info_editor_separator(self) -> Rect {
-        self.info_editor_separator
+    /// Returns the key-hint bar bounds.
+    pub const fn key_hint_bar(self) -> Rect {
+        self.key_hint_bar
+    }
+
+    /// Returns the one-pixel separator between the key hints and editor.
+    pub const fn hint_editor_separator(self) -> Rect {
+        self.hint_editor_separator
     }
 
     /// Returns the editor bounds.

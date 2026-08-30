@@ -14,6 +14,8 @@ use crate::Rect;
 use crate::ScrollAxis;
 use crate::ScrollCommand;
 use crate::ScrollState;
+use crate::ScrollbarPresentation;
+use crate::ScrollbarState;
 use crate::TabGroupId;
 use crate::TabInput;
 use crate::TabInputKey;
@@ -206,7 +208,8 @@ fn body_mount_scrolls_overflowing_tabs_inside_its_viewport() {
         test_style(),
         &dispatch,
     )
-    .with_scroll_state(scroll);
+    .with_scroll_state(scroll)
+    .with_scrollbar_presentation(ScrollbarPresentation::new(ScrollbarState::Hovered, 1.0));
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
 
     frame.draw_component(&scrolled);
@@ -218,6 +221,10 @@ fn body_mount_scrolls_overflowing_tabs_inside_its_viewport() {
             .interaction()
             .node(TAB_CONTAINER_SETTINGS_TAB)
             .is_some()
+    );
+    assert_eq!(
+        frame.scene().rects().last().unwrap().fill(),
+        Color::rgb(90, 90, 96)
     );
 }
 

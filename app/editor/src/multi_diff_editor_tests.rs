@@ -503,6 +503,36 @@ fn measured_layout_reuses_section_metrics_for_scrolling_and_paint() {
 }
 
 #[test]
+fn multi_diff_style_distinguishes_paint_changes_from_layout_changes() {
+    let mut text_layout = zui::ui::TextInputLayoutEngine::new();
+    let original_editor =
+        crate::CodeEditorStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, &mut text_layout)
+            .unwrap();
+    let original =
+        MultiDiffEditorStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, original_editor);
+    let mut recolored_theme = zeta_ui_theme::DEFAULT_UI_THEME;
+    recolored_theme.diff_inserted_line = Color::rgb(10, 80, 30);
+    recolored_theme.content_background = Color::rgb(20, 20, 20);
+    let recolored_editor =
+        crate::CodeEditorStyle::from_theme(recolored_theme, &mut text_layout).unwrap();
+    let recolored = MultiDiffEditorStyle::from_theme(recolored_theme, recolored_editor);
+    let larger_text =
+        zui::ui::TextStyle::new(18.0, zeta_ui_theme::DEFAULT_UI_THEME.editor_foreground)
+            .with_family(zui::ui::FontFamily::Monospace)
+            .with_line_height(28.0);
+    let larger_editor = crate::CodeEditorStyle::from_theme_and_text_style(
+        zeta_ui_theme::DEFAULT_UI_THEME,
+        larger_text,
+        &mut text_layout,
+    )
+    .unwrap();
+    let larger = MultiDiffEditorStyle::from_theme(zeta_ui_theme::DEFAULT_UI_THEME, larger_editor);
+
+    assert!(original.same_layout_as(&recolored));
+    assert!(!original.same_layout_as(&larger));
+}
+
+#[test]
 fn measured_layout_indexes_variable_section_heights_and_spacing() {
     let small = document("old", "new");
     let large_original = (0..40)

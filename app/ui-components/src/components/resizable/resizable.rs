@@ -4,16 +4,10 @@ use super::{SashOrientation, SashState};
 use crate::Point;
 use crate::SplitViewResize;
 use crate::SplitViewResizeSnapshot;
+use zui::ui::Hover;
+use zui::ui::HoverPresence;
 
 const DEFAULT_SASH_HOVER_DELAY: Duration = Duration::from_millis(300);
-
-/// Whether a pointer is currently over a Sash interaction target.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum SashPointerPresence {
-    #[default]
-    Outside,
-    Over,
-}
 
 /// Platform-independent Sash presentation state and hover timing.
 ///
@@ -22,100 +16,79 @@ pub enum SashPointerPresence {
 /// [`Self::next_deadline`] to schedule the next wake-up.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SashController {
-    hover_delay: Duration,
-    state: SashState,
-    hover_deadline: Option<Instant>,
+    hover: Hover,
+    active: bool,
 }
 
 impl SashController {
     /// Creates a controller with an explicit delayed-hover duration.
     pub const fn new(hover_delay: Duration) -> Self {
         Self {
-            hover_delay,
-            state: SashState::Resting,
-            hover_deadline: None,
+            hover: Hover::new(hover_delay),
+            active: false,
         }
     }
 
     /// Returns the presentation state consumed by [`super::Sash`].
     pub const fn presentation(self) -> SashState {
-        self.state
+        if self.active {
+            SashState::Active
+        } else if self.hover.is_hovered() {
+            SashState::Hovered
+        } else {
+            SashState::Resting
+        }
     }
 
     /// Returns the next delayed-hover wake-up, if one is pending.
     pub const fn next_deadline(self) -> Option<Instant> {
-        self.hover_deadline
+        self.hover.next_deadline()
     }
 
     /// Projects the pointer relationship without reading platform input directly.
-    pub fn pointer_presence(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
-        match presence {
-            SashPointerPresence::Outside => {
-                if self.state == SashState::Active {
-                    return false;
-                }
-                let changed = self.state != SashState::Resting;
-                self.state = SashState::Resting;
-                self.hover_deadline = None;
-                changed
-            }
-            SashPointerPresence::Over => {
-                if matches!(self.state, SashState::Hovered | SashState::Active)
-                    || self.hover_deadline.is_some()
-                {
-                    return false;
-                }
-                self.hover_deadline = Some(
-                    now.checked_add(self.hover_delay)
-                        .expect("Sash hover deadline must remain within the Instant range"),
-                );
-                false
-            }
+    pub fn pointer_presence(&mut self, presence: HoverPresence, now: Instant) -> bool {
+        if self.active {
+            false
+        } else {
+            self.hover.pointer_presence(presence, now)
         }
     }
 
     /// Enters the active presentation while the host owns a resize gesture.
     pub fn begin_drag(&mut self, _now: Instant) -> bool {
-        let changed = self.state != SashState::Active || self.hover_deadline.is_some();
-        self.state = SashState::Active;
-        self.hover_deadline = None;
+        let changed = !self.active || self.hover.next_deadline().is_some();
+        self.active = true;
+        self.hover.cancel();
         changed
     }
 
     /// Leaves the active presentation and projects the pointer relationship after release.
-    pub fn end_drag(&mut self, presence: SashPointerPresence, _now: Instant) -> bool {
-        let next_state = match presence {
-            SashPointerPresence::Outside => SashState::Resting,
-            SashPointerPresence::Over => SashState::Hovered,
-        };
-        let changed = self.state != next_state || self.hover_deadline.is_some();
-        self.state = next_state;
-        self.hover_deadline = None;
-        changed
+    pub fn end_drag(&mut self, presence: HoverPresence, _now: Instant) -> bool {
+        let previous = self.presentation();
+        self.active = false;
+        match presence {
+            HoverPresence::Outside => {
+                self.hover.cancel();
+            }
+            HoverPresence::Over => {
+                self.hover.hover_now();
+            }
+        }
+        self.presentation() != previous
     }
 
     /// Cancels pending hover or active presentation, for example after window deactivation.
     pub fn cancel(&mut self) -> bool {
-        let changed = self.state != SashState::Resting || self.hover_deadline.is_some();
-        self.state = SashState::Resting;
-        self.hover_deadline = None;
+        let changed =
+            self.active || self.hover.is_hovered() || self.hover.next_deadline().is_some();
+        self.active = false;
+        self.hover.cancel();
         changed
     }
 
     /// Advances a pending delayed hover and reports whether the painted presentation changed.
     pub fn advance(&mut self, now: Instant) -> bool {
-        let Some(deadline) = self.hover_deadline else {
-            return false;
-        };
-        if now < deadline {
-            return false;
-        }
-        self.hover_deadline = None;
-        if self.state != SashState::Resting {
-            return false;
-        }
-        self.state = SashState::Hovered;
-        true
+        !self.active && self.hover.advance(now)
     }
 }
 
@@ -180,7 +153,7 @@ impl Resizable {
     }
 
     /// Projects pointer presence to the embedded Sash controller.
-    pub fn pointer_presence(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn pointer_presence(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.sash.pointer_presence(presence, now)
     }
 
@@ -228,7 +201,7 @@ impl Resizable {
     }
 
     /// Ends the current drag and projects the pointer relationship after release.
-    pub fn end_drag(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn end_drag(&mut self, presence: HoverPresence, now: Instant) -> bool {
         if self.drag.take().is_none() {
             return false;
         }

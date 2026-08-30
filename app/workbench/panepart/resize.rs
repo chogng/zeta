@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use zeta_ui_components::Resizable;
 use zeta_ui_components::SashOrientation;
-use zeta_ui_components::SashPointerPresence;
+use zui::ui::HoverPresence;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;
 
@@ -52,7 +52,7 @@ impl PaneResizeState {
         (total.is_finite() && total > 0.0).then(|| (next.previous_size() / total).clamp(0.0, 1.0))
     }
 
-    pub fn finish(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn finish(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.resizable.end_drag(presence, now)
     }
 

@@ -3,6 +3,7 @@ use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::steer::SteerId;
 use crate::features::approval::Approval;
+use crate::features::config::ConfigEditResult;
 use crate::features::config::ConfigPaneSpec;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorPaneSpec;
@@ -49,6 +50,7 @@ pub(crate) enum AppEvent {
         result: String,
     },
     ConfigSettingsReceived(TerminalSettings),
+    ConfigUpdated(ConfigEditResult),
     ConfigPaneOpened(ConfigPaneSpec),
     ConfigPaneReplaced(ConfigPaneSpec),
     ConfigApiKeySaved {

@@ -27,9 +27,9 @@ Runtime snapshot
 
 | 所有者 | 拥有 | 不拥有 |
 | --- | --- | --- |
-| User Config | Agent 默认值、Provider、MCP、Skill source、Plugin request、Hook、Tool Search、execution policy、目录权限 | secret、live connection、已安装包、运行健康状态、UI 偏好 |
+| User Config | Agent 默认值、Provider、MCP、Skill source、Plugin request、Hook、Tool Search、execution policy、目录权限，以及前端自有的 `gui`、`tui` 键值表 | secret、live connection、已安装包、运行健康状态，以及 `gui`、`tui` 字段含义 |
 | Dir Config | 目录提供的 Agent/MCP/Skill/Plugin/Hook 意图和只收紧的执行规则 | 授权、凭据、安装、激活和运行状态 |
-| Device Settings | Theme、可访问性、hover、sash 等界面偏好 | Agent、Provider、目录权限和运行状态 |
+| Device Settings | TUI/Electron 主题、可访问性、hover、sash 等设备界面偏好 | Rust GUI 编辑器字体、Agent、Provider、目录权限和运行状态 |
 | Secret Store | opaque secret bytes | 配置类型、OAuth 流程和作用域决定 |
 | 各领域管理器 | 实际安装、连接、激活、健康状态和生命周期 | 用户配置正文 |
 | App Server | 组合不可变快照并选择生效点 | 重新拥有各领域状态 |
@@ -46,9 +46,36 @@ Runtime snapshot
 
 `config.toml` 顶层使用 `schemaVersion` 标记文件格式。读取无版本的历史文件时，Config 只执行已登记且无歧义的迁移，完成严格校验后原子重写为当前版本；历史字段和当前字段同时出现、未登记字段、过新版本或低于最低支持版本都会拒绝启动。`semanticCodeIndex` 迁到 `codebase` 时不会保留旧的源码外发授权；`workspaceTrust` 只转换路径仍存在、旧身份与路径一致的 `trusted` 项，并为它生成当前目录身份，其他项不落盘。
 
-用户文档的主要 section 是 `agent`、`providers`、`mcp`、`skills`、`plugins`、`hooks`、
-`toolSearch`、`execPolicy`、`dirPermissions` 和 `codebase`。Config 保存非敏感引用，不保存 API key、
-OAuth token、authorization header 或 refresh 状态。
+用户文档的主要 section 是 `agent`、`gui`、`tui`、`providers`、`mcp`、`skills`、`plugins`、
+`hooks`、`toolSearch`、`execPolicy`、`dirPermissions` 和 `codebase`。Config 保存非敏感引用，不保存
+API key、OAuth token、authorization header 或 refresh 状态。
+
+图形界面的主题选择和编辑器排版由图形界面解释根级 `[gui]`：
+
+```toml
+[gui]
+theme = "system"
+editorFontFamily = "monospace"
+editorFontSize = 13
+editorLineHeight = 20
+```
+
+`theme` 使用内置主题入口、用户主题 ID 或 `system`；字体族可用 `monospace`、`sans-serif`、
+`serif` 或具体字体名称。字号范围为 6–96 px，行高不能小于字号且不能超过 192 px。这些默认值、
+校验和生效方式都属于图形界面，不进入 Config 或 App Server 的领域类型。
+
+TUI 独立解释根级 `[tui]`，其中保存主题、鼠标交互、后续消息模式、输入模式和新增目录默认权限：
+
+```toml
+[tui]
+theme = "zeta-code-dark"
+mouseInteractions = true
+followUpMode = "queue"
+inputMode = "standard"
+```
+
+Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不校验字段含义。更新任一表时，
+前端必须先读取当前值、保留自己不认识的键，再携带 `expectedRevision` 替换完整表；两个表彼此独立。
 
 ## 目录配置
 
@@ -114,7 +141,8 @@ BuiltInDefaults
 | MCP / Skill / Plugin / Hook | User、Dir | Dir 只提供待处理意图；领域管理器决定实际状态 |
 | Execution policy | Host、Organization、User、Dir | Dir 只能保持或收紧 |
 | Directory permissions | User、Organization、Host | Dir Config 无权自授 |
-| UI preference | Device Settings | 不进入 Agent runtime snapshot |
+| Rust GUI theme/editor typography | User | 进入 `config/read`，不参与 Agent Turn 执行 |
+| TUI/Electron device preference | Device Settings | 不进入 Agent runtime snapshot |
 
 目录来源未获得对应能力时，解析结果保留其待处理意图和诊断，但不会静默激活。运行时协调失败只
 更新实际状态，不回滚用户期望。
@@ -127,7 +155,8 @@ BuiltInDefaults
 | MCP / Skill / Plugin / Hook catalog | 各管理器完成协调后，由新 generation 发布 |
 | 目录权限 | 新 Grant 发布后；撤销会使旧 Authorization 失效并停止依赖资源 |
 | execution policy | 下一次动作评估；已经准备的调用保留冻结版本 |
-| UI preference | 对应 Renderer 服务自己的更新周期 |
+| Rust GUI theme/editor typography | Workbench 收到新 config generation 后重建完整样式 |
+| TUI/Electron device preference | 对应 Renderer 服务自己的更新周期 |
 
 运行中的 Turn 不读取可变 ConfigStore，也不持有 live manager。它只消费创建时冻结的快照和后续
 明确允许的安全点更新。

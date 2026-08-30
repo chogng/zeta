@@ -282,10 +282,12 @@ impl<'a> DiffEditor<'a> {
             DiffEditorPresentation::SideBySide => CodeEditor::content_height_for_rows(
                 CodeEditorHeader::Label(self.labels.original),
                 self.document.diff().rows().len(),
+                self.style.code_editor(),
             ),
             DiffEditorPresentation::Unified => CodeEditor::content_height_for_rows(
                 CodeEditorHeader::Hidden,
                 self.document.unified_row_count(&self.state),
+                self.style.code_editor(),
             ),
         }
     }
@@ -313,16 +315,16 @@ impl<'a> DiffEditor<'a> {
         let editor = self.unified_code_editor(&rows);
         let visible = editor.visible_row_range();
         let visible_start = visible.start;
+        let row_height = self.style.code_editor().row_height();
         visible
             .filter_map(|visual_row| {
                 let (region, expanded) = rows.fold_at(visual_row)?;
                 let bounds = Rect::from_xywh(
                     self.bounds.origin.x,
                     self.bounds.origin.y
-                        + visual_row.saturating_sub(visible_start) as f32
-                            * CodeEditor::row_height(),
+                        + visual_row.saturating_sub(visible_start) as f32 * row_height,
                     self.bounds.size.width,
-                    CodeEditor::row_height(),
+                    row_height,
                 )
                 .intersection(self.paint_viewport);
                 (!bounds.is_empty()).then_some(DiffEditorFoldControl {

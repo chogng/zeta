@@ -18,6 +18,8 @@ pub struct SessionPaneStyle {
     pub warning: Color,
     pub error: Color,
     pub selected: Color,
+    pub key_hint_foreground: Color,
+    pub key_hint_background: Color,
     pub scroll_view: ScrollViewStyle,
     pub compact_action_label: TypographyStyle,
 }
@@ -36,6 +38,8 @@ impl SessionPaneStyle {
             warning: theme.warning,
             error: theme.error,
             selected: theme.list_active_background,
+            key_hint_foreground: theme.key_hint_foreground,
+            key_hint_background: theme.key_hint_background,
             scroll_view: theme.file_list_scroll_view_style(),
             compact_action_label: theme.compact_action_label,
         }

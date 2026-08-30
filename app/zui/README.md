@@ -19,6 +19,7 @@
 | 后台任务、作用域取消与 event-loop timer | `zui::runtime`；`zui::task` 是兼容入口 | `runtime/task.rs` / `runtime/timer.rs` |
 | Window、display snapshot、event、theme、cursor、文件拖放与 chrome capability | `zui::window` | `window` |
 | Keyboard、pointer 与 IME | `zui::input` | `input`；pointer/IME 事件由 `window/event.rs` 统一拥有 |
+| 基础 hover 进入、离开、延迟与 deadline | `zui::ui::{Hover,HoverPresence}` | `ui/foundation/hover.rs`；具体颜色、显隐和 active 语义由组件解释 |
 | Clipboard、dialog、opener、notification、menu、tray 与 global shortcut | `zui::services` | `services` |
 | OS login item | `zui::services::LoginItemHandle` / application capabilities | `services/login_item.rs` / `services/login_item/platform` |
 | OS 最近使用文档 | `zui::services::RecentDocumentHandle` / application 与 window context | `services/recent_document.rs` / `services/recent_document/platform.rs` |
@@ -36,7 +37,7 @@
 | 默认 GPU composition | `zui::app::Application::run` | private `render/wgpu` |
 | 常用最小导入 | `zui::prelude` | `prelude.rs` |
 | 手动时钟、确定性 lifecycle/timer 与 headless renderer | `zui::testing`；`zui::testkit` 是兼容别名 | `testing` |
-| Button、List、ContextMenu | 不属于 `zui` | `zeta-ui-components` |
+| Button、List、Dropdown | 不属于 `zui` | `zeta-ui-components` |
 | Workbench Titlebar、TabContainer 与交互标识 | 不属于 `zui` | `zeta-workbench` |
 
 `src/lib.rs` 只声明这些同名能力模块，不再通过 `api.rs` 拼装第二套目录。根级类型导出、`zui::task` 和 `zui::testkit` 暂时作为现有消费者兼容入口保留；新代码使用上表的规范入口。

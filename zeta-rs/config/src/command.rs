@@ -8,6 +8,7 @@ use crate::{
     SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement, SkillSourceId,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use zeta_execpolicy::ExecPolicyRule;
 use zeta_execpolicy::ExecPolicyRuleId;
@@ -34,7 +35,9 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub grep_backend: Patch<AgentGrepBackend>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub tui_theme: Patch<String>,
+    pub gui: Patch<BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub tui: Patch<BTreeMap<String, serde_json::Value>>,
 }
 
 /// Typed mutations accepted by the user configuration authority.

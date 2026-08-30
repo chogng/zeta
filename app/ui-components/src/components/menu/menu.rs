@@ -1,13 +1,15 @@
+use std::ops::Range;
+
 use crate::{
     AccessibilityRole, AccessibilitySelection, BoxShadow, Color, Component, ComponentContext,
     ComponentElement, ComputedElement, CornerRadii, CursorFeedback, Edges, Element, ElementId,
-    FocusBehavior, NavigationAxis, NavigationGroupId, NodeAction, PaintRect, Point, Rect, Size,
-    UiNode, UiScene,
+    FocusBehavior, ListView, NavigationAxis, NavigationGroupId, NodeAction, PaintRect, Point, Rect,
+    ScrollMetrics, ScrollState, ScrollViewStyle, Size, UiNode, UiScene, VirtualListLayout,
 };
 
 use super::{
-    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
-    ButtonSelection, ButtonState, ButtonStyle, InteractionRegion,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle, ActionBarStyle,
+    ActionViewItem, ButtonSelection, ButtonStyle, InteractionRegion,
 };
 
 const MENU_PADDING: f32 = 2.0;
@@ -29,25 +31,40 @@ impl MenuIds {
     }
 }
 
-/// One host-owned action presented by a [`Menu`].
+/// One action or separator presented by a [`Menu`].
 #[derive(Clone, Debug, PartialEq)]
-pub struct MenuItem {
-    element: ElementId,
-    label: String,
-    state: ButtonState,
+pub enum MenuItem {
+    Action {
+        element: ElementId,
+        view: ActionViewItem,
+    },
+    Separator,
 }
 
 impl MenuItem {
-    pub fn new(element: ElementId, label: impl Into<String>, state: ButtonState) -> Self {
-        Self {
-            element,
-            label: label.into(),
-            state,
-        }
+    pub const fn action(element: ElementId, view: ActionViewItem) -> Self {
+        Self::Action { element, view }
+    }
+
+    pub const fn separator() -> Self {
+        Self::Separator
     }
 
     const fn is_enabled(&self) -> bool {
-        !matches!(self.state, ButtonState::Disabled)
+        match self {
+            Self::Action { view, .. } => view.is_enabled(),
+            Self::Separator => false,
+        }
+    }
+
+    fn main_axis_extent(&self, style: &MenuStyle) -> f32 {
+        match self {
+            Self::Action { view, .. } => view
+                .main_axis_extent()
+                .unwrap_or(style.item_size.height)
+                .max(0.0),
+            Self::Separator => style.separator_style.extent().max(0.0),
+        }
     }
 }
 
@@ -63,6 +80,19 @@ pub enum MenuSelection {
     None,
 }
 
+/// Retained state and scrollbar style for a scrollable [`Menu`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MenuScrollConfiguration {
+    state: ScrollState,
+    style: ScrollViewStyle,
+}
+
+impl MenuScrollConfiguration {
+    pub(crate) const fn new(state: ScrollState, style: ScrollViewStyle) -> Self {
+        Self { state, style }
+    }
+}
+
 /// Shared surface and item presentation for a [`Menu`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct MenuStyle {
@@ -70,6 +100,7 @@ pub struct MenuStyle {
     button_style: ButtonStyle,
     item_size: Size,
     header_height: f32,
+    separator_style: ActionBarSeparatorStyle,
 }
 
 impl MenuStyle {
@@ -79,6 +110,7 @@ impl MenuStyle {
             button_style,
             item_size,
             header_height: 0.0,
+            separator_style: ActionBarSeparatorStyle::new(Color::TRANSPARENT),
         }
     }
 
@@ -87,13 +119,18 @@ impl MenuStyle {
         self.header_height = header_height;
         self
     }
+
+    pub const fn with_separator_style(mut self, separator_style: ActionBarSeparatorStyle) -> Self {
+        self.separator_style = separator_style;
+        self
+    }
 }
 
 /// Reusable menu content with one interaction and accessibility tree.
 ///
 /// Menu owns its surface, item layout, selection presentation, item interaction regions, and
 /// accessibility semantics. The host owns open state, dismissal, focus restoration, and command
-/// execution. Anchored placement belongs to [`super::ContextMenu`].
+/// execution. Anchored placement belongs to [`super::ContextMenu`] and [`super::Dropdown`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Menu {
     bounds: Rect,
@@ -101,6 +138,7 @@ pub struct Menu {
     item_bounds: Rect,
     header_bounds: Option<Rect>,
     items: Vec<MenuItem>,
+    list_view: Option<ListView>,
     ids: MenuIds,
     accessibility_label: String,
     style: MenuStyle,
@@ -114,6 +152,28 @@ impl Menu {
         items: Vec<MenuItem>,
         ids: MenuIds,
         style: MenuStyle,
+    ) -> Self {
+        Self::build(bounds, accessibility_label, items, ids, style, None)
+    }
+
+    pub(crate) fn new_scrollable(
+        bounds: Rect,
+        accessibility_label: impl Into<String>,
+        items: Vec<MenuItem>,
+        ids: MenuIds,
+        style: MenuStyle,
+        scroll: MenuScrollConfiguration,
+    ) -> Self {
+        Self::build(bounds, accessibility_label, items, ids, style, Some(scroll))
+    }
+
+    fn build(
+        bounds: Rect,
+        accessibility_label: impl Into<String>,
+        items: Vec<MenuItem>,
+        ids: MenuIds,
+        style: MenuStyle,
+        scroll: Option<MenuScrollConfiguration>,
     ) -> Self {
         let content_bounds = inset_rect(bounds, MENU_PADDING);
         let header_height = style.header_height.max(0.0).min(content_bounds.size.height);
@@ -131,12 +191,22 @@ impl Menu {
             content_bounds.size.width,
             (content_bounds.size.height - header_height).max(0.0),
         );
+        let list_view = scroll.map(|scroll| {
+            let layout = VirtualListLayout::variable(
+                items
+                    .iter()
+                    .map(|item| item.main_axis_extent(&style).max(f32::EPSILON)),
+            );
+            ListView::from_layout(item_bounds, layout, scroll.state, scroll.style)
+                .with_overscan_items(1)
+        });
         Self {
             bounds,
             content_bounds,
             item_bounds,
             header_bounds,
             items,
+            list_view,
             ids,
             accessibility_label: accessibility_label.into(),
             style,
@@ -144,11 +214,19 @@ impl Menu {
         }
     }
 
-    pub(crate) fn desired_size(item_count: usize, style: &MenuStyle) -> Size {
+    pub(crate) fn desired_size(
+        items: &[MenuItem],
+        style: &MenuStyle,
+        maximum_visible_items: Option<usize>,
+    ) -> Size {
         Size::new(
             style.item_size.width.max(0.0) + MENU_PADDING * 2.0,
             style.header_height.max(0.0)
-                + style.item_size.height.max(0.0) * item_count as f32
+                + items
+                    .iter()
+                    .take(maximum_visible_items.unwrap_or(items.len()))
+                    .map(|item| item.main_axis_extent(style))
+                    .sum::<f32>()
                 + MENU_PADDING * 2.0,
         )
     }
@@ -177,6 +255,17 @@ impl Menu {
         self.header_bounds
     }
 
+    /// Returns the clipped viewport occupied by menu items, excluding the optional header.
+    pub const fn item_viewport_bounds(&self) -> Rect {
+        self.item_bounds
+    }
+
+    pub fn scroll_metrics(&self) -> Option<ScrollMetrics> {
+        self.list_view
+            .as_ref()
+            .map(|list_view| list_view.scroll_view().metrics())
+    }
+
     pub fn selected_index(&self) -> Option<usize> {
         match self.selection {
             MenuSelection::FirstEnabled => self.items.iter().position(MenuItem::is_enabled),
@@ -190,15 +279,32 @@ impl Menu {
     }
 
     pub fn item_bounds(&self, index: usize) -> Option<Rect> {
-        self.action_bar().item_bounds(index)
+        let MenuItem::Action { .. } = self.items.get(index)? else {
+            return None;
+        };
+        if let Some(list_view) = &self.list_view {
+            return Some(list_view.item_bounds(index)?.intersection(self.item_bounds));
+        }
+        self.action_bar(0..self.items.len()).item_bounds(index)
     }
 
     pub fn interactive_item_bounds(&self, index: usize) -> Option<Rect> {
-        self.action_bar().interactive_item_bounds(index)
+        if !self.items.get(index)?.is_enabled() {
+            return None;
+        }
+        self.item_bounds(index)
     }
 
     pub fn hit_test(&self, point: Point) -> Option<usize> {
-        self.action_bar().hit_test(point)
+        if let Some(list_view) = &self.list_view {
+            let index = list_view.item_at(point)?;
+            return self
+                .items
+                .get(index)
+                .is_some_and(MenuItem::is_enabled)
+                .then_some(index);
+        }
+        self.action_bar(0..self.items.len()).hit_test(point)
     }
 
     /// Paints the canonical menu shell and items with caller-owned content in its header row.
@@ -223,30 +329,72 @@ impl Menu {
         });
     }
 
-    fn action_bar(&self) -> ActionBar {
+    fn action_bar(&self, range: Range<usize>) -> ActionBar {
         let selected_index = self.selected_index();
         let items = self
             .items
+            .get(range.clone())
+            .unwrap_or_default()
             .iter()
             .enumerate()
-            .map(|(index, item)| {
-                ActionBarItem::Action(
-                    ActionViewItem::label(item.label.clone(), item.state).with_selection(
-                        if selected_index == Some(index) {
+            .map(|(local_index, item)| match item {
+                MenuItem::Action { view, .. } => {
+                    ActionBarItem::Action(view.clone().with_selection(
+                        if selected_index == Some(range.start + local_index) {
                             ButtonSelection::Selected
                         } else {
                             ButtonSelection::Unselected
                         },
-                    ),
-                )
+                    ))
+                }
+                MenuItem::Separator => ActionBarItem::Separator,
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let origin = self
+            .unclipped_item_bounds(range.start)
+            .map_or(self.item_bounds.origin, |bounds| bounds.origin);
+        let height = self
+            .items
+            .get(range)
+            .unwrap_or_default()
+            .iter()
+            .map(|item| item.main_axis_extent(&self.style))
+            .sum();
         ActionBar::new(
-            self.item_bounds,
+            Rect::from_xywh(origin.x, origin.y, self.item_bounds.size.width, height),
             ActionBarOrientation::Vertical,
             items,
-            ActionBarStyle::new(self.style.button_style.clone(), self.style.item_size),
+            ActionBarStyle::new(self.style.button_style.clone(), self.style.item_size)
+                .with_separator_style(self.style.separator_style),
         )
+    }
+
+    fn unclipped_item_bounds(&self, index: usize) -> Option<Rect> {
+        if let Some(list_view) = &self.list_view {
+            return list_view.item_bounds(index);
+        }
+        let item = self.items.get(index)?;
+        let offset = self
+            .items
+            .iter()
+            .take(index)
+            .map(|item| item.main_axis_extent(&self.style))
+            .sum::<f32>();
+        Some(Rect::from_xywh(
+            self.item_bounds.origin.x,
+            self.item_bounds.origin.y + offset,
+            self.item_bounds.size.width,
+            item.main_axis_extent(&self.style),
+        ))
+    }
+
+    fn projected_range(&self) -> Range<usize> {
+        let Some(list_view) = &self.list_view else {
+            return 0..self.items.len();
+        };
+        list_view
+            .layout()
+            .projected_range(list_view.scroll_view().viewport())
     }
 
     fn interaction_regions(&self) -> Vec<InteractionRegion> {
@@ -255,14 +403,17 @@ impl Menu {
             .iter()
             .enumerate()
             .filter_map(|(index, item)| {
+                let MenuItem::Action { element, view } = item else {
+                    return None;
+                };
                 let bounds = self.interactive_item_bounds(index)?;
                 Some(
                     InteractionRegion::new(
                         "MenuItem",
-                        item.element,
+                        *element,
                         bounds,
                         AccessibilityRole::MenuItem,
-                        item.label.clone(),
+                        view.accessible_label(),
                     )
                     .with_cursor(CursorFeedback::Pointer)
                     .with_focus(FocusBehavior::TabStop)
@@ -303,7 +454,14 @@ impl Menu {
         if let Some(header_bounds) = self.header_bounds {
             paint_header(scene, header_bounds);
         }
-        scene.draw_component(&self.action_bar());
+        let action_bar = self.action_bar(self.projected_range());
+        if let Some(list_view) = &self.list_view {
+            list_view.scroll_view().draw(scene, |scene, _viewport| {
+                scene.draw_component(&action_bar);
+            });
+        } else {
+            scene.draw_component(&action_bar);
+        }
     }
 
     fn compose_contents(
@@ -318,7 +476,16 @@ impl Menu {
         for region in self.interaction_regions() {
             context.draw_component(&region);
         }
-        context.draw_component(&self.action_bar());
+        let action_bar = self.action_bar(self.projected_range());
+        if let Some(list_view) = &self.list_view {
+            list_view
+                .scroll_view()
+                .draw_components(context, |context, _viewport| {
+                    context.draw_component(&action_bar);
+                });
+        } else {
+            context.draw_component(&action_bar);
+        }
     }
 }
 

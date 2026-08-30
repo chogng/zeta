@@ -1,10 +1,11 @@
 use std::time::{Duration, Instant};
 
-use super::{Resizable, SashController, SashPointerPresence};
+use super::{Resizable, SashController};
 use crate::{
     Point, Rect, SashOrientation, SashState, SplitViewLayout, SplitViewLayoutPriority,
     SplitViewOrientation, SplitViewPane,
 };
+use zui::ui::HoverPresence;
 
 const HOVER_DELAY: Duration = Duration::from_millis(300);
 
@@ -28,7 +29,7 @@ fn sash_controller_delays_hover_until_its_deadline() {
     let now = Instant::now();
     let mut controller = SashController::new(HOVER_DELAY);
 
-    assert!(!controller.pointer_presence(SashPointerPresence::Over, now));
+    assert!(!controller.pointer_presence(HoverPresence::Over, now));
     assert_eq!(controller.presentation(), SashState::Resting);
     assert_eq!(controller.next_deadline(), Some(now + HOVER_DELAY));
     assert!(!controller.advance(now + HOVER_DELAY - Duration::from_millis(1)));
@@ -43,14 +44,14 @@ fn sash_controller_cancels_pending_and_visible_hover_on_exit() {
     let now = Instant::now();
     let mut controller = SashController::new(HOVER_DELAY);
 
-    controller.pointer_presence(SashPointerPresence::Over, now);
-    assert!(!controller.pointer_presence(SashPointerPresence::Outside, now));
+    controller.pointer_presence(HoverPresence::Over, now);
+    assert!(!controller.pointer_presence(HoverPresence::Outside, now));
     assert_eq!(controller.next_deadline(), None);
     assert_eq!(controller.presentation(), SashState::Resting);
 
-    controller.pointer_presence(SashPointerPresence::Over, now);
+    controller.pointer_presence(HoverPresence::Over, now);
     controller.advance(now + HOVER_DELAY);
-    assert!(controller.pointer_presence(SashPointerPresence::Outside, now));
+    assert!(controller.pointer_presence(HoverPresence::Outside, now));
     assert_eq!(controller.presentation(), SashState::Resting);
 }
 
@@ -59,11 +60,11 @@ fn sash_controller_enters_active_presentation_immediately_for_drag() {
     let now = Instant::now();
     let mut controller = SashController::new(HOVER_DELAY);
 
-    controller.pointer_presence(SashPointerPresence::Over, now);
+    controller.pointer_presence(HoverPresence::Over, now);
     assert!(controller.begin_drag(now));
     assert_eq!(controller.presentation(), SashState::Active);
     assert_eq!(controller.next_deadline(), None);
-    assert!(controller.end_drag(SashPointerPresence::Over, now));
+    assert!(controller.end_drag(HoverPresence::Over, now));
     assert_eq!(controller.presentation(), SashState::Hovered);
 }
 
@@ -79,7 +80,7 @@ fn resizable_uses_vertical_sash_pointer_delta_and_snapshot_constraints() {
         resizable.resize_to(Point::new(580.0, 0.0)),
         Some(snapshot.resize(100.0))
     );
-    assert!(resizable.end_drag(SashPointerPresence::Outside, now));
+    assert!(resizable.end_drag(HoverPresence::Outside, now));
     assert!(!resizable.is_dragging());
 }
 

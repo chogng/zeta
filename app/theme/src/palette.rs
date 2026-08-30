@@ -14,6 +14,9 @@ use zui::ui::Edges;
 use zui::ui::FontWeight;
 use zui::ui::TextStyle;
 
+const DEFAULT_EDITOR_LINE_HEIGHT: f32 = 20.0;
+const DEFAULT_EDITOR_HEADER_HEIGHT: f32 = 32.0;
+
 /// Resolved typography for one semantic UI text role.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TypographyStyle {
@@ -23,7 +26,7 @@ pub struct TypographyStyle {
 }
 
 impl TypographyStyle {
-    const fn new(font_size: f32, line_height: f32, weight: FontWeight) -> Self {
+    pub const fn new(font_size: f32, line_height: f32, weight: FontWeight) -> Self {
         Self {
             font_size,
             line_height,
@@ -87,6 +90,8 @@ pub struct UiTheme {
     pub menu_background: Color,
     pub menu_hover_background: Color,
     pub action_bar_background: Color,
+    pub key_hint_foreground: Color,
+    pub key_hint_background: Color,
     pub tab_hover_background: Color,
     pub tab_active_background: Color,
     pub title_bar_background: Color,
@@ -95,6 +100,8 @@ pub struct UiTheme {
     pub title_bar_hover_background: Color,
     pub editor_foreground: Color,
     pub editor_syntax: EditorSyntaxColors,
+    pub editor_text: TypographyStyle,
+    pub editor_header: TypographyStyle,
     pub compact_action_label: TypographyStyle,
     pub(crate) font_size_body: f32,
     pub(crate) font_size_label: f32,
@@ -135,6 +142,8 @@ pub const DEFAULT_UI_THEME: UiTheme = UiTheme {
     menu_background: Color::WHITE,
     menu_hover_background: Color::rgb(226, 226, 228),
     action_bar_background: Color::rgb(245, 245, 246),
+    key_hint_foreground: Color::WHITE,
+    key_hint_background: Color::rgb(96, 97, 102),
     tab_hover_background: Color::rgb(226, 226, 228),
     tab_active_background: Color::rgb(235, 235, 237),
     title_bar_background: Color::WHITE,
@@ -161,6 +170,8 @@ pub const DEFAULT_UI_THEME: UiTheme = UiTheme {
         type_name: Color::rgb(38, 127, 153),
         variable: Color::rgb(51, 51, 51),
     },
+    editor_text: TypographyStyle::new(13.0, DEFAULT_EDITOR_LINE_HEIGHT, FontWeight::Normal),
+    editor_header: TypographyStyle::new(12.0, DEFAULT_EDITOR_HEADER_HEIGHT, FontWeight::Bold),
     compact_action_label: TypographyStyle::new(12.0, 16.0, FontWeight::SemiBold),
     font_size_body: 13.0,
     font_size_label: 12.0,
@@ -232,6 +243,8 @@ impl UiTheme {
             menu_background: theme_color(theme, tokens::MENU_BACKGROUND)?,
             menu_hover_background: theme_color(theme, tokens::MENU_HOVER_BACKGROUND)?,
             action_bar_background: theme_color(theme, tokens::ACTION_BAR_BACKGROUND)?,
+            key_hint_foreground: theme_color(theme, tokens::KEYBINDING_LABEL_FOREGROUND)?,
+            key_hint_background: theme_color(theme, tokens::KEYBINDING_LABEL_BACKGROUND)?,
             tab_hover_background: theme_color(theme, tokens::TAB_LIST_HOVER_BACKGROUND)?,
             tab_active_background: theme_color(theme, tokens::TAB_LIST_ACTIVE_BACKGROUND)?,
             title_bar_background: theme_color(theme, tokens::TITLE_BAR_BACKGROUND)?,
@@ -258,6 +271,16 @@ impl UiTheme {
                 type_name: theme_color(theme, tokens::EDITOR_TOKEN_TYPE)?,
                 variable: theme_color(theme, tokens::EDITOR_TOKEN_VARIABLE)?,
             },
+            editor_text: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_BODY1)?,
+                DEFAULT_EDITOR_LINE_HEIGHT,
+                FontWeight::Normal,
+            ),
+            editor_header: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_LABEL1)?,
+                DEFAULT_EDITOR_HEADER_HEIGHT,
+                FontWeight::Bold,
+            ),
             compact_action_label: TypographyStyle::new(
                 theme.required_pixel_size(tokens::FONT_SIZE_LABEL1)?,
                 16.0,
@@ -317,6 +340,10 @@ impl UiTheme {
     }
 
     pub fn picker_scroll_view_style(self) -> ScrollViewStyle {
+        self.overlay_scroll_view_style()
+    }
+
+    pub fn tab_container_scroll_view_style(self) -> ScrollViewStyle {
         self.overlay_scroll_view_style()
     }
 

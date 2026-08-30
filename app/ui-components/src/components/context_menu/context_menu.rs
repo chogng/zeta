@@ -1,9 +1,22 @@
-use crate::{
-    Color, Component, ComponentContext, ComponentElement, ComputedElement, ContextView,
-    ContextViewPlacement, ContextViewStyle, Element, ElementId, Point, Rect, UiScene,
-};
+use crate::Color;
+use crate::Component;
+use crate::ComponentContext;
+use crate::ComponentElement;
+use crate::ComputedElement;
+use crate::ContextView;
+use crate::ContextViewPlacement;
+use crate::ContextViewStyle;
+use crate::Element;
+use crate::ElementId;
+use crate::Point;
+use crate::Rect;
+use crate::UiScene;
 
-use super::{Menu, MenuIds, MenuItem, MenuSelection, MenuStyle};
+use super::Menu;
+use super::MenuIds;
+use super::MenuItem;
+use super::MenuSelection;
+use super::MenuStyle;
 
 /// Placement and menu presentation used by a [`ContextMenu`].
 #[derive(Clone, Debug, PartialEq)]
@@ -26,10 +39,10 @@ impl ContextMenuStyle {
     }
 }
 
-/// Anchors reusable [`Menu`] content in a topmost context view.
+/// Anchors a context-click action menu in the topmost context view.
 ///
-/// ContextMenu owns viewport-aware placement and overlay composition. Menu owns the surface, item
-/// geometry, interaction, and accessibility. The host owns open state, dismissal, focus
+/// ContextMenu owns viewport-aware placement and its context-menu component boundary. Menu owns
+/// item presentation and interaction; the host owns the context-click trigger, dismissal, focus
 /// restoration, and command execution.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextMenu {
@@ -46,7 +59,7 @@ impl ContextMenu {
         ids: MenuIds,
         style: ContextMenuStyle,
     ) -> Self {
-        let desired_size = Menu::desired_size(items.len(), &style.menu);
+        let desired_size = Menu::desired_size(&items, &style.menu, None);
         let context_view = ContextView::new(
             viewport,
             anchor,

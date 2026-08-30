@@ -16,7 +16,7 @@
 | `ThemeDocument` | 严格解析最多 1 MiB、512 个覆盖项的图形界面用户主题 JSON |
 | `ThemeSnapshot` | 保存完整 RGBA 与类型化标量尺寸表；不包含 DOM、WGPU 或 Ratatui 类型 |
 | `ThemeLoader` | 有界读取 `configuration.json` 与 `themes/*.json`，选择主题并隔离错误文件 |
-| `ThemeLoader::choices` / `preview` / `select` | 枚举有效主题、无副作用预览、验证后原子保存 `workbench.colorTheme` |
+| `ThemeLoader::choices` / `preview` / `select` | 枚举有效主题；`preview` 解析 GUI 从 `[gui].theme` 取得的值但不写配置；`select` 验证后原子保存 `workbench.colorTheme` |
 | `ThemeLoadOptions::with_default_entry` | 由 Rust 桌面产品选择 `zeta` 或 `app` 默认入口 |
 
 Desktop 使用 TypeScript resolver；Rust 桌面端使用本 crate。两者读取同一 manifest、Schema 与 conformance fixture。`zeta-ui-theme` 将快照转换为组件调色板，组件本身不读取主题文件或 profile 配置。
@@ -37,13 +37,16 @@ ThemeLoader::load(options)
 ├─ ThemeCatalog::resolve_document
 └─ LoadedTheme { snapshot, diagnostics }
 
+Rust GUI config/read → ThemeLoader::preview(options, gui.theme)
+└─ 解析同一 built-in/user catalog，不读写 graphical device preference
+
 ThemeLoader::select(options, preference)
 ├─ ThemeLoader::preview
 └─ preference::write_preference
    └─ zeta_utils_path::write_text_atomically
 ```
 
-`Resolver` 是别名、默认值、覆盖、循环检测、变换深度、系数和透明度契约的唯一 owner。`read_preference` 只解释 `workbench.colorTheme`；`read_theme_documents` 只枚举非递归常规 JSON，按路径排序并限制为 128 个；`read_bounded_text` 在分配完整内容前把配置和主题文件限制为 1 MiB。
+`Resolver` 是别名、默认值、覆盖、循环检测、变换深度、系数和透明度契约的唯一 owner。`read_preference` 只解释 `configuration.json` 的 `workbench.colorTheme`；Rust GUI 自己解释 `[gui].theme`，再把选择值交给 `ThemeLoader::preview`。`zeta-theme` 不读取 `[gui]`、`[tui]` 或 App Server 配置。`read_theme_documents` 只枚举非递归常规 JSON，按路径排序并限制为 128 个；`read_bounded_text` 在分配完整内容前把配置和主题文件限制为 1 MiB。
 
 `theme-entries.json` 只包含 `zeta` 与 `app` 图形界面入口。配置为 `system` 时，所选入口跟随系统明暗方案；配置为 `<entry>-light`、`<entry>-dark` 或用户主题 ID 时固定到对应主题。
 

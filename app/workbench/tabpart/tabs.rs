@@ -5,8 +5,8 @@ use crate::{
     ButtonBackgrounds, ButtonState, ButtonStyle, Color, Component, ComponentContext,
     ComponentElement, ComputedElement, CornerRadii, Edges, Element, FontWeight, InteractionRegion,
     PaintIcon, PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView,
-    ScrollViewStyle, ScrollbarStyle, Size, Tab, TabBackgrounds, TabList, TabListStyle,
-    TabSelection, TabState, TabStyle, TextBlock, TextStyle, UiScene,
+    ScrollbarPresentation, Size, Tab, TabBackgrounds, TabList, TabListStyle, TabSelection,
+    TabState, TabStyle, TextBlock, TextStyle, UiScene,
 };
 use zeta_icons::icons;
 use zui::ui::AccessibilityRole;
@@ -75,6 +75,7 @@ pub struct TabContainer<'a> {
     selected_id: ElementId,
     visible_action_bar_tab: Option<ElementId>,
     scroll: ScrollState,
+    scrollbar_presentation: ScrollbarPresentation,
     placement: TabContainerPlacement,
     style: WorkbenchUiStyle,
     dispatch: &'a UiDispatch,
@@ -119,6 +120,7 @@ impl<'a> TabContainer<'a> {
             selected_id,
             visible_action_bar_tab: None,
             scroll: ScrollState::default(),
+            scrollbar_presentation: ScrollbarPresentation::default(),
             placement,
             style,
             dispatch,
@@ -140,6 +142,15 @@ impl<'a> TabContainer<'a> {
     /// Supplies retained vertical scroll state for the body-mounted tab list.
     pub const fn with_scroll_state(mut self, scroll: ScrollState) -> Self {
         self.scroll = scroll;
+        self
+    }
+
+    /// Supplies the retained scrollbar visibility and interaction state.
+    pub const fn with_scrollbar_presentation(
+        mut self,
+        presentation: ScrollbarPresentation,
+    ) -> Self {
+        self.scrollbar_presentation = presentation;
         self
     }
 
@@ -251,7 +262,7 @@ impl<'a> TabContainer<'a> {
             .sum()
     }
 
-    fn scroll_view(&self) -> ScrollView {
+    pub(crate) fn scroll_view(&self) -> ScrollView {
         let content_size = match self.placement {
             TabContainerPlacement::Body => {
                 Size::new(self.content_bounds.size.width, self.body_content_height())
@@ -263,15 +274,9 @@ impl<'a> TabContainer<'a> {
             content_size,
             self.scroll,
             ScrollAxis::Vertical,
-            ScrollViewStyle::new(
-                ScrollbarStyle::new(
-                    self.style.colors.side_bar_background,
-                    self.style.colors.muted_foreground,
-                )
-                .with_thickness(6.0)
-                .with_inset(2.0),
-            ),
+            self.style.scroll_view,
         )
+        .with_scrollbar_presentation(self.scrollbar_presentation)
     }
 
     fn tab_list(&self, group: &WorkbenchTabGroup<'_>, bounds: Rect) -> TabList {

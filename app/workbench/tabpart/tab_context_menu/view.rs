@@ -1,3 +1,4 @@
+use zeta_ui_components::ActionViewItem;
 use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonState;
 use zeta_ui_components::ButtonStyle;
@@ -111,10 +112,12 @@ impl TabContextMenu {
             .into_iter()
             .map(|action| {
                 let id = action.element_id();
-                MenuItem::new(
+                MenuItem::action(
                     id,
-                    action.label(open.pinned),
-                    button_state(dispatch, id, true),
+                    ActionViewItem::label(
+                        action.label(open.pinned),
+                        button_state(dispatch, id, true),
+                    ),
                 )
             })
             .collect();
@@ -165,7 +168,12 @@ impl TabContextMenu {
                 .collect::<Vec<_>>();
             let items = entries
                 .iter()
-                .map(|(id, label)| MenuItem::new(*id, label, button_state(dispatch, *id, true)))
+                .map(|(id, label)| {
+                    MenuItem::action(
+                        *id,
+                        ActionViewItem::label(label, button_state(dispatch, *id, true)),
+                    )
+                })
                 .collect();
             let anchor = root.item_bounds(2).unwrap_or_else(|| {
                 Rect::from_xywh(root.bounds().right(), root.bounds().origin.y, 1.0, 1.0)

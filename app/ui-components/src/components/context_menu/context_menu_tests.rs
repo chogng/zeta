@@ -1,9 +1,23 @@
-use super::{ContextMenu, ContextMenuStyle};
-use crate::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, Color, ElementId, MenuIds, MenuItem,
-    MenuSelection, MenuStyle, PaintRect, Point, Rect, Size, TextStyle, UiDispatch, UiFrame,
-    UiScene,
-};
+use super::ContextMenu;
+use super::ContextMenuStyle;
+use crate::ActionViewItem;
+use crate::ButtonBackgrounds;
+use crate::ButtonState;
+use crate::ButtonStyle;
+use crate::Color;
+use crate::ElementId;
+use crate::MenuIds;
+use crate::MenuItem;
+use crate::MenuSelection;
+use crate::MenuStyle;
+use crate::PaintRect;
+use crate::Point;
+use crate::Rect;
+use crate::Size;
+use crate::TextStyle;
+use crate::UiDispatch;
+use crate::UiFrame;
+use crate::UiScene;
 use zui::ui::InteractionFrame;
 
 const PARENT: ElementId = ElementId::scoped(92, 1);
@@ -25,14 +39,14 @@ fn style() -> MenuStyle {
 }
 
 #[test]
-fn anchors_menu_content_and_keeps_its_interaction_tree() {
+fn context_menu_preserves_anchored_geometry_and_interaction_semantics() {
     let menu = ContextMenu::new(
         Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
         Rect::from_xywh(30.0, 20.0, 1.0, 1.0),
         "Tab actions",
         vec![
-            MenuItem::new(FIRST, "Pin", ButtonState::Resting),
-            MenuItem::new(SECOND, "Close", ButtonState::Resting),
+            MenuItem::action(FIRST, ActionViewItem::label("Pin", ButtonState::Resting)),
+            MenuItem::action(SECOND, ActionViewItem::label("Close", ButtonState::Resting)),
         ],
         MenuIds::new(PARENT, ROOT),
         ContextMenuStyle::new(style()),
@@ -57,12 +71,15 @@ fn anchors_menu_content_and_keeps_its_interaction_tree() {
 }
 
 #[test]
-fn header_content_is_composed_inside_the_anchored_menu() {
+fn context_menu_composes_header_content_inside_its_surface() {
     let menu = ContextMenu::new(
         Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
         Rect::from_xywh(30.0, 260.0, 80.0, 24.0),
         "Branches",
-        vec![MenuItem::new(FIRST, "main", ButtonState::Resting)],
+        vec![MenuItem::action(
+            FIRST,
+            ActionViewItem::label("main", ButtonState::Resting),
+        )],
         MenuIds::new(PARENT, ROOT),
         ContextMenuStyle::new(style().with_header_height(36.0)),
     );

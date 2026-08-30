@@ -8,7 +8,6 @@ use crate::components::search_box::SearchBoxModel;
 use crate::components::text_prompt::TextPromptSpec;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
-use crate::features::config::TerminalSettingsEdit;
 use crate::features::config::preferred_model;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -26,7 +25,7 @@ use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ConfigEdit {
-    pub(crate) terminal: TerminalSettingsEdit,
+    pub(crate) terminal: TerminalSettings,
     pub(crate) server_config: ConfigReadResult,
     pub(crate) providers: ProviderListResult,
     pub(crate) session_id: SessionId,
@@ -37,7 +36,6 @@ pub(crate) struct ConfigEdit {
 pub(crate) struct PermissionEdit {
     pub(crate) params: SessionDirPermissionsSetParams,
     pub(crate) terminal: TerminalSettings,
-    pub(crate) terminal_revision: u64,
     pub(crate) server_config: ConfigReadResult,
     pub(crate) providers: ProviderListResult,
 }
@@ -105,7 +103,6 @@ pub(crate) fn config_pane_spec(
     config: &ConfigReadResult,
     providers: &ProviderListResult,
     terminal: TerminalSettings,
-    terminal_revision: u64,
     session_id: &SessionId,
     dirs: &SessionDirListResult,
 ) -> ConfigPaneSpec {
@@ -117,10 +114,7 @@ pub(crate) fn config_pane_spec(
     actions.insert(
         mouse_id.clone(),
         ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
-            terminal: TerminalSettingsEdit {
-                expected_revision: terminal_revision,
-                settings: toggled_terminal,
-            },
+            terminal: toggled_terminal,
             server_config: config.clone(),
             providers: providers.clone(),
             session_id: session_id.clone(),
@@ -136,20 +130,14 @@ pub(crate) fn config_pane_spec(
         input_mode_id.clone(),
         ConfigSelectionAction::ChooseInputMode {
             standard: Box::new(ConfigEdit {
-                terminal: TerminalSettingsEdit {
-                    expected_revision: terminal_revision,
-                    settings: standard_terminal,
-                },
+                terminal: standard_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
                 dirs: dirs.clone(),
             }),
             vim: Box::new(ConfigEdit {
-                terminal: TerminalSettingsEdit {
-                    expected_revision: terminal_revision,
-                    settings: vim_terminal,
-                },
+                terminal: vim_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
@@ -166,20 +154,14 @@ pub(crate) fn config_pane_spec(
         follow_up_id.clone(),
         ConfigSelectionAction::ChooseFollowUpMode {
             queue: Box::new(ConfigEdit {
-                terminal: TerminalSettingsEdit {
-                    expected_revision: terminal_revision,
-                    settings: queue_terminal,
-                },
+                terminal: queue_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
                 dirs: dirs.clone(),
             }),
             steer: Box::new(ConfigEdit {
-                terminal: TerminalSettingsEdit {
-                    expected_revision: terminal_revision,
-                    settings: steer_terminal,
-                },
+                terminal: steer_terminal,
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
@@ -218,15 +200,8 @@ pub(crate) fn config_pane_spec(
     ];
     config_items.extend(overview(config));
     let provider_items = provider_items(providers, &mut actions);
-    let permission_items = dir_permission_items(
-        dirs,
-        session_id,
-        terminal,
-        terminal_revision,
-        config,
-        providers,
-        &mut actions,
-    );
+    let permission_items =
+        dir_permission_items(dirs, session_id, terminal, config, providers, &mut actions);
 
     ConfigPaneSpec {
         model: PaneSpec::new(
@@ -251,7 +226,6 @@ fn dir_permission_items(
     snapshot: &SessionDirListResult,
     session_id: &SessionId,
     terminal: TerminalSettings,
-    terminal_revision: u64,
     config: &ConfigReadResult,
     providers: &ProviderListResult,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
@@ -267,10 +241,7 @@ fn dir_permission_items(
         actions.insert(
             id.clone(),
             ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
-                terminal: TerminalSettingsEdit {
-                    expected_revision: terminal_revision,
-                    settings,
-                },
+                terminal: settings,
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
@@ -300,7 +271,6 @@ fn dir_permission_items(
                         permissions: toggled_permissions(&directory.permissions, *permission),
                     },
                     terminal,
-                    terminal_revision,
                     server_config: config.clone(),
                     providers: providers.clone(),
                 }),

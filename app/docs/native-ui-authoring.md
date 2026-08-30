@@ -126,7 +126,20 @@ let button_style = ButtonStyle::new(
 
 如果组件需要当前 contract 尚未表达的 min/max size、cross-axis alignment、intrinsic measurement、margin 或 wrapping，应先提出一个 typed layout contract；不能通过 host 手工计算一套平行 geometry，也不能用未定义的 CSS-like 字符串逃避类型设计。
 
-### 4.3 当前不变量
+### 4.3 容器区域命名
+
+容器分区名表达稳定结构，分区内的组件名表达实际内容。只有一个外壳长期由固定顶部区域和主体区域组成时，才使用 `header` 和 `content`；不要因为某个区域当前恰好位于上方，就把它命名为 `header`。
+
+| 结构 | 区域命名 | 区域内容 |
+| --- | --- | --- |
+| Tab Part | `header`、`content` | `header` 组合 `TabContainerToolbar`；`content` 组合 `ScrollView` 和一个或多个 `TabList` |
+| Chat Composer | `interaction`、`info_bar`、`editor`、`toolbar` | 各区域按真实职责命名；底部 `toolbar` 不能改称 `header` |
+
+同级区域必须由共同的父布局一次性计算。`header` 可以组合 `Toolbar`，但 `Toolbar` 只计算自己的按钮、搜索框和内部 padding，不能计算或公开兄弟 `content` 的 bounds。出现 `Toolbar::content_bounds`、`Header::body_bounds` 或调用方重复推导同一分区几何，说明布局 ownership 已经漂移，应把分区计算移回容器布局。
+
+公开几何 API 使用与结构一致的名词：外壳提供 `bounds()`，稳定分区提供 `header()`、`content()` 或准确的职责名，滚动内容再由 `ScrollViewport` 提供内容坐标。不要同时使用 `body`、`main`、`content` 表达同一层主体区域，也不要让 `content_bounds` 在不同类型中分别表示外壳内区、滚动 viewport 和业务内容尺寸。
+
+### 4.4 当前不变量
 
 - 组件不能在 paint、hit-test 和 inspection 中分别解释同一份 authored style；
 - product host 不能从 scene primitive 反推组件树或重新注册第二份 geometry；
@@ -214,7 +227,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 
 - `zui` 已提供 `Element`、`ComputedElement`、`Component`、`UiScene`、inspection 和 backend-neutral primitive contract；
 - `zui` 已提供 `ViewState` revision/subscription，以及由稳定 `ElementId` 驱动 local state、external observation、RAII resource 和 unmount cleanup 的 `ComponentRuntime`；
-- `zeta-ui-components` 已提供 Button、Switch、Checkbox、ActionBar、Menu、ContextMenu、TabList、HorizontalScrollbar、VerticalScrollbar、ScrollView、InputBox、ContextView 等 typed component/style contract；
+- `zeta-ui-components` 已提供 Button、Switch、Checkbox、ActionBar、Menu、Dropdown、TabList、HorizontalScrollbar、VerticalScrollbar、ScrollView、InputBox、ContextView 等 typed component/style contract；
 - Native host 已通过主题快照、palette 和领域 style factory 向组件投影颜色与标准尺寸；
 - 组件的 paint、interaction、inspection 和 accessibility 已沿同一 frame/Element contract 组合；
 - DevTools 展示 scene inspection 和 computed layout，但不模拟 DOM/CSS debugger。

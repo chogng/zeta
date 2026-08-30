@@ -71,6 +71,10 @@ impl DiffEditorStyle {
         }
     }
 
+    pub(crate) fn same_layout_as(&self, other: &Self) -> bool {
+        self.code_editor.same_layout_as(&other.code_editor)
+    }
+
     pub(super) const fn code_editor(&self) -> &CodeEditorStyle {
         &self.code_editor
     }

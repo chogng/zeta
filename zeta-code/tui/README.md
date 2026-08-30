@@ -89,7 +89,7 @@ Tool、approval policy 或 persistence。
   仍执行 session shutdown 与 terminal RAII cleanup；
 - Ctrl-Z 在 Unix 上先恢复当前启用的鼠标捕获、bracketed paste、alternate screen 和 raw mode，再发送 `SIGTSTP`；`fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
 - raw mode、alternate screen、bracketed paste 与 cursor cleanup；Mouse interactions 开启时在整个 TUI 会话捕获鼠标，关闭时释放捕获并把拖拽文本选择交还终端；
-- 启动时通过 App Server 从 `<profile>/config.toml` 的 `[tui].theme` 读取主题选择，并从 `<profile>/zeta-code/themes/*.json` 读取 TUI 专用用户主题；内置调色板、语义颜色与 TrueColor、ANSI-256、ANSI-16、Monochrome 降级均由本 crate 拥有，不读取 TypeScript token registry、`resources/design-tokens`、共享 `configuration.json` 或 `zeta-theme`；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、挂在顶部分隔线上的反色 `Theme` 标题、编号、
+- 启动时通过 App Server 从 `<profile>/config.toml` 的 `[tui]` 读取主题和终端设置，并从 `<profile>/zeta-code/themes/*.json` 读取 TUI 专用用户主题；内置调色板、语义颜色与 TrueColor、ANSI-256、ANSI-16、Monochrome 降级均由本 crate 拥有，不读取 TypeScript token registry、`resources/design-tokens`、`configuration.json` 或 `zeta-theme`；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、挂在顶部分隔线上的反色 `Theme` 标题、编号、
   active 标记、候选 frame highlight、仅带上下较高对比度长节虚线的 diff preview、palette 来源说明和选择动作，Pane
   不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane；成功时以状态圆点、`/theme <id>` 和以 `└─` 归属且与命令文字对齐的 `Theme set to …` transcript 记录执行结果，`/theme <id>` 保留直接切换；
   Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark；查询超时
@@ -106,7 +106,7 @@ TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，�
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Add-dir、Providers 与 Language servers。主题选择由共享 `<profile>/config.toml` 的 `[tui].theme` 保存；Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认授权保存在 `<profile>/zeta-code/terminal.json`。默认授权不保存路径；当前 Session 的目录授权也不写入该文件或 User Config。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Add-dir、Providers 与 Language servers。主题、Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认授权都保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端只保存完整键值表，字段默认值和校验由 TUI 负责。默认授权不保存路径；当前 Session 的目录授权也不写入 `[tui]`。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
 
 从 repository root 启动当前 TUI：
 
@@ -126,7 +126,7 @@ cargo run --manifest-path Cargo.toml -p zeta-cli
 | --- | --- |
 | `TuiOptions::new` | 提供 Session/Thread title，并默认以当前目录作为 file mention root |
 | `TuiOptions::with_dir_root` | 显式覆盖有界 file mention root |
-| `TuiOptions::with_profile_root` | 启用 host-local、产品作用域的 `zeta-code/keybindings.json`、`zeta-code/statusline.json`、`zeta-code/terminal.json` 与 `zeta-code/themes/*.json` 资源 |
+| `TuiOptions::with_profile_root` | 启用 host-local、产品作用域的 `zeta-code/keybindings.json`、`zeta-code/statusline.json` 与 `zeta-code/themes/*.json` 资源；普通 TUI 设置来自 App Server 配置 authority 的 `[tui]` |
 | `TuiRecoveryState::new` | 从 CLI 参数构造需要重新读取的持久化 Session/Thread 身份，不携带 connection 或待执行请求 |
 | `run` | 接管 ready `AppServerSession`，校验 initialize snapshot、驱动 terminal/client events，并在退出时显式 shutdown |
 | `TuiExit::UserRequested` | 用户通过按键或 command 请求正常退出 |
@@ -145,14 +145,17 @@ slash snapshot，并且只取一次 connection event stream。
 
 键盘焦点、键盘当前项、已生效项、鼠标悬停/按下、禁用和文字框选的统一含义及内置颜色由 [TUI 交互与颜色语义](../../docs/tui-interaction.md) 定义；本节只拥有用户主题文件格式。
 
-主题选择由共享 `<profile>/config.toml` 保存：
+TUI 设置保存在 `<profile>/config.toml` 的根级 `[tui]` 表：
 
 ```toml
 [tui]
 theme = "graphite"
+mouseInteractions = true
+followUpMode = "queue"
+inputMode = "standard"
 ```
 
-Mouse interactions、Follow-up messages、Input mode 和新增目录默认授权继续保存在 `<profile>/zeta-code/terminal.json`。用户主题保存为 `<profile>/zeta-code/themes/*.json`。每个文件最多 1 MiB；目录最多读取 128 个常规 JSON 文件；`id` 必须是小写 kebab-case，`label` 为 1–80 个已去除首尾空格的字符，`appearance` 只能是 `dark` 或 `light`，`colors` 最多覆盖 64 项且颜色必须是 `#RRGGBB`。未知字段、未知颜色名、重复/保留 ID 和不支持的版本都会使该文件单独失效。
+新增目录默认授权写入 `[tui.dirPermissions]`，只保存权限集合，不保存目录或 Session。用户主题内容仍保存为 `<profile>/zeta-code/themes/*.json`。每个文件最多 1 MiB；目录最多读取 128 个常规 JSON 文件；`id` 必须是小写 kebab-case，`label` 为 1–80 个已去除首尾空格的字符，`appearance` 只能是 `dark` 或 `light`，`colors` 最多覆盖 64 项且颜色必须是 `#RRGGBB`。未知字段、未知颜色名、重复/保留 ID 和不支持的版本都会使该主题文件单独失效。
 
 ```json
 {
@@ -215,7 +218,7 @@ src/
 │   └── detail_list.rs / text_prompt.rs / key_capture.rs # QuickView detail and concrete Pane bodies
 ├── features/
 │   ├── config.rs                  # config feature module root
-│   ├── config/                    # server config requests, terminal settings resource and pane mapping
+│   ├── config/                    # [tui] parsing, server config requests and pane mapping
 │   ├── sessions/                  # active Session/Thread selection and lifecycle requests
 │   ├── thread/                    # canonical snapshot, requests, subscription and presentation
 │   ├── queue.rs / queue/          # stable Queue identity, inline rows and management Pane
@@ -272,7 +275,7 @@ src/
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 按配置顺序把当前权限、preferred model、Git 分支和变更映射为长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
 | `StatusLineResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/statusline.json` | 只保存四个显示开关，不进入 App Server 配置、不拥有被显示的数据 |
-| `ConfigResource` | crate-private | 按 `schemaVersion` 有界读取、迁移历史字段、revision 校验并原子保存 `<profile>/zeta-code/terminal.json` 的终端设置 | 未知字段和不支持的版本必须拒绝；主题选择由共享 `config/read`、`config/update` 管理 |
+| `features::config::TerminalSettings` | crate-private | 解释和校验 `[tui]` 中的终端设置，并在更新已知键时保留该表的其他键 | App Server 只做 revision 校验和完整表替换，不解释 TUI 字段 |
 | `components::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 directory 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
@@ -348,9 +351,9 @@ run(session, options)
 ├─ app::EventPump::start → TerminalEventSource + ClientEventSource + TerminationSource
 ├─ FileSearchManager::new
 ├─ App::for_dir → WelcomeModel::for_dir + StatusLineModel::new
-├─ ConfigResource::refresh → AppEvent::ConfigSettingsReceived → App::update
 ├─ StatusLineResource::refresh → AppEvent::StatusLineSettingsReceived → App::update
-├─ client.read_config / git_status → AppEvent → App::update
+├─ client.read_config → `[tui]` parse + preferred model → AppEvent → App::update
+├─ client.git_status → AppEvent → App::update
 └─ loop
    ├─ EventPump::recv / recv_timeout(redraw deadline)
    │  ├─ terminal event → input routing

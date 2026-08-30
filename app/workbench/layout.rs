@@ -7,10 +7,11 @@ use std::time::Instant;
 
 use zeta_ui_components::Resizable;
 use zeta_ui_components::SashOrientation;
-use zeta_ui_components::SashPointerPresence;
 use zeta_ui_components::SashState;
 use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::ScrollMetrics;
+use zeta_ui_components::ScrollbarPresentation;
+use zui::ui::HoverPresence;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;
 
@@ -104,6 +105,19 @@ impl WorkbenchLayoutState {
         self.tab_container.scroll(command, metrics)
     }
 
+    pub(crate) fn tab_container_scroll_state_mut(
+        &mut self,
+    ) -> &mut zeta_ui_components::ScrollState {
+        self.tab_container.scroll_state_mut()
+    }
+
+    pub(crate) fn set_tab_container_scrollbar_presentation(
+        &mut self,
+        presentation: ScrollbarPresentation,
+    ) {
+        self.tab_container.set_scrollbar_presentation(presentation);
+    }
+
     pub fn expand_inspector(&mut self) {
         self.inspector.expand();
     }
@@ -134,11 +148,7 @@ impl WorkbenchLayoutState {
         self.tab_container.resize_to(pointer)
     }
 
-    pub fn finish_tab_container_resize(
-        &mut self,
-        presence: SashPointerPresence,
-        now: Instant,
-    ) -> bool {
+    pub fn finish_tab_container_resize(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.tab_container.finish_resizing(presence, now)
     }
 
@@ -161,7 +171,7 @@ impl WorkbenchLayoutState {
             .is_some_and(|next| self.inspector.set_preferred_width(next.next_size()))
     }
 
-    pub fn finish_inspector_resize(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+    pub fn finish_inspector_resize(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.inspector_resize.end_drag(presence, now)
     }
 
@@ -169,17 +179,13 @@ impl WorkbenchLayoutState {
         self.inspector_resize.cancel()
     }
 
-    pub fn tab_sash_pointer_presence(
-        &mut self,
-        presence: SashPointerPresence,
-        now: Instant,
-    ) -> bool {
+    pub fn tab_sash_pointer_presence(&mut self, presence: HoverPresence, now: Instant) -> bool {
         self.tab_container.sash_pointer_presence(presence, now)
     }
 
     pub fn inspector_sash_pointer_presence(
         &mut self,
-        presence: SashPointerPresence,
+        presence: HoverPresence,
         now: Instant,
     ) -> bool {
         self.inspector_resize.pointer_presence(presence, now)

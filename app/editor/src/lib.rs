@@ -18,7 +18,8 @@ pub use code_editor::{
     CodeEditorPalette, CodeEditorPosition, CodeEditorPresentation, CodeEditorRevision,
     CodeEditorRow, CodeEditorRowSource, CodeEditorSearchMatch, CodeEditorSearchQuery,
     CodeEditorSelection, CodeEditorSelectionMode, CodeEditorStyle, CodeEditorSyntaxPalette,
-    CodeEditorSyntaxToken, CodeEditorTextEdit, CodeEditorTokenRole, CodeEditorViewport,
+    CodeEditorSyntaxToken, CodeEditorTextEdit, CodeEditorTokenRole, CodeEditorTypography,
+    CodeEditorTypographyError, CodeEditorViewport,
 };
 pub use diff_editor::{
     DiffEditor, DiffEditorDocument, DiffEditorFoldControl, DiffEditorFoldState, DiffEditorLabels,

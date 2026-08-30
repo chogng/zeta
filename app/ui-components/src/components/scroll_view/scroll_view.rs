@@ -79,9 +79,10 @@ impl ScrollViewport {
 
 /// Clipping viewport that composes one independent scrollbar per enabled axis.
 ///
-/// The host retains [`ScrollState`], normalizes platform input into [`ScrollCommand`], computes
-/// content size, and owns interaction routing and pointer capture. ScrollView owns effective
-/// offset clamping, content translation, clipping, visibility policy, and axis composition.
+/// The host retains [`ScrollState`], normalizes platform input into [`ScrollCommand`], and computes
+/// content size. [`crate::ScrollbarController`] owns reusable hover, visibility, and capture while
+/// ScrollView owns effective offset clamping, content translation, clipping, visibility policy,
+/// and axis composition.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollView {
     bounds: Rect,

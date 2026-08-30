@@ -69,7 +69,12 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
     );
     assert_eq!(
         focused.caret_bounds(),
-        Some(Rect::from_xywh(8.0, 12.0, 8.0, 20.0))
+        Some(Rect::from_xywh(
+            0.0,
+            12.0,
+            editor.style.cell_width(),
+            editor.style.row_height(),
+        ))
     );
 
     focused.paint(&mut scene);
@@ -78,6 +83,10 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
         .iter()
         .find(|block| block.text() == "Ask Zeta anything…")
         .unwrap();
+    assert_eq!(
+        placeholder.origin().x,
+        focused.caret_bounds().unwrap().origin.x
+    );
     assert_eq!(placeholder.origin().y, 12.0);
 }
 
@@ -98,17 +107,15 @@ fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
         )
         .paint(&mut scene);
 
-    let command = scene
+    let code = scene
         .text_blocks()
         .iter()
-        .find(|block| block.text() == "just")
-        .expect("syntax command token should be painted");
-    assert_eq!(command.style().color(), Color::rgb(15, 110, 96));
+        .find(|block| block.text() == "just app")
+        .expect("code line should be painted once");
     assert!(
-        scene
-            .text_blocks()
-            .iter()
-            .any(|block| block.text() == "just app")
+        code.spans().iter().any(|span| {
+            span.text() == "just" && span.style().color() == Color::rgb(121, 94, 38)
+        })
     );
 }
 

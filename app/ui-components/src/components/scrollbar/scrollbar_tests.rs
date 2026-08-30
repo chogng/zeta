@@ -27,11 +27,11 @@ fn vertical_scrollbar_resolves_track_and_thumb_from_scalar_metrics() {
     assert_eq!(scrollbar.layout().axis(), ScrollbarAxis::Vertical);
     assert_eq!(
         scrollbar.track_bounds(),
-        Rect::from_xywh(90.0, 2.0, 8.0, 96.0)
+        Rect::from_xywh(92.0, 0.0, 8.0, 100.0)
     );
     assert_eq!(
         scrollbar.thumb_bounds(),
-        Rect::from_xywh(90.0, 74.0, 8.0, 24.0)
+        Rect::from_xywh(92.0, 75.0, 8.0, 25.0)
     );
 }
 
@@ -96,7 +96,7 @@ fn horizontal_scrollbar_has_horizontal_geometry_without_an_axis_argument() {
     assert_eq!(scrollbar.layout().axis(), ScrollbarAxis::Horizontal);
     assert_eq!(
         scrollbar.track_bounds(),
-        Rect::from_xywh(12.0, 90.0, 96.0, 8.0)
+        Rect::from_xywh(10.0, 92.0, 100.0, 8.0)
     );
 
     let mut scene = UiScene::new(Color::TRANSPARENT);

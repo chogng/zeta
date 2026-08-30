@@ -47,8 +47,12 @@ pub(super) fn byte_offset_for_column(text: &str, requested: usize) -> usize {
 }
 
 pub(super) fn expand_tabs(text: &str) -> String {
+    expand_tabs_at_column(text, 0).0
+}
+
+pub(super) fn expand_tabs_at_column(text: &str, start_column: usize) -> (String, usize) {
     let mut expanded = String::with_capacity(text.len());
-    let mut columns = 0;
+    let mut columns = start_column;
     let mut segment_start = 0;
     for (index, character) in text.char_indices() {
         if character != '\t' {
@@ -62,8 +66,15 @@ pub(super) fn expand_tabs(text: &str) -> String {
         columns += spaces;
         segment_start = index + character.len_utf8();
     }
-    expanded.push_str(&text[segment_start..]);
-    expanded
+    let tail = &text[segment_start..];
+    expanded.push_str(tail);
+    columns += UnicodeWidthStr::width(tail);
+    (expanded, columns)
+}
+
+pub(super) fn has_wide_display_cells(text: &str) -> bool {
+    text.graphemes(true)
+        .any(|grapheme| display_columns(grapheme) > 1)
 }
 
 pub(super) fn visit_display_cell_runs<'a>(

@@ -406,6 +406,7 @@ impl WorkbenchApplication {
             .as_mut()
             .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
         let configuration = client.read_config().map_err(client_error)?;
+        self.apply_gui_config(configuration.gui.clone());
         self.language_service
             .apply_configuration(&configuration, &self.file_editor_host);
         Ok(())

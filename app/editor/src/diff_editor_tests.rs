@@ -120,16 +120,18 @@ fn diff_document_projects_editor_owned_syntax_into_both_code_panes() {
 
     editor.paint(&mut scene);
 
-    assert_eq!(
-        scene
-            .text_blocks()
+    let code_blocks = scene
+        .text_blocks()
+        .iter()
+        .filter(|block| matches!(block.text(), "fn before() {}" | "fn after() {}"))
+        .collect::<Vec<_>>();
+    assert_eq!(code_blocks.len(), 2);
+    assert!(code_blocks.iter().all(|block| {
+        block
+            .spans()
             .iter()
-            .filter(|block| {
-                block.text() == "fn" && block.style().color() == Color::rgb(130, 80, 223)
-            })
-            .count(),
-        2
-    );
+            .any(|span| span.text() == "fn" && span.style().color() == Color::rgb(175, 0, 219))
+    }));
 }
 
 #[test]

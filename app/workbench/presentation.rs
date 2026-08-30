@@ -15,7 +15,7 @@ use zeta_settings::RemoteTunnelManager;
 use zeta_settings::RemoteTunnelManagerState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore, TerminalMousePosition};
 use zeta_ui_components::{
-    InteractionRegion, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics,
+    InteractionRegion, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics, ScrollView,
     ScrollbarPresentation,
 };
 use zui::ui::{
@@ -127,7 +127,7 @@ pub struct WorkbenchSceneLayout {
     pub thread_timeline: Rect,
     pub session_pane_layout: SessionPaneLayout,
     pub composer_panel: Rect,
-    pub composer_info_bar: Rect,
+    pub composer_key_hint_bar: Rect,
     pub composer_toolbar: Rect,
     pub composer: Rect,
 }
@@ -229,7 +229,7 @@ impl WorkbenchSceneLayout {
             thread_timeline: session_pane_layout.timeline(),
             session_pane_layout,
             composer_panel: composer_panel.panel(),
-            composer_info_bar: composer_panel.info_bar(),
+            composer_key_hint_bar: composer_panel.key_hint_bar(),
             composer_toolbar: composer_panel.toolbar(),
             composer: composer_panel.editor(),
         })
@@ -249,6 +249,7 @@ pub struct WorkbenchPresentation {
     pub frame: UiFrame<InteractionFrame>,
     pub ime_cursor_area: Option<Rect>,
     pub tab_container_scroll_metrics: Option<ScrollMetrics>,
+    pub tab_container_scroll_view: Option<ScrollView>,
     pub directory_picker_scroll_metrics: Option<ScrollMetrics>,
     pub directory_picker_item_viewport: Option<Rect>,
     pub remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
@@ -369,6 +370,7 @@ struct TabContainerView<'a> {
     selected_id: ElementId,
     visible_action_bar_tab: Option<&'a TabInputKey>,
     scroll: zeta_ui_components::ScrollState,
+    scrollbar_presentation: ScrollbarPresentation,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -426,6 +428,7 @@ struct MainDrawResult {
 struct TabContainerDrawResult {
     search_caret: Option<Rect>,
     scroll_metrics: Option<ScrollMetrics>,
+    scroll_view: Option<ScrollView>,
 }
 
 #[cfg(test)]
@@ -492,6 +495,7 @@ fn build_workbench_presentation_with_bindings(
             frame,
             ime_cursor_area: None,
             tab_container_scroll_metrics: None,
+            tab_container_scroll_view: None,
             directory_picker_scroll_metrics: None,
             directory_picker_item_viewport: None,
             remote_connection_picker_scroll_metrics: None,
@@ -550,6 +554,7 @@ fn build_workbench_presentation_with_bindings(
                     selected_id,
                     visible_action_bar_tab: model.tab_context_menu.target_tab(),
                     scroll: model.tab_container.scroll_state(),
+                    scrollbar_presentation: model.tab_container.scrollbar_presentation(),
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
@@ -689,6 +694,7 @@ fn build_workbench_presentation_with_bindings(
         frame,
         ime_cursor_area: overlay.ime_cursor_area,
         tab_container_scroll_metrics: tab_container_draw.scroll_metrics,
+        tab_container_scroll_view: tab_container_draw.scroll_view,
         directory_picker_scroll_metrics: overlay.directory_picker_scroll_metrics,
         directory_picker_item_viewport: overlay.directory_picker_item_viewport,
         remote_connection_picker_scroll_metrics: overlay.remote_connection_picker_scroll_metrics,
@@ -1174,7 +1180,8 @@ fn draw_tab_container(
         view.dispatch,
     )
     .with_viewport(viewport)
-    .with_scroll_state(view.scroll);
+    .with_scroll_state(view.scroll)
+    .with_scrollbar_presentation(view.scrollbar_presentation);
     if let Some(tab) = view
         .visible_action_bar_tab
         .and_then(|tab| mounted_tab_element_id(view.tab_part, tab, TabContainerPlacement::Body))
@@ -1182,6 +1189,7 @@ fn draw_tab_container(
         tab_container = tab_container.with_visible_action_bar(tab);
     }
     let scroll_metrics = tab_container.scroll_metrics();
+    let scroll_view = tab_container.scroll_view();
     context.draw_component(&tab_container);
     TabContainerDrawResult {
         search_caret: view
@@ -1190,6 +1198,7 @@ fn draw_tab_container(
             .then_some(search_caret)
             .flatten(),
         scroll_metrics: Some(scroll_metrics),
+        scroll_view: Some(scroll_view),
     }
 }
 

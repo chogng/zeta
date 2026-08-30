@@ -263,9 +263,14 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.grep_backend = crate::AgentGrepBackend::Ripgrep,
         Patch::Value(backend) => document.agent.grep_backend = *backend,
     }
-    match &update.tui_theme {
+    match &update.gui {
         Patch::Missing => {}
-        Patch::Null => document.tui.theme = crate::DEFAULT_TUI_THEME.into(),
-        Patch::Value(theme) => document.tui.theme = theme.clone(),
+        Patch::Null => document.gui.clear(),
+        Patch::Value(gui) => document.gui = gui.clone(),
+    }
+    match &update.tui {
+        Patch::Missing => {}
+        Patch::Null => document.tui.clear(),
+        Patch::Value(tui) => document.tui = tui.clone(),
     }
 }

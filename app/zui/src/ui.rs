@@ -51,6 +51,8 @@ pub use crate::ui::foundation::CornerRadii;
 pub use crate::ui::foundation::Edges;
 pub use crate::ui::foundation::ElementId;
 pub use crate::ui::foundation::FrameInvalidation;
+pub use crate::ui::foundation::Hover;
+pub use crate::ui::foundation::HoverPresence;
 pub use crate::ui::foundation::Icon;
 pub use crate::ui::foundation::IconDefinition;
 pub use crate::ui::foundation::IconId;

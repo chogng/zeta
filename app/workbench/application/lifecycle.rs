@@ -143,6 +143,7 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
                 }
                 self.scm.editor_mut().cancel_scrollbar_interaction();
                 self.terminal_view_mut().scroll.cancel_scrollbar();
+                self.workbench.cancel_tab_container_scrollbar();
                 self.workbench.dismiss_tab_context_menu();
                 self.git_branch_picker.dismiss();
                 self.directory_picker.dismiss();
@@ -307,6 +308,7 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
         let scrollbar_changed = self.scm.editor_mut().advance_scrollbar(now);
         let settings_scrollbar_changed = self.settings.advance_keybindings_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_view_mut().scroll.advance_scrollbar(now);
+        let tab_container_scrollbar_changed = self.workbench.advance_tab_container_scrollbar(now);
         let sash_changed = self.workbench.advance_layout_sashes(now);
         let retained_runtime_due = self
             .retained_runtime
@@ -318,6 +320,7 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
             || scrollbar_changed
             || settings_scrollbar_changed
             || terminal_scrollbar_changed
+            || tab_container_scrollbar_changed
             || file_search_changed
             || file_editor_auto_scrolled
             || sash_changed
@@ -332,6 +335,7 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
             self.scm.editor().scrollbar_deadline(),
             self.settings.keybindings_scrollbar_deadline(),
             self.terminal_view().scroll.scrollbar_deadline(),
+            self.workbench.tab_container_scrollbar_deadline(),
             self.retained_runtime.next_deadline(),
             self.workbench.tab_sash_deadline(),
             self.workbench.inspector_sash_deadline(),

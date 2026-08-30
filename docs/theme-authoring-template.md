@@ -156,7 +156,17 @@ Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件�
 - Windows/Linux 原生标题栏按钮区域；
 - 状态栏、菜单、输入框、列表和其他语义组件。
 
-选择值保存在 profile `configuration.json`；主题文档本身仍位于 profile root 的 `themes/*.json`：
+Rust GUI 的选择值保存在 profile `config.toml` 根级 `[gui]`，并可同时设置编辑器字体：
+
+```toml
+[gui]
+theme = "zeta-aurora"
+editorFontFamily = "monospace"
+editorFontSize = 13
+editorLineHeight = 20
+```
+
+Desktop 的选择值保存在 profile `configuration.json`；图形界面主题文档本身始终位于 profile root 的 `themes/*.json`：
 
 ```json
 {
@@ -167,7 +177,7 @@ Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件�
 }
 ```
 
-该字段可以省略，省略时使用 `system` 默认入口。`system` 表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存和预览会即时更新；Rust 桌面端需要重启才能重新读取外部修改的主题文件。
+各字段都可省略，省略时使用对应界面的 `system` 默认入口。`system` 表示跟随操作系统并在内置 Light/Dark 之间切换。Rust GUI 收到新的 Config generation 后即时应用主题选择与编辑器字体；Desktop 保存和预览也会即时更新。外部修改主题文件后，Rust GUI 仍需重启才能重新读取文件内容。Zeta Code TUI 使用独立主题格式，选择值写入 `config.toml` 的 `[tui].theme`，不消费本模板描述的图形界面主题。
 
 ## 开发与验证
 

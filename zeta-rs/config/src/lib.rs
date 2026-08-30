@@ -23,7 +23,6 @@ mod store_file;
 mod store_monitor;
 mod store_schema;
 mod tool_search;
-mod tui;
 
 pub use codebase::{CodebaseAutomaticContext, CodebaseConfig, CodebaseModelSelection};
 pub use command::{
@@ -63,7 +62,6 @@ pub use skills::{SkillEnablement, SkillSourceConfig, SkillSourceEnablement, Skil
 pub use store::{ConfigChange, ConfigError, ConfigStore};
 pub use tool_search::ToolSearchConfig;
 pub use tool_search::ToolSearchModeConfig;
-pub use tui::{DEFAULT_TUI_THEME, TuiConfig};
 pub use zeta_file_access::DirId;
 pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, ToolMode};
 

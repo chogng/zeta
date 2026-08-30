@@ -2,6 +2,7 @@ mod catalog;
 mod editor;
 mod interaction;
 mod interaction_view;
+mod key_hint_bar;
 mod layout;
 mod shell_completion;
 mod toolbar;

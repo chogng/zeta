@@ -115,6 +115,7 @@ use crate::protocol::config::ExecPolicyRuleUpsertParams;
 use crate::protocol::config::ExecPolicyScopeMatcherDto;
 use crate::protocol::config::ExecPolicySelectorDto;
 use crate::protocol::config::ExecPolicyTokenDto;
+use crate::protocol::config::FrontendConfigDto;
 use crate::protocol::config::HookActionDto;
 use crate::protocol::config::HookConfigDto;
 use crate::protocol::config::HookEnablementDto;
@@ -153,7 +154,6 @@ use crate::protocol::config::ToolSearchConfigDto;
 use crate::protocol::config::ToolSearchConfigureParams;
 use crate::protocol::config::ToolSearchEmbeddingStatusDto;
 use crate::protocol::config::ToolSearchModeDto;
-use crate::protocol::config::TuiConfigDto;
 use crate::protocol::connectors::ConnectorAccountDto;
 use crate::protocol::connectors::ConnectorApiTokenConnectParams;
 use crate::protocol::connectors::ConnectorAvailableActionDto;
@@ -2730,7 +2730,7 @@ typescript_bindings! {
     HookConfigDto,
     LanguageServerModeDto,
     LanguageServerConfigDto,
-    TuiConfigDto,
+    FrontendConfigDto,
     ConfigReadResult,
     ConfigChanged,
     ConfigCommandDispositionDto,

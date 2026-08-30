@@ -105,8 +105,25 @@ impl ActionViewItem {
         self
     }
 
-    const fn is_enabled(&self) -> bool {
+    pub(crate) const fn is_enabled(&self) -> bool {
         !matches!(self.state, ButtonState::Disabled)
+    }
+
+    pub(crate) fn accessible_label(&self) -> &str {
+        match &self.content {
+            ActionViewItemContent::Label(label)
+            | ActionViewItemContent::IconAndLabel { label, .. } => label,
+            ActionViewItemContent::Icon {
+                accessible_label, ..
+            }
+            | ActionViewItemContent::IconAndStyledLabel {
+                accessible_label, ..
+            } => accessible_label,
+        }
+    }
+
+    pub(crate) const fn main_axis_extent(&self) -> Option<f32> {
+        self.main_axis_extent
     }
 
     fn paint(&self, bounds: Rect, style: &ButtonStyle, scene: &mut UiScene) {
@@ -186,6 +203,10 @@ impl ActionBarSeparatorStyle {
     pub const fn with_thickness(mut self, thickness: f32) -> Self {
         self.thickness = thickness;
         self
+    }
+
+    pub(crate) const fn extent(&self) -> f32 {
+        self.extent
     }
 }
 

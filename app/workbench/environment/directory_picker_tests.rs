@@ -152,7 +152,14 @@ fn picker_is_anchored_above_the_toolbar_and_registers_modal_menu_semantics() {
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        vec!["Picker", "Dropdown", "ContextView", "SearchBox", "InputBox"]
+        vec![
+            "Picker",
+            "Dropdown",
+            "ContextView",
+            "Menu",
+            "SearchBox",
+            "InputBox",
+        ]
     );
     assert_eq!(state.first_action_id(), Some(directory_item_id(0)));
     std::fs::remove_dir_all(root).unwrap();

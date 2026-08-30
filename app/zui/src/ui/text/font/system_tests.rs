@@ -17,6 +17,17 @@ fn excludes_the_macos_bitmap_face_that_swash_cannot_rasterize() {
 }
 
 #[test]
+fn uses_macos_system_font_families() {
+    let font_system = new_font_system();
+
+    assert_eq!(font_system.db().family_name(&Family::SansSerif), ".SF NS");
+    assert_eq!(
+        font_system.db().family_name(&Family::Monospace),
+        ".SF NS Mono"
+    );
+}
+
+#[test]
 fn shapes_and_rasterizes_multilingual_fallback_glyphs() {
     let mut font_system = new_font_system();
     let mut swash_cache = SwashCache::new();

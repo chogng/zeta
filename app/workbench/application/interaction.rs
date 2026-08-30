@@ -51,18 +51,18 @@ impl WorkbenchApplication {
         }
     }
 
-    pub(super) fn sash_pointer_presence(&self, id: ElementId) -> SashPointerPresence {
+    pub(super) fn sash_pointer_presence(&self, id: ElementId) -> HoverPresence {
         let Some(point) = self.cursor_position else {
-            return SashPointerPresence::Outside;
+            return HoverPresence::Outside;
         };
         let over = self.ui_dispatch.window_active()
             && self.presentation.as_ref().is_some_and(|presentation| {
                 presentation.interaction_frame().target_at(point) == Some(id)
             });
         if over {
-            SashPointerPresence::Over
+            HoverPresence::Over
         } else {
-            SashPointerPresence::Outside
+            HoverPresence::Outside
         }
     }
 
@@ -75,14 +75,14 @@ impl WorkbenchApplication {
         let agent_hovered =
             window_active && self.ui_dispatch.is_hovered(crate::INSPECTOR_RESIZE_HANDLE);
         let session_presence = if session_hovered {
-            SashPointerPresence::Over
+            HoverPresence::Over
         } else {
-            SashPointerPresence::Outside
+            HoverPresence::Outside
         };
         let agent_presence = if agent_hovered {
-            SashPointerPresence::Over
+            HoverPresence::Over
         } else {
-            SashPointerPresence::Outside
+            HoverPresence::Outside
         };
         let session_changed = self
             .workbench
@@ -280,6 +280,9 @@ impl WorkbenchApplication {
         if self.route_tab_context_menu_pointer_move(point) {
             return;
         }
+        if self.route_tab_container_scrollbar_move(point) {
+            return;
+        }
         if self.route_tab_container_resize_move(point) {
             return;
         }
@@ -326,6 +329,12 @@ impl WorkbenchApplication {
         if self
             .settings
             .keybindings_scrollbar_pointer_left(Instant::now())
+        {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        if self
+            .workbench
+            .tab_container_scrollbar_pointer_left(Instant::now())
         {
             self.rebuild_presentation_on_next_redraw();
         }
@@ -400,6 +409,9 @@ impl WorkbenchApplication {
         if self.route_tab_context_menu_button(state, button) {
             return;
         }
+        if button == MouseButton::Left && self.route_tab_container_scrollbar_button(state) {
+            return;
+        }
         if button == MouseButton::Left && self.route_tab_container_resize_button(state) {
             return;
         }
@@ -470,6 +482,47 @@ impl WorkbenchApplication {
         let outcome =
             self.settings
                 .keybindings_scrollbar_pointer_moved(point, viewport, Instant::now());
+        if outcome.presentation_changed {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        outcome.handled
+    }
+
+    fn route_tab_container_scrollbar_move(&mut self, point: Point) -> bool {
+        let Some(view) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.tab_container_scroll_view)
+        else {
+            return false;
+        };
+        let outcome =
+            self.workbench
+                .tab_container_scrollbar_pointer_moved(view, point, Instant::now());
+        if outcome.presentation_changed {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        outcome.handled
+    }
+
+    fn route_tab_container_scrollbar_button(&mut self, state: ElementState) -> bool {
+        let Some(view) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.tab_container_scroll_view)
+        else {
+            return false;
+        };
+        let point = self.cursor_position.unwrap_or(Point::new(-1.0, -1.0));
+        let now = Instant::now();
+        let outcome = match state {
+            ElementState::Pressed => self
+                .workbench
+                .press_tab_container_scrollbar(view, point, now),
+            ElementState::Released => self
+                .workbench
+                .release_tab_container_scrollbar(view, point, now),
+        };
         if outcome.presentation_changed {
             self.rebuild_presentation_on_next_redraw();
         }

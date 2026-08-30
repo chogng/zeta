@@ -348,6 +348,15 @@ impl MultiDiffEditorStyle {
             ..self
         }
     }
+
+    /// Returns whether retained section measurements remain valid after a style change.
+    pub fn same_layout_as(&self, other: &Self) -> bool {
+        self.diff_editor.same_layout_as(&other.diff_editor)
+            && self.section_gap == other.section_gap
+            && self.section_horizontal_inset == other.section_horizontal_inset
+            && self.content_vertical_padding == other.content_vertical_padding
+            && self.section_border_width == other.section_border_width
+    }
 }
 
 /// A scrollable editor surface that presents all changed files in one document.

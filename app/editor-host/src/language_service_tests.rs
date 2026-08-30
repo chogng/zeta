@@ -3,8 +3,8 @@ use std::path::Path;
 
 use zeta_app_server_protocol::protocol::config::{
     AgentGrepBackendDto, ApprovalReviewModelSelectionDto, CodebaseAutomaticContextDto,
-    CodebaseConfigDto, ConfigReadResult, LanguageServerConfigDto, LanguageServerModeDto,
-    ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto, TuiConfigDto,
+    CodebaseConfigDto, ConfigReadResult, FrontendConfigDto, LanguageServerConfigDto,
+    LanguageServerModeDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
 use zeta_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
@@ -54,6 +54,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         commit_message_active_dir_authorized: false,
         tool_mode: Default::default(),
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
+        gui: FrontendConfigDto::default(),
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),
@@ -70,9 +71,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
             automatic_context: CodebaseAutomaticContextDto::Off,
         },
         exec_policy_rules: Vec::new(),
-        tui: TuiConfigDto {
-            theme: "system".into(),
-        },
+        tui: FrontendConfigDto::default(),
     };
 
     let catalog = catalog_from_configuration(&configuration);
@@ -102,6 +101,7 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
         commit_message_active_dir_authorized: false,
         tool_mode: Default::default(),
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
+        gui: FrontendConfigDto::default(),
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),
@@ -118,9 +118,7 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
             automatic_context: CodebaseAutomaticContextDto::Off,
         },
         exec_policy_rules: Vec::new(),
-        tui: TuiConfigDto {
-            theme: "system".into(),
-        },
+        tui: FrontendConfigDto::default(),
     };
 
     let catalog = catalog_from_configuration(&configuration);

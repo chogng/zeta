@@ -1,16 +1,34 @@
 use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonStyle;
 use zeta_ui_theme::UiTheme;
-use zui::ui::{CornerRadii, Edges, FontFamily, FontWeight, TextStyle};
+use zui::ui::{CornerRadii, Edges, FontFamily, FontWeight, TextInputLayoutEngine, TextStyle};
 
 use crate::{
     CodeEditorDiagnosticPalette, CodeEditorPalette, CodeEditorStyle, CodeEditorSyntaxPalette,
-    CodeEditorTokenRole, DiffEditorPalette, DiffEditorStyle, MultiDiffEditorPalette,
-    MultiDiffEditorStyle,
+    CodeEditorTokenRole, CodeEditorTypography, CodeEditorTypographyError, DiffEditorPalette,
+    DiffEditorStyle, MultiDiffEditorPalette, MultiDiffEditorStyle,
 };
 
 impl CodeEditorStyle {
-    pub fn from_theme(theme: UiTheme) -> Self {
+    pub fn from_theme(
+        theme: UiTheme,
+        text_layout: &mut TextInputLayoutEngine,
+    ) -> Result<Self, CodeEditorTypographyError> {
+        Self::from_theme_and_text_style(
+            theme,
+            theme
+                .editor_text
+                .text_style(theme.editor_foreground)
+                .with_family(FontFamily::Monospace),
+            text_layout,
+        )
+    }
+
+    pub fn from_theme_and_text_style(
+        theme: UiTheme,
+        text_style: TextStyle,
+        text_layout: &mut TextInputLayoutEngine,
+    ) -> Result<Self, CodeEditorTypographyError> {
         let colors = theme.editor_syntax;
         let syntax = CodeEditorSyntaxPalette::uniform(theme.editor_foreground)
             .with_color(CodeEditorTokenRole::Attribute, colors.attribute)
@@ -30,31 +48,39 @@ impl CodeEditorStyle {
             .with_color(CodeEditorTokenRole::String, colors.string)
             .with_color(CodeEditorTokenRole::Type, colors.type_name)
             .with_color(CodeEditorTokenRole::Variable, colors.variable);
-        Self::new(CodeEditorPalette {
-            surface: theme.content_background,
-            header: theme.side_bar_background,
-            gutter: theme.side_bar_background,
-            divider: theme.border,
-            text: theme.editor_foreground,
-            text_muted: theme.muted_foreground,
-            selection: theme.text_selection_background,
-            caret: theme.accent,
-            composition_underline: theme.accent,
-            diagnostics: CodeEditorDiagnosticPalette {
-                error: theme.error,
-                warning: theme.warning,
-                information: theme.accent,
-                hint: theme.muted_foreground,
+        let header_style = theme
+            .editor_header
+            .text_style(theme.editor_foreground)
+            .with_family(text_style.family().clone());
+        let typography = CodeEditorTypography::measure(text_style, header_style, text_layout)?;
+        Ok(Self::new(
+            CodeEditorPalette {
+                surface: theme.content_background,
+                header: theme.side_bar_background,
+                gutter: theme.side_bar_background,
+                divider: theme.border,
+                text: theme.editor_foreground,
+                text_muted: theme.muted_foreground,
+                selection: theme.text_selection_background,
+                caret: theme.accent,
+                composition_underline: theme.accent,
+                diagnostics: CodeEditorDiagnosticPalette {
+                    error: theme.error,
+                    warning: theme.warning,
+                    information: theme.accent,
+                    hint: theme.muted_foreground,
+                },
+                syntax,
             },
-            syntax,
-        })
+            typography,
+        ))
     }
 }
 
 impl MultiDiffEditorStyle {
-    pub fn from_theme(theme: UiTheme) -> Self {
+    pub fn from_theme(theme: UiTheme, code_editor: CodeEditorStyle) -> Self {
         let diff_editor = DiffEditorStyle::new(DiffEditorPalette {
-            code_editor: CodeEditorStyle::from_theme(theme),
+            code_editor,
             divider: theme.border,
             removed_marker: theme.diff_removed_marker,
             added_marker: theme.diff_inserted_marker,

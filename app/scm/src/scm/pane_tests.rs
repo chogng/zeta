@@ -7,8 +7,11 @@ use crate::MULTI_DIFF_EDITOR;
 use crate::MULTI_DIFF_SCROLLBAR;
 use crate::TEST_SCM_PANE_STYLE;
 use zeta_diff::DiffDocument;
+use zeta_editor::CodeEditorStyle;
+use zeta_editor::MultiDiffEditorStyle;
+use zeta_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
-use zui::ui::{Color, Component, Rect, UiScene};
+use zui::ui::{Color, Component, FontFamily, Rect, TextInputLayoutEngine, TextStyle, UiScene};
 
 const TEST_PARENT: zui::ui::ElementId = zui::ui::ElementId::scoped(99, 1);
 
@@ -47,6 +50,53 @@ fn changed_files_retain_independent_diff_viewports_in_one_multi_diff_state() {
     assert_eq!(state.diffs[0].editor_state.first_visible_row(), 0);
     assert_eq!(state.diffs[1].editor_state.first_visible_row(), 8);
     assert_eq!(state.scroll_state.vertical_offset(), 120.0);
+}
+
+#[test]
+fn style_changes_remeasure_only_when_editor_geometry_changes() {
+    let mut state = EditorPaneState::default();
+    state.open_diff(
+        "alpha.rs",
+        "alpha.rs (base)",
+        "alpha.rs (working)",
+        document("old alpha\n", "new alpha\n"),
+    );
+    let retained_extent = 777.0;
+    state
+        .measured_layout
+        .update_section_extent(0, retained_extent);
+    let mut recolored_theme = DEFAULT_UI_THEME;
+    recolored_theme.content_background = Color::rgb(20, 20, 20);
+    recolored_theme.diff_inserted_line = Color::rgb(10, 80, 30);
+    let mut text_layout = TextInputLayoutEngine::new();
+    let recolored_editor = CodeEditorStyle::from_theme(recolored_theme, &mut text_layout).unwrap();
+
+    state.set_style(MultiDiffEditorStyle::from_theme(
+        recolored_theme,
+        recolored_editor,
+    ));
+
+    assert_eq!(
+        state.measured_layout.section_extent(0),
+        Some(retained_extent)
+    );
+
+    let larger_text = TextStyle::new(18.0, DEFAULT_UI_THEME.editor_foreground)
+        .with_family(FontFamily::Monospace)
+        .with_line_height(28.0);
+    let larger_editor =
+        CodeEditorStyle::from_theme_and_text_style(DEFAULT_UI_THEME, larger_text, &mut text_layout)
+            .unwrap();
+
+    state.set_style(MultiDiffEditorStyle::from_theme(
+        DEFAULT_UI_THEME,
+        larger_editor,
+    ));
+
+    assert_ne!(
+        state.measured_layout.section_extent(0),
+        Some(retained_extent)
+    );
 }
 
 #[test]

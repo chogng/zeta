@@ -401,7 +401,8 @@ pub(super) fn set_preferred_model(
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
             agent_grep_backend: Patch::Missing,
-            tui_theme: Patch::Missing,
+            gui: Patch::Missing,
+            tui: Patch::Missing,
         })
         .map_err(client_error)?;
     Ok(())

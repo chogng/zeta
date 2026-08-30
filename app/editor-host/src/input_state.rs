@@ -111,12 +111,10 @@ impl FileEditorInputState {
         self.completion_selection
     }
 
-    pub fn wheel_rows(&mut self, delta: FileEditorWheelDelta) -> isize {
+    pub fn wheel_rows(&mut self, delta: FileEditorWheelDelta, row_height: f32) -> isize {
         let rows = match delta {
             FileEditorWheelDelta::Lines(vertical) => -f64::from(vertical) * ROWS_PER_WHEEL_STEP,
-            FileEditorWheelDelta::Pixels(vertical) => {
-                -vertical / f64::from(zeta_editor::CodeEditor::row_height())
-            }
+            FileEditorWheelDelta::Pixels(vertical) => -vertical / f64::from(row_height),
         };
         if rows.signum() != self.fractional_rows.signum() {
             self.fractional_rows = 0.0;

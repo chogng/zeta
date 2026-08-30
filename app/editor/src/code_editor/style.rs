@@ -1,11 +1,74 @@
 //! CodeEditor-owned presentation tokens.
 
-use zui::ui::{Border, Color, Edges, FontFamily, FontWeight, PaintRect, Rect, TextStyle};
+use std::sync::Arc;
+use std::sync::OnceLock;
+
+use zeta_ui_theme::DEFAULT_UI_THEME;
+use zui::ui::{Border, Color, Edges, PaintRect, Rect, TextInputLayoutEngine, TextStyle};
 
 use super::{
     CodeEditorDiagnosticPalette, CodeEditorDiagnosticSeverity, CodeEditorSyntaxPalette,
-    CodeEditorTokenRole, HEADER_HEIGHT, ROW_HEIGHT,
+    CodeEditorTokenRole,
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CodeEditorTypographyError {
+    InvalidTextStyle,
+    InvalidHeaderStyle,
+    InvalidCellWidth,
+}
+
+impl std::fmt::Display for CodeEditorTypographyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match self {
+            Self::InvalidTextStyle => "editor text metrics must be finite and positive",
+            Self::InvalidHeaderStyle => "editor header metrics must be finite and positive",
+            Self::InvalidCellWidth => "editor font must produce a finite positive cell width",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for CodeEditorTypographyError {}
+
+/// Resolved editor text styles and measured monospace cell advance.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CodeEditorTypography {
+    text_style: TextStyle,
+    header_style: TextStyle,
+    cell_width: f32,
+}
+
+impl CodeEditorTypography {
+    pub fn measure(
+        text_style: TextStyle,
+        header_style: TextStyle,
+        text_layout: &mut TextInputLayoutEngine,
+    ) -> Result<Self, CodeEditorTypographyError> {
+        if !valid_text_style(&text_style) {
+            return Err(CodeEditorTypographyError::InvalidTextStyle);
+        }
+        if !valid_text_style(&header_style) {
+            return Err(CodeEditorTypographyError::InvalidHeaderStyle);
+        }
+        let cell_width = text_layout.measure_text("0", &text_style).width;
+        if !cell_width.is_finite() || cell_width <= 0.0 {
+            return Err(CodeEditorTypographyError::InvalidCellWidth);
+        }
+        Ok(Self {
+            text_style: text_style.with_color(Color::TRANSPARENT),
+            header_style: header_style.with_color(Color::TRANSPARENT),
+            cell_width,
+        })
+    }
+}
+
+fn valid_text_style(style: &TextStyle) -> bool {
+    style.font_size().is_finite()
+        && style.font_size() > 0.0
+        && style.line_height().is_finite()
+        && style.line_height() > 0.0
+}
 
 /// Resolved color inputs used to construct one CodeEditor presentation style.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -23,9 +86,9 @@ pub struct CodeEditorPalette {
     pub syntax: CodeEditorSyntaxPalette,
 }
 
-/// Semantic surface and typography owned by the shared CodeEditor viewport.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CodeEditorStyle {
+/// Resolved paint-only editor values shared by every CodeEditor presentation.
+#[derive(Debug, PartialEq)]
+struct CodeEditorAppearance {
     surface: Color,
     header: Color,
     gutter: Color,
@@ -40,112 +103,115 @@ pub struct CodeEditorStyle {
     syntax: CodeEditorSyntaxPalette,
 }
 
+/// Shared immutable editor appearance and measured typography snapshots.
+///
+/// Cloning this value preserves both snapshots, so ordinary, composer, and diff editors do not
+/// repeatedly copy resolved colors, font names, or measured geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CodeEditorStyle {
+    appearance: Arc<CodeEditorAppearance>,
+    typography: Arc<CodeEditorTypography>,
+}
+
 impl CodeEditorStyle {
     pub fn light() -> Self {
-        let text = Color::rgb(38, 38, 41);
-        let syntax = CodeEditorSyntaxPalette::uniform(text)
-            .with_color(CodeEditorTokenRole::Comment, Color::rgb(126, 126, 132))
-            .with_color(CodeEditorTokenRole::Function, Color::rgb(15, 110, 96))
-            .with_color(CodeEditorTokenRole::Keyword, Color::rgb(130, 80, 223))
-            .with_color(CodeEditorTokenRole::Constant, Color::rgb(130, 80, 223))
-            .with_color(CodeEditorTokenRole::String, Color::rgb(154, 103, 0))
-            .with_color(CodeEditorTokenRole::Number, Color::rgb(154, 103, 0))
-            .with_color(CodeEditorTokenRole::Operator, Color::rgb(207, 34, 46))
-            .with_color(CodeEditorTokenRole::Punctuation, Color::rgb(207, 34, 46))
-            .with_color(CodeEditorTokenRole::Property, Color::rgb(9, 105, 218))
-            .with_color(CodeEditorTokenRole::Variable, Color::rgb(9, 105, 218));
-        Self::new(CodeEditorPalette {
-            surface: Color::WHITE,
-            header: Color::rgb(246, 246, 247),
-            gutter: Color::rgb(247, 247, 248),
-            divider: Color::rgb(222, 222, 224),
-            text,
-            text_muted: Color::rgb(126, 126, 132),
-            selection: Color::rgba(68, 139, 202, 72),
-            caret: Color::rgb(15, 110, 96),
-            composition_underline: Color::rgb(15, 110, 96),
-            diagnostics: CodeEditorDiagnosticPalette {
-                error: Color::rgb(180, 38, 38),
-                warning: Color::rgb(154, 103, 0),
-                information: Color::rgb(9, 105, 218),
-                hint: Color::rgb(126, 126, 132),
-            },
-            syntax,
-        })
+        static STYLE: OnceLock<CodeEditorStyle> = OnceLock::new();
+        STYLE
+            .get_or_init(|| {
+                let mut text_layout = TextInputLayoutEngine::new();
+                Self::from_theme(DEFAULT_UI_THEME, &mut text_layout)
+                    .expect("default editor theme typography must be valid")
+            })
+            .clone()
     }
 
-    pub fn new(palette: CodeEditorPalette) -> Self {
+    pub fn new(palette: CodeEditorPalette, typography: CodeEditorTypography) -> Self {
+        let text_style = typography.text_style.clone().with_color(palette.text);
+        let header_style = typography.header_style.clone().with_color(palette.text);
         Self {
-            surface: palette.surface,
-            header: palette.header,
-            gutter: palette.gutter,
-            divider: palette.divider,
-            text_muted: palette.text_muted,
-            selection: palette.selection,
-            caret: palette.caret,
-            composition_underline: palette.composition_underline,
-            diagnostics: palette.diagnostics,
-            text_style: TextStyle::new(13.0, palette.text)
-                .with_family(FontFamily::Monospace)
-                .with_line_height(ROW_HEIGHT),
-            header_style: TextStyle::new(12.0, palette.text)
-                .with_family(FontFamily::Monospace)
-                .with_weight(FontWeight::Bold)
-                .with_line_height(HEADER_HEIGHT),
-            syntax: palette.syntax,
+            appearance: Arc::new(CodeEditorAppearance {
+                surface: palette.surface,
+                header: palette.header,
+                gutter: palette.gutter,
+                divider: palette.divider,
+                text_muted: palette.text_muted,
+                selection: palette.selection,
+                caret: palette.caret,
+                composition_underline: palette.composition_underline,
+                diagnostics: palette.diagnostics,
+                text_style,
+                header_style,
+                syntax: palette.syntax,
+            }),
+            typography: Arc::new(typography),
         }
     }
 
-    pub(crate) const fn surface(&self) -> Color {
-        self.surface
+    /// Returns whether switching between two styles can preserve editor row geometry.
+    pub fn same_layout_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.typography, &other.typography) || self.typography == other.typography
     }
 
-    pub(super) const fn gutter(&self) -> Color {
-        self.gutter
+    pub fn row_height(&self) -> f32 {
+        self.typography.text_style.line_height()
     }
 
-    pub(super) const fn selection(&self) -> Color {
-        self.selection
+    pub fn header_height(&self) -> f32 {
+        self.typography.header_style.line_height()
     }
 
-    pub(super) const fn caret(&self) -> Color {
-        self.caret
+    pub fn cell_width(&self) -> f32 {
+        self.typography.cell_width
     }
 
-    pub(super) const fn composition_underline(&self) -> Color {
-        self.composition_underline
+    pub(crate) fn surface(&self) -> Color {
+        self.appearance.surface
     }
 
-    pub(super) const fn diagnostic_color(&self, severity: CodeEditorDiagnosticSeverity) -> Color {
-        self.diagnostics.color(severity)
+    pub(super) fn gutter(&self) -> Color {
+        self.appearance.gutter
     }
 
-    pub(super) const fn text_style(&self) -> &TextStyle {
-        &self.text_style
+    pub(super) fn selection(&self) -> Color {
+        self.appearance.selection
     }
 
-    pub(super) const fn header_text_style(&self) -> &TextStyle {
-        &self.header_style
+    pub(super) fn caret(&self) -> Color {
+        self.appearance.caret
+    }
+
+    pub(super) fn composition_underline(&self) -> Color {
+        self.appearance.composition_underline
+    }
+
+    pub(super) fn diagnostic_color(&self, severity: CodeEditorDiagnosticSeverity) -> Color {
+        self.appearance.diagnostics.color(severity)
+    }
+
+    pub fn text_style(&self) -> &TextStyle {
+        &self.appearance.text_style
+    }
+
+    pub(super) fn header_text_style(&self) -> &TextStyle {
+        &self.appearance.header_style
     }
 
     pub(super) fn muted_text_style(&self) -> TextStyle {
-        self.text_with_color(self.text_muted)
+        self.text_with_color(self.appearance.text_muted)
     }
 
-    pub(super) fn text_with_color(&self, color: Color) -> TextStyle {
-        TextStyle::new(self.text_style.font_size(), color)
-            .with_family(self.text_style.family().clone())
-            .with_line_height(self.text_style.line_height())
-            .with_weight(self.text_style.weight())
-            .with_style(self.text_style.style())
+    pub fn text_with_color(&self, color: Color) -> TextStyle {
+        self.appearance.text_style.clone().with_color(color)
     }
 
-    pub(super) const fn syntax_color(&self, role: CodeEditorTokenRole) -> Color {
-        self.syntax.color(role)
+    pub(super) fn syntax_color(&self, role: CodeEditorTokenRole) -> Color {
+        self.appearance.syntax.color(role)
     }
 
-    pub(super) const fn header_rect(&self, bounds: Rect) -> PaintRect {
-        PaintRect::new(bounds, self.header)
-            .with_border(Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.divider))
+    pub(super) fn header_rect(&self, bounds: Rect) -> PaintRect {
+        PaintRect::new(bounds, self.appearance.header).with_border(Border::new(
+            Edges::new(0.0, 0.0, 1.0, 0.0),
+            self.appearance.divider,
+        ))
     }
 }

@@ -168,7 +168,8 @@ fn update_preferences(
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
-            tui_theme: Patch::Missing,
+            gui: Patch::Missing,
+            tui: Patch::Missing,
         }),
     }
 }
@@ -380,8 +381,95 @@ fn newer_file_schema_is_rejected_explicitly() {
 }
 
 #[test]
+fn gui_section_is_read_without_interpreting_frontend_fields() {
+    let database_path = config_path("gui");
+    std::fs::write(
+        database_path.with_extension("toml"),
+        r#"schemaVersion = 1
+
+[gui]
+theme = "zeta-dark"
+editorFontFamily = "JetBrains Mono"
+editorFontSize = 15
+editorLineHeight = 24
+"#,
+    )
+    .unwrap();
+
+    let store = ConfigStore::open(&database_path).unwrap();
+
+    assert_eq!(
+        store.read_snapshot().unwrap().values.gui,
+        BTreeMap::from([
+            (
+                "editorFontFamily".into(),
+                serde_json::json!("JetBrains Mono")
+            ),
+            ("editorFontSize".into(), serde_json::json!(15)),
+            ("editorLineHeight".into(), serde_json::json!(24)),
+            ("theme".into(), serde_json::json!("zeta-dark")),
+        ])
+    );
+    drop(store);
+    remove_config_files(&database_path);
+}
+
+#[test]
+fn frontend_section_patch_is_durable_and_null_clears_the_section() {
+    let database_path = config_path("gui-patch");
+    let store = ConfigStore::open(&database_path).unwrap();
+    let configured = BTreeMap::from([
+        (
+            "editorFontFamily".into(),
+            serde_json::json!("JetBrains Mono"),
+        ),
+        ("editorFontSize".into(), serde_json::json!(15)),
+        ("editorLineHeight".into(), serde_json::json!(24)),
+        ("theme".into(), serde_json::json!("zeta-dark")),
+    ]);
+
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-gui").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                gui: Patch::Value(configured.clone()),
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(store.read_snapshot().unwrap().values.gui, configured);
+
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("reset-gui").unwrap(),
+            expected_revision: ConfigRevision::new(1),
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                gui: Patch::Null,
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+    assert!(store.read_snapshot().unwrap().values.gui.is_empty());
+    drop(store);
+    remove_config_files(&database_path);
+}
+
+#[test]
+fn frontend_sections_preserve_fields_the_backend_does_not_understand() {
+    let document = toml::from_str::<UserConfigDocument>(
+        "[gui]\neditorFontSize = 16\neditorLineHeight = 15\nfutureOption = true\n",
+    )
+    .unwrap();
+
+    assert_eq!(document.gui["futureOption"], serde_json::json!(true));
+    assert!(document.validate().is_ok());
+}
+
+#[test]
 fn tool_mode_defaults_to_direct_and_updates_durably() {
-    let store = ConfigStore::open(config_path("tool-mode")).unwrap();
+    let database_path = config_path("tool-mode");
+    let store = ConfigStore::open(&database_path).unwrap();
     assert_eq!(
         store.read_snapshot().unwrap().values.tool_mode,
         zeta_protocol::ToolMode::Direct
@@ -401,7 +489,8 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(zeta_protocol::ToolMode::CodeModeOnly),
                 grep_backend: Patch::Value(AgentGrepBackend::FastRegex),
-                tui_theme: Patch::Missing,
+                gui: Patch::Missing,
+                tui: Patch::Missing,
             }),
         })
         .unwrap();
@@ -414,10 +503,14 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
         store.read_snapshot().unwrap().values.agent_grep_backend,
         AgentGrepBackend::FastRegex
     );
+    let persisted = persisted_config_document(&database_path);
+    assert!(!persisted.contains("[gui]"));
+    drop(store);
+    remove_config_files(&database_path);
 }
 
 #[test]
-fn tui_theme_is_persisted_in_the_tui_table() {
+fn tui_section_is_persisted_in_the_tui_table() {
     let path = config_path("tui-theme");
     let store = ConfigStore::open(&path).unwrap();
 
@@ -426,15 +519,18 @@ fn tui_theme_is_persisted_in_the_tui_table() {
             command_id: CommandId::new("select-tui-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
-                tui_theme: Patch::Value("zeta-code-light".into()),
+                tui: Patch::Value(BTreeMap::from([(
+                    "theme".into(),
+                    serde_json::json!("zeta-code-light"),
+                )])),
                 ..PreferencesUpdate::default()
             }),
         })
         .unwrap();
 
     assert_eq!(
-        store.read_snapshot().unwrap().values.tui.theme,
-        "zeta-code-light"
+        store.read_snapshot().unwrap().values.tui["theme"],
+        serde_json::json!("zeta-code-light")
     );
     let document = persisted_config_document(&path);
     assert!(document.contains("[tui]\n"));
@@ -443,25 +539,27 @@ fn tui_theme_is_persisted_in_the_tui_table() {
 }
 
 #[test]
-fn invalid_tui_theme_does_not_commit_a_config_revision() {
-    let path = config_path("invalid-tui-theme");
+fn tui_section_values_are_not_interpreted_by_the_backend() {
+    let path = config_path("opaque-tui-theme");
     let store = ConfigStore::open(&path).unwrap();
 
-    let error = store
+    store
         .apply(ConfigCommandRequest {
-            command_id: CommandId::new("select-invalid-tui-theme").unwrap(),
+            command_id: CommandId::new("select-frontend-owned-theme").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
-                tui_theme: Patch::Value("Not A Theme".into()),
+                tui: Patch::Value(BTreeMap::from([(
+                    "theme".into(),
+                    serde_json::json!("Not A Theme"),
+                )])),
                 ..PreferencesUpdate::default()
             }),
         })
-        .unwrap_err();
+        .unwrap();
 
-    assert!(matches!(error, ConfigCommandError::Config(_)));
     assert_eq!(
-        store.read_snapshot().unwrap().revision,
-        ConfigRevision::INITIAL
+        store.read_snapshot().unwrap().values.tui["theme"],
+        serde_json::json!("Not A Theme")
     );
     remove_config_files(&path);
 }
@@ -917,7 +1015,8 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
-                tui_theme: Patch::Missing,
+                gui: Patch::Missing,
+                tui: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
@@ -936,7 +1035,8 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
-                tui_theme: Patch::Missing,
+                gui: Patch::Missing,
+                tui: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),

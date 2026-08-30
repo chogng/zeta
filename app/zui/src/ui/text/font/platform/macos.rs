@@ -1,6 +1,9 @@
 use crate::ui::text::FontCatalogError;
 
 pub(crate) fn configure_font_database(database: &mut cosmic_text::fontdb::Database) {
+    database.set_sans_serif_family(".SF NS");
+    database.set_monospace_family(".SF NS Mono");
+
     let unsupported_faces = database
         .faces()
         .filter(|face| face.post_script_name == "GB18030Bitmap")

@@ -53,9 +53,7 @@ pub use context_view::{
     ContextView, ContextViewAnchorAlignment, ContextViewAnchorAxis, ContextViewAnchorPosition,
     ContextViewLayout, ContextViewPlacement, ContextViewStyle,
 };
-pub use dropdown::{
-    Dropdown, DropdownItem, DropdownScrollConfiguration, DropdownSelection, DropdownStyle,
-};
+pub use dropdown::{Dropdown, DropdownScrollConfiguration, DropdownStyle};
 pub use icon_label::{IconLabel, IconLabelStyle};
 pub use input_box::{InputBox, InputBoxState, InputBoxStateColors, InputBoxStyle};
 pub use interaction_region::InteractionRegion;
@@ -69,7 +67,7 @@ pub use quick_input::{QuickInput, QuickInputIds, QuickInputMessageKind, QuickInp
 pub use quick_pick::{
     QuickPick, QuickPickItem, QuickPickItemLayout, QuickPickSelection, QuickPickStyle,
 };
-pub use resizable::{Resizable, SashController, SashPointerPresence};
+pub use resizable::{Resizable, SashController};
 pub use sash::{Sash, SashOrientation, SashState, SashStyle};
 pub use scroll_view::{
     ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollView,
@@ -77,7 +75,7 @@ pub use scroll_view::{
 };
 pub use scrollbar::{
     HorizontalScrollbar, ScrollbarAxis, ScrollbarController, ScrollbarDrag, ScrollbarHit,
-    ScrollbarLayout, ScrollbarMetrics, ScrollbarPart, ScrollbarPointerPresence,
+    ScrollbarInteractionOutcome, ScrollbarLayout, ScrollbarMetrics, ScrollbarPart,
     ScrollbarPresentation, ScrollbarState, ScrollbarStyle, VerticalScrollbar,
 };
 pub use search_box::{SearchBox, SearchBoxStyle};

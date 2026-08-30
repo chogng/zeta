@@ -16,9 +16,10 @@ use crate::UiScene;
 
 /// Horizontal scrollbar with compile-time orientation.
 ///
-/// The host provides retained scroll state, pointer capture, scheduling, identity, and
-/// accessibility semantics. This component owns horizontal track/thumb geometry, paint, hit
-/// testing, track paging, and drag mapping.
+/// The host provides retained scroll state, scheduling, identity, and accessibility semantics.
+/// This component owns horizontal track/thumb geometry, paint, hit testing, track paging, and
+/// drag mapping; [`super::ScrollbarController`] owns reusable hover, visibility, and pointer
+/// capture.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HorizontalScrollbar {
     core: ScrollbarCore,

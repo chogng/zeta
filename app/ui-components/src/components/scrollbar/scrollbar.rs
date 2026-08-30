@@ -16,7 +16,7 @@ mod vertical_scrollbar;
 
 pub use horizontal_scrollbar::HorizontalScrollbar;
 pub use interaction::ScrollbarController;
-pub use interaction::ScrollbarPointerPresence;
+pub use interaction::ScrollbarInteractionOutcome;
 pub use interaction::ScrollbarPresentation;
 pub use interaction::ScrollbarState;
 pub use vertical_scrollbar::VerticalScrollbar;
@@ -75,7 +75,6 @@ pub struct ScrollbarStyle {
     hovered_thumb: Color,
     active_thumb: Color,
     thickness: f32,
-    inset: f32,
     minimum_thumb_extent: f32,
     corner_radii: CornerRadii,
 }
@@ -90,7 +89,6 @@ impl ScrollbarStyle {
             hovered_thumb: thumb,
             active_thumb: thumb,
             thickness: 8.0,
-            inset: 2.0,
             minimum_thumb_extent: 24.0,
             corner_radii: CornerRadii::uniform(4.0),
         }
@@ -110,11 +108,6 @@ impl ScrollbarStyle {
 
     pub const fn with_thickness(mut self, thickness: f32) -> Self {
         self.thickness = thickness;
-        self
-    }
-
-    pub const fn with_inset(mut self, inset: f32) -> Self {
-        self.inset = inset;
         self
     }
 
@@ -246,19 +239,18 @@ impl ScrollbarCore {
     }
 
     fn layout(self) -> ScrollbarLayout {
-        let inset = self.style.inset.max(0.0);
         let thickness = self.style.thickness.max(0.0);
         let track_bounds = match self.axis {
             ScrollbarAxis::Vertical => Rect::from_xywh(
-                self.bounds.right() - inset - thickness,
-                self.bounds.origin.y + inset,
+                self.bounds.right() - thickness,
+                self.bounds.origin.y,
                 thickness,
-                (self.bounds.size.height - inset * 2.0).max(0.0),
+                self.bounds.size.height,
             ),
             ScrollbarAxis::Horizontal => Rect::from_xywh(
-                self.bounds.origin.x + inset,
-                self.bounds.bottom() - inset - thickness,
-                (self.bounds.size.width - inset * 2.0).max(0.0),
+                self.bounds.origin.x,
+                self.bounds.bottom() - thickness,
+                self.bounds.size.width,
                 thickness,
             ),
         };
