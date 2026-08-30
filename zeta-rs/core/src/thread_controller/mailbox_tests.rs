@@ -156,6 +156,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
         session_id: SessionId::new("session").unwrap(),
         thread_id: thread_id.clone(),
+        created_at_unix_ms: 0,
         parent_thread_id: None,
         forked_from_id: None,
         title: "test".into(),

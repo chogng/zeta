@@ -1501,6 +1501,8 @@ impl AppServer {
                 .into_iter()
                 .map(|thread| SessionThread {
                     thread_id: thread.thread_id,
+                    title: thread.title,
+                    created_at_unix_ms: thread.created_at_unix_ms,
                     parent_thread_id: thread.parent_thread_id,
                     forked_from_id: thread.forked_from_id,
                     status: thread.status,

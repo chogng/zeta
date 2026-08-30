@@ -8,7 +8,7 @@ fn session_layout_bounds_queue_and_preserves_transcript() {
     assert_eq!(areas.transcript.height, 4);
     assert_eq!(areas.goal.height, 0);
     assert_eq!(areas.plan.height, 0);
-    assert_eq!(areas.queue.height, 7);
+    assert_eq!(areas.queue.height, 6);
     assert_eq!(areas.composer.height, 3);
     assert_eq!(areas.status.height, 2);
     assert_eq!(areas.subagent_pane.height, 4);
@@ -31,7 +31,25 @@ fn session_layout_places_goal_plan_and_queue_above_input() {
     assert_eq!(areas.queue.y, areas.plan.y + areas.plan.height);
     assert_eq!(areas.composer.y, areas.queue.y + areas.queue.height);
     assert_eq!(areas.status.y, areas.composer.y + areas.composer.height);
-    assert_eq!(areas.subagent_pane.y, areas.status.y + areas.status.height);
+    assert_eq!(
+        areas.subagent_pane.y,
+        areas.status.y + areas.status.height + 1
+    );
+}
+
+#[test]
+fn session_layout_does_not_reserve_a_subagent_gap_without_both_surfaces() {
+    let without_subagents = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 1, 0);
+    let without_status = session_areas(Rect::new(0, 0, 80, 20), 0, 0, 0, 0, 3, 0, 2);
+
+    assert_eq!(
+        without_subagents.subagent_pane.y,
+        without_subagents.status.y + without_subagents.status.height
+    );
+    assert_eq!(
+        without_status.subagent_pane.y,
+        without_status.status.y + without_status.status.height
+    );
 }
 
 #[test]

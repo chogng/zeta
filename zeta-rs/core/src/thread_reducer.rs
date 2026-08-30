@@ -65,6 +65,7 @@ mod approval;
 pub struct ThreadSnapshot {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
+    pub created_at_unix_ms: u64,
     pub parent_thread_id: Option<ThreadId>,
     pub forked_from_id: Option<ThreadId>,
     pub title: String,
@@ -313,11 +314,15 @@ pub fn reduce_thread_event(
                 title,
                 thread_id,
             } => {
+                let created_at_unix_ms = u64::try_from(envelope.recorded_at.0).map_err(|_| {
+                    CoreError::Journal("Thread creation timestamp exceeds u64".into())
+                })?;
                 let mut event_digests = BTreeMap::new();
                 event_digests.insert(envelope.sequence, event_digest(&envelope.event)?);
                 Ok(ThreadSnapshot {
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
+                    created_at_unix_ms,
                     parent_thread_id: None,
                     forked_from_id: None,
                     title: title.clone(),

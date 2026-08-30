@@ -361,7 +361,7 @@ fn exec_policy_authority_serializes_exact_rule_and_revision() {
 }
 
 #[test]
-fn canonical_session_contains_thread_lineage_without_embedding_thread_history() {
+fn canonical_session_contains_thread_identity_presentation_and_lineage_without_history() {
     let session = Session {
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
@@ -369,12 +369,16 @@ fn canonical_session_contains_thread_lineage_without_embedding_thread_history() 
         threads: vec![
             SessionThread {
                 thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
+                title: "task".into(),
+                created_at_unix_ms: 1,
                 parent_thread_id: None,
                 forked_from_id: None,
                 status: ThreadStatus::Active,
             },
             SessionThread {
                 thread_id: ThreadId::new("thread_child").expect("test ID is non-empty"),
+                title: "review".into(),
+                created_at_unix_ms: 2,
                 parent_thread_id: Some(ThreadId::new("thread_root").expect("test ID is non-empty")),
                 forked_from_id: Some(ThreadId::new("thread_root").expect("test ID is non-empty")),
                 status: ThreadStatus::Active,
@@ -383,9 +387,11 @@ fn canonical_session_contains_thread_lineage_without_embedding_thread_history() 
     };
 
     assert_eq!(session.threads.len(), 2);
+    assert_eq!(session.threads[1].title, "review");
+    assert_eq!(session.threads[1].created_at_unix_ms, 2);
     assert_eq!(
-        session.threads[1].forked_from_id,
-        Some(ThreadId::new("thread_root").expect("test ID is non-empty"))
+        session.threads[1].forked_from_id.as_ref(),
+        Some(&session.threads[0].thread_id)
     );
 }
 

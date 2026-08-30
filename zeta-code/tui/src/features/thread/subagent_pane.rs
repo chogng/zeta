@@ -1,21 +1,26 @@
-use crate::ui::accent;
+use crate::ui::foreground;
 use crate::ui::muted;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Line;
-use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use unicode_width::UnicodeWidthChar;
+use unicode_width::UnicodeWidthStr;
 use zeta_protocol::Session;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 pub(crate) const DEFAULT_MAX_ROWS: usize = 4;
+const MARKER_WIDTH: usize = 2;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SubagentPaneRow {
     pub(crate) thread_id: ThreadId,
     pub(crate) label: String,
+    pub(crate) created_at_unix_ms: u64,
 }
 
 #[derive(Debug, Default)]
@@ -24,6 +29,7 @@ pub(crate) struct SubagentPaneState {
     selected: Option<ThreadId>,
     viewport_start: usize,
     focused: bool,
+    now_unix_ms: u64,
 }
 
 impl SubagentPaneState {
@@ -32,6 +38,7 @@ impl SubagentPaneState {
         session: Option<&Session>,
         viewed_thread: Option<&ThreadId>,
     ) {
+        self.refresh_elapsed();
         self.rows = session.map(active_rows).unwrap_or_default();
         let selected_is_valid = self
             .selected
@@ -101,12 +108,16 @@ impl SubagentPaneState {
         SubagentPaneView {
             rows: &self.rows[self.viewport_start..end],
             selected: self.selected.as_ref(),
-            focused: self.focused,
+            now_unix_ms: self.now_unix_ms,
         }
     }
 
     pub(crate) fn desired_rows(&self) -> u16 {
         u16::try_from(self.rows.len().min(DEFAULT_MAX_ROWS)).unwrap_or(u16::MAX)
+    }
+
+    pub(crate) fn refresh_elapsed(&mut self) {
+        self.now_unix_ms = current_unix_millis();
     }
 
     fn selected_index(&self) -> Option<usize> {
@@ -130,7 +141,7 @@ impl SubagentPaneState {
 pub(crate) struct SubagentPaneView<'a> {
     pub(crate) rows: &'a [SubagentPaneRow],
     pub(crate) selected: Option<&'a ThreadId>,
-    pub(crate) focused: bool,
+    pub(crate) now_unix_ms: u64,
 }
 
 pub(crate) fn draw_subagent_pane(frame: &mut Frame<'_>, area: Rect, view: SubagentPaneView<'_>) {
@@ -139,19 +150,71 @@ pub(crate) fn draw_subagent_pane(frame: &mut Frame<'_>, area: Rect, view: Subage
         .iter()
         .map(|row| {
             let selected = view.selected == Some(&row.thread_id);
-            let marker = if view.focused && selected { ">" } else { " " };
+            let marker = if selected { '●' } else { '○' };
             let style = if selected {
-                Style::default().fg(accent())
+                Style::default().fg(foreground())
             } else {
                 Style::default().fg(muted())
             };
-            Line::from(vec![
-                Span::styled(format!("{marker} {}", row.label), style),
-                Span::styled(format!("  {}", row.thread_id), Style::default().fg(muted())),
-            ])
+            let elapsed_seconds = view.now_unix_ms.saturating_sub(row.created_at_unix_ms) / 1_000;
+            Line::styled(
+                row_text(
+                    marker,
+                    &row.label,
+                    &format_elapsed_compact(elapsed_seconds),
+                    usize::from(area.width),
+                ),
+                style,
+            )
         })
         .collect::<Vec<_>>();
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+fn row_text(marker: char, label: &str, elapsed: &str, width: usize) -> String {
+    let elapsed_width = elapsed.width();
+    let name_width = width.saturating_sub(MARKER_WIDTH + elapsed_width + 1);
+    let name = truncate_to_width(label, name_width);
+    let left = format!("{marker} {name}");
+    let gap = width
+        .saturating_sub(left.width() + elapsed_width)
+        .max(usize::from(width > left.width() + elapsed_width));
+    format!("{left}{}{elapsed}", " ".repeat(gap))
+}
+
+fn truncate_to_width(text: &str, width: usize) -> String {
+    text.chars()
+        .scan(0, |used, character| {
+            let character_width = character.width().unwrap_or(0);
+            (*used + character_width <= width).then(|| {
+                *used += character_width;
+                character
+            })
+        })
+        .collect()
+}
+
+fn format_elapsed_compact(elapsed_seconds: u64) -> String {
+    if elapsed_seconds < 60 {
+        return format!("{elapsed_seconds}s");
+    }
+    if elapsed_seconds < 3_600 {
+        let minutes = elapsed_seconds / 60;
+        let seconds = elapsed_seconds % 60;
+        return format!("{minutes}m {seconds:02}s");
+    }
+    let hours = elapsed_seconds / 3_600;
+    let minutes = (elapsed_seconds % 3_600) / 60;
+    let seconds = elapsed_seconds % 60;
+    format!("{hours}h {minutes:02}m {seconds:02}s")
+}
+
+fn current_unix_millis() -> u64 {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must be after the Unix epoch")
+        .as_millis();
+    u64::try_from(millis).expect("Unix millisecond timestamp must fit u64")
 }
 
 fn active_rows(session: &Session) -> Vec<SubagentPaneRow> {
@@ -162,7 +225,8 @@ fn active_rows(session: &Session) -> Vec<SubagentPaneRow> {
     }) {
         rows.push(SubagentPaneRow {
             thread_id: root.thread_id.clone(),
-            label: "Main".into(),
+            label: "main".into(),
+            created_at_unix_ms: root.created_at_unix_ms,
         });
     }
     rows.extend(
@@ -176,7 +240,8 @@ fn active_rows(session: &Session) -> Vec<SubagentPaneRow> {
             })
             .map(|thread| SubagentPaneRow {
                 thread_id: thread.thread_id.clone(),
-                label: thread.thread_id.to_string(),
+                label: thread.title.to_lowercase(),
+                created_at_unix_ms: thread.created_at_unix_ms,
             }),
     );
     rows

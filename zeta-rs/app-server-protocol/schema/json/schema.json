@@ -21598,6 +21598,11 @@
     "SessionThread": {
       "description": "One Thread grouped into a Session tree by `session_id`.",
       "properties": {
+        "createdAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "forkedFromId": {
           "anyOf": [
             {
@@ -21623,10 +21628,15 @@
         },
         "threadId": {
           "$ref": "#/$defs/ThreadId"
+        },
+        "title": {
+          "type": "string"
         }
       },
       "required": [
         "threadId",
+        "title",
+        "createdAtUnixMs",
         "status"
       ],
       "type": "object"

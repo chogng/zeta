@@ -1255,15 +1255,6 @@ impl App {
         };
         let viewed_thread =
             visible_session.and_then(|session_id| self.sessions.remembered_thread(session_id));
-        let agents = self
-            .sessions
-            .catalog()
-            .iter()
-            .filter(|session| {
-                Some(&session.session_id) != visible_session
-                    && session.status == zeta_protocol::SessionStatus::Active
-            })
-            .count();
         let subagents = visible_session
             .and_then(|session_id| {
                 self.sessions
@@ -1297,7 +1288,6 @@ impl App {
             state,
             plan,
             queue,
-            agents,
             subagents,
             waiting: usize::from(matches!(
                 self.status,
@@ -1836,6 +1826,7 @@ impl App {
     pub(crate) fn handle_tick(&mut self, now: Instant) {
         let context = self.app_keymap_context(true);
         self.app_keymap.expire(context, now);
+        self.subagent_pane.refresh_elapsed();
     }
 
     pub(crate) fn pending_key_chord_label(&self) -> Option<String> {

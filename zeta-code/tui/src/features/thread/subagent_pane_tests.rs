@@ -1,4 +1,10 @@
 use super::SubagentPaneState;
+use super::draw_subagent_pane;
+use super::format_elapsed_compact;
+use crate::ui::foreground;
+use crate::ui::muted;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
@@ -43,6 +49,44 @@ fn selection_drives_a_bounded_viewport() {
     );
 }
 
+#[test]
+fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
+    let mut session = session();
+    session.threads[1].title = "Review Agent".into();
+    session.threads[1].created_at_unix_ms = 31_000;
+    let mut pane = SubagentPaneState::default();
+    pane.reconcile(Some(&session), Some(&thread_id("child-a")));
+    pane.now_unix_ms = 62_000;
+    let backend = TestBackend::new(30, 2);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal
+        .draw(|frame| draw_subagent_pane(frame, frame.area(), pane.view()))
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let rows = (0..2)
+        .map(|row| {
+            (0..30)
+                .map(|column| buffer[(column, row)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(rows[0].trim_end(), "○ main                  1m 01s");
+    assert_eq!(rows[1].trim_end(), "● review agent             31s");
+    assert!(!rows.join("\n").contains("child-a"));
+    assert_eq!(buffer[(0, 0)].fg, muted());
+    assert_eq!(buffer[(0, 1)].fg, foreground());
+}
+
+#[test]
+fn elapsed_time_uses_the_compact_codex_status_format() {
+    assert_eq!(format_elapsed_compact(0), "0s");
+    assert_eq!(format_elapsed_compact(59), "59s");
+    assert_eq!(format_elapsed_compact(62), "1m 02s");
+    assert_eq!(format_elapsed_compact(3_789), "1h 03m 09s");
+}
+
 fn session() -> Session {
     Session {
         session_id: session_id("root"),
@@ -55,6 +99,8 @@ fn session() -> Session {
 fn root() -> SessionThread {
     SessionThread {
         thread_id: thread_id("root"),
+        title: "Main Task".into(),
+        created_at_unix_ms: 1_000,
         parent_thread_id: None,
         forked_from_id: None,
         status: ThreadStatus::Active,
@@ -64,6 +110,8 @@ fn root() -> SessionThread {
 fn child(value: &str) -> SessionThread {
     SessionThread {
         thread_id: thread_id(value),
+        title: value.into(),
+        created_at_unix_ms: 1_000,
         parent_thread_id: Some(thread_id("root")),
         forked_from_id: None,
         status: ThreadStatus::Active,

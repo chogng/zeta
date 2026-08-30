@@ -70,7 +70,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与后台 Agent/Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；需要明确操作键时由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
+- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；历史 Session 数量只在 `/resume` 的 Session Manager 展示；需要明确操作键时由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
 - 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各 component 拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -540,7 +540,7 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 ## 渲染
 
-Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → SubagentPane` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 固定一行，SubagentPane 最多四行。几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面只保留列表正文、ChatInput 和 StatusLine/KeyHints。
+Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPane` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 固定一行，SubagentPane 最多四行。StatusLine/KeyHints 与存在内容的 SubagentPane 之间固定保留一行；几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面只保留列表正文、ChatInput 和 StatusLine/KeyHints。
 
 QuickView 和 Suggest 覆盖现有内容；stacked Pane 仍从 ChatInput 向上占高。每个 Thread 的草稿、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
 
@@ -551,7 +551,7 @@ PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢�
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
 不处理完整 grapheme/reflow/Markdown layout。
 
-当前协议没有提供 SessionThread 的标题、耗时、attention/summary，也没有为每次工具执行提供可持久恢复的最终时长与退出码。SubagentPane 因此只展示协议已有身份和状态；ExecCell 也不会从输出文字猜这些字段。
+`SessionThread` 提供标题和创建时间；SubagentPane 将 Main 与子代理名称统一为小写，以实心圆表示当前项、空心圆表示其他项，在右侧按 Codex 状态时长格式展示从 Thread 创建至今的时间，并隐藏 Thread ID。当前协议仍未提供 attention/summary，也没有为每次工具执行提供可持久恢复的最终时长与退出码；ExecCell 不会从输出文字猜这些字段。
 
 v15 接受 `inline_visualization` 的终端 fallback，但当前 protocol 没有 visualization artifact、结构化 fallback 或安全引用。TUI 因此不会解析任意 HTML；上游契约到位后，它进入普通 TranscriptCell/Expansion/QuickView 路径，而不是新增一套覆盖层。
 

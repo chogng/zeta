@@ -28,8 +28,11 @@ pub(crate) fn session_areas(
     let available_above_subagent_pane = area.height.saturating_sub(subagent_pane_rows);
     let status_rows = status_desired_rows.min(available_above_subagent_pane);
     let available_above_status = available_above_subagent_pane.saturating_sub(status_rows);
-    let transcript_rows = MIN_TRANSCRIPT_ROWS.min(available_above_status);
-    let available_chrome = available_above_status.saturating_sub(transcript_rows);
+    let subagent_gap_rows =
+        u16::from(subagent_pane_rows > 0 && status_rows > 0).min(available_above_status);
+    let available_above_gap = available_above_status.saturating_sub(subagent_gap_rows);
+    let transcript_rows = MIN_TRANSCRIPT_ROWS.min(available_above_gap);
+    let available_chrome = available_above_gap.saturating_sub(transcript_rows);
     let composer_rows = composer_desired_rows.min(available_chrome);
     let request_rows = request_desired_rows.min(available_chrome.saturating_sub(composer_rows));
     let available_inline = available_chrome
@@ -44,7 +47,9 @@ pub(crate) fn session_areas(
     );
     let bottom = area.y.saturating_add(area.height);
     let subagent_pane_y = bottom.saturating_sub(subagent_pane_rows);
-    let status_y = subagent_pane_y.saturating_sub(status_rows);
+    let status_y = subagent_pane_y
+        .saturating_sub(subagent_gap_rows)
+        .saturating_sub(status_rows);
     let composer_y = status_y.saturating_sub(composer_rows);
     let request_y = composer_y.saturating_sub(request_rows);
     let queue_y = request_y.saturating_sub(queue_rows);

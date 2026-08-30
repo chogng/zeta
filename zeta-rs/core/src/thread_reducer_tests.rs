@@ -47,6 +47,24 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
 }
 
 #[test]
+fn reducer_preserves_the_thread_creation_timestamp() {
+    let thread = reduce_thread_event(
+        None,
+        &envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                title: "test".into(),
+            },
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(thread.created_at_unix_ms, 1);
+}
+
+#[test]
 fn reducer_keeps_legacy_external_execution_attempts_readable() {
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     let turn_id = TurnId::new("turn_1").expect("test ID is non-empty");

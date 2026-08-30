@@ -25,6 +25,9 @@ pub struct Session {
 #[serde(rename_all = "camelCase")]
 pub struct SessionThread {
     pub thread_id: ThreadId,
+    pub title: String,
+    #[ts(type = "number")]
+    pub created_at_unix_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub parent_thread_id: Option<ThreadId>,

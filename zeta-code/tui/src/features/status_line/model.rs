@@ -15,7 +15,6 @@ pub(crate) struct StatusLineRuntime {
     pub(crate) state: Option<&'static str>,
     pub(crate) plan: Option<(usize, usize)>,
     pub(crate) queue: usize,
-    pub(crate) agents: usize,
     pub(crate) subagents: usize,
     pub(crate) waiting: usize,
 }
@@ -31,7 +30,6 @@ impl StatusLineRuntime {
         }
         for (label, count) in [
             ("queue", self.queue),
-            ("agents", self.agents),
             ("subagents", self.subagents),
             ("waiting", self.waiting),
         ] {

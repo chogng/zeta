@@ -340,9 +340,10 @@ Normal Session screen:
 │ StatusLine                                   │ 1..N
 │ OR KeyHints                                  │ exactly 1
 ├──────────────────────────────────────────────┤
-│ Main                                  12m    │
-│ review                                 4m · approval
-│ tests                                  2m    │
+│                                              │ exactly 1 when rows follow
+│ ● main                                12m    │
+│ ○ review                               4m · approval
+│ ○ tests                                2m    │
 └──────────────────────────────────────────────┘
 ```
 
@@ -466,7 +467,7 @@ Example:
 
 ```text
 sonnet · context 42% · working · plan 1/3 · queue 2
-agents 2 · waiting 1 · subagents 3 · git main
+waiting 1 · subagents 3 · git main
 ```
 
 StatusLine contains state only.
@@ -479,7 +480,6 @@ context 42%
 goal active
 plan 1/3
 queue 2
-agents 2
 subagents 3
 waiting 1
 model
@@ -502,13 +502,6 @@ Long content belongs elsewhere.
 # 11. Background counts
 
 The current context counts as zero.
-
-## Agents
-
-```text
-agents N
-= Sessions other than the currently viewed Session
-```
 
 ## Subagents
 
@@ -573,22 +566,22 @@ The persistent bottom Thread navigator is called `SubagentPane` in product/UI di
 It contains:
 
 ```text
-Main
-active Subagent 1
-active Subagent 2
+main
+active subagent 1
+active subagent 2
 ...
 ```
 
 Example:
 
 ```text
-> Main             12m
-  review            4m · approval
-  tests             2m
-  research         38s · query
+● main             12m
+○ review            4m · approval
+○ tests             2m
+○ research         38s · query
 ```
 
-Although Main appears in the list, the name `SubagentPane` is acceptable because its product purpose is fast Main/Subagent navigation.
+Although main appears in the list, the name `SubagentPane` is acceptable because its product purpose is fast main/Subagent navigation.
 
 ---
 
@@ -607,7 +600,7 @@ Do NOT show activity summaries here.
 Examples:
 
 ```text
-Main             12m
+main             12m
 review            4m · approval
 tests             2m
 research         38s · query
@@ -724,7 +717,7 @@ Example:
 ├────────────────────────────────────────────────────┤
 │ > ChatInput                                        │
 ├────────────────────────────────────────────────────┤
-│ agents 4 · waiting 1 · working 2 · done 1          │
+│ waiting 1 · working 2 · done 1                     │
 └────────────────────────────────────────────────────┘
 ```
 

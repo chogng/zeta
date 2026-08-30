@@ -550,6 +550,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
+        created_at_unix_ms: 0,
         parent_thread_id: None,
         forked_from_id: None,
         title: "test".into(),
