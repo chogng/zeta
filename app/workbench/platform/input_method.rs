@@ -9,13 +9,14 @@ use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::window::ImeCursorArea;
 
 use crate::MainSurfaceKind;
-use crate::ProductApp;
 use crate::SESSION_SEARCH_INPUT;
 use crate::TAB_RENAME_INPUT;
+use crate::WorkbenchApplication;
 use crate::directory_picker::DIRECTORY_SEARCH_INPUT;
 use crate::git_branch_picker::GIT_BRANCH_SEARCH_INPUT;
 use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
 use zeta_files::FILE_SEARCH_INPUT;
+use zeta_scm::COMMIT_MESSAGE_EDITOR;
 use zeta_session::interaction::COMPOSER;
 use zeta_settings::KEYBOARD_SHORTCUTS_SEARCH;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
@@ -27,6 +28,7 @@ enum InputMethodTarget {
     SessionSearch,
     TabRename,
     FileSearch,
+    CommitMessage,
     GitBranchSearch,
     DirectoryPathSearch,
     RemoteConnectionSearch,
@@ -53,6 +55,7 @@ struct InputMethodContext {
     session_search_focused: bool,
     tab_rename_focused: bool,
     file_search_focused: bool,
+    commit_message_focused: bool,
     git_branch_search_focused: bool,
     path_search_focused: bool,
     remote_connection_search_focused: bool,
@@ -75,6 +78,9 @@ impl InputMethodTarget {
         }
         if context.file_search_focused {
             return Self::FileSearch;
+        }
+        if context.commit_message_focused {
+            return Self::CommitMessage;
         }
         if context.git_branch_search_focused {
             return Self::GitBranchSearch;
@@ -120,7 +126,7 @@ impl InputMethodTarget {
     }
 }
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn ime_input(&mut self, event: Ime) {
         self.keybindings.cancel_chord();
         let target = self.input_method_target();
@@ -166,6 +172,15 @@ impl ProductApp {
                 };
                 self.caret_blink.activity(Instant::now());
                 self.files.apply_search_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::CommitMessage => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.scm.toolbar_mut().apply_commit_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -303,6 +318,7 @@ impl ProductApp {
             InputMethodTarget::Composer
                 | InputMethodTarget::SessionSearch
                 | InputMethodTarget::FileSearch
+                | InputMethodTarget::CommitMessage
                 | InputMethodTarget::GitBranchSearch
                 | InputMethodTarget::DirectoryPathSearch
                 | InputMethodTarget::RemoteConnectionSearch
@@ -328,6 +344,9 @@ impl ProductApp {
         }
         if target != InputMethodTarget::FileSearch {
             self.files.cancel_search_composition();
+        }
+        if target != InputMethodTarget::CommitMessage {
+            self.scm.toolbar_mut().cancel_commit_composition();
         }
         if target != InputMethodTarget::GitBranchSearch {
             self.git_branch_picker.cancel_search_composition();
@@ -380,6 +399,7 @@ impl ProductApp {
             session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),
             tab_rename_focused: self.ui_dispatch.is_focused(TAB_RENAME_INPUT),
             file_search_focused: self.ui_dispatch.is_focused(FILE_SEARCH_INPUT),
+            commit_message_focused: self.ui_dispatch.is_focused(COMMIT_MESSAGE_EDITOR),
             git_branch_search_focused: self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT),
             path_search_focused: self.ui_dispatch.is_focused(DIRECTORY_SEARCH_INPUT),
             remote_connection_search_focused: self

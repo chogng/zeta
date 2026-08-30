@@ -8,7 +8,7 @@ use zeta_lsp_manager::LanguageRequestKind;
 use zui::input::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
 use zui::ui::TextInputCompositionEvent;
 
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
 use crate::terminal_input::{code_editor_command, text_input_command};
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
@@ -17,7 +17,7 @@ use zeta_editor_host::{
     FileEditorAction, file_editor_close_index, file_editor_fold_index, file_editor_tab_index,
 };
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn file_editor_keyboard_input(&mut self, event: &KeyEvent) -> bool {
         if !self.main_surface.is_editor() {
             return false;

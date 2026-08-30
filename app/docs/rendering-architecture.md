@@ -86,10 +86,7 @@ wgpu 在 macOS、Linux 和 Windows 上本身可选择 Metal、Vulkan 或 DX12。
 
 ## 当前状态与演进
 
-当前已完成 scene/backend 分离、ordered scene batching、single-frame presentation/interaction、
-`Renderer` trait、wgpu implementation、application/window runtime、renderer type erasure、通用 icon
-contract 与单一 public `zui` crate 收拢。`zui-demo` 提供无产品状态的 recording backend 和 native
-smoke host。
+当前已完成 scene/backend 分离、ordered scene batching、single-frame presentation/interaction、`Renderer` trait、wgpu implementation、application/window runtime、renderer type erasure、通用 icon contract 与单一 public `zui` crate 收拢。通用 scene、renderer、component runtime 与 window lifecycle 由 `zui` 自身的 package-scoped tests 验证。
 
 尚未实现 backend capability negotiation、运行时热切换、raw Metal/Vulkan renderer 或跨 backend
 golden-image 一致性测试。新增 backend 时可放在独立第三方 crate，但只能依赖 public `zui` contract，

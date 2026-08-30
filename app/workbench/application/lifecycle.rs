@@ -1,14 +1,14 @@
 use super::events::handle_terminal_event;
 use super::*;
 
-impl App<ProductEvent> for ProductApp {
-    fn ready(&mut self, context: &mut AppContext<'_, ProductEvent>) {
+impl App<WorkbenchEvent> for WorkbenchApplication {
+    fn ready(&mut self, context: &mut AppContext<'_, WorkbenchEvent>) {
         if self.window.is_some() {
             self.request_redraw();
             return;
         }
 
-        let options = WindowOptions::new(PRODUCT_DISPLAY_NAME)
+        let options = WindowOptions::new(APP_DISPLAY_NAME)
             .with_inner_size(LogicalSize::new(INITIAL_WIDTH, INITIAL_HEIGHT))
             .with_chrome(WindowChrome::ContentUnderTitlebar);
         let opened_window = match context.open_window(options) {
@@ -24,10 +24,8 @@ impl App<ProductEvent> for ProductApp {
             Ok(Some(Theme::Dark)) => ColorScheme::Dark,
             Ok(Some(Theme::Light) | None) => ColorScheme::Light,
             Err(error) => {
-                context.exit_with_error(ApplicationError::product(
-                    "initial window theme query",
-                    error,
-                ));
+                context
+                    .exit_with_error(ApplicationError::host("initial window theme query", error));
                 return;
             }
         };
@@ -38,10 +36,7 @@ impl App<ProductEvent> for ProductApp {
                 ColorScheme::Light | ColorScheme::HighContrastLight => Theme::Light,
             },
         )) {
-            context.exit_with_error(ApplicationError::product(
-                "initial window theme update",
-                error,
-            ));
+            context.exit_with_error(ApplicationError::host("initial window theme update", error));
             return;
         }
         self.physical_extent = opened_window.metrics().physical_extent();
@@ -86,11 +81,15 @@ impl App<ProductEvent> for ProductApp {
         self.request_redraw();
     }
 
-    fn resumed(&mut self, _context: &mut AppContext<'_, ProductEvent>) {
+    fn resumed(&mut self, _context: &mut AppContext<'_, WorkbenchEvent>) {
         self.request_redraw();
     }
 
-    fn window_event(&mut self, context: &mut WindowContext<'_, ProductEvent>, event: WindowEvent) {
+    fn window_event(
+        &mut self,
+        context: &mut WindowContext<'_, WorkbenchEvent>,
+        event: WindowEvent,
+    ) {
         if self.window.as_ref().map(WindowHandle::id) != Some(context.id()) {
             return;
         }
@@ -172,13 +171,13 @@ impl App<ProductEvent> for ProductApp {
         }
     }
 
-    fn redraw(&mut self, context: &mut WindowContext<'_, ProductEvent>) {
+    fn redraw(&mut self, context: &mut WindowContext<'_, WorkbenchEvent>) {
         self.redraw_frame(context);
     }
 
     fn accessibility_action(
         &mut self,
-        _context: &mut AppContext<'_, ProductEvent>,
+        _context: &mut AppContext<'_, WorkbenchEvent>,
         action: AccessibilityAction,
     ) {
         if self.window.as_ref().map(WindowHandle::id) != Some(action.window()) {
@@ -198,13 +197,13 @@ impl App<ProductEvent> for ProductApp {
         self.apply_dispatch_outcome(outcome);
     }
 
-    fn user_event(&mut self, _context: &mut AppContext<'_, ProductEvent>, event: ProductEvent) {
+    fn user_event(&mut self, _context: &mut AppContext<'_, WorkbenchEvent>, event: WorkbenchEvent) {
         match event {
-            ProductEvent::Session(event) => {
+            WorkbenchEvent::Session(event) => {
                 self.handle_session_runtime_event(event);
                 return;
             }
-            ProductEvent::EditorLanguage(event) => {
+            WorkbenchEvent::EditorLanguage(event) => {
                 self.language_service
                     .handle_event(event, &self.file_editor_host);
                 if let Some(target) = self
@@ -219,19 +218,29 @@ impl App<ProductEvent> for ProductApp {
                 self.request_redraw();
                 return;
             }
-            ProductEvent::RemoteWindowLaunch(event) => {
+            WorkbenchEvent::RemoteWindowLaunch(event) => {
                 self.handle_remote_window_launch_event(event);
                 return;
             }
-            ProductEvent::RemoteTunnel(event) => {
+            WorkbenchEvent::RemoteTunnel(event) => {
                 self.handle_remote_tunnel_event(event);
                 return;
             }
-            ProductEvent::Terminal(event) => {
+            WorkbenchEvent::ScmOperationFinished(result) => {
+                if let Err(error) = result {
+                    eprintln!("SCM operation failed: {error}");
+                }
+                if let Err(error) = self.refresh_git_from_app_server() {
+                    eprintln!("could not refresh Git after SCM operation: {error}");
+                }
+                self.rebuild_presentation_on_next_redraw();
+                return;
+            }
+            WorkbenchEvent::Terminal(event) => {
                 handle_terminal_event(self, event.key, event.event);
                 return;
             }
-            ProductEvent::TerminalReady(ready) => {
+            WorkbenchEvent::TerminalReady(ready) => {
                 match self.terminal_runtime.handle_ready(ready) {
                     TerminalReadyOutcome::Active {
                         key,
@@ -264,7 +273,7 @@ impl App<ProductEvent> for ProductApp {
         }
     }
 
-    fn about_to_wait(&mut self, context: &mut AppContext<'_, ProductEvent>) {
+    fn about_to_wait(&mut self, context: &mut AppContext<'_, WorkbenchEvent>) {
         let now = Instant::now();
         self.keybindings.advance_chord(now);
         if let Some(commit) = self.settings.advance_keyboard_shortcuts(now) {

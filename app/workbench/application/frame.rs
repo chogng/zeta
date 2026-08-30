@@ -1,7 +1,7 @@
 use super::presentation::with_shell_presentation_model;
 use super::*;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn rebuild_presentation(&mut self) {
         let viewport = self.logical_viewport();
         let active_screen = self.active_screen();

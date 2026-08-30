@@ -1,25 +1,25 @@
-//! Product event-loop adapter for editor-owned language-service events.
+//! Application event-loop adapter for editor-owned language-service events.
 
 use zeta_editor_host::FileEditorLanguageEvent;
 use zeta_editor_host::FileEditorLanguageEventSink;
 use zui::app::AppProxy;
 
-use crate::product_event::ProductEvent;
+use crate::workbench_event::WorkbenchEvent;
 
-pub(crate) struct ProductLanguageEventSink {
-    events: AppProxy<ProductEvent>,
+pub(crate) struct WorkbenchLanguageEventSink {
+    events: AppProxy<WorkbenchEvent>,
 }
 
-impl ProductLanguageEventSink {
-    pub(crate) const fn new(events: AppProxy<ProductEvent>) -> Self {
+impl WorkbenchLanguageEventSink {
+    pub(crate) const fn new(events: AppProxy<WorkbenchEvent>) -> Self {
         Self { events }
     }
 }
 
-impl FileEditorLanguageEventSink for ProductLanguageEventSink {
+impl FileEditorLanguageEventSink for WorkbenchLanguageEventSink {
     fn send(&self, event: FileEditorLanguageEvent) -> std::result::Result<(), String> {
         self.events
-            .send_event(ProductEvent::EditorLanguage(event))
+            .send_event(WorkbenchEvent::EditorLanguage(event))
             .map_err(|_| "desktop event loop is unavailable".to_owned())
     }
 }

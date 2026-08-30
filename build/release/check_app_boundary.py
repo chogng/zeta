@@ -18,7 +18,6 @@ EXPECTED_APP_MEMBERS = {
     "app/terminal-runtime",
     "app/workbench",
     "app/zui",
-    "app/zui-demo",
 }
 
 RETIRED_PRODUCT_PATHS = {
@@ -127,7 +126,6 @@ def main() -> int:
         repository_root
         / "app"
         / "workbench"
-        / "features"
         / "remote"
         / "launch.rs"
     )

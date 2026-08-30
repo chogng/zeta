@@ -1,8 +1,8 @@
 # `app`
 
-> 本文只说明纯 Rust Desktop 产品宿主的源码边界、启动路径和验证入口。产品布局由 [`LAYOUT.md`](LAYOUT.md) 维护，其他产品行为与跨 crate 架构由 [`app/docs`](docs/README.md) 维护，各能力 crate 的实现契约由各自的 README 维护。
+> 本文只说明纯 Rust Desktop 应用的源码边界、启动路径和验证入口。Workbench 布局由 [`LAYOUT.md`](LAYOUT.md) 维护，其他应用行为与跨 crate 架构由 [`app/docs`](docs/README.md) 维护，各能力 crate 的实现契约由各自的 README 维护。
 
-`app` 是纯 Rust Desktop 产品的 Cargo package 和发布边界。完整工作台由 `zeta-workbench` 负责。
+`app` 是纯 Rust Desktop 应用的 Cargo package 和发布边界。完整工作台由 `zeta-workbench` 负责。
 
 ## 职责边界
 
@@ -17,21 +17,22 @@
 
 依赖只能从产品宿主指向能力 crate 和共享后端。`zeta-rs`、`zui`、`zeta-ui-components`、`zeta-workbench` 及其他能力 crate 不得依赖 `app`。`app` 也不得执行或依赖 `zeta-code`、`zeta-cli` 或 `zeta-tui` 的产品入口。
 
-`app` package 只依赖 `zeta-workbench`，没有 library target，也没有 `src` 目录。产品组合、窗口生命周期、平台事件和效果执行统一由 Workbench 的 `product` 模块负责；能力内部状态与算法仍由对应能力 crate 负责。
+`app` package 只依赖 `zeta-workbench`，没有 library target，也没有 `src` 目录。应用组合、窗口生命周期、平台事件和效果执行统一由 Workbench 的 `application` 模块负责；能力内部状态与算法仍由对应能力 crate 负责。
 
 ## 源码入口
 
 ```text
 main.rs                         binary 入口，只调用 zeta_workbench::run()
-workbench/product.rs            产品组合模块入口、产品状态与能力接线
-workbench/product/              生命周期、事件、帧、交互和运行入口
+workbench/application.rs        应用组合模块入口、Workbench 状态与能力接线
+workbench/application/          生命周期、事件、帧、交互和运行入口
+workbench/command.rs            稳定命令映射与穷尽执行入口
 workbench/app_server.rs         App Server 适配入口
 workbench/{agent,editor,environment,remote,terminal}/
                                 按职责组织的产品事件与效果适配
 workbench/platform/             键盘、IME 和窗口事件适配
 ```
 
-`ProductApp` 是 Workbench 内唯一产品组合根，但不能吸收能力实现。跨功能协调应先确定长期负责的能力 crate，Workbench 只做必要调用。若某个改动让能力 crate 反向读取 `ProductApp` 字段，说明依赖方向已经错误。
+`WorkbenchApplication` 是 Workbench 内唯一应用组合根，但不能吸收能力实现。跨功能协调应先确定长期负责的能力 crate，Workbench 只做必要调用。若某个改动让能力 crate 反向读取 `WorkbenchApplication` 字段，说明依赖方向已经错误。
 
 ## 启动路径
 
@@ -40,8 +41,8 @@ workbench/platform/             键盘、IME 和窗口事件适配
 1. 处理内部 App Server daemon 和 `app-server` 子命令。
 2. 由 `AppInvocation::parse` 解析产品命令，由 `AppInvocation::resolve` 生成本地或远程启动配置。
 3. 远程启动先由 `launch_progress::prepare_remote_launch` 完成运行时检查和准备；失败时直接返回非零退出码，不创建窗口。
-4. `zui::app::Application::run` 创建 `ProductApp` 并进入事件循环。
-5. `ProductApp::ready` 打开窗口，启动终端、远程语言服务和 Agent Session，然后构建首帧。
+4. `zui::app::Application::run` 创建 `WorkbenchApplication` 并进入事件循环。
+5. `WorkbenchApplication::ready` 打开窗口，启动终端、远程语言服务和 Agent Session，然后构建首帧。
 6. 初始化失败或事件循环返回运行时错误时，进程返回非零退出码。
 
 `AppServerHost` 是产品到 App Server 的适配边界。本地和远程只是连接方式，Session、Thread、文件、Git、语言服务和终端的权威状态仍由各自能力及共享后端拥有。
@@ -88,9 +89,9 @@ bazel test //app:app_ci
 
 ## 修改检查
 
-- 改动启动参数、远程连接准备或退出语义时，同步检查 `workbench/product/run.rs`、对应 CLI 测试和 [`远程开发`](../docs/remote-development.md)。
-- 改动窗口生命周期、事件或帧调度时，同步检查 `workbench/product/lifecycle.rs`、`workbench/product/frame.rs` 和 [`zui`](zui/README.md) 的宿主约束。
-- 改动产品布局或交互时，同步检查 `workbench/product/presentation.rs`、`workbench/product/interaction.rs` 及对应 Workbench/能力 crate 测试。
+- 改动启动参数、远程连接准备或退出语义时，同步检查 `workbench/application/run.rs`、对应 CLI 测试和 [`远程开发`](../docs/remote-development.md)。
+- 改动窗口生命周期、事件或帧调度时，同步检查 `workbench/application/lifecycle.rs`、`workbench/application/frame.rs` 和 [`zui`](zui/README.md) 的宿主约束。
+- 改动 Workbench 布局或交互时，同步检查 `workbench/application/presentation.rs`、`workbench/application/interaction.rs` 及对应 Workbench/能力 crate 测试。
 - 改动 App Server 接线时，保持 `AppServerHost` 为窄适配层，并检查本地与远程两条连接路径。
 - 改动 package、Bazel 输入或发布参数时，同步更新 [`app release graph`](docs/app-release-graph.md) 和 `//app:app_ci`。
 

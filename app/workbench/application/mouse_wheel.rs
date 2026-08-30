@@ -3,7 +3,7 @@ use std::time::Instant;
 use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::MouseScrollDelta;
 
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::terminal_history::scroll_limit;
 use crate::terminal_pointer::TerminalPointerRouting;
 use zeta_files::FILE_LIST_ROW_HEIGHT;
@@ -11,10 +11,11 @@ use zeta_files::FILES_PANE;
 use zeta_scm::MULTI_DIFF_EDITOR;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
+const TAB_CONTAINER_PIXELS_PER_LINE: f32 = 18.0;
 const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
 const SETTINGS_PIXELS_PER_LINE: f32 = 18.0;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
         if self.route_remote_tunnel_manager_wheel(delta) {
             return;
@@ -29,6 +30,9 @@ impl ProductApp {
             return;
         }
         if self.workbench.tab_context_menu().is_open() {
+            return;
+        }
+        if self.route_tab_container_wheel(delta) {
             return;
         }
         if self.route_settings_wheel(delta) {
@@ -82,6 +86,31 @@ impl ProductApp {
             self.rebuild_presentation();
             self.request_redraw();
         }
+    }
+
+    fn route_tab_container_wheel(&mut self, delta: MouseScrollDelta) -> bool {
+        let Some(point) = self.cursor_position else {
+            return false;
+        };
+        let Some(presentation) = self.presentation.as_ref() else {
+            return false;
+        };
+        let Some(bounds) = presentation.element_bounds(crate::TAB_CONTAINER) else {
+            return false;
+        };
+        if !bounds.contains(point) {
+            return false;
+        }
+        let Some(metrics) = presentation.tab_container_scroll_metrics else {
+            return true;
+        };
+        if self
+            .workbench
+            .scroll_tab_container(tab_container_scroll_command(delta), metrics)
+        {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        true
     }
 
     fn route_settings_wheel(&mut self, delta: MouseScrollDelta) -> bool {
@@ -229,6 +258,16 @@ fn composer_interaction_scroll_command(delta: MouseScrollDelta) -> ScrollCommand
     let pixels = match delta {
         MouseScrollDelta::LineDelta(_, vertical) => {
             vertical * LINES_PER_WHEEL_STEP * zeta_session::INTERACTION_ROW_HEIGHT
+        }
+        MouseScrollDelta::PixelDelta(position) => position.y as f32,
+    };
+    ScrollCommand::ByPixels(ScrollDelta::vertical(-pixels))
+}
+
+fn tab_container_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
+    let pixels = match delta {
+        MouseScrollDelta::LineDelta(_, vertical) => {
+            vertical * LINES_PER_WHEEL_STEP * TAB_CONTAINER_PIXELS_PER_LINE
         }
         MouseScrollDelta::PixelDelta(position) => position.y as f32,
     };

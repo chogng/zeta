@@ -17,10 +17,10 @@ use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::SshAppServerConnectionOptions;
 
-/// Product-owned App Server host context shared by Agent, Language, and Terminal adapters.
+/// Application-owned App Server host context shared by Agent, Language, and Terminal adapters.
 ///
 /// The host exposes one horizontal application backend contract. `Local` and `Remote` describe
-/// how the App Server is reached; they do not create separate product APIs. Window state, panes,
+/// how the App Server is reached; they do not create separate application APIs. Window state, panes,
 /// commands, and Remote picker state remain owned by `app` outside this context.
 #[derive(Clone, Debug)]
 pub(crate) struct AppServerHost {
@@ -46,7 +46,7 @@ impl AppServerHost {
         }
     }
 
-    /// Selects an SSH-hosted App Server and an optional product-provided OpenSSH executable.
+    /// Selects an SSH-hosted App Server and an optional application-provided OpenSSH executable.
     pub(crate) fn remote_with_executable(
         profile: RemoteProfile,
         ssh_executable: Option<&Path>,

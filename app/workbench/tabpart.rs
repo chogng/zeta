@@ -13,9 +13,9 @@ mod titlebar;
 mod toolbar;
 
 pub use identity::{
-    ADD_SESSION, FILES_PANE_TOGGLE, FIRST_TAB_CONTAINER_SESSION_ACTION,
+    ADD_SESSION, CHANGES_PANE_BUTTON, FIRST_TAB_CONTAINER_SESSION_ACTION,
     FIRST_TAB_CONTAINER_SESSION_CLOSE, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER_TOGGLE, WINDOW,
+    TAB_CONTAINER, TAB_CONTAINER_TOGGLE, WINDOW,
 };
 pub use session_input::session_tab_input;
 pub use session_search::SessionSearchState;
@@ -89,7 +89,6 @@ fn test_style() -> WorkbenchUiStyle {
         icons::PINNED,
         icons::LAYOUT_SIDEBAR_LEFT,
         icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
-        icons::LAYOUT_SIDEBAR_RIGHT,
-        icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY,
+        icons::DIFF,
     )
 }

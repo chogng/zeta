@@ -5,6 +5,10 @@ use std::time::Instant;
 use super::{MINIMUM_MAIN_WIDTH, TabContainerState};
 use crate::Point;
 use crate::SashPointerPresence;
+use crate::ScrollAxis;
+use crate::ScrollCommand;
+use crate::ScrollMetrics;
+use crate::Size;
 
 #[test]
 fn tab_container_is_expanded_by_default_and_can_still_be_collapsed() {
@@ -72,4 +76,14 @@ fn viewport_constraints_do_not_replace_the_preferred_width() {
     assert!(!tab_container.resize_to(Point::new(320.0, 0.0)));
     assert!(tab_container.finish_resizing(SashPointerPresence::Outside, now));
     assert_eq!(tab_container.visible_width(1_000.0), Some(420.0));
+}
+
+#[test]
+fn tab_container_scroll_clamps_to_the_list_content() {
+    let mut tab_container = TabContainerState::expanded();
+    let metrics = ScrollMetrics::new(Size::new(200.0, 300.0), Size::new(200.0, 900.0));
+
+    assert!(tab_container.scroll(ScrollCommand::ToEnd(ScrollAxis::Vertical), metrics));
+    assert_eq!(tab_container.scroll_state().vertical_offset(), 600.0);
+    assert!(!tab_container.scroll(ScrollCommand::ToEnd(ScrollAxis::Vertical), metrics));
 }

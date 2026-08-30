@@ -1,4 +1,4 @@
-//! Native-host keybinding lifecycle independent of product command execution.
+//! Host keybinding lifecycle independent of command execution.
 
 mod catalog;
 mod engine;

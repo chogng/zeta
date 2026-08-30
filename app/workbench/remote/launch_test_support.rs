@@ -40,6 +40,8 @@ fn initialize_response_with_protocol(server_schema_hash: &str, protocol_major: u
                 "sessions": true,
                 "threads": true,
                 "turns": true,
+                "workCoordination": false,
+                "projects": false,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,

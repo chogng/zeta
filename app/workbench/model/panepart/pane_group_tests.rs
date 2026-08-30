@@ -49,6 +49,16 @@ fn a_group_keeps_input_identity_when_replacing_content() {
 }
 
 #[test]
+fn adding_an_input_keeps_the_existing_input_active() {
+    let mut group = PaneGroup::new();
+    let first = group.add_input(PaneInput::terminal(session("session-1")));
+    let second = group.add_input(PaneInput::files("/dir".into()));
+
+    assert_eq!(group.active_input_id(), Some(first));
+    assert_eq!(group.input(second), Some(&PaneInput::files("/dir".into())));
+}
+
+#[test]
 fn closing_active_input_selects_the_nearest_remaining_input() {
     let mut group = PaneGroup::new();
     let first = group.open_input(PaneInput::settings());

@@ -11,7 +11,6 @@ name = "zeta_files"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-commands = { workspace = true }
 zeta-file-search = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-ui-components = { workspace = true }

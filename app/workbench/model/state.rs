@@ -47,7 +47,7 @@ impl ClosedTab {
 ///
 /// `TabPart` owns orientation-neutral groups and tab inputs, and the Workbench owns one
 /// [`PaneContainer`] per tab input. Each container owns its complete [`PanePart`] group topology.
-/// Product hosts can present the same Tab Part vertically or horizontally without moving renderer,
+/// Application hosts can present the same Tab Part vertically or horizontally without moving renderer,
 /// terminal, or App Server state into this model.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Workbench {
@@ -289,6 +289,16 @@ impl Workbench {
         input: PaneInput,
     ) -> Option<PaneInputId> {
         self.pane_part_mut(tab_key)?.open_input(pane_id, input)
+    }
+
+    /// Adds an input through stable identities without changing the active input.
+    pub fn add_input(
+        &mut self,
+        tab_key: &TabInputKey,
+        pane_id: PaneGroupId,
+        input: PaneInput,
+    ) -> Option<PaneInputId> {
+        self.pane_part_mut(tab_key)?.add_input(pane_id, input)
     }
 
     /// Activates one input through stable tab, group, and input identities.

@@ -7,10 +7,9 @@ use crate::{
 };
 
 use super::identity::{
-    FILES_PANE_TOGGLE, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, WINDOW,
+    CHANGES_PANE_BUTTON, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, WINDOW,
 };
 use super::tabs::TabContainer;
-use crate::PaneInputKind;
 use crate::TabInputKey;
 use crate::TabPart;
 use zui::ui::ElementId;
@@ -21,6 +20,7 @@ const TITLEBAR_ACTION_GAP: f32 = 8.0;
 const TITLEBAR_ACTION_ITEM_GAP: f32 = 4.0;
 const TOGGLE_SIZE: f32 = 24.0;
 const TOGGLE_ICON_SIZE: f32 = 18.0;
+const CHANGES_ACTION_LABEL: &str = "Show changes";
 
 /// Logical space reserved for platform window controls on each titlebar edge.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -38,7 +38,7 @@ impl TitlebarInsets {
     }
 }
 
-/// Product-owned draggable titlebar for the single terminal surface.
+/// Application-owned draggable titlebar for the single terminal surface.
 pub struct Titlebar<'a> {
     bounds: Rect,
     style: WorkbenchUiStyle,
@@ -47,7 +47,6 @@ pub struct Titlebar<'a> {
     settings_action_index: Option<usize>,
     tab_container: Option<TabContainer<'a>>,
     tab_container_toggle_label: &'static str,
-    files_toggle_label: &'static str,
 }
 
 impl<'a> Titlebar<'a> {
@@ -57,7 +56,6 @@ impl<'a> Titlebar<'a> {
         _tab_part: &'a TabPart,
         _active_tab: Option<&TabInputKey>,
         tabs_expanded: bool,
-        active_pane_kind: Option<PaneInputKind>,
         window_control_insets: TitlebarInsets,
         dispatch: &'a UiDispatch,
     ) -> Self {
@@ -94,11 +92,11 @@ impl<'a> Titlebar<'a> {
         } else {
             ButtonState::Resting
         };
-        let files_toggle_state = if dispatch.is_pressed(FILES_PANE_TOGGLE) {
+        let changes_action_state = if dispatch.is_pressed(CHANGES_PANE_BUTTON) {
             ButtonState::Pressed
-        } else if dispatch.is_focused(FILES_PANE_TOGGLE) {
+        } else if dispatch.is_focused(CHANGES_PANE_BUTTON) {
             ButtonState::Focused
-        } else if dispatch.is_hovered(FILES_PANE_TOGGLE) {
+        } else if dispatch.is_hovered(CHANGES_PANE_BUTTON) {
             ButtonState::Hovered
         } else {
             ButtonState::Resting
@@ -122,20 +120,6 @@ impl<'a> Titlebar<'a> {
         } else {
             style.tabs_collapsed_icon
         };
-        let files_pane_visible = matches!(
-            active_pane_kind,
-            Some(PaneInputKind::Files | PaneInputKind::Diff)
-        );
-        let files_toggle_label = if files_pane_visible {
-            "Show agent"
-        } else {
-            "Show files"
-        };
-        let files_toggle_icon = if files_pane_visible {
-            style.files_visible_icon
-        } else {
-            style.files_hidden_icon
-        };
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(style.colors.title_bar_background)
                 .with_hovered(style.colors.title_bar_hover_background)
@@ -157,9 +141,9 @@ impl<'a> Titlebar<'a> {
             ActionBarStyle::new(button_style.clone(), Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
         );
         let mut right_actions = vec![ActionBarItem::Action(ActionViewItem::icon(
-            files_toggle_icon,
-            files_toggle_label,
-            files_toggle_state,
+            style.changes_icon,
+            CHANGES_ACTION_LABEL,
+            changes_action_state,
         ))];
         let settings_action_index = settings_action_visible.then(|| {
             let index = right_actions.len();
@@ -185,7 +169,6 @@ impl<'a> Titlebar<'a> {
             settings_action_index,
             tab_container: None,
             tab_container_toggle_label,
-            files_toggle_label,
         }
     }
 
@@ -213,13 +196,13 @@ impl<'a> Titlebar<'a> {
             .with_focus(FocusBehavior::TabStop)
             .with_action(NodeAction::Activate),
             InteractionRegion::new(
-                "WorkspacePaneToggle",
-                FILES_PANE_TOGGLE,
+                "ChangesPaneButton",
+                CHANGES_PANE_BUTTON,
                 self.right_action_bar
                     .interactive_item_bounds(0)
-                    .expect("files pane toggle is enabled"),
+                    .expect("changes action is enabled"),
                 AccessibilityRole::Button,
-                self.files_toggle_label,
+                CHANGES_ACTION_LABEL,
             )
             .with_cursor(CursorFeedback::Pointer)
             .with_focus(FocusBehavior::TabStop)

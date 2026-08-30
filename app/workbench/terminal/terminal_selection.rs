@@ -2,10 +2,10 @@ use zeta_terminal::TerminalMousePosition;
 use zui::input::ElementState;
 use zui::services::{ClipboardError, ClipboardHandle};
 
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::terminal_history::visible_text_lines;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn route_terminal_selection_move(
         &mut self,
         position: Option<TerminalMousePosition>,

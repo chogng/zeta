@@ -50,7 +50,7 @@ pub fn run() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let application_exit =
-        match Application::run(move |event_proxy| ProductApp::new(event_proxy, launch)) {
+        match Application::run(move |event_proxy| WorkbenchApplication::new(event_proxy, launch)) {
             Ok(application_exit) => application_exit,
             Err(error) => {
                 eprintln!("failed to run the desktop event loop: {error}");
@@ -59,7 +59,7 @@ pub fn run() -> ExitCode {
         };
     let (application, runtime_error, _) = application_exit.into_parts();
     if let Some(error) = runtime_error.as_ref() {
-        eprintln!("{PRODUCT_DISPLAY_NAME} runtime failed: {error}");
+        eprintln!("{APP_DISPLAY_NAME} runtime failed: {error}");
     }
     if application.failed || runtime_error.is_some() {
         ExitCode::FAILURE

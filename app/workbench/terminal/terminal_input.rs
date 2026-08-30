@@ -14,10 +14,10 @@ use zui::services::ClipboardHandle;
 use zui::ui::TextInputCommand;
 use zui::ui::TextInputSelectionMode;
 
-use crate::ProductApp;
 use crate::SESSION_SEARCH_INPUT;
+use crate::WorkbenchApplication;
 use crate::keybindings::{
-    ProductKeybindingContext, ProductKeybindingFacts, ProductKeybindingResolution,
+    WorkbenchKeybindingContext, WorkbenchKeybindingFacts, WorkbenchKeybindingResolution,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
@@ -30,7 +30,7 @@ use zeta_settings::KEYBOARD_SHORTCUTS_SEARCH;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
 use zui::ui::{FocusDirection, NavigationAxis};
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn keyboard_input(&mut self, event: KeyEvent) {
         if event.state != ElementState::Pressed {
             return;
@@ -103,8 +103,11 @@ impl ProductApp {
         if self.route_tab_context_menu_keyboard(&event) {
             return;
         }
+        if self.route_scm_keyboard(&event) {
+            return;
+        }
         let direct_terminal = self.is_direct_terminal_input();
-        let context = ProductKeybindingContext::from_facts(ProductKeybindingFacts {
+        let context = WorkbenchKeybindingContext::from_facts(WorkbenchKeybindingFacts {
             direct_terminal,
             terminal_surface_visible: self.main_surface.is_terminal(),
             tab_container_visible: self.workbench.tab_container_state().is_expanded(),
@@ -116,15 +119,15 @@ impl ProductApp {
             },
         });
         match self.keybindings.resolve(&event, self.modifiers, &context) {
-            ProductKeybindingResolution::Command(command) => {
-                self.dispatch_command(command.into());
+            WorkbenchKeybindingResolution::Command(command) => {
+                self.dispatch_command(command);
                 self.sync_input_focus();
                 self.rebuild_presentation();
                 self.request_redraw();
                 return;
             }
-            ProductKeybindingResolution::Consumed => return,
-            ProductKeybindingResolution::NoMatch => {}
+            WorkbenchKeybindingResolution::Consumed => return,
+            WorkbenchKeybindingResolution::NoMatch => {}
         }
         if direct_terminal {
             self.direct_terminal_keyboard_input(&event);

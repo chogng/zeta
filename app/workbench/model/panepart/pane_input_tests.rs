@@ -1,4 +1,4 @@
-//! Product pane input description tests.
+//! Application pane input description tests.
 
 use std::path::PathBuf;
 

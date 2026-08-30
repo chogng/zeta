@@ -1,4 +1,4 @@
-//! Product content descriptions mounted in Workbench panes.
+//! Application content descriptions mounted in Workbench panes.
 
 #[cfg(test)]
 use std::path::Path;
@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
-/// Product content kind that can be mounted into one PaneGroup input.
+/// Application content kind that can be mounted into one PaneGroup input.
 ///
 /// The kind is independent from layout identity. A [`PaneGroupId`](crate::PaneGroupId) identifies
 /// a leaf in a [`PaneGroup`](crate::PaneGroup); this value identifies what the group is showing.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PaneInputKind {
-    /// A terminal surface described by one product-level Session.
+    /// A terminal surface described by one application-level Session.
     Terminal,
     /// An Agent conversation or thread surface.
     Agent,
@@ -25,14 +25,14 @@ pub enum PaneInputKind {
     Settings,
 }
 
-/// Logical content description mounted by a product host into one Pane.
+/// Logical content description mounted by a application host into one Pane.
 ///
 /// This is a description, not a renderer widget or runtime handle. In particular, the Terminal
 /// variant carries only a [`SessionId`]; terminal startup and runtime-handle ownership stay in the
-/// product host.
+/// application host.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PaneInput {
-    /// A terminal surface associated with one product-level Session.
+    /// A terminal surface associated with one application-level Session.
     Terminal(SessionId),
     /// An Agent view associated with one Session and independently ordered Thread.
     Agent {

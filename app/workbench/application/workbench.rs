@@ -1,6 +1,6 @@
 use super::*;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) const fn terminal_view(&self) -> &TerminalPaneViewState {
         self.terminal_pane_views.active_view()
     }
@@ -9,7 +9,7 @@ impl ProductApp {
         self.terminal_pane_views.active_view_mut()
     }
 
-    /// Closes one logical tab and releases every product resource keyed by that tab.
+    /// Closes one logical tab and releases every application resource keyed by that tab.
     pub(super) fn close_workbench_tab(&mut self, tab_key: &TabInputKey) -> bool {
         if self
             .workbench
@@ -131,7 +131,7 @@ impl ProductApp {
         if let Some(window) = self.window.as_ref()
             && let Some(terminal) = self.active_terminal()
         {
-            let _ = window.set_title(terminal.core().title().unwrap_or(PRODUCT_DISPLAY_NAME));
+            let _ = window.set_title(terminal.core().title().unwrap_or(APP_DISPLAY_NAME));
         }
         true
     }
@@ -371,7 +371,7 @@ impl ProductApp {
     }
 }
 
-impl ProductApp {
+impl WorkbenchApplication {
     /// Selects the singleton Settings workbench item and prepares its feature-owned state.
     pub(super) fn activate_settings_tab(&mut self) {
         let remote_selected = self.settings.section() == zeta_settings::SettingsPageSection::Remote;

@@ -7,6 +7,10 @@ use crate::Resizable;
 use crate::SashOrientation;
 use crate::SashPointerPresence;
 use crate::SashState;
+use crate::ScrollAxis;
+use crate::ScrollCommand;
+use crate::ScrollMetrics;
+use crate::ScrollState;
 use crate::TabContainerLayout;
 use crate::TabContainerLayoutSpec;
 use std::time::Instant;
@@ -32,6 +36,7 @@ pub struct TabContainerState {
     visibility: TabContainerVisibility,
     preferred_width: f32,
     resizable: Resizable,
+    scroll: ScrollState,
 }
 
 impl Default for TabContainerState {
@@ -40,26 +45,29 @@ impl Default for TabContainerState {
             visibility: TabContainerVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
+            scroll: ScrollState::default(),
         }
     }
 }
 
 impl TabContainerState {
     #[cfg(test)]
-    pub const fn expanded() -> Self {
+    pub fn expanded() -> Self {
         Self {
             visibility: TabContainerVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
+            scroll: ScrollState::default(),
         }
     }
 
     #[cfg(test)]
-    pub const fn collapsed() -> Self {
+    pub fn collapsed() -> Self {
         Self {
             visibility: TabContainerVisibility::Collapsed,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
+            scroll: ScrollState::default(),
         }
     }
 
@@ -69,6 +77,14 @@ impl TabContainerState {
 
     pub const fn is_resizing(self) -> bool {
         self.resizable.is_dragging()
+    }
+
+    pub const fn scroll_state(self) -> ScrollState {
+        self.scroll
+    }
+
+    pub fn scroll(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
+        self.scroll.apply(command, metrics, ScrollAxis::Vertical)
     }
 
     pub fn sash_pointer_presence(&mut self, presence: SashPointerPresence, now: Instant) -> bool {

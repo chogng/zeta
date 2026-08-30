@@ -2,10 +2,10 @@ use zeta_keybinding::BindingSet;
 use zeta_keybinding::HostPlatform;
 use zeta_keybinding::KeySequence;
 
-/// Supplies product-specific commands, builtin rules, conditions, and context matching.
+/// Supplies host commands, builtin rules, conditions, and context matching.
 ///
-/// Implementations keep product vocabulary in the host while allowing the native keybinding
-/// engine and user-resource lifecycle to remain independent of `ProductApp` and product transports.
+/// Implementations keep command vocabulary in the host while allowing the keybinding engine and
+/// user-resource lifecycle to remain independent of Workbench state and transports.
 pub trait KeybindingCatalog {
     type Command: Copy + Eq;
     type Condition: Clone + Eq;

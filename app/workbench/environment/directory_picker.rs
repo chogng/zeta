@@ -71,7 +71,7 @@ struct OpenDirectoryPicker {
     restore_focus: Option<ElementId>,
 }
 
-/// Product-owned directory browsing state for the directory picker.
+/// Application-owned directory browsing state for the directory picker.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DirectoryPickerState {
     open: Option<OpenDirectoryPicker>,
@@ -384,7 +384,7 @@ impl Component for DirectoryPicker {
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        self.picker.paint(scene);
+        scene.draw_component(&self.picker);
     }
 }
 

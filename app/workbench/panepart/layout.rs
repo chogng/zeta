@@ -15,7 +15,7 @@ use crate::PaneSplitId;
 /// Geometry projection for a host-owned recursive pane layout.
 ///
 /// The host supplies the immutable [`PaneNode`] for one frame and retains all topology, active
-/// state, runtime binding, and split mutations. This wrapper gives product layouts an explicit
+/// state, runtime binding, and split mutations. This wrapper gives application layouts an explicit
 /// group boundary without introducing a second geometry algorithm beside [`GridLayout`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PaneGroupLayout<LeafId, SplitId> {

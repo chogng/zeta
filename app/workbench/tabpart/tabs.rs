@@ -4,7 +4,8 @@ use crate::{
     ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonBackgrounds, ButtonState, ButtonStyle, Color, Component, ComponentContext,
     ComponentElement, ComputedElement, CornerRadii, Edges, Element, FontWeight, InteractionRegion,
-    PaintIcon, PaintRect, Point, Rect, Size, Tab, TabBackgrounds, TabList, TabListStyle,
+    PaintIcon, PaintRect, Point, Rect, ScrollAxis, ScrollMetrics, ScrollState, ScrollView,
+    ScrollViewStyle, ScrollbarStyle, Size, Tab, TabBackgrounds, TabList, TabListStyle,
     TabSelection, TabState, TabStyle, TextBlock, TextStyle, UiScene,
 };
 use zeta_icons::icons;
@@ -65,7 +66,7 @@ struct GroupLayout<'a> {
     tab_list: TabList,
 }
 
-/// Product-owned container that projects browser-style Tab Groups at one UI mount.
+/// Application-owned container that projects browser-style Tab Groups at one UI mount.
 pub struct TabContainer<'a> {
     bounds: Rect,
     viewport: Rect,
@@ -73,6 +74,7 @@ pub struct TabContainer<'a> {
     groups: Vec<WorkbenchTabGroup<'a>>,
     selected_id: ElementId,
     visible_action_bar_tab: Option<ElementId>,
+    scroll: ScrollState,
     placement: TabContainerPlacement,
     style: WorkbenchUiStyle,
     dispatch: &'a UiDispatch,
@@ -116,6 +118,7 @@ impl<'a> TabContainer<'a> {
             groups,
             selected_id,
             visible_action_bar_tab: None,
+            scroll: ScrollState::default(),
             placement,
             style,
             dispatch,
@@ -132,6 +135,17 @@ impl<'a> TabContainer<'a> {
     pub fn with_visible_action_bar(mut self, tab: ElementId) -> Self {
         self.visible_action_bar_tab = Some(tab);
         self
+    }
+
+    /// Supplies retained vertical scroll state for the body-mounted tab list.
+    pub const fn with_scroll_state(mut self, scroll: ScrollState) -> Self {
+        self.scroll = scroll;
+        self
+    }
+
+    /// Returns the body-mounted list viewport and content extents.
+    pub fn scroll_metrics(&self) -> ScrollMetrics {
+        self.scroll_view().metrics()
     }
 
     #[cfg(test)]
@@ -157,16 +171,17 @@ impl<'a> TabContainer<'a> {
 
     fn group_layouts(&self) -> Vec<GroupLayout<'_>> {
         let mut cursor = match self.placement {
-            TabContainerPlacement::Body => self.content_bounds.origin.y,
+            TabContainerPlacement::Body => self.scroll_view().viewport().content_origin().y,
             TabContainerPlacement::Titlebar => self.content_bounds.origin.x,
         };
+        let body_content_x = self.scroll_view().viewport().content_origin().x;
         self.groups
             .iter()
             .map(|group| {
                 let label_bounds = group.label.map(|_| match self.placement {
                     TabContainerPlacement::Body => {
                         let bounds = Rect::from_xywh(
-                            self.content_bounds.origin.x + TAB_CONTENT_PADDING,
+                            body_content_x + TAB_CONTENT_PADDING,
                             cursor,
                             (self.content_bounds.size.width - TAB_CONTENT_PADDING * 2.0).max(0.0),
                             BODY_GROUP_LABEL_HEIGHT,
@@ -191,7 +206,7 @@ impl<'a> TabContainer<'a> {
                         let height = visible_tabs as f32 * BODY_TAB_HEIGHT
                             + visible_tabs.saturating_sub(1) as f32 * BODY_TAB_GAP;
                         let bounds = Rect::from_xywh(
-                            self.content_bounds.origin.x,
+                            body_content_x,
                             cursor,
                             self.content_bounds.size.width,
                             height,
@@ -221,6 +236,42 @@ impl<'a> TabContainer<'a> {
                 }
             })
             .collect()
+    }
+
+    fn body_content_height(&self) -> f32 {
+        self.groups
+            .iter()
+            .map(|group| {
+                let label_height = group.label.map_or(0.0, |_| BODY_GROUP_LABEL_HEIGHT);
+                let visible_tabs = if group.collapsed { 0 } else { group.tabs.len() };
+                let tabs_height = visible_tabs as f32 * BODY_TAB_HEIGHT
+                    + visible_tabs.saturating_sub(1) as f32 * BODY_TAB_GAP;
+                label_height + tabs_height + BODY_GROUP_GAP
+            })
+            .sum()
+    }
+
+    fn scroll_view(&self) -> ScrollView {
+        let content_size = match self.placement {
+            TabContainerPlacement::Body => {
+                Size::new(self.content_bounds.size.width, self.body_content_height())
+            }
+            TabContainerPlacement::Titlebar => self.content_bounds.size,
+        };
+        ScrollView::new(
+            self.content_bounds,
+            content_size,
+            self.scroll,
+            ScrollAxis::Vertical,
+            ScrollViewStyle::new(
+                ScrollbarStyle::new(
+                    self.style.colors.side_bar_background,
+                    self.style.colors.muted_foreground,
+                )
+                .with_thickness(6.0)
+                .with_inset(2.0),
+            ),
+        )
     }
 
     fn tab_list(&self, group: &WorkbenchTabGroup<'_>, bounds: Rect) -> TabList {
@@ -275,7 +326,7 @@ impl<'a> TabContainer<'a> {
         }
     }
 
-    fn compose_groups(&self, context: &mut ComponentContext<'_, '_>) {
+    fn compose_visible_groups(&self, context: &mut ComponentContext<'_, '_>) {
         for layout in self.group_layouts() {
             let list_bounds = layout.tab_list.bounds().intersection(self.content_bounds);
             if list_bounds.is_empty() {
@@ -306,9 +357,21 @@ impl<'a> TabContainer<'a> {
                     }
                 }
             }
-            context.scene_mut().with_clip(self.content_bounds, |scene| {
-                self.paint_group(scene, &layout)
-            });
+            self.paint_group(context.scene_mut(), &layout);
+        }
+    }
+
+    fn compose_groups(&self, context: &mut ComponentContext<'_, '_>) {
+        match self.placement {
+            TabContainerPlacement::Body => {
+                self.scroll_view()
+                    .draw_components(context, |context, _viewport| {
+                        self.compose_visible_groups(context)
+                    });
+            }
+            TabContainerPlacement::Titlebar => context.with_clip(self.content_bounds, |context| {
+                self.compose_visible_groups(context)
+            }),
         }
         self.compose_dirs_preview(context);
     }
@@ -695,11 +758,22 @@ impl Component for TabContainer<'_> {
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        scene.with_clip(self.content_bounds, |scene| {
-            for layout in self.group_layouts() {
-                self.paint_group(scene, &layout);
+        match self.placement {
+            TabContainerPlacement::Body => {
+                self.scroll_view().draw(scene, |scene, _viewport| {
+                    for layout in self.group_layouts() {
+                        self.paint_group(scene, &layout);
+                    }
+                });
             }
-        });
+            TabContainerPlacement::Titlebar => {
+                scene.with_clip(self.content_bounds, |scene| {
+                    for layout in self.group_layouts() {
+                        self.paint_group(scene, &layout);
+                    }
+                });
+            }
+        }
     }
 }
 

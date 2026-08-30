@@ -1,6 +1,6 @@
 use super::*;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn reload_theme(&mut self, system_scheme: ColorScheme) {
         let Ok(loader) = ThemeLoader::embedded() else {
             return;
@@ -65,7 +65,7 @@ impl ProductApp {
         self.open_main_input(PaneInput::diff(self.env.working_directory().to_path_buf()));
     }
 
-    /// Mounts one product capability as the active input of the current PaneGroup.
+    /// Mounts one application capability as the active input of the current PaneGroup.
     fn open_main_input(&mut self, input: PaneInput) {
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
@@ -196,11 +196,11 @@ impl ProductApp {
     }
 
     pub(super) fn fail(&mut self, message: impl std::fmt::Display) {
-        eprintln!("{PRODUCT_DISPLAY_NAME} failed: {message}");
+        eprintln!("{APP_DISPLAY_NAME} failed: {message}");
         self.failed = true;
     }
 
-    pub(super) fn redraw_frame(&mut self, context: &mut WindowContext<'_, ProductEvent>) {
+    pub(super) fn redraw_frame(&mut self, context: &mut WindowContext<'_, WorkbenchEvent>) {
         let now = Instant::now();
         let retained_report = self.retained_runtime.advance(now);
         let _ = retained_report
@@ -219,7 +219,7 @@ impl ProductApp {
         };
         if let Err(error) = context.present_frame(presentation.frame(), &self.ui_dispatch) {
             self.fail(&error);
-            context.exit_with_error(ApplicationError::product("app frame rendering", error));
+            context.exit_with_error(ApplicationError::host("app frame rendering", error));
         }
     }
 

@@ -2,8 +2,6 @@ use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonState;
 use zeta_ui_components::ButtonStyle;
 use zeta_ui_components::ContextMenu;
-use zeta_ui_components::ContextMenuItem;
-use zeta_ui_components::ContextMenuSelection;
 use zeta_ui_components::ContextMenuStyle as SharedContextMenuStyle;
 use zeta_ui_components::ContextViewAnchorAxis;
 use zeta_ui_components::ContextViewAnchorPosition;
@@ -13,6 +11,10 @@ use zeta_ui_components::InputBoxState;
 use zeta_ui_components::InputBoxStateColors;
 use zeta_ui_components::InputBoxStyle;
 use zeta_ui_components::InteractionRegion;
+use zeta_ui_components::MenuIds;
+use zeta_ui_components::MenuItem;
+use zeta_ui_components::MenuSelection;
+use zeta_ui_components::MenuStyle;
 use zeta_ui_theme::UiTheme;
 use zui::ui::AccessibilityRole;
 use zui::ui::CaretVisibility;
@@ -28,16 +30,12 @@ use zui::ui::Element;
 use zui::ui::ElementId;
 use zui::ui::FocusBehavior;
 use zui::ui::InteractionFrame;
-use zui::ui::NavigationAxis;
-use zui::ui::NavigationGroupId;
-use zui::ui::NodeAction;
 use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::Size;
 use zui::ui::TextInputLayoutEngine;
 use zui::ui::TextStyle;
 use zui::ui::UiDispatch;
-use zui::ui::UiNode;
 
 use super::TAB_CONTEXT_MENU;
 use super::TAB_CONTEXT_MENU_GROUPS;
@@ -91,10 +89,7 @@ pub struct TabContextMenu {
     root: ContextMenu,
     groups: Option<ContextMenu>,
     rename: Option<InputBox>,
-    root_regions: Vec<InteractionRegion>,
-    group_regions: Vec<InteractionRegion>,
     rename_value: Option<String>,
-    window: ElementId,
     bounds: Rect,
 }
 
@@ -116,27 +111,37 @@ impl TabContextMenu {
             .into_iter()
             .map(|action| {
                 let id = action.element_id();
-                ContextMenuItem::new(action.label(open.pinned), button_state(dispatch, id, true))
+                MenuItem::new(
+                    id,
+                    action.label(open.pinned),
+                    button_state(dispatch, id, true),
+                )
             })
             .collect();
-        let root_style = SharedContextMenuStyle::new(
+        let menu_style = MenuStyle::new(
             style.surface,
             button_style.clone(),
             Size::new(MENU_WIDTH, MENU_ITEM_HEIGHT),
-        )
-        .with_placement(
+        );
+        let menu_style = if open.view == TabContextMenuView::Rename {
+            menu_style.with_header_height(RENAME_HEIGHT)
+        } else {
+            menu_style
+        };
+        let root_style = SharedContextMenuStyle::new(menu_style).with_placement(
             ContextViewPlacement::new()
                 .with_gap(MENU_GAP)
                 .with_viewport_margin(MENU_MARGIN),
         );
-        let root_style = if open.view == TabContextMenuView::Rename {
-            root_style.with_header_height(RENAME_HEIGHT)
-        } else {
-            root_style
-        };
-        let root = ContextMenu::new(viewport, open.anchor, root_items, root_style)
-            .with_selection(ContextMenuSelection::None);
-        let root_regions = action_regions(&root, open.pinned);
+        let root = ContextMenu::new(
+            viewport,
+            open.anchor,
+            "Tab actions",
+            root_items,
+            MenuIds::new(window, TAB_CONTEXT_MENU),
+            root_style,
+        )
+        .with_selection(MenuSelection::None);
 
         let groups = (open.view == TabContextMenuView::Groups).then(|| {
             let source = tab_part.input_group(&open.target_tab);
@@ -160,20 +165,22 @@ impl TabContextMenu {
                 .collect::<Vec<_>>();
             let items = entries
                 .iter()
-                .map(|(id, label)| ContextMenuItem::new(label, button_state(dispatch, *id, true)))
+                .map(|(id, label)| MenuItem::new(*id, label, button_state(dispatch, *id, true)))
                 .collect();
             let anchor = root.item_bounds(2).unwrap_or_else(|| {
                 Rect::from_xywh(root.bounds().right(), root.bounds().origin.y, 1.0, 1.0)
             });
-            let menu = ContextMenu::new(
+            ContextMenu::new(
                 viewport,
                 anchor,
+                "Tab groups",
                 items,
-                SharedContextMenuStyle::new(
+                MenuIds::new(TAB_CONTEXT_MENU, TAB_CONTEXT_MENU_GROUPS),
+                SharedContextMenuStyle::new(MenuStyle::new(
                     style.surface,
                     button_style.clone(),
                     Size::new(MENU_WIDTH, MENU_ITEM_HEIGHT),
-                )
+                ))
                 .with_placement(
                     ContextViewPlacement::new()
                         .with_axis(ContextViewAnchorAxis::Horizontal)
@@ -182,16 +189,8 @@ impl TabContextMenu {
                         .with_viewport_margin(MENU_MARGIN),
                 ),
             )
-            .with_selection(ContextMenuSelection::None);
-            (menu, entries)
+            .with_selection(MenuSelection::None)
         });
-        let (groups, group_regions) = match groups {
-            Some((menu, entries)) => {
-                let regions = group_action_regions(&menu, &entries);
-                (Some(menu), regions)
-            }
-            None => (None, Vec::new()),
-        };
 
         let rename = if open.view == TabContextMenuView::Rename {
             let header = root.header_bounds().expect("rename view reserves a header");
@@ -223,10 +222,7 @@ impl TabContextMenu {
             root,
             groups,
             rename,
-            root_regions,
-            group_regions,
             rename_value,
-            window,
             bounds,
         })
     }
@@ -239,51 +235,29 @@ impl TabContextMenu {
 
 impl Component for TabContextMenu {
     fn element(&self) -> ComponentElement {
-        Element::leaf("TabContextMenu")
-            .in_bounds(self.bounds)
-            .with_identity(TAB_CONTEXT_MENU)
-    }
-
-    fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
-        Some(
-            UiNode::new(
-                TAB_CONTEXT_MENU,
-                element.bounds(),
-                AccessibilityRole::Menu,
-                "Tab actions",
-            )
-            .with_parent(self.window),
-        )
+        Element::leaf("TabContextMenu").in_bounds(self.bounds)
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        context.set_modal_root(TAB_CONTEXT_MENU);
-        for region in &self.root_regions {
-            context.draw_component(region);
-        }
-        for region in &self.group_regions {
-            context.draw_component(region);
-        }
-        if let Some(rename) = &self.rename {
-            context.draw_component(
-                &InteractionRegion::new(
-                    "TabRenameInput",
-                    TAB_RENAME_INPUT,
-                    rename.bounds(),
-                    AccessibilityRole::TextInput,
-                    "Rename tab",
-                )
-                .with_cursor(CursorFeedback::Text)
-                .with_focus(FocusBehavior::TabStop)
-                .with_value(self.rename_value.as_deref().unwrap_or_default()),
-            );
-        }
         self.root
             .draw_components_with_header(context, |context, _| {
                 if let Some(rename) = &self.rename {
+                    context.draw_component(
+                        &InteractionRegion::new(
+                            "TabRenameInput",
+                            TAB_RENAME_INPUT,
+                            rename.bounds(),
+                            AccessibilityRole::TextInput,
+                            "Rename tab",
+                        )
+                        .with_cursor(CursorFeedback::Text)
+                        .with_focus(FocusBehavior::TabStop)
+                        .with_value(self.rename_value.as_deref().unwrap_or_default()),
+                    );
                     context.draw_component(rename);
                 }
             });
+        context.set_modal_root(self.root.menu_root());
         if let Some(groups) = &self.groups {
             context.draw_component(groups);
         }
@@ -296,60 +270,6 @@ pub fn update_tab_context_menu_pointer(
     frame: &InteractionFrame,
 ) -> zui::ui::DispatchOutcome {
     dispatch.pointer_moved(point, frame)
-}
-
-fn action_regions(menu: &ContextMenu, pinned: bool) -> Vec<InteractionRegion> {
-    TabContextMenuAction::ALL
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, action)| {
-            let bounds = menu.interactive_item_bounds(index)?;
-            Some(menu_region(
-                action.element_id(),
-                bounds,
-                action.label(pinned),
-                TAB_CONTEXT_MENU,
-            ))
-        })
-        .collect()
-}
-
-fn group_action_regions(
-    menu: &ContextMenu,
-    entries: &[(ElementId, String)],
-) -> Vec<InteractionRegion> {
-    entries
-        .iter()
-        .enumerate()
-        .filter_map(|(index, (id, label))| {
-            Some(menu_region(
-                *id,
-                menu.interactive_item_bounds(index)?,
-                label,
-                TAB_CONTEXT_MENU_GROUPS,
-            ))
-        })
-        .collect()
-}
-
-fn menu_region(
-    id: ElementId,
-    bounds: Rect,
-    label: impl Into<String>,
-    group: ElementId,
-) -> InteractionRegion {
-    InteractionRegion::new(
-        "TabContextMenuItem",
-        id,
-        bounds,
-        AccessibilityRole::MenuItem,
-        label,
-    )
-    .with_parent(TAB_CONTEXT_MENU)
-    .with_cursor(CursorFeedback::Pointer)
-    .with_focus(FocusBehavior::TabStop)
-    .with_action(NodeAction::Activate)
-    .with_navigation(NavigationGroupId::new(group), NavigationAxis::Vertical)
 }
 
 fn button_state(dispatch: &UiDispatch, id: ElementId, enabled: bool) -> ButtonState {

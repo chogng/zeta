@@ -2,7 +2,7 @@ use super::{
     KeybindingsResource, KeybindingsResourcePoll, binding_diagnostics, compile_user_bindings,
 };
 use crate::keybindings::{
-    ProductKeybindingContext, ProductKeybindingResolution, ProductKeybindings,
+    WorkbenchKeybindingContext, WorkbenchKeybindingResolution, WorkbenchKeybindings,
 };
 use std::fs;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -88,16 +88,16 @@ fn user_blocker_consumes_an_otherwise_unmatched_key() {
         HostPlatform::Linux,
     )
     .expect("valid blocker");
-    let mut keybindings = ProductKeybindings::for_platform(HostPlatform::Linux);
+    let mut keybindings = WorkbenchKeybindings::for_platform(HostPlatform::Linux);
     keybindings.replace_user_bindings(rules);
 
     assert_eq!(
         keybindings.resolve_stroke_at(
             &stroke("x"),
-            &ProductKeybindingContext::direct_terminal(),
+            &WorkbenchKeybindingContext::direct_terminal(),
             Instant::now(),
         ),
-        ProductKeybindingResolution::Consumed
+        WorkbenchKeybindingResolution::Consumed
     );
 }
 
@@ -120,22 +120,22 @@ fn invalid_hot_update_preserves_the_previous_complete_rule_set() {
     .expect("write valid resource");
     let now = Instant::now();
     let mut resource = KeybindingsResource::new(path.clone(), HostPlatform::Linux, now);
-    let mut keybindings = ProductKeybindings::for_platform(HostPlatform::Linux);
+    let mut keybindings = WorkbenchKeybindings::for_platform(HostPlatform::Linux);
     assert_eq!(
         resource.poll(now, &mut keybindings),
         KeybindingsResourcePoll::Updated
     );
     assert_eq!(
-        keybindings.resolve_stroke_at(&stroke("k"), &ProductKeybindingContext::text_input(), now),
-        ProductKeybindingResolution::Consumed
+        keybindings.resolve_stroke_at(&stroke("k"), &WorkbenchKeybindingContext::text_input(), now),
+        WorkbenchKeybindingResolution::Consumed
     );
     assert_eq!(
         keybindings.resolve_stroke_at(
             &stroke("c"),
-            &ProductKeybindingContext::text_input(),
+            &WorkbenchKeybindingContext::text_input(),
             now + Duration::from_millis(10)
         ),
-        ProductKeybindingResolution::Command(AppCommandId::ToggleTabContainer)
+        WorkbenchKeybindingResolution::Command(AppCommandId::ToggleTabContainer)
     );
 
     fs::write(&path, b"{").expect("write invalid resource");
@@ -147,10 +147,10 @@ fn invalid_hot_update_preserves_the_previous_complete_rule_set() {
     assert_eq!(
         keybindings.resolve_stroke_at(
             &stroke("k"),
-            &ProductKeybindingContext::text_input(),
+            &WorkbenchKeybindingContext::text_input(),
             now + Duration::from_secs(2)
         ),
-        ProductKeybindingResolution::Consumed
+        WorkbenchKeybindingResolution::Consumed
     );
     let _ = fs::remove_file(path);
     let _ = fs::remove_dir(root);

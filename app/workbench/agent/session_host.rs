@@ -23,8 +23,8 @@ use zeta_text_file::TextFileSaveRequest;
 use zeta_text_file::TextFileSnapshot;
 
 use crate::PaneInput;
-use crate::ProductApp;
 use crate::TabInputKey;
+use crate::WorkbenchApplication;
 use crate::app_server::AppServerRequestHandle;
 use crate::app_server::ClientError;
 use crate::app_server::ServerNotification;
@@ -35,7 +35,7 @@ pub(crate) use zeta_session::EnvCwdSetResult;
 pub(crate) use zeta_session::SessionRuntime;
 pub(crate) use zeta_session::SessionRuntimeEvent;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(crate) fn add_session(&mut self) {
         let Some(session) = self.session_runtime.as_ref() else {
             eprintln!("could not create session: App Server session is unavailable");
@@ -200,7 +200,7 @@ fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
     }
 }
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(crate) fn refresh_dir_capabilities(&mut self) {
         let pane_kind = self.active_main_pane_kind();
         self.files
@@ -221,12 +221,11 @@ impl ProductApp {
     }
 
     fn sync_repository_state(&mut self) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
-        self.scm.replace_diffs(
-            self.env
-                .diffs()
-                .iter()
-                .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
-        )
+        self.scm
+            .set_branch(Some(self.env.git_branch_label()).filter(|branch| *branch != "No Git"));
+        self.scm.replace_diffs(self.env.diffs().iter().map(|diff| {
+            ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
+        }))
     }
 
     fn remove_scm_animation_tracks(

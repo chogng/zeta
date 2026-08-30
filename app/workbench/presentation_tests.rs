@@ -45,7 +45,7 @@ use zui::ui::{
 };
 use zui::window::WindowControlInsets;
 
-const PRODUCT_DISPLAY_NAME: &str = "app";
+const APP_DISPLAY_NAME: &str = "app";
 
 struct TestKeybindings;
 
@@ -312,7 +312,7 @@ fn presentation_with_active_tab_input(
     let initial = build_workbench_presentation(
         viewport(),
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal,
             terminal_panes: &[],
@@ -370,7 +370,7 @@ fn presentation_with_active_tab_input(
     build_workbench_presentation(
         viewport(),
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal,
             terminal_panes: &[],
@@ -575,7 +575,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let presentation = build_workbench_presentation(
         viewport(),
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -866,7 +866,7 @@ fn session_search_filters_tabs_by_session_name() {
     let presentation = build_workbench_presentation(
         viewport(),
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -1031,6 +1031,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
         TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
     let files = FilesState::default();
     let mut scm = ScmState::default();
+    scm.set_branch(Some("main"));
     scm.replace_diffs(
         environment_context
             .diffs()
@@ -1064,7 +1065,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     let presentation = build_workbench_presentation(
         viewport(),
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -1134,6 +1135,11 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     assert!(
         accessibility_nodes
             .iter()
+            .any(|node| node.id == CHANGES_TOOLBAR)
+    );
+    assert!(
+        accessibility_nodes
+            .iter()
             .all(|node| !matches!(node.id, FILES_PANE | FILES_REFRESH | FILES_SEARCH))
     );
     let visible_text = presentation
@@ -1145,7 +1151,9 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
         .collect::<Vec<_>>();
     assert!(visible_text.contains(&"fixture-0.txt"));
     assert!(visible_text.contains(&"fixture-1.txt"));
-    assert!(!visible_text.contains(&"No changed files"));
+    assert!(visible_text.contains(&"Current turn"));
+    assert!(visible_text.contains(&"Commit"));
+    assert!(!visible_text.contains(&"No changes in this scope"));
     assert!(!visible_text.contains(&"HEAD"));
     assert!(!visible_text.contains(&"Working Tree"));
 }
@@ -1206,7 +1214,7 @@ fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
     let presentation = build_workbench_presentation(
         viewport(),
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -1448,7 +1456,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let closed_model = WorkbenchPresentationModel {
-        product_name: PRODUCT_DISPLAY_NAME,
+        app_name: APP_DISPLAY_NAME,
         palette: zeta_ui_theme::DEFAULT_UI_THEME,
         terminal: None,
         terminal_panes: &[],
@@ -1513,7 +1521,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         &mut presentation,
         viewport(),
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             tab_context_menu: menu,
             ..closed_model.clone()
         },
@@ -1630,7 +1638,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             height: 100.0,
         },
         WorkbenchPresentationModel {
-            product_name: PRODUCT_DISPLAY_NAME,
+            app_name: APP_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -1831,6 +1839,6 @@ fn background_terminal_title_does_not_replace_the_agent_session_title() {
         .iter()
         .map(|block| block.text())
         .collect::<Vec<_>>();
-    assert!(text.contains(&PRODUCT_DISPLAY_NAME));
+    assert!(text.contains(&APP_DISPLAY_NAME));
     assert!(!text.contains(&"project shell"));
 }

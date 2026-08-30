@@ -1,6 +1,6 @@
-//! The stable, product-level command vocabulary.
+//! The stable app command vocabulary.
 
-/// Stable app product command identity.
+/// Stable app command identity.
 ///
 /// The enum is the type-safe internal representation. [`AppCommandId::id`]
 /// is the persisted and externally visible string used by keybinding
@@ -59,7 +59,7 @@ impl AppCommandId {
         Self::ClosePane,
     ];
 
-    /// Every command known to the product command catalog.
+    /// Every command known to the app command catalog.
     pub const ALL: [Self; 27] = [
         Self::Copy,
         Self::Paste,

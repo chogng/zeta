@@ -12,7 +12,7 @@ const MINIMUM_VIEWPORT_HEIGHT: f32 = 180.0;
 /// Structural leaves in one Workbench frame.
 ///
 /// The enum describes layout ownership only. Session, Settings, Terminal, and Inspector content
-/// remain owned by their product hosts and are mounted into these leaves by the caller.
+/// remain owned by their application hosts and are mounted into these leaves by the caller.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg(test)]
 pub enum WorkbenchPart {
@@ -29,7 +29,7 @@ pub enum WorkbenchPart {
 /// Host-neutral sizing policy for the Workbench part tree.
 ///
 /// This value contains layout constraints only. Visibility and preferred sizes are projected by the
-/// product host, while the resulting geometry is resolved here so every content part uses the same
+/// application host, while the resulting geometry is resolved here so every content part uses the same
 /// topology.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorkbenchLayoutSpec {

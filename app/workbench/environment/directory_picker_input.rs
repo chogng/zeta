@@ -7,7 +7,7 @@ use zui::ui::{
     NavigationAxis, UiDispatch,
 };
 
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::directory_picker::{
     DIRECTORY_SEARCH_INPUT, DirectoryPickerActivation, DirectoryPickerState, PICKER_ITEM_HEIGHT,
     directory_item_id,
@@ -19,7 +19,7 @@ use zeta_session::interaction::CONTEXT_WORKING_DIRECTORY;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn toggle_directory_picker(&mut self) {
         if self.directory_picker.is_open() {
             self.dismiss_directory_picker();

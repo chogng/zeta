@@ -42,7 +42,7 @@ impl AppInvocation {
             .map_err(AppInvocationParseError::Launch)
     }
 
-    /// Executes a management command or returns the launch selected for the desktop product.
+    /// Executes a management command or returns the launch selected for the desktop application.
     pub(crate) fn resolve(self) -> Result<Option<AppLaunch>, String> {
         let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
         let stdout = io::stdout();

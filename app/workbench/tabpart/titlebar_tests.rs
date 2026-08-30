@@ -1,12 +1,11 @@
 use super::Titlebar;
 use super::TitlebarInsets;
 use crate::Color;
-use crate::PaneInputKind;
 use crate::Point;
 use crate::Rect;
 use crate::TabPart;
 use crate::tabpart::identity::{
-    FILES_PANE_TOGGLE, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON,
+    CHANGES_PANE_BUTTON, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON,
     TITLEBAR_SETTINGS_CLOSE, TITLEBAR_TAB_CONTAINER,
 };
 use crate::tabpart::test_style;
@@ -29,7 +28,6 @@ fn collapsed_tab_part_hides_tabs_and_keeps_titlebar_actions() {
         &part,
         part.active_tab_key(),
         false,
-        None,
         TitlebarInsets::new(70.0, 110.0),
         &dispatch,
     );
@@ -40,10 +38,7 @@ fn collapsed_tab_part_hides_tabs_and_keeps_titlebar_actions() {
         frame.scene().icons()[0].icon(),
         icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
     );
-    assert_eq!(
-        frame.scene().icons()[1].icon(),
-        icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
-    );
+    assert_eq!(frame.scene().icons()[1].icon(), icons::DIFF);
     assert_eq!(frame.scene().icons()[2].icon(), icons::GEAR);
     assert!(frame.interaction().node(TITLEBAR_SETTINGS_CLOSE).is_none());
     assert!(
@@ -89,28 +84,28 @@ fn collapsed_tab_part_hides_tabs_and_keeps_titlebar_actions() {
         Some(UiIntent::Activate(TITLEBAR_SETTINGS_BUTTON))
     );
 
-    let dir_bounds = frame
+    let changes_bounds = frame
         .interaction()
-        .node(FILES_PANE_TOGGLE)
-        .expect("dir action")
+        .node(CHANGES_PANE_BUTTON)
+        .expect("changes action")
         .bounds();
-    let dir_point = Point::new(
-        dir_bounds.origin.x + dir_bounds.size.width * 0.5,
-        dir_bounds.origin.y + dir_bounds.size.height * 0.5,
+    let changes_point = Point::new(
+        changes_bounds.origin.x + changes_bounds.size.width * 0.5,
+        changes_bounds.origin.y + changes_bounds.size.height * 0.5,
     );
-    dispatch.pointer_moved(dir_point, frame.interaction());
+    dispatch.pointer_moved(changes_point, frame.interaction());
     dispatch.press_primary(frame.interaction());
-    assert!(dispatch.is_pressed(FILES_PANE_TOGGLE));
+    assert!(dispatch.is_pressed(CHANGES_PANE_BUTTON));
     assert_eq!(
         dispatch
-            .release_primary(dir_point, frame.interaction())
+            .release_primary(changes_point, frame.interaction())
             .intent,
-        Some(UiIntent::Activate(FILES_PANE_TOGGLE))
+        Some(UiIntent::Activate(CHANGES_PANE_BUTTON))
     );
 }
 
 #[test]
-fn expanded_tab_part_uses_the_active_icon_without_titlebar_tabs() {
+fn expanded_tab_part_uses_the_changes_icon_without_titlebar_tabs() {
     let part = TabPart::default();
     let dispatch = UiDispatch::default();
     let titlebar = Titlebar::new(
@@ -119,7 +114,6 @@ fn expanded_tab_part_uses_the_active_icon_without_titlebar_tabs() {
         &part,
         part.active_tab_key(),
         true,
-        Some(PaneInputKind::Files),
         TitlebarInsets::NONE,
         &dispatch,
     );
@@ -129,7 +123,7 @@ fn expanded_tab_part_uses_the_active_icon_without_titlebar_tabs() {
 
     assert_eq!(frame.scene().icons().len(), 3);
     assert_eq!(frame.scene().icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT);
-    assert_eq!(frame.scene().icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT);
+    assert_eq!(frame.scene().icons()[1].icon(), icons::DIFF);
     assert_eq!(frame.scene().icons()[2].icon(), icons::GEAR);
     assert!(
         frame

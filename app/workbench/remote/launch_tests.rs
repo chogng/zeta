@@ -76,7 +76,7 @@ fn remote_arguments_build_one_credential_free_profile() {
 }
 
 #[test]
-fn remote_arguments_default_to_the_product_neutral_server_host() {
+fn remote_arguments_default_to_the_application_neutral_server_host() {
     let launch = AppLaunch::parse([
         "--remote".to_owned(),
         "build.example".to_owned(),

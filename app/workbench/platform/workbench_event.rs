@@ -1,4 +1,4 @@
-//! Product events delivered through the desktop application loop.
+//! Application events delivered through the desktop application loop.
 
 use crate::remote_connection_process::RemoteWindowLaunchEvent;
 use crate::remote_tunnel_process::RemoteTunnelEvent;
@@ -7,34 +7,35 @@ use crate::terminal_session::{TerminalSessionEventEnvelope, TerminalSessionReady
 use zeta_editor_host::FileEditorLanguageEvent;
 use zeta_terminal_runtime::TerminalRuntimeEvent;
 
-pub(crate) enum ProductEvent {
+pub(crate) enum WorkbenchEvent {
     Session(SessionRuntimeEvent),
     Terminal(TerminalSessionEventEnvelope),
     TerminalReady(TerminalSessionReady),
     EditorLanguage(FileEditorLanguageEvent),
     RemoteWindowLaunch(RemoteWindowLaunchEvent),
     RemoteTunnel(RemoteTunnelEvent),
+    ScmOperationFinished(Result<(), String>),
 }
 
-impl From<SessionRuntimeEvent> for ProductEvent {
+impl From<SessionRuntimeEvent> for WorkbenchEvent {
     fn from(event: SessionRuntimeEvent) -> Self {
         Self::Session(event)
     }
 }
 
-impl From<TerminalSessionEventEnvelope> for ProductEvent {
+impl From<TerminalSessionEventEnvelope> for WorkbenchEvent {
     fn from(event: TerminalSessionEventEnvelope) -> Self {
         Self::Terminal(event)
     }
 }
 
-impl From<TerminalSessionReady> for ProductEvent {
+impl From<TerminalSessionReady> for WorkbenchEvent {
     fn from(event: TerminalSessionReady) -> Self {
         Self::TerminalReady(event)
     }
 }
 
-impl From<TerminalRuntimeEvent> for ProductEvent {
+impl From<TerminalRuntimeEvent> for WorkbenchEvent {
     fn from(event: TerminalRuntimeEvent) -> Self {
         match event {
             TerminalRuntimeEvent::Session(event) => Self::Terminal(event),

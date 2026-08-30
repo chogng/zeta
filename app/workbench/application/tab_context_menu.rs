@@ -1,7 +1,7 @@
 //! Desktop input adapter for the Workbench-owned tab context menu.
 
-use crate::ProductApp;
 use crate::TabContextMenuAction;
+use crate::WorkbenchApplication;
 use crate::terminal_input::text_input_command;
 use zui::input::ElementState;
 use zui::input::Key;
@@ -17,7 +17,7 @@ use zui::ui::NavigationAxis;
 use zui::ui::Point;
 use zui::ui::UiDispatch;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(crate) fn route_tab_context_menu_pointer_move(&mut self, point: Point) -> bool {
         if !self.workbench.tab_context_menu().is_open() {
             return false;

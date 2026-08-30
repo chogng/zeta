@@ -1,4 +1,4 @@
-//! Desktop product composition and lifecycle.
+//! Workbench application composition and lifecycle.
 //!
 //! This module coordinates zui lifecycle callbacks, feature hosts, Workbench state, and the final
 //! frame. Domain modules remain responsible for their own state and adapters.
@@ -16,10 +16,10 @@ use crate::environment_context::EnvironmentContext;
 use crate::git_branch_picker::GitBranchPickerState;
 use crate::keybindings::{KeybindingsResource, KeybindingsResourcePoll};
 use crate::launch::AppLaunch;
-use crate::product_event::ProductEvent;
 use crate::remote_connection_cli::AppInvocation;
-use crate::remote_tunnel_process::ProductRemoteTunnelHost;
+use crate::remote_tunnel_process::RemoteTunnelHost;
 use crate::session_host::SessionRuntime;
+use crate::workbench_event::WorkbenchEvent;
 use crate::{
     LogicalViewport, PaneGroupId as PaneId, PaneInput, PaneInputKind, PaneKey, PaneSplitDirection,
     PaneSplitId, TabInputKey, WorkbenchHost,
@@ -94,21 +94,21 @@ use zui::window::WindowOptions;
 
 #[path = "app_server.rs"]
 pub(crate) mod app_server;
-#[path = "product/command_dispatch.rs"]
-pub(crate) mod command_dispatch;
-#[path = "product/events.rs"]
+#[path = "command.rs"]
+pub(crate) mod command;
+#[path = "application/events.rs"]
 mod events;
 #[path = "editor/file_editor_input.rs"]
 pub(crate) mod file_editor_input;
 pub(crate) use zeta_editor_host as file_editor_pane;
-#[path = "product/frame.rs"]
+#[path = "application/frame.rs"]
 mod frame;
 pub(crate) use zeta_scm as git_branch_picker;
 #[path = "environment/git_branch_picker_input.rs"]
 pub(crate) mod git_branch_picker_input;
 #[path = "platform/input_method.rs"]
 pub(crate) mod input_method;
-#[path = "product/interaction.rs"]
+#[path = "application/interaction.rs"]
 mod interaction;
 #[path = "platform/keybindings.rs"]
 pub(crate) mod keybindings;
@@ -130,14 +130,12 @@ pub(crate) mod launch_test_support;
 #[cfg(test)]
 #[path = "remote/launch_tests.rs"]
 pub(crate) mod launch_tests;
-#[path = "product/lifecycle.rs"]
+#[path = "application/lifecycle.rs"]
 mod lifecycle;
-#[path = "product/mouse_wheel.rs"]
+#[path = "application/mouse_wheel.rs"]
 pub(crate) mod mouse_wheel;
-#[path = "product/presentation.rs"]
+#[path = "application/presentation.rs"]
 mod presentation;
-#[path = "platform/product_event.rs"]
-pub(crate) mod product_event;
 #[path = "remote/remote_connection_cli.rs"]
 pub(crate) mod remote_connection_cli;
 #[cfg(test)]
@@ -160,16 +158,20 @@ pub(crate) mod remote_connection_tunnel_tests;
 pub(crate) mod remote_tunnel_manager_input;
 #[path = "remote/remote_tunnel_process.rs"]
 pub(crate) mod remote_tunnel_process;
-#[path = "product/run.rs"]
+#[path = "application/run.rs"]
 mod run;
-#[path = "product/runtime.rs"]
+#[path = "application/runtime.rs"]
 mod runtime;
+#[path = "application/scm_input.rs"]
+mod scm_input;
 #[path = "agent/session_host.rs"]
 pub(crate) mod session_host;
-#[path = "product/state.rs"]
+#[path = "application/state.rs"]
 mod state;
-#[path = "product/tab_context_menu.rs"]
+#[path = "application/tab_context_menu.rs"]
 pub(crate) mod tab_context_menu;
+#[path = "platform/workbench_event.rs"]
+pub(crate) mod workbench_event;
 pub(crate) use zeta_terminal_runtime as terminal_blocks;
 pub(crate) use zeta_terminal_runtime as terminal_history;
 #[path = "terminal/terminal_input.rs"]
@@ -192,9 +194,9 @@ mod workbench;
 mod workbench_resize;
 mod workbench_tabs_resize;
 pub use run::run;
-pub(crate) use state::ProductApp;
+pub(crate) use state::WorkbenchApplication;
 
-pub(crate) const PRODUCT_DISPLAY_NAME: &str = "app";
+pub(crate) const APP_DISPLAY_NAME: &str = "app";
 const DEFAULT_THEME_ENTRY: &str = "app";
 const INITIAL_WIDTH: f64 = 1_280.0;
 const INITIAL_HEIGHT: f64 = 800.0;

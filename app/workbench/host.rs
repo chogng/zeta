@@ -20,11 +20,11 @@ use crate::TabInputKey;
 use crate::Workbench;
 use crate::WorkbenchLayoutState;
 use std::time::Instant;
-use zeta_commands::AppCommandId;
-use zeta_commands::CommandRequest;
 use zeta_ui_components::SashOrientation;
 use zeta_ui_components::SashPointerPresence;
 use zeta_ui_components::SashState;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollMetrics;
 use zui::ui::ElementId;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;
@@ -240,7 +240,7 @@ pub struct WorkbenchHost<B> {
     tab_context_menu: TabContextMenuState,
 }
 
-/// Product-facing result of activating a Workbench-owned tab menu item.
+/// Application-facing result of activating a Workbench-owned tab menu item.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TabContextMenuOutcome {
     Ignored,
@@ -264,45 +264,6 @@ impl<B> WorkbenchHost<B> {
             layout: WorkbenchLayoutState::default(),
             pane_resize: None,
             tab_context_menu: TabContextMenuState::default(),
-        }
-    }
-
-    /// Routes one product command through the Workbench command boundary.
-    ///
-    /// Commands whose state is owned by Workbench execute here. Commands owned by a mounted
-    /// capability are returned to the application leaf for mechanical binding dispatch.
-    pub fn dispatch_command(&mut self, request: CommandRequest) -> crate::WorkbenchCommandDispatch {
-        match request.command_id() {
-            AppCommandId::ToggleTabContainer => {
-                self.toggle_tab_container();
-                crate::WorkbenchCommandDispatch::Handled
-            }
-            AppCommandId::Copy
-            | AppCommandId::Paste
-            | AppCommandId::Save
-            | AppCommandId::ToggleTerminalSurface
-            | AppCommandId::OpenKeyboardShortcuts
-            | AppCommandId::ManageRemoteTunnels
-            | AppCommandId::ToggleFilesPane
-            | AppCommandId::AddSession
-            | AppCommandId::ShowAgentChanges
-            | AppCommandId::ShowAgentFiles
-            | AppCommandId::RefreshAgentFiles
-            | AppCommandId::ToggleAgentFileSearch
-            | AppCommandId::PinSession
-            | AppCommandId::CloseSession
-            | AppCommandId::RenameSession
-            | AppCommandId::GroupSession
-            | AppCommandId::ForkSession
-            | AppCommandId::PickExecutionLocation
-            | AppCommandId::PickWorkingDirectory
-            | AppCommandId::PickGitBranch
-            | AppCommandId::ShowGitDiff
-            | AppCommandId::SplitTerminalHorizontal
-            | AppCommandId::SplitTerminalVertical
-            | AppCommandId::FocusNextPane
-            | AppCommandId::FocusPreviousPane
-            | AppCommandId::ClosePane => crate::WorkbenchCommandDispatch::Capability(request),
         }
     }
 
@@ -446,6 +407,10 @@ impl<B> WorkbenchHost<B> {
 
     pub fn toggle_tab_container(&mut self) {
         self.layout.toggle_tab_container();
+    }
+
+    pub fn scroll_tab_container(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
+        self.layout.scroll_tab_container(command, metrics)
     }
 
     pub fn expand_inspector(&mut self) {
@@ -745,7 +710,7 @@ impl<B> WorkbenchHost<B> {
         {
             return Some(PaneKey::new(tab.clone(), pane, input_id));
         }
-        let input_id = self.workbench.open_input(tab, pane, input)?;
+        let input_id = self.workbench.add_input(tab, pane, input)?;
         let key = PaneKey::new(tab.clone(), pane, input_id);
         let previous_binding = self.pane_host.insert(key.clone(), create_binding());
         assert!(

@@ -4,8 +4,6 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 
-use zeta_commands::AppCommandId;
-use zeta_commands::CommandRequest;
 use zeta_file_search::PathSearchHandle;
 use zeta_file_search::PathSearchOptions;
 use zeta_file_search::PathSearchSnapshot;
@@ -131,16 +129,6 @@ impl FilesToolbarStyle {
             .with_padding(Edges::uniform(4.0))
             .with_icon_size(16.0)
     }
-}
-
-/// Resolves a Files-owned element into its stable product command.
-pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest> {
-    let command = match element {
-        FILES_REFRESH => AppCommandId::RefreshAgentFiles,
-        FILES_SEARCH => AppCommandId::ToggleAgentFileSearch,
-        _ => return None,
-    };
-    Some(command.into())
 }
 
 /// A filesystem entry projected by the host into the Files pane.
@@ -357,10 +345,6 @@ impl FilesState {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "command_tests.rs"]
-mod command_tests;
 
 #[cfg(test)]
 #[path = "state_tests.rs"]

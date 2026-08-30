@@ -23,7 +23,7 @@ use zui::ui::NavigationAxis;
 use zui::ui::Point;
 use zui::ui::UiDispatch;
 
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::app_server::local_profile_root;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
@@ -31,7 +31,7 @@ use zeta_session::interaction::CONTEXT_LOCATION;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn toggle_remote_connection_picker(&mut self) {
         if self.remote_connection_picker.is_open() {
             self.dismiss_remote_connection_picker();

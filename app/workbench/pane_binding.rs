@@ -4,7 +4,7 @@ use crate::terminal_session::TerminalSessionKey;
 
 /// Terminal runtime currently attached to a Workbench-owned pane.
 ///
-/// This mapping is deliberately product-local. The workbench description stays free of PTY and
+/// This mapping is deliberately application-local. The workbench description stays free of PTY and
 /// terminal-session handles while app resolves a Session into its runtime key here.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum PaneRuntime {
@@ -13,8 +13,8 @@ enum PaneRuntime {
 
 /// Binding between one workbench group and its feature runtime, if one has been mounted.
 ///
-/// Workbench owns the logical [`PaneInput`] and this product-local runtime handle. The terminal
-/// capability remains unaware of product pane identities.
+/// Workbench owns the logical [`PaneInput`] and this application-local runtime handle. The terminal
+/// capability remains unaware of application pane identities.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneBinding {
     runtime: Option<PaneRuntime>,

@@ -1,4 +1,4 @@
-/// Product surface currently shown in the main area.
+/// Application surface currently shown in the main area.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum MainSurfaceKind {
     #[default]

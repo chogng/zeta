@@ -6,14 +6,14 @@ use zui::ui::{
     NavigationAxis, UiDispatch,
 };
 
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::git_branch_picker::{
     GIT_BRANCH_SEARCH_INPUT, GitBranchPickerActivation, GitBranchPickerState,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use zeta_session::interaction::CONTEXT_GIT_BRANCH;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn toggle_git_branch_picker(&mut self) {
         if self.git_branch_picker.is_open() {
             self.dismiss_git_branch_picker();

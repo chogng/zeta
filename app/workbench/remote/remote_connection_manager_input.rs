@@ -30,7 +30,7 @@ use zui::ui::NavigationAxis;
 use zui::ui::Point;
 use zui::ui::TextInputCommand;
 
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::app_server::local_profile_root;
 use crate::terminal_input::text_input_command;
 use crate::terminal_selection::read_clipboard_text;
@@ -41,7 +41,7 @@ mod support;
 use support::is_remote_connection_manager_element;
 use support::remote_connection_manager_scroll_command;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn open_remote_connection_settings(&mut self) -> bool {
         if self.remote_connection_manager.is_settings() {
             self.rebuild_and_focus_remote_connection_manager();

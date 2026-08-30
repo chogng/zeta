@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn handle_terminal_event(
-    app: &mut ProductApp,
+    app: &mut WorkbenchApplication,
     key: TerminalSessionKey,
     event: TerminalSessionEvent,
 ) {
@@ -40,7 +40,7 @@ pub(super) fn handle_terminal_event(
             terminal
                 .core()
                 .title()
-                .unwrap_or(PRODUCT_DISPLAY_NAME)
+                .unwrap_or(APP_DISPLAY_NAME)
                 .to_owned(),
         )
     } else {

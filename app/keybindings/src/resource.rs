@@ -35,7 +35,7 @@ pub enum KeybindingsResourcePoll {
     Rejected(String),
 }
 
-/// A bounded, polling JSON resource for one product keybinding catalog.
+/// A bounded, polling JSON resource for one application keybinding catalog.
 pub struct KeybindingsResource<C: KeybindingCatalog> {
     path: PathBuf,
     platform: HostPlatform,
@@ -148,7 +148,7 @@ impl<C: KeybindingCatalog> KeybindingsResource<C> {
 /// Shared validation error for a malformed user keybinding resource.
 pub type KeybindingsResourceError = zeta_keybinding::UserBindingsError;
 
-/// Parses a complete user resource into product rules without mutating an active engine.
+/// Parses a complete user resource into application rules without mutating an active engine.
 pub fn compile_user_bindings<C: KeybindingCatalog>(
     contents: &[u8],
     platform: HostPlatform,

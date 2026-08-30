@@ -6,7 +6,7 @@
 use zeta_ui_components::*;
 use zui::ui::*;
 
-mod command;
+mod application;
 mod host;
 mod keybinding_hint;
 mod layout;
@@ -14,12 +14,12 @@ mod model;
 mod pane_binding;
 mod panepart;
 mod presentation;
-mod product;
 mod quick_access;
 mod surface;
 mod tabpart;
 
-pub(crate) use command::{WorkbenchCommandDispatch, command_request_for_element};
+pub(crate) use application::command::command_for_element;
+pub use application::run;
 pub(crate) use host::{PaneKey, PaneMount, TabContextMenuOutcome, WorkbenchHost};
 pub(crate) use keybinding_hint::paint_chord_hint;
 pub(crate) use layout::{
@@ -49,31 +49,33 @@ pub(crate) use presentation::{
 pub(crate) use presentation::{
     WorkbenchKeybindings, WorkbenchSceneLayout, build_workbench_presentation, draw_inspector_border,
 };
-pub use product::run;
 pub(crate) use quick_access::QuickAccess;
 pub(crate) use surface::{MainSurface, MainSurfaceKind};
 pub(crate) use tabpart::*;
 
 #[allow(unused_imports)]
-pub(crate) use product::{
-    PRODUCT_DISPLAY_NAME, ProductApp, app_server, command_dispatch, directory_picker,
-    directory_picker_input, environment_context, file_editor_input, file_editor_pane,
-    git_branch_picker, git_branch_picker_input, input_method, keybindings,
-    language_service_adapter, launch, launch_progress, mouse_wheel, product_event,
-    remote_connection_cli, remote_connection_launch_input, remote_connection_manager_input,
-    remote_connection_picker_input, remote_connection_process, remote_connection_tunnel,
-    remote_tunnel_manager_input, remote_tunnel_process, session_host, tab_context_menu,
-    terminal_blocks, terminal_history, terminal_input, terminal_output_scroll_view,
-    terminal_pointer, terminal_selection, terminal_session, thread_timeline_scroll,
+pub(crate) use application::{
+    APP_DISPLAY_NAME, WorkbenchApplication, app_server, directory_picker, directory_picker_input,
+    environment_context, file_editor_input, file_editor_pane, git_branch_picker,
+    git_branch_picker_input, input_method, keybindings, language_service_adapter, launch,
+    launch_progress, mouse_wheel, remote_connection_cli, remote_connection_launch_input,
+    remote_connection_manager_input, remote_connection_picker_input, remote_connection_process,
+    remote_connection_tunnel, remote_tunnel_manager_input, remote_tunnel_process, session_host,
+    tab_context_menu, terminal_blocks, terminal_history, terminal_input,
+    terminal_output_scroll_view, terminal_pointer, terminal_selection, terminal_session,
+    thread_timeline_scroll, workbench_event,
 };
 
 #[cfg(test)]
 #[allow(unused_imports)]
-pub(crate) use product::{
+pub(crate) use application::{
     launch_profile_tests, launch_progress_tests, launch_test_support, launch_tests,
     remote_connection_cli_tests, remote_connection_tunnel_tests,
 };
 
+#[cfg(test)]
+#[path = "application_composition_tests.rs"]
+mod application_composition_tests;
 #[cfg(test)]
 #[path = "host_tests.rs"]
 mod host_tests;
@@ -83,6 +85,3 @@ mod interaction_tests;
 #[cfg(test)]
 #[path = "presentation_tests.rs"]
 mod presentation_tests;
-#[cfg(test)]
-#[path = "product_composition_tests.rs"]
-mod product_composition_tests;

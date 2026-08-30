@@ -249,6 +249,7 @@ pub fn inspector_resize_snapshot_for_viewport(
 pub struct WorkbenchPresentation {
     pub frame: UiFrame<InteractionFrame>,
     pub ime_cursor_area: Option<Rect>,
+    pub tab_container_scroll_metrics: Option<ScrollMetrics>,
     pub directory_picker_scroll_metrics: Option<ScrollMetrics>,
     pub directory_picker_item_viewport: Option<Rect>,
     pub remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
@@ -315,7 +316,7 @@ pub struct PaneView<'a> {
 
 #[derive(Clone)]
 pub struct WorkbenchPresentationModel<'a> {
-    pub product_name: &'a str,
+    pub app_name: &'a str,
     pub palette: UiTheme,
     pub terminal: Option<&'a TerminalCore>,
     pub terminal_panes: &'a [PaneView<'a>],
@@ -370,6 +371,7 @@ struct TabContainerView<'a> {
     tab_part: &'a TabPart,
     selected_id: ElementId,
     visible_action_bar_tab: Option<&'a TabInputKey>,
+    scroll: zeta_ui_components::ScrollState,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -423,6 +425,12 @@ struct MainDrawResult {
     remote_connection_manager_list_viewport: Option<Rect>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct TabContainerDrawResult {
+    search_caret: Option<Rect>,
+    scroll_metrics: Option<ScrollMetrics>,
+}
+
 #[cfg(test)]
 pub fn build_workbench_presentation(
     viewport: LogicalViewport,
@@ -468,7 +476,7 @@ fn build_workbench_presentation_with_bindings(
         WINDOW,
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         AccessibilityRole::Window,
-        model.product_name,
+        model.app_name,
     ));
     let Some(layout) = WorkbenchSceneLayout::for_viewport_with_composer_and_interaction_height(
         viewport,
@@ -482,10 +490,11 @@ fn build_workbench_presentation_with_bindings(
                 zeta_session::interaction_preferred_height(view.items().len())
             }),
     ) else {
-        draw_compact_scene(frame.scene_mut(), viewport, model.product_name, palette);
+        draw_compact_scene(frame.scene_mut(), viewport, model.app_name, palette);
         return WorkbenchPresentation {
             frame,
             ime_cursor_area: None,
+            tab_container_scroll_metrics: None,
             directory_picker_scroll_metrics: None,
             directory_picker_item_viewport: None,
             remote_connection_picker_scroll_metrics: None,
@@ -508,7 +517,7 @@ fn build_workbench_presentation_with_bindings(
             .session_pane
             .thread()
             .map(|thread| thread.title.as_str())
-            .unwrap_or(model.product_name)
+            .unwrap_or(model.app_name)
     };
     let session_title = model
         .active_tab_input
@@ -532,7 +541,6 @@ fn build_workbench_presentation_with_bindings(
         model.tab_part,
         model.active_tab_input,
         model.tab_container.is_expanded(),
-        model.active_pane.map(|pane| pane.kind()),
         TitlebarInsets::new(
             model.window_control_insets.left(),
             model.window_control_insets.right(),
@@ -545,7 +553,7 @@ fn build_workbench_presentation_with_bindings(
         titlebar = titlebar.with_visible_tab_action_bar(tab);
     }
     frame.draw_component(&titlebar);
-    let session_search_caret = if let Some(bounds) = layout.tab_container() {
+    let tab_container_draw = if let Some(bounds) = layout.tab_container() {
         frame.with_context(|context| {
             draw_tab_container(
                 context,
@@ -558,6 +566,7 @@ fn build_workbench_presentation_with_bindings(
                     tab_part: model.tab_part,
                     selected_id,
                     visible_action_bar_tab: model.tab_context_menu.target_tab(),
+                    scroll: model.tab_container.scroll_state(),
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
@@ -566,8 +575,9 @@ fn build_workbench_presentation_with_bindings(
             )
         })
     } else {
-        None
+        TabContainerDrawResult::default()
     };
+    let session_search_caret = tab_container_draw.search_caret;
     let file_editor_caret = if let Some(bounds) = layout.inspector() {
         if model.main_surface == MainSurfaceKind::Editor {
             frame.with_context(|context| {
@@ -695,6 +705,7 @@ fn build_workbench_presentation_with_bindings(
     WorkbenchPresentation {
         frame,
         ime_cursor_area: overlay.ime_cursor_area,
+        tab_container_scroll_metrics: tab_container_draw.scroll_metrics,
         directory_picker_scroll_metrics: overlay.directory_picker_scroll_metrics,
         directory_picker_item_viewport: overlay.directory_picker_item_viewport,
         remote_connection_picker_scroll_metrics: overlay.remote_connection_picker_scroll_metrics,
@@ -1150,7 +1161,7 @@ fn draw_tab_container(
     view: TabContainerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
-) -> Option<Rect> {
+) -> TabContainerDrawResult {
     context.scene_mut().draw_rect(
         PaintRect::new(bounds, palette.side_bar_background).with_border(Border::new(
             zui::ui::Edges::new(0.0, 1.0, 0.0, 0.0),
@@ -1204,18 +1215,24 @@ fn draw_tab_container(
         crate::WorkbenchUiStyle::from_theme(palette),
         view.dispatch,
     )
-    .with_viewport(viewport);
+    .with_viewport(viewport)
+    .with_scroll_state(view.scroll);
     if let Some(tab) = view
         .visible_action_bar_tab
         .and_then(|tab| mounted_tab_element_id(view.tab_part, tab, TabContainerPlacement::Body))
     {
         tab_container = tab_container.with_visible_action_bar(tab);
     }
+    let scroll_metrics = tab_container.scroll_metrics();
     context.draw_component(&tab_container);
-    view.dispatch
-        .is_focused(SESSION_SEARCH_INPUT)
-        .then_some(search_caret)
-        .flatten()
+    TabContainerDrawResult {
+        search_caret: view
+            .dispatch
+            .is_focused(SESSION_SEARCH_INPUT)
+            .then_some(search_caret)
+            .flatten(),
+        scroll_metrics: Some(scroll_metrics),
+    }
 }
 
 fn draw_sash(
@@ -1620,7 +1637,7 @@ fn draw_terminal_in_bounds(
 fn draw_compact_scene(
     scene: &mut UiScene,
     viewport: LogicalViewport,
-    product_name: &str,
+    app_name: &str,
     palette: UiTheme,
 ) {
     let bounds = Rect::from_xywh(
@@ -1636,7 +1653,7 @@ fn draw_compact_scene(
     );
     draw_text(
         scene,
-        product_name,
+        app_name,
         Rect::from_xywh(
             bounds.origin.x + 18.0,
             bounds.origin.y + 18.0,

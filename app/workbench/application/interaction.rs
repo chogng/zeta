@@ -1,6 +1,6 @@
 use super::*;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn logical_pointer_position(&self, physical_x: f64, physical_y: f64) -> Point {
         let scale_factor = if self.scale_factor.is_finite() && self.scale_factor > 0.0 {
             self.scale_factor as f32
@@ -163,6 +163,9 @@ impl ProductApp {
         if self.scm.editor_mut().toggle_fold_for_element(id) {
             return;
         }
+        if self.activate_scm_element(id) {
+            return;
+        }
         if self.activate_remote_connection_manager_element(id) {
             return;
         }
@@ -209,8 +212,8 @@ impl ProductApp {
             }
             return;
         }
-        if let Some(request) = crate::command_request_for_element(id) {
-            self.dispatch_command(request);
+        if let Some(command) = crate::command_for_element(id) {
+            self.dispatch_command(command);
         }
     }
 

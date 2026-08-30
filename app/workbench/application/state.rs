@@ -1,7 +1,7 @@
 use super::*;
 use crate::QuickAccess;
 
-pub(crate) struct ProductApp {
+pub(crate) struct WorkbenchApplication {
     pub(super) window: Option<WindowHandle>,
     pub(super) presentation: Option<WorkbenchPresentation>,
     pub(super) frame_scheduler: FrameScheduler,
@@ -23,7 +23,7 @@ pub(crate) struct ProductApp {
     pub(super) remote_connection_manager: RemoteConnectionManagerState,
     pub(super) remote_connection_launch: Option<remote_connection_process::RemoteConnectionLaunch>,
     pub(super) remote_tunnel_manager: RemoteTunnelManagerState,
-    pub(super) remote_tunnel_host: Option<ProductRemoteTunnelHost>,
+    pub(super) remote_tunnel_host: Option<RemoteTunnelHost>,
     pub(super) ui_dispatch: UiDispatch,
     pub(super) session_runtime: Option<SessionRuntime>,
     pub(super) app_server_client: Option<AppServerRequestHandle>,
@@ -34,11 +34,10 @@ pub(crate) struct ProductApp {
     pub(super) text_layout: TextInputLayoutEngine,
     pub(super) caret_blink: CaretBlinkController,
     pub(super) code_editor_style: CodeEditorStyle,
-    pub(super) event_proxy: zui::app::AppProxy<ProductEvent>,
+    pub(super) event_proxy: zui::app::AppProxy<WorkbenchEvent>,
     pub(super) clipboard: ClipboardHandle,
     pub(super) cursor_position: Option<Point>,
-    pub(super) command_registry: command_dispatch::ProductCommandRegistry,
-    pub(super) keybindings: keybindings::ProductKeybindings,
+    pub(super) keybindings: keybindings::WorkbenchKeybindings,
     pub(super) keybindings_resource: KeybindingsResource,
     pub(super) quick_access: QuickAccess,
     pub(super) settings: SettingsState,
@@ -52,8 +51,8 @@ pub(crate) struct ProductApp {
     pub(super) theme_follows_system: bool,
 }
 
-impl ProductApp {
-    pub(super) fn new(application: ApplicationHandle<ProductEvent>, launch: AppLaunch) -> Self {
+impl WorkbenchApplication {
+    pub(super) fn new(application: ApplicationHandle<WorkbenchEvent>, launch: AppLaunch) -> Self {
         let event_proxy = application.proxy();
         let clipboard = application.clipboard();
         let local_env = EnvironmentContext::capture_current();
@@ -61,7 +60,7 @@ impl ProductApp {
         let remote_tunnel_host = app_server_host
             .ssh_transport()
             .map(|(host, ssh_executable)| {
-                ProductRemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
+                RemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
             });
         let env = if app_server_host.is_remote() {
             EnvironmentContext::capture_remote(app_server_host.cwd().to_path_buf())
@@ -71,12 +70,11 @@ impl ProductApp {
         let mut files = FilesState::default();
         files.set_dir_root(env.working_directory().to_path_buf());
         let mut scm = ScmState::default();
-        scm.replace_diffs(
-            env.diffs()
-                .iter()
-                .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
-        );
-        let mut keybindings = keybindings::ProductKeybindings::default();
+        scm.set_branch(Some(env.git_branch_label()).filter(|branch| *branch != "No Git"));
+        scm.replace_diffs(env.diffs().iter().map(|diff| {
+            ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
+        }));
+        let mut keybindings = keybindings::WorkbenchKeybindings::default();
         let mut keybindings_resource = KeybindingsResource::new(
             local_profile_root().join("keybindings.json"),
             zeta_keybinding::HostPlatform::current(),
@@ -88,7 +86,7 @@ impl ProductApp {
             eprintln!("{error}");
         }
         let session_pane = SessionPaneState::for_working_directory(env.working_directory());
-        let language_events = Arc::new(language_service_adapter::ProductLanguageEventSink::new(
+        let language_events = Arc::new(language_service_adapter::WorkbenchLanguageEventSink::new(
             event_proxy.clone(),
         ));
         let language_service = if launch.is_remote() {
@@ -127,7 +125,7 @@ impl ProductApp {
                             size,
                             event_sink,
                             terminal_target.clone(),
-                            PRODUCT_DISPLAY_NAME.to_owned(),
+                            APP_DISPLAY_NAME.to_owned(),
                         )
                     },
                     TerminalSession::resize,
@@ -154,7 +152,6 @@ impl ProductApp {
             event_proxy,
             clipboard,
             cursor_position: None,
-            command_registry: command_dispatch::builtin_command_registry(),
             keybindings,
             keybindings_resource,
             quick_access: QuickAccess::default(),

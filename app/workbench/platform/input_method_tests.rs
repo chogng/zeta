@@ -19,6 +19,7 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         session_search_focused: false,
         tab_rename_focused: false,
         file_search_focused: false,
+        commit_message_focused: false,
         git_branch_search_focused: false,
         path_search_focused: false,
         remote_connection_search_focused: false,
@@ -64,6 +65,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     };
     let file_search = InputMethodContext {
         file_search_focused: true,
+        ..terminal_grid
+    };
+    let commit_message = InputMethodContext {
+        commit_message_focused: true,
         ..terminal_grid
     };
     let git_branch_search = InputMethodContext {
@@ -134,6 +139,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     assert_eq!(
         InputMethodTarget::for_context(file_search),
         InputMethodTarget::FileSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(commit_message),
+        InputMethodTarget::CommitMessage
     );
     assert_eq!(
         InputMethodTarget::for_context(git_branch_search),

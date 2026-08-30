@@ -1,6 +1,6 @@
 //! Structural Workbench geometry built on backend-neutral [`zui`] layout contracts.
 //!
-//! The layout types resolve structural Part/Pane geometry only. Product hosts retain content,
+//! The layout types resolve structural Part/Pane geometry only. Application hosts retain content,
 //! identity, focus semantics, event routing, and runtime state.
 
 use std::time::Instant;
@@ -9,6 +9,8 @@ use zeta_ui_components::Resizable;
 use zeta_ui_components::SashOrientation;
 use zeta_ui_components::SashPointerPresence;
 use zeta_ui_components::SashState;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollMetrics;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;
 
@@ -96,6 +98,10 @@ impl WorkbenchLayoutState {
 
     pub fn toggle_tab_container(&mut self) {
         self.tab_container.toggle();
+    }
+
+    pub fn scroll_tab_container(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
+        self.tab_container.scroll(command, metrics)
     }
 
     pub fn expand_inspector(&mut self) {

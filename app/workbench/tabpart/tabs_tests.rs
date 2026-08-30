@@ -11,6 +11,9 @@ use crate::Color;
 use crate::FontWeight;
 use crate::Point;
 use crate::Rect;
+use crate::ScrollAxis;
+use crate::ScrollCommand;
+use crate::ScrollState;
 use crate::TabGroupId;
 use crate::TabInput;
 use crate::TabInputKey;
@@ -43,10 +46,7 @@ fn session(id: &str, title: &str) -> Session {
         session_id: SessionId::new(id).unwrap(),
         title: title.to_owned(),
         status: SessionStatus::Active,
-        model: None,
-        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        current_thread_id: None,
-        sequence: 1,
+        manager: Default::default(),
         threads: Vec::new(),
     }
 }
@@ -160,6 +160,64 @@ fn body_mount_arranges_tabs_vertically_with_two_line_session_information() {
     assert_eq!(
         frame.scene().text_blocks()[1].style().color(),
         Color::rgb(38, 38, 41)
+    );
+}
+
+#[test]
+fn body_mount_scrolls_overflowing_tabs_inside_its_viewport() {
+    let mut part = TabPart::default();
+    let mut keys = Vec::new();
+    for index in 0..8 {
+        let session = session(&format!("session-{index}"), &format!("Session {index}"));
+        let key = TabInputKey::session(session.session_id.clone());
+        part.upsert_session_input(TabInput::session(
+            session.session_id,
+            TabInputMetadata::new(session.title, format!("~/session-{index}"))
+                .with_status(TabStatus::idle("Active")),
+        ));
+        keys.push(key);
+    }
+    let first = mounted_tab_element_id(&part, &keys[0], TabContainerPlacement::Body).unwrap();
+    let last = mounted_tab_element_id(&part, &keys[7], TabContainerPlacement::Body).unwrap();
+    let dispatch = UiDispatch::default();
+    let bounds = Rect::from_xywh(0.0, 36.0, 220.0, 180.0);
+    let initial = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&keys[0]),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    );
+    let mut scroll = ScrollState::default();
+    assert!(scroll.apply(
+        ScrollCommand::ToEnd(ScrollAxis::Vertical),
+        initial.scroll_metrics(),
+        ScrollAxis::Vertical,
+    ));
+    drop(initial);
+    let scrolled = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&keys[0]),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    )
+    .with_scroll_state(scroll);
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
+
+    frame.draw_component(&scrolled);
+
+    assert!(frame.interaction().node(first).is_none());
+    assert!(frame.interaction().node(last).is_some());
+    assert!(
+        frame
+            .interaction()
+            .node(TAB_CONTAINER_SETTINGS_TAB)
+            .is_some()
     );
 }
 

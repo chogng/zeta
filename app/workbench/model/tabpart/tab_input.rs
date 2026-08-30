@@ -1,4 +1,4 @@
-//! Logical Workbench tab inputs and their product metadata.
+//! Logical Workbench tab inputs and their application metadata.
 
 #[cfg(test)]
 use std::path::Path;
@@ -39,7 +39,7 @@ impl TabInputKey {
     }
 }
 
-/// Product-owned logical input behind one Workbench tab.
+/// Application-owned logical input behind one Workbench tab.
 ///
 /// This record contains the stable input identity and the labels needed by the Workbench view.
 /// Session lifecycle and Thread state remain owned by the App Server session adapter.
@@ -49,10 +49,10 @@ pub struct TabInput {
     metadata: TabInputMetadata,
 }
 
-/// Display metadata supplied by the product owner for one Workbench tab.
+/// Display metadata supplied by the application owner for one Workbench tab.
 ///
 /// The Workbench stores the current values used by its tab surfaces, but it does not derive them
-/// from Session protocol records or decide product copy.
+/// from Session protocol records or decide application copy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabInputMetadata {
     title: String,

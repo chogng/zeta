@@ -74,7 +74,7 @@ impl Pane {
 /// Immutable logical topology for the visible groups in a [`PanePart`].
 ///
 /// The Workbench layout module converts this tree into geometry. The node contains no renderer,
-/// framework layout, or product runtime types.
+/// framework layout, or application runtime types.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PaneNode {
     /// One visible group leaf.
@@ -220,6 +220,11 @@ impl PanePart {
     pub fn open_input(&mut self, group_id: PaneGroupId, input: PaneInput) -> Option<PaneInputId> {
         self.group_mut(group_id)
             .map(|group| group.open_input(input))
+    }
+
+    /// Adds an input to an existing group without changing its active input.
+    pub fn add_input(&mut self, group_id: PaneGroupId, input: PaneInput) -> Option<PaneInputId> {
+        self.group_mut(group_id).map(|group| group.add_input(input))
     }
 
     #[cfg(test)]

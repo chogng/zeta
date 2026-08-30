@@ -1,10 +1,10 @@
-use crate::ProductApp;
+use crate::WorkbenchApplication;
 use crate::launch_progress::RemoteLaunchProgressEvent;
 use crate::remote_connection_process::RemoteWindowLaunchEvent;
 use crate::remote_connection_process::RemoteWindowLaunchUpdate;
 use crate::remote_connection_process::launch_remote_connection;
 
-impl ProductApp {
+impl WorkbenchApplication {
     pub(super) fn connect_remote_connection_manager(&mut self) {
         let Some(name) = self.remote_connection_manager.connect_request() else {
             self.remote_connection_manager_changed();

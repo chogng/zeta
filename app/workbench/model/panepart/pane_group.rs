@@ -30,7 +30,7 @@ struct PaneInputEntry {
 ///
 /// A group owns the logical inputs shown in its tab strip and the active input. It does not own
 /// layout topology, renderer nodes, or feature runtime handles; those belong to [`PanePart`] and
-/// the product host respectively.
+/// the application host respectively.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PaneGroup {
     inputs: Vec<PaneInputEntry>,
@@ -98,6 +98,16 @@ impl PaneGroup {
         let id = self.allocate_input_id();
         self.inputs.push(PaneInputEntry { id, input });
         self.active = Some(id);
+        id
+    }
+
+    /// Adds an input without changing the active input when the group is already populated.
+    pub fn add_input(&mut self, input: PaneInput) -> PaneInputId {
+        let id = self.allocate_input_id();
+        self.inputs.push(PaneInputEntry { id, input });
+        if self.active.is_none() {
+            self.active = Some(id);
+        }
         id
     }
 

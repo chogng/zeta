@@ -51,9 +51,16 @@ impl<'a> ShortcutProvider<'a> {
         }
         command.label().to_lowercase().contains(query)
             || keybinding.is_some_and(|keybinding| {
-                format_key_sequence(keybinding, platform)
-                    .to_lowercase()
-                    .contains(query)
+                let shortcut = format_key_sequence(keybinding, platform).to_lowercase();
+                let shortcut = shortcut
+                    .chars()
+                    .filter(|character| !character.is_whitespace() && *character != '+')
+                    .collect::<String>();
+                let query = query
+                    .chars()
+                    .filter(|character| !character.is_whitespace() && *character != '+')
+                    .collect::<String>();
+                shortcut.contains(&query)
             })
     }
 }

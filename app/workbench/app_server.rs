@@ -1,4 +1,4 @@
-//! App's product boundary to the shared zeta-rs App Server client.
+//! App's application boundary to the shared zeta-rs App Server client.
 //!
 //! `zeta-app-server-client` owns the reusable App Server session, request, event, and shutdown
 //! contract. This module owns the app-specific choice of Local or Remote backend and exposes a

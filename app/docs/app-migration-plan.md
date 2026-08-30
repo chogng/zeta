@@ -40,7 +40,6 @@ zeta/
 │   ├── src/                    # app product host and composition root
 │   ├── zui/                    # complete public framework; capability-owned internal directories
 │   ├── composer/               # app Composer state, input, interaction and geometry
-│   ├── zui-demo/               # product-independent framework smoke host
 │   ├── ui/                     # reusable UI components
 │   ├── workbench/              # pure Tab/Pane Workbench model
 │   ├── workbench/              # Workbench model, layout, chrome UI and binding boundary
@@ -137,8 +136,6 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 - [x] 将 Workbench/Pane 的结构布局收回 `zeta-workbench`，并让 `zeta-ui-components` 只保留可复用组件；
 - [x] 将 Tab/Pane 模型、`PaneNode`、ratio contract、Part 布局和基础 UI 统一收回 `zeta-workbench`；
 - [x] 由公开 `WorkbenchHost` 统一提交 Tab、Pane、布局和 binding 周期；内部 Pane binding 表不再允许产品层分别修改；
-- [x] 建立 `zui-demo`，只依赖 public `zui` 与 `zeta-ui-components`，以 recording backend 验证通用
-      组件可脱离 app product host 组合；
 - [x] 将 Composer text/routing/history/completion、Slash/model interaction、scroll state、panel/list geometry 收入 `zeta-session`，和 Thread、时间线组成一个完整 Session Pane；产品宿主只保留提交 effect 与平台事件接线；
 - [x] 将 Session、Workspace、Editor 和 Remote 的可复用状态/视图按 owner 分批抽到
       `app/` 下的产品 crate；组合根只保留宿主快照、effect 和平台事件接线；

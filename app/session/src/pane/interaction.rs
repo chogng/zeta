@@ -1,7 +1,5 @@
 //! Stable interaction identities owned by the Session Pane.
 
-use zeta_commands::AppCommandId;
-use zeta_commands::CommandRequest;
 use zui::ui::ElementId;
 
 pub const SESSION_HEADER: ElementId = ElementId::scoped(16, 1);
@@ -52,17 +50,6 @@ impl ContextAction {
             _ => None,
         }
     }
-}
-
-/// Resolves a Session-owned element into the stable product command it invokes.
-pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest> {
-    let command = match ContextAction::from_element_id(element)? {
-        ContextAction::Location => AppCommandId::PickExecutionLocation,
-        ContextAction::WorkingDirectory => AppCommandId::PickWorkingDirectory,
-        ContextAction::GitBranch => AppCommandId::PickGitBranch,
-        ContextAction::Diff => AppCommandId::ShowGitDiff,
-    };
-    Some(command.into())
 }
 
 pub fn composer_interaction_item_id(index: usize) -> ElementId {

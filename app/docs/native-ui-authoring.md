@@ -214,7 +214,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 
 - `zui` 已提供 `Element`、`ComputedElement`、`Component`、`UiScene`、inspection 和 backend-neutral primitive contract；
 - `zui` 已提供 `ViewState` revision/subscription，以及由稳定 `ElementId` 驱动 local state、external observation、RAII resource 和 unmount cleanup 的 `ComponentRuntime`；
-- `zeta-ui-components` 已提供 Button、Switch、ActionBar、TabList、ScrollView、InputBox、ContextView 等 typed component/style contract；
+- `zeta-ui-components` 已提供 Button、Switch、Checkbox、ActionBar、Menu、ContextMenu、TabList、HorizontalScrollbar、VerticalScrollbar、ScrollView、InputBox、ContextView 等 typed component/style contract；
 - Native host 已通过主题快照、palette 和领域 style factory 向组件投影颜色与标准尺寸；
 - 组件的 paint、interaction、inspection 和 accessibility 已沿同一 frame/Element contract 组合；
 - DevTools 展示 scene inspection 和 computed layout，但不模拟 DOM/CSS debugger。

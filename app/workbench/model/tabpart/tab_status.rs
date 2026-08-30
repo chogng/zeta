@@ -1,4 +1,4 @@
-//! Product status shown with a Workbench tab.
+//! Application status shown with a Workbench tab.
 
 /// Visual category used by Workbench to render one tab's current status.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -7,9 +7,9 @@ pub enum TabStatusKind {
     Warning,
 }
 
-/// Product-supplied status shown by the Workbench tab chrome.
+/// Application-supplied status shown by the Workbench tab chrome.
 ///
-/// The product chooses the user-facing label and maps its runtime state into a visual category.
+/// The application chooses the user-facing label and maps its runtime state into a visual category.
 /// Workbench owns the category's color, motion, tooltip, and accessibility presentation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabStatus {

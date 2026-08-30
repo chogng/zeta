@@ -1,64 +1,27 @@
 # zeta-commands
 
-`zeta-commands` owns the stable product command vocabulary and the runtime-free
-registration contract for the native `app` host. Pointer activation, menu
-items, keyboard shortcuts, and future command-palette entries converge on a
-[`CommandRequest`](src/request.rs) before the host executes a state transition.
+`zeta-commands` owns the stable command vocabulary shared by Workbench command entry points.
 
-## Ownership
+## Responsibilities
 
-| Concern | Owner |
-| --- | --- |
-| Type-safe command identity | `AppCommandId` |
-| Complete product command catalog | `AppCommandId::ALL` |
-| Persisted command ID and shortcut label | `AppCommandId::id` / `AppCommandId::label` |
-| Currently user-bindable command set | `AppCommandId::BINDABLE` |
-| ID parsing and user-binding validation | `AppCommandId::from_id` / `AppCommandId::bindable_from_id` |
-| Cross-module execution request | `CommandRequest` |
-| Generic handler registration and lookup | `CommandRegistry<Context>` |
-| `ElementId` mapping | `app` host adapter |
-| Keybinding context and platform defaults | `app/workbench/platform/keybindings.rs` |
-| Built-in handler registration and product state | `app/workbench/product/command_dispatch.rs` |
-
-This crate must remain independent of `ProductApp`, `zui` and native platform events,
-terminal state, workspace state, and the keybinding runtime. A command request
-is a stable product intent; it is not a domain state machine or a replacement
-for typed Session, Editor, Terminal, or App Server APIs.
+- `AppCommandId` is the type-safe identity used by Rust callers; `AppCommandId::ALL` is the complete catalog and `AppCommandId::BINDABLE` is the subset exposed to user keybindings.
+- `AppCommandId::id`, `from_id`, and `bindable_from_id` own the persisted string boundary, including compatibility names under `workbench.action.*`; internal callers do not pass string IDs.
+- Command execution, UI element mapping, focus, state changes, and invalidation belong to `zeta-workbench`; this crate has no dependency on Workbench state, `zui`, keybinding execution, or domain APIs.
 
 ## Execution path
 
 ```text
 pointer / menu / shortcut / command palette
-  → CommandRequest(AppCommandId)
-  → CommandRegistry<ProductApp>
-  → registered host handler
-  → product state owner
+  → AppCommandId
+  → WorkbenchApplication::dispatch_command
+  → owning Workbench or domain API
   → invalidation / presentation rebuild
 ```
 
-`CommandRegistry<Context>` owns only command-to-handler registration and lookup.
-The registry is process-local to the host instance; it is not a global backend
-registry. `app` registers every built-in command during `ProductApp` startup,
-while each handler remains responsible for calling the domain state owner.
-`CommandRequest` currently carries only the command identity. A command that
-needs parameters should add a typed request payload when that command is
-introduced instead of passing UI element IDs or untyped service calls.
-
-The string IDs are retained at the configuration boundary for existing
-keybinding resources, including the current `workbench.action.*` compatibility
-names. Internal callers use the enum so command consumers do not depend on
-spelling or on UI element identity. A future namespace migration must add an
-alias/compatibility path before changing persisted IDs.
-
-`PickExecutionLocation` is currently the bindable Native entry to app's saved Remote connection
-picker. The command remains a parameter-free product intent: picker selection and new-process
-launching belong to the host, while this crate knows neither Remote profiles nor SSH.
-`ManageRemoteTunnels` is the corresponding parameter-free entry for the current Remote window's
-Native tunnel manager. The host derives availability and SSH authority from the window; the
-command catalog owns neither tunnel state nor credentials.
+The dispatcher in `app/workbench/command.rs` uses an exhaustive `match`, so adding an `AppCommandId` requires adding its execution path at compile time. Commands do not replace direct typed APIs between Workbench and Editor, Terminal, Files, Session, or App Server owners.
 
 ## Verification
 
 ```bash
-cargo test -p zeta-commands
+just test zeta-commands
 ```

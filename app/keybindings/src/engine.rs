@@ -34,7 +34,7 @@ pub enum UserBindingTarget<Command> {
     Block,
 }
 
-/// The product-facing result of resolving one platform key event.
+/// The application-facing result of resolving one platform key event.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum KeybindingResolution<Command> {
     NoMatch,
@@ -42,7 +42,7 @@ pub enum KeybindingResolution<Command> {
     Consumed,
 }
 
-/// Native keybinding runtime parameterized by a product command/context catalog.
+/// Keybinding runtime parameterized by an application command/context catalog.
 pub struct Keybindings<C: KeybindingCatalog> {
     bindings: BindingSet<C::Condition, C::Command>,
     platform: HostPlatform,

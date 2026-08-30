@@ -33,7 +33,7 @@ const BUNDLED_REMOTE_RUNTIME_CATALOG_URL: Option<&str> =
     option_env!("APP_REMOTE_RUNTIME_CATALOG_URL");
 const REMOTE_RUNTIME_DOWNLOAD_CACHE: &str = "remote-runtime-downloads";
 
-/// Product-owned launch selection made before the desktop event loop starts.
+/// Application-owned launch selection made before the desktop event loop starts.
 ///
 /// A Remote launch carries only the SSH host, remote Directory path, runtime reference, and
 /// optional OpenSSH executable. Credentials remain in the local OpenSSH configuration and agent.
@@ -75,7 +75,7 @@ pub(crate) enum RemoteRuntimePreparationProgress {
 }
 
 impl AppLaunch {
-    /// Parses the small product-level launch surface used by `app`.
+    /// Parses the small application-level launch surface used by `app`.
     pub(crate) fn parse(
         arguments: impl IntoIterator<Item = String>,
     ) -> Result<Self, LaunchParseError> {

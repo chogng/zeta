@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[test]
-fn product_composition_uses_scene_draw_component() {
+fn application_composition_uses_scene_draw_component() {
     let source_root = app_root().join("workbench");
     let mut violations = Vec::new();
     visit_rust_sources(&source_root, &mut |path, source| {
@@ -22,7 +22,7 @@ fn product_composition_uses_scene_draw_component() {
 
     assert!(
         violations.is_empty(),
-        "Desktop product composition must use UiScene::draw_component so inspection ancestry is preserved:\n{}",
+        "Desktop application composition must use UiScene::draw_component so inspection ancestry is preserved:\n{}",
         violations.join("\n")
     );
 }
@@ -86,7 +86,7 @@ fn public_zui_facade_owns_desktop_framework_composition() {
             !manifest
                 .lines()
                 .any(|line| line.trim_start().starts_with(forbidden)),
-            "zui must not depend on product capability {forbidden}"
+            "zui must not depend on application capability {forbidden}"
         );
     }
 }
@@ -199,12 +199,12 @@ fn component_crate_remains_graphics_backend_neutral() {
 }
 
 #[test]
-fn product_uses_only_zui_for_desktop_framework_hosting() {
+fn application_uses_only_zui_for_desktop_framework_hosting() {
     let workspace = app_root();
-    let product_manifest = fs::read_to_string(workspace.join("workbench/Cargo.toml"))
+    let workbench_manifest = fs::read_to_string(workspace.join("workbench/Cargo.toml"))
         .expect("Workbench manifest should be readable");
     assert!(
-        product_manifest
+        workbench_manifest
             .lines()
             .any(|line| line.trim_start().starts_with("zui =")),
         "app must consume the complete zui framework"
@@ -218,7 +218,7 @@ fn product_uses_only_zui_for_desktop_framework_hosting() {
         "zeta-winit =",
     ] {
         assert!(
-            !product_manifest
+            !workbench_manifest
                 .lines()
                 .any(|line| line.trim_start().starts_with(forbidden)),
             "app must obtain {forbidden} through zui rather than depending on an implementation layer"
@@ -256,10 +256,10 @@ fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
         violations.join("\n")
     );
 
-    let product_manifest = fs::read_to_string(workspace.join("workbench/Cargo.toml"))
+    let workbench_manifest = fs::read_to_string(workspace.join("workbench/Cargo.toml"))
         .expect("Workbench manifest should be readable");
     assert!(
-        product_manifest
+        workbench_manifest
             .lines()
             .any(|line| line.trim_start().starts_with("zeta-app-server-client =")),
         "Workbench must own the shared zeta-rs App Server client dependency"
@@ -285,47 +285,47 @@ fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
 #[test]
 fn desktop_app_state_is_private_to_the_workbench_composition_boundary() {
     let source_root = app_root().join("workbench");
-    let state_source = fs::read_to_string(source_root.join("product/state.rs"))
-        .expect("ProductApp state source should be readable");
+    let state_source = fs::read_to_string(source_root.join("application/state.rs"))
+        .expect("WorkbenchApplication state source should be readable");
     assert!(
-        state_source.contains("pub(crate) struct ProductApp"),
-        "ProductApp should remain available to the product app without exposing its fields"
+        state_source.contains("pub(crate) struct WorkbenchApplication"),
+        "WorkbenchApplication should remain available to the app without exposing its fields"
     );
     assert!(
         !state_source.contains("    pub(crate) "),
-        "ProductApp fields must not be crate-wide; expose them only to app composition descendants"
+        "WorkbenchApplication fields must not be crate-wide; expose them only to app composition descendants"
     );
     assert!(
         state_source.contains("    pub(super) window:")
             && state_source.contains("    pub(super) app_server_host:"),
-        "ProductApp state fields must use the app-composition visibility boundary"
+        "WorkbenchApplication state fields must use the app-composition visibility boundary"
     );
 
-    let product_app_source = fs::read_to_string(source_root.join("product.rs"))
-        .expect("ProductApp composition source should be readable");
+    let application_source = fs::read_to_string(source_root.join("application.rs"))
+        .expect("WorkbenchApplication composition source should be readable");
     assert!(
-        product_app_source.contains("mod state;")
-            && product_app_source.contains("pub(crate) use state::ProductApp;"),
-        "Workbench must own and re-export the product state type"
+        application_source.contains("mod state;")
+            && application_source.contains("pub(crate) use state::WorkbenchApplication;"),
+        "Workbench must own and re-export the application state type"
     );
     assert!(
-        !product_app_source.contains("state: state::ProductAppState"),
-        "ProductApp must not add a second wrapper state layer"
+        !application_source.contains("state: state::WorkbenchApplicationState"),
+        "WorkbenchApplication must not add a second wrapper state layer"
     );
 
     for relative_path in [
-        "product/frame.rs",
-        "product/interaction.rs",
-        "product/runtime.rs",
-        "product/workbench.rs",
-        "product/workbench_resize.rs",
-        "product/workbench_tabs_resize.rs",
+        "application/frame.rs",
+        "application/interaction.rs",
+        "application/runtime.rs",
+        "application/workbench.rs",
+        "application/workbench_resize.rs",
+        "application/workbench_tabs_resize.rs",
     ] {
         let source = fs::read_to_string(source_root.join(relative_path))
             .unwrap_or_else(|error| panic!("could not read {relative_path}: {error}"));
         assert!(
             !source.contains("pub(crate) fn"),
-            "{relative_path} must not expose ProductApp composition methods at crate scope"
+            "{relative_path} must not expose WorkbenchApplication composition methods at crate scope"
         );
     }
 }
@@ -438,7 +438,7 @@ fn production_composition_does_not_register_inspection_nodes_directly() {
     }
     assert!(
         violations.is_empty(),
-        "Product composition must declare Element style and let zui register inspection nodes:\n{}",
+        "Application composition must declare Element style and let zui register inspection nodes:\n{}",
         violations.join("\n")
     );
 }

@@ -13,10 +13,7 @@ fn session(id: &str, title: &str) -> Session {
         session_id: SessionId::new(id).expect("test session ID is non-empty"),
         title: title.to_owned(),
         status: SessionStatus::Active,
-        model: None,
-        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        current_thread_id: None,
-        sequence: 1,
+        manager: Default::default(),
         threads: Vec::new(),
     }
 }
