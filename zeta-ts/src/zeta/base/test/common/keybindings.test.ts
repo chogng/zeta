@@ -9,6 +9,7 @@ import {
 	serializeKeybinding,
 } from "../../common/keybindingParser.js";
 import {
+	decodeKeybinding,
 	Keybinding,
 	KeybindingChordKind,
 	logicalKey,
@@ -24,6 +25,7 @@ import {
 	IMMUTABLE_KEY_CODE_TO_CODE,
 	KeyCode,
 	KeyCodeUtils,
+	KeyMod,
 	NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE,
 	ScanCode,
 	ScanCodeUtils,
@@ -97,6 +99,25 @@ test("portable primary modifiers resolve and format for each OS", () => {
 		getKeybindingLabel(mac, KeybindingLabelStyle.UserSettings),
 		"cmd+n",
 	);
+});
+
+test("VS Code numeric keybindings decode into the canonical keybinding model", () => {
+	const windows = decodeKeybinding(KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyM, OperatingSystem.Windows);
+	const mac = decodeKeybinding(KeyMod.CtrlCmd | KeyMod.WinCtrl | KeyCode.KeyM, OperatingSystem.Macintosh);
+
+	assert.ok(windows);
+	assert.deepEqual(resolveKeybinding(windows, OperatingSystem.Windows).chords[0], {
+		kind: KeybindingChordKind.Logical,
+		key: "m",
+		label: undefined,
+		ctrlKey: true,
+		shiftKey: true,
+		altKey: false,
+		metaKey: false,
+	});
+	assert.ok(mac);
+	assert.equal(resolveKeybinding(mac, OperatingSystem.Macintosh).chords[0].ctrlKey, true);
+	assert.equal(resolveKeybinding(mac, OperatingSystem.Macintosh).chords[0].metaKey, true);
 });
 
 test("resolved chords match their declared logical or physical identity", () => {

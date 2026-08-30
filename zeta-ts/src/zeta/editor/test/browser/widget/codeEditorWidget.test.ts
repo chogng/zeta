@@ -1,233 +1,245 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import { JSDOM } from "jsdom";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
-import { CursorsController } from "../../../common/cursor/cursor.js";
-import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
-import { Position } from "../../../common/core/position.js";
-import { TextModel } from "../../../common/model/textModel.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-class TestResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
-}
-for (const [name, value] of Object.entries({
-	window: browserEnvironment.window,
-	document: browserEnvironment.window.document,
-	Node: browserEnvironment.window.Node,
-	Element: browserEnvironment.window.Element,
-	HTMLElement: browserEnvironment.window.HTMLElement,
-	Event: browserEnvironment.window.Event,
-	InputEvent: browserEnvironment.window.InputEvent,
-	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
-	ResizeObserver: TestResizeObserver,
-})) {
-	Object.defineProperty(globalThis, name, { configurable: true, value });
-}
+import assert from 'assert';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { Range } from '../../../common/core/range.js';
+import { Selection } from '../../../common/core/selection.js';
+import { ILanguageService } from '../../../common/languages/language.js';
+import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
+import { withTestCodeEditor } from '../testCodeEditor.js';
 
-const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
-const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
-const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
-const { WidgetPlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
-await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
+suite('CodeEditorWidget', () => {
 
-test.after(() => browserEnvironment.window.close());
+	ensureNoDisposablesAreLeakedInTestSuite();
 
-test("CodeEditorWidget owns one canonical browser editing surface", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	const editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20, ariaLabel: "Code" });
+	test('onDidChangeModelDecorations', () => {
+		withTestCodeEditor('', {}, (editor, viewModel) => {
+			const disposables = new DisposableStore();
 
-	editor.layout({ width: 320, height: 80 });
+			let invoked = false;
+			disposables.add(editor.onDidChangeModelDecorations((e) => {
+				invoked = true;
+			}));
 
-	assert.equal(editor.element.parentElement, container);
-	assert.equal(editor.element.getAttribute("aria-label"), "Code");
-	assert.equal(editor.view.element.getAttribute("aria-label"), "Code");
-	assert.deepEqual(editor.viewport.viewportLayout.viewportSize, { width: 320, height: 80 });
+			viewModel.model.deltaDecorations([], [{ range: new Range(1, 1, 1, 1), options: { description: 'test' } }]);
 
-	editor.dispose();
-	assert.equal(editor.element.isConnected, false);
-	assert.equal(model.getText(), "alpha");
-	assert.equal(selections.textModel, model);
-	dom.window.close();
-});
+			assert.deepStrictEqual(invoked, true);
 
-test("CodeEditorWidget owns padding, placeholder, and current-line presentation for embedded editors", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using editor = new CodeEditorWidget({
-		container,
-		model,
-		selectionController: selections,
-		lineHeight: 20,
-		placeholder: "Ask Zeta",
-		viewport: { presentation: "embedded", padding: { top: 20, right: 20, bottom: 20, left: 20 } },
+			disposables.dispose();
+		});
 	});
 
-	editor.layout({ width: 320, height: 40 });
+	test('onDidChangeModelLanguage', () => {
+		withTestCodeEditor('', {}, (editor, viewModel, instantiationService) => {
+			const languageService = instantiationService.get(ILanguageService);
+			const disposables = new DisposableStore();
+			disposables.add(languageService.registerLanguage({ id: 'testMode' }));
 
-	assert.equal(editor.element.querySelector(".view-line.active"), null);
-	assert.ok(editor.element.querySelector(".stanza-editor-caret"));
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-lines").style.top, "20px");
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-lines").style.transform, "");
-	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-left"), "20px");
-	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-right"), "20px");
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text").style.top, "20px");
-	assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
-	dom.window.close();
-});
+			let invoked = false;
+			disposables.add(editor.onDidChangeModelLanguage((e) => {
+				invoked = true;
+			}));
 
-test("PlaceholderTextContribution follows model emptiness and editor layout", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel();
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using editor = new CodeEditorWidget({
-		container,
-		model,
-		selectionController: selections,
-		lineHeight: 20,
-		placeholder: "Ask Zeta",
-		viewport: { padding: { top: 8, right: 12, bottom: 8, left: 12 } },
+			viewModel.model.setLanguage('testMode');
+
+			assert.deepStrictEqual(invoked, true);
+
+			disposables.dispose();
+		});
 	});
 
-	editor.layout({ width: 320, height: 80 });
-	const placeholder = requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text");
-	assert.strictEqual(WidgetPlaceholderTextContribution.get(editor), editor.getContribution(WidgetPlaceholderTextContribution.ID));
-	assert.deepEqual({
-		display: placeholder.style.display,
-		left: placeholder.style.left,
-		top: placeholder.style.top,
-		width: placeholder.style.width,
-		lineHeight: placeholder.style.lineHeight,
-	}, {
-		display: "block",
-		left: "45px",
-		top: "8px",
-		width: "275px",
-		lineHeight: "20px",
+	test('onDidChangeModelLanguageConfiguration', () => {
+		withTestCodeEditor('', {}, (editor, viewModel, instantiationService) => {
+			const languageConfigurationService = instantiationService.get(ILanguageConfigurationService);
+			const languageService = instantiationService.get(ILanguageService);
+			const disposables = new DisposableStore();
+			disposables.add(languageService.registerLanguage({ id: 'testMode' }));
+			viewModel.model.setLanguage('testMode');
+
+			let invoked = false;
+			disposables.add(editor.onDidChangeModelLanguageConfiguration((e) => {
+				invoked = true;
+			}));
+
+			disposables.add(languageConfigurationService.register('testMode', {
+				brackets: [['(', ')']]
+			}));
+
+			assert.deepStrictEqual(invoked, true);
+
+			disposables.dispose();
+		});
 	});
 
-	model.reset("alpha");
-	assert.equal(placeholder.style.display, "none");
-	model.reset("");
-	assert.equal(placeholder.style.display, "block");
-	dom.window.close();
-});
+	test('onDidChangeModelContent', () => {
+		withTestCodeEditor('', {}, (editor, viewModel) => {
+			const disposables = new DisposableStore();
 
-test("CodeEditorWidget stages and owns per-instance contributions", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	const events: string[] = [];
-	const service = { kind: "test" };
-	const serviceId = createServiceIdentifier<typeof service>("test.codeEditorContribution");
-	const services = new ServiceContainer();
-	services.registerInstance(serviceId, service);
-	const instantiationService = services;
-	const state = { events, instantiationService, model, service };
-	using editor = new CodeEditorWidget({
-		container,
-		model,
-		selectionController: selections,
-		lineHeight: 20,
-		instantiationService,
-		contributions: [
-			{
-				id: "test.eager",
-				instantiation: EditorContributionInstantiation.Eager,
-				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId, IInstantiationService] }),
-			},
-			{
-				id: "test.lazy",
-				instantiation: EditorContributionInstantiation.Lazy,
-				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId, IInstantiationService] }),
-			},
-		],
+			let invoked = false;
+			disposables.add(editor.onDidChangeModelContent((e) => {
+				invoked = true;
+			}));
+
+			viewModel.type('hello', 'test');
+
+			assert.deepStrictEqual(invoked, true);
+
+			disposables.dispose();
+		});
 	});
 
-	assert.deepEqual(events, ["eager:create"]);
-	assert.ok(editor.contributions.get("test.lazy"));
-	assert.deepEqual(events, ["eager:create", "lazy:create"]);
-	editor.dispose();
-	assert.deepEqual(events, ["eager:create", "lazy:create", "lazy:dispose", "eager:dispose"]);
-	dom.window.close();
-});
+	test('onDidChangeModelOptions', () => {
+		withTestCodeEditor('', {}, (editor, viewModel) => {
+			const disposables = new DisposableStore();
 
-class TestCodeEditorContribution extends Disposable {
-	constructor(
-		private readonly state: { readonly events: string[]; readonly instantiationService: InstanceType<typeof ServiceContainer>; readonly model: TextModel; readonly service: { readonly kind: string } },
-		private readonly id: string,
-		context: CodeEditorContributionContext,
-		service: { readonly kind: string },
-		instantiationService: InstanceType<typeof ServiceContainer>,
-	) {
-		super();
-		assert.equal(context.model, state.model);
-		assert.equal(service, state.service);
-		assert.notEqual(instantiationService, state.instantiationService);
-		assert.equal(instantiationService.get(IInstantiationService), instantiationService);
-		state.events.push(`${id}:create`);
-		this._register(toDisposable(() => state.events.push(`${id}:dispose`)));
-	}
-}
+			let invoked = false;
+			disposables.add(editor.onDidChangeModelOptions((e) => {
+				invoked = true;
+			}));
 
-test("CodeEditorWidget rejects a selection controller from another model", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
-	using otherModel = new TextModel("beta");
-	using selections = new CursorsController(otherModel, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+			viewModel.model.updateOptions({
+				tabSize: 3
+			});
 
-	assert.throws(() => new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 }), /must match/);
-	dom.window.close();
-});
+			assert.deepStrictEqual(invoked, true);
 
-test("CodeEditorWidget leaves text drops available to its host", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 });
-	const drop = textDropEvent(dom.window, "dropped");
-
-	editor.element.dispatchEvent(drop);
-
-	assert.equal(drop.defaultPrevented, false);
-	assert.equal(model.getText(), "alpha");
-	dom.window.close();
-});
-
-function textDropEvent(targetWindow: typeof browserEnvironment.window, text: string): DragEvent {
-	const event = new targetWindow.Event("drop", { bubbles: true, cancelable: true });
-	Object.defineProperty(event, "dataTransfer", {
-		value: {
-			types: ["text/plain"],
-			getData(type: string): string {
-				return type === "text/plain" ? text : "";
-			},
-		},
+			disposables.dispose();
+		});
 	});
-	return event as unknown as DragEvent;
-}
 
-function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	assert.ok(element);
-	return element;
-}
+	test('issue #145872 - Model change events are emitted before the selection updates', () => {
+		withTestCodeEditor('', {}, (editor, viewModel) => {
+			const disposables = new DisposableStore();
+
+			let observedSelection: Selection | null = null;
+			disposables.add(editor.onDidChangeModelContent((e) => {
+				observedSelection = editor.getSelection();
+			}));
+
+			viewModel.type('hello', 'test');
+
+			assert.deepStrictEqual(observedSelection, new Selection(1, 6, 1, 6));
+
+			disposables.dispose();
+		});
+	});
+
+	test('monaco-editor issue #2774 - Wrong order of events onDidChangeModelContent and onDidChangeCursorSelection on redo', () => {
+		withTestCodeEditor('', {}, (editor, viewModel) => {
+			const disposables = new DisposableStore();
+
+			const calls: string[] = [];
+			disposables.add(editor.onDidChangeModelContent((e) => {
+				calls.push(`contentchange(${e.changes.reduce<any[]>((aggr, c) => [...aggr, c.text, c.rangeOffset, c.rangeLength], []).join(', ')})`);
+			}));
+			disposables.add(editor.onDidChangeCursorSelection((e) => {
+				calls.push(`cursorchange(${e.selection.positionLineNumber}, ${e.selection.positionColumn})`);
+			}));
+
+			viewModel.type('a', 'test');
+			viewModel.model.undo();
+			viewModel.model.redo();
+
+			assert.deepStrictEqual(calls, [
+				'contentchange(a, 0, 0)',
+				'cursorchange(1, 2)',
+				'contentchange(, 0, 1)',
+				'cursorchange(1, 1)',
+				'contentchange(a, 0, 0)',
+				'cursorchange(1, 2)'
+			]);
+
+			disposables.dispose();
+		});
+	});
+
+	test('issue #146174: Events delivered out of order when adding decorations in content change listener (1 of 2)', () => {
+		withTestCodeEditor('', {}, (editor, viewModel) => {
+			const disposables = new DisposableStore();
+
+			const calls: string[] = [];
+			disposables.add(editor.onDidChangeModelContent((e) => {
+				calls.push(`listener1 - contentchange(${e.changes.reduce<any[]>((aggr, c) => [...aggr, c.text, c.rangeOffset, c.rangeLength], []).join(', ')})`);
+			}));
+			disposables.add(editor.onDidChangeCursorSelection((e) => {
+				calls.push(`listener1 - cursorchange(${e.selection.positionLineNumber}, ${e.selection.positionColumn})`);
+			}));
+			disposables.add(editor.onDidChangeModelContent((e) => {
+				calls.push(`listener2 - contentchange(${e.changes.reduce<any[]>((aggr, c) => [...aggr, c.text, c.rangeOffset, c.rangeLength], []).join(', ')})`);
+			}));
+			disposables.add(editor.onDidChangeCursorSelection((e) => {
+				calls.push(`listener2 - cursorchange(${e.selection.positionLineNumber}, ${e.selection.positionColumn})`);
+			}));
+
+			viewModel.type('a', 'test');
+
+			assert.deepStrictEqual(calls, ([
+				'listener1 - contentchange(a, 0, 0)',
+				'listener2 - contentchange(a, 0, 0)',
+				'listener1 - cursorchange(1, 2)',
+				'listener2 - cursorchange(1, 2)',
+			]));
+
+			disposables.dispose();
+		});
+	});
+
+	test('issue #146174: Events delivered out of order when adding decorations in content change listener (2 of 2)', () => {
+		withTestCodeEditor('', {}, (editor, viewModel) => {
+			const disposables = new DisposableStore();
+
+			const calls: string[] = [];
+			disposables.add(editor.onDidChangeModelContent((e) => {
+				calls.push(`listener1 - contentchange(${e.changes.reduce<any[]>((aggr, c) => [...aggr, c.text, c.rangeOffset, c.rangeLength], []).join(', ')})`);
+				editor.changeDecorations((changeAccessor) => {
+					changeAccessor.deltaDecorations([], [{ range: new Range(1, 1, 1, 1), options: { description: 'test' } }]);
+				});
+			}));
+			disposables.add(editor.onDidChangeCursorSelection((e) => {
+				calls.push(`listener1 - cursorchange(${e.selection.positionLineNumber}, ${e.selection.positionColumn})`);
+			}));
+			disposables.add(editor.onDidChangeModelContent((e) => {
+				calls.push(`listener2 - contentchange(${e.changes.reduce<any[]>((aggr, c) => [...aggr, c.text, c.rangeOffset, c.rangeLength], []).join(', ')})`);
+			}));
+			disposables.add(editor.onDidChangeCursorSelection((e) => {
+				calls.push(`listener2 - cursorchange(${e.selection.positionLineNumber}, ${e.selection.positionColumn})`);
+			}));
+
+			viewModel.type('a', 'test');
+
+			assert.deepStrictEqual(calls, ([
+				'listener1 - contentchange(a, 0, 0)',
+				'listener2 - contentchange(a, 0, 0)',
+				'listener1 - cursorchange(1, 2)',
+				'listener2 - cursorchange(1, 2)',
+			]));
+
+			disposables.dispose();
+		});
+	});
+
+	test('getBottomForLineNumber should handle invalid line numbers gracefully', () => {
+		withTestCodeEditor('line1\nline2\nline3', {}, (editor, viewModel) => {
+			// Test with lineNumber greater than line count
+			const result1 = editor.getBottomForLineNumber(100);
+			assert.ok(result1 >= 0, 'Should return a valid position for out-of-bounds line number');
+
+			// Test with lineNumber less than 1
+			const result2 = editor.getBottomForLineNumber(0);
+			assert.ok(result2 >= 0, 'Should return a valid position for line number 0');
+
+			// Test with negative lineNumber
+			const result3 = editor.getBottomForLineNumber(-5);
+			assert.ok(result3 >= 0, 'Should return a valid position for negative line number');
+
+			// Test with valid lineNumber should still work
+			const result4 = editor.getBottomForLineNumber(2);
+			assert.ok(result4 > 0, 'Should return a valid position for valid line number');
+		});
+	});
+
+});

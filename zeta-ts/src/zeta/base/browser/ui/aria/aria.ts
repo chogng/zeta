@@ -94,7 +94,7 @@ export class AriaLiveRegion extends Disposable {
 	private politeIndex = 0;
 	private assertiveIndex = 0;
 
-	constructor(ownerDocument: Document) {
+	constructor(ownerDocument: Document, container: HTMLElement = ownerDocument.body) {
 		super();
 		this.root = h(ownerDocument, "div");
 		this.root.className = "zeta-aria-live";
@@ -107,7 +107,7 @@ export class AriaLiveRegion extends Disposable {
 			this.createRegion(ownerDocument, "assertive"),
 		];
 		this.root.append(...this.polite, ...this.assertive);
-		ownerDocument.body.append(this.root);
+		container.append(this.root);
 		this._register(toDisposable(() => this.root.remove()));
 	}
 
@@ -176,3 +176,23 @@ export class AriaLiveRegion extends Disposable {
 }
 
 const maximumMessageLength = 20_000;
+
+let ariaLiveRegion: AriaLiveRegion | undefined;
+
+export function setARIAContainer(parent: HTMLElement): void {
+	ariaLiveRegion?.dispose();
+	ariaLiveRegion = new AriaLiveRegion(parent.ownerDocument, parent);
+}
+
+export function alert(message: string): void {
+	getARIAContainer().alert(message);
+}
+
+export function status(message: string): void {
+	getARIAContainer().status(message);
+}
+
+function getARIAContainer(): AriaLiveRegion {
+	if (!ariaLiveRegion) throw new Error("ARIA container has not been initialized");
+	return ariaLiveRegion;
+}

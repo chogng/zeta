@@ -1,6 +1,6 @@
 ---
 name: vscode-api-alignment
-description: Align Zeta TypeScript editor source files, APIs, and debuggable call paths with the checked-out VS Code source by preserving corresponding paths, file decomposition, public names, responsibilities, ownership, lifecycle, and caller contracts. Use when adding, renaming, refactoring, or reviewing Zeta editor APIs against VS Code; do not use for Rust or generic TypeScript naming.
+description: Align Zeta TypeScript editor file sets, APIs, and debuggable call paths with the checked-out VS Code source by preserving file counts, corresponding paths, public names, responsibilities, ownership, lifecycle, and caller contracts. Use when adding, renaming, refactoring, or reviewing Zeta editor APIs against VS Code; do not use for Rust or generic TypeScript naming.
 ---
 
 ## 同路径批量查询
@@ -12,7 +12,15 @@ description: Align Zeta TypeScript editor source files, APIs, and debuggable cal
 
 # VS Code API 对齐
 
-当 Zeta 的 TypeScript 编辑器实现对应 VS Code 的模块、视图部件或公共契约时，以 `../vscode` 为源码依据，以 `zeta-ts/src/zeta/editor` 及其必要调用方为主要修改范围。目标是建立可以沿调用链定位问题的真实对应关系，不是复制上游，也不是只让类型检查通过。对齐过程必须让生产文件图单调收敛：仅本地文件只能减少，新增生产文件必须能在 VS Code 中找到大小写一致的同相对路径文件。
+当 Zeta 的 TypeScript 编辑器实现对应 VS Code 的模块、视图部件或公共契约时，以 `../vscode` 为源码依据，以 `zeta-ts/src/zeta/editor` 及其必要调用方为主要修改范围。目标是建立可以沿调用链定位问题的真实对应关系，不能把复制上游或通过类型检查本身当作完成。对齐过程必须让生产文件图单调收敛：仅本地文件只能减少，新增生产文件必须能在 VS Code 中找到大小写一致的同相对路径文件。
+
+## 目标结构与实现策略
+
+- 所选 Editor 切片最终必须与 VS Code 具有相同的生产文件数量、文件名、大小写和相对路径。文件集合本身是架构和排错契约；不得用额外的 Zeta Editor 文件承载桥接、兼容、聚合或产品专属职责。
+- 对应文件必须对齐 VS Code 的公开 API 名称与大小写、签名、导入 owner、职责边界、状态所有权、生命周期、调用顺序、副作用和错误语义。只对齐导出声明、类型形状或成员名不算完成。
+- 内部算法不要求逐字相同。现有 Zeta owner 若承担必要且合法的基础或产品职责，应在同一正确 owner 中实现 VS Code 契约，并以真实生产调用和行为测试证明语义一致；不得为了字节一致覆盖或丢失这些职责。
+- 对应文件没有 Zeta 专属职责、且其依赖 owner 已闭合时，可以把上游文件作为机械同步步骤批量复制。复制后仍须迁移调用方和测试、验证行为链；文件相同不能替代职责验证。
+- 结构、文件名和 API 名称对齐不等于复制实现，也不取消许可证要求。凡复制 VS Code 实现、注释或实质代码，先核对 `../vscode/LICENSE.txt`，保留原版权与许可证声明；不得因为文件图或接口名称一致而删除现有许可证头或宣称无需考虑版权。
 
 ## 分层与依赖方向
 
@@ -95,5 +103,9 @@ description: Align Zeta TypeScript editor source files, APIs, and debuggable cal
 - 最后复核对应表、`git diff`、`git status`，报告已真实对齐、仍是假对齐或缺失的 owner、没有上游对应路径的阻塞能力、已运行检查和未解决问题。
 
 ## Learnings
+
+* 对齐工作的价值在职责迁移、调用链闭合和行为验证；同路径文件复制只是机械步骤，必须批量快速完成，不能用逐层审计和复制代替对 owner、生产调用方、测试及产品专属职责的处理。
+
+* 删除不是对齐结果；删除本地旧文件时，必须同步完成职责迁移，证明真实生产调用已经改走 VS Code 对应 owner，并同步测试；不能用“调用归零”或“上游没有该文件”代替职责对齐。
 
 * 对齐上游编辑器前，必须先保存工作树来源基线并比较整个目标所有权切片的相对生产源码文件集合；文件路径、数量与职责拆分都属于架构契约。严格对齐采用单调文件图：仅本地文件只能迁移并在用户确认准确路径后删除，新增文件必须命中 VS Code 的同路径文件。把上游 `import` 当作依赖能力清单，深度优先补齐真实 owner；一条依赖分支未闭合前不得铺开其他分支，也不得用新增桥接文件承载上游 API。来源不明默认按用户文件保护，不能仅凭“上游不存在”删除；任何删除都必须执行前暂停询问。

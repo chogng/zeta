@@ -1,285 +1,120 @@
-.stanza-editor {
-  --stanza-editor-padding-left: 12px;
-  --stanza-editor-padding-right: 12px;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-  position: relative;
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  color: var(--zeta-editor-foreground);
-  background: var(--zeta-editor-background);
-  font-family: var(--zeta-font-family-monospace, ui-monospace, monospace);
-  white-space: pre;
-  tab-size: 4;
-  outline: none;
-  contain: strict;
+/* -------------------- IE10 remove auto clear button -------------------- */
+
+::-ms-clear {
+	display: none;
 }
 
-.stanza-editor.horizontally-scrollable {
-  overflow-x: auto;
+/* All widgets */
+/* I am not a big fan of this rule */
+.monaco-editor .editor-widget input {
+	color: inherit;
 }
 
-.stanza-editor.vertically-scrollable {
-  overflow-y: auto;
+/* -------------------- Editor -------------------- */
+
+.monaco-editor {
+	position: relative;
+	overflow: visible;
+	-webkit-text-size-adjust: 100%;
+	text-spacing-trim: space-all;
+	color: var(--vscode-editor-foreground);
+	background-color: var(--vscode-editor-background);
+	overflow-wrap: initial;
 }
-
-.stanza-editor-focus-owner-editor:focus-visible,
-.stanza-editor-focus-owner-editor.input-focused {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
+.monaco-editor-background {
+	background-color: var(--vscode-editor-background);
 }
-
-.stanza-editor-embedded {
-  color: var(--zeta-input-foreground);
-  background: transparent;
-  font-family: inherit;
-}
-
-.stanza-editor-embedded .line-numbers {
-  display: none;
-}
-
-.stanza-editor.hide-line-numbers .line-numbers {
-  display: none;
-}
-
-.stanza-editor-content {
-  position: relative;
-  min-width: 100%;
-}
-
-.stanza-editor-content-widgets,
-.stanza-editor-overlay-widgets {
-	position: absolute;
-	top: 0;
-	left: 0;
-}
-
-.stanza-editor-view-zone {
-    position: absolute;
-    box-sizing: border-box;
-	pointer-events: auto;
-  }
-
-.stanza-editor-view-zones {
-	position: absolute;
-	top: 0;
-	pointer-events: none;
-}
-
-.stanza-editor-margin-view-zones {
-	position: absolute;
-	top: 0;
-	left: 0;
-	pointer-events: none;
-}
-
-.stanza-editor-margin-view-zone {
-	position: absolute;
-	left: 0;
+.monaco-editor .rangeHighlight {
+	background-color: var(--vscode-editor-rangeHighlightBackground);
 	box-sizing: border-box;
-	pointer-events: auto;
+	border: 1px solid var(--vscode-editor-rangeHighlightBorder);
+}
+.monaco-editor.hc-black .rangeHighlight, .monaco-editor.hc-light .rangeHighlight {
+	border-style: dotted;
+}
+.monaco-editor .symbolHighlight {
+	background-color: var(--vscode-editor-symbolHighlightBackground);
+	box-sizing: border-box;
+	border: 1px solid var(--vscode-editor-symbolHighlightBorder);
+}
+.monaco-editor.hc-black .symbolHighlight, .monaco-editor.hc-light .symbolHighlight {
+	border-style: dotted;
 }
 
-.stanza-editor-diagnostic-hover {
-  position: fixed;
-  z-index: 100;
-  box-sizing: border-box;
-  max-width: 352px;
-  padding: 6px 8px;
-  color: var(--zeta-editor-foreground);
-  font: inherit;
-  white-space: pre-wrap;
-  pointer-events: none;
-  background: var(--zeta-editor-background);
-  border: 1px solid var(--zeta-focus-border);
-  border-radius: 3px;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--zeta-editor-foreground) 20%, transparent);
+.monaco-editor .editorCanvas {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	z-index: 0;
+	pointer-events: none;
 }
 
-.stanza-editor-accessibility-status {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
+/* -------------------- Misc -------------------- */
+
+.monaco-editor .overflow-guard {
+	position: relative;
+	overflow: hidden;
 }
 
-@media (forced-colors: active) {
-  .stanza-editor {
-    color: CanvasText;
-    background: Canvas;
-  }
-
-  .stanza-editor-focus-owner-editor:focus-visible,
-  .stanza-editor-focus-owner-editor.input-focused {
-    outline-color: Highlight;
-  }
-
+.monaco-editor .view-overlays {
+	position: absolute;
+	top: 0;
 }
 
-.stanza-editor-text-metrics {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  visibility: hidden;
-  pointer-events: none;
+.monaco-editor .view-overlays > div, .monaco-editor .margin-view-overlays > div {
+	position: absolute;
+	width: 100%;
 }
 
-.stanza-editor {
-  --zeta-scrollbar-size: var(--stanza-editor-vertical-scrollbar-size);
-  scrollbar-width: none;
+/*
+.monaco-editor .auto-closed-character {
+	opacity: 0.3;
 }
+*/
 
-.stanza-editor::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
 
-.stanza-editor-scrollbar-track {
-  position: absolute;
-  z-index: 8;
-  box-sizing: border-box;
-  opacity: 1;
-  outline: none;
-  touch-action: none;
-  transition: opacity 100ms linear;
+.monaco-editor .squiggly-error {
+	border-bottom: 4px double var(--vscode-editorError-border);
 }
-
-.stanza-editor-scrollbar-track-horizontal {
-  bottom: 0;
-  left: 0;
-  height: var(--stanza-editor-horizontal-scrollbar-size);
-  border-radius: calc(var(--stanza-editor-horizontal-scrollbar-size) / 2);
+.monaco-editor .squiggly-error::before {
+	display: block;
+	content: '';
+	width: 100%;
+	height: 100%;
+	background: var(--vscode-editorError-background);
 }
-
-.stanza-editor-scrollbar-track-vertical {
-  top: 0;
-  right: 0;
-  width: var(--stanza-editor-vertical-scrollbar-size);
-  border-radius: calc(var(--stanza-editor-vertical-scrollbar-size) / 2);
+.monaco-editor .squiggly-warning {
+	border-bottom: 4px double var(--vscode-editorWarning-border);
 }
-
-.stanza-editor-scrollbar-track[data-visibility="auto"] {
-  opacity: 0;
-  pointer-events: none;
+.monaco-editor .squiggly-warning::before {
+	display: block;
+	content: '';
+	width: 100%;
+	height: 100%;
+	background: var(--vscode-editorWarning-background);
 }
-
-.stanza-editor:hover > .stanza-editor-scrollbar-track[data-visibility="auto"],
-.stanza-editor:focus-within > .stanza-editor-scrollbar-track[data-visibility="auto"],
-.stanza-editor-scrolling > .stanza-editor-scrollbar-track[data-visibility="auto"],
-.stanza-editor-scrollbar-track.active {
-  opacity: 1;
-  pointer-events: auto;
+.monaco-editor .squiggly-info {
+	border-bottom: 4px double var(--vscode-editorInfo-border);
 }
-
-.stanza-editor-scrollbar-track.disabled {
-  pointer-events: none;
+.monaco-editor .squiggly-info::before {
+	display: block;
+	content: '';
+	width: 100%;
+	height: 100%;
+	background: var(--vscode-editorInfo-background);
 }
-
-.stanza-editor-scrollbar-track > .zeta-scrollbar-thumb {
-  position: absolute;
-  box-sizing: border-box;
-  border: 2px solid transparent;
-  background: var(--zeta-scrollbar-slider-background) padding-box;
-  cursor: default;
-  forced-color-adjust: none;
-  will-change: transform;
+.monaco-editor .squiggly-hint {
+	border-bottom: 2px dotted var(--vscode-editorHint-border);
 }
-
-.stanza-editor-scrollbar-track-horizontal > .zeta-scrollbar-thumb {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  border-radius: calc(var(--stanza-editor-horizontal-scrollbar-size) / 2);
+.monaco-editor.showUnused .squiggly-unnecessary {
+	border-bottom: 2px dashed var(--vscode-editorUnnecessaryCode-border);
 }
-
-.stanza-editor-scrollbar-track-vertical > .zeta-scrollbar-thumb {
-  top: 0;
-  right: 0;
-  bottom: auto;
-  left: 0;
-  border-radius: calc(var(--stanza-editor-vertical-scrollbar-size) / 2);
-}
-
-.stanza-editor-scrollbar-track:hover > .zeta-scrollbar-thumb {
-  background: var(--zeta-scrollbar-slider-hover-background) padding-box;
-}
-
-.stanza-editor-scrollbar-track.active > .zeta-scrollbar-thumb {
-  background: var(--zeta-scrollbar-slider-active-background) padding-box;
-}
-
-.stanza-editor-scrollbar-track:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-scrollbar-track > .zeta-scrollbar-thumb {
-    border-color: ButtonText;
-    background: ButtonFace padding-box;
-  }
-}
-.stanza-editor-overview-ruler {
-  position: absolute;
-  z-index: 6;
-  width: 6px;
-  pointer-events: none;
-}
-
-.stanza-editor-overview-marker {
-  position: absolute;
-  right: 0;
-  left: 0;
-  min-height: 2px;
-}
-
-.stanza-editor-overview-marker.diff-added {
-  right: 3px;
-  background: var(--zeta-diff-editor-inserted-line-marker);
-}
-
-.stanza-editor-overview-marker.diff-modified {
-  right: 3px;
-  background: var(--zeta-focus-border);
-}
-
-.stanza-editor-overview-marker.diff-deleted {
-  right: 3px;
-  background: var(--zeta-diff-editor-removed-line-marker);
-}
-
-.stanza-editor-overview-marker.error-underline {
-  background: var(--zeta-error-foreground);
-}
-
-.stanza-editor-overview-marker.warning-underline {
-  background: var(--zeta-warning-foreground);
-}
-
-.stanza-editor-overview-marker.information-underline {
-  background: var(--zeta-focus-border);
-}
-
-.stanza-editor-overview-marker.hint-underline {
-  background: var(--zeta-description-foreground);
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-overview-marker {
-    background: CanvasText;
-    color: CanvasText;
-  }
+.monaco-editor.showDeprecated .squiggly-inline-deprecated {
+	text-decoration: line-through;
+	text-decoration-color: var(--vscode-editor-foreground, inherit);
 }

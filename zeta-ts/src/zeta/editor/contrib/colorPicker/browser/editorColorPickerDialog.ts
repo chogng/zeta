@@ -32,39 +32,39 @@ export class EditorColorPickerDialog extends Disposable {
 		});
 		this.presentationSelect = h(ownerDocument, 'select', {
 			className: 'stanza-editor-color-picker-presentation',
-			attributes: { 'aria-label': localize('zeta.editor.colorPicker', 'presentation', 'Color format') },
+			attributes: { 'aria-label': localize('presentation', 'Color format') },
 		});
-		this.hueInput = colorRange(ownerDocument, 'hue', localize('zeta.editor.colorPicker', 'hue', 'Hue'), 0, 360);
-		this.saturationInput = colorRange(ownerDocument, 'saturation', localize('zeta.editor.colorPicker', 'saturation', 'Saturation'), 0, 100);
-		this.lightnessInput = colorRange(ownerDocument, 'lightness', localize('zeta.editor.colorPicker', 'lightness', 'Lightness'), 0, 100);
-		this.alphaInput = colorRange(ownerDocument, 'alpha', localize('zeta.editor.colorPicker', 'opacity', 'Opacity'), 0, 255);
+		this.hueInput = colorRange(ownerDocument, 'hue', localize('hue', 'Hue'), 0, 360);
+		this.saturationInput = colorRange(ownerDocument, 'saturation', localize('saturation', 'Saturation'), 0, 100);
+		this.lightnessInput = colorRange(ownerDocument, 'lightness', localize('lightness', 'Lightness'), 0, 100);
+		this.alphaInput = colorRange(ownerDocument, 'alpha', localize('opacity', 'Opacity'), 0, 255);
 		const closeButton = h(ownerDocument, 'button', {
 			className: 'stanza-editor-color-picker-close',
-			attributes: { type: 'button', 'aria-label': localize('zeta.editor.colorPicker', 'close', 'Close color picker') },
+			attributes: { type: 'button', 'aria-label': localize('close', 'Close color picker') },
 		}, '×');
 		this.applyButton = h(ownerDocument, 'button', {
 			className: 'stanza-editor-color-picker-apply',
 			attributes: { type: 'button' },
-		}, localize('zeta.editor.colorPicker', 'apply', 'Apply'));
+		}, localize('apply', 'Apply'));
 		const cancelButton = h(ownerDocument, 'button', {
 			className: 'stanza-editor-color-picker-cancel',
 			attributes: { type: 'button' },
-		}, localize('zeta.editor.colorPicker', 'cancel', 'Cancel'));
+		}, localize('cancel', 'Cancel'));
 		this.domNode = h(ownerDocument, 'div', {
 			className: 'stanza-editor-color-picker',
 			attributes: {
 				role: 'dialog',
-				'aria-label': localize('zeta.editor.colorPicker', 'dialog', 'Color picker'),
+				'aria-label': localize('dialog', 'Color picker'),
 				'aria-modal': 'false',
 			},
 			properties: { hidden: true },
 		},
 			h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-header' }, this.preview, this.presentationSelect, closeButton),
 			h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-controls' },
-				colorControl(ownerDocument, localize('zeta.editor.colorPicker', 'hueShort', 'H'), this.hueInput),
-				colorControl(ownerDocument, localize('zeta.editor.colorPicker', 'saturationShort', 'S'), this.saturationInput),
-				colorControl(ownerDocument, localize('zeta.editor.colorPicker', 'lightnessShort', 'L'), this.lightnessInput),
-				colorControl(ownerDocument, localize('zeta.editor.colorPicker', 'opacityShort', 'A'), this.alphaInput),
+				colorControl(ownerDocument, localize('hueShort', 'H'), this.hueInput),
+				colorControl(ownerDocument, localize('saturationShort', 'S'), this.saturationInput),
+				colorControl(ownerDocument, localize('lightnessShort', 'L'), this.lightnessInput),
+				colorControl(ownerDocument, localize('opacityShort', 'A'), this.alphaInput),
 			),
 			h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-actions' }, cancelButton, this.applyButton),
 		);

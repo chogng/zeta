@@ -476,7 +476,7 @@ function registerKeyIdentity(
 		return;
 	}
 	IMMUTABLE_CODE_TO_KEY_CODE[scanCode] = keyCode;
-	if (keyCode !== KeyCode.Unknown && keyCode !== KeyCode.Enter && !isModifierKeyCode(keyCode)) {
+	if (keyCode !== KeyCode.Unknown && keyCode !== KeyCode.Enter && !isModifierKey(keyCode)) {
 		IMMUTABLE_KEY_CODE_TO_CODE[keyCode] = scanCode;
 	}
 }
@@ -653,7 +653,19 @@ export function keyCodeFromKeyboardEvent(
 	return keyCode !== KeyCode.Unknown ? keyCode : EVENT_KEY_CODE_MAP[legacyKeyCode] ?? KeyCode.Unknown;
 }
 
-export function isModifierKeyCode(keyCode: KeyCode): boolean {
+export const enum KeyMod {
+	CtrlCmd = (1 << 11) >>> 0,
+	Shift = (1 << 10) >>> 0,
+	Alt = (1 << 9) >>> 0,
+	WinCtrl = (1 << 8) >>> 0,
+}
+
+export function KeyChord(firstPart: number, secondPart: number): number {
+	const chordPart = ((secondPart & 0x0000FFFF) << 16) >>> 0;
+	return (firstPart | chordPart) >>> 0;
+}
+
+export function isModifierKey(keyCode: KeyCode): boolean {
 	return keyCode === KeyCode.Ctrl || keyCode === KeyCode.Shift || keyCode === KeyCode.Alt || keyCode === KeyCode.Meta;
 }
 

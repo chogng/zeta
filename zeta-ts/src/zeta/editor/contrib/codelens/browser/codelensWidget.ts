@@ -23,7 +23,7 @@ export class EditorCodeLensWidget extends Disposable {
 		this.domNode = h(viewport.element.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-widget stanza-editor-codelens';
 		this.domNode.setAttribute('role', 'group');
-		this.domNode.setAttribute('aria-label', localize('zeta.editor.codeLens', 'commands', 'CodeLens commands'));
+		this.domNode.setAttribute('aria-label', localize('commands', 'CodeLens commands'));
 		this.viewZone = {
 			afterLineNumber: this.afterVisualLineIndex + 1,
 			heightInPx: this.codeLensHeight,

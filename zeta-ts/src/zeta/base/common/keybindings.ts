@@ -2,7 +2,7 @@ import {
 	operatingSystem,
 	OperatingSystem,
 } from "./platform.js";
-import type { KeyCode, ScanCode } from "./keyCodes.js";
+import { KeyCode, KeyCodeUtils, type ScanCode } from "./keyCodes.js";
 
 /**
  * Modifiers for a keybinding chord.
@@ -107,6 +107,28 @@ export class Keybinding {
 	): Keybinding {
 		return new Keybinding([first, second, ...remaining]);
 	}
+}
+
+export function decodeKeybinding(keybinding: number | readonly number[], targetOperatingSystem: OperatingSystem): Keybinding | null {
+	const encodedChords = typeof keybinding === "number"
+		? [keybinding & 0x0000FFFF, (keybinding & 0xFFFF0000) >>> 16]
+		: keybinding;
+	const chords = encodedChords
+		.filter(encoded => encoded !== 0)
+		.map(encoded => {
+			const ctrlCmd = (encoded & (1 << 11)) !== 0;
+			const shiftKey = (encoded & (1 << 10)) !== 0;
+			const altKey = (encoded & (1 << 9)) !== 0;
+			const winCtrl = (encoded & (1 << 8)) !== 0;
+			const keyCode = encoded & 0xFF;
+			return logicalKey(KeyCodeUtils.toString(keyCode), {
+				ctrlKey: targetOperatingSystem === OperatingSystem.Macintosh ? winCtrl : ctrlCmd,
+				shiftKey,
+				altKey,
+				metaKey: targetOperatingSystem === OperatingSystem.Macintosh ? ctrlCmd : winCtrl,
+			});
+		});
+	return chords.length === 0 ? null : new Keybinding(chords);
 }
 
 /** A chord after portable modifiers have been resolved for one host OS. */

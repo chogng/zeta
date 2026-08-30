@@ -1,4 +1,4 @@
-import { AriaLiveRegion } from "../../../base/browser/ui/aria/aria.js";
+import { alert, setARIAContainer, status } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { IContextKey, IContextKeyService } from "../../contextkey/common/contextkey.js";
@@ -18,7 +18,6 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 	private readonly accessibilityModeEnabledContext: IContextKey<boolean>;
 	private readonly root: HTMLElement;
 	private readonly configurationService: IConfigurationService;
-	private readonly liveRegion: AriaLiveRegion;
 	private readonly onDidChangeScreenReaderOptimizedEmitter = this._register(new Emitter<void>());
 	private readonly onDidChangeReducedMotionEmitter = this._register(new Emitter<void>());
 	private readonly onDidChangeReducedTransparencyEmitter = this._register(new Emitter<void>());
@@ -47,7 +46,7 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 		this.systemMotionReduced = false;
 		this.systemTransparencyReduced = false;
 		this.accessibilityModeEnabledContext = CONTEXT_ACCESSIBILITY_MODE_ENABLED.bindTo(options.contextKeyService);
-		this.liveRegion = this._register(new AriaLiveRegion(ownerDocument));
+		setARIAContainer(options.root);
 		this._register(toDisposable(() => {
 			this.accessibilityModeEnabledContext.reset();
 			this.root.classList.remove("zeta-reduce-motion", "zeta-enable-motion", "zeta-reduce-transparency", "zeta-underline-links");
@@ -130,11 +129,11 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 	}
 
 	alert(message: string): void {
-		this.liveRegion.alert(message);
+		alert(message);
 	}
 
 	status(message: string): void {
-		this.liveRegion.status(message);
+		status(message);
 	}
 
 	private updateAccessibilityModeContext(): void {

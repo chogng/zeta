@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM, type DOMWindow } from "jsdom";
 import { scheduleAtNextAnimationFrame } from "../../browser/scheduler.js";
-import { AriaLiveRegion, setAriaAttribute, setRole } from "../../browser/ui/aria/aria.js";
+import { alert, AriaLiveRegion, setARIAContainer, setAriaAttribute, setRole, status } from "../../browser/ui/aria/aria.js";
 
 test("ARIA helpers set, preserve false, and remove semantic attributes", () => {
 	const dom = new JSDOM("<!doctype html><body><button></button></body>");
@@ -62,6 +62,24 @@ test("AriaLiveRegion announces repeated status and alert messages", async () => 
 		dom.window.document.querySelector(".zeta-aria-live"),
 		null,
 	);
+	dom.window.close();
+});
+
+test("module ARIA owner announces through the configured workbench container", async () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>", {
+		pretendToBeVisual: true,
+	});
+	const container = dom.window.document.querySelector("main");
+	assert.ok(container);
+	setARIAContainer(container);
+
+	status("Ready");
+	await nextAnimationFrame(dom.window);
+	alert("Tab moves focus");
+	await nextAnimationFrame(dom.window);
+
+	assert.equal(container.querySelector(".zeta-aria-status")?.textContent, "Ready");
+	assert.equal(container.querySelector(".zeta-aria-alert")?.textContent, "Tab moves focus");
 	dom.window.close();
 });
 

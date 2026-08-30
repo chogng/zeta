@@ -1,32 +1,30 @@
-import { Emitter, type Event } from '../../../base/common/event.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 
-/**
- * Host-scoped state for whether Tab moves browser focus or edits the document.
- *
- * The service owns no DOM nodes and no keybindings. A host may share one
- * instance across its editors; when an editor is constructed without an
- * injected instance, its browser runtime creates an editor-local one.
- */
-export class TabFocus extends Disposable {
-	private readonly changeEmitter = this._register(new Emitter<boolean>());
-	private enabled = false;
+class TabFocusImpl extends Disposable {
+	private _tabFocus: boolean = false;
+	private readonly _onDidChangeTabFocus = this._register(new Emitter<boolean>());
+	public readonly onDidChangeTabFocus: Event<boolean> = this._onDidChangeTabFocus.event;
 
-	readonly onDidChange: Event<boolean> = this.changeEmitter.event;
-
-	get isEnabled(): boolean {
-		return this.enabled;
+	public getTabFocusMode(): boolean {
+		return this._tabFocus;
 	}
 
-	setEnabled(enabled: boolean): void {
-		if (typeof enabled !== 'boolean') throw new TypeError('Tab focus mode must be boolean');
-		if (enabled === this.enabled) return;
-		this.enabled = enabled;
-		this.changeEmitter.fire(enabled);
-	}
-
-	toggle(): boolean {
-		this.setEnabled(!this.enabled);
-		return this.enabled;
+	public setTabFocusMode(tabFocusMode: boolean): void {
+		this._tabFocus = tabFocusMode;
+		this._onDidChangeTabFocus.fire(this._tabFocus);
 	}
 }
+
+/**
+ * Control what pressing Tab does.
+ * If it is false, pressing Tab or Shift-Tab will be handled by the editor.
+ * If it is true, pressing Tab or Shift-Tab will move the browser focus.
+ * Defaults to false.
+ */
+export const TabFocus = new TabFocusImpl();

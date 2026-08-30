@@ -7,6 +7,7 @@ import {
 } from "../../../../base/common/keybindings.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { OperatingSystem } from "../../../../base/common/platform.js";
+import { KeyCode, KeyMod } from "../../../../base/common/keyCodes.js";
 import {
 	Action2,
 	MenuId,
@@ -35,6 +36,7 @@ import {
 } from "../../../../platform/keybinding/common/keybindingResolver.js";
 import {
 	KeybindingRuleKind,
+	KeybindingWeight,
 	KeybindingsRegistry,
 } from "../../../../platform/keybinding/common/keybindingsRegistry.js";
 import {
@@ -129,6 +131,36 @@ test("registerAction2 accepts independently conditioned keybinding contributions
 	assert.equal(rules.length, 2);
 	assert.deepEqual(rules.map((rule) => rule.args), [["first"], ["second"]]);
 	assert.deepEqual(rules.map((rule) => [...(rule.when?.keys() ?? [])]), [["test.firstBinding"], ["test.secondBinding"]]);
+});
+
+test("registerAction2 routes VS Code numeric keybindings through the canonical registry", () => {
+	const commandId = "test.actions.numeric-keybinding";
+	using registration = registerAction2(class NumericKeybindingAction extends Action2 {
+		constructor() {
+			super({
+				id: commandId,
+				title: "Numeric keybinding",
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyCode.KeyM,
+					weight: KeybindingWeight.EditorContrib,
+				},
+			});
+		}
+
+		override run(): void {}
+	});
+
+	const rule = KeybindingsRegistry.getKeybindings().find(candidate => candidate.kind === KeybindingRuleKind.Command && candidate.command === commandId);
+	assert.ok(rule);
+	const resolved = resolveKeybinding(rule.keybinding, OperatingSystem.Windows).chords[0];
+	assert.deepEqual({ key: resolved.key, ctrlKey: resolved.ctrlKey, shiftKey: resolved.shiftKey, altKey: resolved.altKey, metaKey: resolved.metaKey }, {
+		key: "m",
+		ctrlKey: true,
+		shiftKey: false,
+		altKey: false,
+		metaKey: false,
+	});
+	assert.equal(rule.priority, KeybindingWeight.EditorContrib);
 });
 
 test("menu actions react to visibility, enablement, and toggle context", () => {

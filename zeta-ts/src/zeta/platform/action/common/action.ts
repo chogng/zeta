@@ -2,6 +2,7 @@ import type { Icon } from "../../../base/common/icon.js";
 import type {
 	ContextKeyExpression,
 } from "../../contextkey/common/contextkey.js";
+import type { ICommandMetadata } from "../../commands/common/commands.js";
 import { localize } from "../../../nls.js";
 
 export interface ILocalizedString {
@@ -29,6 +30,7 @@ export interface ICommandActionToggleInfo {
 export interface ICommandAction {
 	readonly id: string;
 	readonly title: CommandActionTitle;
+	readonly metadata?: ICommandMetadata;
 	readonly shortTitle?: CommandActionTitle;
 	readonly tooltip?: CommandActionTitle;
 	readonly icon?: Icon;
@@ -42,7 +44,7 @@ export function localizedString(bundle: string, key: string, original: string): 
 
 export function commandActionLabel(title: CommandActionTitle): string {
 	if (typeof title === "string") return title;
-	return title.bundle && title.key ? localize(title.bundle, title.key, title.original) : title.value;
+	return title.key ? localize(title.key, title.original) : title.value;
 }
 
 export function isCommandActionToggleInfo(

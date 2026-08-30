@@ -11,6 +11,7 @@ import {
 	toDisposable,
 } from "../../../base/common/lifecycle.js";
 import { getOrSet } from "../../../base/common/map.js";
+import { operatingSystem, OperatingSystem } from "../../../base/common/platform.js";
 import {
 	commandActionLabel,
 	type CommandActionTitle,
@@ -219,13 +220,22 @@ export class SubmenuItemAction extends SubmenuAction {
 
 type OneOrMany<T> = T | readonly T[];
 
-export interface IAction2KeybindingOptions {
-	readonly primary: Keybinding;
-	readonly secondary?: readonly Keybinding[];
+type ActionKeybinding = Keybinding | number | readonly number[];
+
+interface IAction2PlatformKeybindingOptions {
+	readonly primary: ActionKeybinding;
+	readonly secondary?: readonly ActionKeybinding[];
+}
+
+export interface IAction2KeybindingOptions extends IAction2PlatformKeybindingOptions {
+	readonly win?: IAction2PlatformKeybindingOptions;
+	readonly linux?: IAction2PlatformKeybindingOptions;
+	readonly mac?: IAction2PlatformKeybindingOptions;
 	readonly when?: ContextKeyExpression;
 	readonly args?: readonly unknown[];
 	readonly source?: KeybindingSource;
 	readonly priority?: number;
+	readonly weight?: number;
 }
 
 export interface IAction2Options extends ICommandAction {
@@ -268,9 +278,10 @@ export function registerAction2(
 		));
 
 		for (const contribution of toArray(action.desc.keybinding)) {
+			const platformContribution = getPlatformKeybinding(contribution);
 			const keybindings = [
-				contribution.primary,
-				...(contribution.secondary ?? []),
+				platformContribution?.primary ?? contribution.primary,
+				...(platformContribution?.secondary ?? contribution.secondary ?? []),
 			];
 			const when = ContextKeyExpr.and(
 				action.desc.precondition,
@@ -283,7 +294,7 @@ export function registerAction2(
 					when,
 					args: contribution.args,
 					source: contribution.source,
-					priority: contribution.priority,
+					priority: contribution.priority ?? contribution.weight,
 				}));
 			}
 		}
@@ -317,4 +328,10 @@ export function registerAction2(
 function toArray<T>(value: OneOrMany<T> | undefined): readonly T[] {
 	if (value === undefined) return [];
 	return Array.isArray(value) ? value : [value as T];
+}
+
+function getPlatformKeybinding(options: IAction2KeybindingOptions): IAction2PlatformKeybindingOptions | undefined {
+	if (operatingSystem === OperatingSystem.Windows) return options.win;
+	if (operatingSystem === OperatingSystem.Macintosh) return options.mac;
+	return options.linux;
 }

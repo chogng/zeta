@@ -1,187 +1,106 @@
-import { type CursorsController } from '../common/cursor/cursor.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { ICodeEditor } from './editorBrowser.js';
 import { Position } from '../common/core/position.js';
-import { type View } from './view.js';
+import { ScrollType } from '../common/editorCommon.js';
 
-/** Preserves the first visible visual row while editor content is reprojected. */
-export class ViewStableEditorScrollState {
-	private readonly initialScrollTop: number;
-	private readonly initialContentHeight: number;
-	private readonly visiblePosition: Position | undefined;
-	private readonly visiblePositionScrollDelta: number;
-	private readonly cursorPosition: Position | undefined;
-	private readonly selectionController: CursorsController | undefined;
+export class StableEditorScrollState {
 
-	public static capture(
-		viewport: View,
-		selectionController?: CursorsController,
-	): ViewStableEditorScrollState {
-		const layout = viewport.currentLayout;
-		const cursorPosition = selectionController?.selections.primary.getPosition();
-		if (layout.scrollPosition.top === 0) {
-			return new ViewStableEditorScrollState(
-				layout.scrollPosition.top,
-				layout.contentSize.height,
-				undefined,
-				0,
-				cursorPosition,
-				selectionController,
-			);
+	public static capture(editor: ICodeEditor): StableEditorScrollState {
+		if (editor.getScrollTop() === 0 || editor.hasPendingScrollAnimation()) {
+			// Never mess with the scroll top if the editor is at the top of the file or if there is a pending scroll animation
+			return new StableEditorScrollState(editor.getScrollTop(), editor.getContentHeight(), null, 0, null);
 		}
 
-		const visibleLine = viewport.getVisualLineProjection().lineAt(layout.visibleLines.startLineIndex);
-		if (!visibleLine) {
-			return new ViewStableEditorScrollState(
-				layout.scrollPosition.top,
-				layout.contentSize.height,
-				undefined,
-				0,
-				cursorPosition,
-				selectionController,
-			);
+		let visiblePosition: Position | null = null;
+		let visiblePositionScrollDelta = 0;
+		const visibleRanges = editor.getVisibleRanges();
+		if (visibleRanges.length > 0) {
+			visiblePosition = visibleRanges[0].getStartPosition();
+			const visiblePositionScrollTop = editor.getTopForPosition(visiblePosition.lineNumber, visiblePosition.column);
+			visiblePositionScrollDelta = editor.getScrollTop() - visiblePositionScrollTop;
 		}
-
-		const visiblePosition = new Position((visibleLine.logicalLineIndex) + 1, (visibleLine.startColumn) + 1);
-		const visiblePositionTop = viewport.getPositionContentCoordinates(visiblePosition).top;
-		return new ViewStableEditorScrollState(
-			layout.scrollPosition.top,
-			layout.contentSize.height,
-			visiblePosition,
-			layout.scrollPosition.top - visiblePositionTop,
-			cursorPosition,
-			selectionController,
-		);
+		return new StableEditorScrollState(editor.getScrollTop(), editor.getContentHeight(), visiblePosition, visiblePositionScrollDelta, editor.getPosition());
 	}
 
-	private constructor(
-		initialScrollTop: number,
-		initialContentHeight: number,
-		visiblePosition: Position | undefined,
-		visiblePositionScrollDelta: number,
-		cursorPosition: Position | undefined,
-		selectionController: CursorsController | undefined,
+	constructor(
+		private readonly _initialScrollTop: number,
+		private readonly _initialContentHeight: number,
+		private readonly _visiblePosition: Position | null,
+		private readonly _visiblePositionScrollDelta: number,
+		private readonly _cursorPosition: Position | null,
 	) {
-		this.initialScrollTop = initialScrollTop;
-		this.initialContentHeight = initialContentHeight;
-		this.visiblePosition = visiblePosition;
-		this.visiblePositionScrollDelta = visiblePositionScrollDelta;
-		this.cursorPosition = cursorPosition;
-		this.selectionController = selectionController;
 	}
 
-	/** Restores the captured top-row offset after the viewport layout changes. */
-	public restore(viewport: View): void {
-		const layout = viewport.currentLayout;
-		if (
-			this.initialContentHeight === layout.contentSize.height &&
-			this.initialScrollTop === layout.scrollPosition.top
-		) {
-			return;
-		}
-		if (!this.visiblePosition) return;
-
-		const position = clampPosition(viewport, this.visiblePosition);
-		const visiblePositionTop = viewport.getPositionContentCoordinates(position).top;
-		viewport.scrollTo({
-			left: layout.scrollPosition.left,
-			top: visiblePositionTop + this.visiblePositionScrollDelta,
-		});
-	}
-
-	/**
-	 * Keeps the current cursor at the same relative vertical position after a
-	 * model or visual-line projection change.
-	 */
-	public restoreRelativeVerticalPositionOfCursor(
-		viewport: View,
-		selectionController?: CursorsController,
-	): void {
-		const layout = viewport.currentLayout;
-		if (
-			this.initialContentHeight === layout.contentSize.height &&
-			this.initialScrollTop === layout.scrollPosition.top
-		) {
+	public restore(editor: ICodeEditor): void {
+		if (this._initialContentHeight === editor.getContentHeight() && this._initialScrollTop === editor.getScrollTop()) {
+			// The editor's content height and scroll top haven't changed, so we don't need to do anything
 			return;
 		}
 
-		const initialCursorPosition = this.cursorPosition;
-		const selections = selectionController ?? this.selectionController;
-		const currentCursorPosition = selections?.selections.primary.getPosition();
-		if (!initialCursorPosition || !currentCursorPosition) return;
+		if (this._visiblePosition) {
+			const visiblePositionScrollTop = editor.getTopForPosition(this._visiblePosition.lineNumber, this._visiblePosition.column);
+			editor.setScrollTop(visiblePositionScrollTop + this._visiblePositionScrollDelta);
+		}
+	}
 
-		const initialTop = viewport.getPositionContentCoordinates(clampPosition(viewport, initialCursorPosition)).top;
-		const currentTop = viewport.getPositionContentCoordinates(clampPosition(viewport, currentCursorPosition)).top;
-		viewport.scrollTo({
-			left: layout.scrollPosition.left,
-			top: layout.scrollPosition.top + currentTop - initialTop,
-		});
+	public restoreRelativeVerticalPositionOfCursor(editor: ICodeEditor): void {
+		if (this._initialContentHeight === editor.getContentHeight() && this._initialScrollTop === editor.getScrollTop()) {
+			// The editor's content height and scroll top haven't changed, so we don't need to do anything
+			return;
+		}
+
+		const currentCursorPosition = editor.getPosition();
+
+		if (!this._cursorPosition || !currentCursorPosition) {
+			return;
+		}
+
+		const offset = editor.getTopForLineNumber(currentCursorPosition.lineNumber) - editor.getTopForLineNumber(this._cursorPosition.lineNumber);
+		editor.setScrollTop(editor.getScrollTop() + offset, ScrollType.Immediate);
 	}
 }
 
-/** Preserves the last visible visual row while editor content is reprojected. */
-export class ViewStableEditorBottomScrollState {
-	private readonly initialScrollTop: number;
-	private readonly initialContentHeight: number;
-	private readonly visiblePosition: Position | undefined;
-	private readonly visiblePositionScrollDelta: number;
 
-	public static capture(viewport: View): ViewStableEditorBottomScrollState {
-		const layout = viewport.currentLayout;
-		const visibleLine = layout.visibleLines.endLineIndexExclusive > layout.visibleLines.startLineIndex
-			? viewport.getVisualLineProjection().lineAt(layout.visibleLines.endLineIndexExclusive - 1)
-			: undefined;
-		if (!visibleLine) {
-			return new ViewStableEditorBottomScrollState(
-				layout.scrollPosition.top,
-				layout.contentSize.height,
-				undefined,
-				0,
-			);
+export class StableEditorBottomScrollState {
+
+	public static capture(editor: ICodeEditor): StableEditorBottomScrollState {
+		if (editor.hasPendingScrollAnimation()) {
+			// Never mess with the scroll if there is a pending scroll animation
+			return new StableEditorBottomScrollState(editor.getScrollTop(), editor.getContentHeight(), null, 0);
 		}
 
-		const visiblePosition = new Position((visibleLine.logicalLineIndex) + 1, (visibleLine.startColumn) + 1);
-		const coordinates = viewport.getPositionContentCoordinates(visiblePosition);
-		return new ViewStableEditorBottomScrollState(
-			layout.scrollPosition.top,
-			layout.contentSize.height,
-			visiblePosition,
-			coordinates.top + coordinates.height - layout.scrollPosition.top,
-		);
+		let visiblePosition: Position | null = null;
+		let visiblePositionScrollDelta = 0;
+		const visibleRanges = editor.getVisibleRanges();
+		if (visibleRanges.length > 0) {
+			visiblePosition = visibleRanges.at(-1)!.getEndPosition();
+			const visiblePositionScrollBottom = editor.getBottomForLineNumber(visiblePosition.lineNumber);
+			visiblePositionScrollDelta = visiblePositionScrollBottom - editor.getScrollTop();
+		}
+		return new StableEditorBottomScrollState(editor.getScrollTop(), editor.getContentHeight(), visiblePosition, visiblePositionScrollDelta);
 	}
 
-	private constructor(
-		initialScrollTop: number,
-		initialContentHeight: number,
-		visiblePosition: Position | undefined,
-		visiblePositionScrollDelta: number,
+	constructor(
+		private readonly _initialScrollTop: number,
+		private readonly _initialContentHeight: number,
+		private readonly _visiblePosition: Position | null,
+		private readonly _visiblePositionScrollDelta: number,
 	) {
-		this.initialScrollTop = initialScrollTop;
-		this.initialContentHeight = initialContentHeight;
-		this.visiblePosition = visiblePosition;
-		this.visiblePositionScrollDelta = visiblePositionScrollDelta;
 	}
 
-	/** Restores the captured bottom-row offset after the viewport layout changes. */
-	public restore(viewport: View): void {
-		const layout = viewport.currentLayout;
-		if (
-			this.initialContentHeight === layout.contentSize.height &&
-			this.initialScrollTop === layout.scrollPosition.top
-		) {
+	public restore(editor: ICodeEditor): void {
+		if (this._initialContentHeight === editor.getContentHeight() && this._initialScrollTop === editor.getScrollTop()) {
+			// The editor's content height and scroll top haven't changed, so we don't need to do anything
 			return;
 		}
-		if (!this.visiblePosition) return;
 
-		const position = clampPosition(viewport, this.visiblePosition);
-		const coordinates = viewport.getPositionContentCoordinates(position);
-		viewport.scrollTo({
-			left: layout.scrollPosition.left,
-			top: coordinates.top + coordinates.height - this.visiblePositionScrollDelta,
-		});
+		if (this._visiblePosition) {
+			const visiblePositionScrollBottom = editor.getBottomForLineNumber(this._visiblePosition.lineNumber);
+			editor.setScrollTop(visiblePositionScrollBottom - this._visiblePositionScrollDelta, ScrollType.Immediate);
+		}
 	}
-}
-
-function clampPosition(viewport: View, position: Position): Position {
-	const model = viewport.textModel;
-	const lineNumber = Math.min(Math.max(position.lineNumber, 1), model.lineCount);
-	return new Position(lineNumber, Math.min(Math.max(position.column, 1), model.getLineLength(lineNumber) + 1));
 }

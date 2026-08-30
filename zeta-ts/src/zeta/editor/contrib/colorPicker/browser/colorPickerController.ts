@@ -85,7 +85,7 @@ export class ColorPickerController extends Disposable {
 				data = colors.find(candidate => candidate.information.range.containsPosition(position));
 			}
 			if (!data) {
-				this.viewport.announceAccessibilityStatus(localize('zeta.editor.colorPicker', 'noColorAtCursor', 'No color is available at the cursor.'));
+				this.viewport.announceAccessibilityStatus(localize('noColorAtCursor', 'No color is available at the cursor.'));
 				return;
 			}
 			await this.show(data, focus);
@@ -177,7 +177,7 @@ export class ColorPickerController extends Disposable {
 		const presentation = this.model.value?.presentation;
 		if (!data || !presentation) return;
 		if (this.readOnly) {
-			this.viewport.announceAccessibilityStatus(localize('zeta.editor.colorPicker', 'readOnly', 'The editor is read-only.'));
+			this.viewport.announceAccessibilityStatus(localize('readOnly', 'The editor is read-only.'));
 			this.close(true);
 			return;
 		}
