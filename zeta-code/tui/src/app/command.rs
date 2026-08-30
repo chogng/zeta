@@ -11,6 +11,7 @@ use crate::features::thread::ThreadRequestResponse;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
+use zeta_protocol::SessionId;
 use zeta_protocol::SkillId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
@@ -55,6 +56,9 @@ pub(crate) enum AppCommand {
     ResumeSession {
         session_id: String,
         preferred_thread_id: Option<ThreadId>,
+    },
+    ArchiveSessions {
+        session_ids: Vec<SessionId>,
     },
     CreateSessionAndEnter {
         submission: ChatSubmission,

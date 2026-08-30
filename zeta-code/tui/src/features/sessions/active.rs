@@ -422,7 +422,7 @@ fn expect_thread_result(result: SessionRequestResult) -> Result<SessionThreadRes
     }
 }
 
-fn expect_session_result(
+pub(super) fn expect_session_result(
     result: SessionRequestResult,
 ) -> Result<zeta_app_server_protocol::protocol::session::SessionResult, ClientError> {
     match result {

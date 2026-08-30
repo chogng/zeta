@@ -15,6 +15,7 @@ use zeta_client::ClientError;
 use zeta_client::ClientRequest;
 use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
+use zeta_protocol::SessionStatus;
 
 use super::ActiveConversation;
 use crate::TuiRecoveryState;
@@ -58,6 +59,32 @@ fn recovery_keeps_the_explicit_branch_after_another_branch_is_created() {
     .unwrap();
 
     assert_eq!(recovered.thread_id(), &stale_thread_id);
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn manager_archive_applies_to_every_selected_session_and_returns_the_new_catalog() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let (mut client, state_root) = client();
+    let first = ActiveConversation::start(&mut client, "first".into()).unwrap();
+    let second = ActiveConversation::start(&mut client, "second".into()).unwrap();
+
+    let catalog = super::super::archive(
+        &mut client,
+        vec![first.session_id().clone(), second.session_id().clone()],
+    )
+    .unwrap();
+
+    assert!(
+        catalog
+            .iter()
+            .filter(|session| {
+                session.session_id == *first.session_id()
+                    || session.session_id == *second.session_id()
+            })
+            .all(|session| session.status == SessionStatus::Archived)
+    );
     drop(client);
     let _ = fs::remove_dir_all(state_root);
 }

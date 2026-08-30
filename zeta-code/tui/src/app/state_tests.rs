@@ -59,7 +59,9 @@ use zeta_app_server_protocol::protocol::provider::{
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
+use zeta_protocol::Session;
 use zeta_protocol::SessionId;
+use zeta_protocol::SessionStatus;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillName;
 use zeta_protocol::SkillRef;
@@ -1342,6 +1344,51 @@ fn sessions_and_agents_commands_open_the_manager_root() {
 }
 
 #[test]
+fn manager_group_and_session_keys_use_the_selected_node_semantics() {
+    let mut app = App::new();
+    app.update(AppEvent::SessionCatalogReceived(vec![
+        manager_state_session("one"),
+        manager_state_session("two"),
+    ]));
+    app.insert_text("/sessions");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+
+    assert!(app.session_manager_hint().contains("space to collapse"));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
+        Some(AppCommand::ArchiveSessions {
+            session_ids: vec![
+                SessionId::new("one").unwrap(),
+                SessionId::new("two").unwrap()
+            ],
+        })
+    );
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+        None
+    );
+    assert!(app.session_manager_hint().contains("space to expand"));
+    app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(app.session_manager_hint().contains("space to preview"));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+        Some(AppCommand::ResumeSession {
+            session_id: "one".into(),
+            preferred_thread_id: None,
+        })
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
+        Some(AppCommand::ArchiveSessions {
+            session_ids: vec![SessionId::new("one").unwrap()],
+        })
+    );
+}
+
+#[test]
 fn queued_turn_stays_editable_when_automatic_submission_is_rejected() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
@@ -1525,4 +1572,14 @@ fn temporary_dir(label: &str) -> std::path::PathBuf {
     ));
     fs::create_dir_all(&path).unwrap();
     path
+}
+
+fn manager_state_session(id: &str) -> Session {
+    Session {
+        session_id: SessionId::new(id).unwrap(),
+        title: id.into(),
+        status: SessionStatus::Active,
+        manager: Default::default(),
+        threads: Vec::new(),
+    }
 }

@@ -18,6 +18,7 @@ use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerActivity;
 use zeta_protocol::SessionManagerStatus;
+use zeta_protocol::SessionStatus;
 use zeta_utils_elapsed::format_compact_duration;
 
 const ANIMATION_INTERVAL: Duration = Duration::from_millis(80);
@@ -25,9 +26,10 @@ const WORKING_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '�
 
 #[derive(Debug)]
 pub(crate) struct SessionManagerState {
-    selected: Option<SessionId>,
+    selected: Option<ManagerSelection>,
     focused: bool,
     pinned: BTreeSet<SessionId>,
+    collapsed: BTreeSet<SessionGroup>,
     animation_frame: usize,
     last_animation_at: Option<Instant>,
     now_unix_ms: u64,
@@ -39,6 +41,7 @@ impl Default for SessionManagerState {
             selected: None,
             focused: false,
             pinned: BTreeSet::new(),
+            collapsed: BTreeSet::new(),
             animation_frame: 0,
             last_animation_at: None,
             now_unix_ms: current_unix_millis(),
@@ -53,16 +56,15 @@ impl SessionManagerState {
                 .iter()
                 .any(|session| &session.session_id == session_id)
         });
+        let rows = manager_rows(sessions, &self.pinned, &self.collapsed);
         if self
             .selected
             .as_ref()
-            .is_some_and(|selected| sessions.iter().any(|item| &item.session_id == selected))
+            .is_some_and(|selected| rows.iter().any(|row| row.selection() == *selected))
         {
             return;
         }
-        self.selected = ordered_sessions(sessions, &self.pinned)
-            .first()
-            .map(|session| session.session_id.clone());
+        self.selected = rows.first().map(ManagerRow::selection);
     }
 
     pub(crate) fn focus(&mut self) {
@@ -85,12 +87,67 @@ impl SessionManagerState {
         self.select_offset(sessions, 1)
     }
 
-    pub(crate) fn selected(&self) -> Option<&SessionId> {
-        self.selected.as_ref()
+    pub(crate) fn selected_session(&self) -> Option<&SessionId> {
+        match self.selected.as_ref() {
+            Some(ManagerSelection::Session(session_id)) => Some(session_id),
+            Some(ManagerSelection::Group(_)) | None => None,
+        }
+    }
+
+    pub(crate) fn toggle_or_preview(&mut self, sessions: &[Session]) -> Option<SessionId> {
+        match self.selected.as_ref()? {
+            ManagerSelection::Group(group) => {
+                if !self.collapsed.remove(group) {
+                    self.collapsed.insert(*group);
+                }
+                None
+            }
+            ManagerSelection::Session(session_id) => sessions
+                .iter()
+                .find(|session| {
+                    &session.session_id == session_id && session.status == SessionStatus::Active
+                })
+                .map(|session| session.session_id.clone()),
+        }
+    }
+
+    pub(crate) fn selected_archive_ids(&self, sessions: &[Session]) -> Vec<SessionId> {
+        match self.selected.as_ref() {
+            Some(ManagerSelection::Group(group)) => sessions
+                .iter()
+                .filter(|session| {
+                    session.status == SessionStatus::Active && group.includes(session, &self.pinned)
+                })
+                .map(|session| session.session_id.clone())
+                .collect(),
+            Some(ManagerSelection::Session(session_id)) => sessions
+                .iter()
+                .filter(|session| {
+                    &session.session_id == session_id && session.status == SessionStatus::Active
+                })
+                .map(|session| session.session_id.clone())
+                .collect(),
+            None => Vec::new(),
+        }
+    }
+
+    pub(crate) fn selection_hint(&self) -> &'static str {
+        match self.selected.as_ref() {
+            Some(ManagerSelection::Group(group)) if self.collapsed.contains(group) => {
+                "↑↓ select · space to expand · ctrl+x to archive all"
+            }
+            Some(ManagerSelection::Group(_)) => {
+                "↑↓ select · space to collapse · ctrl+x to archive all"
+            }
+            Some(ManagerSelection::Session(_)) => {
+                "↑↓ select · space to preview · ctrl+x to archive"
+            }
+            None => "esc to input",
+        }
     }
 
     pub(crate) fn toggle_selected_pin(&mut self) -> bool {
-        let Some(selected) = self.selected.clone() else {
+        let Some(ManagerSelection::Session(selected)) = self.selected.clone() else {
             return false;
         };
         if !self.pinned.remove(&selected) {
@@ -135,6 +192,7 @@ impl SessionManagerState {
             selected: self.selected.as_ref(),
             focused: self.focused,
             pinned: &self.pinned,
+            collapsed: &self.collapsed,
             animation_frame: self.animation_frame,
             now_unix_ms: self.now_unix_ms,
         }
@@ -145,32 +203,30 @@ impl SessionManagerState {
     }
 
     fn select_offset(&mut self, sessions: &[Session], delta: isize) -> bool {
-        let ordered = ordered_sessions(sessions, &self.pinned);
+        let rows = manager_rows(sessions, &self.pinned, &self.collapsed);
         let Some(current) = self.selected.as_ref() else {
-            self.selected = ordered.first().map(|session| session.session_id.clone());
+            self.selected = rows.first().map(ManagerRow::selection);
             return self.selected.is_some();
         };
-        let Some(index) = ordered
-            .iter()
-            .position(|session| &session.session_id == current)
-        else {
-            self.selected = ordered.first().map(|session| session.session_id.clone());
+        let Some(index) = rows.iter().position(|row| row.selection() == *current) else {
+            self.selected = rows.first().map(ManagerRow::selection);
             return self.selected.is_some();
         };
         let next = index
             .saturating_add_signed(delta)
-            .min(ordered.len().saturating_sub(1));
+            .min(rows.len().saturating_sub(1));
         let changed = next != index;
-        self.selected = ordered.get(next).map(|session| session.session_id.clone());
+        self.selected = rows.get(next).map(ManagerRow::selection);
         changed
     }
 }
 
 pub(crate) struct SessionManagerView<'a> {
     sessions: &'a [Session],
-    selected: Option<&'a SessionId>,
+    selected: Option<&'a ManagerSelection>,
     focused: bool,
     pinned: &'a BTreeSet<SessionId>,
+    collapsed: &'a BTreeSet<SessionGroup>,
     animation_frame: usize,
     now_unix_ms: u64,
 }
@@ -184,7 +240,7 @@ pub(crate) fn draw_manager(
     if area.is_empty() {
         return;
     }
-    let rows = manager_rows(view.sessions, view.pinned);
+    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
     if rows.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::styled(
@@ -197,60 +253,115 @@ pub(crate) fn draw_manager(
     }
     let visible_rows = usize::from(area.height);
     let selected_row = rows.iter().position(|row| {
-        matches!(row, ManagerRow::Session(session) if view.selected == Some(&session.session_id))
+        view.selected
+            .is_some_and(|selected| row.selection() == *selected)
     });
-    let start = visible_start(&rows, selected_row, visible_rows);
-    let lines = rows
-        .into_iter()
-        .skip(start)
-        .take(visible_rows)
-        .map(|row| match row {
-            ManagerRow::Heading(label) => Line::styled(
-                label,
-                Style::default()
-                    .fg(context.muted())
-                    .add_modifier(Modifier::BOLD),
-            ),
-            ManagerRow::Session(session) => session_line(
-                session,
-                view.selected == Some(&session.session_id),
-                view.focused,
-                view.animation_frame,
-                view.now_unix_ms,
-                usize::from(area.width),
-                context,
-            ),
-        })
-        .collect::<Vec<_>>();
+    let viewport = manager_viewport(rows.len(), selected_row, visible_rows);
+    let mut lines = Vec::with_capacity(visible_rows);
+    if viewport.start > 0 {
+        lines.push(more_line('↑', viewport.start, usize::from(area.width)));
+    }
+    lines.extend(
+        rows[viewport.start..viewport.end]
+            .iter()
+            .copied()
+            .map(|row| match row {
+                ManagerRow::Heading { group, count } => group_line(
+                    group,
+                    count,
+                    view.collapsed.contains(&group),
+                    view.selected == Some(&ManagerSelection::Group(group)),
+                    view.focused,
+                    usize::from(area.width),
+                ),
+                ManagerRow::Session(session) => session_line(
+                    session,
+                    view.selected == Some(&ManagerSelection::Session(session.session_id.clone())),
+                    view.focused,
+                    view.animation_frame,
+                    view.now_unix_ms,
+                    usize::from(area.width),
+                ),
+            }),
+    );
+    if viewport.end < rows.len() {
+        lines.push(more_line(
+            '↓',
+            rows.len() - viewport.end,
+            usize::from(area.width),
+        ));
+    }
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-fn visible_start(
-    rows: &[ManagerRow<'_>],
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ManagerViewport {
+    start: usize,
+    end: usize,
+}
+
+fn manager_viewport(
+    row_count: usize,
     selected_row: Option<usize>,
     visible_rows: usize,
-) -> usize {
-    let mut start = selected_row
-        .map(|index| index.saturating_add(1).saturating_sub(visible_rows))
-        .unwrap_or_default();
-    let previous = start.saturating_sub(1);
-    if start > 0
-        && matches!(rows.get(start), Some(ManagerRow::Session(_)))
-        && matches!(rows.get(previous), Some(ManagerRow::Heading(_)))
-        && selected_row.is_some_and(|selected| selected < previous.saturating_add(visible_rows))
-    {
-        start = previous;
+) -> ManagerViewport {
+    if row_count <= visible_rows {
+        return ManagerViewport {
+            start: 0,
+            end: row_count,
+        };
     }
-    start
+    if visible_rows <= 1 {
+        let start = selected_row
+            .unwrap_or_default()
+            .min(row_count.saturating_sub(1));
+        return ManagerViewport {
+            start,
+            end: (start + 1).min(row_count),
+        };
+    }
+    let selected = selected_row
+        .unwrap_or_default()
+        .min(row_count.saturating_sub(1));
+    for start in 0..=selected {
+        let top_notice = usize::from(start > 0);
+        let mut capacity = visible_rows.saturating_sub(top_notice).max(1);
+        if row_count.saturating_sub(start) > capacity && capacity > 1 {
+            capacity -= 1;
+        }
+        let end = start.saturating_add(capacity).min(row_count);
+        if selected < end {
+            return ManagerViewport { start, end };
+        }
+    }
+    ManagerViewport {
+        start: selected,
+        end: (selected + 1).min(row_count),
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ManagerSelection {
+    Group(SessionGroup),
+    Session(SessionId),
 }
 
 #[derive(Clone, Copy)]
 enum ManagerRow<'a> {
-    Heading(&'static str),
+    Heading { group: SessionGroup, count: usize },
     Session(&'a Session),
 }
 
-#[derive(Clone, Copy)]
+impl ManagerRow<'_> {
+    fn selection(&self) -> ManagerSelection {
+        match self {
+            Self::Heading { group, .. } => ManagerSelection::Group(*group),
+            Self::Session(session) => ManagerSelection::Session(session.session_id.clone()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum SessionGroup {
     Pinned,
     NeedsInput,
@@ -308,7 +419,11 @@ impl SessionGroup {
     }
 }
 
-fn manager_rows<'a>(sessions: &'a [Session], pinned: &BTreeSet<SessionId>) -> Vec<ManagerRow<'a>> {
+fn manager_rows<'a>(
+    sessions: &'a [Session],
+    pinned: &BTreeSet<SessionId>,
+    collapsed: &BTreeSet<SessionGroup>,
+) -> Vec<ManagerRow<'a>> {
     let mut rows = Vec::new();
     for group in SessionGroup::ALL {
         let group_sessions = sessions
@@ -318,8 +433,13 @@ fn manager_rows<'a>(sessions: &'a [Session], pinned: &BTreeSet<SessionId>) -> Ve
         if group_sessions.is_empty() {
             continue;
         }
-        rows.push(ManagerRow::Heading(group.label()));
-        rows.extend(group_sessions.into_iter().map(ManagerRow::Session));
+        rows.push(ManagerRow::Heading {
+            group,
+            count: group_sessions.len(),
+        });
+        if !collapsed.contains(&group) {
+            rows.extend(group_sessions.into_iter().map(ManagerRow::Session));
+        }
     }
     rows
 }
@@ -342,38 +462,71 @@ fn session_line<'a>(
     animation_frame: usize,
     now_unix_ms: u64,
     width: usize,
-    context: RenderContext<'_>,
 ) -> Line<'a> {
-    let (icon, icon_color) = status_icon(session.manager.status, animation_frame, context);
+    let icon = status_icon(session.manager.status, animation_frame);
     let elapsed = elapsed_label(session, now_unix_ms);
     let elapsed_width = elapsed.width();
     let icon_width = icon.width().unwrap_or(1);
-    let after_icon = width.saturating_sub(icon_width + 1);
+    let indent = 2;
+    let after_icon = width.saturating_sub(indent + icon_width + 1);
     let time_gap = usize::from(after_icon > elapsed_width);
     let body_width = after_icon.saturating_sub(elapsed_width + time_gap);
     let middle = activity_text(session);
     let (name_width, middle_gap, middle_width) = column_widths(body_width, !middle.is_empty());
     let name = pad_to_width(&truncate_to_width(&session.title, name_width), name_width);
     let middle = pad_to_width(&truncate_to_width(middle, middle_width), middle_width);
-    let label_style = if selected && focused {
-        Style::default()
-            .fg(context.highlight())
-            .add_modifier(Modifier::BOLD)
-    } else if selected {
-        Style::default().add_modifier(Modifier::BOLD)
+    let row_style = if selected && focused {
+        selected_style()
     } else {
-        Style::default()
+        Style::default().fg(Color::Gray)
     };
 
     Line::from(vec![
-        Span::styled(icon.to_string(), Style::default().fg(icon_color)),
+        Span::styled("  ", row_style),
+        Span::styled(icon.to_string(), row_style),
         Span::raw(" "),
-        Span::styled(name, label_style),
+        Span::styled(name, row_style),
         Span::raw(" ".repeat(middle_gap)),
-        Span::styled(middle, label_style.fg(context.muted())),
+        Span::styled(middle, row_style),
         Span::raw(" ".repeat(time_gap)),
-        Span::styled(elapsed, Style::default().fg(context.muted())),
+        Span::styled(elapsed, row_style),
     ])
+    .style(row_style)
+}
+
+fn group_line(
+    group: SessionGroup,
+    count: usize,
+    collapsed: bool,
+    selected: bool,
+    focused: bool,
+    width: usize,
+) -> Line<'static> {
+    let arrow = if collapsed { '▸' } else { '▾' };
+    let text = format!("{arrow} {} ({count})", group.label());
+    let style = if selected && focused {
+        selected_style().add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .fg(Color::Gray)
+            .add_modifier(Modifier::BOLD)
+    };
+    Line::styled(pad_to_width(&truncate_to_width(&text, width), width), style)
+}
+
+fn more_line(direction: char, count: usize, width: usize) -> Line<'static> {
+    let position = if direction == '↑' { "above" } else { "below" };
+    let text = format!("{direction} {count} more {position}");
+    Line::styled(
+        pad_to_width(&truncate_to_width(&text, width), width),
+        Style::default()
+            .fg(Color::Gray)
+            .add_modifier(Modifier::ITALIC),
+    )
+}
+
+fn selected_style() -> Style {
+    Style::default().fg(Color::Black).bg(Color::Gray)
 }
 
 fn column_widths(body_width: usize, has_middle: bool) -> (usize, usize, usize) {
@@ -409,22 +562,14 @@ fn elapsed_label(session: &Session, now_unix_ms: u64) -> String {
     }
 }
 
-fn status_icon(
-    status: SessionManagerStatus,
-    animation_frame: usize,
-    context: RenderContext<'_>,
-) -> (char, Color) {
+fn status_icon(status: SessionManagerStatus, animation_frame: usize) -> char {
     match status {
-        SessionManagerStatus::Idle => ('○', context.muted()),
-        SessionManagerStatus::NeedsInput => ('?', context.warning()),
-        SessionManagerStatus::Working => (
-            WORKING_FRAMES[animation_frame % WORKING_FRAMES.len()],
-            context.accent(),
-        ),
-        SessionManagerStatus::ReadyForReview => ('◆', context.accent()),
-        SessionManagerStatus::Completed => ('●', context.success()),
-        SessionManagerStatus::Failed => ('●', context.danger()),
-        SessionManagerStatus::Stopped => ('■', context.muted()),
+        SessionManagerStatus::Idle => '○',
+        SessionManagerStatus::NeedsInput => '?',
+        SessionManagerStatus::Working => WORKING_FRAMES[animation_frame % WORKING_FRAMES.len()],
+        SessionManagerStatus::ReadyForReview => '◆',
+        SessionManagerStatus::Completed | SessionManagerStatus::Failed => '●',
+        SessionManagerStatus::Stopped => '■',
     }
 }
 

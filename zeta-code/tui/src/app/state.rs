@@ -1199,6 +1199,10 @@ impl App {
             && self.sessions.manager().focused()
     }
 
+    pub(crate) fn session_manager_hint(&self) -> &'static str {
+        self.sessions.manager().selection_hint()
+    }
+
     pub(crate) fn root_navigation_hint(&self) -> Option<&'static str> {
         if !self.chat_input_focused() || !self.input().is_empty() {
             return None;
@@ -1622,13 +1626,23 @@ impl App {
     }
 
     fn handle_root_navigation_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
-        if key.kind != KeyEventKind::Press || !key.modifiers.is_empty() {
+        if key.kind != KeyEventKind::Press {
             return None;
         }
         if matches!(self.sessions.root(), Some(RootTarget::Manager))
             && self.sessions.manager().focused()
         {
             let catalog = self.sessions.catalog().to_vec();
+            if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('x') {
+                let session_ids = self.sessions.manager().selected_archive_ids(&catalog);
+                return Some(
+                    (!session_ids.is_empty())
+                        .then_some(AppCommand::ArchiveSessions { session_ids }),
+                );
+            }
+            if !key.modifiers.is_empty() {
+                return None;
+            }
             return match key.code {
                 KeyCode::Up => {
                     self.sessions.manager_mut().select_previous(&catalog);
@@ -1640,12 +1654,19 @@ impl App {
                     }
                     Some(None)
                 }
-                KeyCode::Enter => Some(self.sessions.manager().selected().map(|session_id| {
-                    AppCommand::ResumeSession {
+                KeyCode::Enter => Some(self.sessions.manager().selected_session().map(
+                    |session_id| AppCommand::ResumeSession {
                         session_id: session_id.to_string(),
                         preferred_thread_id: self.sessions.remembered_thread(session_id).cloned(),
-                    }
-                })),
+                    },
+                )),
+                KeyCode::Char(' ') => {
+                    let preview = self.sessions.manager_mut().toggle_or_preview(&catalog);
+                    Some(preview.map(|session_id| AppCommand::ResumeSession {
+                        preferred_thread_id: self.sessions.remembered_thread(&session_id).cloned(),
+                        session_id: session_id.to_string(),
+                    }))
+                }
                 KeyCode::Char('p') => {
                     self.sessions.manager_mut().toggle_selected_pin();
                     Some(None)
@@ -1656,6 +1677,9 @@ impl App {
                 }
                 _ => None,
             };
+        }
+        if !key.modifiers.is_empty() {
+            return None;
         }
         if self.subagent_pane.focused() {
             return match key.code {

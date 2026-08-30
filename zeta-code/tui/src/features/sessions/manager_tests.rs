@@ -1,5 +1,8 @@
 use super::*;
-use crate::render::test_context;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
 use zeta_protocol::SessionManagerInfo;
 use zeta_protocol::SessionStatus;
 
@@ -24,13 +27,15 @@ fn groups_sessions_by_management_status_and_keeps_pinned_first() {
     ];
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
-    state.selected = Some(SessionId::new("completed").unwrap());
+    state.selected = Some(ManagerSelection::Session(
+        SessionId::new("completed").unwrap(),
+    ));
     assert!(state.toggle_selected_pin());
 
-    let labels = manager_rows(&sessions, &state.pinned)
+    let labels = manager_rows(&sessions, &state.pinned, &state.collapsed)
         .into_iter()
         .map(|row| match row {
-            ManagerRow::Heading(label) => label.to_owned(),
+            ManagerRow::Heading { group, .. } => group.label().to_owned(),
             ManagerRow::Session(session) => session.session_id.to_string(),
         })
         .collect::<Vec<_>>();
@@ -58,11 +63,13 @@ fn navigation_follows_the_visible_group_order() {
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
 
-    assert_eq!(state.selected().unwrap().as_str(), "question");
+    assert_eq!(state.selected_session(), None);
     assert!(state.select_next(&sessions));
-    assert_eq!(state.selected().unwrap().as_str(), "working");
+    assert_eq!(state.selected_session().unwrap().as_str(), "question");
     assert!(state.select_next(&sessions));
-    assert_eq!(state.selected().unwrap().as_str(), "completed");
+    assert_eq!(state.selected_session(), None);
+    assert!(state.select_next(&sessions));
+    assert_eq!(state.selected_session().unwrap().as_str(), "working");
 }
 
 #[test]
@@ -74,17 +81,9 @@ fn row_starts_with_status_icon_and_keeps_name_activity_and_time_columns() {
             text: "Running targeted tests".into(),
         }),
     );
-    let text = line_text(&session_line(
-        &session,
-        false,
-        false,
-        0,
-        72_000,
-        72,
-        test_context(),
-    ));
+    let text = line_text(&session_line(&session, false, false, 0, 72_000, 72));
 
-    assert!(text.starts_with("⠋ working"));
+    assert!(text.starts_with("  ⠋ working"));
     assert!(text.contains("Running targeted tests"));
     assert!(text.ends_with("1m 02s"));
     assert_eq!(text.width(), 72);
@@ -101,19 +100,9 @@ fn completed_time_is_relative_but_working_time_is_runtime() {
 
 #[test]
 fn status_icons_have_distinct_semantics_and_working_animation_advances_on_tick() {
-    let context = test_context();
-    assert_eq!(
-        status_icon(SessionManagerStatus::Failed, 0, context),
-        ('●', context.danger())
-    );
-    assert_eq!(
-        status_icon(SessionManagerStatus::Completed, 0, context),
-        ('●', context.success())
-    );
-    assert_eq!(
-        status_icon(SessionManagerStatus::Stopped, 0, context),
-        ('■', context.muted())
-    );
+    assert_eq!(status_icon(SessionManagerStatus::Failed, 0), '●');
+    assert_eq!(status_icon(SessionManagerStatus::Completed, 0), '●');
+    assert_eq!(status_icon(SessionManagerStatus::Stopped, 0), '■');
 
     let sessions = vec![session("working", SessionManagerStatus::Working, None)];
     let mut state = SessionManagerState::default();
@@ -132,18 +121,90 @@ fn summary_column_stays_empty_without_a_configured_summary_result() {
 }
 
 #[test]
-fn viewport_never_trades_the_selected_row_for_a_group_heading() {
-    let sessions = vec![
-        session("question", SessionManagerStatus::NeedsInput, None),
-        session("working", SessionManagerStatus::Working, None),
-        session("completed", SessionManagerStatus::Completed, None),
-    ];
-    let rows = manager_rows(&sessions, &BTreeSet::new());
+fn viewport_reserves_rows_for_both_overflow_notices() {
+    assert_eq!(
+        manager_viewport(20, Some(10), 5),
+        ManagerViewport { start: 8, end: 11 }
+    );
+}
 
-    let start = visible_start(&rows, Some(5), 3);
+#[test]
+fn group_selection_collapses_children_and_archives_all_active_children() {
+    let sessions = (0..4)
+        .map(|index| session(&format!("idle-{index}"), SessionManagerStatus::Idle, None))
+        .collect::<Vec<_>>();
+    let mut state = SessionManagerState::default();
+    state.reconcile(&sessions);
 
-    assert_eq!(start, 3);
-    assert!(5 < start + 3);
+    assert_eq!(state.selected_archive_ids(&sessions).len(), 4);
+    assert_eq!(state.toggle_or_preview(&sessions), None);
+    assert_eq!(
+        manager_rows(&sessions, &state.pinned, &state.collapsed).len(),
+        1
+    );
+    assert!(state.selection_hint().contains("space to expand"));
+}
+
+#[test]
+fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
+    let sessions = (0..8)
+        .map(|index| session(&format!("idle-{index}"), SessionManagerStatus::Idle, None))
+        .collect::<Vec<_>>();
+    let mut state = SessionManagerState::default();
+    state.reconcile(&sessions);
+    state.focus();
+    let backend = TestBackend::new(32, 5);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_manager(
+                frame,
+                Rect::new(0, 0, 32, 5),
+                state.view(&sessions),
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..5)
+        .map(|row| {
+            (0..32)
+                .map(|column| buffer[(column, row)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(rendered.contains("▾ Idle (8)"));
+    assert!(rendered.contains("more below"));
+    assert_eq!(buffer[(0, 0)].fg, Color::Black);
+    assert_eq!(buffer[(0, 0)].bg, Color::Gray);
+    assert_eq!(buffer[(2, 1)].fg, Color::Gray);
+
+    for _ in 0..5 {
+        state.select_next(&sessions);
+    }
+    terminal
+        .draw(|frame| {
+            draw_manager(
+                frame,
+                Rect::new(0, 0, 32, 5),
+                state.view(&sessions),
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..5)
+        .map(|row| {
+            (0..32)
+                .map(|column| buffer[(column, row)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(rendered.contains("more above"));
+    assert!(rendered.contains("more below"));
 }
 
 fn session(

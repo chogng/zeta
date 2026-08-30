@@ -812,6 +812,22 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
+                    AppCommand::ArchiveSessions { session_ids } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-archive-sessions",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        sessions::archive(&mut request_client, session_ids)
+                                            .map(AppEvent::SessionCatalogReceived)
+                                            .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::ResolveThreadRequest(response) => {
                         if pending_request.is_none() {
                             let request = response.identity();

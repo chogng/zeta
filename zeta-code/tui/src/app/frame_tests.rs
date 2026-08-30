@@ -157,10 +157,10 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
     assert!(rendered.contains("Needs input"));
     assert!(rendered.contains("Working"));
     assert!(rendered.contains("Completed"));
-    assert!(needs_input.starts_with("? needs-input"));
+    assert!(needs_input.starts_with("  ? needs-input"));
     assert!(needs_input.contains("Which API should I use?"));
-    assert!(working.starts_with("⠋ working"));
-    assert!(completed.starts_with("● done"));
+    assert!(working.starts_with("  ⠋ working"));
+    assert!(completed.starts_with("  ● done"));
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
         "  ↑ sessions · enter create"

@@ -19,6 +19,10 @@ pub(crate) use state::SessionsState;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::session::SessionRequest;
+use zeta_app_server_protocol::protocol::session::SessionRequestParams;
+use zeta_protocol::Session;
+use zeta_protocol::SessionId;
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
@@ -39,4 +43,23 @@ where
     T: JsonRpcTransport,
 {
     client.list_sessions().map(|result| result.sessions)
+}
+
+pub(crate) fn archive<T>(
+    client: &mut AppServerClient<T>,
+    session_ids: Vec<SessionId>,
+) -> Result<Vec<Session>, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    for session_id in session_ids {
+        client
+            .request_session(SessionRequestParams {
+                command_id: crate::client::new_command_id("archive"),
+                session_id,
+                request: SessionRequest::Archive,
+            })
+            .and_then(active::expect_session_result)?;
+    }
+    load_catalog(client)
 }
