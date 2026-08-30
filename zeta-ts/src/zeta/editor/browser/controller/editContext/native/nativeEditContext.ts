@@ -3,14 +3,14 @@ import "./nativeEditContext.css";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
-import { AbstractEditContext, type EditContextCharacterBounds, type EditContextCompositionEvent, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from "../editContext.js";
+import { EditorInputContext, type EditContextCharacterBounds, type EditContextCompositionEvent, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from "../editContext.js";
 import { type Position } from "../../../../common/core/position.js";
 import { normalizeTextLineEndings } from "../../../../common/core/textChange.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
-import { editContextAddDisposableListener, FocusTracker, MAX_CHARACTER_BOUNDS_REQUEST_LENGTH, clampOffset, createNativeTextWindow, isFiniteOffset, isNativeTextUpdateEvent, isValidOffset } from "./nativeEditContextUtils.js";
+import { editContextAddDisposableListener, EditContextFocusTracker, MAX_CHARACTER_BOUNDS_REQUEST_LENGTH, clampOffset, createNativeTextWindow, isFiniteOffset, isNativeTextUpdateEvent, isValidOffset } from "./nativeEditContextUtils.js";
 import { NativeEditContextRegistry } from "./nativeEditContextRegistry.js";
-import { ScreenReaderSupport } from './screenReaderSupport.js';
+import { EditorScreenReaderSupport } from './screenReaderSupport.js';
 
 /** Minimal local declaration because TypeScript's DOM library does not yet expose EditContext. */
 export interface NativeEditContextObject extends EventTarget {
@@ -60,7 +60,7 @@ export interface NativeTextFormatUpdateEvent extends globalThis.Event {
 }
 
 /** Native EditContext adapter used when the browser exposes the API. */
-export class NativeEditContext extends AbstractEditContext {
+export class BrowserEditContext extends EditorInputContext {
 	readonly domNode: HTMLElement;
 	readonly textArea = undefined;
 	readonly nativeContext: NativeEditContextObject;
@@ -93,8 +93,8 @@ export class NativeEditContext extends AbstractEditContext {
 	private lastPosition: EditContextPosition | undefined;
 	private lastRenderPosition: Position | null = null;
 	private readonly characterBoundsProvider: (modelOffset: number) => EditContextCharacterBounds | undefined;
-	private readonly focusTracker: FocusTracker;
-	private readonly screenReaderSupport: ScreenReaderSupport;
+	private readonly focusTracker: EditContextFocusTracker;
+	private readonly screenReaderSupport: EditorScreenReaderSupport;
 	private focused = false;
 	private imeFallbackFocused = false;
 
@@ -164,14 +164,14 @@ export class NativeEditContext extends AbstractEditContext {
 		this._register(NativeEditContextRegistry.register(element, this));
 		container.append(element);
 		container.append(imeTextArea);
-		this.focusTracker = this._register(new FocusTracker(element, focused => this.handleElementFocusChange(focused)));
+		this.focusTracker = this._register(new EditContextFocusTracker(element, focused => this.handleElementFocusChange(focused)));
 		this._register(toDisposable(() => {
 			(element as NativeEditContextElement).editContext = undefined;
 			element.remove();
 			imeTextArea.remove();
 		}));
 		const compositionController = this.initializeController(options);
-		this.screenReaderSupport = this._register(new ScreenReaderSupport({
+		this.screenReaderSupport = this._register(new EditorScreenReaderSupport({
 			element,
 			model: options.viewport.textModel,
 			viewport: options.viewport,

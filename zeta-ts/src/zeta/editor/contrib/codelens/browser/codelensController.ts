@@ -1,6 +1,6 @@
 import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type View } from '../../../browser/view.js';
-import { StableEditorScrollState } from '../../../browser/stableEditorScroll.js';
+import { ViewStableEditorScrollState } from '../../../browser/stableEditorScroll.js';
 import { TimeoutTimer } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
@@ -8,18 +8,18 @@ import { type OwnedLanguageFeatureProviderRegistry } from '../../../common/owned
 import { type LanguageCodeLensCommand, type LanguageCodeLensProvider } from '../common/languageCodeLenses.js';
 import { codeLensCache } from './codeLensCache.js';
 import { LanguageCodeLensModel, getLanguageCodeLensModel, resolveLanguageCodeLensItem, type LanguageCodeLensItem } from './codelens.js';
-import { CodeLensWidget } from './codelensWidget.js';
+import { EditorCodeLensWidget } from './codelensWidget.js';
 
 export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 
 /** Coordinates provider requests, visible deferred resolves, and line-owned CodeLens widgets. */
-export class CodeLensContribution extends Disposable {
+export class EditorCodeLensContribution extends Disposable {
 	public static readonly ID = 'editor.contrib.codelens';
 
-	private readonly widgets = this._register(new DisposableMap<number, CodeLensWidget>());
+	private readonly widgets = this._register(new DisposableMap<number, EditorCodeLensWidget>());
 	private readonly providerListeners = this._register(new DisposableStore());
 	private readonly cacheExpiry = this._register(new TimeoutTimer());
-	private readonly resolvingWidgets = new Map<CodeLensWidget, AbortController>();
+	private readonly resolvingWidgets = new Map<EditorCodeLensWidget, AbortController>();
 	private request: AbortController | undefined;
 	private currentModel = LanguageCodeLensModel.Empty;
 	private cachedModel: LanguageCodeLensModel | undefined;
@@ -132,7 +132,7 @@ export class CodeLensContribution extends Disposable {
 	}
 
 	private reconcileWidgets(items: readonly LanguageCodeLensItem[]): void {
-		const scrollState = StableEditorScrollState.capture(this.viewport);
+		const scrollState = ViewStableEditorScrollState.capture(this.viewport);
 		const groups = groupCodeLensItems(items);
 		const currentWidgets = new Map(this.widgets);
 		try {
@@ -145,7 +145,7 @@ export class CodeLensContribution extends Disposable {
 					current.updateCodeLensItems(lineItems);
 					continue;
 				}
-				this.widgets.set(lineNumber, new CodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
+				this.widgets.set(lineNumber, new EditorCodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
 			}
 		} finally {
 			scrollState.restore(this.viewport);
@@ -153,7 +153,7 @@ export class CodeLensContribution extends Disposable {
 	}
 
 	private clearWidgets(): void {
-		const scrollState = StableEditorScrollState.capture(this.viewport);
+		const scrollState = ViewStableEditorScrollState.capture(this.viewport);
 		try {
 			for (const lineNumber of [...this.widgets.keys()]) this.widgets.deleteAndDispose(lineNumber);
 		} finally {
@@ -181,7 +181,7 @@ export class CodeLensContribution extends Disposable {
 		});
 	}
 
-	private async resolveWidget(widget: CodeLensWidget, request: AbortController): Promise<void> {
+	private async resolveWidget(widget: EditorCodeLensWidget, request: AbortController): Promise<void> {
 		this.resolvingWidgets.set(widget, request);
 		const items = widget.codeLensItems;
 		try {
@@ -235,10 +235,10 @@ function groupCodeLensItems(items: readonly LanguageCodeLensItem[]): ReadonlyMap
 }
 
 registerTextEditorCapabilityContribution({
-	id: CodeLensContribution.ID,
+	id: EditorCodeLensContribution.ID,
 	install: context => {
 		if (context.kind !== 'text' || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
-		context.register(new CodeLensContribution(
+		context.register(new EditorCodeLensContribution(
 			context.viewport,
 			context.languageFeaturesService.codeLensProvider,
 			context.languageId,

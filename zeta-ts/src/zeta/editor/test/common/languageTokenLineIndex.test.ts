@@ -189,7 +189,7 @@ test("Token line index reuses unchanged sparse lines from a confirmed delta", ()
 	const currentTokens = initialTokens.map((entry, lineIndex) => (
 		lineIndex === changedLine ? token(changedLine, 0, 7, "keyword") : entry
 	));
-	const result = createLanguageTokenSnapshotNormalizer(model.createSnapshot())({ tokens: currentTokens });
+	const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens: currentTokens });
 	attachLanguageTokenResultDelta(result, {
 		baseRequestId: 1,
 		splices: [{
@@ -237,7 +237,7 @@ test("Token line index rebuilds only two disjoint splice lines", () => {
 	const currentTokens = initialTokens.map((entry, lineIndex) => (
 		lineIndex === 100 || lineIndex === 900 ? token(lineIndex, 0, 10, "keyword") : entry
 	));
-	const result = createLanguageTokenSnapshotNormalizer(model.createSnapshot())({ tokens: currentTokens });
+	const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens: currentTokens });
 	attachLanguageTokenResultDelta(result, {
 		baseRequestId: 1,
 		splices: [100, 900].map(itemIndex => ({
@@ -273,7 +273,7 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 	using index = new LanguageTokenLineIndex(store);
 	const cache = new LanguageLexicalSyntaxCache();
 	const signal = new AbortController().signal;
-	const firstSnapshot = model.createSnapshot();
+	const firstSnapshot = model.createVersionedSnapshot();
 	const firstResult: SyntaxResult = Object.freeze({
 		lane: SYNTAX_TOKEN_LANE,
 		value: cache.getTokens(firstSnapshot, signal),
@@ -300,7 +300,7 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 		range: Range.fromPositions(model.positionAt(insertionOffset)),
 		text: "inserted\n",
 	}]);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const currentResult: SyntaxResult = Object.freeze({
 		lane: SYNTAX_TOKEN_LANE,
 		value: cache.getTokens(snapshot, signal),
@@ -342,7 +342,7 @@ test("Token line index matches full results across random wire deltas", () => {
 	});
 
 	for (let requestId = 1; requestId <= 100; requestId += 1) {
-		const snapshot = model.createSnapshot();
+		const snapshot = model.createVersionedSnapshot();
 		const serverResult: SyntaxResult = Object.freeze({
 			lane: SYNTAX_TOKEN_LANE,
 			value: cache.getTokens(snapshot, signal),

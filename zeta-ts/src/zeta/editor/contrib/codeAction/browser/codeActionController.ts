@@ -12,7 +12,7 @@ import { type CodeActionService, type LanguageCodeAction } from "../common/langu
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
-export class CodeActionController extends Disposable {
+export class EditorCodeActionController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly actionListeners = this._register(new DisposableStore());
 	private request: AbortController | undefined;
@@ -40,7 +40,7 @@ export class CodeActionController extends Disposable {
 			stopEvent(event);
 			this.close();
 		}));
-		this._register(viewport.textModel.onDidChange(() => this.close()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.close()));
 	}
 
 	private async open(): Promise<void> {

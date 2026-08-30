@@ -39,7 +39,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import("../../../browser/view.js");
-const { MouseHandler } = await import("../../../browser/controller/mouseHandler.js");
+const { EditorPointerSelectionHandler } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Alt pointer gestures add, toggle, drag, and track multiple selections", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -60,7 +60,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 	});
 	viewport.layout({ width: 200, height: 60 });
 	viewport.element.getBoundingClientRect = () => editorBounds();
-	using pointer = new MouseHandler(viewport, selections);
+	using pointer = new EditorPointerSelectionHandler(viewport, selections);
 
 	click(dom.window, viewport.element, 1, 158, 75, { altKey: true });
 	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
@@ -155,7 +155,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 	});
 	viewport.layout({ width: 200, height: 60 });
 	viewport.element.getBoundingClientRect = () => editorBounds();
-	using pointer = new MouseHandler(viewport, selections, {
+	using pointer = new EditorPointerSelectionHandler(viewport, selections, {
 		multiCursorModifier: PointerMultiCursorModifier.ControlOrMeta,
 	});
 
@@ -173,7 +173,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 		SelectionSet.single(caret(2, 1)),
 	);
 	assert.throws(
-		() => new MouseHandler(viewport, selections, {
+		() => new EditorPointerSelectionHandler(viewport, selections, {
 			multiCursorModifier: "shift" as PointerMultiCursorModifier,
 		}),
 		/Unknown Stanza pointer multi-cursor modifier/,

@@ -75,7 +75,7 @@ export class LineHeightsManager {
 	private _defaultLineHeight: number;
 	private _hasPending: boolean = false;
 
-	constructor(defaultLineHeight: number, customLineHeightData: CustomLineHeightData[]) {
+	constructor(defaultLineHeight: number, customLineHeightData: EditorCustomLineHeightData[]) {
 		this._defaultLineHeight = defaultLineHeight;
 		for (const data of customLineHeightData) {
 			this.insertOrChangeCustomLineHeight(data.decorationId, data.startLineNumber, data.endLineNumber, data.lineHeight);
@@ -381,7 +381,7 @@ export class LineHeightsManager {
 		} else {
 			startIndexOfInsertion = -(candidateStartIndexOfInsertion + 1);
 		}
-		const toReAdd: CustomLineHeightData[] = [];
+		const toReAdd: EditorCustomLineHeightData[] = [];
 		const decorationsImmediatelyAfter = new Set<string>();
 		for (let i = startIndexOfInsertion; i < this._orderedCustomLines.length; i++) {
 			if (this._orderedCustomLines[i].lineNumber === fromLineNumber) {
@@ -437,7 +437,7 @@ export class LineHeightsManager {
 	}
 }
 
-export class CustomLineHeightData {
+export class EditorCustomLineHeightData {
 
 	constructor(
 		readonly decorationId: string,

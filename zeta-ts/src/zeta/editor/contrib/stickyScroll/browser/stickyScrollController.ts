@@ -7,7 +7,7 @@ import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Projects folding ancestors above the viewport as an accessible sticky header stack. */
-export class StickyScrollController extends Disposable {
+export class EditorStickyScrollController extends Disposable {
 	private readonly element: HTMLDivElement;
 
 	constructor(private readonly viewport: View, private readonly folding: EditorFoldingModel) {

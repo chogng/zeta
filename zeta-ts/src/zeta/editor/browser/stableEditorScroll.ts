@@ -3,7 +3,7 @@ import { Position } from '../common/core/position.js';
 import { type View } from './view.js';
 
 /** Preserves the first visible visual row while editor content is reprojected. */
-export class StableEditorScrollState {
+export class ViewStableEditorScrollState {
 	private readonly initialScrollTop: number;
 	private readonly initialContentHeight: number;
 	private readonly visiblePosition: Position | undefined;
@@ -14,11 +14,11 @@ export class StableEditorScrollState {
 	public static capture(
 		viewport: View,
 		selectionController?: CursorsController,
-	): StableEditorScrollState {
+	): ViewStableEditorScrollState {
 		const layout = viewport.currentLayout;
 		const cursorPosition = selectionController?.selections.primary.getPosition();
 		if (layout.scrollPosition.top === 0) {
-			return new StableEditorScrollState(
+			return new ViewStableEditorScrollState(
 				layout.scrollPosition.top,
 				layout.contentSize.height,
 				undefined,
@@ -30,7 +30,7 @@ export class StableEditorScrollState {
 
 		const visibleLine = viewport.getVisualLineProjection().lineAt(layout.visibleLines.startLineIndex);
 		if (!visibleLine) {
-			return new StableEditorScrollState(
+			return new ViewStableEditorScrollState(
 				layout.scrollPosition.top,
 				layout.contentSize.height,
 				undefined,
@@ -42,7 +42,7 @@ export class StableEditorScrollState {
 
 		const visiblePosition = new Position((visibleLine.logicalLineIndex) + 1, (visibleLine.startColumn) + 1);
 		const visiblePositionTop = viewport.getPositionContentCoordinates(visiblePosition).top;
-		return new StableEditorScrollState(
+		return new ViewStableEditorScrollState(
 			layout.scrollPosition.top,
 			layout.contentSize.height,
 			visiblePosition,
@@ -118,19 +118,19 @@ export class StableEditorScrollState {
 }
 
 /** Preserves the last visible visual row while editor content is reprojected. */
-export class StableEditorBottomScrollState {
+export class ViewStableEditorBottomScrollState {
 	private readonly initialScrollTop: number;
 	private readonly initialContentHeight: number;
 	private readonly visiblePosition: Position | undefined;
 	private readonly visiblePositionScrollDelta: number;
 
-	public static capture(viewport: View): StableEditorBottomScrollState {
+	public static capture(viewport: View): ViewStableEditorBottomScrollState {
 		const layout = viewport.currentLayout;
 		const visibleLine = layout.visibleLines.endLineIndexExclusive > layout.visibleLines.startLineIndex
 			? viewport.getVisualLineProjection().lineAt(layout.visibleLines.endLineIndexExclusive - 1)
 			: undefined;
 		if (!visibleLine) {
-			return new StableEditorBottomScrollState(
+			return new ViewStableEditorBottomScrollState(
 				layout.scrollPosition.top,
 				layout.contentSize.height,
 				undefined,
@@ -140,7 +140,7 @@ export class StableEditorBottomScrollState {
 
 		const visiblePosition = new Position((visibleLine.logicalLineIndex) + 1, (visibleLine.startColumn) + 1);
 		const coordinates = viewport.getPositionContentCoordinates(visiblePosition);
-		return new StableEditorBottomScrollState(
+		return new ViewStableEditorBottomScrollState(
 			layout.scrollPosition.top,
 			layout.contentSize.height,
 			visiblePosition,

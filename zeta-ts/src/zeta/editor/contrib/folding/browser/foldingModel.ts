@@ -30,7 +30,7 @@ export class EditorFoldingModel extends Disposable {
 	constructor(private readonly textModel: TextModel) {
 		super();
 		this._register(toDisposable(() => disposeRecords(this.records)));
-		this._register(textModel.onDidChange(() => this.reconcileTrackedRanges()));
+		this._register(textModel.onDidChangeContent(() => this.reconcileTrackedRanges()));
 	}
 
 	get model(): TextModel {

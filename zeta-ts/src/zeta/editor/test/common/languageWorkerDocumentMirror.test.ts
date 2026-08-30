@@ -4,10 +4,11 @@ import { LanguageWorkerDocumentMirror } from '../../common/services/textModelSyn
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { EndOfLineSequence } from '../../common/model.js';
 
 test("Worker document mirror applies model transactions through its Piece Tree", () => {
 	using model = new TextModel("abc\ndef");
-	const mirror = new LanguageWorkerDocumentMirror(model.createSnapshot());
+	const mirror = new LanguageWorkerDocumentMirror(model.createVersionedSnapshot());
 	const captured = mirror.createSnapshot();
 	const change = model.applyEdits([
 		{
@@ -37,7 +38,7 @@ test("Worker document mirror applies model transactions through its Piece Tree",
 
 test("Worker document mirror rejects invalid synchronization atomically", () => {
 	using model = new TextModel("value");
-	const mirror = new LanguageWorkerDocumentMirror(model.createSnapshot());
+	const mirror = new LanguageWorkerDocumentMirror(model.createVersionedSnapshot());
 
 	assert.throws(() => mirror.synchronize(2, 3, [{
 		rangeOffset: 0,
@@ -51,4 +52,20 @@ test("Worker document mirror rejects invalid synchronization atomically", () => 
 	}]), /inside the mirror/);
 	assert.equal(mirror.version, 1);
 	assert.equal(mirror.createSnapshot().getText(), "value");
+});
+
+test('Worker document mirror synchronizes CRLF and EOL-only model versions', () => {
+	using model = new TextModel('first\r\nsecond');
+	const mirror = new LanguageWorkerDocumentMirror(model.createVersionedSnapshot());
+	assert.equal(mirror.createSnapshot().getText(), 'first\r\nsecond');
+
+	model.setEOL(EndOfLineSequence.LF);
+	const lfChange = model.getVersionId();
+	mirror.synchronize(lfChange - 1, lfChange, [], model.getEOL() as '\n');
+	assert.equal(mirror.createSnapshot().getText(), 'first\nsecond');
+
+	model.pushEOL(EndOfLineSequence.CRLF);
+	const crlfChange = model.getVersionId();
+	mirror.synchronize(crlfChange - 1, crlfChange, [], model.getEOL() as '\r\n');
+	assert.equal(mirror.createSnapshot().getText(), model.getText());
 });

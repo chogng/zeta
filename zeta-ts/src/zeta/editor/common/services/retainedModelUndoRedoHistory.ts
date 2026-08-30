@@ -34,7 +34,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 		this.delete(key);
 		const snapshot = model.createUndoRedoSnapshot();
 		if (!snapshot) return;
-		const textUnits = snapshot.text.length + snapshot.history.textUnits;
+		const textUnits = snapshot.contentLength + snapshot.history.textUnits;
 		if (textUnits > this.maxTextUnits) return;
 		this.retained.set(key, Object.freeze({ snapshot, textUnits }));
 		this.retainedTextUnits += textUnits;

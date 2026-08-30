@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { AbstractCodeEditorService } from '../../browser/services/abstractCodeEditorService.js';
+import { AbstractWidgetCodeEditorRegistry } from '../../browser/services/abstractCodeEditorService.js';
 import { type CodeEditorWidget } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 
-class TestCodeEditorService extends AbstractCodeEditorService {}
+class TestWidgetCodeEditorRegistry extends AbstractWidgetCodeEditorRegistry {}
 
 test('code editor handlers remove their own ordered registration', async () => {
-	using service = new TestCodeEditorService();
+	using service = new TestWidgetCodeEditorRegistry();
 	const sharedEditor = { id: 'shared' } as unknown as CodeEditorWidget;
 	const middleEditor = { id: 'middle' } as unknown as CodeEditorWidget;
 	const shared = async (): Promise<CodeEditorWidget> => sharedEditor;

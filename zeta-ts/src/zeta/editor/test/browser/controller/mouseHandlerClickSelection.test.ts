@@ -38,7 +38,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import("../../../browser/view.js");
-const { MouseHandler } = await import("../../../browser/controller/mouseHandler.js");
+const { EditorPointerSelectionHandler } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Pointer click counts select and drag by word or complete line", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -58,7 +58,7 @@ test("Pointer click counts select and drag by word or complete line", () => {
 	});
 	viewport.layout({ width: 240, height: 60 });
 	viewport.element.getBoundingClientRect = () => editorBounds();
-	using pointer = new MouseHandler(viewport, selections);
+	using pointer = new EditorPointerSelectionHandler(viewport, selections);
 
 	drag(dom.window, viewport.element, 1, point(20, 5), point(20, 5), 2);
 	assert.deepEqual(selections.selections.primary, Selection.fromPositions(

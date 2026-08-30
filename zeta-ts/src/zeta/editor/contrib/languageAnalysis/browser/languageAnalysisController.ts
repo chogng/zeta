@@ -18,7 +18,7 @@ export class LanguageAnalysisController extends Disposable {
 			const requestGeneration = ++this.requestGeneration;
 			queueMicrotask(() => void this.requestAnalysis(requestGeneration));
 		};
-		this._register(syntaxService.tokens.textModel.onDidChange(scheduleAnalysis));
+		this._register(syntaxService.tokens.textModel.onDidChangeContent(scheduleAnalysis));
 		if (onDidChangeLanguageSupport) this._register(onDidChangeLanguageSupport(scheduleAnalysis));
 		this._register(toDisposable(() => {
 			this.requestGeneration += 1;

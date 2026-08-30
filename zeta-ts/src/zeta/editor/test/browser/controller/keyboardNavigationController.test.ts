@@ -5,8 +5,8 @@ import { StandardKeyboardEvent } from "../../../../base/browser/keyboardEvent.js
 import { OperatingSystem } from "../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { resolveStanzaKeyboardNavigation } from "../../../browser/view/viewController.js";
-import { ViewUserInputEvents } from "../../../browser/view/viewUserInputEvents.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorMoveOperations.js";
+import { EditorViewUserInputEvents } from "../../../browser/view/viewUserInputEvents.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorNavigation.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
@@ -24,6 +24,12 @@ class FixedTextMeasurer implements TextMeasurer {
 	measureLineWidth(text: string): number {
 		return [...text].length * 10;
 	}
+}
+
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
 }
 
 test("Keyboard navigation resolves Windows/Linux and macOS chords", () => {
@@ -99,6 +105,7 @@ for (const [name, value] of Object.entries({
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -138,7 +145,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 40 });
-	const userInputEvents = new ViewUserInputEvents();
+	const userInputEvents = new EditorViewUserInputEvents();
 	let forwardedKeyDownCount = 0;
 	const previousKeyDownHandler = (): void => {
 		forwardedKeyDownCount++;
@@ -247,7 +254,7 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 		minimap: { enabled: false },
 	});
 	viewport.layout({ width: 70, height: 40 });
-	const userInputEvents = new ViewUserInputEvents();
+	const userInputEvents = new EditorViewUserInputEvents();
 	using keyboard = new KeyboardNavigationController(
 		viewport,
 		selections,
@@ -288,7 +295,7 @@ test('Keyboard controller applies sticky tab stops to indentation movement', () 
 	using model = new TextModel('        value');
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 8)));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	const userInputEvents = new ViewUserInputEvents();
+	const userInputEvents = new EditorViewUserInputEvents();
 	using keyboard = new KeyboardNavigationController(
 		viewport,
 		selections,
@@ -324,14 +331,14 @@ test("Keyboard controller rejects cross-model wiring and invalid OS options", ()
 	});
 
 	assert.throws(
-		() => new KeyboardNavigationController(viewport, selections, new ViewUserInputEvents()),
+		() => new KeyboardNavigationController(viewport, selections, new EditorViewUserInputEvents()),
 		/must share one text model/,
 	);
 	assert.throws(
 		() => new KeyboardNavigationController(
 			viewport,
 			ownSelections,
-			new ViewUserInputEvents(),
+			new EditorViewUserInputEvents(),
 			{ operatingSystem: "plan9" as OperatingSystem },
 		),
 		/Unknown Stanza keyboard operating system/,
@@ -349,7 +356,7 @@ interface KeyOptions {
 	readonly isComposing?: boolean;
 }
 
-function emitKeyDown(userInputEvents: ViewUserInputEvents, event: KeyboardEvent): void {
+function emitKeyDown(userInputEvents: EditorViewUserInputEvents, event: KeyboardEvent): void {
 	userInputEvents.emitKeyDown(new StandardKeyboardEvent(event));
 }
 

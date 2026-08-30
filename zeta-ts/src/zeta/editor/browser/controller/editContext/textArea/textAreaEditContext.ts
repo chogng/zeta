@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { h } from "../../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../../base/browser/fastDomNode.js";
 import { type Event } from "../../../../../base/common/event.js";
-import { AbstractEditContext, type CompositionController, type EditContextCompositionEvent, type EditContextOptions, type EditContextPosition, type EditContextState } from "../editContext.js";
+import { EditorInputContext, type CompositionController, type EditContextCompositionEvent, type EditContextOptions, type EditContextPosition, type EditContextState } from "../editContext.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { type CursorsController } from '../../../../common/cursor/cursor.js';
 import { SelectionDirection, Selection } from '../../../../common/core/selection.js';
@@ -13,7 +13,7 @@ import { Range } from '../../../../common/core/range.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { type View } from '../../../view.js';
 import { MappedScreenReaderStrategy, modelOffsetAtContentOffset, type MappedScreenReaderContentState } from '../mappedScreenReaderUtils.js';
-import { TextAreaInput } from "./textAreaEditContextInput.js";
+import { EditorTextAreaInput } from "./textAreaEditContextInput.js";
 import { TextAreaEditContextRegistry } from "./textAreaEditContextRegistry.js";
 import { TextAreaState, type ITextAreaWrapper } from "./textAreaEditContextState.js";
 
@@ -26,11 +26,11 @@ export type TextAreaEditContextOptions = EditContextOptions;
  * The concrete edit context owns its textarea input, composition controller,
  * focus state, ARIA state, and screen-reader mirror.
  */
-export class TextAreaEditContext extends AbstractEditContext implements ITextAreaWrapper {
+export class EditorTextAreaInputContext extends EditorInputContext implements ITextAreaWrapper {
 	readonly inputNode: FastDomNode<HTMLTextAreaElement>;
 	readonly domNode: HTMLTextAreaElement;
 	readonly textArea: HTMLTextAreaElement;
-	readonly textAreaInput: TextAreaInput;
+	readonly textAreaInput: EditorTextAreaInput;
 	private readonly accessibilityController: TextAreaAccessibilityController;
 	private lastRenderPosition: Position | null = null;
 	private connected = false;
@@ -66,7 +66,7 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 		this.domNode.setAttribute("aria-multiline", "true");
 		this.domNode.setAttribute("aria-roledescription", "code editor");
 		this.domNode.setAttribute("aria-readonly", String(this.domNode.readOnly));
-		this.textAreaInput = this._register(new TextAreaInput(this.domNode));
+		this.textAreaInput = this._register(new EditorTextAreaInput(this.domNode));
 		this._register(TextAreaEditContextRegistry.register(options.ownerId, this));
 		this._register(TextAreaEditContextRegistry.register(this.domNode, this));
 		container.append(this.domNode);
@@ -195,7 +195,7 @@ class TextAreaAccessibilityController extends Disposable {
 	private readonly screenReaderStrategy = new MappedScreenReaderStrategy();
 
 	constructor(
-		private readonly input: TextAreaEditContext,
+		private readonly input: EditorTextAreaInputContext,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		private readonly compositionController: CompositionController,

@@ -71,7 +71,7 @@ export function createScreenReaderContentState(
 	const modelSegments = pageSize === undefined
 		? [createScreenReaderWindow(model.length, selectionStart, selectionEnd, activeOffset)]
 		: createScreenReaderPageWindows(model, selectionStart, selectionEnd, activeOffset, pageSize);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const safeModelSegments = modelSegments.map(segment => avoidSurrogateSplit(snapshot, model.length, segment));
 	let text = "";
 	let contentOffset = 0;
@@ -345,7 +345,7 @@ function clampModelOffset(offset: number, startOffset: number, endOffset: number
 }
 
 function avoidSurrogateSplit(
-	snapshot: ReturnType<TextModel["createSnapshot"]>,
+	snapshot: ReturnType<TextModel['createVersionedSnapshot']>,
 	modelLength: number,
 	segment: { readonly startOffset: number; readonly endOffset: number },
 ): { readonly startOffset: number; readonly endOffset: number } {

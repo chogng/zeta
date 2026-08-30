@@ -1,4 +1,4 @@
-import { type DiagnosticOverviewMarker, type DiffOverviewMarker, OverviewRuler } from './overviewRuler.js';
+import { type DiagnosticOverviewMarker, type DiffOverviewMarker, EditorOverviewRuler } from './overviewRuler.js';
 
 const OVERVIEW_RULER_WIDTH = 6;
 
@@ -13,7 +13,7 @@ export interface DecorationsOverviewRulerOptions {
 }
 
 /** Projects diagnostic and diff markers into the editor's overview ruler. */
-export class DecorationsOverviewRuler extends OverviewRuler {
+export class EditorDecorationsOverviewRuler extends EditorOverviewRuler {
 	constructor(options: DecorationsOverviewRulerOptions) {
 		super({
 			host: options.host,

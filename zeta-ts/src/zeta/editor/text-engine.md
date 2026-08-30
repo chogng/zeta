@@ -20,7 +20,7 @@ Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本�
 ## 设计不变量
 
 - `TextModel` 是文本、版本、事务、文档历史、snapshot 和 tracked range 的唯一同步 mutation authority。
-- 文本位置使用 0-based line、UTF-16 column；range 有序且 end-exclusive；进入模型的换行统一为 LF。
+- 对外 `Position` / `Range` 使用 1-based line、1-based UTF-16 column；内部 visual-line、buffer offset 和局部投影可以使用 0-based 索引，但必须在 owner 边界转换一次。range 有序且 end-exclusive；进入模型的换行统一为当前 `ITextBuffer` 的 EOL。
 - `CursorsController` 拥有一个 editor instance 的 selection、composition 和 cursor history，不把 selection 写入共享 `TextModel`。
 - model、view model、layout 和 browser projection 依赖单向流动；`common` 不依赖 DOM、Workbench、Electron 或 generated DTO。
 - 输入热路径不等待 Worker、Rust、App Server、文件系统或语言服务。
@@ -32,11 +32,14 @@ Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本�
 
 ```mermaid
 flowchart LR
+    Base[base] --> Platform[platform services]
+    Base --> Core[common/core]
+    Platform --> ModelServices[common/services]
     Core[common/core] --> Model[common/model]
     Model --> Cursor[common/cursor + commands]
     Model --> ViewModel[common/viewModel]
-    ViewModel --> ViewLayout[common/viewLayout]
-    ViewLayout --> BrowserView[browser/view]
+    ViewModel --> EditorViewportLayoutManager[common/viewLayout]
+    EditorViewportLayoutManager --> BrowserView[browser/view]
     BrowserView --> ViewParts[browser/viewParts]
     ViewParts --> DOM[DOM / Canvas]
     Model --> Languages[common/languages + tokens]
@@ -48,7 +51,7 @@ flowchart LR
 | 层 | 拥有 | 不得拥有 |
 | --- | --- | --- |
 | `common/core` | position、range、selection value、纯 edit/range/text 算法 | model state、DOM、provider、产品逻辑 |
-| `common/model` | `TextModel`、`TextBuffer`、history、snapshot、search、tracked range、decoration identity；PieceTree 是当前私有 buffer 实现 | CSS、selection instance、文件传输、语言 runtime |
+| `common/model` | `TextModel`、`ITextBuffer`、history、snapshot、search、tracked range、decoration identity；PieceTree 是当前私有 buffer 实现 | CSS、selection instance、文件传输、语言 runtime |
 | `common/cursor`、`common/commands` | editor-local selection 和 DOM-free edit intent | 键盘监听、DOM、Workbench command registry |
 | `common/viewModel` | logical line → visual line、geometry、hit-test 所需纯投影 | DOM 测量、CSS、feature controller |
 | `common/viewLayout` | viewport size、content extent、scroll clamp、visible/render ranges | DOM scroll node、model mutation |
@@ -57,21 +60,29 @@ flowchart LR
 | `contrib/<feature>` | 可移除 feature 的 command、state、controller 和 presentation | 第二套 model、产品 ID、隐式宿主依赖 |
 | Workbench | pane/input、文件和 working-copy、产品组合、transport adapter | 文本事务、selection、viewport |
 
-依赖保持 `Workbench → editor/contrib → editor/browser → editor/common → base`。Stanza 可以借鉴 VS Code 的目录和职责名称，但不复制其历史依赖、全局 service singleton 或与当前调用者无关的文件。
+顶层依赖保持 `workbench → editor → platform → base`；Editor 内部保持 `contrib/browser → common`，其中 editor 的各层都可以按运行环境依赖更低层的 base/platform owner。Stanza 可以借鉴 VS Code 的目录和职责名称，但不复制其历史依赖、全局 service singleton 或与当前调用者无关的文件。
 
 ## 同步文本内核
 
 ### Model、事务和历史
 
-`TextModel` 在一次提交前验证所有 range 和 edit，拒绝重叠或越界输入，然后通过一个 mutation boundary 更新 TextBuffer、tracked ranges、history、version 和同步事件。Exact replacement 是 no-op，不增加版本，也不产生 history。当前 TextBuffer 由 `PieceTreeTextBufferBuilder` 构建的红黑 PieceTree 实现，但调用方不能依赖该具体类型。
+`TextModel` 在一次提交前验证所有 range 和 edit，拒绝重叠或越界输入，然后通过一个 mutation boundary 更新 TextBuffer、tracked ranges、history、version 和同步事件。内容变化统一从 `onDidChangeContent` 发布；普通状态对象仍可使用自己的 `onDidChange`，因此调试时可以直接按 VS Code 的模型事件名追调用链。Exact replacement 是 no-op，不增加版本，也不产生 history。当前 TextBuffer 由 `PieceTreeTextBufferBuilder` 构建的红黑 PieceTree 实现，但调用方不能依赖该具体类型。
 
-`TextModel.createSnapshot` 捕获不可变 source segments。Snapshot 在后续 edit 或 model disposal 后仍可读取。文档 history 有 transaction 与 UTF-16 text-unit 双重预算；typing、Backspace 和 Delete 只有在光标连续性可证明时才合并。
+`TextModel.createSnapshot` 遵循 editor 公共契约，返回顺序消费的 `ITextSnapshot.read()`；它用于模型服务、独立入口和其他只需要读取文本的调用方。语言请求、Worker 同步与 diff 需要额外的 model version、长度和随机区间读取，因此使用独立的 `createVersionedSnapshot`。两种快照都在后续 edit 或 model disposal 后保持可读，但不再由一个同名 API 混合两套职责。文档 history 有 transaction 与 UTF-16 text-unit 双重预算；typing、Backspace 和 Delete 只有在光标连续性可证明时才合并。
 
-`TextModel.reset` 用于 reload/revert，不建立普通 undo entry。文件行尾约定由 model reference 保存，模型内部仍保持 LF。
+`TextModel.reset` 用于 reload/revert，不建立普通 undo entry。`ModelService.updateModel` 会先按目标 buffer 更新 EOL，再提交最小文本 edit；模型、snapshot、undo/redo 和 worker mirror 始终使用同一个 `ITextBuffer` EOL。
+
+`ModelService` 通过 `platform/configuration` 读取模型创建选项，通过 `ITextResourcePropertiesService` 决定资源 EOL。语言、资源或相关配置变化会清空 creation-options cache 并更新已打开模型；关闭文件的 undo/redo 只有在 URI 策略允许、内容 SHA-1 一致且内存预算允许时才恢复。
 
 ### Selection、command 和 composition
 
 一个 `TextModel` 可以被多个 `CursorsController` 投影。Controller 通过 `EditorEditCommand` 提交有序 edit 和明确的 post-selection；undo/redo 使用稳定 transaction identity 恢复各自的 selection，而不把 selection history 放入共享模型。
+
+`CursorConfiguration` 从模型选项、编辑器配置和语言配置解析光标策略；`CursorContext` 固定 model、visual-line model、`ICoordinatesConverter` 和配置的同一组身份。`ViewModelLines` 已实现 visual-line `ICursorSimpleModel` 与 model/view 坐标往返，列选的生产调用链已经使用它。`Cursor` 和 `CursorCollection` 现在分别持有 `modelState` / `viewState` 与 primary-first 多光标集合，marker 恢复、重叠合并及折行坐标转换均有直接测试。当前限制是 `CursorsController` 仍由装配根在 `ViewModelLines` 之前创建，尚未由统一 `ViewModel` owner 持有，因此这两个基础 owner 还不能从待处理账目移出。
+
+`cursorMoveOperations.ts` 只处理上游同契约的 `SingleCursorState`、visible column、visual-line model 和 buffer 边界；面向本地 `SelectionSet` 的键盘命令编排位于 `cursorNavigation.ts`。两者共享 base 的 grapheme 步长，因此 UTF-16、emoji、sticky tab stop 和折行坐标不会由两个同名 owner 分别解释。
+
+`cursorDeleteOperations.ts` 和 `cursorWordOperations.ts` 使用上游的 `Selection[]`、`SingleCursorState` 与 `ICommand` 契约。Zeta 的 `SelectionSet` 事务转换由 `selectionSetDeleteOperations.ts`、`selectionSetWordOperations.ts` 负责，浏览器正则词选区由 `wordSelection.ts` 负责；这些入口不会再向上游同名 class 添加另一种坐标或命令语义。
 
 IME composition 使用受保护的 history revision。Provisional updates 可以产生可观察 model version，但 commit 只保留一个 undo step，cancel 必须无损恢复初始文本和 selection。Composition 活跃时，普通 edit、selection change 和 history command 不能绕过该边界。
 
@@ -80,6 +91,8 @@ IME composition 使用受保护的 history revision。Provisional updates 可以
 `TextDecorationCollection<TMetadata>` 只拥有稳定 identity、opaque metadata 和 tracked range。CSS class、severity、hover、overview marker 和 geometry 由 browser/feature owner 解释。
 
 语言请求从 immutable model snapshot 开始。`LanguageRequestCoordinator`、`VersionedLanguageResultStore` 和对应 token/diagnostic index 共同执行 latest-wins、cancellation、cross-model rejection 和 stale-result rejection。Worker 或 Rust adapter 可以生产事实，但不能成为 token store、selection 或 model owner。
+
+语义 token 的 provider 生命周期由 `SemanticTokensStylingService` 按 provider identity 缓存 `SemanticTokensProviderStyling`；单 provider owner 把当前 `LanguageToken` 映射为展示属性，`ResolvedSemanticTokensService` 只负责 source/overlay 的结果转换。浏览器 contribution 实际经过这两个 owner，不把 provider cache 合并进 DOM 展示服务。当前本地 provider 直接返回结构化 `LanguageToken`，尚未采用 VS Code legend 的数字 metadata 表示。
 
 ## 视图架构
 
@@ -91,16 +104,16 @@ VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效
 flowchart LR
     Change[Model / layout / decoration change] --> Project[View.project]
     Layout[Current EditorViewportLayout] --> Project
-    Project --> Lines[ViewLines]
+    Project --> Lines[EditorViewLines]
     Lines --> Context[EditorRenderingContext]
     Context --> Prepare[Part prepareRender]
     Prepare --> Parts[Part render]
     Parts --> DOM[DOM / GPU mutation]
 ```
 
-- `ViewLayout` 生成不可变 `EditorViewportLayout`；`EditorViewportLinesLayout` 只转换本地零基行号、overscan 与快照格式，实际行高、padding、View Zone/whitespace 排序和纵向查询统一交给 VS Code 同名的 `LinesLayout`。browser 只挂载调用方拥有的 zone DOM。
+- `EditorViewportLayoutManager` 生成不可变 `EditorViewportLayout`；`EditorViewportLinesLayout` 只转换本地零基行号、overscan 与快照格式，实际行高、padding、View Zone/whitespace 排序和纵向查询统一交给 VS Code 同名的 `LinesLayout`。browser 只挂载调用方拥有的 zone DOM。
 - `View` 同时承担当前 view host、同步 scheduler、measurement 组合、hit test 和 DOM scroll 同步。
-- `ViewLines` 先建立当前 rendered lines；`EditorViewContext` 提供当前 layout 和单次渲染上下文的稳定入口。
+- `EditorViewLines` 先建立当前 rendered lines；`EditorViewContext` 提供当前 layout 和单次渲染上下文的稳定入口。
 - `EditorRenderingContext` 是每次同步 render pass 的不可变快照，包含 layout、viewport data 和通过 model version 校验的 overlay geometry。
 - `EditorViewPartCollection` 和 `EditorOverlayCoordinator` 先向全部 Parts 传入同一个 context 执行 `prepareRender`，再按注册顺序执行 `render`。
 - 当前每次 `project` 仍会调用全部 Parts，Part 通过自己的 retained state 避免不必要的重建。
@@ -115,7 +128,7 @@ flowchart LR
 - Part 创建稳定根节点并拥有其内部节点、listener 和 disposal。
 - View host 决定根节点挂载位置和 sibling 顺序。Part 不接收 container 只是为了在构造函数中自行 append。
 - Part 可以公开 `domNode` 给 host，但 host 不操作 Part 内部 children。
-- Feature-owned ViewPart 直接接收 feature owner，例如 glyph margin 直接依赖 `DecorationsOverlay`；不通过共享 context 查找 feature。
+- Feature-owned ViewPart 直接接收 feature owner，例如 glyph margin 直接依赖 `EditorDecorationsOverlay`；不通过共享 context 查找 feature。
 - Render 使用 guard clause 拒绝 stale frame。Model version validation 在 frame/context boundary 只做一次。
 - 短而完整的 reconcile 算法保留在一个方法中；只有共享语义、独立生命周期或独立失效条件才提取 helper。
 
@@ -132,17 +145,17 @@ flowchart LR
 
 没有这些条件时，直接使用 frame context 中的当前值。
 
-`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且同步 scheduler 会重复写入相同样式的节点。`ViewLine` 只对文字行根节点使用 wrapper；line number、diagnostic marker、indent guide、decoration、selection、cursor 和 composition 由各自 Part 通过 `ViewPartRows` 拥有独立 DOM。`SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 projection DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
+`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且同步 scheduler 会重复写入相同样式的节点。`EditorViewLine` 只对文字行根节点使用 wrapper；line number、diagnostic marker、indent guide、decoration、selection、cursor 和 composition 由各自 Part 通过 `ViewPartRows` 拥有独立 DOM。`SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 projection DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
 
 ## 输入与 Controller
 
 Browser controller 的职责是把一个 DOM event 解析成一个 editor intent，然后调用 common command 或 selection transition。它不得重新实现事务、range mapping 或 model history。
 
-- `AbstractEditContext`：browser input contract；`NativeEditContext` 使用浏览器原生 EditContext，`TextAreaEditContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`EditorView` 只选择并暴露这份契约，`ViewController` 执行 common command，`SuggestController` 通过 `EditorView.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
+- `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器原生 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`EditorView` 只选择并暴露这份契约，`EditorViewInputController` 执行 common command，`EditorSuggestController` 通过 `EditorView.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
 - `PointerEventRouter`：pointer dispatch、drag session 和浏览器 capture 的 browser adapter。
-- `MouseHandler`：把 mouse/pointer hit target 转换为 selection intent；`BidirectionalDragScrolling` 统一处理拖选期间的横向和纵向边缘滚动，多光标移动命令位于 `common/cursor/cursorMoveCommands.ts`。
+- `EditorPointerSelectionHandler`：把 mouse/pointer hit target 转换为 selection intent；`BidirectionalDragScrolling` 统一处理拖选期间的横向和纵向边缘滚动，多光标移动命令位于 `common/cursor/cursorMoveCommands.ts`。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。
@@ -175,7 +188,7 @@ contrib/<feature>/
 | --- | --- | --- |
 | Live text model reference、dirty、baseline、conflict | Editor `ITextModelService` contract / Workbench `BrowserTextModelService` | Workbench 提供 resource store 与 working-copy registration |
 | 原始资源读写和 expected revision | editor-owned `ITextResourceStore` contract | Workbench/file service/App Server adapter |
-| Language provider registry 和 version gate | `ILanguageFeaturesService` 与 editor common stores | TextMate、Worker、Rust 或 LSP adapter |
+| Language provider registry 和 version gate | `IEditorLanguageFeaturesService` 与 editor common stores | TextMate、Worker、Rust 或 LSP adapter |
 | Diff request/result 和 `DiffModel` | `common/diff` | Workbench `IDiffService` / `AppServerDiffComputationService` |
 | Pane、tab、save command、notification | 无 | Workbench |
 
@@ -194,7 +207,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 
 | Area | Status | Boundary |
 | --- | --- | --- |
-| TextModel、TextBuffer、history、snapshot、tracked range | ✅ Current | Renderer 内同步权威；PieceTree 仅为私有实现 |
+| TextModel、ITextBuffer、history、snapshot、tracked range、attached view lifecycle | ✅ Current | Renderer 内同步权威；PieceTree 仅为私有实现 |
 | Multi-selection、IME、clipboard、pointer/keyboard input | ✅ Current | Browser adapter 调用 common command |
 | Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `View` 同步调度 |
 | Token、diagnostic、completion、TextMate 和 App Server parser provider | ✅ Current | version-bound async provider path；Editor 不接收后端 API |

@@ -50,8 +50,12 @@ description: Align Zeta TypeScript editor APIs and debuggable call paths with th
 
 当本地一个文件承担上游两个文件的职责时，先判断这两个上游 owner 是否代表独立状态、生命周期或可替换能力。若是，就说明本地解耦不足，应按职责拆开；若只是本地内部实现更紧凑且对外 owner、调用链和行为仍一一可追踪，则不为文件数量机械拆分。
 
+当一个本地对象同时实现多个上游契约时，逐项比较同名方法的坐标域和输入语义。同名方法若分别表示逻辑模型、视觉投影或浏览器测量，就必须由独立 context 或 owner 承担；不得让一个实现用调用时机猜测语义。调用方应显式传入对应契约，并用跨坐标转换测试证明边界。
+
 ## 验证
 
+- 涉及 Editor 118 项对齐账目时，先运行 `node .agents/skills/vscode-api-alignment/scripts/verify-editor-api-ledger.mjs`，确认状态文档中的已处理数、待处理数和 118 个唯一声明一致；每完成一项就把它从待处理表移动到已处理表、同步摘要数字，再次运行脚本。
+- 从 118 项账目选择下一批时，可运行 `node .agents/skills/vscode-api-alignment/scripts/compare-editor-api-members.mjs`，按同路径声明的成员名差异量排序。该结果只用于缩小人工核对范围；成员名相同仍必须继续核对 owner、行为和调用链。
 - 用 `rg` 确认旧名称、错误大小写路径、别名、重复入口和聚合导入不再被生产代码引用。
 - 对受影响文件逐项复核上游与本地 import 的符号和相对 owner path；只看导出声明或编译成功不算验证。
 - 检查 `editor` 的层级和运行环境依赖，尤其防止 `common` 间接引入 DOM、Node 或 Electron 能力。

@@ -5,7 +5,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 
 /** Builds the optional save-boundary edit that terminates a non-empty document with LF. */
 export function createInsertFinalNewLineCommand(model: TextModel, selections: SelectionSet): EditorEditCommand | undefined {
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	if (snapshot.length === 0 || snapshot.getText().endsWith("\n")) return undefined;
 	const selectionsAfter = selections.selections.map(selection => Object.freeze({
 		anchorOffset: model.offsetAt(selection.getSelectionStart()),

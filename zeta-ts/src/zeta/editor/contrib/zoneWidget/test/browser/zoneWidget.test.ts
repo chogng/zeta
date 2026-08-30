@@ -24,9 +24,9 @@ for (const [name, value] of Object.entries({
 
 const { View } = await import('../../../../browser/view.js');
 const { EditorLineWrapping } = await import('../../../../common/config/editorOptions.js');
-const { ZoneWidget } = await import('../../browser/zoneWidget.js');
+const { EditorZoneWidget } = await import('../../browser/zoneWidget.js');
 
-test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and releases its zone', () => {
+test('EditorZoneWidget reserves editor space, tracks its anchor, updates layout, and releases its zone', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('alpha\nbeta\ngamma');
 	using viewport = new View({
@@ -125,7 +125,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	dom.window.close();
 });
 
-test('ZoneWidget preserves selection on request and exposes an enabled resize sash while shown', () => {
+test('EditorZoneWidget preserves selection on request and exposes an enabled resize sash while shown', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('alpha\nbeta');
 	using viewport = new View({
@@ -175,7 +175,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 	dom.window.close();
 });
 
-test('ZoneWidget places an anchor after its wrapped visual line', () => {
+test('EditorZoneWidget places an anchor after its wrapped visual line', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('abcdefghijklmnopqrst');
 	using viewport = new View({
@@ -199,7 +199,7 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 	dom.window.close();
 });
 
-class TestZoneWidget extends ZoneWidget {
+class TestZoneWidget extends EditorZoneWidget {
 	public readonly layouts: Array<{ readonly heightInPixels: number; readonly widthInPixels: number }> = [];
 
 	public resizeTo(heightInLines: number): void {

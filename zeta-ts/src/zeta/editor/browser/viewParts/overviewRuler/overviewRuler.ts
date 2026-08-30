@@ -38,7 +38,7 @@ export interface OverviewRulerOptions {
 }
 
 /** Owns overview-ruler layout and line-to-pixel zone projection. */
-export class OverviewRuler extends EditorViewPart {
+export class EditorOverviewRuler extends EditorViewPart {
 	public readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly zoneManager: OverviewZoneManager;

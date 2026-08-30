@@ -56,7 +56,7 @@ interface MultiDiffSectionLayout {
 }
 
 /** Read-only, vertically virtualized presentation of multiple DiffModels. */
-export class MultiDiffEditorWidget extends Disposable {
+export class EditorMultiDiffWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;

@@ -6,7 +6,7 @@ import { Range } from '../core/range.js';
 import { normalizeTextLineEndings } from '../core/textChange.js';
 
 import { type TextModel } from '../model/textModel.js';
-import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
+import { normalizeSelectionOffsets, TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { type TextEdit } from '../languages.js';
 
 export class TypeOperations {
@@ -82,7 +82,7 @@ export class TypeOperations {
 			}
 			cumulativeDelta += group.text.length;
 		}
-		const normalizedSelections = TypeWithoutInterceptorsOperation.normalizeSelectionOffsets(selectionsAfter, selections.primaryIndex);
+		const normalizedSelections = normalizeSelectionOffsets(selectionsAfter, selections.primaryIndex);
 		return {
 			edits: Object.freeze(edits),
 			selectionsAfter: normalizedSelections.selections,

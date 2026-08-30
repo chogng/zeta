@@ -28,7 +28,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import('../../../../browser/view.js');
-const { CodeLensContribution } = await import('../../browser/codelensController.js');
+const { EditorCodeLensContribution } = await import('../../browser/codelensController.js');
 
 test('CodeLens model preserves provider ownership, provider rank, and independent failures', async () => {
 	using model = new TextModel('first\nsecond');
@@ -109,7 +109,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	const executions: string[] = [];
 	const contributionErrors: unknown[] = [];
 	const executeCommand = ((id: string) => executions.push(id)) as unknown as (id: string, args: readonly unknown[] | undefined) => void;
-	using contribution = new CodeLensContribution(viewport, providers, 'typescript', undefined, executeCommand, error => contributionErrors.push(error));
+	using contribution = new EditorCodeLensContribution(viewport, providers, 'typescript', undefined, executeCommand, error => contributionErrors.push(error));
 
 	await contribution.getModel();
 	let widget = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-codelens');
@@ -164,7 +164,7 @@ test('CodeLens model waits for every visible resolve batch in the current reques
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	viewport.layout({ width: 300, height: 20 });
-	using contribution = new CodeLensContribution(viewport, providers, 'typescript', undefined, () => undefined);
+	using contribution = new EditorCodeLensContribution(viewport, providers, 'typescript', undefined, () => undefined);
 	await waitFor(() => requests.length === 1);
 
 	viewport.scrollTo({ left: 0, top: 210 });
@@ -210,7 +210,7 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 			provideCodeLenses: () => [lens(1, 0, command('old.run', 'Cached'))],
 		});
 		using firstViewport = createViewport(firstDom, firstModel);
-		using firstContribution = new CodeLensContribution(firstViewport, firstProviders, 'typescript', resource, () => undefined);
+		using firstContribution = new EditorCodeLensContribution(firstViewport, firstProviders, 'typescript', resource, () => undefined);
 		await firstContribution.getModel();
 		firstDom.window.close();
 
@@ -225,7 +225,7 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 		});
 		using secondViewport = createViewport(secondDom, secondModel);
 		const executions: string[] = [];
-		using secondContribution = new CodeLensContribution(secondViewport, secondProviders, 'typescript', resource, id => { executions.push(id); });
+		using secondContribution = new EditorCodeLensContribution(secondViewport, secondProviders, 'typescript', resource, id => { executions.push(id); });
 
 		const cachedCommand = requiredElement<HTMLElement>(secondViewport.element, '.stanza-editor-codelens-command');
 		assert.deepEqual({ tagName: cachedCommand.tagName, title: cachedCommand.textContent }, { tagName: 'SPAN', title: 'Cached' });
@@ -270,7 +270,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 			textMeasurer: new FixedTextMeasurer(),
 		});
 		restoredViewport.layout({ width: 300, height: 20 });
-		using restoredContribution = new CodeLensContribution(restoredViewport, restoredProviders, 'typescript', restoredResource, undefined);
+		using restoredContribution = new EditorCodeLensContribution(restoredViewport, restoredProviders, 'typescript', restoredResource, undefined);
 		const restoredWidget = requiredElement<HTMLElement>(restoredViewport.element, '.stanza-editor-codelens');
 		assert.deepEqual({
 			hidden: restoredWidget.hidden,

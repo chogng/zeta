@@ -11,7 +11,7 @@ export interface LanguageFeatureRequest {
 
 /** Creates a request from the model's current snapshot and a caller-owned cancellation signal. */
 export function createLanguageFeatureRequest(model: TextModel, languageId: string, signal: AbortSignal): LanguageFeatureRequest {
-	return Object.freeze({ model, snapshot: model.createSnapshot(), languageId, signal });
+	return Object.freeze({ model, snapshot: model.createVersionedSnapshot(), languageId, signal });
 }
 
 /** Returns whether a provider result may still be applied to the request's model. */

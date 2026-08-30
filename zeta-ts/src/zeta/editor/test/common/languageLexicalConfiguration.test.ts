@@ -11,7 +11,7 @@ test("Lexical caches remain isolated by language identity at one model version",
 	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 
 	assert.deepEqual(await tokenTypes(provider, request(1, "typescript", snapshot)), ["comment", "string"]);
 	assert.deepEqual(await tokenTypes(provider, request(2, "json", snapshot)), ["operator", "variable", "variable"]);
@@ -24,7 +24,7 @@ test("A language configuration revision replaces same-version lexical state", as
 	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 
 	assert.deepEqual(await tokenTypes(provider, request(1, "json", snapshot)), ["variable", "operator", "variable"]);
 	using custom = configurations.register("json", {
@@ -58,7 +58,7 @@ test("Built-in lexical configuration registrations release without owning the re
 test("Rust lexical analysis recognizes Rust comments, keywords, strings, and structural diagnostics", async () => {
 	using model = new TextModel("/// docs\nfn main() { let value = \"ok\"; }");
 	const provider = createLanguageLexicalSyntaxProvider();
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 
 	assert.deepEqual(
 		await tokenTypes(provider, request(1, "rust", snapshot)),
@@ -71,7 +71,7 @@ test("Rust lexical analysis recognizes Rust comments, keywords, strings, and str
 test("Rust lexical analysis recognizes hash-delimited raw strings and character literals", async () => {
 	using model = new TextModel("let raw = r##\"{\ninside } \"##;\nlet character = '\\n';\nlet lifetime = 'a;");
 	const provider = createLanguageLexicalSyntaxProvider();
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 
 	assert.deepEqual(
 		await tokenTypes(provider, request(1, "rust", snapshot)),
@@ -84,7 +84,7 @@ test("Rust lexical analysis recognizes hash-delimited raw strings and character 
 test("ECMAScript lexical analysis recognizes regular expressions without mistaking division for a literal", async () => {
 	using model = new TextModel("const matcher = /\\{(?<name>[a-z]+)\\}/giu;\nconst ratio = total / count;\nreturn /[{}]/.test(value);");
 	const provider = createLanguageLexicalSyntaxProvider();
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 
 	assert.deepEqual(
 		await tokenTypes(provider, request(1, "typescript", snapshot)),
@@ -94,7 +94,7 @@ test("ECMAScript lexical analysis recognizes regular expressions without mistaki
 	assert.deepEqual(diagnostics?.diagnostics, []);
 });
 
-function request(requestId: number, languageId: string, snapshot: ReturnType<TextModel["createSnapshot"]>): SyntaxProviderRequest {
+function request(requestId: number, languageId: string, snapshot: ReturnType<TextModel['createVersionedSnapshot']>): SyntaxProviderRequest {
 	return Object.freeze({ requestId, languageId, snapshot });
 }
 

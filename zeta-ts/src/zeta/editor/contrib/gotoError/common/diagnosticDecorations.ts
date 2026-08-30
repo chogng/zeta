@@ -24,7 +24,7 @@ export class LanguageDiagnosticDecorationBridge extends Disposable {
 			if (externalSource) this._register(externalSource.onDidChangeDiagnostics(resource => {
 				if (resource.toString() === this.resource?.toString()) this.synchronize();
 			}));
-			if (externalSource) this._register(store.textModel.onDidChange(() => this.synchronize()));
+			if (externalSource) this._register(store.textModel.onDidChangeContent(() => this.synchronize()));
 			this.synchronize();
 		} catch (error) {
 			this.dispose();

@@ -162,7 +162,7 @@ test("CursorsController projects tracked selections before downstream command li
 		)),
 	);
 	const observed: Selection[] = [];
-	using listener = model.onDidChange(() => {
+	using listener = model.onDidChangeContent(() => {
 		const selection = controller.selections.primary;
 		assert.doesNotThrow(() => {
 			model.offsetAt(selection.getSelectionStart());
@@ -287,7 +287,7 @@ test("CursorsController rejects stale post-command selections", () => {
 	using controllerListener = controller.onDidChange(
 		event => reasons.push(event.reason),
 	);
-	using reentrantListener = model.onDidChange(event => {
+	using reentrantListener = model.onDidChangeContent(event => {
 		if (event.version === 2) {
 			model.applyEdits([{
 				range: Range.fromPositions(model.positionAt(model.getText().length)),

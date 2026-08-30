@@ -80,7 +80,7 @@ test("Required modules activate before the first completion request crosses the 
 	using client = new LanguageCompletionCatalogWorkerClient(clientPort, {
 		requiredProviderModules: ["language.word"],
 	});
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const request = Object.freeze({
 		requestId: 1,
 		lane: LANGUAGE_COMPLETION_LANE,

@@ -11,7 +11,7 @@ import { ViewPartRows } from '../../view/viewLayer.js';
 export type WhitespaceRenderingMode = 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
 
 /** Projects whitespace glyphs without changing the text rows used for selection geometry. */
-export class WhitespaceOverlay extends EditorDynamicViewOverlay {
+export class EditorWhitespaceOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly rows: ViewPartRows;
 

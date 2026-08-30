@@ -9,11 +9,11 @@ test("PDF annotation model tracks mutations, undo/redo, and the saved revision",
 	const highlight = model.addHighlight(1, { x: 0.1, y: 0.2, width: 0.3, height: 0.15 }, "#f6c945", new Date("2026-08-08T00:00:00.000Z"));
 
 	assert.equal(model.isDirty, true);
-	assert.equal(model.canUndo, true);
+	assert.equal(model.canUndo(), true);
 	assert.equal(model.annotations[0]?.id, highlight.id);
 	model.undo();
 	assert.equal(model.annotations.length, 0);
-	assert.equal(model.canRedo, true);
+	assert.equal(model.canRedo(), true);
 	model.redo();
 	assert.equal(model.annotations[0]?.kind, "highlight");
 	model.markSaved({ document: model.snapshot, revision: "saved" });

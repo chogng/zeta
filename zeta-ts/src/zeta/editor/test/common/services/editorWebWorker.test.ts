@@ -62,5 +62,5 @@ test('Editor worker navigates an explicitly selected number without a matching w
 });
 
 function run(worker: EditorWorkerRequestExecutor, model: TextModel, requestId: number, lane: EditorWorkerLane, payload: EditorWorkerRequest): ReturnType<EditorWorkerRequestExecutor['run']> {
-	return worker.run(Object.freeze({ requestId, lane, payload, snapshot: model.createSnapshot() }), new AbortController().signal);
+	return worker.run(Object.freeze({ requestId, lane, payload, snapshot: model.createVersionedSnapshot() }), new AbortController().signal);
 }

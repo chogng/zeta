@@ -2,10 +2,16 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isFiniteNumber, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../config/editorOptions.js';
+import { type FontInfo } from '../config/fontInfo.js';
+import { type ICoordinatesConverter } from '../coordinatesConverter.js';
+import { type ICursorSimpleModel } from '../cursorCommon.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import { PositionAffinity } from '../model.js';
 import { type TextModel } from '../model/textModel.js';
+import { type ILineBreaksComputerContext, type ILineBreaksComputerFactory, type ModelLineProjectionData } from '../modelLineProjectionData.js';
 import { type EditorViewportLineSource } from './editorViewportContracts.js';
 import { EditorVisualLineProjection, type EditorVisualLine } from './modelLineProjection.js';
-import { type ZetaLineBreaksComputer, type ZetaLineBreaksResult } from './zetaLineBreaksComputer.js';
 
 /** Supplies logical-line visibility without importing a browser feature. */
 export interface EditorLineVisibilitySource {
@@ -49,7 +55,7 @@ interface ResolvedInitialMeasurement {
  * model-versioned logical-to-visual mapping and combines visibility with the
  * wrapped rows. The browser supplies only the line-break computation policy.
  */
-export class ViewModelLines extends Disposable {
+export class ViewModelLines extends Disposable implements ICursorSimpleModel {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly lineCountChangeEmitter = this._register(new Emitter<void>());
 	private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
@@ -61,7 +67,7 @@ export class ViewModelLines extends Disposable {
 	private wrappingProjection: EditorVisualLineProjection;
 	private currentProjection: EditorVisualLineProjection;
 	private projectionRevision = 0;
-	private pendingBreaks: ZetaLineBreaksResult[] | undefined;
+	private pendingBreaks: Array<ModelLineProjectionData | null> | undefined;
 	private nextLineIndex = 0;
 	private scanVersion = -1;
 
@@ -71,13 +77,17 @@ export class ViewModelLines extends Disposable {
 
 	constructor(
 		private readonly model: TextModel,
-		private readonly lineBreaksComputer: ZetaLineBreaksComputer,
+		private readonly lineBreaksComputerFactory: ILineBreaksComputerFactory,
+		private readonly fontInfo: FontInfo,
+		private readonly tabSize: number,
 		options: ViewModelLinesOptions = {},
 	) {
 		super();
-		if (!lineBreaksComputer || typeof lineBreaksComputer.computeLineBreaks !== 'function') {
-			throw new TypeError('Stanza view-model lines require a line-break computer');
+		if (!lineBreaksComputerFactory || typeof lineBreaksComputerFactory.createLineBreaksComputer !== 'function') {
+			throw new TypeError('Editor view-model lines require a line-break computer factory');
 		}
+		if (!fontInfo || !isFiniteNumber(fontInfo.typicalHalfwidthCharacterWidth) || fontInfo.typicalHalfwidthCharacterWidth <= 0) throw new TypeError('Editor view-model lines require measured font information');
+		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Editor view-model tab size must be a positive safe integer');
 		this.visibilitySource = options.visibilitySource;
 		this.wrapping = readWrapping(options.wrapping);
 		this.wrapWidth = readWrapWidth(options.wrapWidth);
@@ -95,7 +105,7 @@ export class ViewModelLines extends Disposable {
 			onDidChange: this.onDidChange,
 		});
 		if (this.usesInitialMeasurement()) this.startInitialMeasurement();
-		this._register(this.model.onDidChange(() => this.refresh()));
+		this._register(this.model.onDidChangeContent(() => this.refresh()));
 		if (this.visibilitySource) this._register(this.visibilitySource.onDidChange(() => this.rebuildVisibleProjection()));
 	}
 
@@ -110,6 +120,50 @@ export class ViewModelLines extends Disposable {
 
 	get lineCount(): number {
 		return this.currentProjection.visualLineCount;
+	}
+
+	createCoordinatesConverter(): ICoordinatesConverter {
+		return new ViewModelCoordinatesConverter(this.model, this);
+	}
+
+	getLineCount(): number {
+		return this.ensureCurrent().visualLineCount;
+	}
+
+	getLineContent(lineNumber: number): string {
+		const line = this.getVisualLine(lineNumber);
+		return this.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
+	}
+
+	getLineMinColumn(_lineNumber: number): number {
+		return 1;
+	}
+
+	getLineMaxColumn(lineNumber: number): number {
+		return this.getLineContent(lineNumber).length + 1;
+	}
+
+	getLineFirstNonWhitespaceColumn(lineNumber: number): number {
+		const index = this.getLineContent(lineNumber).search(/\S/u);
+		return index < 0 ? 0 : index + 1;
+	}
+
+	getLineLastNonWhitespaceColumn(lineNumber: number): number {
+		const content = this.getLineContent(lineNumber);
+		for (let index = content.length - 1; index >= 0; index -= 1) {
+			if (/\S/u.test(content[index]!)) return index + 2;
+		}
+		return 0;
+	}
+
+	normalizePosition(position: Position, _affinity: PositionAffinity): Position {
+		const lineNumber = Math.min(Math.max(position.lineNumber, 1), this.getLineCount());
+		return new Position(lineNumber, Math.min(Math.max(position.column, 1), this.getLineMaxColumn(lineNumber)));
+	}
+
+	getLineIndentColumn(lineNumber: number): number {
+		const firstNonWhitespaceColumn = this.getLineFirstNonWhitespaceColumn(lineNumber);
+		return firstNonWhitespaceColumn === 0 ? this.getLineMaxColumn(lineNumber) : firstNonWhitespaceColumn;
 	}
 
 	get wrappingIndent(): WrappingIndent {
@@ -170,13 +224,7 @@ export class ViewModelLines extends Disposable {
 		this.pendingMeasurement.clear();
 		this.scanVersion = this.model.version;
 		this.nextLineIndex = 0;
-		this.pendingBreaks = Array.from(
-			{ length: this.model.lineCount },
-			(_, lineIndex) => Object.freeze({
-				breakColumns: Object.freeze([this.model.getLineContent((lineIndex) + 1).length]),
-				wrappedTextIndentWidth: 0,
-			}),
-		);
+		this.pendingBreaks = Array.from({ length: this.model.lineCount }, () => null);
 		this.measureNextSlice(options.initialLineCount);
 		this.replaceWrappingProjection(this.createProjectionFromPendingBreaks());
 		this.scheduleNextSlice();
@@ -201,14 +249,11 @@ export class ViewModelLines extends Disposable {
 		const breaks = this.pendingBreaks;
 		if (!breaks) return;
 		const endLineIndex = Math.min(this.model.lineCount, this.nextLineIndex + lineCount);
-		for (; this.nextLineIndex < endLineIndex; this.nextLineIndex += 1) {
-			breaks[this.nextLineIndex] = computeLineBreaksForLine(
-				this.lineBreaksComputer,
-				this.model.getLineContent((this.nextLineIndex) + 1),
-				this.wrapWidth,
-				this.currentWrappingIndent,
-			);
-		}
+		const computer = this.createLineBreaksComputer();
+		for (let lineIndex = this.nextLineIndex; lineIndex < endLineIndex; lineIndex += 1) computer.addRequest(lineIndex + 1, breaks[lineIndex] ?? null);
+		const measured = computer.finalize();
+		if (measured.length !== endLineIndex - this.nextLineIndex) throw new Error('Line-break computer returned a result count different from its requests');
+		for (const result of measured) breaks[this.nextLineIndex++] = result;
 	}
 
 	private replaceWrappingProjection(next: EditorVisualLineProjection): void {
@@ -236,24 +281,37 @@ export class ViewModelLines extends Disposable {
 		if (this.wrapping === EditorLineWrapping.Off || this.wrapWidth === 0) {
 			return EditorVisualLineProjection.identity(this.model);
 		}
-		const breakColumnsByLine: number[][] = [];
-		const wrappedTextIndentWidthsByLine: number[] = [];
-		for (let lineIndex = 0; lineIndex < this.model.lineCount; lineIndex += 1) {
-			const text = this.model.getLineContent((lineIndex) + 1);
-			const result = computeLineBreaksForLine(this.lineBreaksComputer, text, this.wrapWidth, this.currentWrappingIndent);
-			breakColumnsByLine.push([...result.breakColumns]);
-			wrappedTextIndentWidthsByLine.push(result.wrappedTextIndentWidth);
-		}
-		return EditorVisualLineProjection.fromBreakColumns(this.model, breakColumnsByLine, wrappedTextIndentWidthsByLine);
+		const computer = this.createLineBreaksComputer();
+		for (let lineNumber = 1; lineNumber <= this.model.lineCount; lineNumber += 1) computer.addRequest(lineNumber, null);
+		return this.createProjection(computer.finalize());
 	}
 
 	private createProjectionFromPendingBreaks(): EditorVisualLineProjection {
 		const breaks = this.pendingBreaks;
 		if (!breaks) throw new Error('Stanza visual-line measurement is not active');
-		return EditorVisualLineProjection.fromBreakColumns(
-			this.model,
-			breaks.map(result => result.breakColumns),
-			breaks.map(result => result.wrappedTextIndentWidth),
+		return this.createProjection(breaks);
+	}
+
+	private createProjection(breaks: readonly (ModelLineProjectionData | null)[]): EditorVisualLineProjection {
+		if (breaks.length !== this.model.lineCount) throw new Error('Line-break data must match the model line count');
+		return EditorVisualLineProjection.fromBreakColumns(this.model, breaks.map((result, lineIndex) => (
+			result?.breakOffsets ?? [this.model.getLineContent(lineIndex + 1).length]
+		)), breaks.map(result => (result?.wrappedTextIndentLength ?? 0) * this.fontInfo.spaceWidth));
+	}
+
+	private createLineBreaksComputer() {
+		const context: ILineBreaksComputerContext = {
+			getLineContent: lineNumber => this.model.getLineContent(lineNumber),
+			getLineInjectedText: _lineNumber => null,
+		};
+		return this.lineBreaksComputerFactory.createLineBreaksComputer(
+			context,
+			this.fontInfo,
+			this.tabSize,
+			Math.max(0, Math.floor(this.wrapWidth / this.fontInfo.typicalHalfwidthCharacterWidth)),
+			this.currentWrappingIndent,
+			'normal',
+			false,
 		);
 	}
 
@@ -272,6 +330,85 @@ export class ViewModelLines extends Disposable {
 		return this.initialMeasurement !== undefined &&
 			this.wrapping === EditorLineWrapping.On &&
 			this.wrapWidth > 0;
+	}
+
+	private getVisualLine(lineNumber: number): EditorVisualLine {
+		const line = this.ensureCurrent().lineAt(lineNumber - 1);
+		if (!line) throw new RangeError('View line number is outside the visual projection');
+		return line;
+	}
+}
+
+class ViewModelCoordinatesConverter implements ICoordinatesConverter {
+	constructor(
+		private readonly model: TextModel,
+		private readonly lines: ViewModelLines,
+	) {}
+
+	public convertViewPositionToModelPosition(viewPosition: Position): Position {
+		const position = this.lines.normalizePosition(viewPosition, PositionAffinity.None);
+		const line = this.lines.projection.lineAt(position.lineNumber - 1)!;
+		return this.model.validatePosition(new Position(line.logicalLineIndex + 1, line.startColumn + position.column));
+	}
+
+	public convertViewRangeToModelRange(viewRange: Range): Range {
+		const range = this.validateViewRange(viewRange, this.model.getFullModelRange());
+		return Range.fromPositions(
+			this.convertViewPositionToModelPosition(range.getStartPosition()),
+			this.convertViewPositionToModelPosition(range.getEndPosition()),
+		);
+	}
+
+	public validateViewPosition(viewPosition: Position, expectedModelPosition: Position): Position {
+		const expected = this.convertModelPositionToViewPosition(expectedModelPosition);
+		return expected.equals(viewPosition) ? expected : this.lines.normalizePosition(viewPosition, PositionAffinity.None);
+	}
+
+	public validateViewRange(viewRange: Range, expectedModelRange: Range): Range {
+		const expected = this.convertModelRangeToViewRange(expectedModelRange);
+		if (expected.equalsRange(viewRange)) return expected;
+		return Range.fromPositions(
+			this.lines.normalizePosition(viewRange.getStartPosition(), PositionAffinity.Left),
+			this.lines.normalizePosition(viewRange.getEndPosition(), PositionAffinity.Right),
+		);
+	}
+
+	public convertModelPositionToViewPosition(modelPosition: Position, affinity: PositionAffinity = PositionAffinity.None): Position {
+		const position = this.model.validatePosition(modelPosition);
+		const projection = this.lines.ensureCurrent();
+		let visualLineIndex = projection.visualLineIndexAt(position);
+		let line = projection.lineAt(visualLineIndex)!;
+		if (affinity === PositionAffinity.Left && position.column - 1 === line.startColumn && visualLineIndex > 0) {
+			const previous = projection.lineAt(visualLineIndex - 1)!;
+			if (previous.logicalLineIndex === line.logicalLineIndex) {
+				visualLineIndex -= 1;
+				line = previous;
+			}
+		}
+		return new Position(visualLineIndex + 1, position.column - line.startColumn);
+	}
+
+	public convertModelRangeToViewRange(modelRange: Range, affinity: PositionAffinity = PositionAffinity.None): Range {
+		const range = this.model.validateRange(modelRange);
+		return Range.fromPositions(
+			this.convertModelPositionToViewPosition(range.getStartPosition(), affinity),
+			this.convertModelPositionToViewPosition(range.getEndPosition(), affinity),
+		);
+	}
+
+	public modelPositionIsVisible(modelPosition: Position): boolean {
+		if (modelPosition.lineNumber < 1 || modelPosition.lineNumber > this.model.getLineCount()) return false;
+		const projection = this.lines.ensureCurrent();
+		return projection.lineAt(projection.visualLineIndexAt(this.model.validatePosition(modelPosition)))?.logicalLineIndex === modelPosition.lineNumber - 1;
+	}
+
+	public getModelLineViewLineCount(modelLineNumber: number): number {
+		if (modelLineNumber < 1 || modelLineNumber > this.model.getLineCount()) return 1;
+		return this.lines.ensureCurrent().lines.filter(line => line.logicalLineIndex === modelLineNumber - 1).length || 1;
+	}
+
+	public getViewLineNumberOfModelPosition(modelLineNumber: number, modelColumn: number): number {
+		return this.convertModelPositionToViewPosition(new Position(modelLineNumber, modelColumn)).lineNumber;
 	}
 }
 
@@ -315,27 +452,6 @@ function readWrappingIndent(value: WrappingIndent | undefined): WrappingIndent {
 		throw new TypeError('Unknown Stanza wrapping indent mode');
 	}
 	return wrappingIndent;
-}
-
-function computeLineBreaksForLine(computer: ZetaLineBreaksComputer, text: string, wrapWidth: number, wrappingIndent: WrappingIndent): ZetaLineBreaksResult {
-	const extended = computer.computeLineBreaksWithIndent;
-	if (extended) {
-		const result = extended.call(computer, text, wrapWidth, wrappingIndent);
-		if (!result || !Array.isArray(result.breakColumns)) {
-			throw new TypeError('Stanza line-break computer must return break columns');
-		}
-		if (!isFiniteNumber(result.wrappedTextIndentWidth) || result.wrappedTextIndentWidth < 0) {
-			throw new RangeError('Stanza line-break computer must return a finite non-negative wrapped-text indent width');
-		}
-		return Object.freeze({
-			breakColumns: Object.freeze([...result.breakColumns]),
-			wrappedTextIndentWidth: result.wrappedTextIndentWidth,
-		});
-	}
-	return Object.freeze({
-		breakColumns: Object.freeze([...computer.computeLineBreaks(text, wrapWidth, wrappingIndent)]),
-		wrappedTextIndentWidth: 0,
-	});
 }
 
 function readWrapWidth(value: number | undefined): number {

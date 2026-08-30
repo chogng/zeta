@@ -67,6 +67,14 @@ export class TrackedRangeCollection extends Disposable {
 		}
 	}
 
+	acceptEOLChange(eolLengthDelta: number): void {
+		if (eolLengthDelta === 0) return;
+		for (const record of this.handles.keys()) {
+			record.startOffset += (this.positionAt(record.startOffset).lineNumber - 1) * eolLengthDelta;
+			record.endOffset += (this.positionAt(record.endOffset).lineNumber - 1) * eolLengthDelta;
+		}
+	}
+
 }
 
 class TrackedRangeHandle extends AbstractDisposable implements TrackedRange {

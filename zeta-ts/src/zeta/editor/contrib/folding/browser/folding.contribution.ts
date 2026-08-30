@@ -1,6 +1,6 @@
 import { EditorContributionInstantiation, registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { FoldingController } from "./folding.js";
+import { EditorFoldingController } from "./folding.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
@@ -48,7 +48,7 @@ registerTextEditorCapabilityContribution({
 			});
 		};
 		refresh();
-		if (!largeFile) context.register(context.model.onDidChange(refresh));
+		if (!largeFile) context.register(context.model.onDidChangeContent(refresh));
 		context.provideCapability(TextEditorCapability.folding, folding);
 		if (hiddenRanges) {
 			context.setLineProjection({ visibilitySource: hiddenRanges });
@@ -56,7 +56,7 @@ registerTextEditorCapabilityContribution({
 		}
 	},
 	runtime: {
-		descriptor: new ServiceConstructionDescriptor(FoldingController),
+		descriptor: new ServiceConstructionDescriptor(EditorFoldingController),
 		instantiation: EditorContributionInstantiation.Eager,
 	},
 });

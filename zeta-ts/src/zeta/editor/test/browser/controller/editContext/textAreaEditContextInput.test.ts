@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../../base/browser/dom.js";
-import { TextAreaInput } from "../../../../browser/controller/editContext/textArea/textAreaEditContextInput.js";
-import { TextAreaEditContext } from "../../../../browser/controller/editContext/textArea/textAreaEditContext.js";
+import { EditorTextAreaInput } from "../../../../browser/controller/editContext/textArea/textAreaEditContextInput.js";
+import { EditorTextAreaInputContext } from "../../../../browser/controller/editContext/textArea/textAreaEditContext.js";
 import { TextAreaEditContextRegistry } from "../../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js";
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -14,11 +14,14 @@ import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.j
 import { EditorView } from '../../../../browser/editorView.js';
 import { View } from '../../../../browser/view.js';
 
-test("TextAreaInput owns textarea DOM events and direction-aware state", () => {
+class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} }
+Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: TestResizeObserver });
+
+test("EditorTextAreaInput owns textarea DOM events and direction-aware state", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const textarea = h(dom.window.document, "textarea");
 	dom.window.document.querySelector("main")!.append(textarea);
-	using input = new TextAreaInput(textarea);
+	using input = new EditorTextAreaInput(textarea);
 	let focusCount = 0;
 	let selectCount = 0;
 	using focusListener = input.onDidFocus(() => focusCount += 1);
@@ -39,7 +42,7 @@ test("TextAreaInput owns textarea DOM events and direction-aware state", () => {
 	dom.window.close();
 });
 
-test("TextAreaEditContext delegates to TextAreaInput and registers its domNode", () => {
+test("EditorTextAreaInputContext delegates to EditorTextAreaInput and registers its domNode", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector("main")!;
 	using model = new TextModel('hello');
@@ -56,7 +59,7 @@ test("TextAreaEditContext delegates to TextAreaInput and registers its domNode",
 	});
 	using editor = new EditorView(viewport, selections);
 	const context = editor.editContext;
-	assert.ok(context instanceof TextAreaEditContext);
+	assert.ok(context instanceof EditorTextAreaInputContext);
 	assert.equal(context.textAreaInput.element, context.domNode);
 	assert.equal(TextAreaEditContextRegistry.get(context.domNode), context);
 	assert.equal(Position.compare(context.getLastRenderData()!, new Position(1, 1)), 0);

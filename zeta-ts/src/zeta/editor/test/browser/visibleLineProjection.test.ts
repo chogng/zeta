@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorLineWrapping } from "../../common/config/editorOptions.js";
+import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
-import { ZetaDOMLineBreaksComputer } from "../../browser/view/zetaDomLineBreaksComputer.js";
+import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -14,7 +15,7 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
 	using model = new TextModel("header\ninside\nend\nlast");
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = createViewModelLines(model, {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		visibilitySource: hiddenRanges,
@@ -44,7 +45,7 @@ test("Visible visual-line projection refreshes the source before collapsed range
 	using model = new TextModel("header\ninside\nend");
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = createViewModelLines(model, {
 		visibilitySource: hiddenRanges,
 	});
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
@@ -60,7 +61,7 @@ test("Visible visual-line projection refreshes the source before collapsed range
 
 test("View-model lines keep the wrapping projection path when no visibility filter is installed", () => {
 	using model = new TextModel("first\nsecond");
-	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()));
+	using projection = createViewModelLines(model);
 
 	const initialProjection = projection.projection;
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (0) + 1)), text: "x" }]);
@@ -80,3 +81,32 @@ class FixedTextMeasurer implements TextMeasurer {
 		return text.length * 10;
 	}
 }
+
+function createViewModelLines(model: TextModel, options: ConstructorParameters<typeof ViewModelLines>[4] = {}): ViewModelLines {
+	return new ViewModelLines(
+		model,
+		new DOMLineBreaksComputerFactory(new WeakRef({} as Window), new FixedTextMeasurer()),
+		TEST_FONT_INFO,
+		4,
+		options,
+	);
+}
+
+const TEST_FONT_INFO = new FontInfo({
+	pixelRatio: 1,
+	fontFamily: 'monospace',
+	fontWeight: 'normal',
+	fontSize: 10,
+	fontFeatureSettings: 'none',
+	fontVariationSettings: 'normal',
+	lineHeight: 20,
+	letterSpacing: 0,
+	isMonospace: true,
+	typicalHalfwidthCharacterWidth: 10,
+	typicalFullwidthCharacterWidth: 20,
+	canUseHalfwidthRightwardsArrow: true,
+	spaceWidth: 10,
+	middotWidth: 10,
+	wsmiddotWidth: 10,
+	maxDigitWidth: 10,
+}, true);

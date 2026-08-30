@@ -175,7 +175,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		if (!item.command) return;
 		const provider = this.registry.getProvider(item.providerId);
 		if (!provider?.executeCompletionCommand) throw new ReferenceError(`Language completion provider '${item.providerId}' cannot execute completion commands`);
-		await provider.executeCompletionCommand(Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), snapshot: this.model.createSnapshot(), command: item.command }), signal);
+		await provider.executeCompletionCommand(Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), snapshot: this.model.createVersionedSnapshot(), command: item.command }), signal);
 		signal.throwIfAborted();
 		this.assertNotDisposed();
 	}

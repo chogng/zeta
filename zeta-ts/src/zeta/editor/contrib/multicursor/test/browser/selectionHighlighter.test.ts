@@ -11,9 +11,14 @@ import { Range } from '../../../../common/core/range.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
+import { TestLanguageFeaturesService as EditorLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -21,6 +26,7 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -28,11 +34,11 @@ for (const [name, value] of Object.entries({
 const { EditorView } = await import('../../../../browser/editorView.js');
 const { View } = await import('../../../../browser/view.js');
 const { resolveSelectionHighlightPresentation } = await import('../../../wordHighlighter/browser/highlightDecorations.js');
-const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
-const { SelectionHighlighter } = await import('../../browser/multicursor.js');
+const { TextualHighlightTargetRegistration } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
+const { EditorSelectionHighlighter } = await import('../../browser/multicursor.js');
 
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
-	using languages = new LanguageFeaturesService();
+	using languages = new EditorLanguageFeaturesService();
 	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
@@ -44,7 +50,7 @@ test('Selection highlighter owns non-empty textual matches and excludes active s
 });
 
 test('Selection highlighter applies whole-word, whitespace, multiline, and maximum-length policy', () => {
-	using languages = new LanguageFeaturesService();
+	using languages = new EditorLanguageFeaturesService();
 	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
@@ -57,12 +63,12 @@ test('Selection highlighter applies whole-word, whitespace, multiline, and maxim
 	assert.equal(harness.decorations.size, 0);
 });
 
-function createHarness(text: string, languages: LanguageFeaturesService, initialSelection: Selection): SelectionHarness {
+function createHarness(text: string, languages: EditorLanguageFeaturesService, initialSelection: Selection): SelectionHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
 	const selections = new CursorsController(model, SelectionSet.single(initialSelection));
-	const textualProvider = new TextualMultiDocumentHighlightFeature(languages, { resource: URI.parse('file:///selection.ts'), model, wordPattern: () => undefined });
+	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource: URI.parse('file:///selection.ts'), model, wordPattern: () => undefined });
 	const decorations = new TextDecorationCollection<boolean>(model);
 	const viewport = new View({
 		container,
@@ -73,7 +79,7 @@ function createHarness(text: string, languages: LanguageFeaturesService, initial
 		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveSelectionHighlightPresentation(decoration.metadata))],
 	});
 	const view = new EditorView(viewport, selections);
-	const controller = new SelectionHighlighter(view, selections, decorations, {
+	const controller = new EditorSelectionHighlighter(view, selections, decorations, {
 		languageId: 'typescript',
 		languageFeaturesService: languages,
 	});
@@ -89,8 +95,8 @@ class SelectionHarness implements Disposable {
 		readonly decorations: TextDecorationCollection<boolean>,
 		readonly viewport: InstanceType<typeof View>,
 		readonly view: InstanceType<typeof EditorView>,
-		readonly controller: InstanceType<typeof SelectionHighlighter>,
-		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,
+		readonly controller: InstanceType<typeof EditorSelectionHighlighter>,
+		private readonly textualProvider: InstanceType<typeof TextualHighlightTargetRegistration>,
 	) {}
 
 	dispose(): void {

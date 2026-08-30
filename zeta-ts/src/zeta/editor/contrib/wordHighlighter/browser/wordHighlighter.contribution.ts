@@ -12,15 +12,15 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type CursorSelectionSetChange, type CursorsController } from '../../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
-import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
+import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../../common/languages.js';
 import { type LanguageFeatureProviderMetadata, type OwnedLanguageFeatureProviderRegistry } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
-import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import type { IEditorLanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { resolveDocumentHighlightPresentation } from './highlightDecorations.js';
-import { TextualMultiDocumentHighlightFeature } from './textualHighlightProvider.js';
+import { TextualHighlightTargetRegistration } from './textualHighlightProvider.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 type OccurrencesHighlightMode = 'off' | 'singleFile' | 'multiFile';
@@ -28,7 +28,7 @@ type OccurrencesHighlightMode = 'off' | 'singleFile' | 'multiFile';
 interface WordHighlighterOptions {
 	readonly resource: URI;
 	readonly languageId: string;
-	readonly languageFeaturesService: ILanguageFeaturesService;
+	readonly languageFeaturesService: IEditorLanguageFeaturesService;
 	readonly mode?: OccurrencesHighlightMode;
 	readonly delay?: number;
 	readonly wordPattern?: () => RegExp | undefined;
@@ -38,7 +38,7 @@ interface WordHighlighterOptions {
 interface DocumentHighlightTarget {
 	readonly resource: URI;
 	readonly model: TextModel;
-	readonly snapshot: ReturnType<TextModel['createSnapshot']>;
+	readonly snapshot: ReturnType<TextModel['createVersionedSnapshot']>;
 	readonly languageId: string;
 	readonly wordPattern?: RegExp;
 }
@@ -87,7 +87,7 @@ class WordHighlighter extends Disposable {
 			this.coordinator.remove(this);
 		}));
 		this._register(selections.onDidChange(change => this.handleSelectionChange(change)));
-		this._register(selections.textModel.onDidChange(() => this.handleModelChange()));
+		this._register(selections.textModel.onDidChangeContent(() => this.handleModelChange()));
 		this._register(view.editContext.onDidFocus(() => this.handleFocus(true)));
 		this._register(view.editContext.onDidBlur(() => this.handleFocus(false)));
 		this._register(view.onWillKeydown(event => this.handleKeydown(event)));
@@ -148,7 +148,7 @@ class WordHighlighter extends Disposable {
 		return Object.freeze({
 			resource: this.resource,
 			model: this.textModel,
-			snapshot: this..createVersionedSnapshot(),
+			snapshot: this.textModel.createVersionedSnapshot(),
 			languageId: this.languageId,
 			...(wordPattern ? { wordPattern } : {}),
 		});
@@ -222,7 +222,7 @@ class WordHighlighter extends Disposable {
 		if (this.selections.selections.selections.length !== 1) return undefined;
 		const selection = this.selections.selections.primary;
 		if (!selectionFitsModel(this.textModel, selection) || selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return undefined;
-		const range = WordOperations.getWordSelectionRange(this.textModel, selection.getStartPosition(), this.currentWordPattern);
+		const range = getWordSelectionRange(this.textModel, selection.getStartPosition(), this.currentWordPattern);
 		if (range.isEmpty() || Position.compare(range.getStartPosition(), selection.getStartPosition()) > 0 || Position.compare(range.getEndPosition(), selection.getEndPosition()) < 0) return undefined;
 		return selection.getStartPosition();
 	}
@@ -294,7 +294,7 @@ function orderedProviders<TProvider extends LanguageFeatureProviderMetadata>(reg
 }
 
 function isDocumentHighlightRequestCurrent(request: DocumentHighlightTarget, token: CancellationToken, targets: readonly DocumentHighlightTarget[] = []): boolean {
-	return !token.isCancellationRequested && !request.model.isDisposed && request.model.version === request.snapshot.version && targets.every(target => !target.model.isDisposed && target.model.version === target.snapshot.version);
+	return !token.isCancellationRequested && !request.model.isDisposed() && request.model.version === request.snapshot.version && targets.every(target => !target.model.isDisposed() && target.model.version === target.snapshot.version);
 }
 
 function normalizeHighlightMap(result: ReadonlyMap<URI, readonly DocumentHighlight[]>, targets: readonly DocumentHighlightTarget[]): ResourceMap<readonly DocumentHighlight[]> {
@@ -326,7 +326,7 @@ class WordHighlightCoordinator {
 	private readonly controllers = new Set<WordHighlighter>();
 	private readonly clearTimer = new TimeoutTimer();
 
-	constructor(private readonly service: ILanguageFeaturesService) {}
+	constructor(private readonly service: IEditorLanguageFeaturesService) {}
 
 	add(controller: WordHighlighter): void {
 		this.controllers.add(controller);
@@ -370,9 +370,9 @@ class WordHighlightCoordinator {
 	}
 }
 
-const coordinators = new WeakMap<ILanguageFeaturesService, WordHighlightCoordinator>();
+const coordinators = new WeakMap<IEditorLanguageFeaturesService, WordHighlightCoordinator>();
 
-function acquireCoordinator(service: ILanguageFeaturesService, controller: WordHighlighter): WordHighlightCoordinator {
+function acquireCoordinator(service: IEditorLanguageFeaturesService, controller: WordHighlighter): WordHighlightCoordinator {
 	let coordinator = coordinators.get(service);
 	if (!coordinator) {
 		coordinator = new WordHighlightCoordinator(service);
@@ -441,7 +441,7 @@ registerTextEditorCapabilityContribution({
 		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
 		context.provideCapability(occurrenceDecorations, decorations);
 		context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => resolveDocumentHighlightPresentation(decoration.metadata)));
-		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService, {
+		context.register(new TextualHighlightTargetRegistration(context.languageFeaturesService, {
 			resource: context.options.input.resource,
 			model: context.model,
 			wordPattern: () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern,

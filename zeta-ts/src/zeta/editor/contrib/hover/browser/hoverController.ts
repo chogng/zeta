@@ -23,7 +23,7 @@ export class HoverController extends Disposable {
 		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.schedule(event)));
 		this._register(addDisposableListener(viewport.element, "pointerleave", () => this.hide()));
 		this._register(addDisposableListener(viewport.element, "scroll", () => this.hide()));
-		this._register(viewport.textModel.onDidChange(() => this.hide()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.hide()));
 	}
 
 	private schedule(event: PointerEvent): void {

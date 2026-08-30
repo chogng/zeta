@@ -18,7 +18,7 @@ export type { IContentWidget, IContentWidgetPosition, IContentWidgetRenderedCoor
 export type { IViewZone, IViewZoneChangeAccessor } from './browser/editorBrowser.js';
 export { PositionAffinity } from './common/model.js';
 export { ColorScheme } from "../platform/theme/common/theme.js";
-export type { IStandaloneEditorInstance } from './standalone/browser/standaloneEditorInstance.js';
+export type { IStandaloneCodeEditor } from './standalone/browser/standaloneCodeEditor.js';
 export type { IStandaloneEditorApi, IStandaloneEditorConstructionOptions } from "./standalone/browser/standaloneEditor.js";
 export type { IStandaloneLanguagesApi } from './standalone/browser/standaloneLanguages.js';
 export type { LanguageDescription, LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration, LanguageRegistrationOptions } from './common/languages/languageRegistry.js';

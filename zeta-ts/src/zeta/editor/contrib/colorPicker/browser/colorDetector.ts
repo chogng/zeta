@@ -15,7 +15,7 @@ export interface ColorDetectorOptions {
 }
 
 /** Owns provider refresh, version cancellation, tracked ranges, and color-swatch metadata. */
-export class ColorDetector extends Disposable {
+export class EditorColorDetector extends Disposable {
 	private readonly decorations: TextDecorationCollection<ColorData>;
 	private readonly refreshTimer = this._register(new MutableDisposable<IDisposable>());
 	private request: AbortController | undefined;
@@ -39,7 +39,7 @@ export class ColorDetector extends Disposable {
 			overviewRuler: false,
 			minimap: false,
 		}), decoration => model.getTextInRange(decoration.range));
-		this._register(model.onDidChange(() => this.scheduleRefresh(250)));
+		this._register(model.onDidChangeContent(() => this.scheduleRefresh(250)));
 		this._register(service.onDidChange(() => this.scheduleRefresh(0)));
 		this.scheduleRefresh(0);
 	}

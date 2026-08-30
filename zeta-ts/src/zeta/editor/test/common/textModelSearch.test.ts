@@ -89,3 +89,21 @@ test("invalid expressions and limits fail before scanning", () => {
 	assert.throws(() => findTextMatches(model, { pattern: "text" }, { resultLimit: -1 }), RangeError);
 	assert.deepEqual(findTextMatches(model, { pattern: "text" }, { resultLimit: 0 }), []);
 });
+
+test('TextModel exposes the editor search contract with wrapping and captures', () => {
+	using model = new TextModel('alpha beta\nalpha gamma');
+	const scopes = [
+		new Range(1, 1, 1, 11),
+		new Range(1, 7, 2, 12),
+	];
+	const matches = model.findMatches('(alpha) (beta|gamma)', scopes, true, true, null, true);
+	assert.deepEqual(matches.map(match => ({
+		range: match.range,
+		captures: match.matches,
+	})), [
+		{ range: new Range(1, 1, 1, 11), captures: ['alpha beta', 'alpha', 'beta'] },
+		{ range: new Range(2, 1, 2, 12), captures: ['alpha gamma', 'alpha', 'gamma'] },
+	]);
+	assert.deepEqual(model.findNextMatch('alpha', new Position(2, 2), false, true, null, false)?.range, new Range(1, 1, 1, 6));
+	assert.deepEqual(model.findPreviousMatch('alpha', new Position(1, 1), false, true, null, false)?.range, new Range(2, 1, 2, 6));
+});

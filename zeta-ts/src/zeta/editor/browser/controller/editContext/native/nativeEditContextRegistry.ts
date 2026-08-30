@@ -1,5 +1,5 @@
 import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import type { NativeEditContext } from "./nativeEditContext.js";
+import type { BrowserEditContext } from "./nativeEditContext.js";
 
 type NativeEditContextOwner = string | HTMLElement;
 
@@ -8,10 +8,10 @@ type NativeEditContextOwner = string | HTMLElement;
  * depend on the concrete editor view instance.
  */
 class NativeEditContextRegistryImpl {
-	private readonly byId = new Map<string, NativeEditContext>();
-	private readonly byElement = new WeakMap<HTMLElement, NativeEditContext>();
+	private readonly byId = new Map<string, BrowserEditContext>();
+	private readonly byElement = new WeakMap<HTMLElement, BrowserEditContext>();
 
-	register(owner: NativeEditContextOwner, context: NativeEditContext): IDisposable {
+	register(owner: NativeEditContextOwner, context: BrowserEditContext): IDisposable {
 		if (typeof owner === "string") {
 			const previous = this.byId.get(owner);
 			if (previous && previous !== context) throw new Error(`Native EditContext owner '${owner}' is already registered`);
@@ -30,7 +30,7 @@ class NativeEditContextRegistryImpl {
 		});
 	}
 
-	get(owner: NativeEditContextOwner): NativeEditContext | undefined {
+	get(owner: NativeEditContextOwner): BrowserEditContext | undefined {
 		return typeof owner === "string" ? this.byId.get(owner) : this.byElement.get(owner);
 	}
 }

@@ -23,6 +23,7 @@ test("Cursor files keep the upstream owner layout plus Zeta selection and langua
 		"cursorDeleteOperations.ts",
 		"cursorMoveCommands.ts",
 		"cursorMoveOperations.ts",
+		"cursorNavigation.ts",
 		"cursorTypeEditOperations.ts",
 		"cursorTypeOperations.ts",
 		"cursorWordOperations.ts",
@@ -31,6 +32,9 @@ test("Cursor files keep the upstream owner layout plus Zeta selection and langua
 		"languagePairEditing.ts",
 		"oneCursor.ts",
 		"selectionSet.ts",
+		"selectionSetDeleteOperations.ts",
+		"selectionSetWordOperations.ts",
+		"wordSelection.ts",
 	]);
 });
 
@@ -182,8 +186,8 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/textModel.ts",
 		"common/cursor/cursor.ts",
 		"common/services/editorBaseApi.ts",
-		"common/services/completionsEnablement.ts",
-		"common/services/languageConfigurationService.ts",
+		"common/services/ownedCompletionsEnablement.ts",
+		"common/languages/ownedLanguageConfigurationContributions.ts",
 		"common/services/languageFeatures.ts",
 		"common/services/languageFeaturesService.ts",
 		"common/services/languageService.ts",
@@ -248,7 +252,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewParts/viewLines/viewLineOptions.ts",
 		"contrib/tokenization/common/languageTokenLineIndexPart.ts",
 		"contrib/semanticTokens/common/semanticTokens.ts",
-		"common/model/textBuffer.ts",
 		"common/model/textBufferFactory.ts",
 		"common/model/pieceTreeTextBuffer/rbTreeBase.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
@@ -291,7 +294,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"text-engine.md",
 		"document-engine.md",
 	];
-	for (const file of requiredFiles) assert.equal(statSafe(join(editorRoot, file)), true, file);
+	assert.deepEqual(requiredFiles.filter(file => !statSafe(join(editorRoot, file))), []);
 
 	const removedLegacyNames = [
 		"browser/controller/dragScrolling.ts",

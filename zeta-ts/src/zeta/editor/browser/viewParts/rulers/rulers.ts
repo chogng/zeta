@@ -19,7 +19,7 @@ export interface RulersOptions {
 }
 
 /** Projects configured column guides into the scrollable editor content. */
-export class Rulers extends EditorViewPart {
+export class EditorRulers extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly textMeasurer: TextMeasurer;

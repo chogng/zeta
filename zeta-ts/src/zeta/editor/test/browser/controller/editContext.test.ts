@@ -24,6 +24,7 @@ class FixedTextMeasurer implements TextMeasurer {
 }
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} }
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -34,6 +35,7 @@ for (const [name, value] of Object.entries({
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	CompositionEvent: browserEnvironment.window.CompositionEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -43,8 +45,8 @@ for (const [name, value] of Object.entries({
 
 const { View } = await import("../../../browser/view.js");
 const { EditorView } = await import('../../../browser/editorView.js');
-const { TextAreaEditContext } = await import("../../../browser/controller/editContext/textArea/textAreaEditContext.js");
-const { NativeEditContext } = await import("../../../browser/controller/editContext/native/nativeEditContext.js");
+const { EditorTextAreaInputContext } = await import("../../../browser/controller/editContext/textArea/textAreaEditContext.js");
+const { BrowserEditContext } = await import("../../../browser/controller/editContext/native/nativeEditContext.js");
 
 test("EditorView falls back to the textarea EditContext", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -54,7 +56,7 @@ test("EditorView falls back to the textarea EditContext", () => {
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 
-	assert.equal(input.editContext instanceof TextAreaEditContext, true);
+	assert.equal(input.editContext instanceof EditorTextAreaInputContext, true);
 	assert.equal(input.textArea?.tagName, "TEXTAREA");
 	dom.window.close();
 });
@@ -71,10 +73,10 @@ test("Native EditContext normalizes text updates and feeds common commands", () 
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 
-	assert.equal(input.editContext instanceof NativeEditContext, true);
+	assert.equal(input.editContext instanceof BrowserEditContext, true);
 	assert.equal(input.element.tagName, "DIV");
 	assert.equal(input.textArea, undefined);
-	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
+	const nativeContext = (input.editContext as InstanceType<typeof BrowserEditContext>).nativeContext as FakeNativeEditContext;
 
 	nativeContext.dispatch(textUpdate(browserEnvironment.window, {
 		text: "X",
@@ -129,7 +131,7 @@ test("Native EditContext composition updates use the protected common session", 
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
-	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
+	const nativeContext = (input.editContext as InstanceType<typeof BrowserEditContext>).nativeContext as FakeNativeEditContext;
 
 	nativeContext.dispatch(new browserEnvironment.window.CompositionEvent("compositionstart", { bubbles: true, cancelable: true }));
 	nativeContext.dispatch(textUpdate(browserEnvironment.window, {
@@ -146,7 +148,7 @@ test("Native EditContext composition updates use the protected common session", 
 	nativeContext.dispatch(new browserEnvironment.window.CompositionEvent("compositionend", { bubbles: true, cancelable: true }));
 	assert.equal(input.compositionController.composing, false);
 	assert.equal(model.getText(), "abxycd");
-	assert.equal(model.canUndo, true);
+	assert.equal(model.canUndo(), true);
 	dom.window.close();
 });
 
@@ -162,7 +164,7 @@ test("Native EditContext maps a bounded native window back to model offsets", ()
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 20_000)));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
-	const native = input.editContext as InstanceType<typeof NativeEditContext>;
+	const native = input.editContext as InstanceType<typeof BrowserEditContext>;
 	const nativeContext = native.nativeContext as FakeNativeEditContext;
 
 	assert.ok(native.textWindow.startOffset > 0);
@@ -192,7 +194,7 @@ test("Native EditContext combines split UTF-16 surrogate updates", () => {
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 0)));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
-	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
+	const nativeContext = (input.editContext as InstanceType<typeof BrowserEditContext>).nativeContext as FakeNativeEditContext;
 
 	nativeContext.dispatch(textUpdate(browserEnvironment.window, {
 		text: "\uD83D",
@@ -225,7 +227,7 @@ test("Native EditContext restores its browser buffer in read-only mode", () => {
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)), { readOnly: true });
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
-	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
+	const nativeContext = (input.editContext as InstanceType<typeof BrowserEditContext>).nativeContext as FakeNativeEditContext;
 
 	const beforeInput = new dom.window.InputEvent("beforeinput", {
 		bubbles: true,
@@ -262,7 +264,7 @@ test("Native EditContext normalizes text formats to model offsets", () => {
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 20_000)));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
-	const native = input.editContext as InstanceType<typeof NativeEditContext>;
+	const native = input.editContext as InstanceType<typeof BrowserEditContext>;
 	const nativeContext = native.nativeContext as FakeNativeEditContext;
 	let update: { readonly rangeStart: number; readonly rangeEnd: number } | undefined;
 	using listener = native.onDidTextFormatUpdate(event => {
@@ -294,7 +296,7 @@ test("Native EditContext answers character bounds in native-text coordinates", (
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
-	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
+	const nativeContext = (input.editContext as InstanceType<typeof BrowserEditContext>).nativeContext as FakeNativeEditContext;
 	const boundsEvent = new browserEnvironment.window.Event("characterboundsupdate") as FakeCharacterBoundsUpdateEvent;
 	Object.assign(boundsEvent, { rangeStart: 1, rangeEnd: 3 });
 	nativeContext.dispatch(boundsEvent);

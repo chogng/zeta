@@ -9,6 +9,45 @@ export interface LanguageAutoClosingPair extends LanguageCharacterPair {
 	readonly notIn?: readonly LanguageAutoClosingTokenContext[];
 }
 
+/** Normalized auto-closing pair consumed by cursor editing operations. */
+export class StandardAutoClosingPairConditional {
+	public readonly open: string;
+	public readonly close: string;
+	public readonly notIn: readonly LanguageAutoClosingTokenContext[];
+
+	constructor(source: LanguageAutoClosingPair) {
+		this.open = source.open;
+		this.close = source.close;
+		this.notIn = Object.freeze([...(source.notIn ?? [])]);
+	}
+}
+
+/** Indexes auto-closing pairs by both sides of their opening and closing text. */
+export class AutoClosingPairs {
+	public readonly autoClosingPairsOpenByStart = new Map<string, StandardAutoClosingPairConditional[]>();
+	public readonly autoClosingPairsOpenByEnd = new Map<string, StandardAutoClosingPairConditional[]>();
+	public readonly autoClosingPairsCloseByStart = new Map<string, StandardAutoClosingPairConditional[]>();
+	public readonly autoClosingPairsCloseByEnd = new Map<string, StandardAutoClosingPairConditional[]>();
+	public readonly autoClosingPairsCloseSingleChar = new Map<string, StandardAutoClosingPairConditional[]>();
+
+	constructor(autoClosingPairs: readonly LanguageAutoClosingPair[]) {
+		for (const source of autoClosingPairs) {
+			const pair = new StandardAutoClosingPairConditional(source);
+			appendPair(this.autoClosingPairsOpenByStart, pair.open.charAt(0), pair);
+			appendPair(this.autoClosingPairsOpenByEnd, pair.open.charAt(pair.open.length - 1), pair);
+			appendPair(this.autoClosingPairsCloseByStart, pair.close.charAt(0), pair);
+			appendPair(this.autoClosingPairsCloseByEnd, pair.close.charAt(pair.close.length - 1), pair);
+			if (pair.open.length === 1 && pair.close.length === 1) appendPair(this.autoClosingPairsCloseSingleChar, pair.close, pair);
+		}
+	}
+}
+
+function appendPair(target: Map<string, StandardAutoClosingPairConditional[]>, key: string, pair: StandardAutoClosingPairConditional): void {
+	const current = target.get(key);
+	if (current) current.push(pair);
+	else target.set(key, [pair]);
+}
+
 export interface LanguageCommentConfiguration {
 	readonly lineComment?: string | null;
 	readonly blockComment?: LanguageCharacterPair | null;

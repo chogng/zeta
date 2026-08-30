@@ -70,7 +70,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			CHAT_INPUT_LANGUAGE_ID,
 			{ widgetContainer: this.element },
 		));
-		this._register(this.model.onDidChange(() => {
+		this._register(this.model.onDidChangeContent(() => {
 			this.syncHeight();
 			this._onDidChange.fire(this.value);
 		}));

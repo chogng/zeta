@@ -29,7 +29,7 @@ export interface FoldingControllerOptions {
 }
 
 /** Routes local VS Code fold chords and gutter controls through Stanza's folding model. */
-export class FoldingController extends Disposable {
+export class EditorFoldingController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly viewport: View;
 	private readonly selections: CursorsController;

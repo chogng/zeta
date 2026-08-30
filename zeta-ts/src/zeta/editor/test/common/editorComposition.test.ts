@@ -142,8 +142,8 @@ test("Composition cancellation restores text without redo history", () => {
 		selections: controller.selections,
 		reason: cancellation?.reason,
 		active: composition.active,
-		canUndo: model.canUndo,
-		canRedo: model.canRedo,
+		canUndo: model.canUndo(),
+		canRedo: model.canRedo(),
 		undo: controller.undo(),
 	}, {
 		text: "hello",
@@ -173,7 +173,7 @@ test("Active composition survives zero history budgets until resolution", () => 
 		text: "你",
 		selection: { anchorOffset: 1, activeOffset: 1 },
 	});
-	assert.equal(cancelModel.canUndo, true);
+	assert.equal(cancelModel.canUndo(), true);
 	cancelled.cancel();
 
 	using commitModel = new TextModel("hello", {
@@ -188,14 +188,14 @@ test("Active composition survives zero history budgets until resolution", () => 
 		text: "你",
 		selection: { anchorOffset: 1, activeOffset: 1 },
 	});
-	assert.equal(commitModel.canUndo, true);
+	assert.equal(commitModel.canUndo(), true);
 	committed.commit();
 
 	assert.deepEqual({
 		cancelledText: cancelModel.getText(),
-		cancelledCanUndo: cancelModel.canUndo,
+		cancelledCanUndo: cancelModel.canUndo(),
 		committedText: commitModel.getText(),
-		committedCanUndo: commitModel.canUndo,
+		committedCanUndo: commitModel.canUndo(),
 	}, {
 		cancelledText: "hello",
 		cancelledCanUndo: false,
@@ -222,7 +222,7 @@ test("No-op composition updates may move the caret without history", () => {
 		change,
 		text: model.getText(),
 		selections: controller.selections,
-		canUndo: model.canUndo,
+		canUndo: model.canUndo(),
 	}, {
 		change: undefined,
 		text: "a",
@@ -250,7 +250,7 @@ test("Composition returning to its original text leaves no undo step", () => {
 
 	assert.deepEqual({
 		text: model.getText(),
-		canUndo: model.canUndo,
+		canUndo: model.canUndo(),
 		undo: controller.undo(),
 	}, {
 		text: "a",
@@ -269,7 +269,7 @@ test("Composition returning to its original text leaves no undo step", () => {
 		selection: { anchorOffset: 1, activeOffset: 1 },
 	});
 	assert.equal(cancelled.cancel(), undefined);
-	assert.equal(model.canUndo, false);
+	assert.equal(model.canUndo(), false);
 });
 
 test("External model edits invalidate an active composition", () => {
@@ -306,7 +306,7 @@ test("Reentrant model edits invalidate composition before update returns", () =>
 		selection(0, 1),
 	);
 	let nestedEditApplied = false;
-	using listener = model.onDidChange(() => {
+	using listener = model.onDidChangeContent(() => {
 		if (nestedEditApplied) return;
 		nestedEditApplied = true;
 		const end = model.positionAt(model.getText().length);
@@ -386,7 +386,7 @@ test("Composition observes the shared base IME coordination state", () => {
 			/currently disabled/,
 		);
 		assert.equal(model.getText(), "a");
-		assert.equal(model.canUndo, false);
+		assert.equal(model.canUndo(), false);
 	} finally {
 		IME.enable();
 	}

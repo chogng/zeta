@@ -158,7 +158,7 @@ export class ObservableCodeEditor extends Disposable {
 			return editor.element;
 		});
 
-		this._register(model.onDidChange(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
+		this._register(model.onDidChangeContent(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
 		this._register(selectionController.onDidChange(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
 		this._register(editor.viewport.onDidChangeLayout(change => this.runInTransaction(transaction => {
 			this.layoutState.set(change.layout, transaction);

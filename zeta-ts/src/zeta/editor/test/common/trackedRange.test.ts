@@ -149,7 +149,7 @@ test("TrackedRange updates before events and follows undo and redo", () => {
 		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	);
 	const observedText: string[] = [];
-	using listener = model.onDidChange(() => {
+	using listener = model.onDidChangeContent(() => {
 		observedText.push(model.getTextInRange(tracked.range));
 	});
 

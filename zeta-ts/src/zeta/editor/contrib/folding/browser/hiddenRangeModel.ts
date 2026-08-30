@@ -17,7 +17,7 @@ export class EditorHiddenRangeModel extends Disposable implements EditorLineVisi
 		if (folding.model !== textModel) throw new TypeError("Hidden range and folding models must share one text model");
 		this.rebuild();
 		this._register(folding.onDidChange(() => this.rebuild()));
-		this._register(textModel.onDidChange(() => this.rebuild()));
+		this._register(textModel.onDidChangeContent(() => this.rebuild()));
 	}
 
 	get model(): TextModel {

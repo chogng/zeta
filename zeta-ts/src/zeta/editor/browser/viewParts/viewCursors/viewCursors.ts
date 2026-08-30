@@ -14,7 +14,7 @@ import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';
-import { CursorPlurality, ViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';
+import { CursorPlurality, EditorViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 export interface ViewCursorsOptions extends ViewCursorOptions {
@@ -25,7 +25,7 @@ export interface ViewCursorsOptions extends ViewCursorOptions {
 }
 
 /** Coordinates active cursors, movement animation, and input composition presentation. */
-export class ViewCursors extends EditorDynamicViewOverlay {
+export class EditorViewCursors extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly fastDomNode: FastDomNode<HTMLElement>;
 	private readonly model: TextModel;
@@ -34,7 +34,7 @@ export class ViewCursors extends EditorDynamicViewOverlay {
 	private readonly compositionRows: ViewPartRows;
 	private readonly smoothCaretAnimation: 'off' | 'explicit' | 'on';
 	private cursorOptions: ViewCursorOptions;
-	private readonly cursors: ViewCursor[] = [];
+	private readonly cursors: EditorViewCursor[] = [];
 	private compositionRange: TrackedRange | undefined;
 	private previousSelectionCount: number;
 	private pauseMovementAnimation = true;
@@ -135,7 +135,7 @@ export class ViewCursors extends EditorDynamicViewOverlay {
 		const selectionCount = selections?.selections.length ?? 0;
 		while (this.cursors.length < selectionCount) {
 			const selectionIndex = this.cursors.length;
-			this.cursors.push(new ViewCursor(
+			this.cursors.push(new EditorViewCursor(
 				this.context,
 				this.domNode,
 				selectionIndex,

@@ -1,6 +1,6 @@
 import { isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorViewZoneLayout, type EditorViewportLineSource } from '../viewModel/editorViewportContracts.js';
-import { type CustomLineHeightData } from './lineHeights.js';
+import { type EditorCustomLineHeightData } from './lineHeights.js';
 import { LinesLayout } from './linesLayout.js';
 
 export type { EditorLineRange, EditorViewportLineSource } from '../viewModel/editorViewportContracts.js';
@@ -33,14 +33,14 @@ const DefaultViewZoneOrdinal = 10_000;
 /**
  * Calculates line positions and virtualized line ranges.
  *
- * `ViewLayout` owns horizontal dimensions and scroll state. This class owns
+ * `EditorViewportLayoutManager` owns horizontal dimensions and scroll state. This class owns
  * only the vertical line collection, including overscan and padding.
  */
 export class EditorViewportLinesLayout {
 	private readonly lineSource: EditorViewportLineSource | undefined;
 	private readonly fixedLineCount: number | undefined;
 	private readonly linesLayout: LinesLayout;
-	private readonly customLineHeights = new Map<string, CustomLineHeightData>();
+	private readonly customLineHeights = new Map<string, EditorCustomLineHeightData>();
 	private synchronizedLineCount: number;
 	private defaultLineHeight: number;
 	private overscanLineCount: number;
@@ -55,7 +55,7 @@ export class EditorViewportLinesLayout {
 		paddingTop = 0,
 		paddingBottom = 0,
 		overscanLineCount = 2,
-		customLineHeightData: readonly CustomLineHeightData[] = [],
+		customLineHeightData: readonly EditorCustomLineHeightData[] = [],
 	) {
 		let initialLineCount: number;
 		if (typeof lineSourceOrCount === 'number') {

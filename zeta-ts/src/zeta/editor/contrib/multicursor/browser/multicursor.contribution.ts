@@ -1,7 +1,7 @@
 import { type EditorCapability, registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { MultiCursorController } from "./multiCursorController.js";
 import { OccurrenceSelectionController } from "./occurrenceSelectionController.js";
-import { SelectionHighlighter } from "./multicursor.js";
+import { EditorSelectionHighlighter } from "./multicursor.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { createStanzaDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 import { resolveSelectionHighlightPresentation } from "../../wordHighlighter/browser/highlightDecorations.js";
@@ -18,7 +18,7 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.multicursor", con
 	context.register(new OccurrenceSelectionController(context.view.element, context.viewport, context.selections, {
 		wordPattern: () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern,
 	}));
-	if (!context.model.largeFile.tooLargeForTokenization) context.register(new SelectionHighlighter(context.view, context.selections, context.getCapability(selectionHighlightDecorations), {
+	if (!context.model.largeFile.tooLargeForTokenization) context.register(new EditorSelectionHighlighter(context.view, context.selections, context.getCapability(selectionHighlightDecorations), {
 		languageId: context.languageId,
 		languageFeaturesService: context.languageFeaturesService,
 		enabled: context.options.selectionHighlight,

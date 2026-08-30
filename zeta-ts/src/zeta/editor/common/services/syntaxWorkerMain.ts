@@ -1,4 +1,4 @@
-import { startZetaWorker } from '../../zetaWorkerBootstrap.js';
+import { start } from '../../editor.worker.start.js';
 import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from '../languages/syntax/syntaxProviderModules.js';
 import { SyntaxProviderModuleWireServer } from '../languages/syntax/syntaxProviderModuleWire.js';
 import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
@@ -9,7 +9,7 @@ import { OwnedLanguageConfigurationContributions } from '../languages/ownedLangu
 import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
 import { LanguageWorkerWireServer } from '../languages/languageWorkerWire.js';
 
-startZetaWorker(({ port, resources }) => {
+start(({ port, resources }) => {
 	const registry = resources.add(new SyntaxProviderRegistry());
 	const modules = resources.add(new SyntaxProviderModuleRegistry());
 	const languageConfigurations = resources.add(new OwnedLanguageConfigurationContributions());

@@ -73,6 +73,13 @@ test('LineDocumentSnapshot keeps rich semantics orthogonal to ordered logical li
 	assert.equal(snapshot.metadata.profile, 'academic');
 });
 
+test('LineDocumentSnapshot treats only CR and LF as physical line boundaries', () => {
+	const snapshot = createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\u2028right\u2029' }] });
+
+	assert.equal(snapshot.getText(), 'left\u2028right\u2029');
+	assert.throws(() => createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\nright' }] }), /line terminator/);
+});
+
 test('LineDocumentSnapshot rejects detached atoms, atom marks, non-exclusive block atoms, and crossing regions', () => {
 	const cyclic: Record<string, unknown> = {};
 	cyclic.self = cyclic;

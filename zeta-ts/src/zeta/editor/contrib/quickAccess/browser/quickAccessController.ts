@@ -56,7 +56,7 @@ export class GotoLineController extends Disposable {
 		this._register(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
 		this._register(addDisposableListener(this.input, "input", () => this.preview()));
 		this._register(viewport.onDidChangeLayout(() => this.position()));
-		this._register(viewport.textModel.onDidChange(() => {
+		this._register(viewport.textModel.onDidChangeContent(() => {
 			if (this.visible) this.preview();
 		}));
 	}

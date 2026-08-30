@@ -37,7 +37,7 @@ export interface DiffEditorWidgetOptions {
  * inline change ranges. This browser component owns only scroll geometry and
  * DOM projection; it never owns source text or diff computation.
  */
-export class DiffEditorWidget extends Disposable {
+export class EditorDiffWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly contentElement: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;

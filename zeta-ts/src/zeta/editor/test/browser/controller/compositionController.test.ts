@@ -24,6 +24,7 @@ class FixedTextMeasurer implements TextMeasurer {
 }
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} }
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -34,6 +35,7 @@ for (const [name, value] of Object.entries({
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	CompositionEvent: browserEnvironment.window.CompositionEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -170,7 +172,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
 	assert.deepEqual({
 		text: model.getText(),
 		selections: selections.selections,
-		canUndo: model.canUndo,
+		canUndo: model.canUndo(),
 	}, {
 		text: "abc",
 		selections: initial,

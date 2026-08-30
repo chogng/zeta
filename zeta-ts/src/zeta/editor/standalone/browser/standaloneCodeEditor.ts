@@ -1,8 +1,9 @@
 import type { Event } from '../../../base/common/event.js';
-import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import { type IContentWidget, type IOverlayWidget, type IViewZoneChangeAccessor } from '../../browser/editorBrowser.js';
 import { ConfiguredCodeEditor, type ConfiguredCodeEditorOptions, type EditorTextViewState, type IConfiguredCodeEditor } from '../../browser/configuredCodeEditor.js';
+import type { IWidgetCodeEditorRegistry } from '../../browser/services/codeEditorService.js';
 import type { EditorView } from '../../browser/editorView.js';
 import type { View } from '../../browser/view.js';
 import type { CodeEditorWidget } from '../../browser/widget/codeEditor/codeEditorWidget.js';
@@ -11,12 +12,12 @@ import type { IDimension } from '../../common/core/2d/dimension.js';
 import type { Range } from '../../common/core/range.js';
 import type { TextModel } from '../../common/model/textModel.js';
 
-export interface IStandaloneEditorInstance extends IConfiguredCodeEditor {
+export interface IStandaloneCodeEditor extends IConfiguredCodeEditor {
 	getModel(): TextModel;
 }
 
-/** Adapts the browser editor to standalone model and theme ownership. */
-export class StandaloneEditorInstance extends Disposable implements IStandaloneEditorInstance {
+/** Standalone editor owner whose identity is shared by create(), editor events, and the editor registry. */
+export class StandaloneEditor extends Disposable implements IStandaloneCodeEditor {
 	private readonly editor: ConfiguredCodeEditor;
 
 	public readonly onDidChange: Event<void>;
@@ -25,7 +26,7 @@ export class StandaloneEditorInstance extends Disposable implements IStandaloneE
 	public readonly selections: CursorsController;
 	public readonly view: EditorView;
 
-	constructor(options: ConfiguredCodeEditorOptions, private readonly model: TextModel, ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0]) {
+	constructor(options: ConfiguredCodeEditorOptions, private readonly model: TextModel, ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorRegistry: IWidgetCodeEditorRegistry) {
 		super();
 		try {
 			if (ownsModel) this._register(model);
@@ -36,16 +37,14 @@ export class StandaloneEditorInstance extends Disposable implements IStandaloneE
 			this.viewport = this.editor.viewport;
 			this.selections = this.editor.selections;
 			this.view = this.editor.view;
+			this._register(codeEditorRegistry.addCodeEditor(this));
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
 	}
 
-	public registerEditorLifetime(registration: IDisposable): void {
-		this._register(registration);
-	}
-
+	public getId(): string { return this.editor.getId(); }
 	public getModel(): TextModel { return this.model; }
 	public announceAccessibilityStatus(message: string): void { this.editor.announceAccessibilityStatus(message); }
 	public layout(dimension: IDimension): void { this.editor.layout(dimension); }

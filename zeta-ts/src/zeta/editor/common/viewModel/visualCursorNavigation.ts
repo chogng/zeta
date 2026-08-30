@@ -1,5 +1,5 @@
 import { clamp } from "../../../base/common/numbers.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorMoveOperations.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorNavigation.js";
 import { Selection } from "../core/selection.js";
 import { SelectionSet } from "../cursor/selectionSet.js";
 import { Position } from "../core/position.js";

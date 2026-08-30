@@ -1,4 +1,4 @@
-import { type Event } from '../../base/common/event.js';
+import { Event } from '../../base/common/event.js';
 import { getClientArea } from '../../base/browser/dom.js';
 import { addDisposableListener, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
@@ -10,41 +10,47 @@ import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { type CursorsController } from '../common/cursor/cursor.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
 import { Position } from '../common/core/position.js';
+import { type IDimension } from '../common/core/2d/dimension.js';
 import { type Range } from '../common/core/range.js';
 import { type TextModel } from '../common/model/textModel.js';
+import { type IAttachedView } from '../common/model.js';
+import { CursorConfiguration } from '../common/cursorCommon.js';
+import { ComposableLanguageConfigurationService, type IComposableLanguageConfigurationService } from '../common/languages/ownedLanguageConfigurationContributions.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
-import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
+import { EDITOR_FONT_DEFAULTS, FontInfo } from '../common/config/fontInfo.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
-import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
+import { type EditorViewportChange, type EditorViewportLayout, EditorViewportLayoutManager } from '../common/viewLayout/viewLayout.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
 import { applyEditorFontInfo } from './config/domFontInfo.js';
 import { ElementSizeObserver } from './config/elementSizeObserver.js';
+import { EditorConfiguration } from './config/editorConfiguration.js';
 import { DomTextMeasurer, type TextMeasurer } from './config/fontMeasurements.js';
 import { type DecorationSource } from './viewParts/decorations/decorations.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
-import { Margin } from './viewParts/margin/margin.js';
-import { GlyphMarginWidgets, resolveGlyphMarginLanes } from './viewParts/glyphMargin/glyphMargin.js';
-import { Rulers, type EditorRuler } from './viewParts/rulers/rulers.js';
+import { EditorMargin } from './viewParts/margin/margin.js';
+import { EditorGlyphMarginWidgets, resolveGlyphMarginLanes } from './viewParts/glyphMargin/glyphMargin.js';
+import { EditorRulers, type EditorRuler } from './viewParts/rulers/rulers.js';
 import { StyledRulersGpu } from './viewParts/rulersGpu/styledRulersGpu.js';
-import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
-import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
-import { Minimap } from './viewParts/minimap/minimap.js';
-import { DecorationsOverviewRuler } from './viewParts/overviewRuler/decorationsOverviewRuler.js';
-import { ScrollDecorationViewPart } from './viewParts/scrollDecoration/scrollDecoration.js';
-import { ViewContentWidgets } from './viewParts/contentWidgets/contentWidgets.js';
+import { EditorViewportScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
+import { EditorLineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
+import { EditorMinimap } from './viewParts/minimap/minimap.js';
+import { EditorDecorationsOverviewRuler } from './viewParts/overviewRuler/decorationsOverviewRuler.js';
+import { EditorScrollDecorationViewPart } from './viewParts/scrollDecoration/scrollDecoration.js';
+import { EditorContentWidgets } from './viewParts/contentWidgets/contentWidgets.js';
 import { ViewOverlayWidgets } from './viewParts/overlayWidgets/overlayWidgets.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
 import { EditorOverlayCoordinator } from './view/editorOverlayCoordinator.js';
-import { LineWidthIndex, ViewLines } from './viewParts/viewLines/viewLines.js';
-import { EditorTextDirection, ViewLineOptions } from './viewParts/viewLines/viewLineOptions.js';
+import { LineWidthIndex, EditorViewLines } from './viewParts/viewLines/viewLines.js';
+import { EditorTextDirection, EditorViewLineOptions } from './viewParts/viewLines/viewLineOptions.js';
 import { StyledViewLinesGpu } from './viewParts/viewLinesGpu/styledViewLinesGpu.js';
-import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './viewParts/viewZones/viewZones.js';
+import { EditorViewZones, type EditorViewZone, type EditorViewZoneHandle } from './viewParts/viewZones/viewZones.js';
 import { linesDecorationsWidth } from './viewParts/linesDecorations/linesDecorations.js';
 import { createEditorRenderingContext, createEditorViewportData, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
-import { ZetaDOMLineBreaksComputer } from './view/zetaDomLineBreaksComputer.js';
+import { DOMLineBreaksComputerFactory } from './view/domLineBreaksComputer.js';
 import './widget/codeEditor/editor.css';
 
 const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
@@ -109,6 +115,9 @@ export interface EditorViewportOptions {
 	readonly cursorHeight?: IEditorOptions['cursorHeight'];
 	readonly allowOverflow?: IEditorOptions['allowOverflow'];
 	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
+	readonly cursorOptions?: IEditorOptions;
+	readonly languageId?: string;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 }
 
 export interface EditorContentPosition {
@@ -131,23 +140,26 @@ export class View extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly onDidChangeLayout: Event<EditorViewportChange>;
 	private readonly model: TextModel;
-	private readonly viewport: ViewLayout;
+	private readonly viewport: EditorViewportLayoutManager;
 	private readonly contentElement: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
 	private readonly textMetricsElement: HTMLSpanElement;
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly viewContext: EditorViewContext;
 	private readonly viewParts: EditorViewPartCollection;
-	private readonly viewLines: ViewLines;
+	private readonly viewLines: EditorViewLines;
 	private readonly viewLinesGpu: StyledViewLinesGpu | undefined;
-	private readonly viewZones: ViewZones;
-	private readonly contentWidgets: ViewContentWidgets;
+	private readonly viewZones: EditorViewZones;
+	private readonly contentWidgets: EditorContentWidgets;
 	private readonly overlayWidgets: ViewOverlayWidgets;
-	private readonly margin: Margin;
+	private readonly margin: EditorMargin;
 	private readonly viewOverlays: EditorOverlayCoordinator;
 	private readonly textMeasurer: TextMeasurer;
 	private readonly lineWidths: LineWidthIndex;
 	private readonly viewModelLines: ViewModelLines;
+	readonly coordinatesConverter: ReturnType<ViewModelLines['createCoordinatesConverter']>;
+	readonly cursorConfig: CursorConfiguration;
+	private readonly attachedView: IAttachedView;
 	private readonly selectionController: CursorsController | undefined;
 	private readonly presentation: EditorViewportPresentation;
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
@@ -163,7 +175,7 @@ export class View extends Disposable {
 	private readonly indentation: ResolvedEditorIndentationOptions;
 	private readonly minimap: EditorMinimapOptions;
 	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
-	private readonly viewLineOptions: ViewLineOptions;
+	private readonly viewLineOptions: EditorViewLineOptions;
 	private readonly elementSizeObserver: ElementSizeObserver;
 	private readonly pixelRatio: IPixelRatioMonitor;
 	private overlayWidgetsMinimumContentWidth = 0;
@@ -215,7 +227,7 @@ export class View extends Disposable {
 		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
 		try {
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
-			this.viewLineOptions = new ViewLineOptions({
+			this.viewLineOptions = new EditorViewLineOptions({
 				textDirection: options.textDirection ?? EditorTextDirection.Auto,
 				fontLigatures: options.fontLigatures ?? false,
 				useGpu: options.experimentalGpuAcceleration === 'on',
@@ -282,9 +294,32 @@ export class View extends Disposable {
 		this.textMeasurer =
 			options.textMeasurer ??
 			new DomTextMeasurer(this.textMetricsElement);
+		const spaceWidth = Math.max(1, this.textMeasurer.measureLineWidth(' '));
+		const typicalHalfwidthCharacterWidth = Math.max(1, this.textMeasurer.measureLineWidth('n'));
+		const fontInfo = new FontInfo({
+			pixelRatio: this.pixelRatio.value,
+			fontFamily: options.fontFamily ?? EDITOR_FONT_DEFAULTS.fontFamily,
+			fontWeight: EDITOR_FONT_DEFAULTS.fontWeight,
+			fontSize: options.fontSize ?? EDITOR_FONT_DEFAULTS.fontSize,
+			fontFeatureSettings: this.viewLineOptions.fontLigatures ? 'normal' : 'none',
+			fontVariationSettings: 'normal',
+			lineHeight: options.lineHeight,
+			letterSpacing: 0,
+			isMonospace: false,
+			typicalHalfwidthCharacterWidth,
+			typicalFullwidthCharacterWidth: Math.max(typicalHalfwidthCharacterWidth, this.textMeasurer.measureLineWidth('ｍ')),
+			canUseHalfwidthRightwardsArrow: true,
+			spaceWidth,
+			middotWidth: this.textMeasurer.measureLineWidth('·'),
+			wsmiddotWidth: this.textMeasurer.measureLineWidth('･'),
+			maxDigitWidth: Math.max(...'0123456789'.split('').map(digit => this.textMeasurer.measureLineWidth(digit))),
+		}, true);
+		const languageConfigurationService = options.languageConfigurationService ?? this._register(new ComposableLanguageConfigurationService());
+		const editorConfiguration = this._register(new EditorConfiguration(options.cursorOptions ?? {}, fontInfo, options.container));
+		this.cursorConfig = new CursorConfiguration(options.languageId ?? this.model.getLanguageId(), this.model.getOptions(), editorConfiguration, languageConfigurationService);
 		const cursorWidth = Math.min(
 			this.configuredCursorWidth,
-			Math.max(1, this.textMeasurer.measureLineWidth(' ')),
+			spaceWidth,
 		);
 		this.lineWidths = this._register(new LineWidthIndex(
 			this.model,
@@ -302,7 +337,9 @@ export class View extends Disposable {
 		));
 		this.viewModelLines = this._register(new ViewModelLines(
 			this.model,
-			new ZetaDOMLineBreaksComputer(this.textMeasurer, this.indentation.tabSize),
+			new DOMLineBreaksComputerFactory(new WeakRef(ownerWindow), this.textMeasurer),
+			fontInfo,
+			this.indentation.tabSize,
 			{
 				wrapping: options.lineWrapping,
 				wrappingIndent: options.wrappingIndent,
@@ -316,7 +353,10 @@ export class View extends Disposable {
 				visibilitySource: options.lineVisibilitySource,
 			},
 		));
-		const viewport = this._register(new ViewLayout(this.model, {
+		this.coordinatesConverter = this.viewModelLines.createCoordinatesConverter();
+		this.attachedView = this.model.onBeforeAttached();
+		this._register(toDisposable(() => this.model.onBeforeDetached(this.attachedView)));
+		const viewport = this._register(new EditorViewportLayoutManager(this.model, {
 			lineHeight: options.lineHeight,
 			overscanLineCount: options.overscanLineCount,
 			lineSource: this.viewModelLines.lineSource,
@@ -329,7 +369,7 @@ export class View extends Disposable {
 			layout => this.createRenderingContext(layout),
 		);
 		this.viewParts = this._register(new EditorViewPartCollection());
-		this.viewZones = this.viewParts.register(new ViewZones({
+		this.viewZones = this.viewParts.register(new EditorViewZones({
 			host: this.element,
 			viewLayout: this.viewport,
 			readVisualLineCount: () => this.visualProjection.visualLineCount,
@@ -337,7 +377,7 @@ export class View extends Disposable {
 			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft - this.textLeft),
 			setMinimumContentWidth: width => this.setViewZonesMinimumContentWidth(width),
 		}));
-		this.contentWidgets = this.viewParts.register(new ViewContentWidgets({
+		this.contentWidgets = this.viewParts.register(new EditorContentWidgets({
 			viewDomNode: this.element,
 			allowOverflow: options.allowOverflow ?? true,
 			fixedOverflowWidgets: options.fixedOverflowWidgets ?? false,
@@ -356,7 +396,7 @@ export class View extends Disposable {
 				if (!this.isDisposed) this.project(this.viewport.layout);
 			},
 		}));
-		this.viewLines = this._register(new ViewLines({
+		this.viewLines = this._register(new EditorViewLines({
 			host: this.contentElement,
 			model: this.model,
 			readVisualProjection: () => this.visualProjection,
@@ -405,7 +445,7 @@ export class View extends Disposable {
 			},
 			...(this.viewLinesGpu ? { readGpuLineIndexes: () => this.viewLinesGpu!.gpuLineIndexes } : {}),
 		}));
-		this.margin = this.viewParts.register(new Margin({
+		this.margin = this.viewParts.register(new EditorMargin({
 			host: this.element,
 			contentElement: this.contentElement,
 			model: this.model,
@@ -417,7 +457,7 @@ export class View extends Disposable {
 			lineDecorationsWidth: linesDecorationsWidth(decorationSources),
 		}));
 		this.margin.domNode.append(this.viewZones.marginDomNode);
-		const glyphMarginWidgets = this.viewParts.register(new GlyphMarginWidgets({
+		const glyphMarginWidgets = this.viewParts.register(new EditorGlyphMarginWidgets({
 			host: this.contentElement,
 			lanes: glyphMarginLanes,
 			decorations: this.viewOverlays.decorations,
@@ -425,7 +465,7 @@ export class View extends Disposable {
 			readLeft: () => this.margin.glyphMarginLeft,
 			readLaneWidth: () => this.margin.glyphMarginLaneWidth,
 		}));
-		const lineNumbersOverlay = this.viewParts.register(new LineNumbersOverlay({
+		const lineNumbersOverlay = this.viewParts.register(new EditorLineNumbersOverlay({
 			host: this.contentElement,
 			lineNumbers: this.lineNumbers,
 			selectionController: this.selectionController,
@@ -439,21 +479,21 @@ export class View extends Disposable {
 				column => this.textLeft + this.textMeasurer.measureLineWidth('0'.repeat(column)),
 			));
 		} else {
-			rulersDomNode = this.viewParts.register(new Rulers({
+			rulersDomNode = this.viewParts.register(new EditorRulers({
 				host: this.contentElement,
 				textMeasurer: this.textMeasurer,
 				readTextLeft: () => this.textLeft,
 				rulers: options.rulers,
 			})).domNode;
 		}
-		this.viewParts.register(new EditorScrollbar({
+		this.viewParts.register(new EditorViewportScrollbar({
 			container: this.element,
 			viewport: this.element,
 			scrollTo: position => this.scrollTo(position),
 			horizontalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
 			verticalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 		}));
-		const minimapPart = this.viewParts.register(new Minimap({
+		const minimapPart = this.viewParts.register(new EditorMinimap({
 			host: this.element,
 			model: this.model,
 			options: this.minimap,
@@ -469,7 +509,7 @@ export class View extends Disposable {
 			readMarkers: () => this.viewOverlays.decorations.minimapMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
 		}));
-		const decorationsOverviewRuler = this.viewParts.register(new DecorationsOverviewRuler({
+		const decorationsOverviewRuler = this.viewParts.register(new EditorDecorationsOverviewRuler({
 			host: this.element,
 			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 			getVerticalOffsetForLineIndex: lineIndex => this.viewport.getVerticalOffsetForLineIndex(
@@ -480,7 +520,7 @@ export class View extends Disposable {
 			readMarkers: () => this.viewOverlays.decorations.overviewMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
 		}));
-		const scrollDecoration = this.viewParts.register(new ScrollDecorationViewPart(this.element));
+		const scrollDecoration = this.viewParts.register(new EditorScrollDecorationViewPart(this.element));
 
 		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
 		this.contentElement.append(
@@ -494,7 +534,7 @@ export class View extends Disposable {
 			...(rulersDomNode ? [rulersDomNode] : []),
 		);
 		this.element.append(
-			this.overlayWidgets.domNode.domNode,
+			this.overlayWidgets.getDomNode().domNode,
 			minimapPart.domNode,
 			decorationsOverviewRuler.domNode,
 			scrollDecoration.domNode,
@@ -520,7 +560,7 @@ export class View extends Disposable {
 			const layout = viewport.setScrollPosition(scrollPosition);
 			this.syncScrollPosition(layout);
 		}));
-		this._register(this.model.onDidChange(change => {
+		this._register(this.model.onDidChangeContent(change => {
 			this.lineWidths.applyModelChange(change);
 			if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
 			viewport.setContentWidth(this.measuredContentWidth);
@@ -940,6 +980,12 @@ export class View extends Disposable {
 	private project(layout: EditorViewportLayout): void {
 		this.observeRenderedLineWidths(layout);
 		if (layout !== this.viewport.layout) return;
+		const firstVisibleLine = this.visualProjection.lineAt(layout.visibleLines.startLineIndex);
+		const lastVisibleLine = this.visualProjection.lineAt(layout.visibleLines.endLineIndexExclusive - 1);
+		this.attachedView.setVisibleLines(firstVisibleLine && lastVisibleLine ? [{
+			startLineNumber: firstVisibleLine.logicalLineIndex + 1,
+			endLineNumber: lastVisibleLine.logicalLineIndex + 1,
+		}] : [], false);
 		const viewportData = createEditorViewportData(layout);
 		this.viewLines.render(viewportData);
 		const context = this.createRenderingContext(layout, viewportData);
@@ -1020,6 +1066,10 @@ export class View extends Disposable {
 		if (this.element.scrollTop !== layout.scrollPosition.top) {
 			this.element.scrollTop = layout.scrollPosition.top;
 		}
+	}
+
+	get cursorModel(): ViewModelLines {
+		return this.viewModelLines;
 	}
 }
 

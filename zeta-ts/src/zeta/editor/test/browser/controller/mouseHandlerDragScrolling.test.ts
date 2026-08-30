@@ -75,7 +75,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import("../../../browser/view.js");
-const { MouseHandler } = await import("../../../browser/controller/mouseHandler.js");
+const { EditorPointerSelectionHandler } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Pointer drag autoscroll advances selection and stops at boundaries", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -100,7 +100,7 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 	});
 	viewport.layout({ width: 100, height: 40 });
 	viewport.element.getBoundingClientRect = () => editorBounds();
-	using pointer = new MouseHandler(viewport, selections);
+	using pointer = new EditorPointerSelectionHandler(viewport, selections);
 
 	viewport.element.dispatchEvent(pointerEvent(
 		dom.window,

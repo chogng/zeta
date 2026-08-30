@@ -1,21 +1,20 @@
-import { Emitter } from "../../../base/common/event.js";
-import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference } from "../../browser/editorBrowser.js";
 import { type ConfiguredCodeEditorOptions } from '../../browser/configuredCodeEditor.js';
-import { PositionAffinity } from "../../common/model.js";
+import { PositionAffinity, type ITextModel } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type NamedEditorThemeData } from "../common/namedEditorTheme.js";
-import { StandaloneEditorInstance, type IStandaloneEditorInstance } from "./standaloneEditorInstance.js";
+import { StandaloneEditor, type IStandaloneCodeEditor } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 
 type StandaloneConfiguredCodeEditorOptions = Omit<ConfiguredCodeEditorOptions,
 	"container" | "input" | "languageId" | "model" | "languageFeaturesService" |
-	"languageConfigurationService" | "editorWorkerFactory" | "syntaxWorkerFactory" | "completionWorkerFactory" | "instantiationService"
+	"languageConfigurationService" | "editorWorkerFactory" | "syntaxWorkerFactory" | "completionWorkerFactory" | "instantiationService" | "codeEditorService"
 >;
 
 export interface IStandaloneEditorConstructionOptions extends StandaloneConfiguredCodeEditorOptions {
-	readonly model?: TextModel;
+	readonly model?: ITextModel;
 	readonly value?: string;
 	readonly language?: string;
 	readonly resource?: URI;
@@ -43,8 +42,6 @@ export interface IStandaloneEditorApi {
 	readonly setTheme: typeof setTheme;
 }
 
-const editors = new Set<IStandaloneEditorInstance>();
-const createEditorEmitter = new Emitter<IStandaloneEditorInstance>();
 const contentWidgetPositionPreference = Object.freeze({
 	EXACT: ContentWidgetPositionPreference.EXACT,
 	ABOVE: ContentWidgetPositionPreference.ABOVE,
@@ -56,8 +53,8 @@ const overlayWidgetPositionPreference = Object.freeze({
 	TOP_CENTER: OverlayWidgetPositionPreference.TOP_CENTER,
 });
 
-export function onDidCreateEditor(listener: (codeEditor: IStandaloneEditorInstance) => void): IDisposable {
-	return createEditorEmitter.event(listener);
+export function onDidCreateEditor(listener: (codeEditor: IStandaloneCodeEditor) => void): IDisposable {
+	return StandaloneServices.get().codeEditorService.onCodeEditorAdd(editor => listener(editor as IStandaloneCodeEditor));
 }
 
 export function onDidCreateModel(listener: (model: TextModel) => void): IDisposable {
@@ -77,7 +74,7 @@ export function create(
 	domElement: HTMLElement,
 	options: IStandaloneEditorConstructionOptions = {},
 	overrides: StandaloneServiceOverrides = {},
-): IStandaloneEditorInstance {
+): IStandaloneCodeEditor {
 	if (!domElement || domElement.nodeType !== 1 || !domElement.ownerDocument) throw new TypeError("Standalone editor requires an HTML element");
 	const services = StandaloneServices.initialize(overrides);
 	const {
@@ -93,6 +90,9 @@ export function create(
 	} = options;
 	if (suppliedModel && (value !== undefined || language !== undefined || resource !== undefined)) {
 		throw new TypeError("Standalone editor model cannot be combined with value, language, or resource");
+	}
+	if (suppliedModel && !(suppliedModel instanceof TextModel)) {
+		throw new TypeError('Standalone editor requires a TextModel created by this editor API');
 	}
 	if (theme !== undefined) services.themeService.setTheme(theme);
 	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
@@ -112,14 +112,10 @@ export function create(
 			editorWorkerFactory: services.editorWorkerFactory,
 			syntaxWorkerFactory: services.syntaxWorkerFactory,
 			instantiationService: services.instantiationService,
-			codeEditorService: services.codeEditorService,
 		};
 		const editor = services.completionWorkerFactory
-			? new StandaloneEditorInstance({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService)
-			: new StandaloneEditorInstance(editorOptions, model, ownsModel, services.themeService);
-		editors.add(editor);
-		editor.registerEditorLifetime(toDisposable(() => editors.delete(editor)));
-		createEditorEmitter.fire(editor);
+			? new StandaloneEditor({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService, services.codeEditorService)
+			: new StandaloneEditor(editorOptions, model, ownsModel, services.themeService, services.codeEditorService);
 		return editor;
 	} catch (error) {
 		if (ownsModel) model.dispose();
@@ -127,28 +123,28 @@ export function create(
 	}
 }
 
-export function createModel(value: string, language?: string, uri?: URI): TextModel {
+export function createModel(value: string, language?: string, uri?: URI): ITextModel {
 	const services = StandaloneServices.get();
 	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
 	return services.modelService.createModel(value, services.languageService.createById(languageId), uri);
 }
 
-export function getModel(uri: URI): TextModel | null {
+export function getModel(uri: URI): ITextModel | null {
 	return StandaloneServices.get().modelService.getModel(uri);
 }
 
-export function getModels(): TextModel[] {
+export function getModels(): ITextModel[] {
 	return StandaloneServices.get().modelService.getModels();
 }
 
-export function setModelLanguage(model: TextModel, mimeTypeOrLanguageId: string): void {
+export function setModelLanguage(model: ITextModel, mimeTypeOrLanguageId: string): void {
 	const languageService = StandaloneServices.get().languageService;
 	const languageId = languageService.getLanguageIdByMimeType(mimeTypeOrLanguageId) ?? (mimeTypeOrLanguageId || 'plaintext');
 	model.setLanguage(languageService.createById(languageId));
 }
 
-export function getEditors(): readonly IStandaloneEditorInstance[] {
-	return Object.freeze([...editors]);
+export function getEditors(): readonly IStandaloneCodeEditor[] {
+	return StandaloneServices.get().codeEditorService.listCodeEditors() as readonly IStandaloneCodeEditor[];
 }
 
 export function defineNamedTheme(themeId: string, themeData: NamedEditorThemeData): void {
@@ -179,4 +175,4 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 	});
 }
 
-export type { IStandaloneEditorInstance } from './standaloneEditorInstance.js';
+export type { IStandaloneCodeEditor } from './standaloneCodeEditor.js';

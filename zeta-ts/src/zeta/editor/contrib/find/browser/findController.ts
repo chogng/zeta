@@ -29,7 +29,7 @@ export interface FindControllerOptions {
 }
 
 /** Owns Stanza's browser find/replace widget, shortcuts, match navigation, and search decorations. */
-export class FindController extends Disposable {
+export class EditorFindController extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly searchInput: HTMLInputElement;
 	readonly replaceInput: HTMLInputElement;
@@ -157,7 +157,7 @@ export class FindController extends Disposable {
 		this._register(addDisposableListener(closeButton, "click", () => this.close()));
 		this._register(addDisposableListener(replaceButton, "click", () => this.replaceCurrentMatch()));
 		this._register(addDisposableListener(replaceAllButton, "click", () => this.replaceAllMatches()));
-		this._register(viewport.textModel.onDidChange(() => {
+		this._register(viewport.textModel.onDidChangeContent(() => {
 			if (this.visible) this.refreshMatches({ selectMatch: false });
 		}));
 		this._register(viewport.onDidChangeLayout(() => this.position()));

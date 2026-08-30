@@ -20,9 +20,9 @@ export interface SuggestControllerOptions {
  * The common session and completion service are supplied by the contribution
  * composition root. This controller owns only browser request cancellation,
  * keyboard/input interception, and the completion widget, matching VS Code's
- * separation between View and SuggestController.
+ * separation between View and EditorSuggestController.
  */
-export class SuggestController extends Disposable {
+export class EditorSuggestController extends Disposable {
 	readonly widget: CompletionWidget;
 	private readonly onRequestError: (error: unknown) => void;
 	private completionRequest: AbortController | undefined;

@@ -57,8 +57,8 @@ export class DiffModel extends Disposable {
 			originalVersion: options.original.version,
 			modifiedVersion: options.modified.version,
 		});
-		this._register(options.original.onDidChange(() => this.refresh()));
-		this._register(options.modified.onDidChange(() => this.refresh()));
+		this._register(options.original.onDidChangeContent(() => this.refresh()));
+		this._register(options.modified.onDidChangeContent(() => this.refresh()));
 		this._register(toDisposable(() => {
 			this.activeRequest?.abort("diffModelDisposed");
 			this.activeRequest = undefined;
@@ -140,7 +140,7 @@ export class DiffModel extends Disposable {
 }
 
 function snapshot(model: TextModel): DiffComputationDocument {
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	return Object.freeze({ version: snapshot.version, text: snapshot.getText() });
 }
 

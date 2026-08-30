@@ -47,7 +47,7 @@ export function createTransposeCharactersCommand(model: TextModel, selections: S
 
 function createTransposeOperation(model: TextModel, position: Position, selectionIndex: number): TransposeOperation | undefined {
 	const line = model.getLineContent(position.lineNumber);
-	const end = position.column === line.length + 1 ? position : MoveOperations.rightPosition(model, position);
+	const end = position.column === line.length + 1 ? position : MoveOperations.rightPosition(model, position.lineNumber, position.column);
 	const middle = MoveOperations.leftPosition(model, end);
 	const begin = MoveOperations.leftPosition(model, middle);
 	if (Position.compare(begin, middle) === 0 || Position.compare(middle, end) === 0) return undefined;

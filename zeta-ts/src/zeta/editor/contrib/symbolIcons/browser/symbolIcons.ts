@@ -45,7 +45,7 @@ export class SymbolIconsController extends Disposable implements OwnedDecoration
 		this.onDidChange = this.source.onDidChange;
 		this.glyphMarginLanes = this.source.glyphMarginLanes;
 		this.linesDecorationLanes = this.source.linesDecorationLanes;
-		this._register(model.onDidChange(() => void this.refresh()));
+		this._register(model.onDidChangeContent(() => void this.refresh()));
 		this._register(toDisposable(() => this.request?.abort()));
 		void this.refresh();
 	}

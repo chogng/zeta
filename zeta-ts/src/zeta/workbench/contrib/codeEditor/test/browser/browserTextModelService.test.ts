@@ -58,14 +58,14 @@ test('Stanza text model service restores undo and redo after the final reference
 
 	reference = await models.acquire({ resource }, new AbortController().signal);
 	assert.notEqual(reference.model, releasedModel);
-	assert.equal(reference.model.canUndo, true);
+	assert.equal(reference.model.canUndo(), true);
 	reference.model.undo();
 	assert.equal(reference.model.getText(), 'alpha');
 	await reference.save(new AbortController().signal);
 	reference.dispose();
 
 	reference = await models.acquire({ resource }, new AbortController().signal);
-	assert.equal(reference.model.canRedo, true);
+	assert.equal(reference.model.canRedo(), true);
 	reference.model.redo();
 	assert.equal(reference.model.getText(), 'alpha!');
 	reference.dispose();
@@ -83,7 +83,7 @@ test('Stanza text model service drops retained history when persisted content ch
 
 	const reopened = await models.acquire({ resource }, new AbortController().signal);
 	assert.equal(reopened.model.getText(), 'external');
-	assert.equal(reopened.model.canUndo, false);
+	assert.equal(reopened.model.canUndo(), false);
 	reopened.dispose();
 });
 
@@ -114,8 +114,8 @@ test("Stanza text model references track dirty content, save snapshots, and expl
 	textFiles.setText("external\r\ncontent");
 	await reference.revert(new AbortController().signal);
 	assert.equal(reference.model.getText(), "external\ncontent");
-	assert.equal(reference.model.canUndo, false);
-	assert.equal(reference.model.canRedo, false);
+	assert.equal(reference.model.canUndo(), false);
+	assert.equal(reference.model.canRedo(), false);
 	assert.equal(reference.isDirty, false);
 	assert.equal(dirtyChanges, 4);
 });

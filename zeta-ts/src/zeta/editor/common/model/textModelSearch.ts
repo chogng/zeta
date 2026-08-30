@@ -71,7 +71,7 @@ export function findTextMatches(model: TextModel, query: TextModelSearchQuery, o
 	const resultLimit = readResultLimit(options.resultLimit);
 	if (query.pattern.length === 0 || resultLimit === 0) return Object.freeze([]);
 
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const startOffset = options.range ? model.offsetAt(options.range.getStartPosition()) : 0;
 	const endOffset = options.range ? model.offsetAt(options.range.getEndPosition()) : snapshot.length;
 	const text = snapshot.getTextBetweenOffsets(startOffset, endOffset);
@@ -105,7 +105,7 @@ export function findTextMatches(model: TextModel, query: TextModelSearchQuery, o
 
 /** Finds the first match at or after `from`, optionally wrapping once at the document end. */
 export function findNextTextMatch(model: TextModel, query: TextModelSearchQuery, from: Position, wrap = true): TextSearchMatch | undefined {
-	const documentEnd = model.positionAt(model.createSnapshot().length);
+	const documentEnd = model.positionAt(model.createVersionedSnapshot().length);
 	const following = findTextMatches(model, query, {
 		range: Range.fromPositions(from, documentEnd),
 		resultLimit: 1,

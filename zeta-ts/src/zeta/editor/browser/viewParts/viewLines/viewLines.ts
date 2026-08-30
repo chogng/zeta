@@ -10,8 +10,8 @@ import { type TextModelChange } from '../../../common/core/textChange.js';
 import { type EditorViewportData } from '../../../common/viewLayout/editorViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
-import { ViewLine, type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
-import { type ViewLineOptions } from './viewLineOptions.js';
+import { EditorViewLine, type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
+import { type EditorViewLineOptions } from './viewLineOptions.js';
 import { ViewLayer } from '../../view/viewLayer.js';
 import { type EditorLineVisibleRange, type EditorVisiblePosition } from '../../view/renderingContext.js';
 
@@ -22,18 +22,18 @@ export interface ViewLinesOptions {
 	readonly readProjectionRevision: () => number;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly viewLineOptions: ViewLineOptions;
+	readonly viewLineOptions: EditorViewLineOptions;
 	readonly typicalHalfwidthCharacterWidth: number;
 }
 
 /** Projects text and semantic tokens into the generic virtualized ViewLayer. */
-export class ViewLines extends Disposable {
+export class EditorViewLines extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private readonly model: TextModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	private readonly layer: ViewLayer<ViewLine>;
+	private readonly layer: ViewLayer<EditorViewLine>;
 	private readonly typicalHalfwidthCharacterWidth: number;
 
 	constructor(options: ViewLinesOptions) {
@@ -44,12 +44,12 @@ export class ViewLines extends Disposable {
 		this.bracketColorizationSource = options.bracketColorizationSource;
 		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
 		this.typicalHalfwidthCharacterWidth = options.typicalHalfwidthCharacterWidth;
-		this.layer = this._register(new ViewLayer<ViewLine>({
+		this.layer = this._register(new ViewLayer<EditorViewLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
 			readProjectionRevision: options.readProjectionRevision,
 			lineRenderer: {
-				createLine: visualLineIndex => new ViewLine(this.domNode, visualLineIndex, options.viewLineOptions),
+				createLine: visualLineIndex => new EditorViewLine(this.domNode, visualLineIndex, options.viewLineOptions),
 				getDomNode: line => line.domNode.domNode,
 					renderLine: (line, visualLine) => {
 						line.domNode.domNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
@@ -64,7 +64,7 @@ export class ViewLines extends Disposable {
 		this.domNode = this.layer.domNode;
 	}
 
-	public get renderedLines(): ReadonlyMap<number, ViewLine> {
+	public get renderedLines(): ReadonlyMap<number, EditorViewLine> {
 		return this.layer.renderedLines;
 	}
 
@@ -140,7 +140,7 @@ export class ViewLines extends Disposable {
 		return this.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 	}
 
-	private projectLineText(line: ViewLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
+	private projectLineText(line: EditorViewLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
 		const fullText = this.model.getLineContent((visualLine.logicalLineIndex) + 1);
 		const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
 		const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];

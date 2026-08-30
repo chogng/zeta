@@ -54,7 +54,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(standaloneEditor, /export function create\(/u);
 	assert.match(standaloneEditor, /createModel/u);
 	assert.match(standaloneEditor, /PositionAffinity,/u);
-	assert.match(standaloneCodeEditor, /class StandaloneCodeEditor/u);
+	assert.match(standaloneCodeEditor, /class StandaloneEditor/u);
 	assert.match(standaloneLanguages, /export function register\(/u);
 	assert.match(standaloneLanguages, /export function registerLanguages\(/u);
 	assert.match(standaloneLanguages, /export function registerProviderBatch\(/u);
@@ -62,7 +62,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(standaloneLanguages, /registerHoverProvider/u);
 	assert.match(baseApi, /export function createEditorBaseApi/u);
 	assert.match(standaloneServices, /StandaloneServices/u);
-	assert.match(models, /onDidCreateModel/u);
+	assert.match(models, /onModelAdded/u);
 	for (const commonOrStandaloneOwner of [standaloneEditor, standaloneCodeEditor, standaloneLanguages, standaloneServices, models]) assert.doesNotMatch(commonOrStandaloneOwner, /workbench/u);
 	assert.match(codeBundle, /editor\.all/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);

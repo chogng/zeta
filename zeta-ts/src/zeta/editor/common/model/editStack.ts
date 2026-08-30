@@ -1,10 +1,14 @@
 import { type OffsetTextEdit } from "./historyCoalescing.js";
 import { TextEditHistoryGroup } from "../core/editOperation.js";
+import { EndOfLineSequence } from '../model.js';
 
 export interface TextModelHistoryEntry {
 	readonly edits: readonly OffsetTextEdit[];
 	readonly textUnits: number;
 	readonly transactionId: number;
+	readonly alternativeVersionId: number;
+	readonly editsEOL: EndOfLineSequence;
+	readonly eol: EndOfLineSequence;
 	readonly historyGroup: TextEditHistoryGroup | undefined;
 	readonly lineIds: readonly string[] | undefined;
 }
@@ -125,6 +129,9 @@ export class TextModelHistory {
 		const replacement = createEntry(
 			edits,
 			previous.transactionId,
+			previous.alternativeVersionId,
+			previous.editsEOL,
+			previous.eol,
 			previous.historyGroup,
 			previous.lineIds,
 		);
@@ -136,20 +143,26 @@ export class TextModelHistory {
 	pushUndo(
 		edits: readonly OffsetTextEdit[],
 		transactionId: number,
+		alternativeVersionId: number,
+		editsEOL: EndOfLineSequence,
+		eol: EndOfLineSequence,
 		historyGroup: TextEditHistoryGroup | undefined,
 		lineIds?: readonly string[],
 	): void {
-		this.push(this.undoStack, edits, transactionId, historyGroup, lineIds);
+		this.push(this.undoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds);
 		this.trim();
 	}
 
 	pushRedo(
 		edits: readonly OffsetTextEdit[],
 		transactionId: number,
+		alternativeVersionId: number,
+		editsEOL: EndOfLineSequence,
+		eol: EndOfLineSequence,
 		historyGroup: TextEditHistoryGroup | undefined,
 		lineIds?: readonly string[],
 	): void {
-		this.push(this.redoStack, edits, transactionId, historyGroup, lineIds);
+		this.push(this.redoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds);
 		this.trim();
 	}
 
@@ -180,10 +193,13 @@ export class TextModelHistory {
 		stack: TextModelHistoryEntry[],
 		edits: readonly OffsetTextEdit[],
 		transactionId: number,
+		alternativeVersionId: number,
+		editsEOL: EndOfLineSequence,
+		eol: EndOfLineSequence,
 		historyGroup: TextEditHistoryGroup | undefined,
 		lineIds?: readonly string[],
 	): void {
-		const entry = createEntry(edits, transactionId, historyGroup, lineIds);
+		const entry = createEntry(edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds);
 		stack.push(entry);
 		this.historyTextUnits += entry.textUnits;
 	}
@@ -234,6 +250,9 @@ export class TextModelHistory {
 function createEntry(
 	edits: readonly OffsetTextEdit[],
 	transactionId: number,
+	alternativeVersionId: number,
+	editsEOL: EndOfLineSequence,
+	eol: EndOfLineSequence,
 	historyGroup: TextEditHistoryGroup | undefined,
 	lineIds?: readonly string[],
 ): TextModelHistoryEntry {
@@ -244,11 +263,14 @@ function createEntry(
 			0,
 		),
 		transactionId,
+		alternativeVersionId,
+		editsEOL,
+		eol,
 		historyGroup,
 		lineIds: lineIds === undefined ? undefined : Object.freeze([...lineIds]),
 	});
 }
 
 function cloneEntry(entry: TextModelHistoryEntry): TextModelHistoryEntry {
-	return createEntry(entry.edits, entry.transactionId, entry.historyGroup, entry.lineIds);
+	return createEntry(entry.edits, entry.transactionId, entry.alternativeVersionId, entry.editsEOL, entry.eol, entry.historyGroup, entry.lineIds);
 }

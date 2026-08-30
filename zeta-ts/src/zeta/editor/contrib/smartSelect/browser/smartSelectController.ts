@@ -35,11 +35,11 @@ export class SmartSelectController extends Disposable {
 			this.request?.abort();
 			this.request = undefined;
 			if (before.selections.every(selection => selection.isEmpty())) {
-				this.commitExpansion(before, this.viewport..createVersionedSnapshot(), []);
+				this.commitExpansion(before, this.viewport.textModel.createVersionedSnapshot(), []);
 				return;
 			}
 			const request = this.request = new AbortController();
-			const snapshot = this.viewport..createVersionedSnapshot();
+			const snapshot = this.viewport.textModel.createVersionedSnapshot();
 			void this.expand(request, before, snapshot);
 		} else if (event.key === "ArrowLeft") {
 			stopEvent(event, { immediate: true });

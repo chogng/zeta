@@ -387,7 +387,7 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 		this.backupLabel = input.label;
 		this.onDidChangeDirty = reference.onDidChangeDirty;
 		this.onDidChangeExternalChange = reference.onDidChangeExternalChange;
-		this.onDidChangeContent = listener => reference.model.onDidChange(() => listener());
+		this.onDidChangeContent = listener => reference.model.onDidChangeContent(() => listener());
 		if (workingCopyService) this._register(workingCopyService.register(this));
 	}
 

@@ -19,7 +19,7 @@ test("RetainedModelUndoRedoHistory retains only the configured number of model h
 	using reopenedSecond = new TextModel(second.getText());
 	assert.equal(participant.restore(firstResource, reopenedFirst), false);
 	assert.equal(participant.restore(secondResource, reopenedSecond), true);
-	assert.equal(reopenedSecond.canUndo, true);
+	assert.equal(reopenedSecond.canUndo(), true);
 });
 
 test("RetainedModelUndoRedoHistory does not capture an unfinished history revision", () => {
@@ -37,7 +37,7 @@ test("RetainedModelUndoRedoHistory does not capture an unfinished history revisi
 
 	using reopened = new TextModel(model.getText());
 	assert.equal(participant.restore(resource, reopened), false);
-	assert.equal(reopened.canUndo, false);
+	assert.equal(reopened.canUndo(), false);
 });
 
 function editedModel(text: string): TextModel {

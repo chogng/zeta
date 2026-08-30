@@ -123,15 +123,16 @@ test("Syntax provider synchronization failures do not block healthy request lane
 	worker.synchronizeDocument({
 		previousVersion,
 		modelVersion: model.version,
+		eol: model.getEOL() as '\n' | '\r\n',
 		changes: [{ rangeOffset: 5, rangeLength: 0, text: "!" }],
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 	});
 
 	const result = await worker.run({
 		requestId: 1,
 		lane: SYNTAX_DIAGNOSTIC_LANE,
 		payload: { languageId: "typescript" },
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 	}, new AbortController().signal);
 
 	assert.deepEqual(errors, [{ providerId: "sync-failure", operation: SYNTAX_SYNCHRONIZATION }]);

@@ -2,7 +2,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { WordOperations } from "../../../common/cursor/cursorWordOperations.js";
+import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 
 /** Expands one selection through word, parser, enclosing-pair, line, and document scopes. */
 export function expandSmartSelection(model: TextModel, selection: Selection, wordPattern?: RegExp, syntaxRanges: readonly Range[] = []): Selection {
@@ -12,7 +12,7 @@ export function expandSmartSelection(model: TextModel, selection: Selection, wor
 }
 
 function expandRange(model: TextModel, range: Range, wordPattern: RegExp | undefined, syntaxRanges: readonly Range[]): Range {
-	if (range.isEmpty()) return WordOperations.getWordSelectionRange(model, range.getStartPosition(), wordPattern);
+	if (range.isEmpty()) return getWordSelectionRange(model, range.getStartPosition(), wordPattern);
 	const structural = smallestStrictlyContainingRange(model, range, syntaxRanges);
 	if (structural) return structural;
 	const enclosing = findEnclosingPair(model, range);

@@ -9,8 +9,8 @@ import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
 import { type View } from "../../../view.js";
-import { RichScreenReaderContent } from "./screenReaderContentRich.js";
-import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
+import { EditorRichScreenReaderContent } from "./screenReaderContentRich.js";
+import { EditorSimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 import { createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, screenReaderLineOffsetAtModelOffset, type NativeScreenReaderContent } from "./screenReaderUtils.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
@@ -20,7 +20,7 @@ export interface NativeScreenReaderSupportOptions {
 	readonly model: TextModel;
 	readonly viewport: View;
 	readonly selectionController: CursorsController;
-	/** Logical focus events from NativeEditContext; they hide the IME bridge hop. */
+	/** Logical focus events from BrowserEditContext; they hide the IME bridge hop. */
 	readonly onDidFocus?: Event<void>;
 	readonly onDidBlur?: Event<void>;
 	readonly accessibilityService?: IAccessibilityService;
@@ -38,7 +38,7 @@ export interface NativeScreenReaderSupportOptions {
  * exposes a bounded, paged source-text mirror when accessibility optimization
  * is on and keeps that mirror aligned with the viewport's active cursor.
  */
-export class ScreenReaderSupport extends Disposable {
+export class EditorScreenReaderSupport extends Disposable {
 	private readonly content: NativeScreenReaderContent;
 	private focused = false;
 	private syncScheduled = false;
@@ -48,12 +48,12 @@ export class ScreenReaderSupport extends Disposable {
 		super();
 		this._register(toDisposable(() => this.resetNativeScreenReaderLayout()));
 		this.content = this._register(options.renderRichContent
-			? new RichScreenReaderContent(options.element, {
+			? new EditorRichScreenReaderContent(options.element, {
 				model: options.model,
 				semanticTokenSource: options.semanticTokenSource,
 				bracketColorizationSource: options.bracketColorizationSource,
 			})
-			: new SimpleScreenReaderContent(options.element));
+			: new EditorSimpleScreenReaderContent(options.element));
 		if (options.onDidFocus) {
 			this._register(options.onDidFocus(() => this.handleFocusChange(true)));
 		} else {

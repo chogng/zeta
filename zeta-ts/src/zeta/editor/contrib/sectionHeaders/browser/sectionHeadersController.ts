@@ -20,7 +20,7 @@ export class SectionHeadersController extends Disposable {
 		super();
 		if (model !== viewport.textModel || lexicalContext.textModel !== model) throw new TypeError("Stanza section header dependencies must share a text model");
 		this._register(viewport.onDidChangeLayout(() => this.update()));
-		this._register(model.onDidChange(() => this.update()));
+		this._register(model.onDidChangeContent(() => this.update()));
 		this.update();
 	}
 

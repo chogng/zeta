@@ -64,7 +64,7 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 			this.dispose();
 			throw new TypeError("Language result normalizer must be a function");
 		}
-		this._register(model.onDidChange(() => this.acceptModelChange()));
+		this._register(model.onDidChangeContent(() => this.acceptModelChange()));
 		this._register(toDisposable(() => {
 			this.currentResult = undefined;
 		}));

@@ -31,7 +31,7 @@ export class LanguageAutoClosingTracker extends Disposable implements LanguageAu
 			this.dispose();
 			throw new TypeError("Language auto-closing dependencies must share one text model");
 		}
-		this._register(model.onDidChange(() => this.pruneInvalidEntries()));
+		this._register(model.onDidChangeContent(() => this.pruneInvalidEntries()));
 		this._register(selections.onDidChange(() => this.pruneInvalidEntries()));
 		this._register(toDisposable(() => {
 			for (const entry of this.entries) this.disposeEntry(entry);

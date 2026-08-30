@@ -49,7 +49,7 @@ test("Word completion validates limits and observes cancellation", async () => {
 function request(model: TextModel, position: Position): LanguageCompletionProviderRequest {
 	return Object.freeze({
 		requestId: 1,
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 		languageId: "plaintext",
 		position,
 		context: createLanguageCompletionInvokeContext(),

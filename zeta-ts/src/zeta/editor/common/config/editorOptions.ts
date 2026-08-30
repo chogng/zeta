@@ -1206,6 +1206,7 @@ interface EditorOptionValueMap {
 	[EditorOption.mouseWheelScrollSensitivity]: number;
 	[EditorOption.mouseWheelZoom]: boolean;
 	[EditorOption.multiCursorMergeOverlapping]: boolean;
+	[EditorOption.multiCursorLimit]: number;
 	[EditorOption.occurrencesHighlight]: 'off' | 'singleFile' | 'multiFile';
 	[EditorOption.occurrencesHighlightDelay]: number;
 	[EditorOption.wordSegmenterLocales]: readonly string[];

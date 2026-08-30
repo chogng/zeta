@@ -32,9 +32,9 @@ export function parseStanzaGotoLocation(model: TextModel, value: string): GotoLo
 function parseOffset(model: TextModel, value: string): GotoLocationParseResult {
 	const offset = parseInteger(value);
 	if (offset === undefined) {
-		return Object.freeze({ kind: "invalid", message: `Type an offset from 1 to ${model.createSnapshot().length}` });
+		return Object.freeze({ kind: "invalid", message: `Type an offset from 1 to ${model.createVersionedSnapshot().length}` });
 	}
-	const length = model.createSnapshot().length;
+	const length = model.createVersionedSnapshot().length;
 	const oneBasedOffset = offset < 0 ? length + 1 + offset : offset;
 	const position = model.positionAt(clamp(oneBasedOffset - 1, 0, length));
 	return locationResult(position, "offset");

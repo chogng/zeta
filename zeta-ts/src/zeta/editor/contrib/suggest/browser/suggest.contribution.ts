@@ -3,7 +3,7 @@ import { registerTextEditorCapabilityContribution, type EditorCapability } from 
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { isCompletionsEnablementEnabled } from "../../../common/services/ownedCompletionsEnablement.js";
 import { LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
-import { SuggestController } from "./suggestController.js";
+import { EditorSuggestController } from "./suggestController.js";
 
 interface SuggestContributionState {
 	readonly service: LanguageCompletionService;
@@ -34,7 +34,7 @@ registerTextEditorCapabilityContribution({
 		if (context.kind !== "text") return;
 		const state = context.getOptionalCapability(suggestState);
 		if (!state) return;
-		context.register(new SuggestController(
+		context.register(new EditorSuggestController(
 			context.view,
 			context.selections,
 			state.service,

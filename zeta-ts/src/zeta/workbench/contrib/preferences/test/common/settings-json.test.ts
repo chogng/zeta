@@ -74,7 +74,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		resource: UserSettingsResource,
 		position,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 	}, new AbortController().signal);
 
 	assert.deepEqual(result?.items.map(item => item.label), ['editor.fontFamily']);
@@ -88,7 +88,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		resource: UserSettingsResource,
 		position: new Position((1) + 1, (triggeredModel.getLineLength((1) + 1)) + 1),
 		context: { kind: LanguageCompletionTriggerKind.TriggerCharacter, triggerCharacter: '"' },
-		snapshot: .createVersionedSnapshot(),
+		snapshot: triggeredModel.createVersionedSnapshot(),
 	}, new AbortController().signal);
 	assert.deepEqual(triggered?.items.map(item => item.label), ['editor.enabled', 'editor.fontFamily']);
 	assert.equal(await provider.provideCompletions({
@@ -97,7 +97,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		resource: URI.parse('zeta-settings:/other.json'),
 		position,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 	}, new AbortController().signal), undefined);
 
 	using valueModel = new TextModel('{ "editor.fontFamily": "editor. }');
@@ -108,7 +108,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		resource: UserSettingsResource,
 		position: new Position((0) + 1, (valuePosition) + 1),
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: .createVersionedSnapshot(),
+		snapshot: valueModel.createVersionedSnapshot(),
 	}, new AbortController().signal);
 	assert.deepEqual(valueResult?.items.map(item => item.insertText), ['""']);
 	using nestedModel = new TextModel(`{
@@ -122,7 +122,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 		resource: UserSettingsResource,
 		position: new Position((2) + 1, (nestedModel.getLineLength((2) + 1)) + 1),
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: .createVersionedSnapshot(),
+		snapshot: nestedModel.createVersionedSnapshot(),
 	}, new AbortController().signal), undefined);
 });
 

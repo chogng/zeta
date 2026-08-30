@@ -5,7 +5,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isWindows } from '../../../../base/common/platform.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { type IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.js';
+import { SelectionSetDeleteOperations } from '../../../common/cursor/selectionSetDeleteOperations.js';
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
@@ -15,7 +15,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type View } from "../../../browser/view.js";
-import { AbstractEditContext } from "../../../browser/controller/editContext/editContext.js";
+import { EditorInputContext } from "../../../browser/controller/editContext/editContext.js";
 import { createEditorClipboardCopyEvent, createClipboardPasteEvent, InMemoryClipboardMetadataManager, readEditorClipboardText, type ClipboardStoredMetadata, type IEditorClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewParts/viewLines/viewLine.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
@@ -82,15 +82,15 @@ export class ClipboardController extends Disposable {
 	private asynchronousPasteRequest = 0;
 
 	constructor(
-		target: AbstractEditContext | HTMLElement,
+		target: EditorInputContext | HTMLElement,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
 	) {
 		super();
-		const editContext = target instanceof AbstractEditContext ? target : undefined;
-		if (target instanceof AbstractEditContext) this.element = target.domNode;
+		const editContext = target instanceof EditorInputContext ? target : undefined;
+		if (target instanceof EditorInputContext) this.element = target.domNode;
 		else this.element = target;
 		if (viewport.textModel !== selectionController.textModel) {
 			this.dispose();
@@ -260,7 +260,7 @@ export class ClipboardController extends Disposable {
 	}
 
 	private executeCut(entries: readonly EditorClipboardEntry[]): void {
-		this.selectionController.execute(DeleteOperations.cut(
+		this.selectionController.execute(SelectionSetDeleteOperations.cut(
 			this.viewport.textModel,
 			this.selectionController.selections,
 			entries.map(entry => entry.sourceRange),

@@ -2,21 +2,23 @@ import { type Event } from '../../../base/common/event.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
-import { type CodeEditorWidget } from '../widget/codeEditor/codeEditorWidget.js';
-
-export interface ICodeEditorOpenHandler {
-	(resource: URI): CodeEditorWidget | Promise<CodeEditorWidget | undefined> | undefined;
+export interface IWidgetCodeEditor {
+	getId(): string;
 }
 
-export interface ICodeEditorService {
-	readonly onCodeEditorAdd: Event<CodeEditorWidget>;
-	readonly onCodeEditorRemove: Event<CodeEditorWidget>;
-	listCodeEditors(): readonly CodeEditorWidget[];
-	getActiveCodeEditor(): CodeEditorWidget | undefined;
-	addCodeEditor(editor: CodeEditorWidget): IDisposable;
-	setActiveCodeEditor(editor: CodeEditorWidget | undefined): void;
-	registerCodeEditorOpenHandler(handler: ICodeEditorOpenHandler): IDisposable;
-	openCodeEditor(resource: URI): Promise<CodeEditorWidget | undefined>;
+export interface IWidgetCodeEditorOpenHandler {
+	(resource: URI): IWidgetCodeEditor | Promise<IWidgetCodeEditor | undefined> | undefined;
 }
 
-export const ICodeEditorService = createServiceIdentifier<ICodeEditorService>('codeEditorService');
+export interface IWidgetCodeEditorRegistry {
+	readonly onCodeEditorAdd: Event<IWidgetCodeEditor>;
+	readonly onCodeEditorRemove: Event<IWidgetCodeEditor>;
+	listCodeEditors(): readonly IWidgetCodeEditor[];
+	getActiveCodeEditor(): IWidgetCodeEditor | undefined;
+	addCodeEditor(editor: IWidgetCodeEditor): IDisposable;
+	setActiveCodeEditor(editor: IWidgetCodeEditor | undefined): void;
+	registerCodeEditorOpenHandler(handler: IWidgetCodeEditorOpenHandler): IDisposable;
+	openCodeEditor(resource: URI): Promise<IWidgetCodeEditor | undefined>;
+}
+
+export const IWidgetCodeEditorRegistry = createServiceIdentifier<IWidgetCodeEditorRegistry>('widgetCodeEditorRegistry');

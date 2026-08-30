@@ -35,7 +35,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 		resource,
 		position: completionPosition,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: .createVersionedSnapshot(),
+		snapshot: completionModel.createVersionedSnapshot(),
 	}, new AbortController().signal);
 	assert.deepEqual(completionResult?.items.map(item => item.label), ['enabled']);
 
@@ -46,7 +46,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 		resource,
 		position: new Position((0) + 1, (valueCompletionModel.getLineLength((0) + 1)) + 1),
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: .createVersionedSnapshot(),
+		snapshot: valueCompletionModel.createVersionedSnapshot(),
 	}, new AbortController().signal);
 	assert.deepEqual(valueCompletionResult?.items.map(item => item.label), ['true', 'false']);
 
@@ -54,7 +54,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 	const signal = new AbortController().signal;
 	const hover = await createJsonHoverProvider(registry).provideHover({
 		model: validModel,
-		snapshot: .createVersionedSnapshot(),
+		snapshot: validModel.createVersionedSnapshot(),
 		languageId: 'jsonc',
 		signal,
 		resource,
@@ -64,7 +64,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 
 	const edits = await createJsonFormattingProvider().provideDocumentFormattingEdits!({
 		model: validModel,
-		snapshot: .createVersionedSnapshot(),
+		snapshot: validModel.createVersionedSnapshot(),
 		languageId: 'jsonc',
 		signal,
 		resource,
@@ -76,7 +76,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 
 	const strictJsonEdits = await createJsonFormattingProvider().provideDocumentFormattingEdits!({
 		model: validModel,
-		snapshot: .createVersionedSnapshot(),
+		snapshot: validModel.createVersionedSnapshot(),
 		languageId: 'json',
 		signal,
 		resource,

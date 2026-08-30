@@ -45,7 +45,7 @@ interface RemoveRangePlan extends BasePlan {
 /** Toggles one configured block-comment pair around each non-overlapping selection. */
 export function createToggleBlockCommentCommand(model: TextModel, selections: SelectionSet, options: EditorBlockCommentOptions): EditorEditCommand {
 	const tokens = readTokens(options);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const text = snapshot.getText();
 	const plans = selections.selections.map(selection => createPlan(
 		model,

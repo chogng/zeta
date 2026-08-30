@@ -24,7 +24,7 @@ import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/c
 import type { LanguageSemanticTokensProvider } from '../../contrib/semanticTokens/common/semanticTokens.js';
 
 /** Provider registries shared by standalone callers and Workbench adapters. */
-export interface ILanguageFeaturesService extends IDisposable {
+export interface IEditorLanguageFeaturesService extends IDisposable {
 	readonly syntaxProvider: SyntaxProviderRegistry;
 	readonly completionProvider: LanguageCompletionProviderRegistry;
 	readonly codeActionProvider: OwnedLanguageFeatureProviderRegistry<LanguageCodeActionProvider>;
@@ -55,7 +55,7 @@ export interface ILanguageFeaturesService extends IDisposable {
 	registerProviderBatch(providers: LanguageProviderBatch): LanguageProviderBatchRegistration;
 }
 
-export const ILanguageFeaturesService = createServiceIdentifier<ILanguageFeaturesService>('languageFeaturesService');
+export const IEditorLanguageFeaturesService = createServiceIdentifier<IEditorLanguageFeaturesService>('languageFeaturesService');
 
 /** One runtime generation contributing several provider kinds atomically. */
 export interface LanguageProviderBatch {

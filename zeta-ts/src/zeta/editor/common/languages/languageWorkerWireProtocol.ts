@@ -1,11 +1,10 @@
-import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { CharCode } from "../../../base/common/charCode.js";
 import { isNonNegativeSafeInteger, isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import { type LanguageWorkerRequest } from "./languageRequestCoordinator.js";
-import { normalizeTextLineEndings, type TextModelChange, type TextSnapshot } from "../core/textChange.js";
+import { type TextModelChange, type TextSnapshot } from "../core/textChange.js";
 
 const LANGUAGE_WORKER_PROTOCOL = "zeta.language-worker";
-const LANGUAGE_WORKER_PROTOCOL_VERSION = 4;
+const LANGUAGE_WORKER_PROTOCOL_VERSION = 5;
 
 export interface LanguageWorkerWireResultState<TResult> {
 	readonly requestId: number;
@@ -58,6 +57,7 @@ export interface SyncWireMessage {
 	readonly kind: "sync";
 	readonly previousVersion: number;
 	readonly modelVersion: number;
+	readonly eol: '\n' | '\r\n';
 	readonly changes: readonly ContentChangeWireDto[];
 }
 
@@ -132,25 +132,28 @@ export function encodeRequestMessage<TLane extends string, TPayload, TResult>(re
 
 export function encodeSyncMessage(change: TextModelChange): SyncWireMessage {
 	assertPositiveSafeInteger(change.version, "Language worker sync model version");
-	if (change.version <= 1 || !isNonEmptyArray(change.changes)) {
+	if (change.version <= 1) {
 		throw new RangeError("Language worker sync must describe one committed model version");
 	}
+	if (change.eol !== '\n' && change.eol !== '\r\n') throw new TypeError('Language worker sync EOL must be LF or CRLF');
+	const eol = change.eol;
 	return Object.freeze({
 		protocol: LANGUAGE_WORKER_PROTOCOL,
 		version: LANGUAGE_WORKER_PROTOCOL_VERSION,
 		kind: "sync",
 		previousVersion: change.version - 1,
 		modelVersion: change.version,
-		changes: Object.freeze(change.changes.map(change => {
-			assertNonNegativeSafeInteger(change.rangeOffset, "Language worker sync range offset");
-			assertNonNegativeSafeInteger(change.rangeLength, "Language worker sync range length");
-			if (typeof change.text !== "string" || normalizeTextLineEndings(change.text) !== change.text) {
-				throw new TypeError("Language worker sync text must use normalized LF line endings");
+		eol: change.eol,
+		changes: Object.freeze(change.changes.map(contentChange => {
+			assertNonNegativeSafeInteger(contentChange.rangeOffset, "Language worker sync range offset");
+			assertNonNegativeSafeInteger(contentChange.rangeLength, "Language worker sync range length");
+			if (typeof contentChange.text !== "string" || normalizeEOL(contentChange.text, eol) !== contentChange.text) {
+				throw new TypeError("Language worker sync text must use the resulting document EOL");
 			}
 			return Object.freeze({
-				rangeOffset: change.rangeOffset,
-				rangeLength: change.rangeLength,
-				text: change.text,
+				rangeOffset: contentChange.rangeOffset,
+				rangeLength: contentChange.rangeLength,
+				text: contentChange.text,
 			});
 		})),
 	});
@@ -227,6 +230,7 @@ export function decodeServerMessage(value: Record<string, unknown>): RequestWire
 		if (!Array.isArray(value.changes)) {
 			throw new TypeError("Language worker sync changes must be an array");
 		}
+		if (value.eol !== '\n' && value.eol !== '\r\n') throw new TypeError('Language worker sync EOL must be LF or CRLF');
 		return value as unknown as SyncWireMessage;
 	}
 	assertRequestId(value.requestId);
@@ -286,8 +290,8 @@ function decodeFullSnapshot(value: FullSnapshotWireDto): TextSnapshot {
 
 function assertFullSnapshot(value: FullSnapshotWireDto): void {
 	assertSnapshotMetadata(value);
-	if (typeof value.text !== "string" || normalizeTextLineEndings(value.text) !== value.text) {
-		throw new TypeError("Language worker snapshot text must use normalized LF line endings");
+	if (typeof value.text !== "string" || !hasConsistentEOL(value.text)) {
+		throw new TypeError("Language worker snapshot text must use one consistent EOL sequence");
 	}
 	if (value.length !== value.text.length) {
 		throw new RangeError("Language worker snapshot length does not match its text");
@@ -362,4 +366,14 @@ function countLines(text: string): number {
 		if (text.charCodeAt(index) === CharCode.LineFeed) result += 1;
 	}
 	return result;
+}
+
+function normalizeEOL(text: string, eol: '\n' | '\r\n'): string {
+	return text.replace(/\r\n|\r|\n/g, eol);
+}
+
+function hasConsistentEOL(text: string): boolean {
+	const withoutCRLF = text.replace(/\r\n/g, '');
+	if (withoutCRLF.includes('\r')) return false;
+	return !text.includes('\r\n') || !withoutCRLF.includes('\n');
 }

@@ -25,6 +25,7 @@ class FixedTextMeasurer implements TextMeasurer {
 }
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} }
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -34,6 +35,7 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -41,10 +43,10 @@ for (const [name, value] of Object.entries({
 const { isLowSurrogate } = await import("../../../../../base/common/strings.js");
 const { NATIVE_TEXT_WINDOW_LENGTH, createNativeTextWindow } = await import("../../../../browser/controller/editContext/native/nativeEditContextUtils.js");
 const { NativeEditContextRegistry } = await import("../../../../browser/controller/editContext/native/nativeEditContextRegistry.js");
-const { SimpleScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentSimple.js");
-const { RichScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentRich.js");
+const { EditorSimpleScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentSimple.js");
+const { EditorRichScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentRich.js");
 const { createScreenReaderContentState, modelOffsetAtContentOffset } = await import("../../../../browser/controller/editContext/native/screenReaderUtils.js");
-const { ScreenReaderSupport } = await import("../../../../browser/controller/editContext/native/screenReaderSupport.js");
+const { EditorScreenReaderSupport } = await import("../../../../browser/controller/editContext/native/screenReaderSupport.js");
 const { View } = await import("../../../../browser/view.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -88,7 +90,7 @@ test("native screen-reader projections preserve empty text, lines, and DOM selec
 		model,
 		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((1) + 1, (2) + 1)),
 	);
-	using simple = new SimpleScreenReaderContent(host);
+	using simple = new EditorSimpleScreenReaderContent(host);
 	simple.sync(state);
 	assert.equal(simple.element.textContent, "alpha\nbeta");
 	assert.equal(simple.element.firstChild?.nodeType, 3);
@@ -113,7 +115,7 @@ test("native screen-reader projections preserve empty text, lines, and DOM selec
 		textModel: model,
 		getLineBrackets: lineIndex => lineIndex === 0 ? [{ startColumn: 0, endColumn: 1, level: 1 }] : [],
 	};
-	using rich = new RichScreenReaderContent(host, { model, semanticTokenSource, bracketColorizationSource });
+	using rich = new EditorRichScreenReaderContent(host, { model, semanticTokenSource, bracketColorizationSource });
 	rich.sync(state);
 	assert.deepEqual(
 		[...rich.element.querySelectorAll<HTMLElement>("[data-line-index]")].map(line => line.textContent),
@@ -148,10 +150,10 @@ test("native screen-reader pages keep endpoint mappings across omitted middle pa
 	assert.equal(state.selectionEnd, state.text.length);
 	assert.equal(modelOffsetAtContentOffset(state, state.selectionEnd, "end"), model.length);
 
-	using simple = new SimpleScreenReaderContent(host);
+	using simple = new EditorSimpleScreenReaderContent(host);
 	simple.sync(state);
 	assert.deepEqual(simple.readSelection(), { anchorOffset: 0, activeOffset: model.length });
-	using rich = new RichScreenReaderContent(host, { model });
+	using rich = new EditorRichScreenReaderContent(host, { model });
 	rich.sync(state);
 	assert.deepEqual(
 		[...rich.element.querySelectorAll<HTMLElement>("[data-line-index]")].map(line => line.dataset.lineIndex),
@@ -183,7 +185,7 @@ test("native screen-reader support follows logical EditContext focus through the
 		onDidChangeScreenReaderOptimized: () => ({ dispose() {}, [Symbol.dispose]() {} }),
 		isScreenReaderOptimized: () => optimized,
 	} as unknown as IAccessibilityService;
-	using support = new ScreenReaderSupport({
+	using support = new EditorScreenReaderSupport({
 		element: host,
 		model,
 		viewport,
@@ -234,7 +236,7 @@ test("native screen-reader mirror follows viewport coordinates and scrolls to th
 		onDidChangeScreenReaderOptimized: () => ({ dispose() {}, [Symbol.dispose]() {} }),
 		isScreenReaderOptimized: () => true,
 	} as unknown as IAccessibilityService;
-	using support = new ScreenReaderSupport({
+	using support = new EditorScreenReaderSupport({
 		element: host,
 		model,
 		viewport,

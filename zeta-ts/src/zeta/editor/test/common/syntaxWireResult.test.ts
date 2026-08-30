@@ -21,7 +21,7 @@ test("Syntax wire deltas stay equal to full results across random edits", () => 
 	let deltaCount = 0;
 
 	for (let iteration = 0; iteration < 100; iteration += 1) {
-		const snapshot = model.createSnapshot();
+		const snapshot = model.createVersionedSnapshot();
 		for (const lane of [SYNTAX_TOKEN_LANE, SYNTAX_DIAGNOSTIC_LANE] as const) {
 			const result = syntaxResult(lane, cache, snapshot, signal);
 			const encoded = syntaxWireCodec.encodeResult(lane, result, snapshot, serverStates.get(lane)) as { readonly kind: string };
@@ -55,14 +55,14 @@ test("Syntax wire rejects missing bases and inconsistent delta metadata", () => 
 	using model = new TextModel("const value = 1;");
 	const cache = new LanguageLexicalSyntaxCache();
 	const signal = new AbortController().signal;
-	const firstSnapshot = model.createSnapshot();
+	const firstSnapshot = model.createVersionedSnapshot();
 	const firstResult = syntaxResult(SYNTAX_TOKEN_LANE, cache, firstSnapshot, signal);
 	const base = Object.freeze({ requestId: 7, snapshot: firstSnapshot, result: firstResult });
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(model.getText().length)),
 		text: "\nreturn value;",
 	}]);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 
 	assert.throws(() => syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, {
 		kind: "delta",
@@ -93,7 +93,7 @@ test("Syntax wire rejects missing bases and inconsistent delta metadata", () => 
 
 test("Syntax wire uses full fallback when a delta cannot reduce item transfer", () => {
 	using model = new TextModel("value");
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const first = tokenResult("variable");
 	const second = tokenResult("keyword");
 	const base = Object.freeze({ requestId: 1, snapshot, result: first });
@@ -109,14 +109,14 @@ test("Syntax wire bounds a one-line edit independently of document token count",
 	using model = new TextModel(lines.join("\n"));
 	const cache = new LanguageLexicalSyntaxCache();
 	const signal = new AbortController().signal;
-	const firstSnapshot = model.createSnapshot();
+	const firstSnapshot = model.createVersionedSnapshot();
 	const first = syntaxResult(SYNTAX_TOKEN_LANE, cache, firstSnapshot, signal);
 	const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 		text: "let",
 	}]);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const current = syntaxResult(SYNTAX_TOKEN_LANE, cache, snapshot, signal);
 
 	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[] }[] };
@@ -133,7 +133,7 @@ test("Syntax wire isolates two distant edits into multiple item splices", () => 
 	using model = new TextModel(lines.join("\n"));
 	const cache = new LanguageLexicalSyntaxCache();
 	const signal = new AbortController().signal;
-	const firstSnapshot = model.createSnapshot();
+	const firstSnapshot = model.createVersionedSnapshot();
 	const first = syntaxResult(SYNTAX_TOKEN_LANE, cache, firstSnapshot, signal);
 	const base = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: first });
 	model.applyEdits([{
@@ -143,7 +143,7 @@ test("Syntax wire isolates two distant edits into multiple item splices", () => 
 		range: Range.fromPositions(new Position((900) + 1, (lines[900]!.length - 4) + 1), new Position((900) + 1, (lines[900]!.length - 1) + 1)),
 		text: "901",
 	}]);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	const current = syntaxResult(SYNTAX_TOKEN_LANE, cache, snapshot, signal);
 
 	const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { readonly kind: string; readonly splices: readonly { readonly items: readonly unknown[] }[] };
@@ -166,7 +166,7 @@ test("Syntax wire multi-splices stay exact across repeated disjoint transactions
 	let multiSpliceCount = 0;
 
 	for (let requestId = 1; requestId <= 40; requestId += 1) {
-		const snapshot = model.createSnapshot();
+		const snapshot = model.createVersionedSnapshot();
 		const result = syntaxResult(SYNTAX_TOKEN_LANE, cache, snapshot, signal);
 		const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, result, snapshot, serverState) as { readonly kind: string; readonly splices?: readonly unknown[] };
 		const decoded = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, clientState);

@@ -14,7 +14,7 @@ export interface ViewLineOptionsConfiguration {
 }
 
 /** Immutable rendering configuration shared by DOM and GPU line renderers. */
-export class ViewLineOptions {
+export class EditorViewLineOptions {
 	public readonly textDirection: EditorTextDirection;
 	public readonly fontLigatures: boolean;
 	public readonly useGpu: boolean;
@@ -39,7 +39,7 @@ export class ViewLineOptions {
 		this.tabSize = configuration.tabSize;
 	}
 
-	public equals(other: ViewLineOptions): boolean {
+	public equals(other: EditorViewLineOptions): boolean {
 		return this.textDirection === other.textDirection &&
 			this.fontLigatures === other.fontLigatures &&
 			this.useGpu === other.useGpu &&

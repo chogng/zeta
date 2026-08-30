@@ -13,7 +13,7 @@ import { type ITextAreaWrapper, TextAreaState } from "./textAreaEditContextState
  * routed by the owning EditorView, while accessibility content
  * is written by the textarea accessibility controller.
  */
-export class TextAreaInput extends Disposable implements ITextAreaWrapper {
+export class EditorTextAreaInput extends Disposable implements ITextAreaWrapper {
 	private readonly focusEmitter = this._register(new Emitter<void>());
 	private readonly blurEmitter = this._register(new Emitter<void>());
 	private readonly beforeInputEmitter = this._register(new Emitter<InputEvent>());

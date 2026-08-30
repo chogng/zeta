@@ -3,10 +3,10 @@ import { TokenizationController } from "./tokenizationController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.tokenization", configure: context => {
-	const styling = context.semanticTokensStylingService;
+	const styling = context.resolvedSemanticTokensService;
 	const lexicalSource = styling.createSource(context.getCapability(TextEditorCapability.tokenization));
 	const semanticOverlay = context.getOptionalCapability(TextEditorCapability.semanticTokenOverlay);
-	const source = semanticOverlay ? styling.createOverlay(lexicalSource, styling.createSource(semanticOverlay)) : lexicalSource;
+	const source = semanticOverlay ? styling.createOverlay(lexicalSource, styling.createSource(semanticOverlay, semanticOverlay.styling)) : lexicalSource;
 	context.provideCapability(TextEditorCapability.semanticTokenSource, source);
 	context.setSemanticTokenSource(source);
 }, install: context => {

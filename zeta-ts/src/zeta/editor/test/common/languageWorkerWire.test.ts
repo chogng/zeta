@@ -204,7 +204,7 @@ test("Wire rejects inconsistent snapshots and unsupported protocol responses", a
 	const response = nextMessage(requester);
 	requester.send({
 		protocol: "zeta.language-worker",
-		version: 4,
+		version: 5,
 		kind: "request",
 		requestId: 1,
 		lane: LANGUAGE_COMPLETION_LANE,
@@ -221,7 +221,7 @@ test("Wire rejects inconsistent snapshots and unsupported protocol responses", a
 	const pending = client.run(request(model, 1), new AbortController().signal);
 	peerPort.send({
 		protocol: "zeta.language-worker",
-		version: 5,
+		version: 6,
 		kind: "result",
 		requestId: 1,
 		result: {},
@@ -245,10 +245,11 @@ test("Invalid incremental synchronization drops the mirror and poisons its clien
 
 	clientPort.send({
 		protocol: "zeta.language-worker",
-		version: 4,
+		version: 5,
 		kind: "sync",
 		previousVersion: 1,
 		modelVersion: 2,
+		eol: '\n',
 		changes: [{ rangeOffset: 99, rangeLength: 0, text: "!" }],
 	});
 	await new Promise<void>(resolve => setImmediate(resolve));
@@ -289,7 +290,7 @@ function request(model: TextModel, requestId: number): LanguageWorkerRequest<typ
 	return Object.freeze({
 		requestId,
 		lane: LANGUAGE_COMPLETION_LANE,
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 		payload: Object.freeze({
 			languageId: "typescript",
 			position: new Position((0) + 1, (model.getText().length) + 1),

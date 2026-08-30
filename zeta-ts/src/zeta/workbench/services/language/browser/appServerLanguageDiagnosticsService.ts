@@ -103,7 +103,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (existing) {
 			if (existing.model !== model || existing.languageId !== languageId) throw new Error("One language document resource cannot bind multiple models or languages");
 			const reopening = existing.references === 0;
-			if (reopening) existing.modelListener = model.onDidChange(() => this.schedule(existing, false));
+			if (reopening) existing.modelListener = model.onDidChangeContent(() => this.schedule(existing, false));
 			existing.references += 1;
 			if (reopening) this.schedule(existing, true);
 			return toDisposable(() => this.release(key, existing));
@@ -122,7 +122,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			languageSynchronized: false,
 			codeIntelligenceSynchronized: false,
 		};
-		entry.modelListener = model.onDidChange(() => this.schedule(entry, false));
+		entry.modelListener = model.onDidChangeContent(() => this.schedule(entry, false));
 		if (this.workspaceServerKeys.delete(key)) {
 			this.serverSnapshots.delete(key);
 			this.changeEmitter.fire(resource);
@@ -184,7 +184,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	private enqueueSynchronization(entry: LanguageDocumentEntry): void {
 		if (!this.languageAllowed) return;
-		const snapshot = entry.model.createSnapshot();
+		const snapshot = entry.model.createVersionedSnapshot();
 		const text = snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {

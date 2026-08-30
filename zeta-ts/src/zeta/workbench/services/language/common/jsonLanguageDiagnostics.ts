@@ -45,7 +45,7 @@ export function acquireJsonLanguageDiagnostics(
 		}
 		publisher.update(model.version, Object.freeze(diagnostics));
 	};
-	store.add(model.onDidChange(update));
+	store.add(model.onDidChangeContent(update));
 	store.add(registry.onDidChange(event => {
 		if (event.resource?.toString() === resource.toString() || !event.resource && registry.getSchemaIdForResource(resource) === event.schemaId) update();
 	}));

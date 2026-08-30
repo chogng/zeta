@@ -1,5 +1,5 @@
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
-import { CodeActionController } from "./codeActionController.js";
+import { EditorCodeActionController } from "./codeActionController.js";
 import { CodeActionService } from '../common/languageCodeActions.js';
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
@@ -9,5 +9,5 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.codeAction", inst
 	if (context.kind !== "text") return;
 	const service = context.register(new CodeActionService(context.model, context.options.input.resource, context.languageFeaturesService.codeActionProvider));
 	const diagnostics = context.getOptionalCapability(TextEditorCapability.diagnosticDecorations) ?? context.register(new TextDecorationCollection<LanguageDiagnostic>(context.model));
-	context.register(new CodeActionController(context.view.element, context.viewport, context.selections, service, diagnostics, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
+	context.register(new EditorCodeActionController(context.view.element, context.viewport, context.selections, service, diagnostics, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

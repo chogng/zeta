@@ -57,7 +57,7 @@ test("TextMate tokenization uses real Oniguruma scopes across lines", async () =
 	using tokenization = new TextMateTokenizationService(registry, onigLib, { onDidUpdateCache: update => updates.push(update) });
 	using model = new TextModel("if value = \"hello\nworld\";\n42");
 
-	const result = await tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal);
+	const result = await tokenization.tokenize("demo", model.createVersionedSnapshot(), new AbortController().signal);
 
 	assert.deepEqual(project(result), [
 		[0, 0, 2, "keyword"],
@@ -87,7 +87,7 @@ test("vendored VS Code JSON grammar tokenizes through the common service", async
 	using tokenization = new TextMateTokenizationService(registry, onigLib);
 	using model = new TextModel("{\"name\": \"alpha\", \"enabled\": true, \"count\": 42}");
 
-	const result = await tokenization.tokenize("json", model.createSnapshot(), new AbortController().signal);
+	const result = await tokenization.tokenize("json", model.createVersionedSnapshot(), new AbortController().signal);
 	const tokenTypes = result!.tokens.map(token => token.tokenType);
 
 	assert.equal(tokenTypes.includes("string"), true);
@@ -114,7 +114,7 @@ test("TextMate grammar metadata reaches runtime configuration and token projecti
 	using tokenization = new TextMateTokenizationService(registry, onigLib);
 	using model = new TextModel("embedded value \"quoted\"");
 
-	const tokens = (await tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal))!.tokens;
+	const tokens = (await tokenization.tokenize("demo", model.createVersionedSnapshot(), new AbortController().signal))!.tokens;
 	assert.equal(tokens.find(token => token.languageId === "javascript")?.languageId, "javascript");
 	assert.equal(tokens.find(token => token.tokenType === "string" && token.languageId === undefined)?.tokenType, "string");
 	assert.equal(tokens.find(token => model.getTextInRange(token.range).includes("quoted"))?.balancedBrackets, false);
@@ -130,7 +130,7 @@ test("TextMate runtime loads registered injection grammars", async () => {
 	using tokenization = new TextMateTokenizationService(registry, onigLib);
 	using model = new TextModel("/* TODO */");
 
-	const result = await tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal);
+	const result = await tokenization.tokenize("demo", model.createVersionedSnapshot(), new AbortController().signal);
 
 	assert.deepEqual(project(result), [
 		[0, 0, 3, "comment"],
@@ -147,11 +147,11 @@ test("TextMate cache rescans until multiline state converges", async () => {
 	using model = new TextModel(lines.join("\n"));
 	const signal = new AbortController().signal;
 
-	await tokenization.tokenize("demo", model.createSnapshot(), signal);
+	await tokenization.tokenize("demo", model.createVersionedSnapshot(), signal);
 	replaceLine(model, 5, "other");
-	await tokenization.tokenize("demo", model.createSnapshot(), signal);
+	await tokenization.tokenize("demo", model.createVersionedSnapshot(), signal);
 	replaceLine(model, 10, "value");
-	await tokenization.tokenize("demo", model.createSnapshot(), signal);
+	await tokenization.tokenize("demo", model.createVersionedSnapshot(), signal);
 
 	assert.deepEqual(updates.map(update => [update.kind, update.scannedLineCount, update.reusedLineCount]), [
 		["full", 50, 0],
@@ -171,14 +171,14 @@ test("TextMate grammar revisions replace same-version runtime state", async () =
 	using model = new TextModel("if");
 	const signal = new AbortController().signal;
 
-	assert.equal((await tokenization.tokenize("demo", model.createSnapshot(), signal))!.tokens[0]!.tokenType, "keyword");
+	assert.equal((await tokenization.tokenize("demo", model.createVersionedSnapshot(), signal))!.tokens[0]!.tokenType, "keyword");
 	registration.dispose();
 	using replacement = registry.register({
 		languageId: "demo",
 		scopeName: "source.demo",
 		loadGrammar: () => demoGrammar("string.quoted.demo"),
 	});
-	assert.equal((await tokenization.tokenize("demo", model.createSnapshot(), signal))!.tokens[0]!.tokenType, "string");
+	assert.equal((await tokenization.tokenize("demo", model.createVersionedSnapshot(), signal))!.tokens[0]!.tokenType, "string");
 });
 
 test("TextMate Syntax provider overrides lexical fallback by explicit priority", async () => {
@@ -216,12 +216,12 @@ test("TextMate rejects mismatched grammars, cancellation, and use after disposal
 	const tokenization = new TextMateTokenizationService(registry, onigLib);
 	using model = new TextModel("if");
 
-	await assert.rejects(tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal), /different root scope/);
+	await assert.rejects(tokenization.tokenize("demo", model.createVersionedSnapshot(), new AbortController().signal), /different root scope/);
 	const cancelled = new AbortController();
 	cancelled.abort();
-	await assert.rejects(tokenization.tokenize("missing", model.createSnapshot(), cancelled.signal), error => (error as Error).name === "AbortError");
+	await assert.rejects(tokenization.tokenize("missing", model.createVersionedSnapshot(), cancelled.signal), error => (error as Error).name === "AbortError");
 	tokenization.dispose();
-	await assert.rejects(tokenization.tokenize("demo", model.createSnapshot(), new AbortController().signal), /already disposed/);
+	await assert.rejects(tokenization.tokenize("demo", model.createVersionedSnapshot(), new AbortController().signal), /already disposed/);
 	assert.equal(registry.currentSnapshot.languageIds[0], "demo");
 });
 

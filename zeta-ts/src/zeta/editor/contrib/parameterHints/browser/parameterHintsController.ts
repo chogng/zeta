@@ -31,7 +31,7 @@ export class ParameterHintsController extends Disposable {
 			stopEvent(event);
 			this.hide();
 		}));
-		this._register(viewport.textModel.onDidChange(change => {
+		this._register(viewport.textModel.onDidChangeContent(change => {
 			const inserted = change.changes.length === 1 ? change.changes[0]!.text : "";
 			const triggerIndex = Math.max(inserted.lastIndexOf("("), inserted.lastIndexOf(","));
 			const trigger = triggerIndex >= 0 ? inserted[triggerIndex] : undefined;

@@ -1,6 +1,7 @@
 import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
+import { EditorModelConfiguration } from '../../../../editor/common/config/editorModelConfiguration.js';
 
 export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
 export type MatchBracketsSetting = "never" | "near" | "always";
@@ -126,12 +127,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, 'editor.guides.highlightActiveIndentation'),
 		setting: booleanSetting('Active indentation guide', 'Emphasize the indentation guide containing the primary cursor.'),
 	}),
-	bracketPairColorization: ConfigurationsRegistry.registerConfiguration<boolean>({
-		key: "editor.bracketPairColorization.enabled",
-		defaultValue: true,
-		parse: value => parseBoolean(value, "editor.bracketPairColorization.enabled"),
-		setting: booleanSetting("Bracket pair colorization", "Use matching colors to distinguish nested bracket pairs."),
-	}),
+	bracketPairColorization: EditorModelConfiguration.bracketPairColorizationEnabled,
 	cursorStyle: ConfigurationsRegistry.registerConfiguration<CursorStyleSetting>({
 		key: 'editor.cursorStyle',
 		defaultValue: 'line',
@@ -233,15 +229,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: EditorIndentationKind.Tabs, label: "Tabs" },
 		]),
 	}),
-	tabSize: ConfigurationsRegistry.registerConfiguration<number>({
-		key: "editor.tabSize",
-		defaultValue: 4,
-		parse(value: unknown): number {
-			if (Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= 32) return value as number;
-			throw new RangeError(`editor.tabSize must be an integer between 1 and 32; received ${String(value)}`);
-		},
-		setting: numberSetting("Tab size", "Set the number of columns represented by one indentation level.", 1, 32),
-	}),
+	tabSize: EditorModelConfiguration.tabSize,
 	formatOnSave: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "editor.formatOnSave",
 		defaultValue: false,

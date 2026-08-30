@@ -6,7 +6,7 @@ import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorker
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
-import { VersionedEditorWorkerClient } from '../../../browser/services/versionedEditorWorkerClient.js';
+import { VersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { editorWorkerWireCodec } from '../../../common/services/editorWorkerWire.js';
 

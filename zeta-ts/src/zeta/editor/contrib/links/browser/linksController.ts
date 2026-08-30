@@ -22,7 +22,7 @@ export class LinksController extends Disposable {
 			stopEvent(event);
 			void this.open(this.activeLink.target);
 		}));
-		this._register(viewport.textModel.onDidChange(() => this.clear()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.clear()));
 	}
 
 	private update(event: PointerEvent): void {

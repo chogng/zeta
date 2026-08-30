@@ -27,7 +27,7 @@ export class LanguageHierarchyController extends Disposable {
 	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
 		super();
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
-		this._register(viewport.textModel.onDidChange(() => this.closePeek()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.closePeek()));
 		this._register(toDisposable(() => this.cancelRequest()));
 	}
 

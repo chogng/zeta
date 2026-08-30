@@ -3,14 +3,14 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Position } from '../../../common/core/position.js';
 import { getTextWordSegments } from '../../../common/core/textSegmentation.js';
-import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
+import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../../common/languages.js';
 import { findTextMatches } from '../../../common/model/textModelSearch.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import type { IEditorLanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 
 const MAX_TEXTUAL_HIGHLIGHTS = 10_000;
-const registrations = new WeakMap<ILanguageFeaturesService, TextualProviderRegistration>();
+const registrations = new WeakMap<IEditorLanguageFeaturesService, TextualProviderRegistration>();
 
 interface TextualProviderRegistration {
 	count: number;
@@ -32,7 +32,7 @@ class TextualDocumentHighlightProvider implements DocumentHighlightProvider, Mul
 	provideMultiDocumentHighlights(primaryModel: TextModel, position: Position, otherModels: TextModel[], token: CancellationToken): Map<TextualHighlightTarget['resource'], DocumentHighlight[]> {
 		const primaryTarget = this.targets.get(primaryModel);
 		const wordPattern = primaryTarget?.wordPattern();
-		const sourceRange = WordOperations.getWordSelectionRange(primaryModel, position, wordPattern);
+		const sourceRange = getWordSelectionRange(primaryModel, position, wordPattern);
 		if (sourceRange.isEmpty() || !isWordRange(primaryModel, sourceRange.getStartPosition().column, sourceRange.getEndPosition().column, sourceRange.getStartPosition().lineNumber, wordPattern)) return new ResourceMap();
 		const text = primaryModel.getTextInRange(sourceRange);
 		const result = new ResourceMap<DocumentHighlight[]>();
@@ -46,8 +46,8 @@ class TextualDocumentHighlightProvider implements DocumentHighlightProvider, Mul
 	}
 }
 
-export class TextualMultiDocumentHighlightFeature extends Disposable {
-	constructor(languageFeaturesService: ILanguageFeaturesService, target: TextualHighlightTarget) {
+export class TextualHighlightTargetRegistration extends Disposable {
+	constructor(languageFeaturesService: IEditorLanguageFeaturesService, target: TextualHighlightTarget) {
 		super();
 		this._register(acquireTextualHighlightProviders(languageFeaturesService, target));
 	}
@@ -59,7 +59,7 @@ interface TextualHighlightTarget {
 	readonly wordPattern: () => RegExp | undefined;
 }
 
-function acquireTextualHighlightProviders(service: ILanguageFeaturesService, target: TextualHighlightTarget): IDisposable {
+function acquireTextualHighlightProviders(service: IEditorLanguageFeaturesService, target: TextualHighlightTarget): IDisposable {
 	let registration = registrations.get(service);
 	if (!registration) {
 		const targets = new WeakMap<TextModel, TextualHighlightTarget>();
@@ -85,8 +85,8 @@ function acquireTextualHighlightProviders(service: ILanguageFeaturesService, tar
 
 function findHighlights(model: TextModel, position: Position, wordPattern: RegExp | undefined, token: CancellationToken): DocumentHighlight[] {
 	if (token.isCancellationRequested) return [];
-	if (model.isDisposed) return [];
-	const range = WordOperations.getWordSelectionRange(model, position, wordPattern);
+	if (model.isDisposed()) return [];
+	const range = getWordSelectionRange(model, position, wordPattern);
 	if (range.isEmpty() || !isWordRange(model, range.getStartPosition().column, range.getEndPosition().column, range.getStartPosition().lineNumber, wordPattern)) return [];
 	return findText(model, model.getTextInRange(range), wordPattern, token);
 }
@@ -108,7 +108,7 @@ function findText(model: TextModel, text: string, wordPattern: RegExp | undefine
 
 function isWordRange(model: TextModel, startColumn: number, endColumn: number, lineNumber: number, wordPattern: RegExp | undefined): boolean {
 	if (wordPattern) {
-		const range = WordOperations.getWordSelectionRange(model, new Position(lineNumber, startColumn), wordPattern);
+		const range = getWordSelectionRange(model, new Position(lineNumber, startColumn), wordPattern);
 		return range.getStartPosition().column === startColumn && range.getEndPosition().column === endColumn;
 	}
 	return Boolean(getTextWordSegments(model.getLineContent(lineNumber)).find(segment => segment.wordLike && segment.start === startColumn - 1 && segment.end === endColumn - 1));

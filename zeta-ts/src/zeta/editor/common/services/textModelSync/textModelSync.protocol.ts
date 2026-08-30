@@ -9,6 +9,7 @@ export interface LanguageWorkerDocumentChange {
 export interface LanguageWorkerDocumentSynchronization {
 	readonly previousVersion: number;
 	readonly modelVersion: number;
+	readonly eol: '\n' | '\r\n';
 	readonly changes: readonly LanguageWorkerDocumentChange[];
 	readonly snapshot: TextSnapshot;
 }

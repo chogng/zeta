@@ -10,8 +10,8 @@ test("Lexical token and diagnostic lanes share one versioned cache", () => {
 	const cache = new LanguageLexicalSyntaxCache({ onDidUpdate: update => updates.push(update) });
 	const signal = new AbortController().signal;
 
-	cache.getTokens(model.createSnapshot(), signal);
-	cache.getDiagnostics(model.createSnapshot(), signal);
+	cache.getTokens(model.createVersionedSnapshot(), signal);
+	cache.getDiagnostics(model.createVersionedSnapshot(), signal);
 
 	assert.deepEqual(updates, [{
 		modelVersion: 1,
@@ -24,8 +24,8 @@ test("Lexical token and diagnostic lanes share one versioned cache", () => {
 		range: Range.fromPositions(model.positionAt(25), model.positionAt(31)),
 		text: "answer",
 	}]);
-	cache.getDiagnostics(model.createSnapshot(), signal);
-	cache.getTokens(model.createSnapshot(), signal);
+	cache.getDiagnostics(model.createVersionedSnapshot(), signal);
+	cache.getTokens(model.createVersionedSnapshot(), signal);
 
 	assert.deepEqual(updates[1], {
 		modelVersion: 2,
@@ -40,14 +40,14 @@ test("Lexical multiline state propagates only until the cached suffix converges"
 	const updates: LanguageLexicalCacheUpdate[] = [];
 	const cache = new LanguageLexicalSyntaxCache({ onDidUpdate: update => updates.push(update) });
 	const signal = new AbortController().signal;
-	cache.getTokens(model.createSnapshot(), signal);
+	cache.getTokens(model.createVersionedSnapshot(), signal);
 
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(0)),
 		text: "/* ",
 	}]);
-	const tokens = cache.getTokens(model.createSnapshot(), signal);
-	const diagnostics = cache.getDiagnostics(model.createSnapshot(), signal);
+	const tokens = cache.getTokens(model.createVersionedSnapshot(), signal);
+	const diagnostics = cache.getDiagnostics(model.createVersionedSnapshot(), signal);
 
 	assert.deepEqual(updates[1], {
 		modelVersion: 2,
@@ -66,7 +66,7 @@ test("Lexical incremental analysis respects a large-document scan budget", () =>
 	const updates: LanguageLexicalCacheUpdate[] = [];
 	const cache = new LanguageLexicalSyntaxCache({ onDidUpdate: update => updates.push(update) });
 	const signal = new AbortController().signal;
-	cache.getTokens(model.createSnapshot(), signal);
+	cache.getTokens(model.createVersionedSnapshot(), signal);
 
 	const line = 517;
 	const lineStart = lines.slice(0, line).reduce((offset, value) => offset + value.length + 1, 0);
@@ -74,7 +74,7 @@ test("Lexical incremental analysis respects a large-document scan budget", () =>
 		range: Range.fromPositions(model.positionAt(lineStart + 6), model.positionAt(lineStart + 11)),
 		text: "item",
 	}]);
-	cache.getTokens(model.createSnapshot(), signal);
+	cache.getTokens(model.createVersionedSnapshot(), signal);
 
 	assert.equal(updates[1]!.scannedLineCount, 1);
 	assert.equal(updates[1]!.reusedLineCount, 999);
@@ -86,7 +86,7 @@ test("Lexical incremental results stay equal to a fresh full-scan oracle", () =>
 	const signal = new AbortController().signal;
 	let seed = 0x5eed1234;
 	const insertions = ["x", " ", "\n", "/*", "*/", "`", "'", "(", ")", "const"];
-	cache.getTokens(model.createSnapshot(), signal);
+	cache.getTokens(model.createVersionedSnapshot(), signal);
 
 	for (let iteration = 0; iteration < 120; iteration += 1) {
 		const length = model.getText().length;
@@ -96,7 +96,7 @@ test("Lexical incremental results stay equal to a fresh full-scan oracle", () =>
 			range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(startOffset + removedLength)),
 			text: insertions[randomInteger(insertions.length)]!,
 		}]);
-		const snapshot = model.createSnapshot();
+		const snapshot = model.createVersionedSnapshot();
 		const incrementalTokens = cache.getTokens(snapshot, signal);
 		const incrementalDiagnostics = cache.getDiagnostics(snapshot, signal);
 		const oracle = new LanguageLexicalSyntaxCache();

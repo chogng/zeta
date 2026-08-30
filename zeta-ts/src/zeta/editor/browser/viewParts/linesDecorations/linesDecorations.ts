@@ -1,7 +1,7 @@
 import "./linesDecorations.css";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
-import { DecorationsOverlay } from "../decorations/decorations.js";
+import { EditorDecorationsOverlay } from "../decorations/decorations.js";
 import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorations.js";
@@ -15,13 +15,13 @@ export interface LinesDecorationLaneLayout {
 }
 
 /** Owns line-side decoration classes and tooltips for rendered logical lines. */
-export class LinesDecorationsOverlay extends EditorDynamicViewOverlay {
+export class EditorLinesDecorationsOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
-	private readonly decorations: DecorationsOverlay;
+	private readonly decorations: EditorDecorationsOverlay;
 	private readonly lanes: ReadonlyMap<string, LinesDecorationLaneLayout>;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay, sources: readonly DecorationSource[]) {
+	constructor(context: EditorViewContext, host: HTMLElement, decorations: EditorDecorationsOverlay, sources: readonly DecorationSource[]) {
 		super(context);
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-lines-decorations-layer', 'stanza-editor-line-lines-decorations'));
 		this.domNode = this.rows.domNode;

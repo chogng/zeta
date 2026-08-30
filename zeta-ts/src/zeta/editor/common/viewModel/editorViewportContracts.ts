@@ -17,7 +17,7 @@ export interface EditorViewportLineSource {
 export interface EditorViewportModelSource {
 	readonly lineCount: number;
 	readonly version: number;
-	readonly onDidChange: Event<TextModelChange>;
+	readonly onDidChangeContent: Event<TextModelChange>;
 }
 
 /** Batch mutation boundary used by view-layout custom line-height owners. */

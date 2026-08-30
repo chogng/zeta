@@ -57,7 +57,7 @@ export function createMoveLinesCommand(model: TextModel, selections: SelectionSe
 		? group.startLineIndex > 0
 		: group.endLineIndex + 1 < model.lineCount);
 	const edits = movableGroups.map(group => moveLineGroup(model, group, direction));
-	const finalText = applyOffsetEdits(model.createSnapshot().getText(), edits);
+	const finalText = applyOffsetEdits(model.createVersionedSnapshot().getText(), edits);
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
 		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({
@@ -76,7 +76,7 @@ export function createInsertLineCommand(model: TextModel, selections: SelectionS
 	}
 	const groups = contiguousLineGroups(selectedLineIndices(selections));
 	const edits = groups.map(group => insertLineAtGroup(model, group, direction));
-	const finalText = applyOffsetEdits(model.createSnapshot().getText(), edits);
+	const finalText = applyOffsetEdits(model.createVersionedSnapshot().getText(), edits);
 	const nextSelections = groups.map((group, index) => Selection.fromPositions(new Position((insertedLineIndex(group, index, direction)) + 1, (0) + 1)));
 	const primaryIndex = primaryInsertedGroupIndex(selections, groups);
 	return Object.freeze({

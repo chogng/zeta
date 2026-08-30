@@ -12,6 +12,13 @@ import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageInlineCompletionsProvider } from '../../common/inlineCompletions.js';
+import { InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
+
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -22,13 +29,14 @@ for (const [name, value] of Object.entries({
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
 const { View } = await import('../../../../browser/view.js');
 const { InlineCompletionProviderService } = await import('../../../../browser/services/inlineCompletionProviderService.js');
-const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
+const { EditorInlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -51,10 +59,11 @@ test('Registered editor commands retrigger inline completions after their edit',
 		},
 	});
 	using service = new InlineCompletionProviderService(model, providers);
+	using inlineCompletionsService = new InlineCompletionsService();
 	using commands = new Emitter<{ readonly commandId: string }>();
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
-	using controller = new InlineCompletionsController(input, viewport, selections, service, 'plaintext', commands.event);
+	using controller = new EditorInlineCompletionsController(input, viewport, selections, service, inlineCompletionsService, 'plaintext', commands.event);
 
 	commands.fire({ commandId: 'editor.test.unrelatedCommand' });
 	await flushPromises();
@@ -65,6 +74,22 @@ test('Registered editor commands retrigger inline completions after their edit',
 	assert.equal(viewport.element.querySelector('.stanza-editor-inline-completion')?.textContent, ' completion');
 
 	dom.window.close();
+});
+
+test('InlineCompletionsService owns snooze state and change events', () => {
+	using service = new InlineCompletionsService();
+	const changes: boolean[] = [];
+	using listener = service.onDidChangeIsSnoozing(value => changes.push(value));
+	service.snooze(10_000);
+	assert.equal(service.isSnoozing(), true);
+	assert.ok(service.snoozeTimeLeft > 0);
+	service.snooze(10_000);
+	assert.deepEqual(changes, [true]);
+	service.cancelSnooze();
+	assert.equal(service.isSnoozing(), false);
+	assert.deepEqual(changes, [true, false]);
+	assert.throws(() => service.setSnoozeDuration(-1), /non-negative/);
+	assert.throws(() => service.reportNewCompletion(''), /non-empty string/);
 });
 
 class FixedTextMeasurer implements TextMeasurer {

@@ -221,6 +221,7 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 		this._register(worker);
 		this._register(port.onMessage(message => this.receive(message)));
 		this._register(toDisposable(() => {
+			this.mirror?.dispose();
 			this.mirror = undefined;
 			this.resultStates.clear();
 			for (const controller of this.active.values()) {
@@ -250,16 +251,18 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 					throw new Error("Language worker sync requires an initialized document mirror");
 				}
 				const changes = normalizeDocumentChanges(message.changes);
-				this.mirror.synchronize(message.previousVersion, message.modelVersion, changes);
+				this.mirror.synchronize(message.previousVersion, message.modelVersion, changes, message.eol);
 				if (supportsDocumentSynchronization(this.worker)) {
 					this.worker.synchronizeDocument(Object.freeze({
 						previousVersion: message.previousVersion,
 						modelVersion: message.modelVersion,
+						eol: message.eol,
 						changes,
 						snapshot: this.mirror.createSnapshot(),
 					}));
 				}
 			} catch (error) {
+				this.mirror?.dispose();
 				this.mirror = undefined;
 				this.port.send(createSyncFailureMessage(error));
 			}
@@ -280,7 +283,10 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 				throw new RangeError(`Unsupported language worker lane '${message.lane}'`);
 			}
 			const decoded = decodeRequestSnapshot(message.snapshot, this.mirror?.createSnapshot());
-			if (decoded.replacesMirror) this.mirror = new LanguageWorkerDocumentMirror(decoded.snapshot);
+			if (decoded.replacesMirror) {
+				this.mirror?.dispose();
+				this.mirror = new LanguageWorkerDocumentMirror(decoded.snapshot);
+			}
 			request = Object.freeze({
 				requestId: message.requestId,
 				lane: message.lane as TLane,

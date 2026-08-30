@@ -1,14 +1,14 @@
 import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import { type TextAreaEditContext } from "./textAreaEditContext.js";
+import { type EditorTextAreaInputContext } from "./textAreaEditContext.js";
 
 type TextAreaEditContextOwner = string | HTMLElement;
 
 /** Tracks textarea edit contexts for host integrations and diagnostics. */
 class TextAreaEditContextRegistryImpl {
-	private readonly byId = new Map<string, TextAreaEditContext>();
-	private readonly byElement = new WeakMap<HTMLElement, TextAreaEditContext>();
+	private readonly byId = new Map<string, EditorTextAreaInputContext>();
+	private readonly byElement = new WeakMap<HTMLElement, EditorTextAreaInputContext>();
 
-	register(owner: TextAreaEditContextOwner, context: TextAreaEditContext): IDisposable {
+	register(owner: TextAreaEditContextOwner, context: EditorTextAreaInputContext): IDisposable {
 		if (typeof owner === "string") {
 			const previous = this.byId.get(owner);
 			if (previous && previous !== context) throw new Error(`Textarea edit-context owner '${owner}' is already registered`);
@@ -27,7 +27,7 @@ class TextAreaEditContextRegistryImpl {
 		});
 	}
 
-	get(owner: TextAreaEditContextOwner): TextAreaEditContext | undefined {
+	get(owner: TextAreaEditContextOwner): EditorTextAreaInputContext | undefined {
 		return typeof owner === "string" ? this.byId.get(owner) : this.byElement.get(owner);
 	}
 }

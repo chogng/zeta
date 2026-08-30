@@ -7,7 +7,7 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type TrackedRange } from "../../common/model/trackedRange.js";
-import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
+import { getWordSelectionRange } from '../../common/cursor/wordSelection.js';
 import { type View } from "../view.js";
 import { BidirectionalDragScrolling } from "./bidirectionalDragScrolling.js";
 import { PointerEventRouter } from "./pointerEventRouter.js";
@@ -57,7 +57,7 @@ export interface MouseHandlerOptions {
  * PointerEventRouter owns browser dispatch/capture. This controller owns gesture
  * policy and maps semantic hit targets to common selection state.
  */
-export class MouseHandler extends Disposable {
+export class EditorPointerSelectionHandler extends Disposable {
 	private readonly dragListeners =
 		this._register(new DisposableStore());
 	private readonly pointerHandler: PointerEventRouter;
@@ -201,7 +201,7 @@ export class MouseHandler extends Disposable {
 				);
 			} else {
 				kind = MouseSelectionKind.Word;
-				anchorRange = WordOperations.getWordSelectionRange(this.viewport.textModel, hitTarget.position, this.wordPattern?.());
+				anchorRange = getWordSelectionRange(this.viewport.textModel, hitTarget.position, this.wordPattern?.());
 			}
 		} else {
 			kind = MouseSelectionKind.Character;
@@ -291,11 +291,23 @@ export class MouseHandler extends Disposable {
 		if (!active) return;
 		const anchorRange = active.anchor.range;
 		if (active.kind === MouseSelectionKind.Column) {
-			this.selectionController.setSelections(ColumnSelection.columnSelect(
-				this.viewport.textModel,
-				anchorRange.getStartPosition(),
-				hitTarget.position,
-			));
+			const coordinates = this.viewport.coordinatesConverter;
+			const model = this.viewport.cursorModel;
+			const config = this.viewport.cursorConfig;
+			const anchor = coordinates.convertModelPositionToViewPosition(anchorRange.getStartPosition());
+			const target = coordinates.convertModelPositionToViewPosition(hitTarget.position);
+			const result = ColumnSelection.columnSelect(
+				config,
+				model,
+				anchor.lineNumber,
+				config.visibleColumnFromColumn(model, anchor),
+				target.lineNumber,
+				config.visibleColumnFromColumn(model, target),
+			);
+			this.selectionController.setSelections(SelectionSet.withPrimary(result.viewStates.map(state => Selection.fromPositions(
+				coordinates.convertViewPositionToModelPosition(state.selection.getSelectionStart()),
+				coordinates.convertViewPositionToModelPosition(state.position),
+			)), 0));
 			return;
 		}
 		const selection = selectionForTarget(
@@ -385,14 +397,14 @@ function trackedSelectionSet(additional: AdditionalMouseSelections): SelectionSe
 }
 
 function wordSelection(model: TextModel, anchorRange: Range, activePosition: Position, wordPattern: RegExp | undefined): Selection {
-	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
+	const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
 	return Position.compare(activeRange.getStartPosition(), anchorRange.getStartPosition()) < 0
 		? Selection.fromPositions(anchorRange.getEndPosition(), activeRange.getStartPosition())
 		: Selection.fromPositions(anchorRange.getStartPosition(), activeRange.getEndPosition());
 }
 
 function extendSelectionToWord(model: TextModel, anchor: Position, activePosition: Position, wordPattern: RegExp | undefined): Selection {
-	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
+	const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
 	const active = Position.compare(activeRange.getStartPosition(), anchor) < 0
 		? activeRange.getStartPosition()
 		: activeRange.getEndPosition();

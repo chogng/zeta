@@ -2,29 +2,28 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { LinkedList } from '../../../base/common/linkedList.js';
 import { type URI } from '../../../base/common/uri.js';
-import { type CodeEditorWidget } from '../widget/codeEditor/codeEditorWidget.js';
-import { type ICodeEditorOpenHandler, type ICodeEditorService } from './codeEditorService.js';
+import { type IWidgetCodeEditor, type IWidgetCodeEditorOpenHandler, type IWidgetCodeEditorRegistry } from './codeEditorService.js';
 
 /** Tracks live code editors and ordered open handlers without owning editor instances. */
-export abstract class AbstractCodeEditorService extends Disposable implements ICodeEditorService {
-	private readonly codeEditorAddEmitter = this._register(new Emitter<CodeEditorWidget>());
-	private readonly codeEditorRemoveEmitter = this._register(new Emitter<CodeEditorWidget>());
-	private readonly codeEditors = new Set<CodeEditorWidget>();
-	private readonly openHandlers = new LinkedList<ICodeEditorOpenHandler>();
-	private activeCodeEditor: CodeEditorWidget | undefined;
+export abstract class AbstractWidgetCodeEditorRegistry extends Disposable implements IWidgetCodeEditorRegistry {
+	private readonly codeEditorAddEmitter = this._register(new Emitter<IWidgetCodeEditor>());
+	private readonly codeEditorRemoveEmitter = this._register(new Emitter<IWidgetCodeEditor>());
+	private readonly codeEditors = new Set<IWidgetCodeEditor>();
+	private readonly openHandlers = new LinkedList<IWidgetCodeEditorOpenHandler>();
+	private activeCodeEditor: IWidgetCodeEditor | undefined;
 
 	public readonly onCodeEditorAdd = this.codeEditorAddEmitter.event;
 	public readonly onCodeEditorRemove = this.codeEditorRemoveEmitter.event;
 
-	public listCodeEditors(): readonly CodeEditorWidget[] {
+	public listCodeEditors(): readonly IWidgetCodeEditor[] {
 		return Object.freeze([...this.codeEditors]);
 	}
 
-	public getActiveCodeEditor(): CodeEditorWidget | undefined {
+	public getActiveCodeEditor(): IWidgetCodeEditor | undefined {
 		return this.activeCodeEditor;
 	}
 
-	public addCodeEditor(editor: CodeEditorWidget) {
+	public addCodeEditor(editor: IWidgetCodeEditor) {
 		if (this.codeEditors.has(editor)) {
 			throw new RangeError('Code editor is already registered');
 		}
@@ -41,21 +40,21 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 		});
 	}
 
-	public setActiveCodeEditor(editor: CodeEditorWidget | undefined): void {
+	public setActiveCodeEditor(editor: IWidgetCodeEditor | undefined): void {
 		if (editor && !this.codeEditors.has(editor)) {
 			throw new RangeError('Active code editor must be registered');
 		}
 		this.activeCodeEditor = editor;
 	}
 
-	public registerCodeEditorOpenHandler(handler: ICodeEditorOpenHandler) {
+	public registerCodeEditorOpenHandler(handler: IWidgetCodeEditorOpenHandler) {
 		if (typeof handler !== 'function') {
 			throw new TypeError('Code editor open handler must be a function');
 		}
 		return toDisposable(this.openHandlers.unshift(handler));
 	}
 
-	public async openCodeEditor(resource: URI): Promise<CodeEditorWidget | undefined> {
+	public async openCodeEditor(resource: URI): Promise<IWidgetCodeEditor | undefined> {
 		for (const handler of this.openHandlers) {
 			const editor = await handler(resource);
 			if (editor) {

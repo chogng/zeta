@@ -2,7 +2,7 @@ import { h, reset, fragment as createFragment } from "../../../../base/browser/d
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
-import { EditorTextDirection, type ViewLineOptions } from './viewLineOptions.js';
+import { EditorTextDirection, type EditorViewLineOptions } from './viewLineOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type Range } from '../../../common/core/range.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
@@ -25,18 +25,18 @@ interface BrowserCaretDocument {
 	caretRangeFromPoint?(x: number, y: number): BrowserCaretRange | null;
 }
 
-/** Owns one reusable virtual-line DOM subtree rendered by ViewLines. */
-export class ViewLine {
+/** Owns one reusable virtual-line DOM subtree rendered by EditorViewLines. */
+export class EditorViewLine {
 	public static readonly CLASS_NAME = 'view-line';
 	public readonly domNode: FastDomNode<HTMLDivElement>;
 	public readonly textElement: HTMLSpanElement;
 	private characterMapping: CharacterMapping;
 	private renderedText = '';
 
-	constructor(host: HTMLElement, lineIndex: number, private readonly options: ViewLineOptions) {
+	constructor(host: HTMLElement, lineIndex: number, private readonly options: EditorViewLineOptions) {
 		const domNode = new FastDomNode(h(host.ownerDocument, "div"));
 		const textElement = h(host.ownerDocument, "span");
-		domNode.setClassName(ViewLine.CLASS_NAME);
+		domNode.setClassName(EditorViewLine.CLASS_NAME);
 		domNode.domNode.dataset.lineIndex = String(lineIndex);
 		textElement.className = "stanza-editor-line-text";
 		textElement.dir = options.textDirection;

@@ -25,7 +25,7 @@ export interface EditorScrollbarOptions {
  * scrollbar axes. Native scrolling remains the editor's input and
  * accessibility fallback; this part owns only the visible custom tracks.
  */
-export class EditorScrollbar extends EditorViewPart {
+export class EditorViewportScrollbar extends EditorViewPart {
 	private static nextViewportId = 1;
 	private readonly container: HTMLElement;
 	private readonly horizontal: HorizontalScrollbar;
@@ -55,7 +55,7 @@ export class EditorScrollbar extends EditorViewPart {
 		this.horizontalVisibility = options.horizontal ?? "auto";
 		this.verticalVisibility = options.vertical ?? "auto";
 		if (!options.viewport.id) {
-			options.viewport.id = `stanza-editor-scroll-viewport-${EditorScrollbar.nextViewportId++}`;
+			options.viewport.id = `stanza-editor-scroll-viewport-${EditorViewportScrollbar.nextViewportId++}`;
 		}
 		options.container.style.setProperty("--stanza-editor-horizontal-scrollbar-size", `${this.horizontalScrollbarSize}px`);
 		options.container.style.setProperty("--stanza-editor-vertical-scrollbar-size", `${this.verticalScrollbarSize}px`);

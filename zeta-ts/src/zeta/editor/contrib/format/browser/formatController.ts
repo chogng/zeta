@@ -3,7 +3,7 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
-import { type IVersionedEditorWorkerClient } from "../../../browser/services/versionedEditorWorkerClient.js";
+import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { createFormattingCommand, FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
 
 export interface FormatControllerOptions {

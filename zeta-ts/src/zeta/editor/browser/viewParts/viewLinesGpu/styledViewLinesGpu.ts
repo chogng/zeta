@@ -5,9 +5,9 @@ import { StyledGlyphRasterizer } from '../../gpu/raster/styledGlyphRasterizer.js
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type BracketColorizationSource, type SemanticTokenSource, type ViewLine } from '../viewLines/viewLine.js';
-import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
-import { type ViewLines } from '../viewLines/viewLines.js';
+import { type BracketColorizationSource, type SemanticTokenSource, type EditorViewLine } from '../viewLines/viewLine.js';
+import { type EditorViewLineOptions } from '../viewLines/viewLineOptions.js';
+import { type EditorViewLines } from '../viewLines/viewLines.js';
 import { BindingId } from '../../gpu/gpu.js';
 import { type GpuRenderFrame, type IGpuFrameRenderStrategy } from '../../gpu/gpuFrameStrategy.js';
 import { StyledFullFileRenderStrategy } from '../../gpu/renderStrategy/styledFullFileRenderStrategy.js';
@@ -20,14 +20,14 @@ export interface ViewLinesGpuOptions {
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly paddingTop: number;
-	readonly viewLineOptions: ViewLineOptions;
-	readonly viewLines: ViewLines;
+	readonly viewLineOptions: EditorViewLineOptions;
+	readonly viewLines: EditorViewLines;
 	readonly requestRender: () => void;
 }
 
 interface PreparedGpuFrame {
 	readonly frame: GpuRenderFrame;
-	readonly renderedLines: ReadonlyMap<number, ViewLine>;
+	readonly renderedLines: ReadonlyMap<number, EditorViewLine>;
 }
 
 const VERTEX_FLOAT_COUNT = 5;
@@ -266,7 +266,7 @@ export class StyledViewLinesGpu extends Disposable {
 		this.context.device.queue.submit([encoder.finish()]);
 	}
 
-	private applyRenderedLines(renderedLines: ReadonlyMap<number, ViewLine>, gpuLineIndexes: ReadonlySet<number>): void {
+	private applyRenderedLines(renderedLines: ReadonlyMap<number, EditorViewLine>, gpuLineIndexes: ReadonlySet<number>): void {
 		this.renderedGpuLineIndexes = new Set(gpuLineIndexes);
 		for (const [visualLineIndex, line] of renderedLines) line.domNode.domNode.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
 	}
@@ -297,7 +297,7 @@ export class StyledViewLinesGpu extends Disposable {
 		return context.layout.modelVersion === this.options.model.version && visualLines.modelVersion === this.options.model.version;
 	}
 
-	private validateRenderedLines(visualLines: EditorVisualLineProjection, renderedLines: ReadonlyMap<number, ViewLine>): void {
+	private validateRenderedLines(visualLines: EditorVisualLineProjection, renderedLines: ReadonlyMap<number, EditorViewLine>): void {
 		for (const visualLineIndex of renderedLines.keys()) {
 			if (!visualLines.lineAt(visualLineIndex)) throw new Error('WebGPU rendered row is outside the visual-line projection');
 		}

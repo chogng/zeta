@@ -466,7 +466,7 @@ interface DecorationIntervalNode {
  * Immutable interval index owned by the decorations view part.
  *
  * The index stores only the latest presentation snapshot. Decoration sources,
- * source invalidation, and DOM projection remain owned by DecorationsOverlay.
+ * source invalidation, and DOM projection remain owned by EditorDecorationsOverlay.
  */
 export class DecorationLineIndex {
 	private readonly root: DecorationIntervalNode | undefined;
@@ -527,7 +527,7 @@ function lastCoveredLineIndex(decoration: ResolvedDecoration): number {
 	return endLineNumber - 2;
 }
 
-export class DecorationsOverlay extends EditorDynamicViewOverlay {
+export class EditorDecorationsOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];

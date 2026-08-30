@@ -1,4 +1,4 @@
-import { startZetaWorker } from '../../zetaWorkerBootstrap.js';
+import { start } from '../../editor.worker.start.js';
 import { LanguageCompletionCatalogWirePublisher } from '../languages/completion/languageCompletionCatalogWire.js';
 import { LanguageCompletionProviderRegistry } from '../languages/completion/languageCompletionProviders.js';
 import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry } from '../languages/completion/languageCompletionProviderModules.js';
@@ -9,7 +9,7 @@ import { languageCompletionWireCodec } from '../languages/completion/languageCom
 import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
 import { LanguageWorkerWireServer } from '../languages/languageWorkerWire.js';
 
-startZetaWorker(({ port, resources }) => {
+start(({ port, resources }) => {
 	const registry = resources.add(new LanguageCompletionProviderRegistry());
 	const modules = resources.add(new LanguageCompletionProviderModuleRegistry());
 	resources.add(modules.register({

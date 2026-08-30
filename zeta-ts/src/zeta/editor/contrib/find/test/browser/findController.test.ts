@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 
 const { View } = await import("../../../../browser/view.js");
 const { DecorationPresentation, createStanzaDecorationSource } = await import("../../../../browser/viewParts/decorations/decorations.js");
-const { FindController } = await import("../../browser/findController.js");
+const { EditorFindController } = await import("../../browser/findController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -171,10 +171,10 @@ interface Fixture extends Disposable {
 	readonly decorations: TextDecorationCollection<void>;
 	readonly viewport: InstanceType<typeof View>;
 	readonly editorInput: HTMLTextAreaElement;
-	readonly find: InstanceType<typeof FindController>;
+	readonly find: InstanceType<typeof EditorFindController>;
 }
 
-function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: ConstructorParameters<typeof FindController>[4]): Fixture {
+function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: ConstructorParameters<typeof EditorFindController>[4]): Fixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const model = new TextModel(text);
@@ -191,7 +191,7 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 	viewport.layout({ width: 600, height: 120 });
 	const editorInput = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(editorInput);
-	const find = new FindController(editorInput, viewport, selections, decorations, options);
+	const find = new EditorFindController(editorInput, viewport, selections, decorations, options);
 	return {
 		dom,
 		model,

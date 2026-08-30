@@ -9,6 +9,11 @@ import { Position } from '../../common/core/position.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -18,6 +23,7 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }

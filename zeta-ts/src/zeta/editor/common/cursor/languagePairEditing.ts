@@ -1,4 +1,4 @@
-import { DeleteOperations } from './cursorDeleteOperations.js';
+import { SelectionSetDeleteOperations } from './selectionSetDeleteOperations.js';
 import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { type LanguageAutoClosingPair, type LanguageCharacterPair } from "../languages/languageConfiguration.js";
@@ -69,7 +69,7 @@ export function createLanguagePairBackspaceCommand(model: TextModel, selections:
 			paired = true;
 			return collapsedEdit(pairRange);
 		}
-		return collapsedEdit(DeleteOperations.getPreviousDeleteRange(model, selection.getPosition()));
+		return collapsedEdit(SelectionSetDeleteOperations.getPreviousDeleteRange(model, selection.getPosition()));
 	});
 	if (!paired) return undefined;
 	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.CoalesceBackspace);

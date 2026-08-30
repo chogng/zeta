@@ -34,7 +34,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import("../../../../browser/view.js");
-const { FoldingCommand, FoldingController, resolveStanzaFoldingCommand } = await import("../../browser/folding.js");
+const { FoldingCommand, EditorFoldingController, resolveStanzaFoldingCommand } = await import("../../browser/folding.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -59,7 +59,7 @@ test("Folding controller routes platform chords and gutter toggles through the f
 	viewport.layout({ width: 300, height: 60 });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
-	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Windows });
+	using controller = new EditorFoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Windows });
 
 	const collapse = keyboardEvent(dom.window, "[", { ctrlKey: true, shiftKey: true });
 	input.dispatchEvent(collapse);
@@ -99,7 +99,7 @@ test("Folding controller routes macOS Command+K chords without accepting Control
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
-	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
+	using controller = new EditorFoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
 
 	input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
 	const collapseAll = keyboardEvent(dom.window, "0", { metaKey: true });
@@ -125,7 +125,7 @@ test("Folding controller collapses and expands every range through Ctrl+K chords
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
-	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Windows });
+	using controller = new EditorFoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Windows });
 	input.dispatchEvent(keyboardEvent(dom.window, "k", { ctrlKey: true }));
 	const collapseAll = keyboardEvent(dom.window, "0", { ctrlKey: true });
 	input.dispatchEvent(collapseAll);
@@ -149,7 +149,7 @@ test("Folding controller recursively folds nested regions through platform prefi
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
-	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
+	using controller = new EditorFoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
 
 	input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
 	const fold = keyboardEvent(dom.window, "[", { metaKey: true });
@@ -175,7 +175,7 @@ test("Folding controller creates and removes manual ranges through macOS prefix 
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
-	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
+	using controller = new EditorFoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
 
 	input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
 	input.dispatchEvent(keyboardEvent(dom.window, ",", { metaKey: true }));
@@ -200,7 +200,7 @@ test("Folding controller collapses macOS prefix levels without hiding shallower 
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
-	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
+	using controller = new EditorFoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
 
 	input.dispatchEvent(keyboardEvent(dom.window, "k", { metaKey: true }));
 	const level = keyboardEvent(dom.window, "2", { metaKey: true });

@@ -7,10 +7,21 @@ import { SemanticTokensService } from '../common/semanticTokens.js';
 registerTextEditorCapabilityContribution({
 	id: "editor.contrib.semanticTokens",
 	configure: context => {
-		const semanticTokens = context.register(new SemanticTokensService(context.model, context.languageFeaturesService.semanticTokensProvider, context.options.input.resource));
+		const semanticTokens = context.register(new SemanticTokensService(
+			context.model,
+			context.languageFeaturesService.semanticTokensProvider,
+			context.semanticTokensStylingService,
+			context.options.input.resource,
+		));
 		const overlay = context.register(new LanguageTokenLineIndex(semanticTokens.tokens));
 		context.provideCapability(TextEditorCapability.semanticTokens, semanticTokens);
-		context.provideCapability(TextEditorCapability.semanticTokenOverlay, overlay);
+		context.provideCapability(TextEditorCapability.semanticTokenOverlay, Object.freeze({
+			textModel: overlay.textModel,
+			onDidChange: overlay.onDidChange,
+			get lines() { return overlay.lines; },
+			getLineTokens: (lineIndex: number) => overlay.getLineTokens(lineIndex),
+			styling: semanticTokens.styling,
+		}));
 	},
 	install: context => {
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.model.largeFile.tooLargeForSynchronization) return;

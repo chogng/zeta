@@ -54,6 +54,7 @@ export function compressConsecutiveTextChanges(previous: TextChange[] | null, cu
 /** The operation that committed one text-model version. */
 export enum TextModelChangeReason {
 	Edit = "edit",
+	EOL = "eol",
 	/** Text changed as part of an atomic rich-document transaction. */
 	Blocks = "blocks",
 	Reset = "reset",
@@ -81,7 +82,12 @@ export interface TextModelChange {
 	readonly transactionId: number;
 	readonly reason: TextModelChangeReason;
 	readonly changes: readonly TextModelContentChange[];
+	readonly eol: '\n' | '\r\n';
+	readonly isEolChange: boolean;
+	readonly detailedReasons: readonly TextModelEditSource[];
 }
+
+import type { TextModelEditSource } from '../textModelEditSource.js';
 
 /**
  * An immutable, versioned view of normalized model text.

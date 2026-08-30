@@ -2,7 +2,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, type TextSearchMatch } from "../../../common/model/textModelSearch.js";
-import { WordOperations } from "../../../common/cursor/cursorWordOperations.js";
+import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 
 const MAX_OCCURRENCE_SELECTIONS = 100_000;
 
@@ -56,7 +56,7 @@ export function selectAllOccurrences(model: TextModel, selections: SelectionSet,
 function sourceSelection(model: TextModel, selections: SelectionSet, wordPattern: RegExp | undefined): Selection | undefined {
 	const primary = selections.primary;
 	if (!primary.isEmpty()) return primary;
-	const range = WordOperations.getWordSelectionRange(model, primary.getPosition(), wordPattern);
+	const range = getWordSelectionRange(model, primary.getPosition(), wordPattern);
 	if (range.isEmpty()) return undefined;
 	return Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
 }

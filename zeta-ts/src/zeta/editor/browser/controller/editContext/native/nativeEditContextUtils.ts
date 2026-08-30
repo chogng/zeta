@@ -26,7 +26,7 @@ export const NATIVE_TEXT_WINDOW_LENGTH = 32 * 1_024;
 export const MAX_CHARACTER_BOUNDS_REQUEST_LENGTH = 4 * 1_024;
 
 /** Tracks focus for a DOM node, including nodes hosted inside a shadow root. */
-export class FocusTracker extends Disposable {
+export class EditContextFocusTracker extends Disposable {
 	private focused = false;
 	private paused = false;
 

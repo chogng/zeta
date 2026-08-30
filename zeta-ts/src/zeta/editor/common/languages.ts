@@ -23,6 +23,12 @@ export interface TextEdit {
 	eol?: model.EndOfLineSequence;
 }
 
+/** Options supplied to document and range formatting providers. */
+export interface FormattingOptions {
+	tabSize: number;
+	insertSpaces: boolean;
+}
+
 /** @internal */
 export interface IInplaceReplaceSupportResult {
 	value: string;

@@ -1,5 +1,5 @@
 import "./marginDecorations.css";
-import { DecorationsOverlay } from "../decorations/decorations.js";
+import { EditorDecorationsOverlay } from "../decorations/decorations.js";
 import { type ResolvedDecoration, DecorationPresentation } from '../decorations/decorations.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
@@ -7,12 +7,12 @@ import { type EditorRenderingContext, EditorViewContext } from "../../view/viewP
 import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects line-level diagnostics into the editor margin. */
-export class MarginViewLineDecorationsOverlay extends EditorDynamicViewOverlay {
+export class EditorMarginLineDecorationsOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
-	private readonly decorations: DecorationsOverlay;
+	private readonly decorations: EditorDecorationsOverlay;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, decorations: DecorationsOverlay) {
+	constructor(context: EditorViewContext, host: HTMLElement, decorations: EditorDecorationsOverlay) {
 		super(context);
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-margin-decorations-layer', 'stanza-editor-diagnostic-marker'));
 		this.domNode = this.rows.domNode;

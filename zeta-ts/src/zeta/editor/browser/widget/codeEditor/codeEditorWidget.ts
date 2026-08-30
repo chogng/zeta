@@ -13,9 +13,9 @@ import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from '..
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from '../../editorView.js';
 import { type View } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../view/viewController.js";
-import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
+import { EditorPointerSelectionHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { CodeEditorContributions, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
+import { WidgetContributionCollection, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 import { observableCodeEditor } from '../../observableCodeEditor.js';
 
 export type CodeEditorWidgetViewportOptions = EditorViewViewportOptions;
@@ -65,7 +65,7 @@ export class CodeEditorWidget extends Disposable {
 	readonly view: EditorView;
 	readonly viewport: View;
 	readonly userInputEvents: EditorView['userInputEvents'];
-	readonly contributions: CodeEditorContributions;
+	readonly contributions: WidgetContributionCollection;
 
 	constructor(options: CodeEditorWidgetOptions) {
 		super();
@@ -92,7 +92,7 @@ export class CodeEditorWidget extends Disposable {
 			this.viewport = this.view.viewport;
 			this.userInputEvents = this.view.userInputEvents;
 			this._register(observableCodeEditor(this));
-			this.contributions = this._register(new CodeEditorContributions());
+			this.contributions = this._register(new WidgetContributionCollection());
 			const instantiationService = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
 			this.contributions.initialize({
 				editor: this,
@@ -103,7 +103,7 @@ export class CodeEditorWidget extends Disposable {
 				placeholder: options.placeholder,
 			}, instantiationService, options.contributions, options.onContributionError);
 			this._register(new KeyboardNavigationController(this.viewport, options.selectionController, this.userInputEvents, options.keyboardNavigation));
-			this._register(new MouseHandler(this.viewport, options.selectionController, options.mouseHandler));
+			this._register(new EditorPointerSelectionHandler(this.viewport, options.selectionController, options.mouseHandler));
 		} catch (error) {
 			this.dispose();
 			throw error;

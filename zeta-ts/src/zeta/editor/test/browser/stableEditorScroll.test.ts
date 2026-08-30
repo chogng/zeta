@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import('../../browser/view.js');
-const { StableEditorBottomScrollState, StableEditorScrollState } = await import('../../browser/stableEditorScroll.js');
+const { ViewStableEditorBottomScrollState, ViewStableEditorScrollState } = await import('../../browser/stableEditorScroll.js');
 
 test('StableEditorScrollState preserves the first visible row offset', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -62,7 +62,7 @@ test('StableEditorScrollState preserves the first visible row offset', () => {
 	const initialDelta = initialLayout.scrollPosition.top - initialAnchorTop;
 	const initialLeft = initialLayout.scrollPosition.left;
 
-	const state = StableEditorScrollState.capture(viewport);
+	const state = ViewStableEditorScrollState.capture(viewport);
 	viewport.setLineHeight(30);
 	state.restore(viewport);
 
@@ -106,7 +106,7 @@ test('StableEditorBottomScrollState preserves the last visible row offset', () =
 	const initialCoordinates = viewport.getPositionContentCoordinates(anchor);
 	const initialDelta = initialCoordinates.top + initialCoordinates.height - initialLayout.scrollPosition.top;
 
-	const state = StableEditorBottomScrollState.capture(viewport);
+	const state = ViewStableEditorBottomScrollState.capture(viewport);
 	viewport.setLineHeight(30);
 	state.restore(viewport);
 
@@ -146,7 +146,7 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 	viewport.layout({ width: 200, height: 60 });
 	viewport.scrollTo({ left: 0, top: 40 });
 
-	const state = StableEditorScrollState.capture(viewport, selections);
+	const state = ViewStableEditorScrollState.capture(viewport, selections);
 	selections.setSelections(SelectionSet.single(
 		Selection.fromPositions(new Position((4) + 1, (0) + 1)),
 	));

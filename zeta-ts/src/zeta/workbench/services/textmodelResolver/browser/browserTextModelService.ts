@@ -78,7 +78,7 @@ export class BrowserTextModelService implements ITextModelResourceService {
 			model,
 			dirtyEmitter,
 			externalChangeEmitter,
-			modelChangeListener: model.onDidChange(() => this.refreshDirty(entry)),
+			modelChangeListener: model.onDidChangeContent(() => this.refreshDirty(entry)),
 			fileChangeListener: this.resourceStore.onDidChange(event => this.acceptFileChange(entry, event)),
 			savedText: model.getText(),
 			revision: content.revision,

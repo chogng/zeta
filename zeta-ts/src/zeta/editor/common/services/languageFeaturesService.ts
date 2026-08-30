@@ -25,10 +25,10 @@ import type { LanguageParameterHintsProvider } from '../../contrib/parameterHint
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
 import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';
 import type { LanguageSemanticTokensProvider } from '../../contrib/semanticTokens/common/semanticTokens.js';
-import type { ILanguageFeaturesService, LanguageProviderBatch, LanguageProviderBatchRegistration } from './languageFeatures.js';
+import type { IEditorLanguageFeaturesService, LanguageProviderBatch, LanguageProviderBatchRegistration } from './languageFeatures.js';
 
 /** Owns the Editor provider registries without knowing their Workbench implementations. */
-export class LanguageFeaturesService extends Disposable implements ILanguageFeaturesService {
+export class EditorLanguageFeaturesService extends Disposable implements IEditorLanguageFeaturesService {
 	public readonly syntaxProvider: SyntaxProviderRegistry;
 	public readonly completionProvider: LanguageCompletionProviderRegistry;
 	public readonly codeActionProvider: OwnedLanguageFeatureProviderRegistry<LanguageCodeActionProvider>;

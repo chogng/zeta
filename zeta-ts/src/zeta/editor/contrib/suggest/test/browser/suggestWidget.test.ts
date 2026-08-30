@@ -13,7 +13,7 @@ import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { SuggestController } from "../../browser/suggestController.js";
+import { EditorSuggestController } from "../../browser/suggestController.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -53,7 +53,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	});
 	viewport.layout({ width: 300, height: 40 });
 	using input = new EditorView(viewport, selections);
-	using suggest = new SuggestController(input, selections, service, session, "plaintext");
+	using suggest = new EditorSuggestController(input, selections, service, session, "plaintext");
 	input.focus();
 	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword, "declaration"),
@@ -237,8 +237,8 @@ test("Completion widget validates ownership and clears its active descendant on 
 		selectionController: selections,
 	});
 	using input = new EditorView(viewport, selections);
-	assert.throws(() => new SuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
-	using suggest = new SuggestController(input, selections, service, session, "plaintext");
+	assert.throws(() => new EditorSuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
+	using suggest = new EditorSuggestController(input, selections, service, session, "plaintext");
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
 	suggest.dispose();
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
@@ -309,7 +309,7 @@ interface CompletionFixture extends Disposable {
 	readonly session: LanguageCompletionSessionController;
 	readonly viewport: InstanceType<typeof View>;
 	readonly input: InstanceType<typeof EditorView>;
-	readonly suggest: SuggestController;
+	readonly suggest: EditorSuggestController;
 }
 
 function createFixture(text: string, sessionOptions: LanguageCompletionSessionOptions = {}): CompletionFixture {
@@ -328,7 +328,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const input = new EditorView(viewport, selections);
-	const suggest = new SuggestController(input, selections, service, session, "plaintext");
+	const suggest = new EditorSuggestController(input, selections, service, session, "plaintext");
 	input.focus();
 	return {
 		dom,

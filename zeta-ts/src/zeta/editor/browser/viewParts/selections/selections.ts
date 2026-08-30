@@ -8,7 +8,7 @@ import { type EditorRenderingContext, EditorViewContext } from "../../view/viewP
 import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects selection ranges and current-line state without owning selection state. */
-export class SelectionsOverlay extends EditorDynamicViewOverlay {
+export class EditorSelectionsOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;

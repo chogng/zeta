@@ -14,15 +14,15 @@ test("LineWidthIndex matches full scans across random transactions", () => {
 		(_, index) => `initial ${index}`,
 	).join("\n"));
 	const index = new LineWidthIndex(model, measurer);
-	using listener = model.onDidChange(change => {
+	using listener = model.onDidChangeContent(change => {
 		index.applyModelChange(change);
 	});
 
 	for (let iteration = 0; iteration < 400; iteration++) {
 		const action = random();
-		if (action < 0.08 && model.canUndo) {
+		if (action < 0.08 && model.canUndo()) {
 			model.undo();
-		} else if (action < 0.12 && model.canRedo) {
+		} else if (action < 0.12 && model.canRedo()) {
 			model.redo();
 		} else {
 			applyRandomTransaction(model, random);
@@ -71,7 +71,7 @@ test("LineWidthIndex restarts an incomplete scan after an edit", () => {
 			schedule: callback => scheduler.schedule(callback),
 		},
 	});
-	using listener = model.onDidChange(change => index.applyModelChange(change));
+	using listener = model.onDidChangeContent(change => index.applyModelChange(change));
 
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
@@ -165,7 +165,7 @@ function applyRandomTransaction(
 	model: TextModel,
 	random: () => number,
 ): void {
-	const length = model.createSnapshot().length;
+	const length = model.createVersionedSnapshot().length;
 	const edits = random() < 0.35 && length >= 4
 		? [
 			randomEdit(model, random, 0, Math.floor(length / 2)),

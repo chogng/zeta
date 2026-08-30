@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations, type EditorCursorNavigationResult } from "../../common/cursor/cursorMoveOperations.js";
+import { CursorNavigation, EditorCursorNavigationCommand, EditorCursorNavigationMode, type EditorCursorNavigationResult } from "../../common/cursor/cursorNavigation.js";
 import { Selection } from "../../common/core/selection.js";
 import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
@@ -135,7 +135,7 @@ test("Line, page, document, and multi-selection navigation remain explicit", () 
 		caret(0, 3),
 		caret(1, 1),
 	], 1);
-	const page = MoveOperations.navigate(model, selections, {
+	const page = CursorNavigation.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.PageDown,
 		mode: EditorCursorNavigationMode.Extend,
 		pageLineCount: 2,
@@ -173,23 +173,23 @@ test("Navigation coalesces exact duplicate results and validates requests", () =
 		caret(0, 1),
 		caret(0, 2),
 	], 1);
-	const result = MoveOperations.navigate(model, selections, {
+	const result = CursorNavigation.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.DocumentStart,
 		mode: EditorCursorNavigationMode.Move,
 	});
 
 	assert.deepEqual(result.selections, SelectionSet.single(caret(0, 0)));
-	assert.throws(() => MoveOperations.navigate(model, selections, {
+	assert.throws(() => CursorNavigation.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.PageDown,
 		mode: EditorCursorNavigationMode.Move,
 		pageLineCount: 0,
 	}), /pageLineCount/);
-	assert.throws(() => MoveOperations.navigate(model, selections, {
+	assert.throws(() => CursorNavigation.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.LineDown,
 		mode: EditorCursorNavigationMode.Move,
 		preferredColumns: [1],
 	}), /preferredColumns/);
-	assert.throws(() => MoveOperations.navigate(model, selections, {
+	assert.throws(() => CursorNavigation.navigate(model, selections, {
 		command: "unknown" as EditorCursorNavigationCommand,
 		mode: EditorCursorNavigationMode.Move,
 	}), /Unknown editor cursor navigation command/);
@@ -197,12 +197,12 @@ test("Navigation coalesces exact duplicate results and validates requests", () =
 
 test('Character navigation honors configured atomic tab stops in indentation', () => {
 	using model = new TextModel('        value');
-	const left = MoveOperations.navigate(model, SelectionSet.single(caret(0, 8)), {
+	const left = CursorNavigation.navigate(model, SelectionSet.single(caret(0, 8)), {
 		command: EditorCursorNavigationCommand.CharacterLeft,
 		mode: EditorCursorNavigationMode.Move,
 		atomicTabSize: 4,
 	});
-	const right = MoveOperations.navigate(model, SelectionSet.single(caret(0, 0)), {
+	const right = CursorNavigation.navigate(model, SelectionSet.single(caret(0, 0)), {
 		command: EditorCursorNavigationCommand.CharacterRight,
 		mode: EditorCursorNavigationMode.Move,
 		atomicTabSize: 4,
@@ -210,7 +210,7 @@ test('Character navigation honors configured atomic tab stops in indentation', (
 
 	assert.deepEqual(left.selections.primary, caret(0, 4));
 	assert.deepEqual(right.selections.primary, caret(0, 4));
-	assert.throws(() => MoveOperations.navigate(model, SelectionSet.single(caret(0, 0)), {
+	assert.throws(() => CursorNavigation.navigate(model, SelectionSet.single(caret(0, 0)), {
 		command: EditorCursorNavigationCommand.CharacterRight,
 		mode: EditorCursorNavigationMode.Move,
 		atomicTabSize: 0,
@@ -224,7 +224,7 @@ function navigate(
 	mode = EditorCursorNavigationMode.Move,
 	preferredColumns?: readonly number[],
 ): EditorCursorNavigationResult {
-	return MoveOperations.navigate(
+	return CursorNavigation.navigate(
 		model,
 		SelectionSet.single(selection),
 		{ command, mode, preferredColumns },

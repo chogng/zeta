@@ -3,12 +3,12 @@ import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { type View } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
-import { ZoneWidget } from "../../zoneWidget/browser/zoneWidget.js";
+import { EditorZoneWidget } from "../../zoneWidget/browser/zoneWidget.js";
 
 const DEFAULT_PEEK_HEIGHT_IN_LINES = 18;
 
 /** A preview surface anchored in reserved editor space. */
-export class EditorPeekViewWidget extends ZoneWidget {
+export class EditorPeekViewWidget extends EditorZoneWidget {
 	private body: HTMLDivElement | undefined;
 
 	constructor(viewport: View, private readonly initialPosition: Position, private readonly title = "Preview") {

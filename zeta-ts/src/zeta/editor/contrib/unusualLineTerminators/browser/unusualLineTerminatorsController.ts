@@ -13,7 +13,7 @@ export class UnusualLineTerminatorsController extends Disposable {
 	constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<void>) {
 		super();
 		if (decorations.textModel !== model) throw new TypeError("Stanza unusual line terminator dependencies must share a text model");
-		this._register(model.onDidChange(() => this.update()));
+		this._register(model.onDidChangeContent(() => this.update()));
 		this.update();
 	}
 

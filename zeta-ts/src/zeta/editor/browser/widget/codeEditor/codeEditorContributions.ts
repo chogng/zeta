@@ -51,7 +51,7 @@ export function getCodeEditorContributions(): readonly CodeEditorContributionDes
 }
 
 /** Owns one CodeEditorWidget's contribution instances and their staged creation. */
-export class CodeEditorContributions extends Disposable {
+export class WidgetContributionCollection extends Disposable {
 	private readonly instances = this._register(new DisposableMap<string, CodeEditorContribution>());
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
 	private readonly completedInstantiation = new Set<EditorContributionInstantiation>();

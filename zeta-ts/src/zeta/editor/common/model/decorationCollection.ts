@@ -62,7 +62,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 
 	constructor(private readonly model: TextModel) {
 		super();
-		this._register(model.onDidChange(() => this.acceptModelChange()));
+		this._register(model.onDidChangeContent(() => this.acceptModelChange()));
 		this._register(toDisposable(() => {
 			for (const entry of this.entries.values()) {
 				entry.trackedRange.dispose();

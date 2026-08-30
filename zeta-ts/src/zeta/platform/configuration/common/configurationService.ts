@@ -19,7 +19,7 @@ export interface IConfigurationKey<T> {
 export interface IConfigurationChangeEvent {
 	readonly keys: ReadonlySet<string>;
 
-	affectsConfiguration<T>(key: IConfigurationKey<T>): boolean;
+	affectsConfiguration<T>(key: IConfigurationKey<T>, overrides?: IConfigurationOverrides): boolean;
 }
 
 export interface IConfigurationOverrides {
@@ -91,7 +91,7 @@ export function isConfigurationOverrides(value: unknown): value is IConfiguratio
 export interface IConfigurationService {
 	readonly onDidChangeConfiguration: Event<IConfigurationChangeEvent>;
 
-	getValue<T>(key: IConfigurationKey<T>): T;
+	getValue<T>(key: IConfigurationKey<T>, overrides?: IConfigurationOverrides): T;
 	updateValue<T>(key: IConfigurationKey<T>, value: T): Promise<void>;
 	resetValue<T>(key: IConfigurationKey<T>): Promise<void>;
 	reload(): Promise<void>;

@@ -41,7 +41,7 @@ export const enum PartFingerprint {
 	OverflowingOverlayWidgets,
 	ScrollableElement,
 	TextArea,
-	ViewLines,
+	EditorViewLines,
 	Minimap,
 	StyledViewLinesGpu,
 }

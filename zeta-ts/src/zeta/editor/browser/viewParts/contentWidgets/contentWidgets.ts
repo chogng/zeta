@@ -37,7 +37,7 @@ interface InViewportRenderData {
 
 type RenderData = InViewportRenderData | OffViewportRenderData;
 
-export class ViewContentWidgets extends EditorViewPart {
+export class EditorContentWidgets extends EditorViewPart {
 	public readonly domNode: FastDomNode<HTMLDivElement>;
 	public readonly overflowingContentWidgetsDomNode: FastDomNode<HTMLDivElement>;
 	private readonly widgets = this._register(new DisposableMap<string, ContentWidget>());

@@ -11,7 +11,7 @@ import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type IEditorAriaOptions } from '../../editorBrowser.js';
 import { type View } from "../../view.js";
-import { type EditorViewTextUpdateEvent, type ViewController } from "../../view/viewController.js";
+import { type EditorViewTextUpdateEvent, type EditorViewInputController } from "../../view/viewController.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { createEditorClipboardCopyEvent, createClipboardPasteEvent, type IEditorClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
 
@@ -72,7 +72,7 @@ export interface EditContextOptions {
 	readonly characterBoundsProvider: (
 		modelOffset: number,
 	) => EditContextCharacterBounds | undefined;
-	readonly viewController: ViewController;
+	readonly viewController: EditorViewInputController;
 	readonly viewport: View;
 	readonly selectionController: CursorsController;
 	readonly accessibilityService?: IAccessibilityService;
@@ -98,7 +98,7 @@ export interface EditContextPosition {
  * browser. This is the same seam that lets VS Code provide native and
  * textarea edit contexts side by side.
  */
-export abstract class AbstractEditContext extends Disposable {
+export abstract class EditorInputContext extends Disposable {
 	abstract readonly domNode: HTMLElement;
 	abstract readonly textArea: HTMLTextAreaElement | undefined;
 	private readonly willCopyEmitter = this._register(new Emitter<IEditorClipboardCopyEvent>());
@@ -180,7 +180,7 @@ export abstract class AbstractEditContext extends Disposable {
 		this.willPasteEmitter.fire(createClipboardPasteEvent(browserEvent));
 	}
 
-	private routeBeforeInput(event: InputEvent, viewController: ViewController, compositionController: CompositionController): void {
+	private routeBeforeInput(event: InputEvent, viewController: EditorViewInputController, compositionController: CompositionController): void {
 		if (event.defaultPrevented || (event.isComposing && compositionController.composing)) return;
 		this.willBeforeInputEmitter.fire(event);
 		if (event.defaultPrevented) return;
@@ -244,7 +244,7 @@ export abstract class AbstractEditContext extends Disposable {
 		}
 	}
 
-	private routeTextUpdate(update: EditContextTextUpdate, viewController: ViewController, compositionController: CompositionController): void {
+	private routeTextUpdate(update: EditContextTextUpdate, viewController: EditorViewInputController, compositionController: CompositionController): void {
 		if (compositionController.composing) return;
 		if (update.updateRangeStart === update.updateRangeEnd && update.text.length === 0) return;
 		const event = makeTextUpdateEvent(update);
@@ -253,7 +253,7 @@ export abstract class AbstractEditContext extends Disposable {
 		viewController.applyTextUpdate(update);
 	}
 
-	private routeKeydown(event: KeyboardEvent, viewController: ViewController): void {
+	private routeKeydown(event: KeyboardEvent, viewController: EditorViewInputController): void {
 		if (event.defaultPrevented) return;
 		viewController.emitKeyDown(new StandardKeyboardEvent(event));
 		this.willKeydownEmitter.fire(event);
@@ -288,7 +288,7 @@ export abstract class AbstractEditContext extends Disposable {
 		if (viewController.hasExpandedSelections) return;
 		stopEvent(event);
 		// Tab is a keyboard command, not a browser text-input transaction. Keep it
-		// out of post-edit consumers such as SuggestController, matching VS Code's
+		// out of post-edit consumers such as EditorSuggestController, matching VS Code's
 		// command dispatch ordering.
 		viewController.insertTab();
 	}
@@ -334,14 +334,14 @@ interface ActiveComposition {
  */
 export class CompositionController extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<boolean>());
-	private readonly input: AbstractEditContext;
+	private readonly input: EditorInputContext;
 	private readonly initialReadOnly: boolean;
 	private activeComposition: ActiveComposition | undefined;
 
 	readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
 	constructor(
-		input: AbstractEditContext,
+		input: EditorInputContext,
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 	) {
@@ -375,7 +375,7 @@ export class CompositionController extends Disposable {
 		this._register(selectionController.onDidChange(() => {
 			this.finishInvalidComposition();
 		}));
-		this._register(viewport.textModel.onDidChange(() => {
+		this._register(viewport.textModel.onDidChangeContent(() => {
 			this.finishInvalidComposition();
 		}));
 		this._register(viewport.onDidChangeLayout(() => {

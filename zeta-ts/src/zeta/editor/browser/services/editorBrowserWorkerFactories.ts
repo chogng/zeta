@@ -4,7 +4,7 @@ import { type LanguageCompletionWorkerFactory } from '../../common/languages/com
 import { LanguageWorkerWireClient } from '../../common/languages/languageWorkerWire.js';
 import { type SyntaxWorkerFactory } from '../../common/languages/syntax/syntaxService.js';
 import { SyntaxModuleWorkerClient } from '../../common/languages/syntax/syntaxModuleWorkerClient.js';
-import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from './versionedEditorWorkerClient.js';
+import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from './editorWorkerService.js';
 import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
 
 /** Owns the browser Worker factories used by one Editor host. */

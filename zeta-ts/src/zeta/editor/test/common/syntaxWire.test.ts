@@ -84,13 +84,13 @@ test("Syntax wire rejects malformed lane DTOs in the client realm", async () => 
 	const pending = client.run({
 		requestId: 1,
 		lane: SYNTAX_TOKEN_LANE,
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 		payload: { languageId: "typescript" },
 	}, new AbortController().signal);
 	await turn();
 	serverPort.send({
 		protocol: "zeta.language-worker",
-		version: 4,
+		version: 5,
 		kind: "result",
 		requestId: 1,
 		result: {
@@ -154,15 +154,15 @@ test("Syntax wire falls back to full when the client missed the server result ba
 	const request = (requestId: number): LanguageWorkerRequest<SyntaxLane, SyntaxRequest> => ({
 		requestId,
 		lane: SYNTAX_TOKEN_LANE,
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 		payload: { languageId: "typescript" },
 	});
 	await client.run(request(1), signal);
 	client.settleResult(1, LanguageWorkerResultDisposition.Applied);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	clientPort.send({
 		protocol: "zeta.language-worker",
-		version: 4,
+		version: 5,
 		kind: "request",
 		requestId: 2,
 		lane: SYNTAX_TOKEN_LANE,

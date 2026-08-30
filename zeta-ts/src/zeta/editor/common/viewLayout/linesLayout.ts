@@ -1,6 +1,6 @@
 import * as strings from '../../../base/common/strings.js';
 import type { IEditorWhitespace, ILineHeightChangeAccessor, IPartialViewLinesViewportData, IViewWhitespaceViewportData, IWhitespaceChangeAccessor } from '../viewModel.js';
-import { CustomLineHeightData, LineHeightsManager } from './lineHeights.js';
+import { EditorCustomLineHeightData, LineHeightsManager } from './lineHeights.js';
 
 interface IPendingChange { id: string; newAfterLineNumber: number; newHeight: number }
 interface IPendingRemove { id: string }
@@ -55,7 +55,7 @@ export class LinesLayout {
 		defaultLineHeight: number,
 		private paddingTop: number,
 		private paddingBottom: number,
-		customLineHeightData: CustomLineHeightData[],
+		customLineHeightData: EditorCustomLineHeightData[],
 	) {
 		this.instanceId = strings.singleLetterHash(++LinesLayout.INSTANCE_COUNT);
 		this.lineHeightsManager = new LineHeightsManager(defaultLineHeight, customLineHeightData);
@@ -76,7 +76,7 @@ export class LinesLayout {
 	setDefaultLineHeight(lineHeight: number): void { this.lineHeightsManager.defaultLineHeight = lineHeight; }
 	setPadding(paddingTop: number, paddingBottom: number): void { this.paddingTop = paddingTop; this.paddingBottom = paddingBottom; }
 
-	onFlushed(lineCount: number, customLineHeightData: CustomLineHeightData[]): void {
+	onFlushed(lineCount: number, customLineHeightData: EditorCustomLineHeightData[]): void {
 		this.lineCount = lineCount;
 		this.lineHeightsManager = new LineHeightsManager(this.lineHeightsManager.defaultLineHeight, customLineHeightData);
 	}

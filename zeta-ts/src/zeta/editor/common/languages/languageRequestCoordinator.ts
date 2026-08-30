@@ -120,7 +120,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			this.dispose();
 			throw new TypeError("Language worker factory must be a function");
 		}
-		this._register(model.onDidChange(change => {
+		this._register(model.onDidChangeContent(change => {
 			this.cancelAll(LanguageRequestCancellationReason.ModelChanged);
 			this.synchronizeWorker(change);
 		}));
@@ -150,7 +150,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		this.cancelLane(lane, LanguageRequestCancellationReason.Superseded);
 
 		const requestId = this.nextRequestId++;
-		const snapshot = this.model.createSnapshot();
+		const snapshot = this.model.createVersionedSnapshot();
 		if (options.signal?.aborted) {
 			return cancelledOutcome(requestId, snapshot.version, {
 				reason: LanguageRequestCancellationReason.Caller,

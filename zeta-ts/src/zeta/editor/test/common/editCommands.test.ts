@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DeleteOperations } from "../../common/cursor/cursorDeleteOperations.js";
-import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
+import { SelectionSetDeleteOperations } from "../../common/cursor/selectionSetDeleteOperations.js";
+import { SelectionSetWordOperations } from '../../common/cursor/selectionSetWordOperations.js';
 import { TypeOperations } from "../../common/cursor/cursorTypeOperations.js";
 import { CursorsController } from "../../common/cursor/cursor.js";
 import { Selection } from "../../common/core/selection.js";
@@ -56,7 +56,7 @@ test("Backspace deletes graphemes and joins lines", () => {
 		SelectionSet.single(caret(0, 3)),
 	);
 
-	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
+	controller.execute(SelectionSetDeleteOperations.deleteLeft(model, controller.selections));
 	assert.deepEqual({
 		text: model.getText(),
 		selection: controller.selections.primary,
@@ -66,7 +66,7 @@ test("Backspace deletes graphemes and joins lines", () => {
 	});
 
 	controller.setSelections(SelectionSet.single(caret(1, 0)));
-	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
+	controller.execute(SelectionSetDeleteOperations.deleteLeft(model, controller.selections));
 	assert.deepEqual({
 		text: model.getText(),
 		selection: controller.selections.primary,
@@ -83,7 +83,7 @@ test("Forward Delete removes graphemes and line breaks", () => {
 		SelectionSet.single(caret(0, 1)),
 	);
 
-	controller.execute(DeleteOperations.deleteRight(
+	controller.execute(SelectionSetDeleteOperations.deleteRight(
 		model,
 		controller.selections,
 	));
@@ -96,7 +96,7 @@ test("Forward Delete removes graphemes and line breaks", () => {
 	});
 
 	controller.setSelections(SelectionSet.single(caret(0, 2)));
-	controller.execute(DeleteOperations.deleteRight(
+	controller.execute(SelectionSetDeleteOperations.deleteRight(
 		model,
 		controller.selections,
 	));
@@ -113,15 +113,15 @@ test("Word deletion uses shared editor word boundaries and coalesces by directio
 	using model = new TextModel("alpha beta gamma");
 	using controller = new CursorsController(model, SelectionSet.single(caret(0, 10)));
 
-	controller.execute(WordOperations.deleteWordLeft(model, controller.selections));
-	controller.execute(WordOperations.deleteWordLeft(model, controller.selections));
+	controller.execute(SelectionSetWordOperations.deleteWordLeft(model, controller.selections));
+	controller.execute(SelectionSetWordOperations.deleteWordLeft(model, controller.selections));
 	assert.equal(model.getText(), " gamma");
 	assert.deepEqual(controller.selections.primary, caret(0, 0));
 	controller.undo();
 	assert.equal(model.getText(), "alpha beta gamma");
 
 	controller.setSelections(SelectionSet.single(caret(0, 0)));
-	controller.execute(WordOperations.deleteWordRight(model, controller.selections));
+	controller.execute(SelectionSetWordOperations.deleteWordRight(model, controller.selections));
 	assert.equal(model.getText(), "beta gamma");
 });
 
@@ -132,7 +132,7 @@ test("Line-boundary deletion is isolated, multi-cursor aware, and preserves sele
 		caret(1, 1),
 	], 1));
 
-	controller.execute(DeleteOperations.deleteToBeginningOfLine(model, controller.selections));
+	controller.execute(SelectionSetDeleteOperations.deleteToBeginningOfLine(model, controller.selections));
 	assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
 		text: "ha\neta",
 		selections: SelectionSet.withPrimary([caret(0, 0), caret(1, 0)], 1),
@@ -141,7 +141,7 @@ test("Line-boundary deletion is isolated, multi-cursor aware, and preserves sele
 	assert.equal(model.getText(), "alpha\nbeta");
 
 	controller.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1))));
-	controller.execute(DeleteOperations.deleteToEndOfLine(model, controller.selections));
+	controller.execute(SelectionSetDeleteOperations.deleteToEndOfLine(model, controller.selections));
 	assert.deepEqual({ text: model.getText(), selection: controller.selections.primary }, {
 		text: "ata",
 		selection: caret(0, 1),
@@ -177,10 +177,10 @@ test("Delete boundaries are no-ops and overlapping selections fail early", () =>
 	);
 
 	const version = model.version;
-	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
+	controller.execute(SelectionSetDeleteOperations.deleteLeft(model, controller.selections));
 	assert.equal(model.version, version);
 	controller.setSelections(SelectionSet.single(caret(0, 3)));
-	controller.execute(DeleteOperations.deleteRight(
+	controller.execute(SelectionSetDeleteOperations.deleteRight(
 		model,
 		controller.selections,
 	));
@@ -205,7 +205,7 @@ test("Adjacent deletions merge converged carets while history restores sources",
 	], 1);
 	using controller = new CursorsController(model, initial);
 
-	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
+	controller.execute(SelectionSetDeleteOperations.deleteLeft(model, controller.selections));
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.selections,
@@ -273,7 +273,7 @@ test("Cut preserves collapsed cursors and restores history", () => {
 	], 0);
 	using controller = new CursorsController(model, initial);
 
-	controller.execute(DeleteOperations.cut(model, controller.selections, controller.selections.selections.map(selection => selection)));
+	controller.execute(SelectionSetDeleteOperations.cut(model, controller.selections, controller.selections.selections.map(selection => selection)));
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.selections,

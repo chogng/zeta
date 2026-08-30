@@ -9,16 +9,16 @@ import { type TextModel } from '../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../common/services/resolvedSemanticTokens.js';
 import { type BracketColorizationSource } from '../viewParts/viewLines/viewLine.js';
 import { type DecorationSource } from '../viewParts/decorations/decorations.js';
-import { BlockDecorations } from '../viewParts/blockDecorations/blockDecorations.js';
-import { DecorationsOverlay } from '../viewParts/decorations/decorations.js';
-import { CurrentLineHighlightOverlay } from '../viewParts/currentLineHighlight/currentLineHighlight.js';
+import { EditorBlockDecorations } from '../viewParts/blockDecorations/blockDecorations.js';
+import { EditorDecorationsOverlay } from '../viewParts/decorations/decorations.js';
+import { EditorCurrentLineHighlightOverlay } from '../viewParts/currentLineHighlight/currentLineHighlight.js';
 import { StyledGpuMarkOverlay } from '../viewParts/gpuMark/styledGpuMark.js';
-import { IndentGuidesOverlay } from '../viewParts/indentGuides/indentGuides.js';
-import { LinesDecorationsOverlay } from '../viewParts/linesDecorations/linesDecorations.js';
-import { MarginViewLineDecorationsOverlay } from '../viewParts/marginDecorations/marginDecorations.js';
-import { SelectionsOverlay } from '../viewParts/selections/selections.js';
-import { ViewCursors } from '../viewParts/viewCursors/viewCursors.js';
-import { WhitespaceOverlay, type WhitespaceRenderingMode } from '../viewParts/whitespace/whitespace.js';
+import { EditorIndentGuidesOverlay } from '../viewParts/indentGuides/indentGuides.js';
+import { EditorLinesDecorationsOverlay } from '../viewParts/linesDecorations/linesDecorations.js';
+import { EditorMarginLineDecorationsOverlay } from '../viewParts/marginDecorations/marginDecorations.js';
+import { EditorSelectionsOverlay } from '../viewParts/selections/selections.js';
+import { EditorViewCursors } from '../viewParts/viewCursors/viewCursors.js';
+import { EditorWhitespaceOverlay, type WhitespaceRenderingMode } from '../viewParts/whitespace/whitespace.js';
 import { EditorDynamicViewOverlay } from './editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from './viewPart.js';
 
@@ -44,44 +44,44 @@ export interface EditorOverlayCoordinatorOptions {
 /** Coordinates row and block overlays while keeping their concrete projections independent. */
 export class EditorOverlayCoordinator extends Disposable {
 	readonly domNodes: readonly HTMLElement[];
-	readonly blockDecorations: BlockDecorations;
-	readonly decorations: DecorationsOverlay;
+	readonly blockDecorations: EditorBlockDecorations;
+	readonly decorations: EditorDecorationsOverlay;
 	readonly onDidChangeDecorations: Event<void>;
 
 	private readonly parts: EditorDynamicViewOverlay[] = [];
-	private readonly selections: SelectionsOverlay;
-	private readonly currentLineHighlight: CurrentLineHighlightOverlay;
-	private readonly indentGuides: IndentGuidesOverlay;
-	private readonly viewCursors: ViewCursors;
-	private readonly whitespace: WhitespaceOverlay;
+	private readonly selections: EditorSelectionsOverlay;
+	private readonly currentLineHighlight: EditorCurrentLineHighlightOverlay;
+	private readonly indentGuides: EditorIndentGuidesOverlay;
+	private readonly viewCursors: EditorViewCursors;
+	private readonly whitespace: EditorWhitespaceOverlay;
 
 	constructor(context: EditorViewContext, options: EditorOverlayCoordinatorOptions) {
 		super();
-		this.decorations = this.register(new DecorationsOverlay(
+		this.decorations = this.register(new EditorDecorationsOverlay(
 			context,
 			options.contentElement,
 			options.model,
 			options.decorationSources,
 		));
 		this.onDidChangeDecorations = this.decorations.onDidChange;
-		const linesDecorations = this.register(new LinesDecorationsOverlay(context, options.contentElement, this.decorations, options.decorationSources));
-		this.blockDecorations = this.register(new BlockDecorations(
+		const linesDecorations = this.register(new EditorLinesDecorationsOverlay(context, options.contentElement, this.decorations, options.decorationSources));
+		this.blockDecorations = this.register(new EditorBlockDecorations(
 			context,
 			this.decorations,
 			options.contentElement,
 		));
-		const marginDecorations = this.register(new MarginViewLineDecorationsOverlay(context, options.contentElement, this.decorations));
-		this.indentGuides = this.register(new IndentGuidesOverlay(context, {
+		const marginDecorations = this.register(new EditorMarginLineDecorationsOverlay(context, options.contentElement, this.decorations));
+		this.indentGuides = this.register(new EditorIndentGuidesOverlay(context, {
 			host: options.contentElement,
 			guides: options.guides,
 			tabSize: options.indentationTabSize,
 			bracketColorizationSource: options.bracketColorizationSource,
 			selectionController: options.selectionController,
 		}));
-		this.whitespace = this.register(new WhitespaceOverlay(context, options.contentElement, options.model, options.selectionController, options.renderWhitespace));
-		this.currentLineHighlight = this.register(new CurrentLineHighlightOverlay(context, options.contentElement, options.selectionController));
-		this.selections = this.register(new SelectionsOverlay(context, options.contentElement, options.selectionController));
-		this.viewCursors = this.register(new ViewCursors(context, {
+		this.whitespace = this.register(new EditorWhitespaceOverlay(context, options.contentElement, options.model, options.selectionController, options.renderWhitespace));
+		this.currentLineHighlight = this.register(new EditorCurrentLineHighlightOverlay(context, options.contentElement, options.selectionController));
+		this.selections = this.register(new EditorSelectionsOverlay(context, options.contentElement, options.selectionController));
+		this.viewCursors = this.register(new EditorViewCursors(context, {
 			host: options.contentElement,
 			style: options.cursorStyle,
 			blinking: options.cursorBlinking,

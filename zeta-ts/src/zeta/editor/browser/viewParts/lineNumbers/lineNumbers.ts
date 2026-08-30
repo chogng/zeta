@@ -14,7 +14,7 @@ interface LineNumbersOverlayOptions {
 }
 
 /** Projects line numbers into virtual rows. */
-export class LineNumbersOverlay extends EditorViewPart {
+export class EditorLineNumbersOverlay extends EditorViewPart {
 	public static readonly CLASS_NAME = 'line-numbers';
 	public readonly domNode: HTMLElement;
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
@@ -39,7 +39,7 @@ export class LineNumbersOverlay extends EditorViewPart {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
 			const number = row.firstElementChild as HTMLElement | null ?? h(row.ownerDocument, "span");
-			number.className = LineNumbersOverlay.CLASS_NAME;
+			number.className = EditorLineNumbersOverlay.CLASS_NAME;
 			number.classList.toggle("active", visualLine.logicalLineIndex === activeLineIndex);
 			number.textContent = visualLine.firstForLogicalLine
 				? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex)

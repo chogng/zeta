@@ -2,7 +2,7 @@ import './blockDecorations.css';
 import { h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { DecorationsOverlay } from '../decorations/decorations.js';
+import { EditorDecorationsOverlay } from '../decorations/decorations.js';
 import { type ResolvedDecoration } from '../decorations/decorations.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
@@ -10,14 +10,14 @@ import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 
-export class BlockDecorations extends EditorDynamicViewOverlay {
+export class EditorBlockDecorations extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLDivElement;
 
 	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly decorations: DecorationsOverlay;
+	private readonly decorations: EditorDecorationsOverlay;
 	private readonly blocks: FastDomNode<HTMLDivElement>[] = [];
 
-	constructor(context: EditorViewContext, decorations: DecorationsOverlay, host: HTMLElement) {
+	constructor(context: EditorViewContext, decorations: EditorDecorationsOverlay, host: HTMLElement) {
 		super(context);
 
 		this.decorations = decorations;

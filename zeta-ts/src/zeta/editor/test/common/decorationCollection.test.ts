@@ -113,7 +113,7 @@ test("TextDecorationCollection exposes tracked ranges before change listeners fi
 	using model = new TextModel("abc");
 	let decorations: TextDecorationCollection<string>;
 	let observedRange: Range | undefined;
-	using earlyListener = model.onDidChange(() => {
+	using earlyListener = model.onDidChangeContent(() => {
 		observedRange = decorations.decorations[0]?.range;
 	});
 	decorations = new TextDecorationCollection<string>(model);

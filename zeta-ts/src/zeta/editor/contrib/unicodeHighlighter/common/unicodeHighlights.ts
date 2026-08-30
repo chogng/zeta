@@ -5,5 +5,5 @@ export type { UnicodeHighlight, UnicodeHighlightKind } from "../../../common/ser
 
 /** Finds editor-dangerous invisible, bidi-control, and likely confusable characters. */
 export function findUnicodeHighlights(model: TextModel): readonly UnicodeHighlight[] {
-	return computeUnicodeHighlights(model.createSnapshot());
+	return computeUnicodeHighlights(model.createVersionedSnapshot());
 }

@@ -22,7 +22,7 @@ export function selectAll(context: CoreTextEditorCommandContext): void {
 	if (context.model !== context.viewport.textModel || context.model !== context.selections.textModel) {
 		throw new TypeError("Editor core command dependencies must share one text model");
 	}
-	const end = context.model.positionAt(context.model.createSnapshot().length);
+	const end = context.model.positionAt(context.model.createVersionedSnapshot().length);
 	context.selections.setSelections(SelectionSet.single(Selection.fromPositions(context.model.positionAt(0), end)));
 	context.viewport.revealPosition(end);
 }

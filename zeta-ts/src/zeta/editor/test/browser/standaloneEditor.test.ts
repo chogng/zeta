@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { EditorLanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
@@ -31,6 +31,11 @@ class TestWorker extends browserEnvironment.window.EventTarget {
 	postMessage(): void {}
 	terminate(): void { terminatedWorkerCount += 1; }
 }
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -39,6 +44,7 @@ for (const [name, value] of Object.entries({
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
+	ResizeObserver: TestResizeObserver,
 	Worker: TestWorker,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
@@ -48,7 +54,7 @@ test.after(() => browserEnvironment.window.close());
 
 test("standalone service collection honors explicit first-scope overrides", () => {
 	const languageConfigurations = new ComposableLanguageConfigurationService();
-	const languages = new LanguageFeaturesService(languageConfigurations);
+	const languages = new EditorLanguageFeaturesService(languageConfigurations);
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
 	assert.equal(services.themeService.getColorTheme(), lightColorTheme);
@@ -133,15 +139,16 @@ test('standalone languages API replaces provider batches atomically', () => {
 
 test("standalone languages API feeds the shared editor registries", async () => {
 	stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
-	using configuration = stanza.languages.registerLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
-	using provider = stanza.languages.registerLanguageHoverProvider({
-		languageIds: ['stanza-public-test'],
+	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
+	using provider = stanza.languages.registerHoverProvider('stanza-public-test', {
 		provideHover: () => ({ contents: ['Public hover'] }),
 	});
 	const services = StandaloneServices.get();
 	assert.equal(services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }), 'stanza-public-test');
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments.lineComment, '//');
 	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));
+	assert.equal(model instanceof stanza.TextModel, true);
+	if (!(model instanceof stanza.TextModel)) throw new Error('Expected the standalone model implementation');
 	using hover = new LanguageHoverService(model, services.languageFeaturesService.hoverProvider);
 	assert.deepEqual(await hover.provideHover('stanza-public-test', new stanza.Position(1, 2)), { contents: ['Public hover'] });
 });
@@ -151,9 +158,8 @@ test("standalone completion providers execute in a live editor", async () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let requests = 0;
 	stanza.languages.register({ id: "stanza-completion-test" });
-	using provider = stanza.languages.registerCompletionProvider({
+	using provider = stanza.languages.registerCompletionItemProvider('stanza-completion-test', {
 		id: "standalone.test",
-		languageIds: ["stanza-completion-test"],
 		provideCompletions: request => {
 			requests += 1;
 			assert.equal(request.context.kind, stanza.languages.LanguageCompletionTriggerKind.Invoke);
@@ -214,19 +220,22 @@ test("standalone editors share caller-owned models and dispose independently", (
 	const dom = new JSDOM("<!doctype html><body><main></main><aside></aside></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = stanza.editor.createModel("shared", "plaintext", URI.parse("inmemory://stanza/shared.txt"));
+	const createdEditors: unknown[] = [];
+	using listener = stanza.editor.onDidCreateEditor(editor => createdEditors.push(editor));
 	const first = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model });
 	const second = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("aside")!, { model });
 
+	assert.deepEqual(createdEditors, [first, second]);
 	assert.equal(stanza.editor.getEditors().includes(first), true);
 	assert.equal(stanza.editor.getEditors().includes(second), true);
 	first.setValue("shared model");
 	assert.equal(second.getValue(), "shared model");
 	first.dispose();
-	assert.equal(model.getText(), "shared model");
+	assert.equal(model.getValue(), "shared model");
 	assert.equal(stanza.editor.getEditors().includes(first), false);
 
 	second.dispose();
-	assert.equal(model.getText(), "shared model");
+	assert.equal(model.getValue(), "shared model");
 	model.dispose();
 	dom.window.close();
 });
@@ -242,7 +251,7 @@ test("standalone editor owns only the implicit model it creates", () => {
 	const model = editor.getModel();
 
 	editor.dispose();
-	assert.equal(model.isDisposed, true);
+	assert.equal(model.isDisposed(), true);
 	assert.equal(createdWorkerCount, terminatedWorkerCount);
 	assert.equal(stanza.editor.getModel(URI.parse("inmemory://stanza/owned.txt")), null);
 	dom.window.close();
@@ -258,7 +267,7 @@ test("standalone editor rejects unregistered models and conflicting model option
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
 	registered.dispose();
 	const lateConfigurations = new ComposableLanguageConfigurationService();
-	const lateOverride = new LanguageFeaturesService(lateConfigurations);
+	const lateOverride = new EditorLanguageFeaturesService(lateConfigurations);
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();
 	lateConfigurations.dispose();

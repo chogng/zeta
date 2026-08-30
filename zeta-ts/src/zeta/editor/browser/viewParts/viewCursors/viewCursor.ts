@@ -65,7 +65,7 @@ interface DomCaretGeometry extends EditorVisiblePosition {
 }
 
 /** Owns one retained caret, its position, rendering data, and DOM writes. */
-export class ViewCursor extends AbstractDisposable {
+export class EditorViewCursor extends AbstractDisposable {
 	private readonly fastDomNode: FastDomNode<HTMLDivElement>;
 	private isVisible = true;
 	private position = new Position((0) + 1, (0) + 1);

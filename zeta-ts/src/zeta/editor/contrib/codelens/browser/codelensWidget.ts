@@ -9,7 +9,7 @@ import { type LanguageCodeLensItem } from './codelens.js';
 export type ExecuteCodeLensCommand = (command: LanguageCodeLensCommand) => void;
 
 /** Owns the stable DOM and interactions for one line of code lenses. */
-export class CodeLensWidget extends Disposable {
+export class EditorCodeLensWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private items: readonly LanguageCodeLensItem[];
 	private currentCommands: readonly LanguageCodeLensCommand[] = [];

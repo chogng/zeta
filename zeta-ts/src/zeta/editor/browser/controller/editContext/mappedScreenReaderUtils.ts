@@ -39,7 +39,7 @@ interface IPagedScreenReaderStrategy<T> {
 export class MappedScreenReaderStrategy implements IPagedScreenReaderStrategy<MappedScreenReaderContentState> {
 	fromEditorSelection(model: TextModel, selection: Selection, linesPerPage: number, trimLongText: boolean): MappedScreenReaderContentState {
 		const pageSize = normalizePageSize(linesPerPage);
-		const snapshot = model.createSnapshot();
+		const snapshot = model.createVersionedSnapshot();
 		const selectionStart = model.offsetAt(selection.getStartPosition());
 		const selectionEnd = model.offsetAt(selection.getEndPosition());
 		const startPage = Math.floor((selection.startLineNumber - 1) / pageSize);

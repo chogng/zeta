@@ -4,13 +4,13 @@ import { URI } from "../../../base/common/uri.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
-import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { EditorLanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageNavigationService } from '../../contrib/gotoSymbol/common/languageNavigation.js';
 
 test("language navigation collects provider results with source resource identity and removes duplicates", async () => {
 	using configurations = new ComposableLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new EditorLanguageFeaturesService(configurations);
 	using model = new TextModel("const answer = value;");
 	const source = URI.file("C:\\project\\main.ts");
 	const target = URI.file("C:\\project\\value.ts");
@@ -40,7 +40,7 @@ test("language navigation collects provider results with source resource identit
 
 test("language navigation exposes declaration, implementation, type definition, and references independently", async () => {
 	using configurations = new ComposableLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new EditorLanguageFeaturesService(configurations);
 	using model = new TextModel("value");
 	const source = URI.file("C:\\project\\main.ts");
 	const location = { resource: source, range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)) };
@@ -64,7 +64,7 @@ test("language navigation exposes declaration, implementation, type definition, 
 
 test("language navigation discards results after the source model changes", async () => {
 	using configurations = new ComposableLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new EditorLanguageFeaturesService(configurations);
 	using model = new TextModel("value");
 	const source = URI.file("C:\\project\\main.ts");
 	const pending = deferred<readonly { readonly resource: URI; readonly range: Range }[]>();
@@ -85,7 +85,7 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 	return { promise, resolve };
 }
 
-function createNavigationService(languages: LanguageFeaturesService, model: TextModel, resource: URI): LanguageNavigationService {
+function createNavigationService(languages: EditorLanguageFeaturesService, model: TextModel, resource: URI): LanguageNavigationService {
 	return new LanguageNavigationService(model, resource, {
 		definitions: languages.definitionProvider,
 		declarations: languages.declarationProvider,

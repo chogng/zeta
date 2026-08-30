@@ -4,7 +4,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
-import { type IVersionedEditorWorkerClient } from "../../../browser/services/versionedEditorWorkerClient.js";
+import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { DEFAULT_WORD_REGEXP } from "../../../common/core/wordHelper.js";
 import { Range } from '../../../common/core/range.js';
 

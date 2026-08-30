@@ -5,7 +5,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type View } from "../../../browser/view.js";
 
 /** Implements editor-local middle-button panning without entering pointer selection mode. */
-export class MiddleScrollController extends Disposable {
+export class PointerMiddleScrollController extends Disposable {
 	private active: { readonly pointerId: number; readonly x: number; readonly y: number; readonly left: number; readonly top: number } | undefined;
 
 	constructor(private readonly viewport: View) {
@@ -34,6 +34,6 @@ registerTextEditorCapabilityContribution({
 	id: "editor.contrib.middleScroll",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new MiddleScrollController(context.viewport));
+		context.register(new PointerMiddleScrollController(context.viewport));
 	},
 });

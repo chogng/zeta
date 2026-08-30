@@ -55,22 +55,6 @@ export class TypeWithoutInterceptorsOperation {
 		);
 	}
 
-	public static normalizeSelectionOffsets(selections: readonly TextSelectionOffsets[], primaryIndex: number): { readonly selections: readonly TextSelectionOffsets[]; readonly primaryIndex: number } {
-		const normalized: TextSelectionOffsets[] = [];
-		const sourceToNormalized: number[] = [];
-		for (const selection of selections) {
-			let targetIndex = normalized.findIndex(candidate => candidate.anchorOffset === selection.anchorOffset && candidate.activeOffset === selection.activeOffset);
-			if (targetIndex < 0) {
-				targetIndex = normalized.length;
-				normalized.push(selection);
-			}
-			sourceToNormalized.push(targetIndex);
-		}
-		return {
-			selections: Object.freeze(normalized),
-			primaryIndex: sourceToNormalized[primaryIndex]!,
-		};
-	}
 }
 
 export class AutoClosingOvertypeOperation {
@@ -78,11 +62,15 @@ export class AutoClosingOvertypeOperation {
 		if (typeof text !== 'string') throw new TypeError('Overtype text must be a string');
 		const normalized = normalizeTextLineEndings(text);
 		const graphemeCount = normalized.includes('\n') ? 0 : getTextGraphemeBoundaries(normalized).length - 1;
+		return this._runAutoClosingOvertype(model, selections, normalized, graphemeCount);
+	}
+
+	private static _runAutoClosingOvertype(model: TextModel, selections: SelectionSet, text: string, graphemeCount: number): EditorEditCommand {
 		return TypeWithoutInterceptorsOperation.getEdits(model, selections, selections.selections.map(selection => {
 			const range = selection.isEmpty() && graphemeCount > 0
 				? Range.fromPositions(selection.getPosition(), advancePositionInLine(model, selection.getPosition(), graphemeCount))
 				: selection;
-			return { range, text: normalized, anchorOffsetInText: normalized.length, activeOffsetInText: normalized.length };
+			return { range, text, anchorOffsetInText: text.length, activeOffsetInText: text.length };
 		}), EditorCommandHistoryMode.CoalesceTyping);
 	}
 }
@@ -101,12 +89,29 @@ function buildSelectionEditCommand(model: TextModel, selections: SelectionSet, r
 		if (item.startOffset !== item.endOffset || item.text.length > 0) edits.push({ range: item.range, text: item.text });
 		cumulativeDelta += item.text.length - (item.endOffset - item.startOffset);
 	}
-	const normalizedSelections = TypeWithoutInterceptorsOperation.normalizeSelectionOffsets(selectionsAfter, selections.primaryIndex);
+	const normalizedSelections = normalizeSelectionOffsets(selectionsAfter, selections.primaryIndex);
 	return {
 		edits: Object.freeze(edits),
 		selectionsAfter: normalizedSelections.selections,
 		primarySelectionIndex: normalizedSelections.primaryIndex,
 		historyMode,
+	};
+}
+
+export function normalizeSelectionOffsets(selections: readonly TextSelectionOffsets[], primaryIndex: number): { readonly selections: readonly TextSelectionOffsets[]; readonly primaryIndex: number } {
+	const normalized: TextSelectionOffsets[] = [];
+	const sourceToNormalized: number[] = [];
+	for (const selection of selections) {
+		let targetIndex = normalized.findIndex(candidate => candidate.anchorOffset === selection.anchorOffset && candidate.activeOffset === selection.activeOffset);
+		if (targetIndex < 0) {
+			targetIndex = normalized.length;
+			normalized.push(selection);
+		}
+		sourceToNormalized.push(targetIndex);
+	}
+	return {
+		selections: Object.freeze(normalized),
+		primaryIndex: sourceToNormalized[primaryIndex]!,
 	};
 }
 
@@ -124,7 +129,7 @@ function validateNonOverlapping(replacements: readonly SelectionReplacement[]): 
 function advancePositionInLine(model: TextModel, position: Position, count: number): Position {
 	let current = position;
 	for (let index = 0; index < count; index += 1) {
-		const next = MoveOperations.rightPosition(model, current);
+		const next = MoveOperations.rightPosition(model, current.lineNumber, current.column);
 		if (next.lineNumber !== position.lineNumber) break;
 		current = next;
 	}

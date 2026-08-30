@@ -822,7 +822,7 @@ test("Model edits refresh visible rows and clamp a shrinking document", () => {
 	assert.equal(lineText(line20).textContent, "changed line");
 	assert.equal(viewport.viewportLayout.modelVersion, 2);
 
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(snapshot.length)),
 		text: "first\nsecond",
@@ -1711,7 +1711,7 @@ test('View preserves focused overflow content widgets off screen and suppresses 
 	dom.window.close();
 });
 
-test('View projects configured whitespace through WhitespaceOverlay', () => {
+test('View projects configured whitespace through EditorWhitespaceOverlay', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a b\t');

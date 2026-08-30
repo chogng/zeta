@@ -2,14 +2,14 @@ import "./media/diffEditorBreadcrumbs.css";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LineDiffKind, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 import { type DiffModel } from "../../../common/diff/diffModel.js";
-import { type DiffEditorWidget } from "../../../browser/widget/diffEditor/diffEditorWidget.js";
+import { type EditorDiffWidget } from "../../../browser/widget/diffEditor/diffEditorWidget.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Adds compact changed-hunk navigation to the Stanza diff editor without touching diff computation. */
 export class DiffEditorBreadcrumbsController extends Disposable {
 	private readonly element: HTMLElement;
 
-	constructor(private readonly editor: DiffEditorWidget, private readonly model: DiffModel) {
+	constructor(private readonly editor: EditorDiffWidget, private readonly model: DiffModel) {
 		super();
 		const document = editor.element.ownerDocument;
 		this.element = h(document, "nav");

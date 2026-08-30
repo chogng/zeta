@@ -5,7 +5,7 @@ import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger 
 import { type TextModelChange } from '../core/textChange.js';
 import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewZoneLayout, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
 import { EditorViewportLinesLayout, type EditorViewportVerticalPadding } from './editorViewportLinesLayout.js';
-import { type CustomLineHeightData } from './lineHeights.js';
+import { type EditorCustomLineHeightData } from './lineHeights.js';
 
 export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition, EditorViewportLineSource, EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
 export type { EditorViewportVerticalPadding } from './editorViewportLinesLayout.js';
@@ -31,7 +31,7 @@ export enum EditorViewportChangeReason {
 	ContentWidth = 'contentWidth',
 	LineHeight = 'lineHeight',
 	Scroll = 'scroll',
-	ViewZones = 'viewZones',
+	EditorViewZones = 'viewZones',
 }
 
 export interface EditorViewportChange {
@@ -45,7 +45,7 @@ export interface EditorViewportOptions {
 	readonly overscanLineCount?: number;
 	readonly lineSource?: EditorViewportLineSource;
 	readonly padding?: EditorViewportVerticalPadding;
-	readonly customLineHeightData?: readonly CustomLineHeightData[];
+	readonly customLineHeightData?: readonly EditorCustomLineHeightData[];
 }
 
 /**
@@ -55,7 +55,7 @@ export interface EditorViewportOptions {
  * `EditorViewportLinesLayout` owns line heights, padding, and visible/render
  * line projection for Zeta's immutable viewport snapshots.
  */
-export class ViewLayout extends Disposable {
+export class EditorViewportLayoutManager extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<EditorViewportChange>());
 	private readonly lineSource: EditorViewportLineSource;
 	private readonly linesLayout: EditorViewportLinesLayout;
@@ -83,7 +83,7 @@ export class ViewLayout extends Disposable {
 			options.customLineHeightData,
 		);
 		this.currentLayout = this.createLayout();
-		this._register(model.onDidChange(change => this.publish(EditorViewportChangeReason.Model, change)));
+		this._register(model.onDidChangeContent(change => this.publish(EditorViewportChangeReason.Model, change)));
 		if (options.lineSource) {
 			this._register(this.lineSource.onDidChange(() => this.publish(EditorViewportChangeReason.LineProjection)));
 		}
@@ -138,19 +138,19 @@ export class ViewLayout extends Disposable {
 
 	public addViewZone(afterLineIndex: number, heightInPixels: number, ordinal?: number): string {
 		const id = this.linesLayout.addViewZone(afterLineIndex, heightInPixels, ordinal);
-		this.publish(EditorViewportChangeReason.ViewZones);
+		this.publish(EditorViewportChangeReason.EditorViewZones);
 		return id;
 	}
 
 	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number, ordinal?: number): EditorViewportLayout {
 		if (!this.linesLayout.changeViewZone(id, afterLineIndex, heightInPixels, ordinal)) return this.currentLayout;
-		this.publish(EditorViewportChangeReason.ViewZones);
+		this.publish(EditorViewportChangeReason.EditorViewZones);
 		return this.currentLayout;
 	}
 
 	public removeViewZone(id: string): EditorViewportLayout {
 		if (!this.linesLayout.removeViewZone(id)) return this.currentLayout;
-		this.publish(EditorViewportChangeReason.ViewZones);
+		this.publish(EditorViewportChangeReason.EditorViewZones);
 		return this.currentLayout;
 	}
 
@@ -222,12 +222,12 @@ function createTextModelLineSource(model: EditorViewportModelSource): EditorView
 		get lineCount(): number {
 			return model.lineCount;
 		},
-		onDidChange: (listener: () => void) => model.onDidChange(() => listener()),
+		onDidChange: (listener: () => void) => model.onDidChangeContent(() => listener()),
 	});
 }
 
 function validateModelSource(model: EditorViewportModelSource): void {
-	if (!model || typeof model !== 'object' || typeof model.onDidChange !== 'function') throw new TypeError('View layout requires a model source');
+	if (!model || typeof model !== 'object' || typeof model.onDidChangeContent !== 'function') throw new TypeError('View layout requires a model source');
 	if (!isPositiveSafeInteger(model.lineCount)) throw new RangeError('View layout model line count must be a positive safe integer');
 	if (!isNonNegativeSafeInteger(model.version)) throw new RangeError('View layout model version must be a non-negative safe integer');
 }

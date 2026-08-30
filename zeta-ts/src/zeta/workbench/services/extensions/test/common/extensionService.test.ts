@@ -57,7 +57,7 @@ test("extension snippets use one-based editor positions and ranges", async () =>
 		languageId: "typescript",
 		position,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: model.createSnapshot(),
+		snapshot: model.createVersionedSnapshot(),
 	}, new AbortController().signal);
 
 	assert.deepEqual(result?.items[0]?.range, new Range(2, 3, 2, 5));

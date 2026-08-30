@@ -146,7 +146,7 @@ function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService["acqu
 		get hasExternalChange() { return reference.hasExternalChange; },
 		onDidChangeDirty: reference.onDidChangeDirty,
 		onDidChangeExternalChange: reference.onDidChangeExternalChange,
-		onDidChangeContent: listener => reference.model.onDidChange(() => listener()),
+		onDidChangeContent: listener => reference.model.onDidChangeContent(() => listener()),
 		backup: () => reference.model.getText(),
 		restoreBackup: content => reference.model.reset(content),
 		save: signal => reference.save(signal),

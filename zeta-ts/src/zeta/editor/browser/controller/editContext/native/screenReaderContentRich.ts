@@ -2,7 +2,7 @@ import { fragment as createFragment, h, text as createText } from "../../../../.
 import { type TextModel } from "../../../../common/model/textModel.js";
 import { projectStanzaSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type ScreenReaderContentState } from "./screenReaderUtils.js";
-import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
+import { EditorSimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 
 export interface RichScreenReaderContentOptions {
 	readonly model: TextModel;
@@ -18,7 +18,7 @@ export interface RichScreenReaderContentOptions {
  * stable rich DOM for assistive technology and keep DOM selection offsets in
  * the same UTF-16 coordinate space as the model.
  */
-export class RichScreenReaderContent extends SimpleScreenReaderContent {
+export class EditorRichScreenReaderContent extends EditorSimpleScreenReaderContent {
 	constructor(
 		host: HTMLElement,
 		private readonly options: RichScreenReaderContentOptions,

@@ -4,12 +4,12 @@ import { Disposable, toDisposable, type IDisposable } from '../../../base/common
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
 import { EditorLineWrapping } from '../../common/config/editorOptions.js';
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from '../../common/cursor/cursorMoveOperations.js';
-import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
+import { CursorNavigation, EditorCursorNavigationCommand, EditorCursorNavigationMode } from '../../common/cursor/cursorNavigation.js';
+import { SelectionSetDeleteOperations } from '../../common/cursor/selectionSetDeleteOperations.js';
 import { LanguageAutoClosingTracker } from '../../common/cursor/languageAutoClosingTracker.js';
 import { createLanguageEnterCommand } from '../../common/cursor/languageEnter.js';
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from '../../common/cursor/languagePairEditing.js';
-import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
+import { SelectionSetWordOperations } from '../../common/cursor/selectionSetWordOperations.js';
 import { type CursorsController } from '../../common/cursor/cursor.js';
 import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
@@ -25,7 +25,7 @@ import { type TextModel } from '../../common/model/textModel.js';
 import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
 import { type View } from '../view.js';
 import { type EditContextTextUpdate } from '../controller/editContext/editContext.js';
-import { ViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
+import { EditorViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
 
 export interface EditorCommandContext {
 	readonly inputType: string;
@@ -64,23 +64,23 @@ export interface EditorViewDidEditEvent {
 export interface ViewControllerOptions {
 	readonly languageEditing?: EditorLanguageEditingAdapter;
 	readonly wordPattern?: () => RegExp | undefined;
-	readonly userInputEvents?: ViewUserInputEvents;
+	readonly userInputEvents?: EditorViewUserInputEvents;
 }
 
 /**
  * Routes semantic editor commands into common editing operations.
  *
- * This is the Stanza equivalent of VS Code's ViewController: browser input
+ * This is the Stanza equivalent of VS Code's EditorViewInputController: browser input
  * adapters normalize raw events, while this class owns command execution,
  * command transformation, overtype, and contribution-facing edit events.
  */
-export class ViewController extends Disposable {
+export class EditorViewInputController extends Disposable {
 	private readonly didChangeOvertypeEmitter = this._register(new Emitter<boolean>());
 	private readonly didEditEmitter = this._register(new Emitter<EditorViewDidEditEvent>());
 	private readonly commandTransformers: EditorCommandTransformer[] = [];
 	private readonly languageEditing: EditorLanguageEditingAdapter | undefined;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
-	private readonly userInputEvents: ViewUserInputEvents;
+	private readonly userInputEvents: EditorViewUserInputEvents;
 	private overtype = false;
 
 	readonly onDidChangeOvertype: Event<boolean> = this.didChangeOvertypeEmitter.event;
@@ -104,7 +104,7 @@ export class ViewController extends Disposable {
 			}
 			this.languageEditing = options.languageEditing;
 			this.wordPattern = options.wordPattern;
-			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents();
+			this.userInputEvents = options.userInputEvents ?? new EditorViewUserInputEvents();
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -144,29 +144,29 @@ export class ViewController extends Disposable {
 
 	public deleteBackward(inputType = 'deleteContentBackward'): TextModelChange | undefined {
 		return this.execute(
-			this.languageEditing?.createBackspaceCommand(this.selectionController.selections) ?? DeleteOperations.deleteLeft(this.viewport.textModel, this.selectionController.selections),
+			this.languageEditing?.createBackspaceCommand(this.selectionController.selections) ?? SelectionSetDeleteOperations.deleteLeft(this.viewport.textModel, this.selectionController.selections),
 			inputType,
 		);
 	}
 
 	public deleteForward(inputType = 'deleteContentForward'): TextModelChange | undefined {
-		return this.execute(DeleteOperations.deleteRight(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.execute(SelectionSetDeleteOperations.deleteRight(this.viewport.textModel, this.selectionController.selections), inputType);
 	}
 
 	public deleteWordBackward(inputType = 'deleteWordBackward'): TextModelChange | undefined {
-		return this.execute(WordOperations.deleteWordLeft(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+		return this.execute(SelectionSetWordOperations.deleteWordLeft(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
 	}
 
 	public deleteWordForward(inputType = 'deleteWordForward'): TextModelChange | undefined {
-		return this.execute(WordOperations.deleteWordRight(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+		return this.execute(SelectionSetWordOperations.deleteWordRight(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
 	}
 
 	public deleteSoftLineBackward(inputType = 'deleteSoftLineBackward'): TextModelChange | undefined {
-		return this.execute(DeleteOperations.deleteToBeginningOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.execute(SelectionSetDeleteOperations.deleteToBeginningOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
 	}
 
 	public deleteSoftLineForward(inputType = 'deleteSoftLineForward'): TextModelChange | undefined {
-		return this.execute(DeleteOperations.deleteToEndOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.execute(SelectionSetDeleteOperations.deleteToEndOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
 	}
 
 	public insertTab(): TextModelChange | undefined {
@@ -181,10 +181,10 @@ export class ViewController extends Disposable {
 			if (inputType === 'insertLineBreak' || inputType === 'insertParagraph') return this.executeEnter(selections, inputType, update.text);
 			return this.executeType(selections, update.text, inputType);
 		}
-		if (inputType === 'deleteContentForward') return this.execute(DeleteOperations.deleteRight(model, selections), inputType);
+		if (inputType === 'deleteContentForward') return this.execute(SelectionSetDeleteOperations.deleteRight(model, selections), inputType);
 		if (inputType === 'deleteContentBackward') {
 			return this.execute(
-				this.languageEditing?.createBackspaceCommand(selections) ?? DeleteOperations.deleteLeft(model, selections),
+				this.languageEditing?.createBackspaceCommand(selections) ?? SelectionSetDeleteOperations.deleteLeft(model, selections),
 				inputType,
 			);
 		}
@@ -359,7 +359,7 @@ export class KeyboardNavigationController extends Disposable {
 	constructor(
 		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
-		userInputEvents: ViewUserInputEvents,
+		userInputEvents: EditorViewUserInputEvents,
 		options: KeyboardNavigationControllerOptions = {},
 	) {
 		super();
@@ -442,7 +442,7 @@ export class KeyboardNavigationController extends Disposable {
 					getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
 				},
 			)
-			: MoveOperations.navigate(
+			: CursorNavigation.navigate(
 				this.viewport.textModel,
 				this.selectionController.selections,
 				{

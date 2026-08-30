@@ -10,6 +10,11 @@ import { Position } from "../../../common/core/position.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -19,6 +24,7 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -26,7 +32,7 @@ for (const [name, value] of Object.entries({
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
-const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
+const { WidgetPlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -98,7 +104,7 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 
 	editor.layout({ width: 320, height: 80 });
 	const placeholder = requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text");
-	assert.strictEqual(PlaceholderTextContribution.get(editor), editor.getContribution(PlaceholderTextContribution.ID));
+	assert.strictEqual(WidgetPlaceholderTextContribution.get(editor), editor.getContribution(WidgetPlaceholderTextContribution.ID));
 	assert.deepEqual({
 		display: placeholder.style.display,
 		left: placeholder.style.left,

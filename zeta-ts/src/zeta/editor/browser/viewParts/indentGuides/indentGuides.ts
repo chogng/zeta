@@ -18,7 +18,7 @@ interface IndentGuidesOptions {
 }
 
 /** Owns and projects the visible indentation-guide rows. */
-export class IndentGuidesOverlay extends EditorDynamicViewOverlay {
+export class EditorIndentGuidesOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly guides: InternalGuidesOptions;
 	private readonly tabSize: number;

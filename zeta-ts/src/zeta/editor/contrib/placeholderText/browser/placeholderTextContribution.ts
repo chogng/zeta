@@ -6,9 +6,9 @@ import { type CodeEditorContributionContext } from '../../../browser/widget/code
 import { Position } from '../../../common/core/position.js';
 
 /** Uses the editor option to present placeholder text while the model is empty. */
-export class PlaceholderTextContribution extends Disposable {
-	public static get(editor: CodeEditorWidget): PlaceholderTextContribution {
-		return editor.getContribution<PlaceholderTextContribution>(PlaceholderTextContribution.ID)!;
+export class WidgetPlaceholderTextContribution extends Disposable {
+	public static get(editor: CodeEditorWidget): WidgetPlaceholderTextContribution {
+		return editor.getContribution<WidgetPlaceholderTextContribution>(WidgetPlaceholderTextContribution.ID)!;
 	}
 
 	public static readonly ID = 'editor.contrib.placeholderText';

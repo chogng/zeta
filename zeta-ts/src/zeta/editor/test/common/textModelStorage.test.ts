@@ -6,7 +6,7 @@ import { TextModel } from "../../common/model/textModel.js";
 
 test("TextModel snapshots remain immutable across edits and disposal", () => {
 	const model = new TextModel("alpha\nbeta");
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(5)),
@@ -56,8 +56,8 @@ test("TextModel bounds history by transaction count", () => {
 	model.undo();
 	assert.deepEqual({
 		text: model.getText(),
-		canUndo: model.canUndo,
-		canRedo: model.canRedo,
+		canUndo: model.canUndo(),
+		canRedo: model.canRedo(),
 	}, {
 		text: "a",
 		canUndo: false,
@@ -85,7 +85,7 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 	}]);
 	assert.deepEqual({
 		text: replacement.getText(),
-		canUndo: replacement.canUndo,
+		canUndo: replacement.canUndo(),
 	}, {
 		text: "x",
 		canUndo: false,
@@ -101,11 +101,11 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 		range: Range.fromPositions(insertion.positionAt(0)),
 		text: "abcdef",
 	}]);
-	assert.equal(insertion.canUndo, true);
+	assert.equal(insertion.canUndo(), true);
 	insertion.undo();
 	assert.deepEqual({
 		text: insertion.getText(),
-		canRedo: insertion.canRedo,
+		canRedo: insertion.canRedo(),
 	}, {
 		text: "",
 		canRedo: false,
@@ -134,7 +134,7 @@ test("TextModel validates explicit history limits", () => {
 test("TextModel compaction remains transparent to snapshots and history", () => {
 	using model = new TextModel("");
 	let eventCount = 0;
-	using listener = model.onDidChange(() => eventCount += 1);
+	using listener = model.onDidChangeContent(() => eventCount += 1);
 	const insertedText = "0123456789".repeat(10_000);
 	const retainedText = insertedText.slice(-10_000);
 
@@ -142,7 +142,7 @@ test("TextModel compaction remains transparent to snapshots and history", () => 
 		range: Range.fromPositions(model.positionAt(0)),
 		text: insertedText,
 	}]);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	model.applyEdits([{
 		range: Range.fromPositions(
 			model.positionAt(0),
@@ -189,7 +189,7 @@ test("TextModel defers reclaiming piece-tree storage through product-owned maint
 		range: Range.fromPositions(model.positionAt(0)),
 		text: insertedText,
 	}]);
-	const snapshot = model.createSnapshot();
+	const snapshot = model.createVersionedSnapshot();
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(insertedText.length - retainedText.length)),
 		text: "",

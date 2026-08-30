@@ -5,7 +5,7 @@ import { type EditorRenderingContext, EditorViewContext } from '../../view/viewP
 import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects the active logical line independently from selection ranges. */
-export class CurrentLineHighlightOverlay extends EditorDynamicViewOverlay {
+export class EditorCurrentLineHighlightOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;

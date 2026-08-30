@@ -386,7 +386,7 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	assert.deepEqual(model.lineDocument.facets.forLine(codeBlock.content[1]!.id).map(facet => facet.kind), ["group", "codeBlock", "codeLine"]);
 	assert.equal(model.lineDocument.atoms.values[0]?.kind, "image");
 	const textChanges: { readonly reason: string; readonly changes: readonly { readonly rangeOffset: number; readonly rangeLength: number; readonly text: string }[] }[] = [];
-	model.onDidChange(change => textChanges.push(change));
+	model.onDidChangeContent(change => textChanges.push(change));
 	const firstCodeText = group.content[2]!.content[0]!.content[0]!;
 	const textBeforeEdit = model.getText();
 	model.dispatch(new DocumentTransaction().replaceText(firstCodeText.id, 0, firstCodeText.text!.length, "let value = 2;"));

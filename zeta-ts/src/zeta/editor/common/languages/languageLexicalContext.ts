@@ -52,7 +52,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 			this.dispose();
 			throw new TypeError("Language lexical context requires a configuration source");
 		}
-		this._register(textModel.onDidChange(change => this.acceptModelChange(change)));
+		this._register(textModel.onDidChangeContent(change => this.acceptModelChange(change)));
 		if (configurations.onDidChange) {
 			this._register(configurations.onDidChange(event => this.acceptConfigurationChange(event)));
 		}

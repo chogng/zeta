@@ -18,7 +18,7 @@ export class SemanticTokensController extends Disposable {
 			const requestGeneration = ++this.requestGeneration;
 			queueMicrotask(() => void this.requestTokens(requestGeneration));
 		};
-		this._register(semanticTokensService.tokens.textModel.onDidChange(scheduleTokens));
+		this._register(semanticTokensService.tokens.textModel.onDidChangeContent(scheduleTokens));
 		if (onDidChangeLanguageSupport) this._register(onDidChangeLanguageSupport(scheduleTokens));
 		this._register(toDisposable(() => {
 			this.requestGeneration += 1;

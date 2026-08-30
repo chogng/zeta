@@ -109,7 +109,7 @@ export class LanguageTokenLineIndex extends Disposable {
 			if (change.reason === LanguageResultStoreChangeReason.ModelChanged) return;
 			this.acceptStoreChange(change.reason, change.modelVersion, change.result);
 		}));
-		this._register(this.model.onDidChange(change => this.acceptModelChange(this.model.version, change)));
+		this._register(this.model.onDidChangeContent(change => this.acceptModelChange(this.model.version, change)));
 		this._register(toDisposable(() => {
 			this.state = EMPTY_STATE;
 			this.invalidatedBase = undefined;

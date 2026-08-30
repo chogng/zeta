@@ -41,7 +41,7 @@ interface ResolvedZoneWidgetOptions {
 }
 
 /** Anchors an interactive widget in reserved editor space after a text position. */
-export abstract class ZoneWidget extends Disposable {
+export abstract class EditorZoneWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	protected containerDomNode: HTMLDivElement | undefined;
 	protected readonly editor: ZoneWidgetEditor;

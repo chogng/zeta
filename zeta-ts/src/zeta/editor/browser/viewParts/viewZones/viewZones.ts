@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { AbstractDisposable, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { isFiniteNumber } from '../../../../base/common/numbers.js';
-import { type EditorViewportLayout, ViewLayout } from '../../../common/viewLayout/viewLayout.js';
+import { type EditorViewportLayout, EditorViewportLayoutManager } from '../../../common/viewLayout/viewLayout.js';
 import { type IViewZone, type IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
 
@@ -15,7 +15,7 @@ export interface EditorViewZoneHandle extends IDisposable {
 
 interface ViewZonesOptions {
 	readonly host: HTMLElement;
-	readonly viewLayout: ViewLayout;
+	readonly viewLayout: EditorViewportLayoutManager;
 	readonly readVisualLineCount: () => number;
 	readonly readContentLeft: () => number;
 	readonly readContentWidth: () => number;
@@ -23,10 +23,10 @@ interface ViewZonesOptions {
 }
 
 /** Owns caller-provided DOM roots placed in reserved vertical editor space. */
-export class ViewZones extends EditorViewPart {
+export class EditorViewZones extends EditorViewPart {
 	public readonly domNode: HTMLDivElement;
 	public readonly marginDomNode: HTMLDivElement;
-	private readonly viewLayout: ViewLayout;
+	private readonly viewLayout: EditorViewportLayoutManager;
 	private readonly readVisualLineCount: () => number;
 	private readonly zones = new Map<string, EditorViewZone>();
 	private readonly mouseDownListeners = this._register(new DisposableMap<string>());

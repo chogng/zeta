@@ -7,6 +7,7 @@ import { createEditorEditCommand } from "../../../../common/commands/editorComma
 import { Range } from "../../../../common/core/range.js";
 import { type CursorsController } from "../../../../common/cursor/cursor.js";
 import { InlineCompletionProviderService } from "../../../../browser/services/inlineCompletionProviderService.js";
+import { InlineCompletionsService, InlineCompletionsServiceCapability, type IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import { type LanguageInlineCompletionItem } from "../../common/inlineCompletions.js";
 import { type View } from "../../../../browser/view.js";
 import { isCompletionsEnablementEnabled } from "../../../../common/services/ownedCompletionsEnablement.js";
@@ -15,12 +16,13 @@ import { type EditorCommandEvent } from '../../../../browser/editorExtensions.js
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
-export class InlineCompletionsController extends Disposable {
+export class EditorInlineCompletionsController extends Disposable {
 	private readonly element: HTMLSpanElement;
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
+	private completionRequestId = 0;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: InlineCompletionProviderService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: InlineCompletionProviderService, private readonly inlineCompletionsService: IInlineCompletionsService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
 		super();
 		const element = this.element = h(viewport.element.ownerDocument, "span");
 		element.className = "stanza-editor-inline-completion";
@@ -39,7 +41,7 @@ export class InlineCompletionsController extends Disposable {
 		}));
 		this._register(selections.onDidChange(() => this.clear()));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
-		this._register(viewport.textModel.onDidChange(() => this.clear()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.clear()));
 		if (onDidExecuteCommand) {
 			const triggerCommands = new Set(TriggerInlineEditCommandsRegistry.getRegisteredCommands());
 			this._register(onDidExecuteCommand(event => {
@@ -50,6 +52,10 @@ export class InlineCompletionsController extends Disposable {
 	}
 
 	private async refresh(triggerKind: "automatic" | "explicit"): Promise<void> {
+		if (this.inlineCompletionsService.isSnoozing()) {
+			this.clear();
+			return;
+		}
 		const selection = this.selections.selections.primary;
 		if (!selection.isEmpty()) return;
 		this.request?.abort();
@@ -58,6 +64,7 @@ export class InlineCompletionsController extends Disposable {
 			const items = await this.service.provideInlineCompletions(this.languageId, selection.getPosition(), triggerKind, request.signal);
 			if (request.signal.aborted) return;
 			this.item = items[0];
+			if (this.item) this.inlineCompletionsService.reportNewCompletion(`editor-inline-${++this.completionRequestId}`);
 			this.render();
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
@@ -99,8 +106,11 @@ export class InlineCompletionsController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.inlineCompletions", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.inlineCompletions", configure: context => {
+	if (context.kind !== 'text') return;
+	context.provideCapability(InlineCompletionsServiceCapability, context.register(new InlineCompletionsService()));
+}, install: context => {
 	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnablementEnabled(context.options.inlineCompletions, context.languageId))) return;
 	const service = context.register(new InlineCompletionProviderService(context.model, context.languageFeaturesService.inlineCompletionsProvider));
-	context.register(new InlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onDidExecuteCommand, context.onLanguageError));
+	context.register(new EditorInlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
 } });

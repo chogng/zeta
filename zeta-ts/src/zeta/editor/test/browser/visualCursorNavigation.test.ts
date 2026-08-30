@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorMoveOperations.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorNavigation.js";
 import { Selection } from "../../common/core/selection.js";
 import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";

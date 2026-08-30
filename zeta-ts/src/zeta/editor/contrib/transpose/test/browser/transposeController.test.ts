@@ -19,6 +19,11 @@ for (const [name, value] of Object.entries({
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: class TestResizeObserver {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }

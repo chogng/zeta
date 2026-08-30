@@ -4,18 +4,18 @@ import { type EditorView } from '../../../browser/editorView.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { type Range } from '../../../common/core/range.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
-import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
+import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { findTextMatches } from '../../../common/model/textModelSearch.js';
 
-import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import type { IEditorLanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 const MAX_SELECTION_HIGHLIGHTS = 10_000;
 
 interface SelectionHighlighterOptions {
 	readonly languageId: string;
-	readonly languageFeaturesService: ILanguageFeaturesService;
+	readonly languageFeaturesService: IEditorLanguageFeaturesService;
 	readonly enabled?: boolean;
 	readonly multiline?: boolean;
 	readonly maxLength?: number;
@@ -24,13 +24,13 @@ interface SelectionHighlighterOptions {
 }
 
 /** Owns textual matches for non-empty editor selections. */
-export class SelectionHighlighter extends Disposable {
+export class EditorSelectionHighlighter extends Disposable {
 	private readonly enabled: boolean;
 	private readonly multiline: boolean;
 	private readonly maxLength: number;
 	private readonly occurrenceHighlights: boolean;
 	private readonly languageId: string;
-	private readonly languageFeaturesService: ILanguageFeaturesService;
+	private readonly languageFeaturesService: IEditorLanguageFeaturesService;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private lastKey = '';
 
@@ -50,7 +50,7 @@ export class SelectionHighlighter extends Disposable {
 		this.languageFeaturesService = options.languageFeaturesService;
 		this.wordPattern = options.wordPattern;
 		this._register(selections.onDidChange(() => this.update()));
-		this._register(selections.textModel.onDidChange(() => this.update()));
+		this._register(selections.textModel.onDidChangeContent(() => this.update()));
 		this.update();
 	}
 
@@ -77,7 +77,7 @@ export class SelectionHighlighter extends Disposable {
 		if (!text || /^\s+$/u.test(text) || (this.maxLength > 0 && text.length > this.maxLength)) return Object.freeze([]);
 		if (!selectionsContainSameText(this.selections, selected, text)) return Object.freeze([]);
 		const wordPattern = this.wordPattern?.();
-		const wordRange = WordOperations.getWordSelectionRange(this.selections.textModel, source.getStartPosition(), wordPattern);
+		const wordRange = getWordSelectionRange(this.selections.textModel, source.getStartPosition(), wordPattern);
 		const wholeWord = rangesEqual(wordRange, source);
 		const matches = findTextMatches(this.selections.textModel, {
 			pattern: text,
@@ -86,7 +86,7 @@ export class SelectionHighlighter extends Disposable {
 		}, { resultLimit: MAX_SELECTION_HIGHLIGHTS });
 		return Object.freeze(matches.flatMap(match => {
 			if (selected.some(selection => rangesIntersect(this.selections, match.range, selection))) return [];
-			if (wholeWord && wordPattern && !rangesEqual(WordOperations.getWordSelectionRange(this.selections.textModel, match.range.getStartPosition(), wordPattern), match.range)) return [];
+			if (wholeWord && wordPattern && !rangesEqual(getWordSelectionRange(this.selections.textModel, match.range.getStartPosition(), wordPattern), match.range)) return [];
 			return [match.range];
 		}));
 	}

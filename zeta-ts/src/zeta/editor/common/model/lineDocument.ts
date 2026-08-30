@@ -103,7 +103,7 @@ export class LineSequence {
 		for (const line of lines) {
 			assertIdentity(line.id, 'Line');
 			if (indicesById.has(line.id)) throw new TypeError(`Duplicate line id '${line.id}'`);
-			if (typeof line.text !== 'string' || /[\r\n\u2028\u2029]/u.test(line.text)) {
+			if (typeof line.text !== 'string' || /[\r\n]/u.test(line.text)) {
 				throw new TypeError(`Logical line '${line.id}' must not contain a line terminator`);
 			}
 			indicesById.set(line.id, values.length);

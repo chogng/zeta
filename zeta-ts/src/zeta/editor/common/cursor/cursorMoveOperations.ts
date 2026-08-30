@@ -1,337 +1,219 @@
-import { clamp } from "../../../base/common/numbers.js";
-import { Selection } from "../core/selection.js";
-import { SelectionSet } from "./selectionSet.js";
-import { Position } from "../core/position.js";
-import { type TextModel } from "../model/textModel.js";
-import { getTextGraphemeBoundaries, getTextWordSegments } from '../core/textSegmentation.js';
+import * as strings from '../../../base/common/strings.js';
+import { Constants } from '../../../base/common/uint.js';
+import { CursorColumns } from '../core/cursorColumns.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import { PositionAffinity } from '../model.js';
+import { CursorConfiguration, type ICursorSimpleModel, SelectionStartKind, SingleCursorState } from '../cursorCommon.js';
 import { AtomicTabMoveOperations, Direction } from './cursorAtomicMoveOperations.js';
 
-export enum EditorCursorNavigationCommand {
-	CharacterLeft = "characterLeft",
-	CharacterRight = "characterRight",
-	WordLeft = "wordLeft",
-	WordRight = "wordRight",
-	LineUp = "lineUp",
-	LineDown = "lineDown",
-	LineStart = "lineStart",
-	LineEnd = "lineEnd",
-	DocumentStart = "documentStart",
-	DocumentEnd = "documentEnd",
-	PageUp = "pageUp",
-	PageDown = "pageDown",
+export class CursorPosition {
+	_cursorPositionBrand: void = undefined;
+
+	constructor(
+		public readonly lineNumber: number,
+		public readonly column: number,
+		public readonly leftoverVisibleColumns: number,
+	) {}
 }
 
-export enum EditorCursorNavigationMode {
-	Move = "move",
-	Extend = "extend",
-}
-
-export interface EditorCursorNavigationRequest {
-	readonly command: EditorCursorNavigationCommand;
-	readonly mode: EditorCursorNavigationMode;
-	readonly pageLineCount?: number;
-	readonly preferredColumns?: readonly number[];
-	readonly wordPattern?: RegExp;
-	readonly atomicTabSize?: number;
-}
-
-export interface EditorCursorNavigationResult {
-	readonly selections: SelectionSet;
-	readonly preferredColumns: readonly number[] | undefined;
-}
-
-/**
- * Applies one DOM-independent cursor navigation command to every selection.
- *
- * Vertical commands retain caller-owned preferred UTF-16 columns. Exact
- * duplicate results coalesce while preserving the primary selection mapping.
- */
 export class MoveOperations {
-	public static navigate(model: TextModel, selections: SelectionSet, request: EditorCursorNavigationRequest): EditorCursorNavigationResult {
-		validateRequest(model, selections, request);
-		const vertical = isVerticalCommand(request.command);
-		const preferredColumns = vertical
-			? resolvePreferredColumns(selections, request.preferredColumns)
-			: undefined;
-		const navigated = selections.selections.map((selection, index) => {
-			const target = navigationTarget(
-				model,
-				selection,
-				request.command,
-				request.pageLineCount ?? 1,
-				preferredColumns?.[index],
-				request.mode,
-				request.wordPattern,
-				request.atomicTabSize,
-			);
-			return request.mode === EditorCursorNavigationMode.Extend
-				? Selection.fromPositions(selection.getSelectionStart(), target)
-				: Selection.fromPositions(target);
-		});
-		return normalizeResult(
-			navigated,
-			selections.primaryIndex,
-			preferredColumns,
-		);
-	}
-
-	public static leftPosition(model: TextModel, position: Position, atomicTabSize?: number): Position {
-		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineNumber), position.column - 1, atomicTabSize, Direction.Left);
-		if (atomicColumn >= 0) return new Position(position.lineNumber, atomicColumn + 1);
-		return previousCharacter(model, position);
-	}
-
-	public static rightPosition(model: TextModel, position: Position, atomicTabSize?: number): Position {
-		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineNumber), position.column - 1, atomicTabSize, Direction.Right);
-		if (atomicColumn >= 0) return new Position(position.lineNumber, atomicColumn + 1);
-		return nextCharacter(model, position);
-	}
-}
-
-function navigationTarget(
-	model: TextModel,
-	selection: Selection,
-	command: EditorCursorNavigationCommand,
-	pageLineCount: number,
-	preferredColumn: number | undefined,
-	mode: EditorCursorNavigationMode,
-	wordPattern: RegExp | undefined,
-	requestAtomicTabSize: number | undefined,
-): Position {
-	if (
-		mode === EditorCursorNavigationMode.Move &&
-		!selection.isEmpty()
-	) {
-		if (
-			command === EditorCursorNavigationCommand.CharacterLeft ||
-			command === EditorCursorNavigationCommand.WordLeft
-		) {
-			return selection.getStartPosition();
+	public static leftPosition(model: ICursorSimpleModel, position: Position): Position {
+		if (position.column > model.getLineMinColumn(position.lineNumber)) {
+			return position.delta(undefined, -strings.prevCharLength(model.getLineContent(position.lineNumber), position.column - 1));
 		}
-		if (
-			command === EditorCursorNavigationCommand.CharacterRight ||
-			command === EditorCursorNavigationCommand.WordRight
-		) {
-			return selection.getEndPosition();
+		if (position.lineNumber > 1) {
+			const lineNumber = position.lineNumber - 1;
+			return new Position(lineNumber, model.getLineMaxColumn(lineNumber));
 		}
+		return position;
 	}
 
-	const active = selection.getPosition();
-	switch (command) {
-		case EditorCursorNavigationCommand.CharacterLeft:
-			return MoveOperations.leftPosition(model, active, requestAtomicTabSize);
-		case EditorCursorNavigationCommand.CharacterRight:
-			return MoveOperations.rightPosition(model, active, requestAtomicTabSize);
-		case EditorCursorNavigationCommand.WordLeft:
-			return previousWord(model, active, wordPattern);
-		case EditorCursorNavigationCommand.WordRight:
-			return nextWord(model, active, wordPattern);
-		case EditorCursorNavigationCommand.LineUp:
-			return verticalTarget(model, active, -1, preferredColumn);
-		case EditorCursorNavigationCommand.LineDown:
-			return verticalTarget(model, active, 1, preferredColumn);
-		case EditorCursorNavigationCommand.PageUp:
-			return verticalTarget(model, active, -pageLineCount, preferredColumn);
-		case EditorCursorNavigationCommand.PageDown:
-			return verticalTarget(model, active, pageLineCount, preferredColumn);
-		case EditorCursorNavigationCommand.LineStart:
-			return new Position(active.lineNumber, 1);
-		case EditorCursorNavigationCommand.LineEnd:
-			return new Position(active.lineNumber, model.getLineContent(active.lineNumber).length + 1);
-		case EditorCursorNavigationCommand.DocumentStart:
-			return new Position((0) + 1, (0) + 1);
-		case EditorCursorNavigationCommand.DocumentEnd: {
-			const lineIndex = model.lineCount - 1;
-			return new Position((lineIndex) + 1, (model.getLineContent((lineIndex) + 1).length) + 1);
+	private static leftPositionAtomicSoftTabs(model: ICursorSimpleModel, position: Position, tabSize: number): Position {
+		if (position.column <= model.getLineIndentColumn(position.lineNumber)) {
+			const column = AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineNumber), position.column - 1, tabSize, Direction.Left);
+			if (column !== -1 && column + 1 >= model.getLineMinColumn(position.lineNumber)) return new Position(position.lineNumber, column + 1);
 		}
+		return this.leftPosition(model, position);
 	}
-}
 
-function previousCharacter(model: TextModel, position: Position): Position {
-	if (position.column === 1) {
-		if (position.lineNumber === 1) return position;
-		const previousLineNumber = position.lineNumber - 1;
-		return new Position(previousLineNumber, model.getLineContent(previousLineNumber).length + 1);
+	private static left(config: CursorConfiguration, model: ICursorSimpleModel, position: Position): CursorPosition {
+		const result = config.stickyTabStops
+			? this.leftPositionAtomicSoftTabs(model, position, config.tabSize)
+			: this.leftPosition(model, position);
+		return new CursorPosition(result.lineNumber, result.column, 0);
 	}
-	const boundaries = getTextGraphemeBoundaries(
-		model.getLineContent(position.lineNumber),
-	);
-	return new Position(position.lineNumber, previousBoundary(boundaries, position.column - 1) + 1);
-}
 
-function nextCharacter(model: TextModel, position: Position): Position {
-	const line = model.getLineContent(position.lineNumber);
-	if (position.column === line.length + 1) {
-		return position.lineNumber < model.lineCount
-			? new Position(position.lineNumber + 1, 1)
-			: position;
-	}
-	return new Position(position.lineNumber, nextBoundary(getTextGraphemeBoundaries(line), position.column - 1) + 1);
-}
-
-function previousWord(model: TextModel, position: Position, wordPattern: RegExp | undefined): Position {
-	for (let lineNumber = position.lineNumber; lineNumber >= 1; lineNumber -= 1) {
-		const limit = lineNumber === position.lineNumber
-			? position.column - 1
-			: Number.POSITIVE_INFINITY;
-		const segments = getTextWordRanges(model.getLineContent(lineNumber), wordPattern);
-		for (let index = segments.length - 1; index >= 0; index -= 1) {
-			const segment = segments[index]!;
-			if (segment.start < limit) {
-				return new Position(lineNumber, segment.start + 1);
-			}
+	public static moveLeft(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean, noOfColumns: number): SingleCursorState {
+		let lineNumber: number;
+		let column: number;
+		if (cursor.hasSelection() && !inSelectionMode) {
+			lineNumber = cursor.selection.startLineNumber;
+			column = cursor.selection.startColumn;
+		} else {
+			const position = cursor.position.delta(undefined, -(noOfColumns - 1));
+			const normalized = model.normalizePosition(this.clipPositionColumn(position, model), PositionAffinity.Left);
+			const result = this.left(config, model, normalized);
+			lineNumber = result.lineNumber;
+			column = result.column;
 		}
+		return cursor.move(inSelectionMode, lineNumber, column, 0);
 	}
-	return new Position((0) + 1, (0) + 1);
-}
 
-function nextWord(model: TextModel, position: Position, wordPattern: RegExp | undefined): Position {
-	for (
-		let lineNumber = position.lineNumber;
-		lineNumber <= model.lineCount;
-		lineNumber += 1
-	) {
-		const limit = lineNumber === position.lineNumber
-			? position.column - 1
-			: -1;
-		for (const segment of getTextWordRanges(model.getLineContent(lineNumber), wordPattern)) {
-			if (segment.start > limit) {
-				return new Position(lineNumber, segment.start + 1);
-			}
+	private static clipPositionColumn(position: Position, model: ICursorSimpleModel): Position {
+		return new Position(position.lineNumber, this.clipRange(position.column, model.getLineMinColumn(position.lineNumber), model.getLineMaxColumn(position.lineNumber)));
+	}
+
+	private static clipRange(value: number, min: number, max: number): number {
+		return Math.max(min, Math.min(max, value));
+	}
+
+	public static rightPosition(model: ICursorSimpleModel, lineNumber: number, column: number): Position {
+		if (column < model.getLineMaxColumn(lineNumber)) {
+			column += strings.nextCharLength(model.getLineContent(lineNumber), column - 1);
+		} else if (lineNumber < model.getLineCount()) {
+			lineNumber++;
+			column = model.getLineMinColumn(lineNumber);
 		}
+		return model.normalizePosition(new Position(lineNumber, column), PositionAffinity.Right);
 	}
-	const lineIndex = model.lineCount - 1;
-	return new Position((lineIndex) + 1, (model.getLineContent((lineIndex) + 1).length) + 1);
-}
 
-function verticalTarget(model: TextModel, position: Position, lineDelta: number, preferredColumn: number | undefined): Position {
-	const lineNumber = clamp(
-		position.lineNumber + lineDelta,
-		1,
-		model.lineCount,
-	);
-	if (lineNumber === position.lineNumber) return position;
-	const line = model.getLineContent(lineNumber);
-	const column = Math.min(preferredColumn ?? position.column, line.length + 1);
-	return new Position(lineNumber, boundaryAtOrBefore(getTextGraphemeBoundaries(line), column - 1) + 1);
-}
-
-function resolvePreferredColumns(selections: SelectionSet, preferredColumns: readonly number[] | undefined): readonly number[] {
-	if (preferredColumns?.length === selections.selections.length) {
-		return Object.freeze([...preferredColumns]);
-	}
-	return Object.freeze(
-		selections.selections.map(selection => selection.getPosition().column),
-	);
-}
-
-function normalizeResult(selections: readonly Selection[], primaryIndex: number, preferredColumns: readonly number[] | undefined): EditorCursorNavigationResult {
-	const normalized: Selection[] = [];
-	const normalizedColumns: number[] = [];
-	const sourceToNormalized: number[] = [];
-	for (let index = 0; index < selections.length; index += 1) {
-		const selection = selections[index]!;
-		let targetIndex = normalized.findIndex(candidate =>
-			selectionsEqual(candidate, selection)
-		);
-		if (targetIndex < 0) {
-			targetIndex = normalized.length;
-			normalized.push(selection);
-			if (preferredColumns) normalizedColumns.push(preferredColumns[index]!);
-		} else if (preferredColumns && index === primaryIndex) {
-			normalizedColumns[targetIndex] = preferredColumns[index]!;
+	public static rightPositionAtomicSoftTabs(model: ICursorSimpleModel, lineNumber: number, column: number, tabSize: number, _indentSize: number): Position {
+		if (column < model.getLineIndentColumn(lineNumber)) {
+			const next = AtomicTabMoveOperations.atomicPosition(model.getLineContent(lineNumber), column - 1, tabSize, Direction.Right);
+			if (next !== -1) return new Position(lineNumber, next + 1);
 		}
-		sourceToNormalized.push(targetIndex);
+		return this.rightPosition(model, lineNumber, column);
 	}
-	return Object.freeze({
-		selections: SelectionSet.withPrimary(
-			normalized,
-			sourceToNormalized[primaryIndex]!,
-		),
-		preferredColumns: preferredColumns
-			? Object.freeze(normalizedColumns)
-			: undefined,
-	});
-}
 
-function validateRequest(model: TextModel, selections: SelectionSet, request: EditorCursorNavigationRequest): void {
-	if (!Object.values(EditorCursorNavigationCommand).includes(request.command)) {
-		throw new TypeError("Unknown editor cursor navigation command");
+	public static right(config: CursorConfiguration, model: ICursorSimpleModel, position: Position): CursorPosition {
+		const result = config.stickyTabStops
+			? this.rightPositionAtomicSoftTabs(model, position.lineNumber, position.column, config.tabSize, config.indentSize)
+			: this.rightPosition(model, position.lineNumber, position.column);
+		return new CursorPosition(result.lineNumber, result.column, 0);
 	}
-	if (!Object.values(EditorCursorNavigationMode).includes(request.mode)) {
-		throw new TypeError("Unknown editor cursor navigation mode");
-	}
-	if (
-		request.pageLineCount !== undefined &&
-		(
-			!Number.isSafeInteger(request.pageLineCount) ||
-			request.pageLineCount < 1
-		)
-	) {
-		throw new RangeError("pageLineCount must be a positive safe integer");
-	}
-	if (
-		request.preferredColumns &&
-		(
-			request.preferredColumns.length !== selections.selections.length ||
-			request.preferredColumns.some(column =>
-				!Number.isSafeInteger(column) || column < 1
-			)
-		)
-	) {
-		throw new RangeError("preferredColumns must match selections");
-	}
-	if (request.atomicTabSize !== undefined && (!Number.isSafeInteger(request.atomicTabSize) || request.atomicTabSize < 1)) {
-		throw new RangeError('atomicTabSize must be a positive safe integer');
-	}
-	for (const selection of selections.selections) {
-		model.offsetAt(selection.getSelectionStart());
-		model.offsetAt(selection.getPosition());
-	}
-}
 
-function isVerticalCommand(command: EditorCursorNavigationCommand): boolean {
-	return command === EditorCursorNavigationCommand.LineUp ||
-		command === EditorCursorNavigationCommand.LineDown ||
-		command === EditorCursorNavigationCommand.PageUp ||
-		command === EditorCursorNavigationCommand.PageDown;
-}
-
-function previousBoundary(boundaries: readonly number[], column: number): number {
-	for (let index = boundaries.length - 1; index >= 0; index -= 1) {
-		if (boundaries[index]! < column) return boundaries[index]!;
-	}
-	return 0;
-}
-
-function nextBoundary(boundaries: readonly number[], column: number): number {
-	return boundaries.find(boundary => boundary > column) ??
-		boundaries[boundaries.length - 1]!;
-}
-
-function boundaryAtOrBefore(boundaries: readonly number[], column: number): number {
-	for (let index = boundaries.length - 1; index >= 0; index -= 1) {
-		if (boundaries[index]! <= column) return boundaries[index]!;
-	}
-	return 0;
-}
-
-function selectionsEqual(left: Selection, right: Selection): boolean {
-	return Position.compare(left.getSelectionStart(), right.getSelectionStart()) === 0 &&
-		Position.compare(left.getPosition(), right.getPosition()) === 0;
-}
-
-function getTextWordRanges(text: string, wordPattern: RegExp | undefined): readonly { readonly start: number; readonly end: number }[] {
-	if (!wordPattern) return getTextWordSegments(text).flatMap(segment => segment.wordLike ? [{ start: segment.start, end: segment.end }] : []);
-	const flags = wordPattern.flags.replaceAll('y', '').includes('g') ? wordPattern.flags.replaceAll('y', '') : `${wordPattern.flags.replaceAll('y', '')}g`;
-	const matcher = new RegExp(wordPattern.source, flags);
-	const ranges: Array<{ readonly start: number; readonly end: number }> = [];
-	for (let match = matcher.exec(text); match; match = matcher.exec(text)) {
-		if (match[0].length === 0) {
-			matcher.lastIndex += 1;
-			continue;
+	public static moveRight(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean, noOfColumns: number): SingleCursorState {
+		let lineNumber: number;
+		let column: number;
+		if (cursor.hasSelection() && !inSelectionMode) {
+			lineNumber = cursor.selection.endLineNumber;
+			column = cursor.selection.endColumn;
+		} else {
+			const position = cursor.position.delta(undefined, noOfColumns - 1);
+			const normalized = model.normalizePosition(this.clipPositionColumn(position, model), PositionAffinity.Right);
+			const result = this.right(config, model, normalized);
+			lineNumber = result.lineNumber;
+			column = result.column;
 		}
-		ranges.push({ start: match.index, end: match.index + match[0].length });
+		return cursor.move(inSelectionMode, lineNumber, column, 0);
 	}
-	return ranges;
+
+	public static vertical(config: CursorConfiguration, model: ICursorSimpleModel, lineNumber: number, column: number, leftoverVisibleColumns: number, newLineNumber: number, allowMoveOnEdgeLine: boolean, normalizationAffinity?: PositionAffinity): CursorPosition {
+		const currentVisibleColumn = CursorColumns.visibleColumnFromColumn(model.getLineContent(lineNumber), column, config.tabSize) + leftoverVisibleColumns;
+		const lineCount = model.getLineCount();
+		const wasOnFirstPosition = lineNumber === 1 && column === 1;
+		const wasOnLastPosition = lineNumber === lineCount && column === model.getLineMaxColumn(lineNumber);
+		const wasAtEdgePosition = newLineNumber < lineNumber ? wasOnFirstPosition : wasOnLastPosition;
+		lineNumber = newLineNumber;
+		if (lineNumber < 1) {
+			lineNumber = 1;
+			column = allowMoveOnEdgeLine ? model.getLineMinColumn(lineNumber) : Math.min(model.getLineMaxColumn(lineNumber), column);
+		} else if (lineNumber > lineCount) {
+			lineNumber = lineCount;
+			column = allowMoveOnEdgeLine ? model.getLineMaxColumn(lineNumber) : Math.min(model.getLineMaxColumn(lineNumber), column);
+		} else {
+			column = config.columnFromVisibleColumn(model, lineNumber, currentVisibleColumn);
+		}
+		leftoverVisibleColumns = wasAtEdgePosition ? 0 : currentVisibleColumn - CursorColumns.visibleColumnFromColumn(model.getLineContent(lineNumber), column, config.tabSize);
+		if (normalizationAffinity !== undefined) {
+			const normalized = model.normalizePosition(new Position(lineNumber, column), normalizationAffinity);
+			leftoverVisibleColumns += column - normalized.column;
+			lineNumber = normalized.lineNumber;
+			column = normalized.column;
+		}
+		return new CursorPosition(lineNumber, column, leftoverVisibleColumns);
+	}
+
+	public static down(config: CursorConfiguration, model: ICursorSimpleModel, lineNumber: number, column: number, leftoverVisibleColumns: number, count: number, allowMoveOnLastLine: boolean): CursorPosition {
+		return this.vertical(config, model, lineNumber, column, leftoverVisibleColumns, lineNumber + count, allowMoveOnLastLine, PositionAffinity.RightOfInjectedText);
+	}
+
+	public static moveDown(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean, linesCount: number): SingleCursorState {
+		let lineNumber = cursor.hasSelection() && !inSelectionMode ? cursor.selection.endLineNumber : cursor.position.lineNumber;
+		const column = cursor.hasSelection() && !inSelectionMode ? cursor.selection.endColumn : cursor.position.column;
+		let index = 0;
+		let result: CursorPosition;
+		do {
+			result = this.down(config, model, lineNumber + index, column, cursor.leftoverVisibleColumns, linesCount, true);
+			if (model.normalizePosition(new Position(result.lineNumber, result.column), PositionAffinity.None).lineNumber > lineNumber) break;
+		} while (index++ < 10 && lineNumber + index < model.getLineCount());
+		return cursor.move(inSelectionMode, result.lineNumber, result.column, result.leftoverVisibleColumns);
+	}
+
+	public static translateDown(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState): SingleCursorState {
+		const selection = cursor.selection;
+		const start = this.down(config, model, selection.selectionStartLineNumber, selection.selectionStartColumn, cursor.selectionStartLeftoverVisibleColumns, 1, false);
+		const position = this.down(config, model, selection.positionLineNumber, selection.positionColumn, cursor.leftoverVisibleColumns, 1, false);
+		return new SingleCursorState(new Range(start.lineNumber, start.column, start.lineNumber, start.column), SelectionStartKind.Simple, start.leftoverVisibleColumns, new Position(position.lineNumber, position.column), position.leftoverVisibleColumns);
+	}
+
+	public static up(config: CursorConfiguration, model: ICursorSimpleModel, lineNumber: number, column: number, leftoverVisibleColumns: number, count: number, allowMoveOnFirstLine: boolean): CursorPosition {
+		return this.vertical(config, model, lineNumber, column, leftoverVisibleColumns, lineNumber - count, allowMoveOnFirstLine, PositionAffinity.LeftOfInjectedText);
+	}
+
+	public static moveUp(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean, linesCount: number): SingleCursorState {
+		const lineNumber = cursor.hasSelection() && !inSelectionMode ? cursor.selection.startLineNumber : cursor.position.lineNumber;
+		const column = cursor.hasSelection() && !inSelectionMode ? cursor.selection.startColumn : cursor.position.column;
+		const result = this.up(config, model, lineNumber, column, cursor.leftoverVisibleColumns, linesCount, true);
+		return cursor.move(inSelectionMode, result.lineNumber, result.column, result.leftoverVisibleColumns);
+	}
+
+	public static translateUp(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState): SingleCursorState {
+		const selection = cursor.selection;
+		const start = this.up(config, model, selection.selectionStartLineNumber, selection.selectionStartColumn, cursor.selectionStartLeftoverVisibleColumns, 1, false);
+		const position = this.up(config, model, selection.positionLineNumber, selection.positionColumn, cursor.leftoverVisibleColumns, 1, false);
+		return new SingleCursorState(new Range(start.lineNumber, start.column, start.lineNumber, start.column), SelectionStartKind.Simple, start.leftoverVisibleColumns, new Position(position.lineNumber, position.column), position.leftoverVisibleColumns);
+	}
+
+	private static _isBlankLine(model: ICursorSimpleModel, lineNumber: number): boolean {
+		return model.getLineFirstNonWhitespaceColumn(lineNumber) === 0;
+	}
+
+	public static moveToPrevBlankLine(_config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean): SingleCursorState {
+		let lineNumber = cursor.position.lineNumber;
+		while (lineNumber > 1 && this._isBlankLine(model, lineNumber)) lineNumber--;
+		while (lineNumber > 1 && !this._isBlankLine(model, lineNumber)) lineNumber--;
+		return cursor.move(inSelectionMode, lineNumber, model.getLineMinColumn(lineNumber), 0);
+	}
+
+	public static moveToNextBlankLine(_config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean): SingleCursorState {
+		const lineCount = model.getLineCount();
+		let lineNumber = cursor.position.lineNumber;
+		while (lineNumber < lineCount && this._isBlankLine(model, lineNumber)) lineNumber++;
+		while (lineNumber < lineCount && !this._isBlankLine(model, lineNumber)) lineNumber++;
+		return cursor.move(inSelectionMode, lineNumber, model.getLineMinColumn(lineNumber), 0);
+	}
+
+	public static moveToBeginningOfLine(_config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean): SingleCursorState {
+		const lineNumber = cursor.position.lineNumber;
+		const minColumn = model.getLineMinColumn(lineNumber);
+		const firstNonBlankColumn = model.getLineFirstNonWhitespaceColumn(lineNumber) || minColumn;
+		return cursor.move(inSelectionMode, lineNumber, cursor.position.column === firstNonBlankColumn ? minColumn : firstNonBlankColumn, 0);
+	}
+
+	public static moveToEndOfLine(_config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean, sticky: boolean): SingleCursorState {
+		const lineNumber = cursor.position.lineNumber;
+		const maxColumn = model.getLineMaxColumn(lineNumber);
+		return cursor.move(inSelectionMode, lineNumber, maxColumn, sticky ? Constants.MAX_SAFE_SMALL_INTEGER - maxColumn : 0);
+	}
+
+	public static moveToBeginningOfBuffer(_config: CursorConfiguration, _model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean): SingleCursorState {
+		return cursor.move(inSelectionMode, 1, 1, 0);
+	}
+
+	public static moveToEndOfBuffer(_config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean): SingleCursorState {
+		const lineNumber = model.getLineCount();
+		return cursor.move(inSelectionMode, lineNumber, model.getLineMaxColumn(lineNumber), 0);
+	}
 }

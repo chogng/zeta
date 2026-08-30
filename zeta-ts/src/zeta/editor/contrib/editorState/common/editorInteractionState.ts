@@ -20,7 +20,7 @@ export class EditorInteractionStateStore extends Disposable {
 	constructor(private readonly model: TextModel, selections: SelectionSet) {
 		super();
 		this.state = Object.freeze({ focused: false, modelVersion: model.version, selections, scrollLeft: 0, scrollTop: 0 });
-		this._register(model.onDidChange(() => this.update({ modelVersion: model.version })));
+		this._register(model.onDidChangeContent(() => this.update({ modelVersion: model.version })));
 	}
 
 	get value(): EditorInteractionState {

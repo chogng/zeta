@@ -1,5 +1,5 @@
 import { type EditContextOptions } from "../editContext.js";
-import { NativeEditContext, type NativeEditContextWindow } from "./nativeEditContext.js";
+import { BrowserEditContext, type NativeEditContextWindow } from "./nativeEditContext.js";
 
 /** Returns the native constructor exposed by the editor's owner window. */
 export function getNativeEditContextConstructor(container: HTMLElement): NativeEditContextWindow["EditContext"] {
@@ -11,6 +11,6 @@ export function supportsNativeEditContext(container: HTMLElement): boolean {
 }
 
 /** Creates the native implementation after the parent selects this browser capability. */
-export function createNativeEditContext(container: HTMLElement, options: EditContextOptions): NativeEditContext {
-	return new NativeEditContext(container, options);
+export function createNativeEditContext(container: HTMLElement, options: EditContextOptions): BrowserEditContext {
+	return new BrowserEditContext(container, options);
 }

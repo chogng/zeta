@@ -24,7 +24,7 @@ export interface ViewLayerOptions<TLine> {
 /**
  * Reconciles the virtualized visual-line window and owns only its layer DOM.
  *
- * Content-specific rendering belongs to the ViewLines part; overlays consume
+ * Content-specific rendering belongs to the EditorViewLines part; overlays consume
  * the stable line objects exposed by this layer.
  */
 export class ViewLayer<TLine> extends Disposable {

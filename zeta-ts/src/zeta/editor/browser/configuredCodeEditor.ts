@@ -12,9 +12,9 @@ import { type Range } from "../common/core/range.js";
 import { type IDimension } from '../common/core/2d/dimension.js';
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
-import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
+import type { IEditorLanguageFeaturesService } from '../common/services/languageFeatures.js';
 import { ComposableLanguageConfigurationService, type IComposableLanguageConfigurationService } from '../common/languages/ownedLanguageConfigurationContributions.js';
-import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
+import { EditorLanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type PositionAffinity } from '../common/model.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../common/core/misc/indentation.js';
@@ -27,7 +27,7 @@ import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavi
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
 import { isCompletionsEnablement, type CompletionsEnablement } from "../common/services/ownedCompletionsEnablement.js";
-import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "./services/versionedEditorWorkerClient.js";
+import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "./services/editorWorkerService.js";
 import { EditorWorkerRequestExecutor } from "../common/services/editorWorkerRequestExecutor.js";
 import { type DecorationSource, type OwnedDecorationSource } from "./viewParts/decorations/decorations.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
@@ -38,10 +38,11 @@ import { migrateOptions } from "./config/migrateOptions.js";
 import { getTextEditorCapabilityContributions, type EditorCapability, type EditorCommandEvent, type TextEditorContributionContext } from "./editorExtensions.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewParts/viewLines/viewLine.js";
 import { ResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokensService.js';
+import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { LanguageEditingAdapter } from "./view/viewController.js";
-import { type ICodeEditorService } from './services/codeEditorService.js';
+import { type IWidgetCodeEditorRegistry } from './services/codeEditorService.js';
 
 import { type IContentWidget, type IOverlayWidget, type IViewZoneChangeAccessor } from './editorBrowser.js';
 import { type EditorResourceInput } from './editorInput.js';
@@ -93,13 +94,13 @@ export interface ConfiguredCodeEditorOptions {
 	/** Optional host-scoped Tab-focus state shared by multiple editor instances. */
 	readonly tabFocus?: TabFocus;
 	/** Optional shared language registrations and providers for this editor host. */
-	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly languageFeaturesService?: IEditorLanguageFeaturesService;
 	/** Optional shared language editing configuration for this editor host. */
 	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	/** Window-scoped constructor service for runtime editor contributions. */
 	readonly instantiationService?: IInstantiationService;
 	/** Host-scoped registry for live code editors and resource open handlers. */
-	readonly codeEditorService?: ICodeEditorService;
+	readonly codeEditorService?: IWidgetCodeEditorRegistry;
 	/** Optional accessibility policy used by native screen-reader content. */
 	readonly accessibilityService?: IAccessibilityService;
 	/** Chooses line-structured content for native screen-reader projection. */
@@ -194,6 +195,7 @@ export interface IConfiguredCodeEditor extends IDisposable {
 	readonly viewport: View;
 	readonly selections: CursorsController;
 	readonly view: EditorView;
+	getId(): string;
 	announceAccessibilityStatus(message: string): void;
 	layout(dimension: IDimension): void;
 	focus(): void;
@@ -236,13 +238,14 @@ export class ConfiguredCodeEditor extends Disposable implements IConfiguredCodeE
 			const editorWorker = this._register(options.editorWorkerFactory
 				? options.editorWorkerFactory(model)
 				: new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor()));
-			this.onDidChange = listener => model.onDidChange(() => listener());
+			this.onDidChange = listener => model.onDidChangeContent(() => listener());
 			if (options.languageFeaturesService && !options.languageConfigurationService) {
 				throw new TypeError('Editor language features require their language configuration service');
 			}
 			const languageConfigurationService = options.languageConfigurationService ?? this._register(new ComposableLanguageConfigurationService());
-			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(languageConfigurationService));
-			const semanticTokensStylingService = this._register(new ResolvedSemanticTokensService());
+			const languageFeaturesService = options.languageFeaturesService ?? this._register(new EditorLanguageFeaturesService(languageConfigurationService));
+			const semanticTokensStylingService = this._register(new SemanticTokensStylingService());
+			const resolvedSemanticTokensService = this._register(new ResolvedSemanticTokensService());
 			const configurations = languageConfigurationService;
 			this.selections = this._register(new CursorsController(
 				model,
@@ -277,6 +280,7 @@ export class ConfiguredCodeEditor extends Disposable implements IConfiguredCodeE
 					languageId,
 					languageFeaturesService,
 					semanticTokensStylingService,
+					resolvedSemanticTokensService,
 					configurations,
 					selections: this.selections,
 					tabFocus,
@@ -317,6 +321,12 @@ export class ConfiguredCodeEditor extends Disposable implements IConfiguredCodeE
 				instantiationService: options.instantiationService,
 				onContributionError: onLanguageError,
 				viewport: {
+					cursorOptions: {
+						readOnly: options.input.readOnly,
+						stickyTabStops: options.stickyTabStops,
+					},
+					languageId,
+					languageConfigurationService,
 					lineVisibilitySource: lineProjection?.visibilitySource,
 					decorationSources,
 					semanticTokenSource,
@@ -412,6 +422,8 @@ export class ConfiguredCodeEditor extends Disposable implements IConfiguredCodeE
 	public registerEditorLifetime<T extends IDisposable>(value: T): T {
 		return this._register(value);
 	}
+
+	getId(): string { return this.codeEditor.getId(); }
 
 	layout(dimension: IDimension): void { this.codeEditor.layout(dimension); }
 	announceAccessibilityStatus(message: string): void { this.codeEditor.announceAccessibilityStatus(message); }

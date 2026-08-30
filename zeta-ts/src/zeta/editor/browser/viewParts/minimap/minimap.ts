@@ -36,7 +36,7 @@ interface MinimapOptions {
 }
 
 /** Owns the minimap canvas, marker layer, slider, and pointer navigation. */
-export class Minimap extends EditorViewPart {
+export class EditorMinimap extends EditorViewPart {
 	public readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly canvas: HTMLCanvasElement;

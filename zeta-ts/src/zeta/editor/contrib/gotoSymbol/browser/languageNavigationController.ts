@@ -20,7 +20,7 @@ export class LanguageNavigationController extends Disposable {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
-		this._register(viewport.textModel.onDidChange(() => this.closePeek()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.closePeek()));
 		this._register(toDisposable(() => this.cancelRequest()));
 	}
 

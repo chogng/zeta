@@ -2,16 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOptions.js";
+import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
-import { ZetaDOMLineBreaksComputer } from "../../browser/view/zetaDomLineBreaksComputer.js";
+import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
+import { PositionAffinity } from "../../common/model.js";
+import { CursorState, SelectionStartKind, SingleCursorState } from '../../common/cursorCommon.js';
+import { CursorContext } from '../../common/cursor/cursorContext.js';
+import { Cursor } from '../../common/cursor/oneCursor.js';
+import { Selection } from '../../common/core/selection.js';
+import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { createTestCursorConfiguration } from '../common/testCursorConfiguration.js';
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
 	using model = new TextModel("ab😀cd\nxyz");
-	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 	});
@@ -43,13 +51,13 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
 
 test("browser visual-line projection applies wrapping indent modes to continuation rows", () => {
 	using model = new TextModel("  abcdefghijkl");
-	const computer = new ZetaDOMLineBreaksComputer(new FixedTextMeasurer(), 4);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.None).wrappedTextIndentWidth, 0);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.Same).wrappedTextIndentWidth, 20);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.Indent).wrappedTextIndentWidth, 40);
-	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.DeepIndent).wrappedTextIndentWidth, 80);
+	const measurer = new FixedTextMeasurer();
+	assert.equal(computeWrappedIndent(model, measurer, 110, WrappingIndent.None), 0);
+	assert.equal(computeWrappedIndent(model, measurer, 110, WrappingIndent.Same), 20);
+	assert.equal(computeWrappedIndent(model, measurer, 110, WrappingIndent.Indent), 40);
+	assert.equal(computeWrappedIndent(model, measurer, 110, WrappingIndent.DeepIndent), 80);
 
-	using projection = new ViewModelLines(model, computer, {
+	using projection = createViewModelLines(model, measurer, {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 70,
 		wrappingIndent: WrappingIndent.Same,
@@ -69,21 +77,72 @@ test("browser visual-line projection applies wrapping indent modes to continuati
 	assert.equal(projection.projection.lines[1]?.wrappedTextIndentWidth, 40);
 });
 
+test("view-model lines expose wrapped cursor rows and convert positions through the same projection", () => {
+	using model = new TextModel("abcdef\nxy");
+	using lines = createViewModelLines(model, new FixedTextMeasurer(), {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 20,
+	});
+	const coordinates = lines.createCoordinatesConverter();
+
+	assert.deepEqual(
+		Array.from({ length: lines.getLineCount() }, (_, index) => lines.getLineContent(index + 1)),
+		["ab", "cd", "ef", "xy"],
+	);
+	assert.deepEqual(coordinates.convertViewPositionToModelPosition(new Position(2, 2)), new Position(1, 4));
+	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3)), new Position(2, 1));
+	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3), PositionAffinity.Left), new Position(1, 3));
+	assert.equal(coordinates.getModelLineViewLineCount(1), 3);
+});
+
+test('Cursor keeps model and wrapped view states in their own coordinate domains', () => {
+	using model = new TextModel('abcdef');
+	using lines = createViewModelLines(model, new FixedTextMeasurer(), {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 20,
+	});
+	using languageConfigurationService = new ComposableLanguageConfigurationService();
+	const context = new CursorContext(
+		model,
+		lines,
+		lines.createCoordinatesConverter(),
+		createTestCursorConfiguration(model, languageConfigurationService),
+	);
+	const cursor = new Cursor(context);
+
+	const modelState = CursorState.fromModelSelection(Selection.fromPositions(new Position(1, 4)));
+	cursor.setState(context, modelState.modelState, null);
+	assert.deepEqual(cursor.modelState.position, new Position(1, 4));
+	assert.deepEqual(cursor.viewState.position, new Position(2, 2));
+
+	const viewState = CursorState.fromViewState(new SingleCursorState(
+		new Range(3, 2, 3, 2),
+		SelectionStartKind.Simple,
+		0,
+		new Position(3, 2),
+		0,
+	));
+	cursor.setState(context, null, viewState.viewState);
+	assert.deepEqual(cursor.viewState.position, new Position(3, 2));
+	assert.deepEqual(cursor.modelState.position, new Position(1, 6));
+	cursor.dispose(context);
+});
+
 test("browser visual-line projection validates its public wrapping inputs", () => {
 	using model = new TextModel("text");
-	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapping: "invalid" as EditorLineWrapping,
 	}), /wrapping mode/);
-	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapWidth: -1,
 	}), /wrap width/);
-	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
 		wrappingIndent: "Same" as unknown as WrappingIndent,
 	}), /wrapping indent mode/);
-	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
 		initialWrappingMeasurement: { schedule: undefined as never },
 	}), /requires a scheduler/);
-	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
 		initialWrappingMeasurement: { initialLineCount: 0, schedule: () => toDisposable(() => {}) },
 	}), /measurement count/);
 });
@@ -92,7 +151,7 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 	using model = new TextModel("abc\ndefg\nhij");
 	const scheduled: (() => void)[] = [];
 	const measurer = new CountingTextMeasurer();
-	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(measurer), {
+	using projection = createViewModelLines(model, measurer, {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		initialWrappingMeasurement: {
@@ -128,7 +187,7 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 test("browser visual-line projection restarts an incomplete wrapped scan after an edit", () => {
 	using model = new TextModel("abc\ndef");
 	const scheduled: (() => void)[] = [];
-	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		initialWrappingMeasurement: {
@@ -188,3 +247,39 @@ class CountingTextMeasurer extends FixedTextMeasurer {
 		return super.measureLineWidth(text);
 	}
 }
+
+function createViewModelLines(model: TextModel, measurer: TextMeasurer, options: ConstructorParameters<typeof ViewModelLines>[4] = {}): ViewModelLines {
+	return new ViewModelLines(model, createFactory(measurer), TEST_FONT_INFO, 4, options);
+}
+
+function computeWrappedIndent(model: TextModel, measurer: TextMeasurer, wrapWidth: number, wrappingIndent: WrappingIndent): number {
+	const computer = createFactory(measurer).createLineBreaksComputer({
+		getLineContent: lineNumber => model.getLineContent(lineNumber),
+		getLineInjectedText: () => null,
+	}, TEST_FONT_INFO, 4, wrapWidth / TEST_FONT_INFO.typicalHalfwidthCharacterWidth, wrappingIndent, 'normal', false);
+	computer.addRequest(1, null);
+	return (computer.finalize()[0]?.wrappedTextIndentLength ?? 0) * TEST_FONT_INFO.spaceWidth;
+}
+
+function createFactory(measurer: TextMeasurer): DOMLineBreaksComputerFactory {
+	return new DOMLineBreaksComputerFactory(new WeakRef({} as Window), measurer);
+}
+
+const TEST_FONT_INFO = new FontInfo({
+	pixelRatio: 1,
+	fontFamily: 'monospace',
+	fontWeight: 'normal',
+	fontSize: 10,
+	fontFeatureSettings: 'none',
+	fontVariationSettings: 'normal',
+	lineHeight: 20,
+	letterSpacing: 0,
+	isMonospace: true,
+	typicalHalfwidthCharacterWidth: 10,
+	typicalFullwidthCharacterWidth: 20,
+	canUseHalfwidthRightwardsArrow: true,
+	spaceWidth: 10,
+	middotWidth: 10,
+	wsmiddotWidth: 10,
+	maxDigitWidth: 10,
+}, true);

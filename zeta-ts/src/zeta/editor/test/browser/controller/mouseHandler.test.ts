@@ -22,6 +22,12 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 }
 
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
+
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
@@ -30,6 +36,7 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -40,7 +47,7 @@ for (const [name, value] of Object.entries({
 const { View } = await import(
 	"../../../browser/view.js"
 );
-const { MouseHandler } = await import(
+const { EditorPointerSelectionHandler } = await import(
 	"../../../browser/controller/mouseHandler.js"
 );
 
@@ -71,7 +78,7 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 	viewport.element.releasePointerCapture = pointerId => {
 		captured.delete(pointerId);
 	};
-	const pointer = new MouseHandler(viewport, selections);
+	const pointer = new EditorPointerSelectionHandler(viewport, selections);
 
 	const click = pointerEvent(dom.window, "pointerdown", 148, 75, {
 		pointerId: 1,
@@ -276,7 +283,7 @@ test("Pointer and viewport selection wiring rejects different text models", () =
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	assert.throws(
-		() => new MouseHandler(viewport, selections),
+		() => new EditorPointerSelectionHandler(viewport, selections),
 		/must share one text model/,
 	);
 	model.applyEdits([{
@@ -308,7 +315,7 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
 	viewport.element.setPointerCapture = pointerId => captured.add(pointerId);
 	viewport.element.hasPointerCapture = pointerId => captured.has(pointerId);
 	viewport.element.releasePointerCapture = pointerId => captured.delete(pointerId);
-	using pointer = new MouseHandler(viewport, selections);
+	using pointer = new EditorPointerSelectionHandler(viewport, selections);
 
 	viewport.element.dispatchEvent(pointerEvent(dom.window, "pointerdown", 172, 115, {
 		pointerId: 19,
@@ -327,10 +334,10 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
 	}));
 
 	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
-		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((0) + 1, (6) + 1)),
-		Selection.fromPositions(new Position((1) + 1, (2) + 1), new Position((1) + 1, (2) + 1)),
-		Selection.fromPositions(new Position((2) + 1, (2) + 1), new Position((2) + 1, (5) + 1)),
 		Selection.fromPositions(new Position((3) + 1, (2) + 1), new Position((3) + 1, (2) + 1)),
+		Selection.fromPositions(new Position((2) + 1, (2) + 1), new Position((2) + 1, (5) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (2) + 1), new Position((1) + 1, (2) + 1)),
+		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((0) + 1, (6) + 1)),
 	], 0));
 	assert.deepEqual([...captured], []);
 	dom.window.close();
@@ -367,7 +374,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 	viewport.element.releasePointerCapture = pointerId => {
 		captured.delete(pointerId);
 	};
-	using pointer = new MouseHandler(viewport, selections);
+	using pointer = new EditorPointerSelectionHandler(viewport, selections);
 
 	viewport.element.dispatchEvent(pointerEvent(
 		dom.window,

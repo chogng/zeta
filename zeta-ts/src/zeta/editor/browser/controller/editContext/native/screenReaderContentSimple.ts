@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { clampScreenReaderOffset, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, type NativeScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
 
 /** Plain-text screen-reader projection used by the native EditContext. */
-export class SimpleScreenReaderContent extends Disposable implements NativeScreenReaderContent {
+export class EditorSimpleScreenReaderContent extends Disposable implements NativeScreenReaderContent {
 	readonly element: HTMLDivElement;
 	protected state: ScreenReaderContentState | undefined;
 

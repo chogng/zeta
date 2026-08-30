@@ -14,7 +14,7 @@ import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { SuggestController } from "../../browser/suggestController.js";
+import { EditorSuggestController } from "../../browser/suggestController.js";
 import { LanguageEditingAdapter } from "../../../../browser/view/viewController.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -177,7 +177,7 @@ test("Completion request wiring rejects a same-model session from another servic
 	});
 
 	using input = new EditorView(viewport, selections);
-	assert.throws(() => new SuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
+	assert.throws(() => new EditorSuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
 	dom.window.close();
 });
 
@@ -187,7 +187,7 @@ interface TriggerFixture extends Disposable {
 	readonly service: LanguageCompletionService;
 	readonly session: LanguageCompletionSessionController;
 	readonly input: InstanceType<typeof EditorView>;
-	readonly suggest: SuggestController;
+	readonly suggest: EditorSuggestController;
 }
 
 function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
@@ -210,7 +210,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	viewport.layout({ width: 300, height: 40 });
 	const languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
 	const input = new EditorView(viewport, selections, { languageEditing });
-	const suggest = new SuggestController(input, selections, service, session, "typescript");
+	const suggest = new EditorSuggestController(input, selections, service, session, "typescript");
 	input.focus();
 	return {
 		dom,

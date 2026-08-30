@@ -5,19 +5,19 @@ import { type IAccessibilityService } from '../../platform/accessibility/common/
 import { type CursorsController } from '../common/cursor/cursor.js';
 import { type IDimension } from '../common/core/2d/dimension.js';
 import { type TextModel } from '../common/model/textModel.js';
-import { type AbstractEditContext, type CompositionController, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
+import { type EditorInputContext, type CompositionController, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
 import { createNativeEditContext, supportsNativeEditContext } from './controller/editContext/native/editContextFactory.js';
-import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
-import { ViewController, type EditorCommandContext, type EditorCommandTransformer, type EditorLanguageEditingAdapter, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from './view/viewController.js';
+import { EditorTextAreaInputContext } from './controller/editContext/textArea/textAreaEditContext.js';
+import { EditorViewInputController, type EditorCommandContext, type EditorCommandTransformer, type EditorLanguageEditingAdapter, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from './view/viewController.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
 import { type IEditorAriaOptions } from './editorBrowser.js';
-import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
+import { EditorViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { View, type EditorViewportOptions } from './view.js';
 
 export type EditorViewViewportOptions = Omit<EditorViewportOptions, 'container' | 'model' | 'lineHeight' | 'ariaLabel' | 'selectionController'>;
 
 export type { EditorCommandContext, EditorCommandTransformer, EditorLanguageEditingAdapter, EditorLanguageTypeCommand, EditorViewDidEditEvent, EditorViewTextUpdateEvent } from './view/viewController.js';
-export { ViewUserInputEvents } from './view/viewUserInputEvents.js';
+export { EditorViewUserInputEvents } from './view/viewUserInputEvents.js';
 export type { EventCallback, EditorViewMouseTargetKind, EditorViewMouseTarget, EditorViewMouseEvent, EditorViewPartialMouseEvent } from './view/viewUserInputEvents.js';
 
 export interface EditorViewOptions {
@@ -38,14 +38,14 @@ export interface EditorViewOptions {
 	readonly languageEditing?: EditorLanguageEditingAdapter;
 	readonly wordPattern?: () => RegExp | undefined;
 	/** Optional view-input bridge; the view creates one when omitted. */
-	readonly userInputEvents?: ViewUserInputEvents;
+	readonly userInputEvents?: EditorViewUserInputEvents;
 }
 
 /**
  * The browser view/input boundary for one line editor.
  *
  * This follows the VS Code split: the view selects and owns the concrete
- * EditContext adapters own browser input, while ViewController routes semantic
+ * EditContext adapters own browser input, while EditorViewInputController routes semantic
  * input into common commands.
  * View owns DOM projection and rendering; feature contributions own
  * policies such as completion.
@@ -54,12 +54,12 @@ export class EditorView extends Disposable {
 	readonly ownerId: string;
 	readonly viewport: View;
 	readonly selectionController: CursorsController;
-	readonly editContext: AbstractEditContext;
+	readonly editContext: EditorInputContext;
 	readonly element: HTMLElement;
 	readonly textArea: HTMLTextAreaElement | undefined;
 	readonly compositionController: CompositionController;
-	readonly viewController: ViewController;
-	readonly userInputEvents: ViewUserInputEvents;
+	readonly viewController: EditorViewInputController;
+	readonly userInputEvents: EditorViewUserInputEvents;
 	readonly onWillBeforeInput: Event<InputEvent>;
 	readonly onWillTextUpdate: Event<EditorViewTextUpdateEvent>;
 	readonly onWillKeydown: Event<KeyboardEvent>;
@@ -93,7 +93,7 @@ export class EditorView extends Disposable {
 				}));
 			const viewOptions = existingViewport ? legacyOptions ?? {} : options!;
 			validateViewOptions(viewOptions);
-			this.userInputEvents = viewOptions.userInputEvents ?? new ViewUserInputEvents();
+			this.userInputEvents = viewOptions.userInputEvents ?? new EditorViewUserInputEvents();
 			if (this.viewport.textModel !== selectionController.textModel) {
 				throw new TypeError('Editor view and selection controller must share one text model');
 			}
@@ -108,7 +108,7 @@ export class EditorView extends Disposable {
 			}
 
 			const languageEditing = viewOptions.languageEditing;
-			this.viewController = this._register(new ViewController(
+			this.viewController = this._register(new EditorViewInputController(
 				this.viewport,
 				selectionController,
 				{ languageEditing, wordPattern: viewOptions.wordPattern, userInputEvents: this.userInputEvents },
@@ -129,7 +129,7 @@ export class EditorView extends Disposable {
 				bracketColorizationSource: viewOptions.bracketColorizationSource,
 			}));
 			this.element = this.editContext.domNode;
-			this.textArea = this.editContext instanceof TextAreaEditContext
+			this.textArea = this.editContext instanceof EditorTextAreaInputContext
 				? this.editContext.domNode
 				: undefined;
 			this.compositionController = this.editContext.compositionController;
@@ -161,7 +161,7 @@ export class EditorView extends Disposable {
 				this.editContext.clear();
 			}));
 			this._register(selectionController.onDidChange(() => this.synchronizeEditContext()));
-			this._register(this.viewport.textModel.onDidChange(() => this.synchronizeEditContext()));
+			this._register(this.viewport.textModel.onDidChangeContent(() => this.synchronizeEditContext()));
 			this.synchronizeEditContext();
 			this.editContext.connect();
 		} catch (error) {
@@ -259,11 +259,11 @@ export class EditorView extends Disposable {
 function createEditContext(
 	container: HTMLElement,
 	options: EditContextOptions,
-): AbstractEditContext {
+): EditorInputContext {
 	if (supportsNativeEditContext(container)) {
 		return createNativeEditContext(container, options);
 	}
-	return new TextAreaEditContext(container, options);
+	return new EditorTextAreaInputContext(container, options);
 }
 
 let nextViewId = 1;

@@ -114,6 +114,34 @@ export function splitLines(value: string): string[] {
 	return value.split(/\r\n|\r|\n/u);
 }
 
+export function firstNonWhitespaceIndex(value: string): number {
+	for (let index = 0; index < value.length; index++) {
+		const characterCode = value.charCodeAt(index);
+		if (characterCode !== 32 && characterCode !== 9) return index;
+	}
+	return -1;
+}
+
+export function lastNonWhitespaceIndex(value: string, startIndex = value.length - 1): number {
+	for (let index = startIndex; index >= 0; index--) {
+		const characterCode = value.charCodeAt(index);
+		if (characterCode !== 32 && characterCode !== 9) return index;
+	}
+	return -1;
+}
+
+export function isAsciiDigit(characterCode: number): boolean {
+	return characterCode >= 48 && characterCode <= 57;
+}
+
+export function isLowerAsciiLetter(characterCode: number): boolean {
+	return characterCode >= 97 && characterCode <= 122;
+}
+
+export function isUpperAsciiLetter(characterCode: number): boolean {
+	return characterCode >= 65 && characterCode <= 90;
+}
+
 export class GraphemeIterator {
 	private readonly boundaries: readonly number[];
 	private boundaryIndex: number;
@@ -154,6 +182,19 @@ export class GraphemeIterator {
 	public eol(): boolean {
 		return this.boundaryIndex === this.boundaries.length - 1;
 	}
+}
+
+export function nextCharLength(value: string, initialOffset: number): number {
+	return new GraphemeIterator(value, initialOffset).nextGraphemeLength();
+}
+
+export function prevCharLength(value: string, initialOffset: number): number {
+	return new GraphemeIterator(value, initialOffset).prevGraphemeLength();
+}
+
+/** Returns the offset reached by deleting the preceding complete grapheme. */
+export function getLeftDeleteOffset(offset: number, value: string): number {
+	return offset - prevCharLength(value, offset);
 }
 
 /** Returns the UTF-16 boundaries of the grapheme containing one offset. */
