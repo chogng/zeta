@@ -4,6 +4,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
+use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use unicode_width::UnicodeWidthChar;
@@ -11,6 +12,7 @@ use unicode_width::UnicodeWidthStr;
 use zeta_protocol::Session;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
+use zeta_utils_elapsed::format_compact_duration;
 
 pub(crate) const DEFAULT_MAX_ROWS: usize = 4;
 const MARKER_WIDTH: usize = 2;
@@ -165,15 +167,14 @@ pub(crate) fn draw_subagent_pane(
                 .active_turn_started_at_unix_ms
                 .map(|started_at| view.now_unix_ms.saturating_sub(started_at))
                 .unwrap_or_default();
-            let elapsed_seconds = row
+            let elapsed = row
                 .completed_turn_duration_ms
-                .saturating_add(active_turn_duration_ms)
-                / 1_000;
+                .saturating_add(active_turn_duration_ms);
             Line::styled(
                 row_text(
                     marker,
                     &row.label,
-                    &format_elapsed_compact(elapsed_seconds),
+                    &format_compact_duration(Duration::from_millis(elapsed)),
                     usize::from(area.width),
                 ),
                 style,
@@ -204,21 +205,6 @@ fn truncate_to_width(text: &str, width: usize) -> String {
             })
         })
         .collect()
-}
-
-fn format_elapsed_compact(elapsed_seconds: u64) -> String {
-    if elapsed_seconds < 60 {
-        return format!("{elapsed_seconds}s");
-    }
-    if elapsed_seconds < 3_600 {
-        let minutes = elapsed_seconds / 60;
-        let seconds = elapsed_seconds % 60;
-        return format!("{minutes}m {seconds:02}s");
-    }
-    let hours = elapsed_seconds / 3_600;
-    let minutes = (elapsed_seconds % 3_600) / 60;
-    let seconds = elapsed_seconds % 60;
-    format!("{hours}h {minutes:02}m {seconds:02}s")
 }
 
 fn current_unix_millis() -> u64 {

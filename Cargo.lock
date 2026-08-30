@@ -12266,6 +12266,7 @@ dependencies = [
  "zeta-slash-commands",
  "zeta-terminal-detection",
  "zeta-theme",
+ "zeta-utils-elapsed",
  "zeta-utils-image",
  "zeta-utils-path",
 ]
@@ -12343,6 +12344,10 @@ dependencies = [
  "sha1",
  "tokio",
 ]
+
+[[package]]
+name = "zeta-utils-elapsed"
+version = "0.1.0"
 
 [[package]]
 name = "zeta-utils-home-dir"

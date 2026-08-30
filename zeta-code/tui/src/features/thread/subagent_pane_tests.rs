@@ -1,6 +1,5 @@
 use super::SubagentPaneState;
 use super::draw_subagent_pane;
-use super::format_elapsed_compact;
 use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -91,14 +90,6 @@ fn pane_is_absent_without_an_active_subagent() {
     assert_eq!(pane.desired_rows(), 0);
     assert!(pane.view().rows.is_empty());
     assert!(!pane.focus());
-}
-
-#[test]
-fn elapsed_time_uses_the_compact_codex_status_format() {
-    assert_eq!(format_elapsed_compact(0), "0s");
-    assert_eq!(format_elapsed_compact(59), "59s");
-    assert_eq!(format_elapsed_compact(62), "1m 02s");
-    assert_eq!(format_elapsed_compact(3_789), "1h 03m 09s");
 }
 
 fn session() -> Session {

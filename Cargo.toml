@@ -106,6 +106,7 @@ members = [
     "zeta-code/tui",
     "zeta-rs/utils/absolute-path",
     "zeta-rs/utils/cache",
+    "zeta-rs/utils/elapsed",
     "zeta-rs/utils/home-dir",
     "zeta-rs/utils/image",
     "zeta-rs/utils/json-to-toml",
@@ -403,6 +404,7 @@ zeta-ui-components = { path = "app/ui-components" }
 zeta-workbench = { path = "app/workbench" }
 zeta-utils-absolute-path = { path = "zeta-rs/utils/absolute-path" }
 zeta-utils-cache = { path = "zeta-rs/utils/cache" }
+zeta-utils-elapsed = { path = "zeta-rs/utils/elapsed" }
 zeta-utils-home-dir = { path = "zeta-rs/utils/home-dir" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-json-to-toml = { path = "zeta-rs/utils/json-to-toml" }
