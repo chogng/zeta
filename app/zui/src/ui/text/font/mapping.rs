@@ -16,6 +16,7 @@ pub(crate) fn shaping_family(family: &FontFamily) -> Family<'_> {
 pub(crate) fn shaping_weight(weight: FontWeight) -> Weight {
     match weight {
         FontWeight::Normal => Weight::NORMAL,
+        FontWeight::SemiBold => Weight::SEMIBOLD,
         FontWeight::Bold => Weight::BOLD,
     }
 }
@@ -26,3 +27,7 @@ pub(crate) fn shaping_style(style: FontStyle) -> Style {
         FontStyle::Italic => Style::Italic,
     }
 }
+
+#[cfg(test)]
+#[path = "mapping_tests.rs"]
+mod tests;

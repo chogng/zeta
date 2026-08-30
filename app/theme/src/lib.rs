@@ -4,4 +4,5 @@ mod palette;
 
 pub use palette::DEFAULT_UI_THEME;
 pub use palette::EditorSyntaxColors;
+pub use palette::TypographyStyle;
 pub use palette::UiTheme;

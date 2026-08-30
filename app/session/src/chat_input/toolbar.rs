@@ -22,8 +22,6 @@ use zui::ui::{
 
 const TOOLBAR_ITEM_HEIGHT: f32 = 24.0;
 const TOOLBAR_ITEM_GAP: f32 = 6.0;
-const TOOLBAR_FONT_SIZE: f32 = 12.0;
-const TOOLBAR_LINE_HEIGHT: f32 = 16.0;
 const TOOLBAR_HORIZONTAL_PADDING: f32 = 7.0;
 const TOOLBAR_ICON_SIZE: f32 = 14.0;
 const TOOLBAR_CONTENT_GAP: f32 = 4.0;
@@ -54,8 +52,7 @@ impl ChatInputToolbar {
             format!("Git branch: {}", labels[2]),
             format!("Git {}", labels[3]),
         ];
-        let natural_text_style =
-            TextStyle::new(TOOLBAR_FONT_SIZE, style.accent).with_line_height(TOOLBAR_LINE_HEIGHT);
+        let natural_text_style = style.compact_action_label.text_style(style.accent);
         let natural_button_style = button_style(style, natural_text_style.clone(), 1.0);
         let item_widths = labels
             .iter()
@@ -67,8 +64,9 @@ impl ChatInputToolbar {
         let total_width =
             item_widths.iter().sum::<f32>() + TOOLBAR_ITEM_GAP * (item_widths.len() - 1) as f32;
         let scale = (bounds.size.width / total_width).clamp(0.0, 1.0);
-        let scaled_text_style = TextStyle::new(TOOLBAR_FONT_SIZE * scale, style.accent)
-            .with_line_height(TOOLBAR_LINE_HEIGHT * scale);
+        let scaled_text_style = style
+            .compact_action_label
+            .scaled_text_style(style.accent, scale);
         let button_style = button_style(style, scaled_text_style.clone(), scale);
         let item = |target, icon, label: String, index: usize| {
             ActionBarItem::Action(

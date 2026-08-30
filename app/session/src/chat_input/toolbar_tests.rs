@@ -3,26 +3,13 @@ use crate::SessionPaneContext;
 use crate::SessionPaneStyle;
 use crate::interaction::CONTEXT_TOOLBAR;
 use crate::interaction::ContextAction;
-use zui::ui::{Component, Point, Rect, TextInputLayoutEngine, UiScene};
+use zeta_ui_theme::DEFAULT_UI_THEME;
+use zui::ui::{Component, FontWeight, Point, Rect, TextInputLayoutEngine, UiScene};
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
-const STYLE: SessionPaneStyle = SessionPaneStyle::new(
-    zui::ui::Color::WHITE,
-    zui::ui::Color::rgb(246, 246, 247),
-    zui::ui::Color::rgb(248, 248, 249),
-    zui::ui::Color::rgb(222, 222, 224),
-    zui::ui::Color::rgb(38, 38, 41),
-    zui::ui::Color::rgb(126, 126, 132),
-    zui::ui::Color::rgb(15, 110, 96),
-    zui::ui::Color::rgb(16, 124, 16),
-    zui::ui::Color::rgb(154, 103, 0),
-    zui::ui::Color::rgb(180, 38, 38),
-    zui::ui::Color::rgb(235, 235, 237),
-    zeta_ui_components::ScrollViewStyle::new(zeta_ui_components::ScrollbarStyle::new(
-        zui::ui::Color::TRANSPARENT,
-        zui::ui::Color::rgba(100, 100, 100, 51),
-    )),
-);
+fn style() -> SessionPaneStyle {
+    SessionPaneStyle::from_theme(DEFAULT_UI_THEME)
+}
 
 fn context(path: &str, branch: Option<&str>, change_count: Option<usize>) -> SessionPaneContext {
     SessionPaneContext::new(
@@ -38,17 +25,18 @@ fn context(path: &str, branch: Option<&str>, change_count: Option<usize>) -> Ses
 
 #[test]
 fn toolbar_projects_four_real_context_values_as_action_buttons() {
+    let style = style();
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
-        STYLE,
+        style,
         &mut text_layout,
         &dispatch,
     );
-    let mut scene = UiScene::new(STYLE.surface);
+    let mut scene = UiScene::new(style.surface);
 
     toolbar.paint(&mut scene);
 
@@ -62,6 +50,12 @@ fn toolbar_projects_four_real_context_values_as_action_buttons() {
         ["Local", "~/Desktop/zeta", "main", "Changes 7 • +7 -0"]
     );
     assert_eq!(scene.rects().len(), 4);
+    assert!(scene.text_blocks().iter().all(|block| {
+        block
+            .spans()
+            .iter()
+            .all(|span| span.style().weight() == FontWeight::SemiBold)
+    }));
     assert!(toolbar.item_bounds(0).unwrap().right() < toolbar.item_bounds(1).unwrap().origin.x);
     assert_eq!(toolbar.hit_test(Point::new(40.0, 612.0)), Some(0));
     assert!(
@@ -71,17 +65,18 @@ fn toolbar_projects_four_real_context_values_as_action_buttons() {
 
 #[test]
 fn changes_label_uses_text_success_and_error_colors() {
+    let style = style();
     let context = SessionPaneContext::new("Local", "~/Desktop/zeta", "main", "Changes 5 • +84 -39");
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
-        STYLE,
+        style,
         &mut text_layout,
         &dispatch,
     );
-    let mut scene = UiScene::new(STYLE.surface);
+    let mut scene = UiScene::new(style.surface);
 
     toolbar.paint(&mut scene);
 
@@ -97,24 +92,25 @@ fn changes_label_uses_text_success_and_error_colors() {
             .map(|span| (span.text(), span.style().color()))
             .collect::<Vec<_>>(),
         [
-            ("Changes ", STYLE.text),
-            ("5 ", STYLE.text),
-            ("• ", STYLE.text),
-            ("+84 ", STYLE.success),
-            ("-39", STYLE.error),
+            ("Changes ", style.text),
+            ("5 ", style.text),
+            ("• ", style.text),
+            ("+84 ", style.success),
+            ("-39", style.error),
         ]
     );
 }
 
 #[test]
 fn toolbar_scales_all_items_into_a_narrow_input_surface() {
+    let style = style();
     let context = context("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 200.0, 192.0, 24.0),
         &context,
-        STYLE,
+        style,
         &mut text_layout,
         &dispatch,
     );
@@ -126,17 +122,18 @@ fn toolbar_scales_all_items_into_a_narrow_input_surface() {
 
 #[test]
 fn toolbar_registers_the_same_button_bounds_used_for_painting() {
+    let style = style();
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
-        STYLE,
+        style,
         &mut text_layout,
         &dispatch,
     );
-    let mut frame = UiFrame::<InteractionFrame>::new(STYLE.surface);
+    let mut frame = UiFrame::<InteractionFrame>::new(style.surface);
     frame.draw_component(&toolbar);
 
     let location = toolbar.item_bounds(0).unwrap();
@@ -150,17 +147,18 @@ fn toolbar_registers_the_same_button_bounds_used_for_painting() {
 
 #[test]
 fn toolbar_projects_host_hover_state_back_into_the_hit_button() {
+    let style = style();
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let mut dispatch = UiDispatch::default();
     let resting = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
-        STYLE,
+        style,
         &mut text_layout,
         &dispatch,
     );
-    let mut frame = UiFrame::<InteractionFrame>::new(STYLE.surface);
+    let mut frame = UiFrame::<InteractionFrame>::new(style.surface);
     frame.draw_component(&resting);
     let first = resting.item_bounds(0).unwrap();
     dispatch.pointer_moved(
@@ -170,31 +168,32 @@ fn toolbar_projects_host_hover_state_back_into_the_hit_button() {
     let hovered = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
-        STYLE,
+        style,
         &mut text_layout,
         &dispatch,
     );
-    let mut scene = UiScene::new(STYLE.surface);
+    let mut scene = UiScene::new(style.surface);
 
     hovered.paint(&mut scene);
 
-    assert_eq!(scene.rects()[0].fill(), STYLE.surface_hovered);
-    assert_eq!(scene.rects()[1].fill(), STYLE.surface_raised);
+    assert_eq!(scene.rects()[0].fill(), style.surface_hovered);
+    assert_eq!(scene.rects()[1].fill(), style.surface_raised);
 }
 
 #[test]
 fn toolbar_buttons_publish_accessible_labels_and_a_toolbar_parent() {
+    let style = style();
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
-        STYLE,
+        style,
         &mut text_layout,
         &dispatch,
     );
-    let mut frame = UiFrame::<InteractionFrame>::new(STYLE.surface);
+    let mut frame = UiFrame::<InteractionFrame>::new(style.surface);
     frame.draw_component(&toolbar);
 
     let nodes = frame.interaction().accessibility_nodes(&dispatch);

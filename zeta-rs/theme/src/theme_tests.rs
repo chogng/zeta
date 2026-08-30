@@ -115,7 +115,7 @@ fn embedded_snapshots_expose_typed_shared_size_tokens() {
     );
     assert_eq!(
         snapshot
-            .required_size("fontWeight.semiBold")
+            .required_size(tokens::FONT_WEIGHT_SEMI_BOLD)
             .unwrap()
             .unit(),
         ThemeSizeUnit::Unitless
@@ -133,7 +133,11 @@ fn embedded_snapshots_expose_typed_shared_size_tokens() {
             .unwrap(),
         10.0
     );
-    assert!(snapshot.required_pixel_size("fontWeight.semiBold").is_err());
+    assert!(
+        snapshot
+            .required_pixel_size(tokens::FONT_WEIGHT_SEMI_BOLD)
+            .is_err()
+    );
 }
 
 #[test]

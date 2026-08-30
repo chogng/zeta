@@ -14,6 +14,7 @@ pub enum FontFamily {
 pub enum FontWeight {
     #[default]
     Normal,
+    SemiBold,
     Bold,
 }
 

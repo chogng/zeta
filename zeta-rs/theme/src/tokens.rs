@@ -35,6 +35,7 @@ pub const SCROLLBAR_SLIDER_ACTIVE_BACKGROUND: &str = "scrollbar.sliderActiveBack
 
 pub const FONT_SIZE_BODY1: &str = "fontSize.body1";
 pub const FONT_SIZE_LABEL1: &str = "fontSize.label1";
+pub const FONT_WEIGHT_SEMI_BOLD: &str = "fontWeight.semiBold";
 pub const SCROLLBAR_SIZE: &str = "scrollbar.size";
 
 pub const DIFF_REMOVED_LINE_BACKGROUND: &str = "diffEditor.removedLineBackground";

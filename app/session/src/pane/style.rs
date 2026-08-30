@@ -1,6 +1,7 @@
 //! Host-resolved Session Pane colors.
 
 use zeta_ui_components::ScrollViewStyle;
+use zeta_ui_theme::TypographyStyle;
 use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 
@@ -18,54 +19,25 @@ pub struct SessionPaneStyle {
     pub error: Color,
     pub selected: Color,
     pub scroll_view: ScrollViewStyle,
+    pub compact_action_label: TypographyStyle,
 }
 
 impl SessionPaneStyle {
     pub fn from_theme(theme: UiTheme) -> Self {
-        Self::new(
-            theme.content_background,
-            theme.side_bar_background,
-            theme.list_hover_background,
-            theme.border,
-            theme.foreground,
-            theme.muted_foreground,
-            theme.accent,
-            theme.success,
-            theme.warning,
-            theme.error,
-            theme.list_active_background,
-            theme.file_list_scroll_view_style(),
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub const fn new(
-        surface: Color,
-        surface_raised: Color,
-        surface_hovered: Color,
-        border: Color,
-        text: Color,
-        text_muted: Color,
-        accent: Color,
-        success: Color,
-        warning: Color,
-        error: Color,
-        selected: Color,
-        scroll_view: ScrollViewStyle,
-    ) -> Self {
         Self {
-            surface,
-            surface_raised,
-            surface_hovered,
-            border,
-            text,
-            text_muted,
-            accent,
-            success,
-            warning,
-            error,
-            selected,
-            scroll_view,
+            surface: theme.content_background,
+            surface_raised: theme.side_bar_background,
+            surface_hovered: theme.list_hover_background,
+            border: theme.border,
+            text: theme.foreground,
+            text_muted: theme.muted_foreground,
+            accent: theme.accent,
+            success: theme.success,
+            warning: theme.warning,
+            error: theme.error,
+            selected: theme.list_active_background,
+            scroll_view: theme.file_list_scroll_view_style(),
+            compact_action_label: theme.compact_action_label,
         }
     }
 }

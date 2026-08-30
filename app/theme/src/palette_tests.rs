@@ -2,6 +2,7 @@ use super::UiTheme;
 use zeta_theme::ColorScheme;
 use zeta_theme::ThemeCatalog;
 use zui::ui::Color;
+use zui::ui::FontWeight;
 
 #[test]
 fn snapshot_projection_resolves_layout_component_tokens_and_standard_sizes() {
@@ -13,6 +14,10 @@ fn snapshot_projection_resolves_layout_component_tokens_and_standard_sizes() {
 
     assert_eq!(theme.font_size_body, 13.0);
     assert_eq!(theme.font_size_label, 12.0);
+    let compact_action_label = theme.compact_action_label.text_style(Color::WHITE);
+    assert_eq!(compact_action_label.font_size(), 12.0);
+    assert_eq!(compact_action_label.line_height(), 16.0);
+    assert_eq!(compact_action_label.weight(), FontWeight::SemiBold);
     assert_eq!(theme.scrollbar_size, 10.0);
     assert_eq!(theme.hover_foreground, Color::rgb(245, 245, 247));
     assert_eq!(theme.hover_background, Color::rgb(45, 46, 51));

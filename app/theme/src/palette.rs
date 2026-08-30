@@ -1,5 +1,6 @@
 use zeta_icons::icons;
 use zeta_theme::ThemeError;
+use zeta_theme::ThemeSizeUnit;
 use zeta_theme::ThemeSnapshot;
 use zeta_theme::tokens;
 use zeta_ui_components::InputBoxStateColors;
@@ -10,7 +11,36 @@ use zeta_ui_components::SearchBoxStyle;
 use zui::ui::Color;
 use zui::ui::CornerRadii;
 use zui::ui::Edges;
+use zui::ui::FontWeight;
 use zui::ui::TextStyle;
+
+/// Resolved typography for one semantic UI text role.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TypographyStyle {
+    font_size: f32,
+    line_height: f32,
+    weight: FontWeight,
+}
+
+impl TypographyStyle {
+    const fn new(font_size: f32, line_height: f32, weight: FontWeight) -> Self {
+        Self {
+            font_size,
+            line_height,
+            weight,
+        }
+    }
+
+    pub fn text_style(self, color: Color) -> TextStyle {
+        self.scaled_text_style(color, 1.0)
+    }
+
+    pub fn scaled_text_style(self, color: Color, scale: f32) -> TextStyle {
+        TextStyle::new(self.font_size * scale, color)
+            .with_line_height(self.line_height * scale)
+            .with_weight(self.weight)
+    }
+}
 
 /// Fully resolved syntax colors consumed by editor-owned style mappings.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -65,6 +95,7 @@ pub struct UiTheme {
     pub title_bar_hover_background: Color,
     pub editor_foreground: Color,
     pub editor_syntax: EditorSyntaxColors,
+    pub compact_action_label: TypographyStyle,
     pub(crate) font_size_body: f32,
     pub(crate) font_size_label: f32,
     pub(crate) scrollbar_size: f32,
@@ -130,6 +161,7 @@ pub const DEFAULT_UI_THEME: UiTheme = UiTheme {
         type_name: Color::rgb(38, 127, 153),
         variable: Color::rgb(51, 51, 51),
     },
+    compact_action_label: TypographyStyle::new(12.0, 16.0, FontWeight::SemiBold),
     font_size_body: 13.0,
     font_size_label: 12.0,
     scrollbar_size: 10.0,
@@ -226,6 +258,11 @@ impl UiTheme {
                 type_name: theme_color(theme, tokens::EDITOR_TOKEN_TYPE)?,
                 variable: theme_color(theme, tokens::EDITOR_TOKEN_VARIABLE)?,
             },
+            compact_action_label: TypographyStyle::new(
+                theme.required_pixel_size(tokens::FONT_SIZE_LABEL1)?,
+                16.0,
+                theme_font_weight(theme, tokens::FONT_WEIGHT_SEMI_BOLD)?,
+            ),
             font_size_body: theme.required_pixel_size(tokens::FONT_SIZE_BODY1)?,
             font_size_label: theme.required_pixel_size(tokens::FONT_SIZE_LABEL1)?,
             scrollbar_size: theme.required_pixel_size(tokens::SCROLLBAR_SIZE)?,
@@ -296,6 +333,25 @@ impl UiTheme {
 pub(crate) fn theme_color(theme: &ThemeSnapshot, token: &str) -> Result<Color, ThemeError> {
     let [red, green, blue, alpha] = theme.required_color(token)?.components();
     Ok(Color::rgba(red, green, blue, alpha))
+}
+
+fn theme_font_weight(theme: &ThemeSnapshot, token: &str) -> Result<FontWeight, ThemeError> {
+    let size = theme.required_size(token)?;
+    let Some(value) = size.as_unitless() else {
+        return Err(ThemeError::SizeUnitMismatch {
+            token: token.to_owned(),
+            expected: ThemeSizeUnit::Unitless,
+            actual: size.unit(),
+        });
+    };
+    match value {
+        400.0 => Ok(FontWeight::Normal),
+        600.0 => Ok(FontWeight::SemiBold),
+        _ => Err(ThemeError::InvalidSizeValue {
+            token: token.to_owned(),
+            value: value.to_string(),
+        }),
+    }
 }
 
 #[cfg(test)]
