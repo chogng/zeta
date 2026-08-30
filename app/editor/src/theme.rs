@@ -1,5 +1,7 @@
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonStyle;
 use zeta_ui_theme::UiTheme;
-use zui::ui::{FontFamily, FontWeight, TextStyle};
+use zui::ui::{CornerRadii, Edges, FontFamily, FontWeight, TextStyle};
 
 use crate::{
     CodeEditorDiagnosticPalette, CodeEditorPalette, CodeEditorStyle, CodeEditorSyntaxPalette,
@@ -73,6 +75,17 @@ impl MultiDiffEditorStyle {
                 .with_weight(FontWeight::Bold)
                 .with_line_height(18.0),
             diff_editor,
+            header_button: ButtonStyle::new(
+                ButtonBackgrounds::new(theme.side_bar_background)
+                    .with_hovered(theme.list_hover_background)
+                    .with_focused(theme.list_active_background)
+                    .with_pressed(theme.list_active_background),
+                TextStyle::new(theme.font_size_label(), theme.foreground),
+            )
+            .with_padding(Edges::uniform(5.0))
+            .with_icon_size(14.0)
+            .with_corner_radii(CornerRadii::uniform(4.0)),
+            header_icon: theme.muted_foreground,
             scroll_view: theme.file_list_scroll_view_style(),
         })
         .cards()

@@ -26,6 +26,7 @@ pub use diff_editor::{
     DiffEditorStyle,
 };
 pub use multi_diff_editor::{
-    MultiDiffEditor, MultiDiffEditorFoldControl, MultiDiffEditorItem, MultiDiffEditorItemIdentity,
-    MultiDiffEditorLayout, MultiDiffEditorPalette, MultiDiffEditorStyle,
+    MultiDiffEditor, MultiDiffEditorFoldControl, MultiDiffEditorHeaderAction, MultiDiffEditorItem,
+    MultiDiffEditorItemIdentity, MultiDiffEditorLayout, MultiDiffEditorPalette,
+    MultiDiffEditorStyle,
 };
