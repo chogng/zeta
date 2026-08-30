@@ -72,6 +72,7 @@ zeta-action-policy = { workspace = true }
 zeta-execpolicy = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-projects = { workspace = true }
 zeta-rollout = { workspace = true }
 zeta-state = { workspace = true }
 zeta-rmcp-client = { workspace = true }
@@ -91,6 +92,7 @@ zeta-web-search-extension = { workspace = true }
 zeta-typst = { workspace = true }
 zeta-utils-pty = { workspace = true }
 zeta-worktree = { workspace = true }
+zeta-work-coordination = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

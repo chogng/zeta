@@ -3,9 +3,15 @@ use serde::Serialize;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::PathBuf;
+use zeta_file_access::DirId;
+use zeta_protocol::ContentDigest;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
+use zeta_protocol::WorkAttemptId;
+use zeta_protocol::WorkContractId;
+use zeta_protocol::WorkExecutionId;
+use zeta_protocol::WorkRunId;
 
 const MAX_COMMIT_MESSAGE_BYTES: usize = 64 * 1024;
 
@@ -121,6 +127,21 @@ pub struct TurnChangeSetDraft {
     pub snapshot_backend: SnapshotBackend,
     pub baseline_dependency_paths: BTreeSet<PathBuf>,
     pub message_state: MessageState,
+    pub work_attempt: Option<WorkAttemptChangeProvenance>,
+}
+
+/// Exact coordinated execution and managed root that produced one ChangeSet.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkAttemptChangeProvenance {
+    pub work_run_id: WorkRunId,
+    pub attempt_id: WorkAttemptId,
+    pub execution_id: WorkExecutionId,
+    pub contract_id: WorkContractId,
+    pub contract_revision: u64,
+    pub source_root_dir_id: DirId,
+    pub managed_root_dir_id: DirId,
+    pub root_checkpoint_digest: ContentDigest,
 }
 
 /// Durable net change produced by one Turn in one repository.
@@ -162,6 +183,8 @@ pub struct TurnChangeSet {
     pub draft_message: Option<String>,
     pub draft_edited: bool,
     pub revision: u64,
+    #[serde(default)]
+    pub work_attempt: Option<WorkAttemptChangeProvenance>,
 }
 
 impl TurnChangeSet {
@@ -201,7 +224,47 @@ impl TurnChangeSet {
             draft_message: None,
             draft_edited: false,
             revision: 1,
+            work_attempt: draft.work_attempt,
         })
+    }
+
+    /// Stable identity of the sealed code and attribution evidence.
+    ///
+    /// Commit-message and publication state are deliberately excluded because they can change
+    /// after a WorkAttempt has sealed without changing the candidate result.
+    pub fn evidence_digest(&self) -> Result<ContentDigest, TurnChangeError> {
+        self.require_capture(CaptureState::Sealed)?;
+        let backend = match &self.snapshot_backend {
+            SnapshotBackend::Git => "git",
+            SnapshotBackend::Directory { .. } => "directory",
+        };
+        let identity = (
+            &self.change_set_id,
+            &self.session_id,
+            &self.thread_id,
+            &self.turn_id,
+            &self.repository_id,
+            &self.target_branch,
+            &self.base_object_id,
+            &self.work_attempt,
+        );
+        let effects = (
+            &self.before_tree,
+            &self.after_tree,
+            backend,
+            &self.terminal_state,
+            &self.files,
+            &self.dependencies,
+            &self.baseline_dependency_paths,
+            &self.external_dependency_paths,
+            &self.read_paths,
+            &self.write_paths,
+            self.opaque_dependencies,
+            self.attribution_incomplete,
+        );
+        let encoded = serde_json::to_vec(&(1_u32, identity, effects))
+            .map_err(|error| TurnChangeError::EvidenceEncoding(error.to_string()))?;
+        Ok(ContentDigest::sha256(&encoded))
     }
 
     pub fn seal(
@@ -516,4 +579,6 @@ pub enum TurnChangeError {
     InvalidCommitMessage,
     #[error("change-set revision overflowed")]
     RevisionOverflow,
+    #[error("change-set evidence could not be encoded: {0}")]
+    EvidenceEncoding(String),
 }

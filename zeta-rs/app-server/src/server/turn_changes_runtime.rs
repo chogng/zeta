@@ -3,27 +3,38 @@ use super::turn_changes_commit::spawn_commit_job;
 use super::turn_changes_message::spawn_message_job;
 use super::turn_changes_watcher::ThreadChangeWatcher;
 use super::update_broker::UpdateBroker;
+use super::work_attempt_workspace::ActiveWorkAttemptWorkspace;
+use super::work_attempt_workspace::WorkAttemptWorkspaceBindings;
 use crate::dir_grants::DirGrants;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 use zeta_app_server_protocol::protocol::turn_changes::{
     ChangeSetId as ChangeSetIdDto, ThreadDirBinding, ThreadWorktreeRepositoryBindingDto,
     TurnChangeCaptureStateDto, TurnChangeCommitStateDto, TurnChangeFileStatisticsDto,
     TurnChangeMessageStateDto, TurnChangeSetSummary, TurnChangeTerminalStateDto,
-    TurnChangesChanged, TurnChangesMutationResult,
+    TurnChangesChanged, TurnChangesMutationResult, WorkAttemptChangeProvenanceDto,
 };
 use zeta_config::ConfigStore;
 use zeta_core::{ModelService, ThreadController};
 use zeta_file_access::{Dir, DirId};
 use zeta_hooks::DeclarativeHookRuntime;
-use zeta_protocol::{CommandId, SessionId, ThreadId, ToolCallId, TurnId};
+use zeta_protocol::CommandId;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::TurnId;
+use zeta_protocol::WorkAttemptId;
+use zeta_protocol::WorkRunId;
 use zeta_state::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
 use zeta_turn_changes::{
     CaptureState, CommitState, MessageState, TerminalTurnState, TurnChangeLedger, TurnChangeSet,
     TurnChangeStore,
 };
-use zeta_worktree::{ThreadWorktreeBinding, WorktreeManager, WorktreeSettings};
+use zeta_worktree::{ManagedDirBinding, WorktreeManager, WorktreeSettings};
 
 /// App Server owner of Thread dir bindings, Turn checkpoints, and ledger notifications.
 pub(super) struct TurnChangesRuntime {
@@ -31,7 +42,12 @@ pub(super) struct TurnChangesRuntime {
     pub(super) dir_id: DirId,
     pub(super) worktrees: WorktreeManager,
     pub(super) worktree_runtime: tokio::runtime::Runtime,
-    pub(super) bindings: RwLock<BTreeMap<ThreadId, ThreadWorktreeBinding>>,
+    pub(super) bindings: RwLock<BTreeMap<ThreadId, ManagedDirBinding>>,
+    pub(super) work_attempt_bindings:
+        RwLock<BTreeMap<(WorkRunId, WorkAttemptId), WorkAttemptWorkspaceBindings>>,
+    pub(super) active_work_attempts: RwLock<BTreeMap<ThreadId, ActiveWorkAttemptWorkspace>>,
+    pub(super) sealing_threads: RwLock<BTreeSet<ThreadId>>,
+    pub(super) workspace_gate: Mutex<()>,
     pub(super) store: Arc<SqliteTurnChangeStore>,
     pub(super) ledger: TurnChangeLedger,
     pub(super) config: Arc<ConfigStore>,
@@ -103,6 +119,10 @@ impl TurnChangesRuntime {
             worktrees,
             worktree_runtime,
             bindings: RwLock::new(bindings),
+            work_attempt_bindings: RwLock::new(BTreeMap::new()),
+            active_work_attempts: RwLock::new(BTreeMap::new()),
+            sealing_threads: RwLock::new(BTreeSet::new()),
+            workspace_gate: Mutex::new(()),
             store,
             ledger,
             config,
@@ -124,7 +144,7 @@ impl TurnChangesRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
         {
-            runtime.start_watcher(thread_id.clone(), binding.dir())?;
+            runtime.start_watcher(thread_id.clone(), [binding.dir().to_path_buf()])?;
         }
         runtime.resume_pending_jobs()?;
         Ok(runtime)
@@ -134,7 +154,7 @@ impl TurnChangesRuntime {
         &self.store
     }
 
-    pub(super) fn binding(&self, thread_id: &ThreadId) -> Option<ThreadWorktreeBinding> {
+    pub(super) fn binding(&self, thread_id: &ThreadId) -> Option<ManagedDirBinding> {
         self.bindings
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -304,6 +324,11 @@ impl TurnChangesRuntime {
         fingerprint: &str,
     ) -> Result<TurnChangesMutationResult, String> {
         require_revision(&record, expected_revision)?;
+        if record.work_attempt.is_some() {
+            return Err(
+                "a WorkAttempt ChangeSet can be published only by the integration gate".into(),
+            );
+        }
         if record.target_branch.is_none() {
             return Err("detached Thread targets cannot be committed".into());
         }
@@ -328,7 +353,7 @@ impl TurnChangesRuntime {
 
     fn resolve_external_dependencies(
         &self,
-        binding: &ThreadWorktreeBinding,
+        binding: &ManagedDirBinding,
         record: &mut TurnChangeSet,
     ) -> Result<(), String> {
         if record.external_dependency_paths.is_empty() {
@@ -339,7 +364,7 @@ impl TurnChangesRuntime {
             .iter()
             .find(|repository| repository.repository_id() == record.repository_id)
             .ok_or_else(|| format!("Thread binding omitted repository {}", record.repository_id))?;
-        if binding.kind() != zeta_worktree::ThreadWorktreeKind::Git {
+        if binding.kind() != zeta_worktree::ManagedDirKind::Git {
             return Ok(());
         }
         let resolved = self.worktree_runtime.block_on(async {
@@ -501,6 +526,19 @@ pub(super) fn summary(record: &TurnChangeSet) -> TurnChangeSetSummary {
         thread_id: record.thread_id.clone(),
         turn_id: record.turn_id.clone(),
         repository_id: record.repository_id.clone(),
+        work_attempt: record
+            .work_attempt
+            .as_ref()
+            .map(|value| WorkAttemptChangeProvenanceDto {
+                work_run_id: value.work_run_id.clone(),
+                attempt_id: value.attempt_id.clone(),
+                execution_id: value.execution_id.clone(),
+                contract_id: value.contract_id.clone(),
+                contract_revision: value.contract_revision,
+                source_root_dir_id: value.source_root_dir_id.clone(),
+                managed_root_dir_id: value.managed_root_dir_id.clone(),
+                root_checkpoint_digest: value.root_checkpoint_digest.clone(),
+            }),
         target_branch: record.target_branch.clone(),
         statistics: TurnChangeFileStatisticsDto {
             files: record.files.len() as u64,

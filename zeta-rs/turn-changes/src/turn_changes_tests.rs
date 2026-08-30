@@ -11,6 +11,7 @@ use crate::TurnChangeSetDraft;
 use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
@@ -95,6 +96,7 @@ fn open_change_set() -> TurnChangeSet {
         snapshot_backend: crate::SnapshotBackend::Git,
         baseline_dependency_paths: BTreeSet::new(),
         message_state: MessageState::Unconfigured,
+        work_attempt: None,
     })
     .unwrap()
 }
@@ -148,6 +150,32 @@ fn sealed_change_set_preserves_manual_draft_when_generation_finishes() {
             Some("fix(core): keep the manual wording"),
         )
     );
+}
+
+#[test]
+fn evidence_digest_tracks_effects_but_not_commit_message_state() {
+    let mut change_set = open_change_set();
+    assert_eq!(
+        change_set.evidence_digest(),
+        Err(TurnChangeError::InvalidTransition)
+    );
+    change_set
+        .seal(
+            "after".into(),
+            TerminalTurnState::Completed,
+            vec![file()],
+            BTreeSet::new(),
+        )
+        .unwrap();
+    let sealed = change_set.evidence_digest().unwrap();
+    change_set
+        .update_draft("fix(core): describe the sealed result".into())
+        .unwrap();
+    assert_eq!(change_set.evidence_digest().unwrap(), sealed);
+
+    let mut changed_effect = change_set.clone();
+    changed_effect.files[0].additions += 1;
+    assert_ne!(changed_effect.evidence_digest().unwrap(), sealed);
 }
 
 #[test]
@@ -253,6 +281,7 @@ fn ledger_seals_rename_mode_and_line_statistics_from_immutable_trees() {
                 base_object_id: Some(head),
                 snapshot_backend: crate::SnapshotBackend::Git,
                 baseline_dependency_paths: BTreeSet::new(),
+                work_attempt: None,
             }],
             commit_message_configured: true,
             opaque_dependencies: false,
@@ -334,6 +363,7 @@ fn opaque_reads_do_not_claim_writes_outside_a_recorded_execution_window() {
                 base_object_id: Some(head),
                 snapshot_backend: crate::SnapshotBackend::Git,
                 baseline_dependency_paths: BTreeSet::new(),
+                work_attempt: None,
             }],
             commit_message_configured: false,
             opaque_dependencies: true,
@@ -366,6 +396,23 @@ fn directory_snapshots_capture_and_restore_non_git_changes() {
     std::fs::write(dir.path().join("binary.bin"), [0, 1, 2]).unwrap();
     let snapshots = crate::DirectorySnapshotStore::new(objects.path());
     let before = snapshots.capture(dir.path()).unwrap();
+    assert_eq!(
+        snapshots
+            .read_file(&before, Path::new("before.txt"), 1024)
+            .unwrap(),
+        Some((b"one\ntwo\n".to_vec(), false))
+    );
+    assert_eq!(
+        snapshots
+            .read_file(&before, Path::new("missing.txt"), 1024)
+            .unwrap(),
+        None
+    );
+    assert!(
+        snapshots
+            .read_file(&before, Path::new("../before.txt"), 1024)
+            .is_err()
+    );
 
     std::fs::rename(dir.path().join("before.txt"), dir.path().join("after.txt")).unwrap();
     std::fs::write(dir.path().join("after.txt"), "one\ntwo\nthree\n").unwrap();

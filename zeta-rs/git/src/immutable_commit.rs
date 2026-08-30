@@ -18,6 +18,84 @@ pub struct GitTreeCommitRequest {
     message: GitCommitRequest,
 }
 
+/// Exact final tree and target revision used to prepare a commit before any ref is changed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitPreparedTreeCommitRequest {
+    transaction_id: String,
+    target_branch: String,
+    expected_target_head: Option<String>,
+    target_tree: GitTreeId,
+    final_tree: GitTreeId,
+    message: GitCommitRequest,
+}
+
+impl GitPreparedTreeCommitRequest {
+    pub fn new(
+        transaction_id: String,
+        target_branch: String,
+        expected_target_head: String,
+        target_tree: GitTreeId,
+        final_tree: GitTreeId,
+        message: String,
+    ) -> GitResult<Self> {
+        validate_transaction_id(&transaction_id)?;
+        validate_target_branch(&target_branch)?;
+        validate_object_id(&expected_target_head, "expected target HEAD")?;
+        Ok(Self {
+            transaction_id,
+            target_branch,
+            expected_target_head: Some(expected_target_head),
+            target_tree,
+            final_tree,
+            message: GitCommitRequest::new(message)?,
+        })
+    }
+
+    pub fn new_unborn(
+        transaction_id: String,
+        target_branch: String,
+        target_tree: GitTreeId,
+        final_tree: GitTreeId,
+        message: String,
+    ) -> GitResult<Self> {
+        validate_transaction_id(&transaction_id)?;
+        validate_target_branch(&target_branch)?;
+        Ok(Self {
+            transaction_id,
+            target_branch,
+            expected_target_head: None,
+            target_tree,
+            final_tree,
+            message: GitCommitRequest::new(message)?,
+        })
+    }
+
+    pub fn target_branch(&self) -> &str {
+        &self.target_branch
+    }
+}
+
+/// Immutable commit object prepared for later conditional publication.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitPreparedTreeCommit {
+    transaction_id: String,
+    target_branch: String,
+    expected_target_head: Option<String>,
+    target_tree: GitTreeId,
+    final_tree: GitTreeId,
+    object_id: String,
+}
+
+impl GitPreparedTreeCommit {
+    pub fn object_id(&self) -> &str {
+        &self.object_id
+    }
+
+    pub fn target_branch(&self) -> &str {
+        &self.target_branch
+    }
+}
+
 impl GitTreeCommitRequest {
     pub fn new(
         transaction_id: String,
@@ -100,6 +178,12 @@ pub enum GitTreeCommitResult {
     Conflict(GitTreeCommitConflict),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum GitPrepareTreeCommitResult {
+    Prepared(GitPreparedTreeCommit),
+    Conflict(GitTreeCommitConflict),
+}
+
 /// Result of replaying one immutable tree delta onto another immutable tree.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GitTreeReplayResult {
@@ -123,6 +207,8 @@ struct CommitJournal {
     old_head: Option<String>,
     new_head: String,
     checkout: Option<CheckoutJournal>,
+    #[serde(default)]
+    retain_until_acknowledged: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -174,7 +260,7 @@ impl GitClient {
             return Ok(GitTreeCommitRecovery::Conflict { paths: Vec::new() });
         }
         let Some(checkout) = journal.checkout else {
-            remove_journal(&path)?;
+            remove_completed_journal(&path, journal.retain_until_acknowledged)?;
             return Ok(GitTreeCommitRecovery::Committed {
                 object_id: journal.new_head,
             });
@@ -187,7 +273,7 @@ impl GitClient {
         let original_index = GitTreeId::new(checkout.original_index)?;
         let original_worktree = GitTreeId::new(checkout.original_worktree)?;
         if current_index == desired_index && current_worktree == desired_worktree {
-            remove_journal(&path)?;
+            remove_completed_journal(&path, journal.retain_until_acknowledged)?;
             return Ok(GitTreeCommitRecovery::Committed {
                 object_id: journal.new_head,
             });
@@ -198,7 +284,7 @@ impl GitClient {
         if install_can_resume {
             self.install_checkout_state(&checkout_repository, &desired_worktree, &desired_index)
                 .await?;
-            remove_journal(&path)?;
+            remove_completed_journal(&path, journal.retain_until_acknowledged)?;
             return Ok(GitTreeCommitRecovery::Committed {
                 object_id: journal.new_head,
             });
@@ -208,6 +294,29 @@ impl GitClient {
                 .await?,
         );
         Ok(GitTreeCommitRecovery::Conflict { paths })
+    }
+
+    /// Removes a retained prepared-publication journal after its publication receipt is durable.
+    /// Calling this again after acknowledgement is harmless.
+    pub async fn acknowledge_published_tree_commit(
+        &self,
+        repository: &GitRepository,
+        transaction_id: &str,
+        expected_object_id: &str,
+    ) -> GitResult<()> {
+        validate_object_id(expected_object_id, "published commit ID")?;
+        let path = journal_path(repository, transaction_id)?;
+        if !path.exists() {
+            return Ok(());
+        }
+        let journal = read_journal(&path)?;
+        if !journal.retain_until_acknowledged || journal.new_head != expected_object_id {
+            return Err(GitError::runtime(
+                "acknowledge prepared tree commit",
+                "journal does not match the durable publication receipt",
+            ));
+        }
+        remove_journal(&path)
     }
 
     /// Replays `before -> after` onto `current` without changing refs, indexes, or files.
@@ -224,6 +333,244 @@ impl GitClient {
                 MergeTreeResult::Conflict(paths) => GitTreeReplayResult::Conflict { paths },
             },
         )
+    }
+
+    /// Creates a deterministic commit object for an exact verified final tree without changing a
+    /// branch, index, or working tree.
+    pub async fn prepare_tree_commit(
+        &self,
+        repository: &GitRepository,
+        request: &GitPreparedTreeCommitRequest,
+    ) -> GitResult<GitPrepareTreeCommitResult> {
+        self.validate_branch_name(repository, request.target_branch())
+            .await?;
+        let target_ref = format!("refs/heads/{}", request.target_branch);
+        let target_head = self.read_optional_ref(repository, &target_ref).await?;
+        if target_head != request.expected_target_head {
+            return Ok(GitPrepareTreeCommitResult::Conflict(target_conflict(
+                target_head.as_deref(),
+                request.expected_target_head.as_deref(),
+            )));
+        }
+        let target_tree = match target_head.as_deref() {
+            Some(target_head) => self.commit_tree(repository, target_head).await?,
+            None => self.empty_tree(repository).await?,
+        };
+        if target_tree != request.target_tree {
+            return Ok(GitPrepareTreeCommitResult::Conflict(
+                GitTreeCommitConflict::TargetMoved,
+            ));
+        }
+        let object_id = self
+            .create_deterministic_commit(
+                repository,
+                &request.final_tree,
+                target_head.as_deref(),
+                &request.message,
+            )
+            .await?;
+        Ok(GitPrepareTreeCommitResult::Prepared(
+            GitPreparedTreeCommit {
+                transaction_id: request.transaction_id.clone(),
+                target_branch: request.target_branch.clone(),
+                expected_target_head: request.expected_target_head.clone(),
+                target_tree: request.target_tree.clone(),
+                final_tree: request.final_tree.clone(),
+                object_id,
+            },
+        ))
+    }
+
+    /// Publishes one previously prepared commit by compare-and-swap and preserves a checked-out
+    /// target branch's staged and unstaged state through the same journaled transaction.
+    pub async fn publish_prepared_tree_commit(
+        &self,
+        repository: &GitRepository,
+        prepared: &GitPreparedTreeCommit,
+    ) -> GitResult<GitTreeCommitResult> {
+        self.validate_branch_name(repository, prepared.target_branch())
+            .await?;
+        let target_ref = format!("refs/heads/{}", prepared.target_branch);
+        let target_head = self.read_optional_ref(repository, &target_ref).await?;
+        if target_head != prepared.expected_target_head {
+            return Ok(GitTreeCommitResult::Conflict(target_conflict(
+                target_head.as_deref(),
+                prepared.expected_target_head.as_deref(),
+            )));
+        }
+        let target_tree = match target_head.as_deref() {
+            Some(target_head) => self.commit_tree(repository, target_head).await?,
+            None => self.empty_tree(repository).await?,
+        };
+        if target_tree != prepared.target_tree
+            || self.commit_tree(repository, &prepared.object_id).await? != prepared.final_tree
+        {
+            return Ok(GitTreeCommitResult::Conflict(
+                GitTreeCommitConflict::TargetMoved,
+            ));
+        }
+
+        let checkout = self
+            .target_checkout(repository, prepared.target_branch())
+            .await?;
+        let checkout_update = match checkout.as_ref() {
+            Some(state) => {
+                let index_tree = match self
+                    .merge_trees(
+                        &state.repository,
+                        &prepared.target_tree,
+                        &prepared.final_tree,
+                        &state.index_tree,
+                    )
+                    .await?
+                {
+                    MergeTreeResult::Clean(tree) => tree,
+                    MergeTreeResult::Conflict(paths) => {
+                        return Ok(GitTreeCommitResult::Conflict(
+                            GitTreeCommitConflict::CheckoutChanged { paths },
+                        ));
+                    }
+                };
+                let worktree_tree = match self
+                    .merge_trees(
+                        &state.repository,
+                        &state.index_tree,
+                        &index_tree,
+                        &state.worktree_tree,
+                    )
+                    .await?
+                {
+                    MergeTreeResult::Clean(tree) => tree,
+                    MergeTreeResult::Conflict(paths) => {
+                        return Ok(GitTreeCommitResult::Conflict(
+                            GitTreeCommitConflict::CheckoutChanged { paths },
+                        ));
+                    }
+                };
+                Some((index_tree, worktree_tree))
+            }
+            None => None,
+        };
+        if let Some(state) = checkout.as_ref() {
+            let snapshot = self.snapshot(&state.repository).await?;
+            let target_still_checked_out = match snapshot.head() {
+                GitHead::Branch { name, .. } => name == prepared.target_branch(),
+                GitHead::Unborn { name } => {
+                    prepared.expected_target_head.is_none() && name == prepared.target_branch()
+                }
+                GitHead::Detached { .. } => false,
+            };
+            if !target_still_checked_out {
+                return Ok(GitTreeCommitResult::Conflict(
+                    GitTreeCommitConflict::TargetDetached,
+                ));
+            }
+            let latest_index = self.capture_index_tree(&state.repository).await?;
+            let latest_worktree = self.capture_worktree_tree(&state.repository).await?;
+            if latest_index != state.index_tree || latest_worktree != state.worktree_tree {
+                let paths = changed_paths(
+                    self.diff_trees(&state.repository, &state.worktree_tree, &latest_worktree)
+                        .await?,
+                );
+                return Ok(GitTreeCommitResult::Conflict(
+                    GitTreeCommitConflict::CheckoutChanged { paths },
+                ));
+            }
+        }
+        let latest_head = self.read_optional_ref(repository, &target_ref).await?;
+        if latest_head != target_head {
+            return Ok(GitTreeCommitResult::Conflict(
+                GitTreeCommitConflict::TargetMoved,
+            ));
+        }
+
+        let journal_path = journal_path(repository, &prepared.transaction_id)?;
+        let journal = CommitJournal {
+            version: 3,
+            target_ref: target_ref.clone(),
+            old_head: target_head.clone(),
+            new_head: prepared.object_id.clone(),
+            checkout: checkout.as_ref().zip(checkout_update.as_ref()).map(
+                |(state, (index_tree, worktree_tree))| CheckoutJournal {
+                    root: state.repository.worktree_root().to_path_buf(),
+                    original_index: state.index_tree.as_str().to_string(),
+                    original_worktree: state.worktree_tree.as_str().to_string(),
+                    desired_index: index_tree.as_str().to_string(),
+                    desired_worktree: worktree_tree.as_str().to_string(),
+                },
+            ),
+            retain_until_acknowledged: true,
+        };
+        write_journal(&journal_path, &journal)?;
+
+        if let Err(error) = self
+            .update_optional_ref_cas(
+                repository,
+                &target_ref,
+                &prepared.object_id,
+                target_head.as_deref(),
+            )
+            .await
+        {
+            let actual = self.read_optional_ref(repository, &target_ref).await?;
+            if actual.as_deref() == Some(prepared.object_id.as_str()) {
+                return match self
+                    .recover_tree_commit(repository, &prepared.transaction_id)
+                    .await?
+                {
+                    GitTreeCommitRecovery::Committed { object_id } => {
+                        Ok(GitTreeCommitResult::Committed { object_id })
+                    }
+                    GitTreeCommitRecovery::Conflict { paths } => Ok(GitTreeCommitResult::Conflict(
+                        GitTreeCommitConflict::CheckoutChanged { paths },
+                    )),
+                    GitTreeCommitRecovery::None | GitTreeCommitRecovery::RolledBack => {
+                        Err(GitError::runtime(
+                            "recover prepared tree commit after ref race",
+                            "publication journal disappeared before recovery",
+                        ))
+                    }
+                };
+            }
+            if actual != target_head {
+                remove_journal(&journal_path)?;
+                return Ok(GitTreeCommitResult::Conflict(target_conflict(
+                    actual.as_deref(),
+                    target_head.as_deref(),
+                )));
+            }
+            return Err(error);
+        }
+        if let (Some(state), Some((index_tree, worktree_tree))) = (checkout, checkout_update)
+            && let Err(error) = self
+                .install_checkout_state(&state.repository, &worktree_tree, &index_tree)
+                .await
+        {
+            let rollback = match target_head.as_deref() {
+                Some(target_head) => {
+                    self.update_ref_cas(repository, &target_ref, target_head, &prepared.object_id)
+                        .await
+                }
+                None => {
+                    self.delete_ref_cas(repository, &target_ref, &prepared.object_id)
+                        .await
+                }
+            };
+            let restore = self
+                .install_checkout_state(&state.repository, &state.worktree_tree, &state.index_tree)
+                .await;
+            if rollback.is_err() || restore.is_err() {
+                return Err(GitError::runtime(
+                    "restore prepared tree commit transaction",
+                    format!("install failed: {error}; repository requires transaction recovery"),
+                ));
+            }
+            remove_journal(&journal_path)?;
+            return Err(error);
+        }
+        Ok(GitTreeCommitResult::Committed {
+            object_id: prepared.object_id.clone(),
+        })
     }
 
     /// Applies only the paths changed by `before -> after` to `current`.
@@ -459,6 +806,7 @@ impl GitClient {
                     desired_worktree: worktree_tree.as_str().to_string(),
                 },
             ),
+            retain_until_acknowledged: false,
         };
         write_journal(&journal_path, &journal)?;
 
@@ -688,6 +1036,40 @@ impl GitClient {
         Ok(object_id)
     }
 
+    async fn create_deterministic_commit(
+        &self,
+        repository: &GitRepository,
+        tree: &GitTreeId,
+        parent: Option<&str>,
+        message: &GitCommitRequest,
+    ) -> GitResult<String> {
+        let mut arguments = vec!["-c", "user.name=Zeta Integration"];
+        arguments.extend(["-c", "user.email=zeta-integration@invalid", "commit-tree"]);
+        arguments.push(tree.as_str());
+        if let Some(parent) = parent {
+            arguments.extend(["-p", parent]);
+        }
+        arguments.extend(["-F", "-"]);
+        let output = self
+            .run_mutation_with_stdin_and_environment(
+                repository.worktree_root(),
+                arguments,
+                message.message().as_bytes().to_vec(),
+                [
+                    ("GIT_AUTHOR_DATE", "@1 +0000"),
+                    ("GIT_COMMITTER_DATE", "@1 +0000"),
+                ],
+            )
+            .await?
+            .require_success()?;
+        let object_id = String::from_utf8(output.stdout)
+            .map_err(|_| GitError::invalid_output(&output.command, "commit ID was not UTF-8"))?
+            .trim()
+            .to_string();
+        validate_object_id(&object_id, "commit ID")?;
+        Ok(object_id)
+    }
+
     async fn update_ref_cas(
         &self,
         repository: &GitRepository,
@@ -758,6 +1140,15 @@ impl GitClient {
 }
 
 fn journal_path(repository: &GitRepository, transaction_id: &str) -> GitResult<PathBuf> {
+    validate_transaction_id(transaction_id)?;
+    Ok(repository
+        .common_dir()
+        .join("zeta")
+        .join("commit-transactions")
+        .join(format!("{transaction_id}.json")))
+}
+
+fn validate_transaction_id(transaction_id: &str) -> GitResult<()> {
     if transaction_id.is_empty()
         || transaction_id.len() > 128
         || !transaction_id
@@ -769,11 +1160,28 @@ fn journal_path(repository: &GitRepository, transaction_id: &str) -> GitResult<P
             requirement: "must contain only ASCII letters, digits, '-' or '_'",
         });
     }
-    Ok(repository
-        .common_dir()
-        .join("zeta")
-        .join("commit-transactions")
-        .join(format!("{transaction_id}.json")))
+    Ok(())
+}
+
+fn validate_target_branch(target_branch: &str) -> GitResult<()> {
+    if target_branch.trim().is_empty()
+        || target_branch.starts_with('-')
+        || target_branch.contains(char::is_whitespace)
+    {
+        return Err(GitError::InvalidConfiguration {
+            field: "target branch",
+            requirement: "must identify one non-empty local branch",
+        });
+    }
+    Ok(())
+}
+
+fn target_conflict(actual: Option<&str>, expected: Option<&str>) -> GitTreeCommitConflict {
+    if actual.is_none() && expected.is_some() {
+        GitTreeCommitConflict::TargetDeleted
+    } else {
+        GitTreeCommitConflict::TargetMoved
+    }
 }
 
 fn write_journal(path: &Path, journal: &CommitJournal) -> GitResult<()> {
@@ -809,7 +1217,7 @@ fn read_journal(path: &Path) -> GitResult<CommitJournal> {
             .map_err(|source| GitError::io("read commit transaction journal", source))?,
     )
     .map_err(|error| GitError::runtime("decode commit transaction journal", error.to_string()))?;
-    if !(1..=2).contains(&journal.version) {
+    if !(1..=3).contains(&journal.version) {
         return Err(GitError::runtime(
             "decode commit transaction journal",
             "unsupported journal version",
@@ -823,6 +1231,14 @@ fn remove_journal(path: &Path) -> GitResult<()> {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(source) => Err(GitError::io("remove commit transaction journal", source)),
+    }
+}
+
+fn remove_completed_journal(path: &Path, retain_until_acknowledged: bool) -> GitResult<()> {
+    if retain_until_acknowledged {
+        Ok(())
+    } else {
+        remove_journal(path)
     }
 }
 

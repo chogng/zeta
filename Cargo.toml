@@ -80,6 +80,7 @@ members = [
     "zeta-rs/plugins",
     "zeta-rs/prompts",
     "zeta-rs/protocol",
+    "zeta-rs/projects",
     "zeta-rs/remote",
     "zeta-rs/remote-connections",
     "zeta-rs/remote-host",
@@ -103,6 +104,7 @@ members = [
     "zeta-rs/turn-changes",
     "zeta-rs/tools",
     "zeta-rs/uds",
+    "zeta-rs/work-coordination",
     "zeta-code/tui",
     "zeta-rs/utils/absolute-path",
     "zeta-rs/utils/cache",
@@ -367,6 +369,7 @@ zeta-action-policy = { path = "zeta-rs/action-policy" }
 zeta-plugins = { path = "zeta-rs/plugins" }
 zeta-prompts = { path = "zeta-rs/prompts" }
 zeta-protocol = { path = "zeta-rs/protocol" }
+zeta-projects = { path = "zeta-rs/projects" }
 zeta-remote = { path = "zeta-rs/remote" }
 zeta-remote-connections = { path = "zeta-rs/remote-connections" }
 zeta-remote-host = { path = "zeta-rs/remote-host" }
@@ -400,6 +403,7 @@ zeta-turn-changes = { path = "zeta-rs/turn-changes" }
 zeta-tools = { path = "zeta-rs/tools" }
 zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
+zeta-work-coordination = { path = "zeta-rs/work-coordination" }
 zeta-ui-components = { path = "app/ui-components" }
 zeta-workbench = { path = "app/workbench" }
 zeta-utils-absolute-path = { path = "zeta-rs/utils/absolute-path" }

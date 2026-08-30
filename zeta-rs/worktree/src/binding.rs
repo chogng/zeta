@@ -1,3 +1,4 @@
+use crate::manager::ManagedDirOwner;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -6,7 +7,7 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
 const BINDING_FILENAME: &str = "zeta-thread-dir.json";
-const BINDING_VERSION: u8 = 4;
+const BINDING_VERSION: u8 = 5;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -36,6 +37,8 @@ pub(crate) struct BindingRecord {
     version: u8,
     pub managed_worktree_id: String,
     pub owner_thread_id: String,
+    #[serde(default)]
+    pub owner: Option<ManagedDirOwner>,
     pub source_dir_id: String,
     pub source_repository_root: PathBuf,
     pub relative_dir: PathBuf,
@@ -56,7 +59,7 @@ pub(crate) struct BindingRecord {
 impl BindingRecord {
     pub(crate) fn new(
         managed_worktree_id: String,
-        owner_thread_id: String,
+        owner: ManagedDirOwner,
         source_dir_id: String,
         source_repository_root: PathBuf,
         relative_dir: PathBuf,
@@ -71,7 +74,8 @@ impl BindingRecord {
         Self {
             version: BINDING_VERSION,
             managed_worktree_id,
-            owner_thread_id,
+            owner_thread_id: owner.metadata_owner_id(),
+            owner: Some(owner),
             source_dir_id,
             source_repository_root,
             relative_dir,
@@ -90,6 +94,16 @@ impl BindingRecord {
         self.repositories = repositories;
         self
     }
+
+    pub(crate) fn matches_owner(&self, owner: &ManagedDirOwner) -> bool {
+        match &self.owner {
+            Some(recorded) => recorded == owner,
+            None => matches!(
+                owner,
+                ManagedDirOwner::Thread { thread_id } if thread_id == &self.owner_thread_id
+            ),
+        }
+    }
 }
 
 pub(crate) fn read(git_dir: &Path) -> Result<BindingRecord> {
@@ -101,6 +115,11 @@ pub(crate) fn read(git_dir: &Path) -> Result<BindingRecord> {
     if !(1..=BINDING_VERSION).contains(&record.version)
         || record.managed_worktree_id.is_empty()
         || record.owner_thread_id.is_empty()
+        || (record.version == BINDING_VERSION && record.owner.is_none())
+        || record.owner.as_ref().is_some_and(|owner| {
+            owner.metadata_owner_id() != record.owner_thread_id
+                || owner.validate(&record.source_dir_id).is_err()
+        })
         || record.target_head.is_empty()
         || record.baseline_tree.is_empty()
         || (record.kind == BindingKind::Git && record.baseline_ref.is_empty())
@@ -153,6 +172,7 @@ pub(crate) fn write(git_dir: &Path, record: &BindingRecord) -> Result<()> {
 pub(crate) fn replace(git_dir: &Path, record: &BindingRecord) -> Result<()> {
     let current = read(git_dir)?;
     if current.owner_thread_id != record.owner_thread_id
+        || current.owner != record.owner
         || current.managed_worktree_id != record.managed_worktree_id
     {
         bail!("Thread directory binding owner changed during update");

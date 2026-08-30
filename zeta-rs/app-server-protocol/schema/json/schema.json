@@ -1376,6 +1376,14 @@
         "TurnChangesUnavailable",
         "TurnChangesRevisionConflict",
         "TurnChangesOperationFailed",
+        "WorkCoordinationUnavailable",
+        "WorkCoordinationNotFound",
+        "WorkCoordinationRevisionConflict",
+        "WorkCoordinationOperationFailed",
+        "ProjectsUnavailable",
+        "ProjectNotFound",
+        "ProjectRevisionConflict",
+        "ProjectOperationFailed",
         "DiffOperationFailed",
         "SyntaxAnalysisFailed",
         "CodebaseUnavailable",
@@ -1622,6 +1630,29 @@
       },
       "required": [
         "nextOffset"
+      ],
+      "type": "object"
+    },
+    "AuthorizationSnapshotRefDto": {
+      "properties": {
+        "authority": {
+          "type": "string"
+        },
+        "grantSetDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "grantedEffectsDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "policyRevision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authority",
+        "policyRevision",
+        "grantSetDigest",
+        "grantedEffectsDigest"
       ],
       "type": "object"
     },
@@ -2035,6 +2066,17 @@
             "boolean",
             "null"
           ]
+        },
+        "workCoordinationHost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkCoordinationHostCapability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "type": "object"
@@ -2562,6 +2604,374 @@
             },
             "params": {
               "$ref": "#/$defs/TurnChangesDiscardThreadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/view/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/participant/add",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunParticipantAddParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/relation/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunRelationCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/goal/revise",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunGoalReviseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/cancel",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunCancelParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/verification/request",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunVerificationRequestParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/integration/request",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunIntegrationRequestParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/details/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectDetailsUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/root/add",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectRootAddParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/root/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectRootUpdateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/root/remove",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectRootRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/session/link",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectSessionMutationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/session/unlink",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectSessionMutationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/workRun/link",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectWorkRunMutationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/workRun/unlink",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectWorkRunMutationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/archive",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectLifecycleParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/restore",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectLifecycleParams"
             }
           },
           "required": [
@@ -5878,6 +6288,374 @@
             },
             "result": {
               "$ref": "#/$defs/TurnChangesMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/view/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunViewReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/participant/add",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/relation/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/goal/revise",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/cancel",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/verification/request",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/integration/request",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkRunMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/details/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/root/add",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/root/update",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/root/remove",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/session/link",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/session/unlink",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/workRun/link",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/workRun/unlink",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/archive",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/restore",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProjectMutationResult"
             }
           },
           "required": [
@@ -10727,6 +11505,52 @@
       ],
       "type": "object"
     },
+    "ControlResourceBindingDto": {
+      "properties": {
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "kind": {
+          "$ref": "#/$defs/ControlResourceKindDto"
+        },
+        "precedence": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "sourceDirId": {
+          "$ref": "#/$defs/DirId"
+        }
+      },
+      "required": [
+        "kind",
+        "sourceDirId",
+        "relativePath",
+        "scope",
+        "precedence",
+        "contentDigest"
+      ],
+      "type": "object"
+    },
+    "ControlResourceKindDto": {
+      "enum": [
+        "projectInstructions",
+        "agentDefinition",
+        "skill",
+        "hook",
+        "buildEntry",
+        "validationProfile",
+        "permissionPolicy",
+        "coordinationPolicy"
+      ],
+      "type": "string"
+    },
     "DebugAdapterCloseParams": {
       "additionalProperties": false,
       "description": "Terminates and releases one connection-owned adapter process.",
@@ -11357,7 +12181,7 @@
       "type": "object"
     },
     "DirPermissionsHostCapability": {
-      "description": "Declares that this connection may manage explicit directory permissions.\n\nThis is an authority boundary for host-only protocol operations. Renderer or extension\nRenderer or extension connections must not declare it merely because they can display an\napproval prompt.",
+      "description": "Declares that this connection may manage explicit directory permissions.\n\nThis is an authority boundary for host-only protocol operations. Renderer or extension\nconnections must not declare it merely because they can display an approval prompt.",
       "properties": {
         "version": {
           "format": "uint32",
@@ -11956,6 +12780,10 @@
         "dirs"
       ],
       "type": "object"
+    },
+    "EnvId": {
+      "description": "Stable host-selected identity for one execution and filesystem environment.",
+      "type": "string"
     },
     "ExecPolicyActionKindDto": {
       "description": "Coarse action category available to deterministic execution-policy selectors.",
@@ -13308,6 +14136,14 @@
       ],
       "type": "string"
     },
+    "ExternalEffectsStatusDto": {
+      "enum": [
+        "none",
+        "verified",
+        "unknown"
+      ],
+      "type": "string"
+    },
     "FastRegexDisableAndDeleteParams": {
       "description": "Starts the durable “disable and delete” Agent grep operation.",
       "properties": {
@@ -14586,6 +15422,29 @@
       ],
       "type": "object"
     },
+    "GitRepositoryCheckpointDto": {
+      "properties": {
+        "baselineTree": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/GitRootTargetDto"
+        }
+      },
+      "required": [
+        "repositoryId",
+        "relativePath",
+        "target",
+        "baselineTree"
+      ],
+      "type": "object"
+    },
     "GitRepositoryDto": {
       "description": "Stable, directory-relative identity for one discovered Git repository projection.",
       "properties": {
@@ -14647,6 +15506,66 @@
         }
       },
       "type": "object"
+    },
+    "GitRootTargetDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "expected_head": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "branch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "expected_head"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "anchor_object_id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "unbornBranch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "anchor_object_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "object_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "detached",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "object_id"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "GitStatusChanged": {
       "properties": {
@@ -14793,6 +15712,33 @@
         "name",
         "ahead",
         "behind"
+      ],
+      "type": "object"
+    },
+    "GitVerificationRepositoryDto": {
+      "properties": {
+        "finalTree": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "repositoryId": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/GitRootTargetDto"
+        },
+        "targetTree": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repositoryId",
+        "relativePath",
+        "target",
+        "targetTree",
+        "finalTree"
       ],
       "type": "object"
     },
@@ -15154,7 +16100,8 @@
             "agentInteractions": null,
             "browser": null,
             "dirPermissionsHost": null,
-            "notifications": null
+            "notifications": null,
+            "workCoordinationHost": null
           }
         },
         "clientInfo": {
@@ -15280,6 +16227,141 @@
           "required": [
             "type",
             "skill"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "IntegrationFailureKindDto": {
+      "enum": [
+        "conflict",
+        "failure",
+        "targetMoved"
+      ],
+      "type": "string"
+    },
+    "IntegrationIncidentDto": {
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/IntegrationFailureKindDto"
+        },
+        "publishedRootCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation",
+        "kind",
+        "reason",
+        "publishedRootCount"
+      ],
+      "type": "object"
+    },
+    "IntegrationPreparedArtifactDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "object_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "gitCommit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "object_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "snapshot_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "directorySnapshot",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "snapshot_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "IntegrationRootStatusDto": {
+      "enum": [
+        "pending",
+        "prepared",
+        "published"
+      ],
+      "type": "string"
+    },
+    "IntegrationRootTargetDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "final_tree": {
+              "type": "string"
+            },
+            "relative_path": {
+              "type": "string"
+            },
+            "repository_id": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/GitRootTargetDto"
+            },
+            "target_tree": {
+              "type": "string"
+            },
+            "type": {
+              "const": "git",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "repository_id",
+            "relative_path",
+            "target",
+            "target_tree",
+            "final_tree"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "final_snapshot_id": {
+              "type": "string"
+            },
+            "target_snapshot_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "directory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target_snapshot_id",
+            "final_snapshot_id"
           ],
           "type": "object"
         }
@@ -17859,6 +18941,29 @@
       ],
       "type": "string"
     },
+    "ManagedRootBindingDto": {
+      "properties": {
+        "bindingManifestDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "managedDirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "rootCheckpointDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "sourceDirId": {
+          "$ref": "#/$defs/DirId"
+        }
+      },
+      "required": [
+        "sourceDirId",
+        "managedDirId",
+        "rootCheckpointDigest",
+        "bindingManifestDigest"
+      ],
+      "type": "object"
+    },
     "MarketplaceAcquireCapabilityParams": {
       "properties": {
         "capability": {
@@ -19851,6 +20956,439 @@
         }
       ]
     },
+    "ProjectChanged": {
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/ProjectDto"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "ProjectCommandDispositionDto": {
+      "enum": [
+        "committed",
+        "replayed"
+      ],
+      "type": "string"
+    },
+    "ProjectCreateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "name",
+        "description"
+      ],
+      "type": "object"
+    },
+    "ProjectDetailsUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "description": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "expectedRevision",
+        "name",
+        "description"
+      ],
+      "type": "object"
+    },
+    "ProjectDto": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/ProjectRootDto"
+          },
+          "type": "array"
+        },
+        "sessionIds": {
+          "items": {
+            "$ref": "#/$defs/SessionId"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/ProjectStatusDto"
+        },
+        "workRunIds": {
+          "items": {
+            "$ref": "#/$defs/WorkRunId"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "projectId",
+        "revision",
+        "status",
+        "name",
+        "description",
+        "roots",
+        "sessionIds",
+        "workRunIds"
+      ],
+      "type": "object"
+    },
+    "ProjectId": {
+      "description": "Stable identity for one long-lived multi-root project catalog.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "ProjectLifecycleParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "ProjectListParams": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProjectListResult": {
+      "properties": {
+        "projects": {
+          "items": {
+            "$ref": "#/$defs/ProjectSummaryDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "projects"
+      ],
+      "type": "object"
+    },
+    "ProjectMutationResult": {
+      "properties": {
+        "disposition": {
+          "$ref": "#/$defs/ProjectCommandDispositionDto"
+        },
+        "project": {
+          "$ref": "#/$defs/ProjectDto"
+        }
+      },
+      "required": [
+        "disposition",
+        "project"
+      ],
+      "type": "object"
+    },
+    "ProjectReadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "type": "object"
+    },
+    "ProjectReadResult": {
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/ProjectDto"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "ProjectRootAddParams": {
+      "additionalProperties": false,
+      "description": "Adds only a root already known to the exact Session directory scope.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "dirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "expectedRevision",
+        "sessionId",
+        "dirId",
+        "name",
+        "purpose"
+      ],
+      "type": "object"
+    },
+    "ProjectRootDto": {
+      "properties": {
+        "dirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "environmentId": {
+          "$ref": "#/$defs/EnvId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId",
+        "dirId",
+        "path",
+        "name",
+        "purpose"
+      ],
+      "type": "object"
+    },
+    "ProjectRootRemoveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "dirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "expectedRevision",
+        "dirId"
+      ],
+      "type": "object"
+    },
+    "ProjectRootUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "dirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        },
+        "purpose": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "expectedRevision",
+        "dirId",
+        "name",
+        "purpose"
+      ],
+      "type": "object"
+    },
+    "ProjectSessionMutationParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "expectedRevision",
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "ProjectStatusDto": {
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "type": "string"
+    },
+    "ProjectSummaryDto": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rootCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/ProjectStatusDto"
+        },
+        "workRunCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "projectId",
+        "revision",
+        "status",
+        "name",
+        "rootCount",
+        "sessionCount",
+        "workRunCount"
+      ],
+      "type": "object"
+    },
+    "ProjectWorkRunMutationParams": {
+      "additionalProperties": false,
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projectId": {
+          "$ref": "#/$defs/ProjectId"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "projectId",
+        "expectedRevision",
+        "workRunId"
+      ],
+      "type": "object"
+    },
     "ProtocolVersion": {
       "properties": {
         "major": {
@@ -20256,6 +21794,71 @@
         }
       ]
     },
+    "RootCheckpointDto": {
+      "properties": {
+        "controlResources": {
+          "items": {
+            "$ref": "#/$defs/ControlResourceBindingDto"
+          },
+          "type": "array"
+        },
+        "dirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "environmentId": {
+          "$ref": "#/$defs/EnvId"
+        },
+        "state": {
+          "$ref": "#/$defs/RootStateDto"
+        }
+      },
+      "required": [
+        "environmentId",
+        "dirId",
+        "state",
+        "controlResources"
+      ],
+      "type": "object"
+    },
+    "RootStateDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "repositories": {
+              "items": {
+                "$ref": "#/$defs/GitRepositoryCheckpointDto"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "git",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "repositories"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "snapshot_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "directory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "snapshot_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "SandboxDenialOutput": {
       "description": "Trustworthy result of an execution attempt rejected by sandbox enforcement.\n\nProducers must not use this for an ordinary non-zero exit. Captured streams must already be\nbounded and secret-free before this value crosses the executor boundary.",
       "properties": {
@@ -20335,6 +21938,9 @@
         "plugins": {
           "type": "boolean"
         },
+        "projects": {
+          "type": "boolean"
+        },
         "resources": {
           "type": "boolean"
         },
@@ -20355,6 +21961,9 @@
         },
         "updateReplay": {
           "type": "boolean"
+        },
+        "workCoordination": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -20363,6 +21972,8 @@
         "sessions",
         "threads",
         "turns",
+        "workCoordination",
+        "projects",
         "resources",
         "attachments",
         "fileSystem",
@@ -20682,6 +22293,38 @@
             },
             "params": {
               "$ref": "#/$defs/TurnChangesChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workRun/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkRunChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "project/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProjectChanged"
             }
           },
           "required": [
@@ -26122,6 +27765,16 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "workAttempt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkAttemptChangeProvenanceDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -26795,6 +28448,1817 @@
         "question"
       ],
       "type": "object"
+    },
+    "ValidationProfileRefDto": {
+      "properties": {
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "contentDigest"
+      ],
+      "type": "object"
+    },
+    "VerificationChangeSetInputDto": {
+      "properties": {
+        "attemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "changeSet": {
+          "$ref": "#/$defs/WorkAttemptChangeEvidenceRefDto"
+        }
+      },
+      "required": [
+        "attemptId",
+        "changeSet"
+      ],
+      "type": "object"
+    },
+    "VerificationCheckEvidenceDto": {
+      "properties": {
+        "checkId": {
+          "type": "string"
+        },
+        "commandDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "outcome": {
+          "$ref": "#/$defs/VerificationCheckOutcomeDto"
+        },
+        "outputDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "checkId",
+        "commandDigest",
+        "outputDigest",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "VerificationCheckOutcomeDto": {
+      "enum": [
+        "passed",
+        "failed",
+        "indeterminate"
+      ],
+      "type": "string"
+    },
+    "VerificationRootDto": {
+      "properties": {
+        "checkpointDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "sourceDirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "state": {
+          "$ref": "#/$defs/VerificationRootStateDto"
+        }
+      },
+      "required": [
+        "sourceDirId",
+        "checkpointDigest",
+        "state"
+      ],
+      "type": "object"
+    },
+    "VerificationRootStateDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "repositories": {
+              "items": {
+                "$ref": "#/$defs/GitVerificationRepositoryDto"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "git",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "repositories"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "final_snapshot_id": {
+              "type": "string"
+            },
+            "target_snapshot_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "directory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target_snapshot_id",
+            "final_snapshot_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WorkAttemptChangeEvidenceRefDto": {
+      "properties": {
+        "changeSetId": {
+          "$ref": "#/$defs/ChangeSetId"
+        },
+        "evidenceDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "changeSetId",
+        "evidenceDigest"
+      ],
+      "type": "object"
+    },
+    "WorkAttemptChangeProvenanceDto": {
+      "properties": {
+        "attemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "contractId": {
+          "$ref": "#/$defs/WorkContractId"
+        },
+        "contractRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "executionId": {
+          "$ref": "#/$defs/WorkExecutionId"
+        },
+        "managedRootDirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "rootCheckpointDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "sourceRootDirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "workRunId",
+        "attemptId",
+        "executionId",
+        "contractId",
+        "contractRevision",
+        "sourceRootDirId",
+        "managedRootDirId",
+        "rootCheckpointDigest"
+      ],
+      "type": "object"
+    },
+    "WorkAttemptCoordinationStatusDto": {
+      "enum": [
+        "clear",
+        "expansionRequested",
+        "conflict",
+        "stale",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "WorkAttemptDto": {
+      "properties": {
+        "attemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "contract": {
+          "$ref": "#/$defs/WorkContractRefDto"
+        },
+        "coordinationStatus": {
+          "$ref": "#/$defs/WorkAttemptCoordinationStatusDto"
+        },
+        "environmentId": {
+          "$ref": "#/$defs/EnvId"
+        },
+        "executionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkExecutionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executionStatus": {
+          "$ref": "#/$defs/WorkAttemptExecutionStatusDto"
+        },
+        "failure": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "integrationStatus": {
+          "$ref": "#/$defs/WorkAttemptIntegrationStatusDto"
+        },
+        "primaryRootDirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkAttemptResultDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/RootCheckpointDto"
+          },
+          "type": "array"
+        },
+        "scopeExpansionEvidence": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "verificationStatus": {
+          "$ref": "#/$defs/WorkAttemptVerificationStatusDto"
+        },
+        "waitingRelationId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkRelationId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkAttemptWorkspaceDto"
+        }
+      },
+      "required": [
+        "attemptId",
+        "contract",
+        "sessionId",
+        "threadId",
+        "environmentId",
+        "roots",
+        "primaryRootDirId",
+        "workspace",
+        "executionStatus",
+        "coordinationStatus",
+        "verificationStatus",
+        "integrationStatus",
+        "scopeExpansionEvidence"
+      ],
+      "type": "object"
+    },
+    "WorkAttemptExecutionStatusDto": {
+      "enum": [
+        "planned",
+        "exploring",
+        "writing",
+        "waiting",
+        "sealed",
+        "failed",
+        "interrupted",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "WorkAttemptId": {
+      "description": "Stable identity for one Agent execution against an exact contract version.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "WorkAttemptIntegrationStatusDto": {
+      "enum": [
+        "idle",
+        "queued",
+        "integrating",
+        "integrated",
+        "partial",
+        "conflict",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "WorkAttemptResultDto": {
+      "properties": {
+        "changeSetIds": {
+          "items": {
+            "$ref": "#/$defs/ChangeSetId"
+          },
+          "type": "array"
+        },
+        "externalEffectsDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "externalEffectsStatus": {
+          "$ref": "#/$defs/ExternalEffectsStatusDto"
+        },
+        "privateOutputDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "resultDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "resultDigest",
+        "changeSetIds",
+        "privateOutputDigest",
+        "externalEffectsDigest",
+        "externalEffectsStatus"
+      ],
+      "type": "object"
+    },
+    "WorkAttemptVerificationStatusDto": {
+      "enum": [
+        "pending",
+        "verifying",
+        "verified",
+        "rejected",
+        "indeterminate",
+        "stale"
+      ],
+      "type": "string"
+    },
+    "WorkAttemptWorkspaceDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "provisioning",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "private_output_dir_id": {
+              "$ref": "#/$defs/DirId"
+            },
+            "roots": {
+              "items": {
+                "$ref": "#/$defs/ManagedRootBindingDto"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "ready",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "roots",
+            "private_output_dir_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WorkConflictDto": {
+      "properties": {
+        "attemptIds": {
+          "items": {
+            "$ref": "#/$defs/WorkAttemptId"
+          },
+          "type": "array"
+        },
+        "conflictId": {
+          "$ref": "#/$defs/WorkConflictId"
+        },
+        "evidence": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "resolutionDecisionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkDecisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkConflictStatusDto"
+        }
+      },
+      "required": [
+        "conflictId",
+        "attemptIds",
+        "resource",
+        "evidence",
+        "status"
+      ],
+      "type": "object"
+    },
+    "WorkConflictId": {
+      "description": "Stable identity for one recorded coordination conflict.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "WorkConflictStatusDto": {
+      "enum": [
+        "open",
+        "resolved"
+      ],
+      "type": "string"
+    },
+    "WorkContractId": {
+      "description": "Stable identity shared by every immutable version of one work contract.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "WorkContractRefDto": {
+      "properties": {
+        "contractId": {
+          "$ref": "#/$defs/WorkContractId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contractId",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "WorkContractVersionDto": {
+      "properties": {
+        "acceptanceConditions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "authorization": {
+          "$ref": "#/$defs/AuthorizationSnapshotRefDto"
+        },
+        "contractId": {
+          "$ref": "#/$defs/WorkContractId"
+        },
+        "decisionIds": {
+          "items": {
+            "$ref": "#/$defs/WorkDecisionId"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "environmentId": {
+          "$ref": "#/$defs/EnvId"
+        },
+        "exclusions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expectedScope": {
+          "$ref": "#/$defs/WorkScopeClaimDto"
+        },
+        "goalRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "ownerThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "primaryRootDirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/RootCheckpointDto"
+          },
+          "type": "array"
+        },
+        "topologyRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upstreamResults": {
+          "items": {
+            "$ref": "#/$defs/WorkResultRefDto"
+          },
+          "type": "array"
+        },
+        "validationProfile": {
+          "$ref": "#/$defs/ValidationProfileRefDto"
+        }
+      },
+      "required": [
+        "contractId",
+        "revision",
+        "goalRevision",
+        "topologyRevision",
+        "ownerThreadId",
+        "objective",
+        "acceptanceConditions",
+        "exclusions",
+        "environmentId",
+        "roots",
+        "primaryRootDirId",
+        "authorization",
+        "decisionIds",
+        "upstreamResults",
+        "expectedScope",
+        "validationProfile"
+      ],
+      "type": "object"
+    },
+    "WorkCoordinationHostCapability": {
+      "description": "Declares that this trusted product host may read and mutate WorkRun coordination state.",
+      "properties": {
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "type": "object"
+    },
+    "WorkDecisionDto": {
+      "properties": {
+        "authority": {
+          "type": "string"
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "decisionId": {
+          "$ref": "#/$defs/WorkDecisionId"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "decisionId",
+        "authority",
+        "scope",
+        "statement",
+        "contentDigest"
+      ],
+      "type": "object"
+    },
+    "WorkDecisionId": {
+      "description": "Stable identity for one accepted work decision.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "WorkExecutionId": {
+      "description": "Stable identity for one process generation executed by a work attempt.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "WorkGoalDto": {
+      "properties": {
+        "acceptanceConditions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "exclusions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "objective",
+        "acceptanceConditions",
+        "exclusions"
+      ],
+      "type": "object"
+    },
+    "WorkIntegrationDto": {
+      "properties": {
+        "evidenceDigest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "incidents": {
+          "items": {
+            "$ref": "#/$defs/IntegrationIncidentDto"
+          },
+          "type": "array"
+        },
+        "integrationKey": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/WorkIntegrationRootDto"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkIntegrationStatusDto"
+        },
+        "verificationKey": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "integrationKey",
+        "verificationKey",
+        "generation",
+        "status",
+        "roots",
+        "incidents"
+      ],
+      "type": "object"
+    },
+    "WorkIntegrationRootDto": {
+      "properties": {
+        "preparedArtifact": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegrationPreparedArtifactDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publicationReceiptDigest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rootId": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "sourceDirId": {
+          "$ref": "#/$defs/DirId"
+        },
+        "status": {
+          "$ref": "#/$defs/IntegrationRootStatusDto"
+        },
+        "target": {
+          "$ref": "#/$defs/IntegrationRootTargetDto"
+        }
+      },
+      "required": [
+        "rootId",
+        "sourceDirId",
+        "target",
+        "status"
+      ],
+      "type": "object"
+    },
+    "WorkIntegrationStatusDto": {
+      "enum": [
+        "queued",
+        "integrating",
+        "integrated",
+        "partial",
+        "conflict",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "WorkParticipantDto": {
+      "properties": {
+        "relation": {
+          "$ref": "#/$defs/WorkParticipantRelationDto"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "relation"
+      ],
+      "type": "object"
+    },
+    "WorkParticipantRelationDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "root",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "delegation_id": {
+              "$ref": "#/$defs/DelegationId"
+            },
+            "parent_thread_id": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "delegated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "parent_thread_id",
+            "delegation_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WorkRelationDto": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/WorkRelationKindDto"
+        },
+        "relationId": {
+          "$ref": "#/$defs/WorkRelationId"
+        },
+        "resumeExecutionStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkAttemptExecutionStatusDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceAttemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkRelationStatusDto"
+        },
+        "targetAttemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        }
+      },
+      "required": [
+        "relationId",
+        "sourceAttemptId",
+        "targetAttemptId",
+        "kind",
+        "status"
+      ],
+      "type": "object"
+    },
+    "WorkRelationId": {
+      "description": "Stable identity for one explicit relationship between work attempts.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "WorkRelationKindDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "observation",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "condition": {
+              "$ref": "#/$defs/WorkWaitConditionDto"
+            },
+            "target_execution_id": {
+              "$ref": "#/$defs/WorkExecutionId"
+            },
+            "type": {
+              "const": "wait",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target_execution_id",
+            "condition"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "alternate",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "target_contract": {
+              "$ref": "#/$defs/WorkContractRefDto"
+            },
+            "type": {
+              "const": "handoff",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target_contract"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "result_digest": {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            "type": {
+              "const": "resultDependency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "result_digest"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WorkRelationStatusDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "active",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "waiting",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "evidence_digest": {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            "type": {
+              "const": "satisfied",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "evidence_digest"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "type": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "cancelled",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "stale",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WorkResultRefDto": {
+      "properties": {
+        "attemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "resultDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "attemptId",
+        "resultDigest"
+      ],
+      "type": "object"
+    },
+    "WorkRunCancelParams": {
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "WorkRunChanged": {
+      "properties": {
+        "workRun": {
+          "$ref": "#/$defs/WorkRunDto"
+        }
+      },
+      "required": [
+        "workRun"
+      ],
+      "type": "object"
+    },
+    "WorkRunCollaborationModeDto": {
+      "enum": [
+        "singleAgent",
+        "team",
+        "multiSession"
+      ],
+      "type": "string"
+    },
+    "WorkRunCommandDispositionDto": {
+      "enum": [
+        "committed",
+        "replayed"
+      ],
+      "type": "string"
+    },
+    "WorkRunCreateParams": {
+      "properties": {
+        "acceptanceConditions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "exclusions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "rootSessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "rootThreadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "rootSessionId",
+        "rootThreadId",
+        "objective",
+        "acceptanceConditions",
+        "exclusions"
+      ],
+      "type": "object"
+    },
+    "WorkRunDto": {
+      "properties": {
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/WorkAttemptDto"
+          },
+          "type": "array"
+        },
+        "conflicts": {
+          "items": {
+            "$ref": "#/$defs/WorkConflictDto"
+          },
+          "type": "array"
+        },
+        "contracts": {
+          "items": {
+            "$ref": "#/$defs/WorkContractVersionDto"
+          },
+          "type": "array"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/WorkDecisionDto"
+          },
+          "type": "array"
+        },
+        "goals": {
+          "items": {
+            "$ref": "#/$defs/WorkGoalDto"
+          },
+          "type": "array"
+        },
+        "integrations": {
+          "items": {
+            "$ref": "#/$defs/WorkIntegrationDto"
+          },
+          "type": "array"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/WorkParticipantDto"
+          },
+          "type": "array"
+        },
+        "relations": {
+          "items": {
+            "$ref": "#/$defs/WorkRelationDto"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkRunStatusDto"
+        },
+        "terminalReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "topologyRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "verifications": {
+          "items": {
+            "$ref": "#/$defs/WorkVerificationDto"
+          },
+          "type": "array"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "workRunId",
+        "revision",
+        "topologyRevision",
+        "status",
+        "goals",
+        "participants",
+        "decisions",
+        "contracts",
+        "attempts",
+        "relations",
+        "conflicts",
+        "verifications",
+        "integrations"
+      ],
+      "type": "object"
+    },
+    "WorkRunGoalReviseParams": {
+      "properties": {
+        "acceptanceConditions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "exclusions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "objective",
+        "acceptanceConditions",
+        "exclusions"
+      ],
+      "type": "object"
+    },
+    "WorkRunId": {
+      "description": "Stable identity for one coordinated development goal.",
+      "minLength": 1,
+      "type": "string"
+    },
+    "WorkRunIntegrationRequestParams": {
+      "additionalProperties": false,
+      "description": "Requests host-owned publication of one exact current verified result set.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "verificationKey": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "verificationKey"
+      ],
+      "type": "object"
+    },
+    "WorkRunListParams": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "WorkRunListResult": {
+      "properties": {
+        "workRuns": {
+          "items": {
+            "$ref": "#/$defs/WorkRunSummaryDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "workRuns"
+      ],
+      "type": "object"
+    },
+    "WorkRunMutationResult": {
+      "properties": {
+        "disposition": {
+          "$ref": "#/$defs/WorkRunCommandDispositionDto"
+        },
+        "workRun": {
+          "$ref": "#/$defs/WorkRunDto"
+        }
+      },
+      "required": [
+        "disposition",
+        "workRun"
+      ],
+      "type": "object"
+    },
+    "WorkRunParticipantAddParams": {
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "relation": {
+          "$ref": "#/$defs/WorkParticipantRelationDto"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "sessionId",
+        "threadId",
+        "relation"
+      ],
+      "type": "object"
+    },
+    "WorkRunReadParams": {
+      "properties": {
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "workRunId"
+      ],
+      "type": "object"
+    },
+    "WorkRunReadResult": {
+      "properties": {
+        "workRun": {
+          "$ref": "#/$defs/WorkRunDto"
+        }
+      },
+      "required": [
+        "workRun"
+      ],
+      "type": "object"
+    },
+    "WorkRunRelationCreateParams": {
+      "additionalProperties": false,
+      "description": "Creates an explicit same-Session or cross-Session relationship between exact Attempts.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/WorkRelationKindDto"
+        },
+        "relationId": {
+          "$ref": "#/$defs/WorkRelationId"
+        },
+        "sourceAttemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "targetAttemptId": {
+          "$ref": "#/$defs/WorkAttemptId"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "relationId",
+        "sourceAttemptId",
+        "targetAttemptId",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "WorkRunSessionTreeDto": {
+      "description": "One canonical Session Agent tree composed into a WorkRun view without copying its facts.",
+      "properties": {
+        "agentTree": {
+          "$ref": "#/$defs/AgentTreeProjection"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "agentTree"
+      ],
+      "type": "object"
+    },
+    "WorkRunStatusDto": {
+      "enum": [
+        "active",
+        "completed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "WorkRunSummaryDto": {
+      "properties": {
+        "attemptCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "openConflictCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "participantCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionCount": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkRunStatusDto"
+        },
+        "topologyRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "workRunId",
+        "revision",
+        "topologyRevision",
+        "status",
+        "objective",
+        "sessionCount",
+        "participantCount",
+        "attemptCount",
+        "openConflictCount"
+      ],
+      "type": "object"
+    },
+    "WorkRunVerificationRequestParams": {
+      "additionalProperties": false,
+      "description": "Requests host-derived replay and independent verification for exact sealed Attempts.",
+      "properties": {
+        "attemptIds": {
+          "items": {
+            "$ref": "#/$defs/WorkAttemptId"
+          },
+          "type": "array"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workRunId": {
+          "$ref": "#/$defs/WorkRunId"
+        }
+      },
+      "required": [
+        "commandId",
+        "workRunId",
+        "expectedRevision",
+        "attemptIds"
+      ],
+      "type": "object"
+    },
+    "WorkRunViewReadResult": {
+      "properties": {
+        "collaborationMode": {
+          "$ref": "#/$defs/WorkRunCollaborationModeDto"
+        },
+        "sessionTrees": {
+          "items": {
+            "$ref": "#/$defs/WorkRunSessionTreeDto"
+          },
+          "type": "array"
+        },
+        "workRun": {
+          "$ref": "#/$defs/WorkRunDto"
+        }
+      },
+      "required": [
+        "workRun",
+        "collaborationMode",
+        "sessionTrees"
+      ],
+      "type": "object"
+    },
+    "WorkScopeClaimDto": {
+      "properties": {
+        "components": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "contracts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "resources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "components",
+        "paths",
+        "contracts",
+        "resources"
+      ],
+      "type": "object"
+    },
+    "WorkSerializabilityEvidenceDto": {
+      "properties": {
+        "evidenceDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkSerializabilityStatusDto"
+        }
+      },
+      "required": [
+        "status",
+        "evidenceDigest",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "WorkSerializabilityStatusDto": {
+      "enum": [
+        "proven",
+        "indeterminate"
+      ],
+      "type": "string"
+    },
+    "WorkVerificationDto": {
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/VerificationCheckEvidenceDto"
+          },
+          "type": "array"
+        },
+        "evidenceDigest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input": {
+          "$ref": "#/$defs/WorkVerificationInputDto"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "staleReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/WorkVerificationStatusDto"
+        },
+        "verificationKey": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "verificationKey",
+        "input",
+        "status",
+        "checks"
+      ],
+      "type": "object"
+    },
+    "WorkVerificationInputDto": {
+      "properties": {
+        "authorizationDigests": {
+          "items": {
+            "$ref": "#/$defs/ContentDigest"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "controlResourceDigests": {
+          "items": {
+            "$ref": "#/$defs/ContentDigest"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "coordinationDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "environmentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "goalRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "orderedChangeSets": {
+          "items": {
+            "$ref": "#/$defs/VerificationChangeSetInputDto"
+          },
+          "type": "array"
+        },
+        "orderedResults": {
+          "items": {
+            "$ref": "#/$defs/WorkResultRefDto"
+          },
+          "type": "array"
+        },
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/VerificationRootDto"
+          },
+          "type": "array"
+        },
+        "serializability": {
+          "$ref": "#/$defs/WorkSerializabilityEvidenceDto"
+        },
+        "topologyRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "validationProfileDigests": {
+          "items": {
+            "$ref": "#/$defs/ContentDigest"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "validatorDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        }
+      },
+      "required": [
+        "goalRevision",
+        "topologyRevision",
+        "coordinationDigest",
+        "orderedResults",
+        "orderedChangeSets",
+        "serializability",
+        "roots",
+        "authorizationDigests",
+        "controlResourceDigests",
+        "validationProfileDigests",
+        "validatorDigest",
+        "environmentDigest"
+      ],
+      "type": "object"
+    },
+    "WorkVerificationStatusDto": {
+      "enum": [
+        "verifying",
+        "verified",
+        "rejected",
+        "indeterminate",
+        "stale"
+      ],
+      "type": "string"
+    },
+    "WorkWaitConditionDto": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "executionFinished",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "attemptSealed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "result_digest": {
+              "$ref": "#/$defs/ContentDigest"
+            },
+            "type": {
+              "const": "exactResult",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "result_digest"
+          ],
+          "type": "object"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

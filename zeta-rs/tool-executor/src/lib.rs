@@ -1,5 +1,7 @@
 //! The single process-execution boundary used by Zeta tools.
 
+mod process_tree;
+
 use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
@@ -11,7 +13,7 @@ use zeta_file_access::Dir;
 use zeta_protocol::{ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput};
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, SandboxBackend, SandboxCommand, SandboxDenialTiming,
-    SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus,
+    SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus, SandboxScope,
 };
 
 /// Decides whether a fully materialized local process action can start.
@@ -140,6 +142,17 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         cancellation: &CancellationToken,
         dir: Option<&Dir>,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
+        let scope = dir.cloned().map(SandboxScope::single);
+        self.execute_scoped(request, authority, cancellation, scope.as_ref())
+    }
+
+    pub fn execute_scoped(
+        &self,
+        request: CommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+    ) -> Result<CommandExecutionOutcome, ExecutionError> {
         check_cancellation_before_start(cancellation)?;
         let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
         match self.approval_policy.requirement_for(&action_digest) {
@@ -154,11 +167,11 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             input,
         } = request;
         let command = SandboxCommand::new(program, arguments, working_directory);
-        let prepared = match dir.map_or_else(
+        let prepared = match scope.map_or_else(
             || self.sandbox.prepare(&command, authority.sandbox_policy()),
-            |dir| {
+            |scope| {
                 self.sandbox
-                    .prepare_in_dir(&command, authority.sandbox_policy(), dir)
+                    .prepare_scoped(&command, authority.sandbox_policy(), scope)
             },
         ) {
             Ok(prepared) => prepared,
@@ -189,6 +202,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             .stdin(stdin)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        process_tree::isolate(&mut command);
         let mut child = match command.spawn() {
             Ok(child) => child,
             Err(error)
@@ -242,6 +256,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             }
             thread::sleep(Duration::from_millis(10));
         };
+        process_tree::kill(child.id()).map_err(|error| ExecutionError::Spawn(error.to_string()))?;
         if let Some(stdin_writer) = stdin_writer {
             stdin_writer
                 .join()
@@ -311,9 +326,8 @@ fn terminate(
     stdout_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
     stderr_reader: thread::JoinHandle<Result<(Vec<u8>, bool), String>>,
 ) -> Result<(), ExecutionError> {
-    child
-        .kill()
-        .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+    process_tree::kill(child.id()).map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+    let _ = child.kill();
     let _ = child.wait();
     if let Some(stdin_writer) = stdin_writer {
         let _ = stdin_writer.join();

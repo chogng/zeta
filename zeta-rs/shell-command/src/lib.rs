@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
 use zeta_file_access::Dir;
 use zeta_sandboxing::SandboxBackend;
+use zeta_sandboxing::SandboxScope;
 use zeta_tool_executor::CommandExecutor;
 use zeta_tool_executor::CommandInput;
 use zeta_tool_executor::CommandRequest;
@@ -87,12 +88,39 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
+        self.execute_authorized_scoped(request, authority, cancellation, None)
+    }
+
+    /// Executes with an optional host-owned multi-directory visibility boundary.
+    pub fn execute_authorized_scoped(
+        &self,
+        request: ShellCommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+    ) -> Result<CommandExecutionOutcome, ExecutionError> {
         let dir = request
             .dir_root()
             .map(Dir::open_local)
             .transpose()
             .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
-        self.executor.execute_in_dir(
+        if scope.is_some() && dir.is_none() {
+            return Err(ExecutionError::Spawn(
+                "sandbox scope requires an exact command directory".into(),
+            ));
+        }
+        if let (Some(dir), Some(scope)) = (&dir, scope)
+            && dir != scope.command_dir()
+        {
+            return Err(ExecutionError::Spawn(
+                "sandbox command directory does not match the materialized request".into(),
+            ));
+        }
+        let owned_scope = scope
+            .is_none()
+            .then(|| dir.clone().map(SandboxScope::single))
+            .flatten();
+        self.executor.execute_scoped(
             CommandRequest {
                 program: request.program,
                 arguments: request.arguments,
@@ -101,7 +129,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             },
             authority,
             cancellation,
-            dir.as_ref(),
+            scope.or(owned_scope.as_ref()),
         )
     }
 
@@ -121,7 +149,12 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             Err(error) => return returned_error(error.to_string()),
         };
 
-        match self.execute_authorized(input, authority, invocation.context().cancellation()) {
+        match self.execute_authorized_scoped(
+            input,
+            authority,
+            invocation.context().cancellation(),
+            invocation.context().sandbox_scope(),
+        ) {
             Ok(CommandExecutionOutcome::Completed(output)) => returned_json(json!({
                 "tool": "shell-command",
                 "result": {

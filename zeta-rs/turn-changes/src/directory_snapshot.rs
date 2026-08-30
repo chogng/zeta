@@ -174,6 +174,43 @@ impl DirectorySnapshotStore {
         Ok((bytes.into_iter().take(limit).collect(), truncated))
     }
 
+    /// Reads one exact regular-file path from an immutable directory snapshot.
+    pub fn read_file(
+        &self,
+        snapshot_id: &str,
+        path: &Path,
+        limit: usize,
+    ) -> Result<Option<(Vec<u8>, bool)>, String> {
+        if path.as_os_str().is_empty()
+            || path.is_absolute()
+            || path.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir | std::path::Component::RootDir
+                )
+            })
+        {
+            return Err("snapshot path must be a non-empty relative path".into());
+        }
+        let path = path
+            .components()
+            .filter_map(|component| match component {
+                std::path::Component::Normal(value) => Some(value.to_string_lossy()),
+                std::path::Component::CurDir => None,
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        let manifest = self.read_manifest(snapshot_id)?;
+        let Some(entry) = manifest.entries.get(&path) else {
+            return Ok(None);
+        };
+        if entry.mode == "120000" {
+            return Err("snapshot path is a symbolic link, not a regular file".into());
+        }
+        self.read_blob(&entry.object_id, limit).map(Some)
+    }
+
     pub fn diff_text(
         &self,
         before: &str,

@@ -11,6 +11,7 @@
 | --- | --- | --- |
 | 目录只读且禁止网络 | 选择当前平台的只读沙箱后端 | macOS、Linux 已接入；Windows 仍需真实平台验收 |
 | 目录可写且禁止网络 | 只开放已授权目录写入，继续限制其他路径和网络 | 各平台按自身机制翻译相同共享策略 |
+| 一个工作尝试拥有多个根，同一存储下还有其他 Agent 目录 | host 提交精确 `SandboxScope`，先隐藏共享存储，再只重开该尝试的根和私有输出 | macOS、Linux 已实现策略转换；真实平台逃逸资格仍未完成 |
 | 完全文件访问且允许网络 | 共享策略允许直接执行，不伪装成受限沙箱 | 仍须先经过权限决定 |
 | 后端缺失或无法表达策略 | 失败即关闭，不降级为普通进程 | 返回明确的后端不可用错误 |
 | 沙箱拒绝动作 | 返回结构化执行证据 | 是否重试或扩权由 Core 与权限系统决定 |
@@ -63,11 +64,14 @@ flowchart TD
 `zeta-sandboxing` 是共享契约与后端管理器：
 
 - `SandboxPolicy`、`FileSystemAccess`、`NetworkAccess`；
+- host 构造的 `SandboxScope`、逐目录只读/读写 Grant 和必须隐藏的同级目录；
 - `SandboxCommand` 与 `PreparedCommand`；
 - 沙箱后端契约 `SandboxBackend`；
 - `SandboxManager` 的目录路径验证与后端分派；
 - 当前 macOS Seatbelt 命令转换；
 - `zeta-file-access::Dir` 提供的 canonical 目录边界。
+
+`SandboxScope` 不是模型或命令参数。工作尝试 host 从已持久化受管目录绑定构造同一 Environment 的精确可见集合；重叠 Grant、重复目录、未获权工作目录和跨 Environment 集合在执行前被拒绝。没有实现多目录强制能力的平台后端只能接受原有单目录形状，其他形状失败即关闭。
 
 macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平台选择与共享策略紧密。
 当 macOS 原生实现需要独立 FFI、辅助程序、较重依赖，或接近 500 行代码时，再提取为
@@ -82,6 +86,8 @@ macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平�
 - 禁止网络时使用独立网络命名空间；
 - 添加用户与进程命名空间、新建的 `/proc`、`/dev`、会话和父进程退出约束；
 - Bubblewrap 不可用或不支持所需能力时必须返回错误。
+
+多根范围先在共享存储位置挂载空文件系统，再逐根重开该工作尝试拥有的目录，最后把共享存储重新设为只读；这样同一路径父目录下的其他 Agent 目录不会因为宿主根只读可见而泄漏。
 
 该 crate 当前拥有系统或随包提供的 `bwrap` 发现、所需 CLI 能力探测和规范身份冻结。后续仍拥有
 版本诊断、WSL 检查、seccomp 与受管网络桥接；这些细节不能进入共享策略。
@@ -148,6 +154,7 @@ zeta-install-context → zeta-sandboxing / 平台沙箱 / shell-command
 - 后端缺失、版本过旧或策略无法完整表达时必须失败即关闭；
 - `Dir` 的目录 containment 不是操作系统沙箱，不能作为降级方案；
 - 模型或工具参数不能选择后端、扩大挂载、授予网络或要求降级；
+- 多根工作尝试只能看见 host 授予的根；Project 目录表、同级 Agent 目录和目标集成目录不能自行进入 `SandboxScope`；
 - 命令与 `bwrap` 参数始终以结构化参数数组传递；
 - 符号链接、不存在的写入路径、嵌套拒绝和只读例外必须在进入真实执行前处理；
 - 能力探测与实际启动使用同一个已解析可执行文件，避免检查与执行之间的竞态；
@@ -163,6 +170,4 @@ zeta-install-context → zeta-sandboxing / 平台沙箱 / shell-command
 6. macOS Seatbelt 配置文件兼容性与集成测试；
 7. 受管网络代理、PTY、取消和进程树终止集成。
 
-`zeta-rs/vendor/bubblewrap` 源码、Linux 随包构建和发现已完成；真实 Linux 命名空间集成与 seccomp 仍是当前限制。Windows
-辅助程序、构建、发现和强制执行路径已完成，仍需通过真实 Windows 集成测试后才能标记为生产环境
-强制执行。
+`zeta-rs/vendor/bubblewrap` 源码、Linux 随包构建和发现、多根范围转换，以及 Unix 命令进程组隔离和返回前终止后台后代已经实现；真实 Linux 命名空间逃逸与 seccomp 仍是当前限制。Windows 辅助程序、构建、发现和强制执行路径已完成，仍需通过真实 Windows 集成测试后才能标记为生产环境强制执行；富多根范围在 Windows 取得对应强制能力前会失败即关闭。

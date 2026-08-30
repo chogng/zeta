@@ -72,6 +72,18 @@ impl BwrapCommandBuilder {
         self
     }
 
+    pub(crate) fn tmpfs(mut self, destination: impl AsRef<OsStr>) -> Self {
+        self.arguments.push("--tmpfs".into());
+        self.arguments.push(destination.as_ref().to_owned());
+        self
+    }
+
+    pub(crate) fn remount_read_only(mut self, destination: impl AsRef<OsStr>) -> Self {
+        self.arguments.push("--remount-ro".into());
+        self.arguments.push(destination.as_ref().to_owned());
+        self
+    }
+
     pub(crate) fn isolate_network(mut self) -> Self {
         self.arguments.push("--unshare-net".into());
         self

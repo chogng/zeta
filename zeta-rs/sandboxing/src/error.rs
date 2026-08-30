@@ -6,6 +6,7 @@ use std::path::PathBuf;
 pub enum SandboxError {
     OutsideDir(PathBuf),
     InvalidRelativePath(PathBuf),
+    InvalidScope(String),
     BackendUnavailable {
         backend: SandboxKind,
         message: String,
@@ -26,6 +27,7 @@ impl fmt::Display for SandboxError {
                     path.display()
                 )
             }
+            Self::InvalidScope(message) => write!(formatter, "invalid sandbox scope: {message}"),
             Self::BackendUnavailable { backend, message } => {
                 write!(formatter, "{backend:?} sandbox is unavailable: {message}")
             }

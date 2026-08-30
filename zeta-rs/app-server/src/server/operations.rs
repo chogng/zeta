@@ -184,7 +184,29 @@ impl AppServer {
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        if params
+            .capabilities
+            .work_coordination_host
+            .as_ref()
+            .is_some_and(|capability| capability.version != 1)
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        if (params.capabilities.dir_permissions_host.is_some()
+            || params.capabilities.work_coordination_host.is_some())
+            && !connection.allows_product_host_capabilities()
+        {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
         connection.set_dir_permissions_host(params.capabilities.dir_permissions_host.is_some());
+        connection.set_work_coordination_host(params.capabilities.work_coordination_host.is_some());
+        self.updates.set_work_coordination_host(
+            connection.connection_id,
+            params.capabilities.work_coordination_host.is_some(),
+        );
         self.updates.set_agent_interaction_capability(
             connection.connection_id,
             params.capabilities.agent_interactions,
@@ -214,6 +236,8 @@ impl AppServer {
             sessions: true,
             threads: true,
             turns: true,
+            work_coordination: self.work_coordination.is_some(),
+            projects: self.projects.is_some(),
             resources: true,
             attachments: true,
             file_system,

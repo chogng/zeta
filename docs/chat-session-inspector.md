@@ -2,7 +2,7 @@
 
 > 状态：已实现。本文描述 Chat 内 Session Inspector、Thread 目录绑定、Turn ChangeSet 和异步提交的当前契约。
 > Session、Thread、Turn 的基础语义见 [`protocol.md`](protocol.md)，接口见
-> [`zeta-app-server-api.md`](zeta-app-server-api.md)，Git 行为见 [`git.md`](git.md)。跨 Agent 工作契约、冲突、验证和多 ChangeSet 集成的计划设计见 [`multi-agent-development.md`](multi-agent-development.md)。
+> [`zeta-app-server-api.md`](zeta-app-server-api.md)，Git 行为见 [`git.md`](git.md)。跨 Agent 工作契约、冲突、验证、多 ChangeSet 集成的当前后端边界与完成门见 [`multi-agent-development.md`](multi-agent-development.md)。
 
 ## 快速理解
 
@@ -48,7 +48,7 @@ Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具
 
 界面和协议只暴露 `managedWorktreeId`、`sourceDirId`、仓库/分支和 baseline 摘要，不暴露受管目录内部路径。
 
-当前一个 Thread 目录绑定围绕一个来源根建立，可以包含该根中的多个嵌套 Git 仓库；Session 另外获得的任意独立目录不会自动变成同一 Thread 的组合受管根，也不会自动进入 Turn ChangeSet。Project 多根工作尝试、逐根 checkpoint 以及 Team spawn 的 seed/baseline 对齐属于 [`multi-agent-development.md`](multi-agent-development.md#33-project多根与跨环境) 的计划设计。
+普通 Thread 目录绑定仍围绕一个来源根建立，可以包含该根中的多个嵌套 Git 仓库；Session 另外获得的独立目录不会自动进入该 Thread 的 Turn ChangeSet。WorkRun host 已能为一个工作尝试显式选择同一 Environment 的多个根、逐根建立 checkpoint 和受管目录，并给每个 ChangeSet 写入精确来源；Team spawn 的 context seed 与这些代码 baseline 在同一安全点对齐仍是产品缺口，见 [`multi-agent-development.md`](multi-agent-development.md#33-project多根与跨环境)。
 
 ## ChangeSet 状态
 

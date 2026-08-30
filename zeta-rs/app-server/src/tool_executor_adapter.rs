@@ -16,6 +16,7 @@ use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolOutputStream;
 use zeta_protocol::TurnId;
+use zeta_sandboxing::SandboxScope;
 use zeta_tools::DEFAULT_TOOL_OUTPUT_MAX_BYTES;
 use zeta_tools::EnvId;
 use zeta_tools::ToolBinding;
@@ -56,6 +57,7 @@ pub(crate) struct PreparedToolExecution {
     review: ActionReviewRequest,
     payload: ToolPayload,
     dir_authorizations: Vec<Authorization>,
+    sandbox_scope: Option<SandboxScope>,
 }
 
 impl PreparedToolExecution {
@@ -64,6 +66,7 @@ impl PreparedToolExecution {
             review,
             payload,
             dir_authorizations: Vec::new(),
+            sandbox_scope: None,
         }
     }
 
@@ -71,11 +74,17 @@ impl PreparedToolExecution {
         self.dir_authorizations.push(authorization);
         self
     }
+
+    pub(crate) fn with_sandbox_scope(mut self, scope: SandboxScope) -> Self {
+        self.sandbox_scope = Some(scope);
+        self
+    }
 }
 
 struct PreparedToolInvocation {
     payload: ToolPayload,
     dir_authorizations: Vec<Authorization>,
+    sandbox_scope: Option<SandboxScope>,
 }
 
 pub(crate) struct ToolExecutorRuntime {
@@ -130,6 +139,7 @@ impl ToolExecutorRuntime {
                 PreparedToolInvocation {
                     payload: prepared.payload,
                     dir_authorizations: prepared.dir_authorizations,
+                    sandbox_scope: prepared.sandbox_scope,
                 },
             );
         Ok(prepared.review)
@@ -176,7 +186,7 @@ impl ToolExecutorRuntime {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let operation_id = ToolOperationId::new(format!("{turn_id}:{}", call.id))
             .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let (payload, dir_authorizations) = {
+        let (payload, dir_authorizations, sandbox_scope) = {
             let prepared = self
                 .prepared
                 .lock()
@@ -190,6 +200,7 @@ impl ToolExecutorRuntime {
             (
                 prepared.payload.clone(),
                 prepared.dir_authorizations.clone(),
+                prepared.sandbox_scope.clone(),
             )
         };
         for authorization in &dir_authorizations {
@@ -212,6 +223,24 @@ impl ToolExecutorRuntime {
                 return Err(CoreError::Execution(error.to_string()));
             }
         }
+        if let Some(scope) = &sandbox_scope
+            && (scope
+                .grants()
+                .iter()
+                .any(|grant| grant.dir().env() != &self.environment_id)
+                || scope
+                    .hidden_dirs()
+                    .iter()
+                    .any(|dir| dir.env() != &self.environment_id))
+        {
+            self.prepared
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&call.id);
+            return Err(CoreError::Execution(
+                "sandbox scope belongs to a different execution environment".into(),
+            ));
+        }
         let authority = match authorization {
             ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
             ToolAuthorization::UnsandboxedGrant { .. }
@@ -220,14 +249,19 @@ impl ToolExecutorRuntime {
             | ToolAuthorization::PermissionBypassed(_)
             | ToolAuthorization::ApprovedOnce(_) => ToolRuntimeAuthority::Unrestricted,
         };
+        let mut context =
+            ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)
+                .with_session_id(session_id.clone());
+        if let Some(scope) = sandbox_scope {
+            context = context.with_sandbox_scope(scope);
+        }
         let invocation = zeta_tools::ToolInvocation::new(
             operation_id,
             call.id.clone(),
             turn_id.clone(),
             binding.clone(),
             payload,
-            ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)
-                .with_session_id(session_id.clone()),
+            context,
         );
         let outcome = pollster::block_on(self.executor.execute(invocation));
         if !matches!(outcome, ToolExecutionOutcome::SandboxDenied(_)) {

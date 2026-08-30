@@ -6,6 +6,7 @@ use zeta_async_utils::CancellationToken;
 use zeta_protocol::SandboxDenialOutput;
 use zeta_protocol::TurnId;
 use zeta_sandboxing::SandboxPolicy;
+use zeta_sandboxing::SandboxScope;
 
 /// Controls whether an executor enters the initial model tool set, deferred search, or neither.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,6 +59,7 @@ pub struct ToolExecutionContext {
     cancellation: CancellationToken,
     authority: ToolRuntimeAuthority,
     session_id: Option<zeta_protocol::SessionId>,
+    sandbox_scope: Option<SandboxScope>,
 }
 
 /// Exact runtime boundary selected by policy for one materialized tool invocation.
@@ -82,11 +84,18 @@ impl ToolExecutionContext {
             cancellation,
             authority,
             session_id: None,
+            sandbox_scope: None,
         }
     }
 
     pub fn with_session_id(mut self, session_id: zeta_protocol::SessionId) -> Self {
         self.session_id = Some(session_id);
+        self
+    }
+
+    /// Binds host-owned directory visibility to this exact invocation.
+    pub fn with_sandbox_scope(mut self, scope: SandboxScope) -> Self {
+        self.sandbox_scope = Some(scope);
         self
     }
 
@@ -104,6 +113,10 @@ impl ToolExecutionContext {
 
     pub fn authority(&self) -> ToolRuntimeAuthority {
         self.authority
+    }
+
+    pub fn sandbox_scope(&self) -> Option<&SandboxScope> {
+        self.sandbox_scope.as_ref()
     }
 }
 

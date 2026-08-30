@@ -232,7 +232,7 @@ fn env_dirs_set_routes_services_by_stable_folder_id() {
     let first = TestDir::new("multi-root-first", "first.txt");
     let second = TestDir::new("multi-root-second", "second.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
-    let mut connection = server.connection();
+    let mut connection = server.product_host_connection();
     server.handle_json(
         &mut connection,
         &serde_json::json!({
@@ -441,7 +441,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             title: "session".into(),
         })
         .unwrap();
-    let mut connection = server.connection();
+    let mut connection = server.product_host_connection();
     server.handle_json(
         &mut connection,
         &serde_json::json!({

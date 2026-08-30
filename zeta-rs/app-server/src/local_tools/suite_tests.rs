@@ -131,6 +131,164 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
     );
 }
 
+#[test]
+fn work_attempt_scope_routes_every_source_root_and_excludes_session_dirs() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source_a = temporary.path().join("source-a");
+    let source_b = temporary.path().join("source-b");
+    let managed_a = temporary.path().join("managed-a");
+    let managed_b = temporary.path().join("managed-b");
+    let output = temporary.path().join("output");
+    let unrelated = temporary.path().join("unrelated");
+    for path in [
+        &source_a, &source_b, &managed_a, &managed_b, &output, &unrelated,
+    ] {
+        std::fs::create_dir(path).unwrap();
+    }
+    std::fs::write(managed_a.join("a.txt"), "a").unwrap();
+    std::fs::write(managed_b.join("b.txt"), "b").unwrap();
+    std::fs::write(output.join("test.log"), "log").unwrap();
+    std::fs::write(unrelated.join("secret.txt"), "secret").unwrap();
+    let source_a_dir = Dir::open_local(&source_a).unwrap();
+    let source_b_dir = Dir::open_local(&source_b).unwrap();
+    let cwd_authorization = authorization(&source_a)
+        .authorize(Permission::ExecuteCommands)
+        .unwrap();
+    let access = Arc::new(crate::dir_grants::DirGrants::default());
+    let session_id = SessionId::new("session").unwrap();
+    let thread_id = ThreadId::new("thread").unwrap();
+    access
+        .add_dir(session_id.clone(), authorization(&unrelated))
+        .unwrap();
+    let identity = crate::dir_grants::WorkAttemptDirIdentity {
+        work_run_id: zeta_protocol::WorkRunId::new("run").unwrap(),
+        attempt_id: zeta_protocol::WorkAttemptId::new("attempt").unwrap(),
+        execution_id: zeta_protocol::WorkExecutionId::new("execution").unwrap(),
+    };
+    access
+        .bind_work_attempt_dirs(
+            thread_id.clone(),
+            identity.clone(),
+            source_b_dir.id(),
+            vec![
+                crate::dir_grants::WorkAttemptDirRoot {
+                    source: source_a_dir,
+                    managed: Dir::open_local(&managed_a).unwrap(),
+                },
+                crate::dir_grants::WorkAttemptDirRoot {
+                    source: source_b_dir,
+                    managed: Dir::open_local(&managed_b).unwrap(),
+                },
+            ],
+            Dir::open_local(&output).unwrap(),
+            Dir::open_local(temporary.path()).unwrap(),
+        )
+        .unwrap();
+    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let shell = LocalShellToolService::new_with_action_policy_revision(
+        cwd_authorization,
+        ripgrep.clone(),
+        PassThroughBackend,
+        ActionPolicyRevision::new("test-policy-v1"),
+    )
+    .unwrap();
+    let suite = LocalToolSuite::new(
+        shell,
+        ripgrep.clone(),
+        Arc::new(AgentGrepService::new(
+            zeta_config::AgentGrepBackend::Ripgrep,
+            ripgrep,
+            None,
+        )),
+        Arc::clone(&access),
+    );
+
+    let primary = suite
+        .resolve(
+            "b.txt",
+            true,
+            Some(&session_id),
+            Some(&thread_id),
+            Permission::InspectRepository,
+        )
+        .unwrap();
+    assert_eq!(
+        primary.absolute,
+        managed_b.join("b.txt").canonicalize().unwrap()
+    );
+    let sandbox_scope = primary
+        .thread_scope
+        .as_ref()
+        .unwrap()
+        .sandbox_scope(&primary.authorization)
+        .unwrap()
+        .unwrap();
+    assert_eq!(sandbox_scope.command_dir(), primary.authorization.dir());
+    assert_eq!(sandbox_scope.grants().len(), 3);
+    assert!(
+        sandbox_scope
+            .hidden_dirs()
+            .iter()
+            .any(|dir| dir.canonical_path() == temporary.path().canonicalize().unwrap())
+    );
+    let aliased = suite
+        .resolve(
+            &source_a.join("a.txt").display().to_string(),
+            true,
+            Some(&session_id),
+            Some(&thread_id),
+            Permission::InspectRepository,
+        )
+        .unwrap();
+    assert_eq!(
+        aliased.absolute,
+        managed_a.join("a.txt").canonicalize().unwrap()
+    );
+    assert!(
+        suite
+            .resolve(
+                &unrelated.join("secret.txt").display().to_string(),
+                true,
+                Some(&session_id),
+                Some(&thread_id),
+                Permission::InspectRepository,
+            )
+            .is_err()
+    );
+    assert!(
+        suite
+            .resolve(
+                &output.join("test.log").display().to_string(),
+                true,
+                Some(&session_id),
+                Some(&thread_id),
+                Permission::InspectRepository,
+            )
+            .is_ok()
+    );
+    let active_authorization = access
+        .thread_scope(&thread_id, Permission::InspectRepository)
+        .unwrap()
+        .unwrap()
+        .primary()
+        .clone();
+    access
+        .unbind_work_attempt_dirs(&thread_id, &identity)
+        .unwrap();
+    assert!(active_authorization.ensure_active().is_err());
+    assert!(
+        suite
+            .resolve(
+                &unrelated.join("secret.txt").display().to_string(),
+                true,
+                Some(&session_id),
+                Some(&thread_id),
+                Permission::InspectRepository,
+            )
+            .is_ok()
+    );
+}
+
 fn authorization(path: &std::path::Path) -> Grant {
     Grant::for_environment(
         Dir::open_local(path).unwrap(),

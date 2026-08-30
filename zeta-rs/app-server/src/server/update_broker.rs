@@ -27,10 +27,12 @@ use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotifica
 use zeta_app_server_protocol::protocol::language::LanguageServerStateNotification;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
+use zeta_app_server_protocol::protocol::projects::ProjectChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::session::SessionChanged;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
+use zeta_app_server_protocol::protocol::work_runs::WorkRunChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
 use zeta_config::ConfigChange;
 use zeta_protocol::AgentRequestEnvelope;
@@ -76,6 +78,7 @@ struct Subscriber {
     queue: NotificationQueueHandle,
     scope_id: u64,
     agent_interactions: Option<AgentInteractionCapability>,
+    work_coordination_host: bool,
     collaboration_rooms: BTreeSet<String>,
     sessions: BTreeSet<SessionId>,
     threads: BTreeMap<ThreadId, ThreadSubscription>,
@@ -138,6 +141,7 @@ impl UpdateBroker {
                     queue: queue.downgrade(),
                     scope_id: self.scope_id,
                     agent_interactions: None,
+                    work_coordination_host: false,
                     collaboration_rooms: BTreeSet::new(),
                     sessions: BTreeSet::new(),
                     threads: BTreeMap::new(),
@@ -169,6 +173,14 @@ impl UpdateBroker {
         {
             subscriber.agent_interactions = capability;
             reconcile_interaction_assignments(&mut state);
+        }
+    }
+
+    pub(super) fn set_work_coordination_host(&self, connection_id: u64, enabled: bool) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.work_coordination_host = enabled;
         }
     }
 
@@ -754,6 +766,42 @@ impl UpdateBroker {
 
     pub(super) fn publish_turn_changes_changed(&self, changed: TurnChangesChanged) {
         self.broadcast_notification(ServerNotificationMethod::TurnChangesChanged, &changed);
+    }
+
+    pub(super) fn publish_work_run_changed(&self, changed: WorkRunChanged) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.scope_id == self.scope_id && subscriber.work_coordination_host {
+                queue.push(notification(
+                    ServerNotificationMethod::WorkRunChanged,
+                    &changed,
+                ));
+            }
+            true
+        });
+    }
+
+    pub(super) fn publish_project_changed(&self, changed: ProjectChanged) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.scope_id == self.scope_id && subscriber.work_coordination_host {
+                queue.push(notification(
+                    ServerNotificationMethod::ProjectChanged,
+                    &changed,
+                ));
+            }
+            true
+        });
     }
 
     pub(super) fn publish_language_diagnostics(

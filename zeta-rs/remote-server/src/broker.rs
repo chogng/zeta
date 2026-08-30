@@ -85,7 +85,9 @@ mod unix {
                                     return;
                                 }
                             };
-                            if let Err(error) = server.serve_jsonl(BufReader::new(reader), stream) {
+                            if let Err(error) =
+                                server.serve_product_host_jsonl(BufReader::new(reader), stream)
+                            {
                                 eprintln!("remote server connection failed: {error}");
                             }
                         })

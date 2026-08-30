@@ -6,14 +6,18 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use ignore::WalkBuilder;
+use serde::Deserialize;
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use zeta_file_access::Dir;
 use zeta_git::GitClient;
 use zeta_git::GitDetachedWorktreeRequest;
 use zeta_git::GitHead;
 use zeta_git::GitPrivateRef;
 use zeta_git::GitRepository;
 use zeta_git::GitWorktreeRemovalMode;
+use zeta_protocol::ContentDigest;
 use zeta_turn_changes::DirectorySnapshotStore;
 
 use crate::binding;
@@ -57,17 +61,119 @@ pub struct Worktree {
     owner: WorktreeOwner,
 }
 
-/// Inputs that must be durably bound before a Thread may execute.
+/// Durable owner of one isolated managed directory.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum ManagedDirOwner {
+    Thread {
+        thread_id: String,
+    },
+    WorkAttemptRoot {
+        work_run_id: String,
+        attempt_id: String,
+        thread_id: String,
+        source_dir_id: String,
+    },
+    VerificationRoot {
+        work_run_id: String,
+        verification_key: String,
+        source_dir_id: String,
+    },
+}
+
+impl ManagedDirOwner {
+    pub(crate) fn validate(&self, source_dir_id: &str) -> Result<()> {
+        let valid = match self {
+            Self::Thread { thread_id } => !thread_id.trim().is_empty(),
+            Self::WorkAttemptRoot {
+                work_run_id,
+                attempt_id,
+                thread_id,
+                source_dir_id: owner_source_dir_id,
+            } => {
+                !work_run_id.trim().is_empty()
+                    && !attempt_id.trim().is_empty()
+                    && !thread_id.trim().is_empty()
+                    && !owner_source_dir_id.trim().is_empty()
+                    && owner_source_dir_id == source_dir_id
+            }
+            Self::VerificationRoot {
+                work_run_id,
+                verification_key,
+                source_dir_id: owner_source_dir_id,
+            } => {
+                !work_run_id.trim().is_empty()
+                    && !verification_key.trim().is_empty()
+                    && !owner_source_dir_id.trim().is_empty()
+                    && owner_source_dir_id == source_dir_id
+            }
+        };
+        if valid {
+            Ok(())
+        } else {
+            bail!("managed directory owner is invalid")
+        }
+    }
+
+    pub(crate) fn metadata_owner_id(&self) -> String {
+        match self {
+            Self::Thread { thread_id } | Self::WorkAttemptRoot { thread_id, .. } => {
+                thread_id.clone()
+            }
+            Self::VerificationRoot {
+                work_run_id,
+                verification_key,
+                source_dir_id,
+            } => hex_digest_parts(&[
+                "verification-root",
+                work_run_id,
+                verification_key,
+                source_dir_id,
+            ]),
+        }
+    }
+
+    fn managed_dir_id(&self) -> String {
+        match self {
+            Self::Thread { thread_id } => hex_digest(thread_id),
+            Self::WorkAttemptRoot {
+                work_run_id,
+                attempt_id,
+                thread_id,
+                source_dir_id,
+            } => hex_digest_parts(&[
+                "work-attempt-root",
+                work_run_id,
+                attempt_id,
+                thread_id,
+                source_dir_id,
+            ]),
+            Self::VerificationRoot {
+                work_run_id,
+                verification_key,
+                source_dir_id,
+            } => hex_digest_parts(&[
+                "verification-root",
+                work_run_id,
+                verification_key,
+                source_dir_id,
+            ]),
+        }
+    }
+}
+
+/// Inputs that must be durably bound before an execution owner may use a managed directory.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ThreadWorktreeProvisionRequest {
-    pub source: ThreadWorktreeSource,
-    pub target: ThreadWorktreeTarget,
+pub struct ManagedDirProvisionRequest {
+    pub source: ManagedDirSource,
+    pub target: ManagedDirTarget,
+    pub repository_targets: BTreeMap<PathBuf, ManagedDirTarget>,
     pub source_dir_id: String,
-    pub thread_id: String,
+    pub owner: ManagedDirOwner,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ThreadWorktreeSource {
+pub enum ManagedDirSource {
     DirSnapshot {
         source_directory: PathBuf,
     },
@@ -78,7 +184,7 @@ pub enum ThreadWorktreeSource {
     },
 }
 
-impl ThreadWorktreeSource {
+impl ManagedDirSource {
     fn source_directory(&self) -> &Path {
         match self {
             Self::DirSnapshot { source_directory }
@@ -90,7 +196,7 @@ impl ThreadWorktreeSource {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ThreadWorktreeTarget {
+pub enum ManagedDirTarget {
     SourceHead,
     Branch {
         name: String,
@@ -105,15 +211,17 @@ pub enum ThreadWorktreeTarget {
     },
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ThreadWorktreeKind {
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ManagedDirKind {
     Git,
     Directory,
 }
 
-/// Durable managed checkout assigned exclusively to one Thread.
+/// Durable managed checkout assigned exclusively to one execution owner.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ThreadWorktreeBinding {
+pub struct ManagedDirBinding {
+    owner: ManagedDirOwner,
     managed_worktree_id: String,
     checkout_root: PathBuf,
     dir: PathBuf,
@@ -124,14 +232,14 @@ pub struct ThreadWorktreeBinding {
     target_unborn: bool,
     baseline_tree: String,
     baseline_ref: String,
-    kind: ThreadWorktreeKind,
+    kind: ManagedDirKind,
     snapshot_store: Option<PathBuf>,
-    repositories: Vec<ThreadRepositoryBinding>,
+    repositories: Vec<ManagedRepositoryBinding>,
 }
 
 /// One repository mapped into a Thread dir.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ThreadRepositoryBinding {
+pub struct ManagedRepositoryBinding {
     repository_id: String,
     relative_path: PathBuf,
     worktree_root: PathBuf,
@@ -143,7 +251,10 @@ pub struct ThreadRepositoryBinding {
     baseline_ref: String,
 }
 
-impl ThreadWorktreeBinding {
+impl ManagedDirBinding {
+    pub fn owner(&self) -> &ManagedDirOwner {
+        &self.owner
+    }
     pub fn managed_worktree_id(&self) -> &str {
         &self.managed_worktree_id
     }
@@ -162,6 +273,17 @@ impl ThreadWorktreeBinding {
 
     pub fn source_repository_root(&self) -> &Path {
         &self.source_repository_root
+    }
+
+    pub fn source_directory(&self) -> PathBuf {
+        match self.kind {
+            ManagedDirKind::Git => self
+                .dir
+                .strip_prefix(&self.checkout_root)
+                .map(|relative| self.source_repository_root.join(relative))
+                .unwrap_or_else(|_| self.source_repository_root.clone()),
+            ManagedDirKind::Directory => self.source_repository_root.clone(),
+        }
     }
 
     pub fn target_branch(&self) -> Option<&str> {
@@ -184,7 +306,7 @@ impl ThreadWorktreeBinding {
         &self.baseline_ref
     }
 
-    pub const fn kind(&self) -> ThreadWorktreeKind {
+    pub const fn kind(&self) -> ManagedDirKind {
         self.kind
     }
 
@@ -192,12 +314,42 @@ impl ThreadWorktreeBinding {
         self.snapshot_store.as_deref()
     }
 
-    pub fn repositories(&self) -> &[ThreadRepositoryBinding] {
+    pub fn repositories(&self) -> &[ManagedRepositoryBinding] {
         &self.repositories
+    }
+
+    /// Returns the canonical identity of the durable binding without exposing host paths.
+    pub fn manifest_digest(&self) -> Result<ContentDigest> {
+        let managed_dir_id = Dir::open_local(&self.dir)?.id();
+        let repositories = self
+            .repositories
+            .iter()
+            .map(|repository| {
+                (
+                    repository.repository_id.as_str(),
+                    &repository.relative_path,
+                    repository.target_branch.as_deref(),
+                    repository.target_head.as_str(),
+                    repository.target_unborn,
+                    repository.baseline_tree.as_str(),
+                    repository.baseline_ref.as_str(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let encoded = serde_json::to_vec(&(
+            1_u32,
+            &self.owner,
+            self.managed_worktree_id.as_str(),
+            self.source_dir_id.as_str(),
+            managed_dir_id,
+            self.kind,
+            repositories,
+        ))?;
+        Ok(ContentDigest::sha256(&encoded))
     }
 }
 
-impl ThreadRepositoryBinding {
+impl ManagedRepositoryBinding {
     pub fn repository_id(&self) -> &str {
         &self.repository_id
     }
@@ -227,9 +379,9 @@ impl ThreadRepositoryBinding {
     }
 }
 
-/// Proof supplied by the ledger owner before destructive Thread cleanup.
+/// Proof supplied by the ledger owner before destructive managed-directory cleanup.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ThreadWorktreeCleanupEligibility {
+pub enum ManagedDirCleanupEligibility {
     AllChangeSetsSettled,
 }
 
@@ -414,14 +566,15 @@ impl WorktreeManager {
         metadata::owner(repository.git_dir())
     }
 
-    /// Creates and durably binds an isolated detached checkout for one Thread.
-    pub async fn provision_thread(
+    /// Creates and durably binds one isolated checkout for an exact execution owner.
+    pub async fn provision(
         &self,
-        request: &ThreadWorktreeProvisionRequest,
-    ) -> Result<ThreadWorktreeBinding> {
-        if request.thread_id.trim().is_empty() || request.source_dir_id.trim().is_empty() {
-            bail!("Thread worktree identity cannot be empty");
+        request: &ManagedDirProvisionRequest,
+    ) -> Result<ManagedDirBinding> {
+        if request.source_dir_id.trim().is_empty() {
+            bail!("managed directory source identity cannot be empty");
         }
+        request.owner.validate(&request.source_dir_id)?;
         let source_directory = dunce::canonicalize(request.source.source_directory())
             .with_context(|| {
                 format!(
@@ -441,15 +594,15 @@ impl WorktreeManager {
             .context("source directory is outside its repository root")?
             .to_path_buf();
         let baseline_tree = match &request.source {
-            ThreadWorktreeSource::DirSnapshot { .. } => {
+            ManagedDirSource::DirSnapshot { .. } => {
                 self.git.capture_worktree_tree(&source_repository).await?
             }
-            ThreadWorktreeSource::ImmutableTree { tree_id, .. } => {
+            ManagedDirSource::ImmutableTree { tree_id, .. } => {
                 zeta_git::GitTreeId::new(tree_id.clone())?
             }
         };
         let (target_branch, target_head, target_unborn) = match &request.target {
-            ThreadWorktreeTarget::SourceHead => {
+            ManagedDirTarget::SourceHead => {
                 let snapshot = self.git.snapshot(&source_repository).await?;
                 match snapshot.head() {
                     GitHead::Branch {
@@ -465,36 +618,34 @@ impl WorktreeManager {
                     ),
                 }
             }
-            ThreadWorktreeTarget::Branch { name, object_id } => {
+            ManagedDirTarget::Branch { name, object_id } => {
                 if name.trim().is_empty() {
-                    bail!("Thread target branch cannot be empty");
+                    bail!("managed directory target branch cannot be empty");
                 }
                 (Some(name.clone()), object_id.clone(), false)
             }
-            ThreadWorktreeTarget::UnbornBranch {
+            ManagedDirTarget::UnbornBranch {
                 name,
                 anchor_object_id,
             } => {
                 if name.trim().is_empty() {
-                    bail!("Thread target branch cannot be empty");
+                    bail!("managed directory target branch cannot be empty");
                 }
                 (Some(name.clone()), anchor_object_id.clone(), true)
             }
-            ThreadWorktreeTarget::Detached { object_id } => (None, object_id.clone(), false),
+            ManagedDirTarget::Detached { object_id } => (None, object_id.clone(), false),
         };
-        let digest = hex_digest(&request.thread_id);
+        let digest = request.owner.managed_dir_id();
         let checkout_root = self.settings.root.join(&digest[..4]).join(&digest);
         if checkout_root.exists() {
-            return self
-                .recover_thread(&checkout_root, &request.thread_id)
-                .await;
+            return self.recover(&checkout_root, &request.owner).await;
         }
         std::fs::create_dir_all(
             checkout_root
                 .parent()
                 .context("managed checkout omitted its parent")?,
         )?;
-        let baseline_ref = GitPrivateRef::new(format!("refs/zeta/threads/{digest}/baseline"))?;
+        let baseline_ref = GitPrivateRef::new(format!("refs/zeta/managed-dirs/{digest}/baseline"))?;
         self.git
             .pin_private_ref(&source_repository, &baseline_ref, &baseline_tree)
             .await?;
@@ -517,12 +668,13 @@ impl WorktreeManager {
             self.git
                 .install_worktree_tree(&linked_repository, &baseline_tree)
                 .await?;
-            metadata::bind_thread(linked_repository.git_dir(), &request.thread_id)?;
+            let metadata_owner_id = request.owner.metadata_owner_id();
+            metadata::bind_thread(linked_repository.git_dir(), &metadata_owner_id)?;
             binding::write(
                 linked_repository.git_dir(),
                 &binding::BindingRecord::new(
                     digest.clone(),
-                    request.thread_id.clone(),
+                    request.owner.clone(),
                     request.source_dir_id.clone(),
                     source_repository.worktree_root().to_path_buf(),
                     relative_dir.clone(),
@@ -539,7 +691,7 @@ impl WorktreeManager {
                 .lock_worktree(
                     &source_repository,
                     &checkout_root,
-                    &format!("Zeta Thread {}", request.thread_id),
+                    &format!("Zeta managed directory for {metadata_owner_id}"),
                 )
                 .await?;
             Ok::<(), anyhow::Error>(())
@@ -560,8 +712,9 @@ impl WorktreeManager {
                 .await;
             return Err(error);
         }
-        let repository_binding = ThreadRepositoryBinding {
-            repository_id: format!("{digest}:repository"),
+        let checkout_root = dunce::canonicalize(&checkout_root)?;
+        let repository_binding = ManagedRepositoryBinding {
+            repository_id: local_repository_id(&source_repository)?,
             relative_path: PathBuf::from("."),
             worktree_root: checkout_root.clone(),
             source_repository_root: source_repository.worktree_root().to_path_buf(),
@@ -612,7 +765,8 @@ impl WorktreeManager {
                 .collect::<Vec<_>>(),
         );
         binding::replace(linked_repository.git_dir(), &record)?;
-        Ok(ThreadWorktreeBinding {
+        Ok(ManagedDirBinding {
+            owner: request.owner.clone(),
             managed_worktree_id: digest,
             checkout_root: checkout_root.clone(),
             dir,
@@ -623,7 +777,7 @@ impl WorktreeManager {
             target_unborn,
             baseline_tree: baseline_tree.as_str().to_string(),
             baseline_ref: baseline_ref.as_str().to_string(),
-            kind: ThreadWorktreeKind::Git,
+            kind: ManagedDirKind::Git,
             snapshot_store: None,
             repositories,
         })
@@ -631,13 +785,32 @@ impl WorktreeManager {
 
     async fn provision_nested_repositories(
         &self,
-        request: &ThreadWorktreeProvisionRequest,
+        request: &ManagedDirProvisionRequest,
         source_directory: &Path,
         primary_repository_root: &Path,
         dir: &Path,
         digest: &str,
-    ) -> Result<Vec<ThreadRepositoryBinding>> {
+    ) -> Result<Vec<ManagedRepositoryBinding>> {
         let roots = discover_nested_repository_roots(source_directory, primary_repository_root);
+        let relative_paths = roots
+            .iter()
+            .map(|root| {
+                root.strip_prefix(source_directory)
+                    .map(Path::to_path_buf)
+                    .context("nested repository is outside the source dir")
+            })
+            .collect::<Result<std::collections::BTreeSet<_>>>()?;
+        if !request.repository_targets.is_empty()
+            && request
+                .repository_targets
+                .keys()
+                .collect::<std::collections::BTreeSet<_>>()
+                != relative_paths
+                    .iter()
+                    .collect::<std::collections::BTreeSet<_>>()
+        {
+            bail!("managed directory repository targets do not match its nested repositories");
+        }
         let mut created = Vec::new();
         for source_root in roots {
             let relative_path = source_root
@@ -646,10 +819,10 @@ impl WorktreeManager {
                 .to_path_buf();
             let source_repository = self.git.open_repository(&source_root).await?;
             let baseline_tree = match &request.source {
-                ThreadWorktreeSource::DirSnapshot { .. } => {
+                ManagedDirSource::DirSnapshot { .. } => {
                     self.git.capture_worktree_tree(&source_repository).await?
                 }
-                ThreadWorktreeSource::ImmutableTree {
+                ManagedDirSource::ImmutableTree {
                     repository_trees, ..
                 } => zeta_git::GitTreeId::new(
                     repository_trees
@@ -663,30 +836,41 @@ impl WorktreeManager {
                         })?,
                 )?,
             };
+            let target = request.repository_targets.get(&relative_path);
             let inherited = binding::try_read(source_repository.git_dir())?;
-            let (target_branch, target_head, target_unborn) = match inherited {
-                Some(record) if record.kind == binding::BindingKind::Git => (
-                    record.target_branch,
-                    record.target_head,
-                    record.target_unborn,
-                ),
-                _ => match self.git.snapshot(&source_repository).await?.head() {
-                    GitHead::Branch {
-                        name, object_id, ..
-                    } => (Some(name.clone()), object_id.clone(), false),
-                    GitHead::Detached { object_id } => (None, object_id.clone(), false),
-                    GitHead::Unborn { name } => (
-                        Some(name.clone()),
-                        self.git
-                            .create_worktree_anchor(&source_repository, &baseline_tree)
-                            .await?,
-                        true,
+            let (target_branch, target_head, target_unborn) = match target {
+                Some(ManagedDirTarget::Branch { name, object_id }) => {
+                    (Some(name.clone()), object_id.clone(), false)
+                }
+                Some(ManagedDirTarget::UnbornBranch {
+                    name,
+                    anchor_object_id,
+                }) => (Some(name.clone()), anchor_object_id.clone(), true),
+                Some(ManagedDirTarget::Detached { object_id }) => (None, object_id.clone(), false),
+                Some(ManagedDirTarget::SourceHead) | None => match inherited {
+                    Some(record) if record.kind == binding::BindingKind::Git => (
+                        record.target_branch,
+                        record.target_head,
+                        record.target_unborn,
                     ),
+                    _ => match self.git.snapshot(&source_repository).await?.head() {
+                        GitHead::Branch {
+                            name, object_id, ..
+                        } => (Some(name.clone()), object_id.clone(), false),
+                        GitHead::Detached { object_id } => (None, object_id.clone(), false),
+                        GitHead::Unborn { name } => (
+                            Some(name.clone()),
+                            self.git
+                                .create_worktree_anchor(&source_repository, &baseline_tree)
+                                .await?,
+                            true,
+                        ),
+                    },
                 },
             };
             let path_digest = hex_digest(&relative_path.to_string_lossy());
             let baseline_ref = GitPrivateRef::new(format!(
-                "refs/zeta/threads/{digest}/repositories/{path_digest}/baseline"
+                "refs/zeta/managed-dirs/{digest}/repositories/{path_digest}/baseline"
             ))?;
             self.git
                 .pin_private_ref(&source_repository, &baseline_ref, &baseline_tree)
@@ -722,8 +906,8 @@ impl WorktreeManager {
                     return Err(error.into());
                 }
             };
-            let repository = ThreadRepositoryBinding {
-                repository_id: format!("{digest}:repository:{}", &path_digest[..16]),
+            let repository = ManagedRepositoryBinding {
+                repository_id: local_repository_id(&source_repository)?,
                 relative_path: relative_path.clone(),
                 worktree_root: destination.clone(),
                 source_repository_root: source_root.clone(),
@@ -737,12 +921,13 @@ impl WorktreeManager {
                 self.git
                     .install_worktree_tree(&linked, &baseline_tree)
                     .await?;
-                metadata::bind_thread(linked.git_dir(), &request.thread_id)?;
+                let metadata_owner_id = request.owner.metadata_owner_id();
+                metadata::bind_thread(linked.git_dir(), &metadata_owner_id)?;
                 binding::write(
                     linked.git_dir(),
                     &binding::BindingRecord::new(
                         digest.to_string(),
-                        request.thread_id.clone(),
+                        request.owner.clone(),
                         request.source_dir_id.clone(),
                         source_root.clone(),
                         PathBuf::from("."),
@@ -759,7 +944,7 @@ impl WorktreeManager {
                     .lock_worktree(
                         &source_repository,
                         &destination,
-                        &format!("Zeta Thread {} nested repository", request.thread_id),
+                        &format!("Zeta managed nested repository for {}", metadata_owner_id),
                     )
                     .await?;
                 Ok::<(), anyhow::Error>(())
@@ -788,7 +973,7 @@ impl WorktreeManager {
         Ok(created)
     }
 
-    async fn cleanup_repository(&self, binding: &ThreadRepositoryBinding) -> Result<()> {
+    async fn cleanup_repository(&self, binding: &ManagedRepositoryBinding) -> Result<()> {
         let source = self
             .git
             .open_repository(binding.source_repository_root())
@@ -814,18 +999,17 @@ impl WorktreeManager {
 
     async fn provision_directory(
         &self,
-        request: &ThreadWorktreeProvisionRequest,
+        request: &ManagedDirProvisionRequest,
         source_directory: &Path,
-    ) -> Result<ThreadWorktreeBinding> {
-        if request.thread_id.trim().is_empty() || request.source_dir_id.trim().is_empty() {
-            bail!("Thread dir identity cannot be empty");
+    ) -> Result<ManagedDirBinding> {
+        if request.source_dir_id.trim().is_empty() {
+            bail!("managed directory source identity cannot be empty");
         }
-        let digest = hex_digest(&request.thread_id);
+        request.owner.validate(&request.source_dir_id)?;
+        let digest = request.owner.managed_dir_id();
         let checkout_root = self.settings.root.join(&digest[..4]).join(&digest);
         if checkout_root.exists() {
-            return self
-                .recover_thread(&checkout_root, &request.thread_id)
-                .await;
+            return self.recover(&checkout_root, &request.owner).await;
         }
         let dir = checkout_root.join("dir");
         let snapshot_store = self
@@ -835,14 +1019,25 @@ impl WorktreeManager {
             .join(hex_digest(&request.source_dir_id));
         let snapshots = DirectorySnapshotStore::new(&snapshot_store);
         let baseline_tree = match &request.source {
-            ThreadWorktreeSource::DirSnapshot { .. } => snapshots
+            ManagedDirSource::DirSnapshot { .. } => snapshots
                 .capture(source_directory)
                 .map_err(anyhow::Error::msg)?,
-            ThreadWorktreeSource::ImmutableTree { tree_id, .. } => tree_id.clone(),
+            ManagedDirSource::ImmutableTree { tree_id, .. } => tree_id.clone(),
         };
         std::fs::create_dir_all(&dir)?;
         let checkout_root = dunce::canonicalize(&checkout_root)?;
         let dir = checkout_root.join("dir");
+        let repository_binding = ManagedRepositoryBinding {
+            repository_id: format!("directory:{}", request.source_dir_id),
+            relative_path: PathBuf::from("."),
+            worktree_root: dir.clone(),
+            source_repository_root: source_directory.to_path_buf(),
+            target_branch: None,
+            target_head: baseline_tree.clone(),
+            target_unborn: false,
+            baseline_tree: baseline_tree.clone(),
+            baseline_ref: String::new(),
+        };
         let result = (|| {
             snapshots
                 .replace_directory(&dir, &baseline_tree)
@@ -851,7 +1046,7 @@ impl WorktreeManager {
                 &checkout_root,
                 &binding::BindingRecord::new(
                     digest.clone(),
-                    request.thread_id.clone(),
+                    request.owner.clone(),
                     request.source_dir_id.clone(),
                     source_directory.to_path_buf(),
                     PathBuf::from("dir"),
@@ -862,25 +1057,16 @@ impl WorktreeManager {
                     String::new(),
                     binding::BindingKind::Directory,
                     Some(snapshot_store.clone()),
-                ),
+                )
+                .with_repositories(vec![repository_record(&repository_binding)]),
             )
         })();
         if let Err(error) = result {
             let _ = std::fs::remove_dir_all(&checkout_root);
             return Err(error);
         }
-        let repository_binding = ThreadRepositoryBinding {
-            repository_id: format!("{digest}:directory"),
-            relative_path: PathBuf::from("."),
-            worktree_root: dir.clone(),
-            source_repository_root: source_directory.to_path_buf(),
-            target_branch: None,
-            target_head: baseline_tree.clone(),
-            target_unborn: false,
-            baseline_tree: baseline_tree.clone(),
-            baseline_ref: String::new(),
-        };
-        Ok(ThreadWorktreeBinding {
+        Ok(ManagedDirBinding {
+            owner: request.owner.clone(),
             managed_worktree_id: digest,
             checkout_root,
             dir,
@@ -891,24 +1077,25 @@ impl WorktreeManager {
             target_unborn: false,
             baseline_tree,
             baseline_ref: String::new(),
-            kind: ThreadWorktreeKind::Directory,
+            kind: ManagedDirKind::Directory,
             snapshot_store: Some(snapshot_store),
             repositories: vec![repository_binding],
         })
     }
 
     /// Recovers the durable binding stored inside an existing managed linked worktree.
-    pub async fn recover_thread(
+    pub async fn recover(
         &self,
         checkout_root: &Path,
-        thread_id: &str,
-    ) -> Result<ThreadWorktreeBinding> {
+        owner: &ManagedDirOwner,
+    ) -> Result<ManagedDirBinding> {
         if let Some(record) = binding::try_read(checkout_root)? {
             if record.kind != binding::BindingKind::Directory {
                 bail!("managed directory binding has an invalid dir kind");
             }
-            if record.owner_thread_id != thread_id {
-                bail!("Thread directory binding owner does not match directory owner");
+            if !record.matches_owner(owner) || record.managed_worktree_id != owner.managed_dir_id()
+            {
+                bail!("managed directory binding owner does not match its durable owner");
             }
             let checkout_root = dunce::canonicalize(checkout_root)?;
             let managed_root = dunce::canonicalize(&self.settings.root)?;
@@ -920,7 +1107,8 @@ impl WorktreeManager {
             }
             let dir = checkout_root.join(&record.relative_dir);
             let repositories = repositories_from_record(&record, &dir, &dir, true);
-            return Ok(ThreadWorktreeBinding {
+            return Ok(ManagedDirBinding {
+                owner: owner.clone(),
                 managed_worktree_id: record.managed_worktree_id,
                 dir,
                 checkout_root,
@@ -931,23 +1119,26 @@ impl WorktreeManager {
                 target_unborn: record.target_unborn,
                 baseline_tree: record.baseline_tree,
                 baseline_ref: record.baseline_ref,
-                kind: ThreadWorktreeKind::Directory,
+                kind: ManagedDirKind::Directory,
                 snapshot_store: record.snapshot_store,
                 repositories,
             });
         }
         let repository = self.managed_checkout(checkout_root).await?;
-        if metadata::owner(repository.git_dir())?.as_deref() != Some(thread_id) {
-            bail!("managed worktree belongs to another Thread");
+        if metadata::owner(repository.git_dir())?.as_deref()
+            != Some(owner.metadata_owner_id().as_str())
+        {
+            bail!("managed worktree belongs to another execution owner");
         }
         let record = binding::read(repository.git_dir())?;
-        if record.owner_thread_id != thread_id {
-            bail!("Thread directory binding owner does not match worktree owner");
+        if !record.matches_owner(owner) || record.managed_worktree_id != owner.managed_dir_id() {
+            bail!("managed worktree binding owner does not match its durable owner");
         }
         let dir = repository.worktree_root().join(&record.relative_dir);
         let repositories =
             repositories_from_record(&record, &dir, repository.worktree_root(), false);
-        Ok(ThreadWorktreeBinding {
+        Ok(ManagedDirBinding {
+            owner: owner.clone(),
             managed_worktree_id: record.managed_worktree_id,
             checkout_root: repository.worktree_root().to_path_buf(),
             dir,
@@ -959,12 +1150,19 @@ impl WorktreeManager {
             baseline_tree: record.baseline_tree,
             baseline_ref: record.baseline_ref,
             kind: match record.kind {
-                binding::BindingKind::Git => ThreadWorktreeKind::Git,
-                binding::BindingKind::Directory => ThreadWorktreeKind::Directory,
+                binding::BindingKind::Git => ManagedDirKind::Git,
+                binding::BindingKind::Directory => ManagedDirKind::Directory,
             },
             snapshot_store: record.snapshot_store,
             repositories,
         })
+    }
+
+    /// Recovers the deterministic managed directory assigned to one exact owner.
+    pub async fn recover_owner(&self, owner: &ManagedDirOwner) -> Result<ManagedDirBinding> {
+        let digest = owner.managed_dir_id();
+        self.recover(&self.settings.root.join(&digest[..4]).join(&digest), owner)
+            .await
     }
 
     /// Recovers every valid Thread binding reachable from one source repository.
@@ -972,7 +1170,7 @@ impl WorktreeManager {
         &self,
         source_directory: &Path,
         source_dir_id: &str,
-    ) -> Result<Vec<(String, ThreadWorktreeBinding)>> {
+    ) -> Result<Vec<(String, ManagedDirBinding)>> {
         let mut bindings = self.recover_directory_threads(source_dir_id).await?;
         if matches!(
             self.git.open_repository(source_directory).await,
@@ -988,10 +1186,20 @@ impl WorktreeManager {
             if worktree.kind() != WorktreeKind::Linked || !worktree.availability().is_available() {
                 continue;
             }
+            let owner = ManagedDirOwner::Thread {
+                thread_id: thread_id.to_string(),
+            };
+            if worktree
+                .checkout_root()
+                .file_name()
+                .and_then(|name| name.to_str())
+                != Some(owner.managed_dir_id().as_str())
+            {
+                continue;
+            }
             bindings.push((
                 thread_id.to_string(),
-                self.recover_thread(worktree.checkout_root(), thread_id)
-                    .await?,
+                self.recover(worktree.checkout_root(), &owner).await?,
             ));
         }
         Ok(bindings)
@@ -1000,7 +1208,7 @@ impl WorktreeManager {
     async fn recover_directory_threads(
         &self,
         source_dir_id: &str,
-    ) -> Result<Vec<(String, ThreadWorktreeBinding)>> {
+    ) -> Result<Vec<(String, ManagedDirBinding)>> {
         let mut recovered = Vec::new();
         let Ok(buckets) = std::fs::read_dir(&self.settings.root) else {
             return Ok(recovered);
@@ -1029,22 +1237,28 @@ impl WorktreeManager {
                     continue;
                 }
                 let thread_id = record.owner_thread_id.clone();
+                let owner = ManagedDirOwner::Thread {
+                    thread_id: thread_id.clone(),
+                };
+                if record.managed_worktree_id != owner.managed_dir_id() {
+                    continue;
+                }
                 recovered.push((
                     thread_id.clone(),
-                    self.recover_thread(&checkout.path(), &thread_id).await?,
+                    self.recover(&checkout.path(), &owner).await?,
                 ));
             }
         }
         Ok(recovered)
     }
 
-    /// Removes a Thread checkout only after every ChangeSet is committed or explicitly discarded.
-    pub async fn cleanup_thread(
+    /// Removes a managed checkout only after every ChangeSet is settled.
+    pub async fn cleanup(
         &self,
-        binding: &ThreadWorktreeBinding,
-        _eligibility: ThreadWorktreeCleanupEligibility,
+        binding: &ManagedDirBinding,
+        _eligibility: ManagedDirCleanupEligibility,
     ) -> Result<()> {
-        if binding.kind == ThreadWorktreeKind::Directory {
+        if binding.kind == ManagedDirKind::Directory {
             let managed_root = dunce::canonicalize(&self.settings.root)?;
             let checkout_root = dunce::canonicalize(&binding.checkout_root)?;
             if !has_managed_layout(&managed_root, &checkout_root) {
@@ -1148,7 +1362,7 @@ fn discover_nested_repository_roots(
     roots
 }
 
-fn repository_record(repository: &ThreadRepositoryBinding) -> binding::RepositoryBindingRecord {
+fn repository_record(repository: &ManagedRepositoryBinding) -> binding::RepositoryBindingRecord {
     binding::RepositoryBindingRecord {
         repository_id: repository.repository_id.clone(),
         relative_path: repository.relative_path.clone(),
@@ -1166,9 +1380,9 @@ fn repositories_from_record(
     dir: &Path,
     primary_worktree_root: &Path,
     directory: bool,
-) -> Vec<ThreadRepositoryBinding> {
+) -> Vec<ManagedRepositoryBinding> {
     if record.repositories.is_empty() {
-        return vec![ThreadRepositoryBinding {
+        return vec![ManagedRepositoryBinding {
             repository_id: format!(
                 "{}:{}",
                 record.managed_worktree_id,
@@ -1187,7 +1401,7 @@ fn repositories_from_record(
     record
         .repositories
         .iter()
-        .map(|repository| ThreadRepositoryBinding {
+        .map(|repository| ManagedRepositoryBinding {
             repository_id: repository.repository_id.clone(),
             relative_path: repository.relative_path.clone(),
             worktree_root: if repository.relative_path == Path::new(".") {
@@ -1207,6 +1421,20 @@ fn repositories_from_record(
 
 fn hex_digest(value: &str) -> String {
     format!("{:x}", Sha256::digest(value.as_bytes()))
+}
+
+fn hex_digest_parts(values: &[&str]) -> String {
+    let mut hasher = Sha256::new();
+    for value in values {
+        hasher.update(value.as_bytes());
+        hasher.update([0]);
+    }
+    format!("{:x}", hasher.finalize())
+}
+
+fn local_repository_id(repository: &GitRepository) -> Result<String> {
+    let common_dir = Dir::open_local(repository.common_dir())?;
+    Ok(format!("git:{}", common_dir.id()))
 }
 
 fn has_managed_layout(root: &Path, checkout: &Path) -> bool {

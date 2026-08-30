@@ -10,8 +10,8 @@ use zeta_file_access::Dir;
 use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, PROTECTED_DIR_METADATA_NAMES, PreparedCommand, SandboxBackend,
-    SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
-    SandboxProcessExitStatus,
+    SandboxCommand, SandboxDirAccess, SandboxError, SandboxKind, SandboxPolicy,
+    SandboxProcessDenial, SandboxProcessExitStatus, SandboxScope,
 };
 
 pub use discovery::LinuxSandboxDiscoveryError;
@@ -49,9 +49,25 @@ impl LinuxSandbox {
         command: &SandboxCommand,
         policy: SandboxPolicy,
         dir: &Dir,
-    ) -> PreparedCommand {
+    ) -> Result<PreparedCommand, SandboxError> {
+        self.prepare_scoped_command(command, policy, &SandboxScope::single(dir.clone()))
+    }
+
+    pub fn prepare_scoped_command(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
         if !policy.requires_platform_sandbox() {
-            return PreparedCommand::unrestricted(command);
+            if scope.grants().len() != 1 || !scope.hidden_dirs().is_empty() {
+                return Err(SandboxError::BackendUnavailable {
+                    backend: SandboxKind::LinuxBubblewrap,
+                    message: "an unrestricted command cannot carry an isolated directory scope"
+                        .into(),
+                });
+            }
+            return Ok(PreparedCommand::unrestricted(command));
         }
 
         let root_access = match policy.file_system() {
@@ -63,16 +79,36 @@ impl LinuxSandbox {
             command.program().to_owned(),
         )
         .mount(Path::new("/"), Path::new("/"), root_access);
-        if policy.file_system() == FileSystemAccess::DirectoryWrite {
+        let mut hidden = scope.hidden_dirs().iter().collect::<Vec<_>>();
+        hidden.sort_by_key(|dir| dir.canonical_path().components().count());
+        for dir in &hidden {
+            builder = builder.tmpfs(dir.canonical_path());
+        }
+        for grant in scope.grants() {
+            let writable = policy.file_system() != FileSystemAccess::ReadOnly
+                && grant.access() == SandboxDirAccess::ReadWrite;
             builder = builder.mount(
-                dir.canonical_path(),
-                dir.canonical_path(),
-                MountAccess::ReadWrite,
+                grant.dir().canonical_path(),
+                grant.dir().canonical_path(),
+                if writable {
+                    MountAccess::ReadWrite
+                } else {
+                    MountAccess::ReadOnly
+                },
             );
-            for name in PROTECTED_DIR_METADATA_NAMES {
-                let path = dir.canonical_path().join(name);
-                if path.exists() {
-                    builder = builder.mount(&path, &path, MountAccess::ReadOnly);
+        }
+        for dir in hidden.iter().rev() {
+            builder = builder.remount_read_only(dir.canonical_path());
+        }
+        for grant in scope.grants() {
+            if policy.file_system() != FileSystemAccess::ReadOnly
+                && grant.access() == SandboxDirAccess::ReadWrite
+            {
+                for name in PROTECTED_DIR_METADATA_NAMES {
+                    let path = grant.dir().canonical_path().join(name);
+                    if path.exists() {
+                        builder = builder.mount(&path, &path, MountAccess::ReadOnly);
+                    }
                 }
             }
         }
@@ -85,12 +121,12 @@ impl LinuxSandbox {
             .working_directory(command.working_directory())
             .inner_arguments(command.arguments().iter().cloned())
             .build();
-        PreparedCommand::new(
+        Ok(PreparedCommand::new(
             SandboxKind::LinuxBubblewrap,
             bwrap.program(),
             bwrap.arguments().iter().cloned(),
             command.working_directory(),
-        )
+        ))
     }
 }
 
@@ -107,11 +143,31 @@ impl SandboxBackend for LinuxSandbox {
     ) -> Result<PreparedCommand, SandboxError> {
         #[cfg(target_os = "linux")]
         {
-            Ok(self.prepare_command(command, policy, dir))
+            self.prepare_command(command, policy, dir)
         }
         #[cfg(not(target_os = "linux"))]
         {
             let _ = (command, policy, dir);
+            Err(SandboxError::BackendUnavailable {
+                backend: SandboxKind::LinuxBubblewrap,
+                message: "the Bubblewrap backend can only run on Linux".to_owned(),
+            })
+        }
+    }
+
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        #[cfg(target_os = "linux")]
+        {
+            self.prepare_scoped_command(command, policy, scope)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = (command, policy, scope);
             Err(SandboxError::BackendUnavailable {
                 backend: SandboxKind::LinuxBubblewrap,
                 message: "the Bubblewrap backend can only run on Linux".to_owned(),

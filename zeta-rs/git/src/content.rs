@@ -1,7 +1,13 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use crate::{GitChangeStatus, GitClient, GitError, GitRepository, GitRepositoryChange, GitResult};
+use crate::GitChangeStatus;
+use crate::GitClient;
+use crate::GitError;
+use crate::GitRepository;
+use crate::GitRepositoryChange;
+use crate::GitResult;
+use crate::GitTreeId;
 
 /// Repository revision from which a host wants to read one file.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,6 +56,35 @@ impl GitClient {
         revision: GitFileRevision,
         maximum_bytes: usize,
     ) -> GitResult<Option<Vec<u8>>> {
+        let object_prefix = match revision {
+            GitFileRevision::Head => OsString::from("HEAD:"),
+            GitFileRevision::Index => OsString::from(":"),
+        };
+        self.read_content_object(repository, path, object_prefix, maximum_bytes)
+            .await
+    }
+
+    /// Reads one path from an exact immutable tree object.
+    pub async fn read_file_at_tree(
+        &self,
+        repository: &GitRepository,
+        tree: &GitTreeId,
+        path: &Path,
+        maximum_bytes: usize,
+    ) -> GitResult<Option<Vec<u8>>> {
+        let mut object_prefix = OsString::from(tree.as_str());
+        object_prefix.push(":");
+        self.read_content_object(repository, path, object_prefix, maximum_bytes)
+            .await
+    }
+
+    async fn read_content_object(
+        &self,
+        repository: &GitRepository,
+        path: &Path,
+        mut object: OsString,
+        maximum_bytes: usize,
+    ) -> GitResult<Option<Vec<u8>>> {
         validate_relative_path(path)?;
         if maximum_bytes == 0 {
             return Err(GitError::InvalidConfiguration {
@@ -57,10 +92,6 @@ impl GitClient {
                 requirement: "must be non-zero",
             });
         }
-        let mut object = match revision {
-            GitFileRevision::Head => OsString::from("HEAD:"),
-            GitFileRevision::Index => OsString::from(":"),
-        };
         object.push(path);
         let output = self
             .run_query_unchecked(

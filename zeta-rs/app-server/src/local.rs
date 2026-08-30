@@ -1147,6 +1147,12 @@ pub fn open_local_app_server_with_codebase_providers(
         options.web_search_backend.take(),
     )
     .map_err(OpenAppServerError)?;
+    server = server
+        .with_local_work_coordination(&database_path)
+        .map_err(OpenAppServerError)?;
+    server = server
+        .with_local_projects(&database_path)
+        .map_err(OpenAppServerError)?;
     if let Some(command) = fast_regex_worker_command {
         server = server.with_fast_regex_worker_command(command);
     }

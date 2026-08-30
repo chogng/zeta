@@ -63,6 +63,7 @@ use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::NetworkAccess;
 use zeta_sandboxing::SandboxBackend;
 use zeta_sandboxing::SandboxPolicy;
+use zeta_sandboxing::SandboxScope;
 use zeta_shell_command::ApprovalPolicy;
 use zeta_shell_command::ApprovalRequirement;
 use zeta_shell_command::CommandExecutionAuthority;
@@ -77,6 +78,7 @@ use zeta_tools::ToolPayload;
 use zeta_tools::to_protocol_tool_definition;
 
 use crate::dir_grants::DirGrants;
+use crate::dir_grants::ThreadDirScope;
 use crate::tool_composition::ToolCompositionError;
 use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
@@ -554,7 +556,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                 call.name
             )));
         }
-        let mut request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
+        let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
@@ -581,6 +583,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         } else {
             requested_directory.to_path_buf()
         };
+        self.materialize_at(request, selected_root, relative)
+    }
+
+    fn materialize_at(
+        &self,
+        mut request: ShellCommandRequest,
+        selected_root: &Dir,
+        relative: PathBuf,
+    ) -> Result<ShellCommandRequest, CoreError> {
         request = request
             .with_working_directory(if relative.as_os_str().is_empty() {
                 PathBuf::from(".")
@@ -608,9 +619,59 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         }
     }
 
+    fn prepare_at(
+        &self,
+        call: &ToolCall,
+        authorization: &Authorization,
+        relative: PathBuf,
+        thread_scope: Option<&ThreadDirScope>,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
+            call.arguments.clone(),
+        ))
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let request = self.materialize_at(request, authorization.dir(), relative)?;
+        let sandbox_scope = thread_scope
+            .map(|scope| scope.sandbox_scope(authorization))
+            .transpose()
+            .map_err(CoreError::Policy)?
+            .flatten();
+        self.review_request_scoped(&request, sandbox_scope.as_ref())
+    }
+
+    fn execute_at(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        dir_authorization: &Authorization,
+        relative: PathBuf,
+        thread_scope: Option<&ThreadDirScope>,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
+            call.arguments.clone(),
+        ))
+        .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let request = self.materialize_at(request, dir_authorization.dir(), relative)?;
+        let sandbox_scope = thread_scope
+            .map(|scope| scope.sandbox_scope(dir_authorization))
+            .transpose()
+            .map_err(CoreError::Execution)?
+            .flatten();
+        self.execute_request_scoped(request, authorization, cancellation, sandbox_scope.as_ref())
+    }
+
     fn review_request(
         &self,
         request: &ShellCommandRequest,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        self.review_request_scoped(request, None)
+    }
+
+    fn review_request_scoped(
+        &self,
+        request: &ShellCommandRequest,
+        sandbox_scope: Option<&SandboxScope>,
     ) -> Result<ActionReviewRequest, CoreError> {
         let selected_root = request
             .dir_root()
@@ -625,6 +686,14 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             "program": request.program(),
             "arguments": request.arguments(),
             "working_directory": canonical_working_directory,
+            "sandboxScope": sandbox_scope.map(|scope| json!({
+                "commandDir": scope.command_dir().id(),
+                "grants": scope.grants().iter().map(|grant| json!({
+                    "dirId": grant.dir().id(),
+                    "access": format!("{:?}", grant.access()),
+                })).collect::<Vec<_>>(),
+                "hiddenDirs": scope.hidden_dirs().iter().map(Dir::id).collect::<Vec<_>>(),
+            })),
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let is_ripgrep = request.program() == self.ripgrep.path().to_string_lossy();
@@ -660,33 +729,21 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         ))
     }
 
-    fn prepare_in_dir(
-        &self,
-        call: &ToolCall,
-        authorization: Option<&Authorization>,
-    ) -> Result<ActionReviewRequest, CoreError> {
-        self.review_request(&self.materialize_in_dir(call, authorization)?)
-    }
-
-    fn execute_in_dir(
-        &self,
-        call: &ToolCall,
-        authorization: &ToolAuthorization,
-        cancellation: &CancellationToken,
-        dir_authorization: Option<&Authorization>,
-    ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_request(
-            self.materialize_in_dir(call, dir_authorization)?,
-            authorization,
-            cancellation,
-        )
-    }
-
     fn execute_request(
         &self,
         request: ShellCommandRequest,
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_request_scoped(request, authorization, cancellation, None)
+    }
+
+    fn execute_request_scoped(
+        &self,
+        request: ShellCommandRequest,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        sandbox_scope: Option<&SandboxScope>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let authority = match authorization {
             ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
@@ -698,7 +755,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         };
         match self
             .shell
-            .execute_authorized(request, authority, cancellation)
+            .execute_authorized_scoped(request, authority, cancellation, sandbox_scope)
         {
             Ok(CommandExecutionOutcome::Completed(output)) => {
                 let text = serde_json::to_string_pretty(&json!({
@@ -806,9 +863,9 @@ impl LocalExecutorReviewer {
             .ensure_active()
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name.as_str() == "shell-command" {
-            let (review, request, authorization) =
+            let (review, request, authorizations, sandbox_scope) =
                 self.prepare_shell(call, session_id, thread_id)?;
-            return Ok(PreparedToolExecution::new(
+            let mut prepared = PreparedToolExecution::new(
                 review,
                 ToolPayload::FunctionArguments(json!({
                     "program": request.program(),
@@ -816,8 +873,14 @@ impl LocalExecutorReviewer {
                     "working_directory": request.working_directory(),
                     "dir_root": request.dir_root(),
                 })),
-            )
-            .with_dir_authorization(authorization));
+            );
+            for authorization in authorizations {
+                prepared = prepared.with_dir_authorization(authorization);
+            }
+            if let Some(scope) = sandbox_scope {
+                prepared = prepared.with_sandbox_scope(scope);
+            }
+            return Ok(prepared);
         }
         if call.name.as_str() == "apply_patch" {
             let (review, patch, authorization) =
@@ -849,7 +912,15 @@ impl LocalExecutorReviewer {
         call: &ToolCall,
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
-    ) -> Result<(ActionReviewRequest, ShellCommandRequest, Authorization), CoreError> {
+    ) -> Result<
+        (
+            ActionReviewRequest,
+            ShellCommandRequest,
+            Vec<Authorization>,
+            Option<SandboxScope>,
+        ),
+        CoreError,
+    > {
         if call.arguments.get("dir_root").is_some() {
             return Err(CoreError::Policy(
                 "shell-command dir_root is host-owned".into(),
@@ -859,7 +930,7 @@ impl LocalExecutorReviewer {
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        let (authorization, relative_working_directory, working_directory) =
+        let (authorization, relative_working_directory, working_directory, thread_scope) =
             self.resolve_execution_dir(request.working_directory(), session_id, thread_id)?;
         request = request
             .with_working_directory(relative_working_directory)
@@ -878,12 +949,6 @@ impl LocalExecutorReviewer {
                 .materialize(request)
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
         }
-        let canonical = serde_json::to_vec(&json!({
-            "program": request.program(),
-            "arguments": request.arguments(),
-            "working_directory": working_directory,
-        }))
-        .map_err(|error| CoreError::Policy(error.to_string()))?;
         let is_ripgrep = request.program() == self.ripgrep.path().to_string_lossy();
         let capabilities = if is_ripgrep {
             local_capabilities(authorization.dir(), &self.ripgrep)
@@ -895,6 +960,29 @@ impl LocalExecutorReviewer {
         } else {
             shell_sandbox()
         };
+        let sandbox_scope = thread_scope
+            .as_ref()
+            .map(|scope| scope.sandbox_scope(&authorization))
+            .transpose()
+            .map_err(CoreError::Policy)?
+            .flatten();
+        let sandbox_scope_identity = sandbox_scope.as_ref().map(|scope| {
+            json!({
+                "commandDir": scope.command_dir().id(),
+                "grants": scope.grants().iter().map(|grant| json!({
+                    "dirId": grant.dir().id(),
+                    "access": format!("{:?}", grant.access()),
+                })).collect::<Vec<_>>(),
+                "hiddenDirs": scope.hidden_dirs().iter().map(Dir::id).collect::<Vec<_>>(),
+            })
+        });
+        let canonical = serde_json::to_vec(&json!({
+            "program": request.program(),
+            "arguments": request.arguments(),
+            "working_directory": working_directory,
+            "sandboxScope": sandbox_scope_identity,
+        }))
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
         let review = ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
@@ -915,7 +1003,11 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::Supported(sandbox),
             self.action_policy_revision.clone(),
         );
-        Ok((review, request, authorization))
+        let authorizations = thread_scope
+            .filter(ThreadDirScope::is_exact)
+            .map(|scope| scope.authorizations().cloned().collect())
+            .unwrap_or_else(|| vec![authorization]);
+        Ok((review, request, authorizations, sandbox_scope))
     }
 
     fn resolve_execution_dir(
@@ -923,29 +1015,42 @@ impl LocalExecutorReviewer {
         requested: &Path,
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
-    ) -> Result<(Authorization, std::path::PathBuf, std::path::PathBuf), CoreError> {
-        let thread_dir = thread_id
+    ) -> Result<
+        (
+            Authorization,
+            std::path::PathBuf,
+            std::path::PathBuf,
+            Option<ThreadDirScope>,
+        ),
+        CoreError,
+    > {
+        let thread_scope = thread_id
             .map(|thread_id| {
                 self.dir_grants
-                    .thread_dir(thread_id, DirPermission::ExecuteCommands)
+                    .thread_scope(thread_id, DirPermission::ExecuteCommands)
                     .map_err(|error| CoreError::Policy(error.to_string()))
             })
             .transpose()?
             .flatten();
         if requested.is_relative() {
-            let authorization = thread_dir
-                .clone()
+            let authorization = thread_scope
+                .as_ref()
+                .map(|scope| scope.primary().clone())
                 .unwrap_or_else(|| self.authorization.clone());
             let absolute = authorization
                 .dir()
                 .resolve_existing(requested)
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
-            return Ok((authorization, requested.to_path_buf(), absolute));
+            return Ok((
+                authorization,
+                requested.to_path_buf(),
+                absolute,
+                thread_scope,
+            ));
         }
-        if let Some(authorization) = &thread_dir
-            && let Ok(relative) = requested
-                .strip_prefix(self.authorization.dir().canonical_path())
-                .or_else(|_| requested.strip_prefix(self.authorization.dir().requested_path()))
+        if let Some((authorization, relative)) = thread_scope
+            .as_ref()
+            .and_then(|scope| scope.resolve_source_alias(requested, self.authorization.dir()))
         {
             let relative = if relative.as_os_str().is_empty() {
                 PathBuf::from(".")
@@ -956,11 +1061,22 @@ impl LocalExecutorReviewer {
                 .dir()
                 .resolve_existing(&relative)
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
-            return Ok((authorization.clone(), relative, absolute));
+            return Ok((authorization, relative, absolute, thread_scope));
         }
-        let mut authorizations = thread_dir.into_iter().collect::<Vec<_>>();
-        authorizations.push(self.authorization.clone());
-        if let Some(session_id) = session_id
+        let exact = thread_scope.as_ref().is_some_and(ThreadDirScope::is_exact);
+        let mut authorizations = thread_scope
+            .as_ref()
+            .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
+            .unwrap_or_else(|| vec![self.authorization.clone()]);
+        if !exact
+            && !authorizations
+                .iter()
+                .any(|value| value.dir() == self.authorization.dir())
+        {
+            authorizations.push(self.authorization.clone());
+        }
+        if !exact
+            && let Some(session_id) = session_id
             && let Some(snapshot) = self
                 .dir_grants
                 .snapshot_for(session_id, DirPermission::ExecuteCommands)
@@ -995,7 +1111,7 @@ impl LocalExecutorReviewer {
             .dir()
             .resolve_existing(&relative)
             .map_err(|error| CoreError::Policy(error.to_string()))?;
-        Ok((authorization, relative, absolute))
+        Ok((authorization, relative, absolute, thread_scope))
     }
 
     fn prepare_apply_patch(
@@ -1014,17 +1130,28 @@ impl LocalExecutorReviewer {
             .get("patch")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| CoreError::Policy("apply_patch patch must be a string".into()))?;
-        let thread_dir = thread_id
+        let thread_scope = thread_id
             .map(|thread_id| {
                 self.dir_grants
-                    .thread_dir(thread_id, DirPermission::MutateRepository)
+                    .thread_scope(thread_id, DirPermission::MutateRepository)
                     .map_err(|error| CoreError::Policy(error.to_string()))
             })
             .transpose()?
             .flatten();
-        let mut authorizations = thread_dir.clone().into_iter().collect::<Vec<_>>();
-        authorizations.push(self.authorization.clone());
-        if let Some(session_id) = session_id
+        let exact = thread_scope.as_ref().is_some_and(ThreadDirScope::is_exact);
+        let mut authorizations = thread_scope
+            .as_ref()
+            .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
+            .unwrap_or_else(|| vec![self.authorization.clone()]);
+        if !exact
+            && !authorizations
+                .iter()
+                .any(|value| value.dir() == self.authorization.dir())
+        {
+            authorizations.push(self.authorization.clone());
+        }
+        if !exact
+            && let Some(session_id) = session_id
             && let Some(snapshot) = self
                 .dir_grants
                 .snapshot_for(session_id, DirPermission::MutateRepository)
@@ -1032,11 +1159,25 @@ impl LocalExecutorReviewer {
         {
             authorizations.extend(snapshot.authorizations().iter().cloned());
         }
-        let (authorization, rewritten_patch, targets) = materialize_patch_targets(
-            &authorizations,
-            patch,
-            thread_dir.as_ref().map(|_| self.authorization.dir()),
-        )?;
+        let source_aliases = thread_scope
+            .as_ref()
+            .map(|scope| {
+                scope
+                    .roots()
+                    .iter()
+                    .map(|root| {
+                        (
+                            root.source()
+                                .cloned()
+                                .unwrap_or_else(|| self.authorization.dir().clone()),
+                            root.authorization().clone(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let (authorization, rewritten_patch, targets) =
+            materialize_patch_targets(&authorizations, patch, &source_aliases)?;
         let capabilities = targets.iter().flat_map(|target| {
             [
                 Capability::new(CapabilityKind::FileRead, target.clone()),
@@ -1069,7 +1210,7 @@ impl LocalExecutorReviewer {
 fn materialize_patch_targets(
     authorizations: &[Authorization],
     patch: &str,
-    primary_alias: Option<&Dir>,
+    source_aliases: &[(Dir, Authorization)],
 ) -> Result<(Authorization, String, Vec<String>), CoreError> {
     let primary = authorizations
         .first()
@@ -1096,12 +1237,24 @@ fn materialize_patch_targets(
         }
         let path = Path::new(path);
         let (authorization, relative) = if path.is_absolute() {
-            if let Some(alias) = primary_alias
-                && let Ok(relative) = path
-                    .strip_prefix(alias.canonical_path())
-                    .or_else(|_| path.strip_prefix(alias.requested_path()))
+            if let Some((authorization, relative)) = source_aliases
+                .iter()
+                .filter_map(|(source, authorization)| {
+                    path.strip_prefix(source.canonical_path())
+                        .or_else(|_| path.strip_prefix(source.requested_path()))
+                        .ok()
+                        .map(|relative| {
+                            (
+                                authorization.clone(),
+                                relative.to_path_buf(),
+                                source.canonical_path().components().count(),
+                            )
+                        })
+                })
+                .max_by_key(|(_, _, depth)| *depth)
+                .map(|(authorization, relative, _)| (authorization, relative))
             {
-                (primary.clone(), relative.to_path_buf())
+                (authorization, relative)
             } else {
                 authorizations
                     .iter()

@@ -7,6 +7,8 @@ fn builds_a_typed_bubblewrap_invocation_without_a_shell() {
     let command = BwrapCommandBuilder::new("/usr/bin/bwrap", "/bin/echo")
         .mount("/", "/", MountAccess::ReadOnly)
         .mount("/workspace", "/workspace", MountAccess::ReadWrite)
+        .tmpfs("/private")
+        .remount_read_only("/private")
         .isolate_network()
         .mount_proc()
         .mount_dev()
@@ -28,6 +30,10 @@ fn builds_a_typed_bubblewrap_invocation_without_a_shell() {
             "--bind",
             "/workspace",
             "/workspace",
+            "--tmpfs",
+            "/private",
+            "--remount-ro",
+            "/private",
             "--unshare-net",
             "--proc",
             "/proc",

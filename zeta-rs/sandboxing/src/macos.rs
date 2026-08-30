@@ -1,7 +1,8 @@
+use crate::SandboxDirAccess;
 use crate::{
     FileSystemAccess, NetworkAccess, PROTECTED_DIR_METADATA_NAMES, PreparedCommand, SandboxBackend,
     SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
-    SandboxProcessExitStatus,
+    SandboxProcessExitStatus, SandboxScope,
 };
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -30,11 +31,27 @@ impl SandboxBackend for MacosSeatbeltSandbox {
         policy: SandboxPolicy,
         dir: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
+        self.prepare_scoped(command, policy, &SandboxScope::single(dir.clone()))
+    }
+
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
         if !policy.requires_platform_sandbox() {
+            if !scope.is_single_unhidden() {
+                return Err(SandboxError::BackendUnavailable {
+                    backend: SandboxKind::MacosSeatbelt,
+                    message: "an unrestricted command cannot carry an isolated directory scope"
+                        .into(),
+                });
+            }
             return Ok(PreparedCommand::unrestricted(command));
         }
 
-        let profile = seatbelt_profile(policy, dir);
+        let profile = seatbelt_profile(policy, scope);
         let mut arguments = vec![OsString::from("-p"), OsString::from(profile), "--".into()];
         arguments.push(command.program().to_owned());
         arguments.extend(command.arguments().iter().cloned());
@@ -72,21 +89,48 @@ impl SandboxBackend for MacosSeatbeltSandbox {
     }
 }
 
-fn seatbelt_profile(policy: SandboxPolicy, dir: &Dir) -> String {
+fn seatbelt_profile(policy: SandboxPolicy, scope: &SandboxScope) -> String {
     let mut profile = String::from("(version 1)\n(allow default)\n");
     match policy.file_system() {
         FileSystemAccess::ReadOnly => profile.push_str("(deny file-write*)\n"),
-        FileSystemAccess::DirectoryWrite => {
-            profile.push_str("(deny file-write*)\n");
+        FileSystemAccess::DirectoryWrite => profile.push_str("(deny file-write*)\n"),
+        FileSystemAccess::FullAccess => {}
+    }
+    for hidden in scope.hidden_dirs() {
+        let path = escape_profile_literal(hidden.canonical_path().to_string_lossy().as_ref());
+        profile.push_str(&format!(
+            "(deny file-read* (literal \"{path}\"))\n\
+             (deny file-read* (subpath \"{path}\"))\n\
+             (deny file-write* (literal \"{path}\"))\n\
+             (deny file-write* (subpath \"{path}\"))\n"
+        ));
+    }
+    for grant in scope.grants() {
+        let path = escape_profile_literal(grant.dir().canonical_path().to_string_lossy().as_ref());
+        profile.push_str(&format!(
+            "(allow file-read* (literal \"{path}\"))\n\
+             (allow file-read* (subpath \"{path}\"))\n"
+        ));
+        if policy.file_system() != FileSystemAccess::ReadOnly
+            && grant.access() == SandboxDirAccess::ReadWrite
+        {
             profile.push_str(&format!(
-                "(allow file-write* (subpath \"{}\"))\n",
-                escape_profile_literal(dir.canonical_path().to_string_lossy().as_ref())
+                "(allow file-write* (literal \"{path}\"))\n\
+                 (allow file-write* (subpath \"{path}\"))\n"
             ));
+        } else if policy.file_system() == FileSystemAccess::FullAccess {
+            profile.push_str(&format!(
+                "(deny file-write* (literal \"{path}\"))\n\
+                 (deny file-write* (subpath \"{path}\"))\n"
+            ));
+        }
+        if policy.file_system() != FileSystemAccess::ReadOnly
+            && grant.access() == SandboxDirAccess::ReadWrite
+        {
             for name in PROTECTED_DIR_METADATA_NAMES {
-                push_protected_metadata_policy(&mut profile, dir.canonical_path(), name);
+                push_protected_metadata_policy(&mut profile, grant.dir().canonical_path(), name);
             }
         }
-        FileSystemAccess::FullAccess => {}
     }
     if policy.network() == NetworkAccess::Denied {
         profile.push_str("(deny network*)\n");

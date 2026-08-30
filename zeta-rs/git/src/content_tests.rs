@@ -53,6 +53,16 @@ async fn reads_head_and_index_content_and_reports_missing_paths() {
             .unwrap(),
         None
     );
+    let head = repository.git(&["rev-parse", "HEAD"]);
+    let tree = client.resolve_tree(&opened, &head).await.unwrap();
+    repository.write("tracked.txt", "later worktree\n");
+    assert_eq!(
+        client
+            .read_file_at_tree(&opened, &tree, Path::new("tracked.txt"), 1024)
+            .await
+            .unwrap(),
+        Some(b"head\n".to_vec())
+    );
 }
 
 #[tokio::test]

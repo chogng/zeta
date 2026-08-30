@@ -170,7 +170,8 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                                     streams: connection_streams,
                                     id: connection_id,
                                 };
-                                if let Err(error) = server.serve_jsonl(reader, stream) {
+                                if let Err(error) = server.serve_product_host_jsonl(reader, stream)
+                                {
                                     eprintln!("local App Server connection failed: {error}");
                                 }
                             })

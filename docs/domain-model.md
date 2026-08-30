@@ -2,7 +2,7 @@
 
 > 本文是 Project、Session、Thread、Environment、Workspace、目录与授权概念的长期架构契约。
 >
-> 状态：Session、Thread、Environment、Dir 与目录授权已经进入当前协议和实现；Project 的持久实体、长期多根目录表以及 Project 关联的跨 Session 工作仍是计划设计。计划边界与验证要求见 [`multi-agent-development.md`](multi-agent-development.md)。
+> 状态：Session、Thread、Environment、Dir、目录授权以及 Project 的持久实体和长期多根目录表已经进入当前后端协议与实现。Project 的 Desktop/CLI/TUI 产品入口、根选择和跨 Environment 交互仍未完成；跨 Session 工作由独立 WorkRun 表达。可靠性边界见 [`multi-agent-development.md`](multi-agent-development.md)。
 
 ## 快速理解
 
@@ -14,7 +14,7 @@
 
 | 概念 | 回答的问题 | 是否独立持久化 |
 | --- | --- | --- |
-| `Project` | 用户长期保存哪些根目录、Session 和共同工作入口？ | 计划；有自己的名称、多根目录表、配置或生命周期时才保存 |
+| `Project` | 用户长期保存哪些根目录、Session 和共同工作入口？ | 是；拥有名称、描述、多根目录表、弱关联和生命周期 |
 | `session_id` | 哪些 Thread 属于同一棵会话树？ | 作为 Thread 字段保存，不单独建立事实源 |
 | `Thread` | 当前操作的是哪条具体对话分支？ | 是；拥有自己的事件、顺序、恢复和执行状态 |
 | `Turn` | Thread 中一次输入与执行周期是什么？ | 随 Thread 保存 |
@@ -45,24 +45,21 @@ get_session(session_id)
 原 `session_id`。这不是所有派生模式的普遍定律：需要新会话树的临时派生可以使用新的
 `session_id`。因此代码只能依赖显式字段，不能靠 ID 相等猜关系。
 
-`Project` 与会话树是弱关联。删除 Project、移动 Project 或重新归类 Thread，不得改变 Thread 与
-`session_id` 的核心身份。长期关联可以落在 Thread 的可选 `project_id` 上；只有 Project 出现独立
-metadata、多根目录表、生命周期和 mutation 时，才建立 Project 实体。当前协议尚无 `ProjectId` 或 Project store，不能从窗口 Workspace、目录集合或 Session 标题推断 Project 已经存在。
+`Project` 与会话树是弱关联。删除 Project、移动 Project 或重新归类 Thread，不得改变 Thread 与 `session_id` 的核心身份。当前关联保存在 Project 的 `session_ids` 集合中，不向 Thread 增加 Project 身份，也不建立 Session store；`ProjectId`、完整 Project 记录和命令回执由独立 Project store 持久化。窗口 Workspace、目录集合或 Session 标题都不能被客户端推断成 Project。
 
 ### 1.1 Project、多根与共同工作
 
-Project 在产品上表现为长期多根工作中心，但它不是目录、Workspace、权限主体或跨 Session 协调器。它计划关联：
+Project 在后端表示长期多根工作中心，但它不是目录、Workspace、权限主体或跨 Session 协调器。它当前关联：
 
 | 关联内容 | 负责什么 | 不负责什么 |
 | --- | --- | --- |
 | 根目录表 | 保存 Environment + Dir 的稳定引用、显示名称、用途和可选仓库摘要 | 授予文件、命令、配置或 Hook 权限 |
 | Session tree | 让用户长期查找和归类独立 Agent 方向 | 改变 Session/Thread 身份、取消或上下文 |
 | WorkRun | 进入一次跨 Session 目标、工作契约、依赖和验证证据 | 把同 Project 自动解释成正在协作 |
-| Workspace 关联 | 帮助 Desktop 打开相应单根或多根窗口 | 取代窗口 Workspace 身份或修改其内容 |
 
 Project 可以关联同一 Environment 中的多个根，也可以关联本地和远程等不同 Environment 的根。一个工作尝试只在一个 Environment 中执行；跨 Environment 的目标通过多个 Session 和显式 WorkRun 协作，不能让一次工具调用隐式跨越执行位置。
 
-Session 创建或扩大工作范围时，只选择 Project 根目录表的明确子集，并为每个根取得独立 Grant。实际执行绑定选中根的 `DirId`、权限、配置来源和不可变 baseline；Project 后续增加、删除或重新排序根，不会静默改变已运行 Session 或工作尝试。需要采用变化时创建新的范围或工作契约版本。
+受信 host 只能把 Session 已有目录授权中的精确 `DirId` 加入 Project，路径和 Environment 由 host 重建，客户端不能提交路径冒充根。这个动作只写 Project 目录表，不创建、恢复或修改 Grant。Session 创建或扩大工作范围时仍需选择 Project 根目录表的明确子集并为每个根取得独立 Grant；实际执行绑定选中根的 `DirId`、权限、配置来源和不可变 baseline。Project 后续增加、删除或重新排序根，不会静默改变已运行 Session 或工作尝试。
 
 同属一个 Project 不产生信任、授权、上下文共享、取消传播、目标分支写入权或结果接受权。Project 名称、描述和归类变化不应让验证失效；只有实际消费的根、配置、决定或 baseline 变化才使相关证据过期。
 

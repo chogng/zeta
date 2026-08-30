@@ -160,13 +160,15 @@ fn shell_executor_runs_in_a_session_dir() {
         "arguments": ["-lc", "pwd"],
         "working_directory": session_dir.path(),
     }));
-    let (_, request, authorization) = reviewer
+    let (_, request, authorizations, sandbox_scope) = reviewer
         .prepare_shell(&call, Some(&session_id), None)
         .unwrap();
+    let authorization = authorizations[0].clone();
     assert_eq!(
-        authorization.dir().canonical_path(),
+        authorizations[0].dir().canonical_path(),
         session_dir.root().canonical_path()
     );
+    assert!(sandbox_scope.is_none());
     reviewer
         .prepare_shell(
             &tool_call(json!({

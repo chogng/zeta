@@ -13,11 +13,13 @@ use serde_json::Value;
 use serde_json::json;
 use tempfile::TempDir;
 
-use crate::ThreadWorktreeCleanupEligibility;
-use crate::ThreadWorktreeKind;
-use crate::ThreadWorktreeProvisionRequest;
-use crate::ThreadWorktreeSource;
-use crate::ThreadWorktreeTarget;
+use crate::ManagedDirCleanupEligibility;
+use crate::ManagedDirKind;
+use crate::ManagedDirOwner;
+use crate::ManagedDirProvisionRequest;
+use crate::ManagedDirSource;
+use crate::ManagedDirTarget;
+use crate::ManagedOutputOwner;
 use crate::WorktreeAvailability;
 use crate::WorktreeKind;
 use crate::WorktreeManager;
@@ -343,13 +345,14 @@ async fn thread_provision_freezes_dirty_source_and_recovers_the_binding() {
 
     let manager = fixture.manager();
     let binding = manager
-        .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::DirSnapshot {
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
                 source_directory: fixture.repository.clone(),
             },
-            target: ThreadWorktreeTarget::SourceHead,
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
             source_dir_id: "dir-1".into(),
-            thread_id: "thread-1".into(),
+            owner: thread_owner("thread-1"),
         })
         .await
         .expect("provision Thread worktree");
@@ -366,17 +369,14 @@ async fn thread_provision_freezes_dirty_source_and_recovers_the_binding() {
     assert!(!binding.checkout_root().join("ignored/output.bin").exists());
     assert_eq!(
         manager
-            .recover_thread(binding.checkout_root(), "thread-1")
+            .recover(binding.checkout_root(), &thread_owner("thread-1"))
             .await
             .expect("recover Thread worktree"),
         binding
     );
 
     manager
-        .cleanup_thread(
-            &binding,
-            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
-        )
+        .cleanup(&binding, ManagedDirCleanupEligibility::AllChangeSetsSettled)
         .await
         .expect("cleanup settled Thread worktree");
     assert!(!binding.checkout_root().exists());
@@ -395,13 +395,14 @@ async fn thread_provision_supports_an_unborn_target_without_creating_its_branch(
     let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
 
     let binding = manager
-        .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::DirSnapshot {
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
                 source_directory: repository.clone(),
             },
-            target: ThreadWorktreeTarget::SourceHead,
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
             source_dir_id: "unborn-dir".into(),
-            thread_id: "unborn-thread".into(),
+            owner: thread_owner("unborn-thread"),
         })
         .await
         .unwrap();
@@ -420,10 +421,7 @@ async fn thread_provision_supports_an_unborn_target_without_creating_its_branch(
     assert!(!branch.success());
 
     manager
-        .cleanup_thread(
-            &binding,
-            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
-        )
+        .cleanup(&binding, ManagedDirCleanupEligibility::AllChangeSetsSettled)
         .await
         .unwrap();
 }
@@ -455,13 +453,14 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
     let manager = fixture.manager();
 
     let binding = manager
-        .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::DirSnapshot {
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
                 source_directory: fixture.repository.clone(),
             },
-            target: ThreadWorktreeTarget::SourceHead,
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
             source_dir_id: "nested-dir".into(),
-            thread_id: "nested-thread".into(),
+            owner: thread_owner("nested-thread"),
         })
         .await
         .unwrap();
@@ -493,8 +492,8 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
     )
     .unwrap();
     let child = manager
-        .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::ImmutableTree {
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::ImmutableTree {
                 source_directory: binding.dir().to_path_buf(),
                 tree_id: binding.baseline_tree().to_string(),
                 repository_trees: BTreeMap::from([
@@ -505,12 +504,13 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
                     ),
                 ]),
             },
-            target: ThreadWorktreeTarget::Branch {
+            target: ManagedDirTarget::Branch {
                 name: binding.target_branch().unwrap().to_string(),
                 object_id: binding.target_head().to_string(),
             },
+            repository_targets: BTreeMap::new(),
             source_dir_id: "nested-dir".into(),
-            thread_id: "nested-child".into(),
+            owner: thread_owner("nested-child"),
         })
         .await
         .unwrap();
@@ -525,10 +525,7 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
     );
     assert_eq!(child_nested.target_branch(), Some("main"));
     manager
-        .cleanup_thread(
-            &child,
-            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
-        )
+        .cleanup(&child, ManagedDirCleanupEligibility::AllChangeSetsSettled)
         .await
         .unwrap();
     fs::write(nested.join("nested.txt"), "source moved on\n").unwrap();
@@ -538,17 +535,14 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
     );
     assert_eq!(
         manager
-            .recover_thread(binding.checkout_root(), "nested-thread")
+            .recover(binding.checkout_root(), &thread_owner("nested-thread"),)
             .await
             .unwrap(),
         binding
     );
 
     manager
-        .cleanup_thread(
-            &binding,
-            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
-        )
+        .cleanup(&binding, ManagedDirCleanupEligibility::AllChangeSetsSettled)
         .await
         .unwrap();
     assert!(!binding.checkout_root().exists());
@@ -601,18 +595,19 @@ async fn non_git_threads_use_durable_managed_directory_snapshots() {
     fs::write(dir.join("source.txt"), "baseline\n").expect("write source");
     let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
     let binding = manager
-        .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::DirSnapshot {
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
                 source_directory: dir.clone(),
             },
-            target: ThreadWorktreeTarget::SourceHead,
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
             source_dir_id: "dir-id".into(),
-            thread_id: "plain-thread".into(),
+            owner: thread_owner("plain-thread"),
         })
         .await
         .expect("provision plain Thread");
 
-    assert_eq!(binding.kind(), ThreadWorktreeKind::Directory);
+    assert_eq!(binding.kind(), ManagedDirKind::Directory);
     assert_eq!(
         fs::read_to_string(binding.dir().join("source.txt")).unwrap(),
         "baseline\n"
@@ -630,13 +625,195 @@ async fn non_git_threads_use_durable_managed_directory_snapshots() {
         .expect("recover plain Thread");
     assert_eq!(recovered, vec![("plain-thread".into(), binding.clone())]);
     manager
-        .cleanup_thread(
-            &binding,
-            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
-        )
+        .cleanup(&binding, ManagedDirCleanupEligibility::AllChangeSetsSettled)
         .await
         .expect("clean plain Thread");
     assert!(!binding.checkout_root().exists());
+}
+
+#[tokio::test]
+async fn one_work_attempt_can_own_multiple_independent_roots_for_one_thread() {
+    let temp = TempDir::new().unwrap();
+    let profile = temp.path().join("profile");
+    let root_a = temp.path().join("root-a");
+    let root_b = temp.path().join("root-b");
+    fs::create_dir_all(&profile).unwrap();
+    initialize_repository(&root_a);
+    initialize_repository(&root_b);
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
+    let owner_a = ManagedDirOwner::WorkAttemptRoot {
+        work_run_id: "run".into(),
+        attempt_id: "attempt".into(),
+        thread_id: "shared-thread".into(),
+        source_dir_id: "root-a".into(),
+    };
+    let owner_b = ManagedDirOwner::WorkAttemptRoot {
+        work_run_id: "run".into(),
+        attempt_id: "attempt".into(),
+        thread_id: "shared-thread".into(),
+        source_dir_id: "root-b".into(),
+    };
+    let binding_a = manager
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
+                source_directory: root_a.clone(),
+            },
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
+            source_dir_id: "root-a".into(),
+            owner: owner_a.clone(),
+        })
+        .await
+        .unwrap();
+    let binding_b = manager
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
+                source_directory: root_b.clone(),
+            },
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
+            source_dir_id: "root-b".into(),
+            owner: owner_b.clone(),
+        })
+        .await
+        .unwrap();
+
+    assert_ne!(binding_a.checkout_root(), binding_b.checkout_root());
+    assert_eq!(binding_a.owner(), &owner_a);
+    assert_eq!(binding_b.owner(), &owner_b);
+    assert!(
+        manager
+            .recover_threads(&root_a, "root-a")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        manager
+            .recover(binding_a.checkout_root(), &owner_b)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        manager
+            .recover(binding_a.checkout_root(), &owner_a)
+            .await
+            .unwrap(),
+        binding_a
+    );
+
+    manager
+        .cleanup(
+            &binding_b,
+            ManagedDirCleanupEligibility::AllChangeSetsSettled,
+        )
+        .await
+        .unwrap();
+    manager
+        .cleanup(
+            &binding_a,
+            ManagedDirCleanupEligibility::AllChangeSetsSettled,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn repository_identity_is_stable_across_different_selected_dirs() {
+    let temp = TempDir::new().unwrap();
+    let profile = temp.path().join("profile");
+    let repository = temp.path().join("repository");
+    fs::create_dir_all(&profile).unwrap();
+    initialize_repository(&repository);
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
+    let first = manager
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
+                source_directory: repository.clone(),
+            },
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
+            source_dir_id: "repository-root".into(),
+            owner: ManagedDirOwner::WorkAttemptRoot {
+                work_run_id: "run".into(),
+                attempt_id: "attempt".into(),
+                thread_id: "thread".into(),
+                source_dir_id: "repository-root".into(),
+            },
+        })
+        .await
+        .unwrap();
+    let second = manager
+        .provision(&ManagedDirProvisionRequest {
+            source: ManagedDirSource::DirSnapshot {
+                source_directory: repository.join("nested/component"),
+            },
+            target: ManagedDirTarget::SourceHead,
+            repository_targets: BTreeMap::new(),
+            source_dir_id: "component-root".into(),
+            owner: ManagedDirOwner::WorkAttemptRoot {
+                work_run_id: "run".into(),
+                attempt_id: "attempt".into(),
+                thread_id: "thread".into(),
+                source_dir_id: "component-root".into(),
+            },
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        first.repositories()[0].repository_id(),
+        second.repositories()[0].repository_id()
+    );
+
+    manager
+        .cleanup(&second, ManagedDirCleanupEligibility::AllChangeSetsSettled)
+        .await
+        .unwrap();
+    manager
+        .cleanup(&first, ManagedDirCleanupEligibility::AllChangeSetsSettled)
+        .await
+        .unwrap();
+}
+
+#[test]
+fn work_attempt_output_is_private_durable_and_owner_checked() {
+    let temp = TempDir::new().unwrap();
+    let profile = temp.path().join("profile");
+    fs::create_dir_all(&profile).unwrap();
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
+    let owner = ManagedOutputOwner::work_attempt("run", "attempt", "thread");
+    let binding = manager.provision_output(&owner).unwrap();
+    let empty = manager.capture_output(&binding).unwrap();
+    fs::write(binding.root().join("build.log"), "private\n").unwrap();
+    let populated = manager.capture_output(&binding).unwrap();
+
+    assert_eq!(manager.recover_output(&owner).unwrap(), binding);
+    assert_ne!(empty, populated);
+    assert_eq!(manager.capture_output(&binding).unwrap(), populated);
+    assert!(
+        manager
+            .recover_output(&ManagedOutputOwner::work_attempt("run", "other", "thread"))
+            .is_err()
+    );
+    let verification_owner = ManagedOutputOwner::verification("run", "sha256:verification");
+    let verification = manager.provision_output(&verification_owner).unwrap();
+    assert_ne!(verification.root(), binding.root());
+    assert_eq!(
+        manager.recover_output(&verification_owner).unwrap(),
+        verification
+    );
+
+    manager
+        .cleanup_output(&binding, ManagedDirCleanupEligibility::AllChangeSetsSettled)
+        .unwrap();
+    manager
+        .cleanup_output(
+            &verification,
+            ManagedDirCleanupEligibility::AllChangeSetsSettled,
+        )
+        .unwrap();
+    assert!(!binding.root().exists());
 }
 
 #[test]
@@ -721,4 +898,10 @@ fn run_git(repository: &Path, args: &[&str]) -> String {
         .expect("Git output is UTF-8")
         .trim()
         .to_string()
+}
+
+fn thread_owner(thread_id: &str) -> ManagedDirOwner {
+    ManagedDirOwner::Thread {
+        thread_id: thread_id.into(),
+    }
 }

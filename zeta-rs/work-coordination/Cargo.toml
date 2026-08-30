@@ -1,0 +1,27 @@
+[package]
+name = "zeta-work-coordination"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_work_coordination"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+zeta-environment = { workspace = true }
+zeta-file-access = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-turn-changes = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

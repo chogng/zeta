@@ -1,6 +1,6 @@
 use crate::{
     PreparedCommand, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy,
-    SandboxProcessDenial, SandboxProcessExitStatus,
+    SandboxProcessDenial, SandboxProcessExitStatus, SandboxScope,
 };
 use zeta_file_access::Dir;
 
@@ -32,6 +32,25 @@ pub trait SandboxBackend: Send + Sync {
         policy: SandboxPolicy,
         dir: &Dir,
     ) -> Result<PreparedCommand, SandboxError>;
+
+    /// Prepares a command whose exact directory visibility may span several roots.
+    ///
+    /// Backends that do not implement multi-root isolation accept only the legacy single-directory
+    /// shape. Any richer scope fails closed instead of silently exposing sibling directories.
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        if !scope.is_single_unhidden() {
+            return Err(SandboxError::BackendUnavailable {
+                backend: self.kind(),
+                message: "the backend cannot enforce this multi-directory visibility scope".into(),
+            });
+        }
+        self.prepare(command, policy, scope.command_dir())
+    }
 }
 
 /// Validates command paths and delegates platform-specific sandbox construction.
@@ -63,9 +82,20 @@ impl<B: SandboxBackend> SandboxManager<B> {
         policy: SandboxPolicy,
         dir: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
-        let working_directory = dir.resolve_existing(command.working_directory())?;
+        self.prepare_scoped(command, policy, &SandboxScope::single(dir.clone()))
+    }
+
+    pub fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        let working_directory = scope
+            .command_dir()
+            .resolve_existing(command.working_directory())?;
         let command = command.with_working_directory(working_directory);
-        self.backend.prepare(&command, policy, dir)
+        self.backend.prepare_scoped(&command, policy, scope)
     }
 
     pub fn classify_denial(

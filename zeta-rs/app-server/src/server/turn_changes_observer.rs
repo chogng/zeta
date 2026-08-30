@@ -1,5 +1,8 @@
 use super::turn_changes_message::spawn_message_job;
 use super::turn_changes_runtime::TurnChangesRuntime;
+use super::work_attempt_workspace::ExecutionRootBinding;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
@@ -12,44 +15,76 @@ use zeta_turn_changes::{
     MessageState, RepositoryCaptureTarget, SnapshotBackend, TerminalTurnState, ToolChangeScope,
     TurnChangeBeginRequest, TurnChangeSealRequest,
 };
-use zeta_worktree::{ThreadWorktreeBinding, ThreadWorktreeKind};
+use zeta_worktree::ManagedDirKind;
 
 impl TurnExecutionObserver for TurnChangesRuntime {
     fn will_execute(&self, event: &TurnExecutionStarted) -> Result<(), CoreError> {
-        let binding = self.binding(&event.thread_id).ok_or_else(|| {
-            CoreError::Journal(format!(
-                "Thread {} has no durable dir binding",
+        if self
+            .sealing_threads
+            .read()
+            .map_err(|_| CoreError::Journal("WorkAttempt sealing lock poisoned".into()))?
+            .contains(&event.thread_id)
+        {
+            return Err(CoreError::Execution(
+                "Thread cannot start a Turn while its WorkAttempt result is sealing".into(),
+            ));
+        }
+        let roots = self
+            .execution_roots(&event.thread_id)
+            .map_err(CoreError::Journal)?;
+        if roots.is_empty() {
+            return Err(CoreError::Journal(format!(
+                "Thread {} has no durable execution roots",
                 event.thread_id
-            ))
-        })?;
+            )));
+        }
+        let mut repository_ids = BTreeSet::new();
+        let repositories = roots
+            .iter()
+            .flat_map(|root| {
+                root.binding
+                    .repositories()
+                    .iter()
+                    .map(move |repository| (root, repository))
+            })
+            .map(|(root, repository)| {
+                if !repository_ids.insert(repository.repository_id().to_string()) {
+                    return Err(CoreError::Journal(format!(
+                        "execution roots repeat repository {}",
+                        repository.repository_id()
+                    )));
+                }
+                Ok(RepositoryCaptureTarget {
+                    repository_id: repository.repository_id().to_string(),
+                    worktree_root: repository.worktree_root().to_path_buf(),
+                    target_branch: repository.target_branch().map(ToOwned::to_owned),
+                    base_object_id: (!repository.target_unborn())
+                        .then(|| repository.target_head().to_string()),
+                    snapshot_backend: match root.binding.kind() {
+                        ManagedDirKind::Git => SnapshotBackend::Git,
+                        ManagedDirKind::Directory => SnapshotBackend::Directory {
+                            object_store: root
+                                .binding
+                                .snapshot_store()
+                                .ok_or_else(|| {
+                                    CoreError::Journal(
+                                        "directory binding omitted its snapshot store".into(),
+                                    )
+                                })?
+                                .to_path_buf(),
+                        },
+                    },
+                    baseline_dependency_paths: self
+                        .initial_baseline_paths(&root.binding, repository)?,
+                    work_attempt: root.work_attempt.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, CoreError>>()?;
         let records = match self.ledger.begin_turn(TurnChangeBeginRequest {
             session_id: event.session_id.clone(),
             thread_id: event.thread_id.clone(),
             turn_id: event.turn_id.clone(),
-            repositories: binding
-                .repositories()
-                .iter()
-                .map(|repository| {
-                    Ok(RepositoryCaptureTarget {
-                        repository_id: repository.repository_id().to_string(),
-                        worktree_root: repository.worktree_root().to_path_buf(),
-                        target_branch: repository.target_branch().map(ToOwned::to_owned),
-                        base_object_id: (!repository.target_unborn())
-                            .then(|| repository.target_head().to_string()),
-                        snapshot_backend: match binding.kind() {
-                            ThreadWorktreeKind::Git => SnapshotBackend::Git,
-                            ThreadWorktreeKind::Directory => SnapshotBackend::Directory {
-                                object_store: binding
-                                    .snapshot_store()
-                                    .expect("directory binding has a snapshot store")
-                                    .to_path_buf(),
-                            },
-                        },
-                        baseline_dependency_paths: self
-                            .initial_baseline_paths(&binding, repository)?,
-                    })
-                })
-                .collect::<Result<Vec<_>, CoreError>>()?,
+            repositories,
             commit_message_configured: self.commit_message_configured(),
             opaque_dependencies: matches!(event.kind, TurnExecutionKind::Shell),
         }) {
@@ -176,21 +211,34 @@ impl TurnExecutionObserver for TurnChangesRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&(event.turn_id.clone(), event.tool_call_id.clone()))
             .unwrap_or(false);
-        let Some(binding) = self.binding(&event.thread_id) else {
-            if write_capable {
-                self.end_write_lifecycle(&event.thread_id, &event.turn_id);
+        let roots = match self.execution_roots(&event.thread_id) {
+            Ok(roots) if !roots.is_empty() => roots,
+            Ok(_) => {
+                if write_capable {
+                    self.end_write_lifecycle(&event.thread_id, &event.turn_id);
+                }
+                log::error!(
+                    "Tool {} ran without a Thread execution root",
+                    event.tool_call_id
+                );
+                return;
             }
-            log::error!(
-                "Tool {} ran without a Thread dir binding",
-                event.tool_call_id
-            );
-            return;
+            Err(error) => {
+                if write_capable {
+                    self.end_write_lifecycle(&event.thread_id, &event.turn_id);
+                }
+                log::error!(
+                    "Tool {} execution roots could not be recovered: {error}",
+                    event.tool_call_id
+                );
+                return;
+            }
         };
-        let (read_paths, write_paths, mut opaque_dependencies) = tool_paths(self, &binding, event);
+        let (read_paths, write_paths, mut opaque_dependencies) = tool_paths(self, &roots, event);
         opaque_dependencies |= write_capable && read_paths.is_empty() && write_paths.is_empty();
         let recorded = if opaque_dependencies {
             self.record_opaque_lifecycle(
-                &binding,
+                &roots,
                 &event.session_id,
                 &event.thread_id,
                 &event.turn_id,
@@ -203,7 +251,7 @@ impl TurnExecutionObserver for TurnChangesRuntime {
                     turn_id: event.turn_id.clone(),
                     read_paths,
                     write_paths,
-                    repository_paths: repository_paths(&binding),
+                    repository_paths: repository_paths(&roots),
                     opaque_dependencies: false,
                 })
                 .map_err(|error| error.to_string())
@@ -249,10 +297,10 @@ impl TurnExecutionObserver for TurnChangesRuntime {
 
 impl HookExecutionObserver for TurnChangesRuntime {
     fn will_execute(&self, event: &HookExecutionEvent) -> Result<(), CoreError> {
-        let Some(binding) = self.binding(&event.thread_id) else {
-            return Ok(());
-        };
-        if event.dir != binding.dir() {
+        let roots = self
+            .execution_roots(&event.thread_id)
+            .map_err(CoreError::Journal)?;
+        if roots.iter().all(|root| event.dir != root.binding.dir()) {
             return Ok(());
         }
         if self
@@ -270,16 +318,23 @@ impl HookExecutionObserver for TurnChangesRuntime {
     }
 
     fn did_finish(&self, event: &HookExecutionEvent) {
-        let Some(binding) = self.binding(&event.thread_id) else {
-            self.end_write_lifecycle(&event.thread_id, &event.turn_id);
-            return;
+        let roots = match self.execution_roots(&event.thread_id) {
+            Ok(roots) => roots,
+            Err(error) => {
+                log::error!(
+                    "Hook {} execution roots could not be recovered: {error}",
+                    event.hook_id
+                );
+                self.end_write_lifecycle(&event.thread_id, &event.turn_id);
+                return;
+            }
         };
-        if event.dir != binding.dir() {
+        if roots.iter().all(|root| event.dir != root.binding.dir()) {
             self.end_write_lifecycle(&event.thread_id, &event.turn_id);
             return;
         }
         match self.record_opaque_lifecycle(
-            &binding,
+            &roots,
             &event.session_id,
             &event.thread_id,
             &event.turn_id,
@@ -296,7 +351,7 @@ impl HookExecutionObserver for TurnChangesRuntime {
 
 fn tool_paths(
     runtime: &TurnChangesRuntime,
-    binding: &ThreadWorktreeBinding,
+    roots: &[ExecutionRootBinding],
     event: &TurnToolExecutionFinished,
 ) -> (BTreeSet<PathBuf>, BTreeSet<PathBuf>, bool) {
     let mut reads = BTreeSet::new();
@@ -306,7 +361,7 @@ fn tool_paths(
             .arguments
             .get(key)
             .and_then(serde_json::Value::as_str)
-            .and_then(|path| runtime.relative_tool_path(binding, path))
+            .and_then(|path| runtime.relative_tool_path(roots, &event.thread_id, path))
     };
     match event.name.as_str() {
         "read_file" => reads.extend(path("path")),
@@ -325,7 +380,9 @@ fn tool_paths(
                 .and_then(serde_json::Value::as_str)
             {
                 for (target, reads_existing) in patch_targets(patch) {
-                    if let Some(target) = runtime.relative_tool_path(binding, &target) {
+                    if let Some(target) =
+                        runtime.relative_tool_path(roots, &event.thread_id, &target)
+                    {
                         if reads_existing {
                             reads.insert(target.clone());
                         }
@@ -379,23 +436,51 @@ impl TurnChangesRuntime {
         }
     }
 
-    fn relative_tool_path(&self, binding: &ThreadWorktreeBinding, raw: &str) -> Option<PathBuf> {
+    fn relative_tool_path(
+        &self,
+        roots: &[ExecutionRootBinding],
+        thread_id: &zeta_protocol::ThreadId,
+        raw: &str,
+    ) -> Option<PathBuf> {
         let requested = Path::new(raw);
-        let relative = if requested.is_absolute() {
-            requested
-                .strip_prefix(binding.dir())
-                .or_else(|_| requested.strip_prefix(&self.dir_root))
-                .ok()?
-                .to_path_buf()
-        } else {
-            requested.to_path_buf()
-        };
-        normalize_relative_path(&relative)
+        if !requested.is_absolute() {
+            let primary = roots.iter().find(|root| root.primary)?;
+            return normalize_relative_path(requested)
+                .map(|path| prefixed_path(&execution_root_prefix(primary), &path));
+        }
+        if let Some(output) = self.execution_output(thread_id)
+            && let Ok(relative) = requested.strip_prefix(output)
+        {
+            return normalize_relative_path(relative)
+                .map(|path| prefixed_path(Path::new(".zeta-output"), &path));
+        }
+        roots
+            .iter()
+            .filter_map(|root| {
+                [
+                    root.binding.dir(),
+                    root.source.canonical_path(),
+                    root.source.requested_path(),
+                ]
+                .into_iter()
+                .filter_map(|base| {
+                    requested
+                        .strip_prefix(base)
+                        .ok()
+                        .map(|relative| (root, relative.to_path_buf(), base.components().count()))
+                })
+                .max_by_key(|(_, _, depth)| *depth)
+            })
+            .max_by_key(|(_, _, depth)| *depth)
+            .and_then(|(root, relative, _)| {
+                normalize_relative_path(&relative)
+                    .map(|path| prefixed_path(&execution_root_prefix(root), &path))
+            })
     }
 
     fn record_opaque_lifecycle(
         &self,
-        binding: &ThreadWorktreeBinding,
+        roots: &[ExecutionRootBinding],
         session_id: &zeta_protocol::SessionId,
         thread_id: &zeta_protocol::ThreadId,
         turn_id: &zeta_protocol::TurnId,
@@ -404,22 +489,18 @@ impl TurnChangesRuntime {
             .ledger
             .refresh_turn(session_id.clone(), thread_id.clone(), turn_id.clone())
             .map_err(|error| error.to_string())?;
-        let repository_prefixes = binding
-            .repositories()
-            .iter()
-            .map(|repository| {
-                (
-                    repository.repository_id().to_string(),
-                    repository.relative_path().to_path_buf(),
-                )
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
+        let repository_prefixes = repository_paths(roots);
         let mut write_paths = BTreeSet::new();
         for record in refreshed {
             let prefix = repository_prefixes
                 .get(&record.repository_id)
                 .map(PathBuf::as_path)
-                .unwrap_or_else(|| Path::new("."));
+                .ok_or_else(|| {
+                    format!(
+                        "execution roots omitted repository {} from the Turn scope",
+                        record.repository_id
+                    )
+                })?;
             for path in record
                 .files
                 .iter()
@@ -436,31 +517,40 @@ impl TurnChangesRuntime {
                 turn_id: turn_id.clone(),
                 read_paths: BTreeSet::new(),
                 write_paths,
-                repository_paths: repository_paths(binding),
+                repository_paths: repository_prefixes,
                 opaque_dependencies: true,
             })
             .map_err(|error| error.to_string())
     }
 }
 
-fn repository_paths(
-    binding: &ThreadWorktreeBinding,
-) -> std::collections::BTreeMap<String, PathBuf> {
-    binding
-        .repositories()
+fn repository_paths(roots: &[ExecutionRootBinding]) -> std::collections::BTreeMap<String, PathBuf> {
+    roots
         .iter()
-        .map(|repository| {
-            (
-                repository.repository_id().to_string(),
-                repository.relative_path().to_path_buf(),
-            )
+        .flat_map(|root| {
+            root.binding.repositories().iter().map(|repository| {
+                (
+                    repository.repository_id().to_string(),
+                    prefixed_path(&execution_root_prefix(root), repository.relative_path()),
+                )
+            })
         })
         .collect()
+}
+
+fn execution_root_prefix(root: &ExecutionRootBinding) -> PathBuf {
+    let Some(provenance) = &root.work_attempt else {
+        return PathBuf::from(".");
+    };
+    let digest = Sha256::digest(provenance.source_root_dir_id.as_str().as_bytes());
+    PathBuf::from(".zeta-roots").join(format!("{digest:x}"))
 }
 
 fn prefixed_path(prefix: &Path, path: &Path) -> PathBuf {
     if prefix == Path::new(".") {
         path.to_path_buf()
+    } else if path == Path::new(".") || path.as_os_str().is_empty() {
+        prefix.to_path_buf()
     } else {
         prefix.join(path)
     }

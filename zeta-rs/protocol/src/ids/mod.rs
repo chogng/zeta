@@ -51,11 +51,13 @@ mod command_id;
 mod context_checkpoint_id;
 mod delegation_id;
 mod item_id;
+mod project_id;
 mod request_id;
 mod session_id;
 mod thread_id;
 mod tool_call_id;
 mod turn_id;
+mod work;
 
 pub use agent_join_id::AgentJoinId;
 pub use agent_message_id::AgentMessageId;
@@ -63,11 +65,19 @@ pub use command_id::CommandId;
 pub use context_checkpoint_id::ContextCheckpointId;
 pub use delegation_id::DelegationId;
 pub use item_id::ItemId;
+pub use project_id::ProjectId;
 pub use request_id::RequestId;
 pub use session_id::SessionId;
 pub use thread_id::ThreadId;
 pub use tool_call_id::ToolCallId;
 pub use turn_id::TurnId;
+pub use work::WorkAttemptId;
+pub use work::WorkConflictId;
+pub use work::WorkContractId;
+pub use work::WorkDecisionId;
+pub use work::WorkExecutionId;
+pub use work::WorkRelationId;
+pub use work::WorkRunId;
 
 /// Rejection reason returned when an externally supplied protocol identity is invalid.
 #[derive(Clone, Debug, Eq, PartialEq)]

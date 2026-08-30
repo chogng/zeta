@@ -113,6 +113,11 @@ mod plugin_extension_sources;
 mod plugin_operations;
 mod plugin_runtime;
 mod plugin_skill_sources;
+mod project_operations;
+#[cfg(test)]
+#[path = "server/project_operations_tests.rs"]
+mod project_operations_tests;
+mod project_projection;
 mod provider_operations;
 mod request_serialization;
 mod search_operations;
@@ -133,6 +138,22 @@ mod turn_changes_watcher;
 mod turn_changes_worktree;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
+mod work_attempt_effects;
+mod work_attempt_evidence;
+mod work_attempt_workspace;
+#[cfg(test)]
+#[path = "server/work_attempt_workspace_tests.rs"]
+mod work_attempt_workspace_tests;
+mod work_coordination_runtime;
+mod work_integration;
+mod work_run_operations;
+#[cfg(test)]
+#[path = "server/work_run_operations_tests.rs"]
+mod work_run_operations_tests;
+mod work_run_projection;
+mod work_serializability;
+mod work_verification;
+mod work_wait;
 
 const OUTBOUND_MESSAGE_QUEUE_CAPACITY: usize = 256;
 const INBOUND_REQUEST_QUEUE_CAPACITY: usize = 64;
@@ -214,6 +235,8 @@ pub struct AppServer {
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     turn_changes: Option<Arc<turn_changes_runtime::TurnChangesRuntime>>,
+    work_coordination: Option<Arc<work_coordination_runtime::WorkCoordinationRuntime>>,
+    projects: Option<Arc<zeta_projects::ProjectCoordinator>>,
     updates: Arc<UpdateBroker>,
 }
 
@@ -237,8 +260,16 @@ impl EnvStateMode {
 #[derive(Clone, Debug, Default)]
 pub struct ConnectionState {
     pub(super) connection_id: u64,
+    authority: ConnectionAuthority,
     state: Arc<Mutex<ConnectionMutableState>>,
     outbound_notifications: NotificationQueue,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum ConnectionAuthority {
+    #[default]
+    Client,
+    ProductHost,
 }
 
 #[derive(Debug, Default)]
@@ -248,6 +279,7 @@ struct ConnectionMutableState {
     request_ids: BTreeSet<u64>,
     marketplace_leases: BTreeSet<String>,
     dir_permissions_host: bool,
+    work_coordination_host: bool,
 }
 
 impl ConnectionState {
@@ -278,8 +310,20 @@ impl ConnectionState {
         connection_state(self).dir_permissions_host = supported;
     }
 
+    fn allows_product_host_capabilities(&self) -> bool {
+        self.authority == ConnectionAuthority::ProductHost
+    }
+
     pub(super) fn supports_dir_permissions_host(&self) -> bool {
         connection_state(self).dir_permissions_host
+    }
+
+    fn set_work_coordination_host(&self, supported: bool) {
+        connection_state(self).work_coordination_host = supported;
+    }
+
+    pub(super) fn supports_work_coordination_host(&self) -> bool {
+        connection_state(self).work_coordination_host
     }
 
     fn marketplace_leases(&self) -> Vec<String> {
@@ -508,6 +552,8 @@ impl AppServer {
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             turn_changes: None,
+            work_coordination: None,
+            projects: None,
             updates,
         }
     }
@@ -533,6 +579,11 @@ impl AppServer {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .turn_executor = executor;
+        if let Some(work_coordination) = &self.work_coordination {
+            work_coordination
+                .attach_workspace_host(Arc::clone(&runtime))
+                .map_err(|error| error.to_string())?;
+        }
         self.turn_changes = Some(runtime);
         Ok(self)
     }
@@ -572,9 +623,51 @@ impl AppServer {
         self.with_turn_changes_runtime(runtime)
     }
 
+    pub(crate) fn with_local_work_coordination(
+        mut self,
+        database_path: &std::path::Path,
+    ) -> Result<Self, String> {
+        let store: Arc<dyn zeta_work_coordination::WorkRunStore> = Arc::new(
+            zeta_state::SqliteWorkRunStore::open(database_path)
+                .map_err(|error| error.to_string())?,
+        );
+        self.work_coordination = Some(Arc::new(
+            work_coordination_runtime::WorkCoordinationRuntime::new(
+                store,
+                Arc::clone(&self.updates),
+            ),
+        ));
+        Ok(self)
+    }
+
+    pub(crate) fn with_local_projects(
+        mut self,
+        database_path: &std::path::Path,
+    ) -> Result<Self, String> {
+        let store: Arc<dyn zeta_projects::ProjectStore> = Arc::new(
+            zeta_state::SqliteProjectStore::open(database_path)
+                .map_err(|error| error.to_string())?,
+        );
+        self.projects = Some(Arc::new(zeta_projects::ProjectCoordinator::new(store)));
+        Ok(self)
+    }
+
     pub fn connection(&self) -> ConnectionState {
+        self.open_connection(ConnectionAuthority::Client)
+    }
+
+    /// Creates a connection whose host-only capabilities may be enabled during initialization.
+    ///
+    /// Only a product composition root may hand this connection to a client. Wire clients cannot
+    /// promote a regular connection by declaring a capability in their initialize payload.
+    pub fn product_host_connection(&self) -> ConnectionState {
+        self.open_connection(ConnectionAuthority::ProductHost)
+    }
+
+    fn open_connection(&self, authority: ConnectionAuthority) -> ConnectionState {
         let connection = ConnectionState {
             connection_id: self.updates.allocate_connection_id(),
+            authority,
             ..ConnectionState::default()
         };
         self.updates
@@ -1470,7 +1563,7 @@ impl AppServer {
     }
 
     pub fn serve_stdio(&self) -> Result<(), std::io::Error> {
-        self.serve_jsonl(BufReader::new(std::io::stdin()), std::io::stdout())
+        self.serve_product_host_jsonl(BufReader::new(std::io::stdin()), std::io::stdout())
     }
 
     pub fn serve_jsonl<R: BufRead, W: Write + Send>(
@@ -1478,8 +1571,28 @@ impl AppServer {
         reader: R,
         writer: W,
     ) -> Result<(), std::io::Error> {
+        self.serve_jsonl_connection(reader, writer, self.connection())
+    }
+
+    /// Serves a product-owned transport that may negotiate host-only capabilities.
+    ///
+    /// The caller must restrict the transport to the product's own process boundary, such as
+    /// process stdio or a user-private local socket. Arbitrary JSONL peers must use `serve_jsonl`.
+    pub fn serve_product_host_jsonl<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<(), std::io::Error> {
+        self.serve_jsonl_connection(reader, writer, self.product_host_connection())
+    }
+
+    fn serve_jsonl_connection<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+        mut connection: ConnectionState,
+    ) -> Result<(), std::io::Error> {
         let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
-        let mut connection = self.connection();
         let notifications = self.connection_notifications(&connection);
         let activity = Arc::new(ConnectionDispatchActivity::default());
         let (inbound_tx, inbound_rx) = mpsc::sync_channel::<String>(INBOUND_REQUEST_QUEUE_CAPACITY);
@@ -1712,6 +1825,57 @@ impl AppServer {
             Some(ClientMethod::TurnChangesDiscardThread) => {
                 self.turn_changes_discard_thread(&request.params)
             }
+            Some(ClientMethod::WorkRunList) => self.work_run_list(connection, &request.params),
+            Some(ClientMethod::WorkRunRead) => self.work_run_read(connection, &request.params),
+            Some(ClientMethod::WorkRunViewRead) => {
+                self.work_run_view_read(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunCreate) => self.work_run_create(connection, &request.params),
+            Some(ClientMethod::WorkRunParticipantAdd) => {
+                self.work_run_participant_add(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunRelationCreate) => {
+                self.work_run_relation_create(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunGoalRevise) => {
+                self.work_run_goal_revise(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunCancel) => self.work_run_cancel(connection, &request.params),
+            Some(ClientMethod::WorkRunVerificationRequest) => {
+                self.work_run_verification_request(connection, &request.params)
+            }
+            Some(ClientMethod::WorkRunIntegrationRequest) => {
+                self.work_run_integration_request(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectList) => self.project_list(connection, &request.params),
+            Some(ClientMethod::ProjectRead) => self.project_read(connection, &request.params),
+            Some(ClientMethod::ProjectCreate) => self.project_create(connection, &request.params),
+            Some(ClientMethod::ProjectDetailsUpdate) => {
+                self.project_details_update(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectRootAdd) => {
+                self.project_root_add(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectRootUpdate) => {
+                self.project_root_update(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectRootRemove) => {
+                self.project_root_remove(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectSessionLink) => {
+                self.project_session_link(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectSessionUnlink) => {
+                self.project_session_unlink(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectWorkRunLink) => {
+                self.project_work_run_link(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectWorkRunUnlink) => {
+                self.project_work_run_unlink(connection, &request.params)
+            }
+            Some(ClientMethod::ProjectArchive) => self.project_archive(connection, &request.params),
+            Some(ClientMethod::ProjectRestore) => self.project_restore(connection, &request.params),
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::AccountRead) => self.account_read(),

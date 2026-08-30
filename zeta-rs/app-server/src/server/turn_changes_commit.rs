@@ -5,12 +5,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use zeta_state::SqliteTurnChangeStore;
 use zeta_turn_changes::{CommitState, TurnChangeSet, TurnChangeStore};
-use zeta_worktree::ThreadWorktreeBinding;
+use zeta_worktree::ManagedDirBinding;
 
 pub(super) fn spawn_commit_job(
     store: Arc<SqliteTurnChangeStore>,
     updates: Arc<UpdateBroker>,
-    binding: ThreadWorktreeBinding,
+    binding: ManagedDirBinding,
     change_set_id: zeta_turn_changes::ChangeSetId,
 ) {
     let _ = std::thread::Builder::new()
@@ -25,7 +25,7 @@ pub(super) fn spawn_commit_job(
 fn commit_change_set(
     store: &SqliteTurnChangeStore,
     updates: &UpdateBroker,
-    binding: &ThreadWorktreeBinding,
+    binding: &ManagedDirBinding,
     change_set_id: &zeta_turn_changes::ChangeSetId,
 ) -> Result<(), String> {
     let mut record = store

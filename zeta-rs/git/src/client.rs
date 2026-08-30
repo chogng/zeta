@@ -203,6 +203,27 @@ impl GitClient {
             .await
     }
 
+    pub(crate) async fn run_mutation_with_stdin_and_environment<I, S, E, K, V>(
+        &self,
+        cwd: &Path,
+        args: I,
+        input: Vec<u8>,
+        environment: E,
+    ) -> GitResult<GitCommandOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+        E: IntoIterator<Item = (K, V)>,
+        K: Into<OsString>,
+        V: AsRef<OsStr>,
+    {
+        let invocation = environment.into_iter().fold(
+            GitInvocation::mutation(cwd, args).with_stdin(input),
+            |invocation, (name, value)| invocation.with_environment(name, value.as_ref()),
+        );
+        self.run(invocation).await
+    }
+
     pub(crate) async fn run_mutation<I, S>(
         &self,
         cwd: &Path,

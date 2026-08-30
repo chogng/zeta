@@ -6,8 +6,8 @@ use zeta_file_access::Dir;
 use zeta_protocol::ThreadOrigin;
 use zeta_turn_changes::{CommitState, TurnChangeSet, TurnChangeStore};
 use zeta_worktree::{
-    ThreadRepositoryBinding, ThreadWorktreeBinding, ThreadWorktreeKind,
-    ThreadWorktreeProvisionRequest, ThreadWorktreeSource, ThreadWorktreeTarget,
+    ManagedDirBinding, ManagedDirKind, ManagedDirOwner, ManagedDirProvisionRequest,
+    ManagedDirSource, ManagedDirTarget, ManagedRepositoryBinding,
 };
 
 impl TurnChangesRuntime {
@@ -51,9 +51,9 @@ impl TurnChangesRuntime {
         eligible.sort_by(|left, right| right.0.cmp(&left.0));
         for (_, thread_id, binding) in eligible.into_iter().skip(settings.keep_count) {
             self.worktree_runtime
-                .block_on(self.worktrees.cleanup_thread(
+                .block_on(self.worktrees.cleanup(
                     &binding,
-                    zeta_worktree::ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
+                    zeta_worktree::ManagedDirCleanupEligibility::AllChangeSetsSettled,
                 ))
                 .map_err(|error| error.to_string())?;
             self.bindings
@@ -76,7 +76,7 @@ impl TurnChangesRuntime {
             .binding(thread_id)
             .ok_or_else(|| format!("Thread {thread_id} has no dir binding"))?;
         self.worktree_runtime.block_on(async {
-            if binding.kind() == ThreadWorktreeKind::Directory {
+            if binding.kind() == ManagedDirKind::Directory {
                 let object_store = binding
                     .snapshot_store()
                     .ok_or_else(|| "managed directory omitted its snapshot store".to_string())?;
@@ -141,10 +141,10 @@ impl TurnChangesRuntime {
 
     pub(super) fn initial_baseline_paths(
         &self,
-        binding: &ThreadWorktreeBinding,
-        repository_binding: &ThreadRepositoryBinding,
+        binding: &ManagedDirBinding,
+        repository_binding: &ManagedRepositoryBinding,
     ) -> Result<BTreeSet<PathBuf>, CoreError> {
-        if binding.kind() == ThreadWorktreeKind::Directory {
+        if binding.kind() == ManagedDirKind::Directory {
             return Ok(BTreeSet::new());
         }
         self.worktree_runtime.block_on(async {
@@ -185,14 +185,14 @@ impl TurnChangesRuntime {
     fn source_for(
         &self,
         origin: &ThreadOrigin,
-    ) -> Result<(ThreadWorktreeSource, ThreadWorktreeTarget), CoreError> {
+    ) -> Result<(ManagedDirSource, ManagedDirTarget), CoreError> {
         let parent_id = match origin {
             ThreadOrigin::Root => {
                 return Ok((
-                    ThreadWorktreeSource::DirSnapshot {
+                    ManagedDirSource::DirSnapshot {
                         source_directory: self.dir_root.clone(),
                     },
-                    ThreadWorktreeTarget::SourceHead,
+                    ManagedDirTarget::SourceHead,
                 ));
             }
             ThreadOrigin::Fork {
@@ -227,7 +227,7 @@ impl TurnChangesRuntime {
                         "rewind Turn {before_turn_id} has an incomplete repository checkpoint"
                     ))
                 })?;
-                ThreadWorktreeSource::ImmutableTree {
+                ManagedDirSource::ImmutableTree {
                     source_directory: parent.dir().to_path_buf(),
                     tree_id: primary_tree(&trees)?,
                     repository_trees: trees,
@@ -237,27 +237,27 @@ impl TurnChangesRuntime {
                 parent_sequence, ..
             } => {
                 let trees = self.trees_at_sequence(parent_id, *parent_sequence)?;
-                ThreadWorktreeSource::ImmutableTree {
+                ManagedDirSource::ImmutableTree {
                     source_directory: parent.dir().to_path_buf(),
                     tree_id: primary_tree(&trees)?,
                     repository_trees: trees,
                 }
             }
-            ThreadOrigin::AgentSpawn { .. } => ThreadWorktreeSource::DirSnapshot {
+            ThreadOrigin::AgentSpawn { .. } => ManagedDirSource::DirSnapshot {
                 source_directory: parent.dir().to_path_buf(),
             },
             ThreadOrigin::Root => unreachable!("root source returned above"),
         };
         let target = match (parent.target_branch(), parent.target_unborn()) {
-            (Some(name), true) => ThreadWorktreeTarget::UnbornBranch {
+            (Some(name), true) => ManagedDirTarget::UnbornBranch {
                 name: name.to_string(),
                 anchor_object_id: parent.target_head().to_string(),
             },
-            (Some(name), false) => ThreadWorktreeTarget::Branch {
+            (Some(name), false) => ManagedDirTarget::Branch {
                 name: name.to_string(),
                 object_id: parent.target_head().to_string(),
             },
-            (None, _) => ThreadWorktreeTarget::Detached {
+            (None, _) => ManagedDirTarget::Detached {
                 object_id: parent.target_head().to_string(),
             },
         };
@@ -326,7 +326,7 @@ impl TurnChangesRuntime {
 }
 
 fn checkpoint_trees(
-    binding: &ThreadWorktreeBinding,
+    binding: &ManagedDirBinding,
     records: &[TurnChangeSet],
     after: bool,
 ) -> Option<BTreeMap<PathBuf, String>> {
@@ -362,15 +362,15 @@ impl ThreadWorktreeBinder for TurnChangesRuntime {
         let (source, target) = self.source_for(&request.origin)?;
         let binding = self
             .worktree_runtime
-            .block_on(
-                self.worktrees
-                    .provision_thread(&ThreadWorktreeProvisionRequest {
-                        source,
-                        target,
-                        source_dir_id: self.dir_id.to_string(),
-                        thread_id: request.thread_id.to_string(),
-                    }),
-            )
+            .block_on(self.worktrees.provision(&ManagedDirProvisionRequest {
+                source,
+                target,
+                repository_targets: BTreeMap::new(),
+                source_dir_id: self.dir_id.to_string(),
+                owner: ManagedDirOwner::Thread {
+                    thread_id: request.thread_id.to_string(),
+                },
+            }))
             .map_err(|error| CoreError::Journal(format!("cannot provision Thread dir: {error}")))?;
         self.bindings
             .write()
@@ -387,7 +387,7 @@ impl TurnChangesRuntime {
     fn bind_thread_services(
         &self,
         thread_id: &zeta_protocol::ThreadId,
-        binding: &ThreadWorktreeBinding,
+        binding: &ManagedDirBinding,
     ) -> Result<(), CoreError> {
         let root = Dir::open_local(binding.dir())
             .map_err(|error| CoreError::Journal(error.to_string()))?;
@@ -395,7 +395,7 @@ impl TurnChangesRuntime {
             .bind_thread_dir(thread_id.clone(), root.clone())
             .map_err(|error| CoreError::Journal(error.to_string()))?;
         self.file_access.bind_thread_dir(thread_id.clone(), root);
-        self.start_watcher(thread_id.clone(), binding.dir())
+        self.start_watcher(thread_id.clone(), [binding.dir().to_path_buf()])
             .map_err(CoreError::Journal)?;
         Ok(())
     }

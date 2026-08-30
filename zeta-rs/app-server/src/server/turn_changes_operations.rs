@@ -186,6 +186,12 @@ impl AppServer {
         let records = runtime
             .list(&params.session_id, &params.thread_id)
             .map_err(operation_error)?;
+        if records.iter().any(|record| record.work_attempt.is_some()) {
+            return Err(operation_error(
+                "WorkAttempt ChangeSets are immutable coordination evidence and cannot be discarded"
+                    .into(),
+            ));
+        }
         let actual_revision = records
             .iter()
             .map(|record| record.revision)

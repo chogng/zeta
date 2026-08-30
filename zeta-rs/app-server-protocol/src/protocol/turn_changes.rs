@@ -2,6 +2,12 @@ use crate::protocol::common::{CommandId, SessionId, ThreadId, TurnId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use zeta_file_access::DirId;
+use zeta_protocol::ContentDigest;
+use zeta_protocol::WorkAttemptId;
+use zeta_protocol::WorkContractId;
+use zeta_protocol::WorkExecutionId;
+use zeta_protocol::WorkRunId;
 
 /// Stable identity of one Turn/repository change set.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, TS)]
@@ -110,6 +116,20 @@ pub struct ThreadWorktreeRepositoryBindingDto {
     pub baseline_object_id: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkAttemptChangeProvenanceDto {
+    pub work_run_id: WorkRunId,
+    pub attempt_id: WorkAttemptId,
+    pub execution_id: WorkExecutionId,
+    pub contract_id: WorkContractId,
+    #[ts(type = "number")]
+    pub contract_revision: u64,
+    pub source_root_dir_id: DirId,
+    pub managed_root_dir_id: DirId,
+    pub root_checkpoint_digest: ContentDigest,
+}
+
 /// Small record used by Session Inspector lists and notifications.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -119,6 +139,9 @@ pub struct TurnChangeSetSummary {
     pub thread_id: ThreadId,
     pub turn_id: TurnId,
     pub repository_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub work_attempt: Option<WorkAttemptChangeProvenanceDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub target_branch: Option<String>,

@@ -47,6 +47,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
         snapshot_backend: zeta_turn_changes::SnapshotBackend::Git,
         baseline_dependency_paths: std::collections::BTreeSet::new(),
         message_state: MessageState::Unconfigured,
+        work_attempt: None,
     })
     .unwrap()
 }

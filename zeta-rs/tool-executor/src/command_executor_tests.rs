@@ -232,6 +232,36 @@ fn executor_terminates_a_running_process_when_cancelled() {
     ));
 }
 
+#[cfg(unix)]
+#[test]
+fn executor_kills_background_descendants_before_returning() {
+    let dir = TestDir::new();
+    let marker = dir.path.join("late-write");
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+
+    let outcome = executor
+        .execute(
+            CommandRequest {
+                program: "/bin/sh".into(),
+                arguments: vec![
+                    "-c".into(),
+                    "(sleep 0.2; touch \"$1\") &".into(),
+                    "zeta-background-test".into(),
+                    marker.display().to_string(),
+                ],
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(matches!(outcome, CommandExecutionOutcome::Completed(_)));
+    std::thread::sleep(Duration::from_millis(400));
+    assert!(!marker.exists());
+}
+
 fn test_limits() -> ExecutionLimits {
     ExecutionLimits {
         timeout: Duration::from_secs(3),

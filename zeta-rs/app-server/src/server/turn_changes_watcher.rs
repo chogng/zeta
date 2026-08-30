@@ -1,7 +1,7 @@
 use super::turn_changes_runtime::{TurnChangesRuntime, publish_records};
 use super::update_broker::UpdateBroker;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -21,7 +21,7 @@ pub(super) struct ThreadChangeWatcher {
 impl ThreadChangeWatcher {
     fn start(
         thread_id: ThreadId,
-        root: PathBuf,
+        roots: Vec<PathBuf>,
         ledger: TurnChangeLedger,
         store: Arc<SqliteTurnChangeStore>,
         updates: Arc<UpdateBroker>,
@@ -34,7 +34,7 @@ impl ThreadChangeWatcher {
             .spawn(move || {
                 watch_thread(
                     thread_id,
-                    root,
+                    roots,
                     ledger,
                     store,
                     updates,
@@ -75,7 +75,11 @@ impl Drop for ThreadChangeWatcher {
 }
 
 impl TurnChangesRuntime {
-    pub(super) fn start_watcher(&self, thread_id: ThreadId, root: &Path) -> Result<(), String> {
+    pub(super) fn start_watcher(
+        &self,
+        thread_id: ThreadId,
+        roots: impl IntoIterator<Item = PathBuf>,
+    ) -> Result<(), String> {
         let mut watchers = self
             .watchers
             .write()
@@ -83,9 +87,13 @@ impl TurnChangesRuntime {
         if watchers.contains_key(&thread_id) {
             return Ok(());
         }
+        let roots = roots.into_iter().collect::<Vec<_>>();
+        if roots.is_empty() {
+            return Err("Turn change watcher requires at least one managed root".into());
+        }
         let watcher = ThreadChangeWatcher::start(
             thread_id.clone(),
-            root.to_path_buf(),
+            roots,
             self.ledger.clone(),
             Arc::clone(&self.store),
             Arc::clone(&self.updates),
@@ -106,7 +114,7 @@ impl TurnChangesRuntime {
 #[allow(clippy::too_many_arguments)]
 fn watch_thread(
     thread_id: ThreadId,
-    root: PathBuf,
+    roots: Vec<PathBuf>,
     ledger: TurnChangeLedger,
     store: Arc<SqliteTurnChangeStore>,
     updates: Arc<UpdateBroker>,
@@ -134,10 +142,14 @@ fn watch_thread(
             }
         };
         let (subscriber, receiver) = watcher.add_subscriber();
-        let _registration = match subscriber.register_paths(vec![WatchPath {
-            path: root,
-            recursive: true,
-        }]) {
+        let paths = roots
+            .into_iter()
+            .map(|path| WatchPath {
+                path,
+                recursive: true,
+            })
+            .collect();
+        let _registration = match subscriber.register_paths(paths) {
             Ok(registration) => registration,
             Err(error) => {
                 let _ = startup.send(Err(format!(
@@ -192,6 +204,13 @@ fn refresh_thread(
     turns.sort();
     turns.dedup();
     for (session_id, turn_id) in turns {
+        let active = active_write_lifecycles
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let active_count = active
+            .get(&(thread_id.clone(), turn_id.clone()))
+            .copied()
+            .unwrap_or(0);
         let refreshed =
             match ledger.refresh_turn(session_id.clone(), thread_id.clone(), turn_id.clone()) {
                 Ok(records) => records,
@@ -201,12 +220,9 @@ fn refresh_thread(
                 }
             };
         publish_records(updates, &refreshed);
-        let active = active_write_lifecycles
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(thread_id.clone(), turn_id.clone()))
-            .copied()
-            .unwrap_or(0);
+        if active_count > 0 {
+            continue;
+        }
         let unexplained = refreshed.iter().any(|record| {
             !record.attribution_incomplete
                 && record
@@ -216,7 +232,7 @@ fn refresh_thread(
                     .flatten()
                     .any(|path| !record.write_paths.contains(path))
         });
-        if active == 0 && unexplained {
+        if unexplained {
             match ledger.record_ambiguous_write(
                 session_id,
                 thread_id.clone(),

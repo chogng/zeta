@@ -8,6 +8,7 @@ mod dir;
 mod error;
 mod manager;
 mod model;
+mod scope;
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -19,6 +20,9 @@ pub use model::{
     FileSystemAccess, NetworkAccess, PreparedCommand, SandboxCommand, SandboxDenialTiming,
     SandboxKind, SandboxPolicy, SandboxProcessDenial, SandboxProcessExitStatus,
 };
+pub use scope::SandboxDirAccess;
+pub use scope::SandboxDirGrant;
+pub use scope::SandboxScope;
 
 #[cfg(target_os = "macos")]
 pub use macos::MacosSeatbeltSandbox;

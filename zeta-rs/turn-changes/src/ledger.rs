@@ -20,6 +20,7 @@ pub struct RepositoryCaptureTarget {
     pub base_object_id: Option<String>,
     pub snapshot_backend: SnapshotBackend,
     pub baseline_dependency_paths: BTreeSet<PathBuf>,
+    pub work_attempt: Option<crate::WorkAttemptChangeProvenance>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -346,6 +347,7 @@ impl LedgerWorker {
                 } else {
                     MessageState::Unconfigured
                 },
+                work_attempt: target.work_attempt,
             })?;
             if request.opaque_dependencies {
                 change_set.record_tool_scope([], [], true)?;
@@ -640,6 +642,7 @@ fn dependencies_for(
     records
         .iter()
         .filter(|candidate| candidate.change_set_id != current.change_set_id)
+        .filter(|candidate| candidate.turn_id != current.turn_id)
         .filter(|candidate| {
             !matches!(candidate.capture_state, CaptureState::Discarded)
                 && !matches!(candidate.commit_state, CommitState::Committed { .. })

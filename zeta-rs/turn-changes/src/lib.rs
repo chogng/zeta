@@ -16,6 +16,7 @@ pub use model::TerminalTurnState;
 pub use model::TurnChangeError;
 pub use model::TurnChangeSet;
 pub use model::TurnChangeSetDraft;
+pub use model::WorkAttemptChangeProvenance;
 pub use store::TurnChangeStore;
 pub use store::TurnChangeStoreError;
 

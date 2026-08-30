@@ -11,7 +11,7 @@ use std::fmt;
 use ts_rs::TS;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 1;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 8;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 19;
 pub const APP_SERVER_CAPABILITY_VERSION: u32 = 3;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
@@ -183,6 +183,8 @@ pub struct ServerCapabilities {
     pub sessions: bool,
     pub threads: bool,
     pub turns: bool,
+    pub work_coordination: bool,
+    pub projects: bool,
     pub resources: bool,
     pub attachments: bool,
     pub file_system: bool,
@@ -214,6 +216,8 @@ impl ServerCapabilities {
             "sessions" => Some(self.sessions),
             "threads" => Some(self.threads),
             "turns" => Some(self.turns),
+            "workCoordination" => Some(self.work_coordination),
+            "projects" => Some(self.projects),
             "resources" => Some(self.resources),
             "attachments" => Some(self.attachments),
             "fileSystem" => Some(self.file_system),
@@ -243,6 +247,8 @@ impl ServerCapabilities {
             ("sessions", self.sessions),
             ("threads", self.threads),
             ("turns", self.turns),
+            ("workCoordination", self.work_coordination),
+            ("projects", self.projects),
             ("resources", self.resources),
             ("attachments", self.attachments),
             ("fileSystem", self.file_system),

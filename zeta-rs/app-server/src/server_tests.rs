@@ -4037,6 +4037,30 @@ fn jsonl_transport_writes_response_before_causal_updates() {
 }
 
 #[test]
+fn only_product_host_jsonl_transport_accepts_host_capabilities() {
+    let server = server();
+    let input = concat!(
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"},\"capabilities\":{\"workCoordinationHost\":{\"version\":1}}}}\n",
+    );
+
+    let mut client_output = Vec::new();
+    server
+        .serve_jsonl(Cursor::new(input.as_bytes()), &mut client_output)
+        .unwrap();
+    let client_response: serde_json::Value =
+        serde_json::from_slice(client_output.trim_ascii_end()).unwrap();
+    assert_eq!(client_response["error"]["message"], "PermissionRequired");
+
+    let mut host_output = Vec::new();
+    server
+        .serve_product_host_jsonl(Cursor::new(input.as_bytes()), &mut host_output)
+        .unwrap();
+    let host_response: serde_json::Value =
+        serde_json::from_slice(host_output.trim_ascii_end()).unwrap();
+    assert!(host_response["result"].is_object());
+}
+
+#[test]
 fn jsonl_transport_writes_notifications_without_another_request() {
     let server = Arc::new(server());
     let (mut client, host) = UnixStream::pair().unwrap();

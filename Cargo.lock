@@ -10881,6 +10881,7 @@ dependencies = [
  "zeta-model-provider-config",
  "zeta-models-manager",
  "zeta-plugins",
+ "zeta-projects",
  "zeta-prompts",
  "zeta-protocol",
  "zeta-rmcp-client",
@@ -10902,6 +10903,7 @@ dependencies = [
  "zeta-utils-pty",
  "zeta-web-search-extension",
  "zeta-windows-sandbox",
+ "zeta-work-coordination",
  "zeta-worktree",
 ]
 
@@ -10955,6 +10957,7 @@ dependencies = [
  "ts-rs",
  "zeroize",
  "zeta-collaboration",
+ "zeta-environment",
  "zeta-file-access",
  "zeta-protocol",
  "zeta-thread-transcript",
@@ -11870,6 +11873,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-projects"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "thiserror 2.0.19",
+ "zeta-environment",
+ "zeta-file-access",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "zeta-prompts"
 version = "0.1.0"
 dependencies = [
@@ -11968,6 +11983,7 @@ dependencies = [
 name = "zeta-sandboxing"
 version = "0.1.0"
 dependencies = [
+ "tempfile",
  "zeta-file-access",
 ]
 
@@ -12122,12 +12138,15 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "zeta-environment",
  "zeta-file-access",
  "zeta-history",
+ "zeta-projects",
  "zeta-protocol",
  "zeta-thread-store",
  "zeta-turn-changes",
  "zeta-utils-path",
+ "zeta-work-coordination",
 ]
 
 [[package]]
@@ -12219,6 +12238,7 @@ dependencies = [
  "zeta-file-access",
  "zeta-protocol",
  "zeta-sandboxing",
+ "zeta-utils-pty",
 ]
 
 [[package]]
@@ -12284,6 +12304,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
+ "zeta-file-access",
  "zeta-git",
  "zeta-protocol",
 ]
@@ -12491,6 +12512,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-work-coordination"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "zeta-environment",
+ "zeta-file-access",
+ "zeta-protocol",
+ "zeta-turn-changes",
+]
+
+[[package]]
 name = "zeta-workbench"
 version = "0.1.0"
 dependencies = [
@@ -12550,7 +12586,9 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "zeta-file-access",
  "zeta-git",
+ "zeta-protocol",
  "zeta-turn-changes",
 ]
 

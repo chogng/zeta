@@ -7,10 +7,20 @@ fn dir_fixture() -> (tempfile::TempDir, Dir, ResolvedFilePath) {
     let directory = tempfile::tempdir().unwrap();
     fs::create_dir(directory.path().join(".git")).unwrap();
     let root = Dir::open_local(directory.path()).unwrap();
+    let authorization = zeta_file_access::Authorization::evaluate(
+        zeta_file_access::GrantSubject::Environment(root.env().clone()),
+        root.clone(),
+        zeta_file_access::GrantSource::HostConfiguration,
+        zeta_file_access::Permissions::new([zeta_file_access::Permission::InspectRepository]),
+        zeta_file_access::Permission::InspectRepository,
+    )
+    .unwrap();
     let resolved = ResolvedFilePath {
         root: root.clone(),
+        authorization,
         relative: PathBuf::new(),
         absolute: root.canonical_path().to_path_buf(),
+        thread_scope: None,
     };
     (directory, root, resolved)
 }

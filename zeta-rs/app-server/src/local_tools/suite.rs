@@ -1,6 +1,8 @@
 use super::LocalShellToolService;
+use super::ShellCommandRequest;
 use super::read_only_sandbox;
 use crate::dir_grants::DirGrants;
+use crate::dir_grants::ThreadDirScope;
 use serde_json::Value;
 use serde_json::json;
 use sha2::Digest;
@@ -131,8 +133,10 @@ pub(crate) struct LocalToolSuite<B> {
 
 pub(super) struct ResolvedFilePath {
     pub(super) root: Dir,
+    pub(super) authorization: Authorization,
     pub(super) relative: PathBuf,
     pub(super) absolute: PathBuf,
+    pub(super) thread_scope: Option<ThreadDirScope>,
 }
 
 impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
@@ -175,56 +179,69 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .ensure_active()
             .map_err(|error| error.to_string())?;
         let path = PathBuf::from(value);
-        let thread_dir = thread_id
+        let thread_scope = thread_id
             .map(|thread_id| {
                 self.dir_grants
-                    .thread_dir(thread_id, permission)
+                    .thread_scope(thread_id, permission)
                     .map_err(|error| error.to_string())
             })
             .transpose()?
             .flatten();
-        let primary = thread_dir
+        let primary = thread_scope
             .as_ref()
-            .map(|authorization| authorization.dir().clone())
-            .unwrap_or_else(|| self.authorization.dir().clone());
-        let mut roots = vec![primary.clone()];
-        if let Some(session_id) = session_id {
+            .map(|scope| scope.primary().clone())
+            .unwrap_or_else(|| self.authorization.clone());
+        let exact = thread_scope.as_ref().is_some_and(|scope| scope.is_exact());
+        let mut authorizations = thread_scope
+            .as_ref()
+            .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
+            .unwrap_or_else(|| vec![self.authorization.clone()]);
+        if !exact
+            && !authorizations
+                .iter()
+                .any(|value| value.dir() == self.authorization.dir())
+        {
+            authorizations.push(self.authorization.clone());
+        }
+        if !exact && let Some(session_id) = session_id {
             if let Some(snapshot) = self
                 .dir_grants
                 .snapshot_for(session_id, permission)
                 .map_err(|error| error.to_string())?
             {
-                roots.extend(
+                authorizations.extend(
                     snapshot
                         .authorizations()
                         .iter()
                         .filter(|authorization| authorization.ensure_active().is_ok())
-                        .map(|authorization| authorization.dir().clone()),
+                        .cloned(),
                 );
             }
         }
-        let (root, relative) = if path.is_absolute() {
-            if let Some(authorization) = &thread_dir
-                && let Ok(relative) = path
-                    .strip_prefix(self.authorization.dir().canonical_path())
-                    .or_else(|_| path.strip_prefix(self.authorization.dir().requested_path()))
+        let (authorization, relative) = if path.is_absolute() {
+            if let Some((authorization, relative)) = thread_scope
+                .as_ref()
+                .and_then(|scope| scope.resolve_source_alias(&path, self.authorization.dir()))
             {
-                (authorization.dir().clone(), relative.to_path_buf())
+                (authorization, relative)
             } else {
-                roots
+                authorizations
                     .into_iter()
-                    .filter_map(|root| {
-                        path.strip_prefix(root.canonical_path())
-                            .or_else(|_| path.strip_prefix(root.requested_path()))
+                    .filter_map(|authorization| {
+                        path.strip_prefix(authorization.dir().canonical_path())
+                            .or_else(|_| path.strip_prefix(authorization.dir().requested_path()))
                             .ok()
-                            .map(|relative| (root, relative.to_path_buf()))
+                            .map(|relative| (authorization, relative.to_path_buf()))
                     })
-                    .max_by_key(|(root, _)| root.canonical_path().components().count())
+                    .max_by_key(|(authorization, _)| {
+                        authorization.dir().canonical_path().components().count()
+                    })
                     .ok_or_else(|| format!("path is outside the authorized directories: {value}"))?
             }
         } else {
             (primary, path)
         };
+        let root = authorization.dir().clone();
         let absolute = if relative.as_os_str().is_empty() {
             Ok(root.canonical_path().to_path_buf())
         } else if existing {
@@ -234,9 +251,11 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         }
         .map_err(|_| format!("path is outside the authorized directories: {value}"))?;
         Ok(ResolvedFilePath {
-            root,
+            root: authorization.dir().clone(),
+            authorization,
             relative,
             absolute,
+            thread_scope,
         })
     }
 
@@ -714,16 +733,28 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         facts: &ToolExecutionFacts,
     ) -> Result<ActionReviewRequest, CoreError> {
         if call.name.as_str() == "shell-command" {
-            let authorization = facts
-                .execution_identity()
-                .map(|identity| {
-                    self.dir_grants
-                        .thread_dir(identity.thread_id(), DirPermission::ExecuteCommands)
-                })
-                .transpose()
-                .map_err(|error| CoreError::Policy(error.to_string()))?
-                .flatten();
-            return self.shell.prepare_in_dir(call, authorization.as_ref());
+            let identity = facts.execution_identity().ok_or_else(|| {
+                CoreError::Policy("local tools require durable caller identity".into())
+            })?;
+            let request = ShellCommandRequest::from_arguments(
+                &zeta_tools::ToolPayload::FunctionArguments(call.arguments.clone()),
+            )
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+            let resolved = self
+                .resolve(
+                    &request.working_directory().display().to_string(),
+                    true,
+                    Some(identity.session_id()),
+                    Some(identity.thread_id()),
+                    DirPermission::ExecuteCommands,
+                )
+                .map_err(CoreError::Policy)?;
+            return self.shell.prepare_at(
+                call,
+                &resolved.authorization,
+                resolved.relative,
+                resolved.thread_scope.as_ref(),
+            );
         }
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Policy("local tools require durable caller identity".into())
@@ -841,19 +872,26 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         if call.name.as_str() == "shell-command" {
-            let dir_authorization = thread_id
-                .map(|thread_id| {
-                    self.dir_grants
-                        .thread_dir(thread_id, DirPermission::ExecuteCommands)
-                })
-                .transpose()
-                .map_err(|error| CoreError::Execution(error.to_string()))?
-                .flatten();
-            return self.shell.execute_in_dir(
+            let request = ShellCommandRequest::from_arguments(
+                &zeta_tools::ToolPayload::FunctionArguments(call.arguments.clone()),
+            )
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
+            let resolved = self
+                .resolve(
+                    &request.working_directory().display().to_string(),
+                    true,
+                    session_id,
+                    thread_id,
+                    DirPermission::ExecuteCommands,
+                )
+                .map_err(CoreError::Execution)?;
+            return self.shell.execute_at(
                 call,
                 authorization,
                 cancellation,
-                dir_authorization.as_ref(),
+                &resolved.authorization,
+                resolved.relative,
+                resolved.thread_scope.as_ref(),
             );
         }
         cancellation

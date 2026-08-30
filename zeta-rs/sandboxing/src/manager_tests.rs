@@ -1,5 +1,7 @@
 use super::*;
 use crate::{FileSystemAccess, NetworkAccess};
+use crate::{SandboxDirAccess, SandboxDirGrant, SandboxScope};
+use std::fs;
 use std::path::Path;
 use zeta_file_access::Dir;
 
@@ -19,6 +21,38 @@ impl SandboxBackend for RecordingBackend {
         assert!(command.working_directory().is_absolute());
         Ok(PreparedCommand::unrestricted(command))
     }
+}
+
+#[test]
+fn backend_without_scoped_support_fails_closed() {
+    let fixture = tempfile::tempdir().unwrap();
+    let first = fixture.path().join("first");
+    let second = fixture.path().join("second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    let first = Dir::open_local(first).unwrap();
+    let second = Dir::open_local(second).unwrap();
+    let scope = SandboxScope::new(
+        first.clone(),
+        vec![
+            SandboxDirGrant::new(first.clone(), SandboxDirAccess::ReadWrite),
+            SandboxDirGrant::new(second, SandboxDirAccess::ReadWrite),
+        ],
+        Vec::new(),
+    )
+    .unwrap();
+    let manager = SandboxManager::new(first, RecordingBackend);
+    let command = SandboxCommand::new("echo", ["hello"], ".");
+
+    let error = manager
+        .prepare_scoped(
+            &command,
+            SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied),
+            &scope,
+        )
+        .unwrap_err();
+
+    assert!(matches!(error, SandboxError::BackendUnavailable { .. }));
 }
 
 #[test]

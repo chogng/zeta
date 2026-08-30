@@ -13,7 +13,9 @@ fn dir_write_is_a_read_only_root_with_a_writable_dir_overlay() {
     let command = SandboxCommand::new("echo", ["hello"], dir.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
 
-    let prepared = LinuxSandbox::new("/usr/bin/bwrap").prepare_command(&command, policy, &dir);
+    let prepared = LinuxSandbox::new("/usr/bin/bwrap")
+        .prepare_command(&command, policy, &dir)
+        .unwrap();
     let arguments: Vec<_> = prepared
         .arguments()
         .iter()
@@ -47,6 +49,64 @@ fn dir_write_is_a_read_only_root_with_a_writable_dir_overlay() {
         );
     }
     assert!(arguments.iter().any(|argument| argument == "--unshare-net"));
+}
+
+#[test]
+fn multi_root_scope_masks_shared_storage_before_reopening_owned_roots() {
+    let fixture = TestDirectory::new();
+    let first_path = fixture.path.join("first");
+    let second_path = fixture.path.join("second");
+    fs::create_dir_all(&first_path).unwrap();
+    fs::create_dir_all(&second_path).unwrap();
+    let storage = fixture.root();
+    let first = Dir::open_local(first_path).unwrap();
+    let second = Dir::open_local(second_path).unwrap();
+    let scope = SandboxScope::new(
+        first.clone(),
+        vec![
+            zeta_sandboxing::SandboxDirGrant::new(
+                first.clone(),
+                zeta_sandboxing::SandboxDirAccess::ReadWrite,
+            ),
+            zeta_sandboxing::SandboxDirGrant::new(
+                second.clone(),
+                zeta_sandboxing::SandboxDirAccess::ReadWrite,
+            ),
+        ],
+        vec![storage.clone()],
+    )
+    .unwrap();
+    let command = SandboxCommand::new("echo", ["hello"], first.canonical_path());
+    let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
+
+    let prepared = LinuxSandbox::new("/usr/bin/bwrap")
+        .prepare_scoped_command(&command, policy, &scope)
+        .unwrap();
+    let arguments = prepared
+        .arguments()
+        .iter()
+        .map(|argument| argument.to_string_lossy())
+        .collect::<Vec<_>>();
+
+    let storage = storage.canonical_path().to_string_lossy();
+    assert!(
+        arguments
+            .windows(2)
+            .any(|args| args == ["--tmpfs", storage.as_ref()])
+    );
+    assert!(
+        arguments
+            .windows(2)
+            .any(|args| args == ["--remount-ro", storage.as_ref()])
+    );
+    for granted in [first, second] {
+        let granted = granted.canonical_path().to_string_lossy();
+        assert!(
+            arguments
+                .windows(3)
+                .any(|args| { args == ["--bind", granted.as_ref(), granted.as_ref()] })
+        );
+    }
 }
 
 #[test]
