@@ -67,7 +67,7 @@ pub(crate) fn rewind_pane_spec(thread: &Thread) -> RewindPaneSpec {
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search message checkpoints"))
             .with_empty_message("No message checkpoints available"),
-            "Space search  ·  ↑/↓ select  ·  Enter rewind  ·  Esc back",
+            "↑/↓ search/select  ·  Enter rewind  ·  Esc back",
         ),
         actions,
     }

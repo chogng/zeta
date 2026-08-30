@@ -6,6 +6,7 @@ use super::theme_pane_spec;
 use crate::components::list_selection::ListSelectionInputOutcome;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionState;
+use crate::components::pane::PaneStack;
 use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
@@ -80,7 +81,7 @@ fn catalog() -> ThemePickerCatalog {
 #[test]
 fn theme_pane_is_numbered_fixed_and_not_searchable() {
     let view = theme_pane_spec(&catalog());
-    let (model, key_hints) = view.model.into_parts();
+    let (model, key_hints) = view.model.clone().into_parts();
     let mut state = ListSelectionState::new(model);
 
     assert_eq!(state.title(), "Theme");
@@ -119,16 +120,32 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         .map(|span| span.content.as_ref() as &str)
         .collect::<String>();
     assert_eq!(caption, "Syntax palette: Palette 1");
-    let height = crate::components::pane::desired_height(state.desired_height(80));
+    let mut panes = PaneStack::default();
+    panes.push_list_selection(view.model);
+    let pane_view = panes.top_view().unwrap();
+    let pane_height = crate::components::pane::view_desired_height(pane_view, 80);
+    let height = pane_height.saturating_add(1);
     let backend = TestBackend::new(80, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
-            let areas = crate::components::pane::areas(frame.area());
-            crate::components::list_selection::draw(frame, areas.body, &state, test_context());
+            crate::components::pane::draw(
+                frame,
+                ratatui::layout::Rect {
+                    height: pane_height,
+                    ..frame.area()
+                },
+                pane_view,
+                None,
+                test_context(),
+            );
             crate::components::key_hint_bar::draw(
                 frame,
-                areas.key_hint_bar,
+                ratatui::layout::Rect {
+                    y: pane_height,
+                    height: 1,
+                    ..frame.area()
+                },
                 &key_hints,
                 test_context(),
             );
@@ -150,7 +167,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
     assert!(rendered.contains('╌'));
     assert!(!rendered.contains('┌'));
     assert!(!rendered.contains('┘'));
-    assert_eq!(title_row, 2);
+    assert_eq!(title_row, 0);
     assert_eq!(first_choice_row - title_row, 2);
     let custom_row = rows
         .iter()
@@ -169,14 +186,16 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         .position(|row| row.contains("Enter apply"))
         .unwrap();
     assert_eq!(preview_row - custom_row, 3);
-    assert_eq!(key_hint_row - palette_row, 3);
+    assert_eq!(key_hint_row - palette_row, 1);
+    assert_eq!(buffer[(1, 0)].fg, Color::White);
+    assert_eq!(buffer[(1, 0)].bg, Color::Indexed(1));
     assert_eq!(buffer[(2, preview_row as u16)].fg, Color::DarkGray);
 
     assert_eq!(
         state.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
         ListSelectionInputOutcome::Consumed
     );
-    assert!(!state.search_active());
+    assert!(state.search().is_none());
     assert_eq!(state.query(), "");
 }
 

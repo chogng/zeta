@@ -65,7 +65,7 @@ fn session_pane_spec_at(
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search saved sessions"))
             .with_empty_message("No matching sessions"),
-            "Space search  ·  Tab/Shift-Tab tabs  ·  ↑/↓ select  ·  Enter resume  ·  Esc back",
+            "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter resume  ·  Esc back",
         ),
         actions,
     }

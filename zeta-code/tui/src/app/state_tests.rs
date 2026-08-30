@@ -735,6 +735,8 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
         &directories,
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     for _ in 0..15 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
@@ -771,6 +773,8 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -823,6 +827,8 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));

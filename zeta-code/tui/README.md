@@ -35,11 +35,11 @@ Tool、approval policy 或 persistence。
 - `/resume`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入覆盖完整 Session catalog 的唯一 Session Manager，`/subagents` 聚焦常驻 SubagentPane，`/queue` 管理当前 Thread 的 Queue；Manager 保留顶部 Welcome，按 Pinned、Needs input、Working、Ready for review、Failed、Stopped、Completed、Idle 分组，每行以状态图标开头并显示名称、当前操作/问题和状态时长；Approval 和 Query 仍由各自请求直接打开，不提供总括页面；
 - `/status` 使用不改变正常布局高度的 QuickView，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
-- `/help` 向 `ChatComposer` 推入可搜索的 `ListSelection` Pane；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 逐层返回常驻 `ChatInput`；快捷键只由 `/shortcuts` 展示；
+- `/help` 向 `ChatComposer` 推入可搜索的 `ListSelection` Pane；上下键在 item、SearchBox 和 Tab 栏间移动焦点，焦点到 Tab 栏后用左右键切换，Tab/Shift-Tab 也可直接切换；Esc/Ctrl-C 逐层返回保留原草稿的 `ChatInput`；Pane 打开期间自身占用 ChatInput 的可见高度，操作提示在底栏替换 StatusLine；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
   All/Enabled/Disabled/Manage/Errors tabs、数量、搜索和 source-qualified metadata；只有 Manage
   tab 的动作通过 revision-checked `skill/enablement/set` 修改 enablement；该页面是目录管理入口，
-  不直接激活 Skill；
+  不直接激活 Skill；Errors 只读展示 `skills/list` 返回的目录诊断，没有诊断时为 `Errors (0)`；
 - `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
   generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
   API token/OAuth 连接仍由 Desktop Settings 完成；
@@ -72,7 +72,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；Manager 页面改用一行选择/创建 KeyHints；需要明确操作键时由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
+- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；Manager、Pane 和其他需要明确操作键的表面由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
 - 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各 component 拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -88,7 +88,7 @@ Tool、approval policy 或 persistence。
   仍执行 session shutdown 与 terminal RAII cleanup；
 - Ctrl-Z 在 Unix 上先恢复当前启用的鼠标捕获、bracketed paste、alternate screen 和 raw mode，再发送 `SIGTSTP`；`fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
 - raw mode、alternate screen、bracketed paste 与 cursor cleanup；Mouse interactions 开启时在整个 TUI 会话捕获鼠标，关闭时释放捕获并把拖拽文本选择交还终端；
-- 启动时通过 App Server 从 `<profile>/config.toml` 的 `[tui].theme` 读取主题选择，并从 `<profile>/zeta-code/themes/*.json` 读取 TUI 专用用户主题；内置调色板、语义颜色与 TrueColor、ANSI-256、ANSI-16、Monochrome 降级均由本 crate 拥有，不读取 TypeScript token registry、`resources/design-tokens`、共享 `configuration.json` 或 `zeta-theme`；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、`Theme` 标题及其上下各一行间距、编号、
+- 启动时通过 App Server 从 `<profile>/config.toml` 的 `[tui].theme` 读取主题选择，并从 `<profile>/zeta-code/themes/*.json` 读取 TUI 专用用户主题；内置调色板、语义颜色与 TrueColor、ANSI-256、ANSI-16、Monochrome 降级均由本 crate 拥有，不读取 TypeScript token registry、`resources/design-tokens`、共享 `configuration.json` 或 `zeta-theme`；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、挂在顶部分隔线上的反色 `Theme` 标题、编号、
   active 标记、候选 frame highlight、仅带上下较高对比度长节虚线的 diff preview、palette 来源说明和选择动作，Pane
   不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane；成功时以状态圆点、`/theme <id>` 和以 `└─` 归属且与命令文字对齐的 `Theme set to …` transcript 记录执行结果，`/theme <id>` 保留直接切换；
   Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark；查询超时
@@ -290,10 +290,10 @@ src/
 | `features::thread::TranscriptProjection` | crate-private | 用稳定 `TranscriptCellId` 维护有序 `TranscriptCell`，单条 entry 和 Exec 分组采用确定性身份，并为每次可见内容变化分配单调 render revision | 不成为持久化层、不把 TUI 身份写成 Core 领域 ID、不从显示文字推断产品事实 |
 | `features::thread::ExecCell` | crate-private | 按 `ToolCallId` 路由调用、流式输出和结果，执行稳定分组与有界保留 | 不把输出接到“当前命令”、不推测缺失的退出码或时长 |
 | `ChatComposer` | crate-private | 在 caller-owned `ChatInput` 与 stacked Pane 之间路由输入，并按 Start/Queue/Steer 选择提交目标 | 不保存补全、Approval、Query、Turn、Plan 等状态，不执行外部副作用 |
-| `components::pane::PaneStack` + 内部 `Pane` | crate-private | 分配 `PaneId`、管理页面栈，并把四种封闭 `PaneBody` 的输入、高度、绘制、按键提示和命中统一映射为 `PaneOutcome` | 不拥有 feature action、RPC、Tab/Search 等正文专属能力 |
-| `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理 Tab/Shift-Tab 循环切换与鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
-| `components::list_selection::ListSelectionState` | crate-private | 可选 search/preview、Space search mode、过滤索引、候选高亮、选择与循环导航，并组合 `TabListState<ListSelectionGroup>` 切换候选集合 | 只承载真正的列表选择，不执行产品 action |
-| `components::list_selection::view` | crate-private | 绘制 title/search/items/preview/caption/key hints，并把 tab 区域委托给 `components::tab_list::draw` | 只读 `ListSelectionState`，不解释产品 action |
+| `components::pane::PaneStack` + 内部 `Pane` | crate-private | 分配 `PaneId`、管理页面栈，统一绘制顶边和反色标题，并把封闭 `PaneBody` 的输入、高度、按键提示和命中映射为 `PaneOutcome` | 不拥有 feature action、RPC、Tab/Search 等正文专属能力 |
+| `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理 Tab/Shift-Tab 与左右键循环切换、鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
+| `components::list_selection::ListSelectionState` | crate-private | 可选 search/preview、过滤索引、候选高亮、选择，并组合 `TabListState<ListSelectionGroup>` 管理 item/SearchBox/Tab 焦点与候选集合 | 只承载真正的列表选择，不执行产品 action |
+| `components::list_selection::view` | crate-private | 用与 ChatInput 正文对齐的两列状态位绘制 search/items/preview/caption，并把 tab 区域委托给 `components::tab_list::draw` | 只读 `ListSelectionState`，不绘制 Pane 标题或底栏，不解释产品 action |
 | `ChatInput` | private | 草稿、多行编辑、Standard/Vim 局部模式、paste routing、附件、输入历史、原子绑定、Slash/Mention/Skill 补全和结构化提交组装 | 不发现候选数据、不打开 Pane、不执行产品动作、不把 Vim 或补全状态提升到 App |
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 `ChatInput`、不发 RPC、不持久化临时文件 |
@@ -575,7 +575,7 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPane` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 固定一行，SubagentPane 最多四行。StatusLine/KeyHints 与存在内容的 SubagentPane 之间固定保留一行；几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
 
-QuickView 和 ChatInput completion 覆盖现有内容；stacked Pane 仍从 ChatInput 向上占高。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
+QuickView 和 ChatInput completion 覆盖现有内容；stacked Pane 打开时保留 ChatInput 状态但接管其全部可见高度，Pane KeyHints 在底栏替换 StatusLine。Pane 标题挂在顶部分隔线上并使用当前高亮色底、白色字；列表第一个两字符状态列与 ChatInput 正文起点对齐。每个 Thread 的草稿、补全状态、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
 
 正文由有序 `TranscriptCell` 构成，live/final 生命周期不改变单元种类。单条正文单元从 canonical entry identity 确定 `TranscriptCellId`，ExecCell 从分组中的首个 `ToolCallId` 确定，后续分组增长不改身份。ExecCell 按 `ToolCallId`
 接收调用、输出和结果，命令输出按 byte、行数和单行长度有界保留；折叠态、展开态与 QuickView

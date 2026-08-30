@@ -73,8 +73,6 @@ fn list_selection(
             ListSelectionModel::new(title, vec![ListSelectionGroup::new("Themes", items)])
                 .with_activation_mode(ListSelectionActivationMode::Enter)
                 .without_tab_bar()
-                .with_title_top_margin(1)
-                .with_title_bottom_margin(1)
                 .with_initial_selected(selected)
                 .with_empty_message("No color themes available"),
             "↑/↓ select  ·  Enter apply  ·  Esc back",

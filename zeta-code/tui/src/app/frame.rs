@@ -364,6 +364,12 @@ fn draw_status_area(
 }
 
 fn status_area_view(app: &App) -> StatusAreaView<'_> {
+    if let Some(hints) = app.pane_key_hints() {
+        return StatusAreaView::Hint {
+            text: Cow::Borrowed(hints),
+            style: StatusHintStyle::Keys,
+        };
+    }
     if app.session_manager_view().is_some() {
         let hint = if app.session_manager_focused() {
             app.session_manager_hint()

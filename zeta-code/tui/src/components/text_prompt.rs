@@ -12,9 +12,6 @@ use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -68,9 +65,7 @@ impl TextPrompt {
             };
         }
         match self.input.handle_key(key) {
-            SearchBoxInputOutcome::Consumed | SearchBoxInputOutcome::QueryChanged => {
-                TextPromptOutcome::Consumed
-            }
+            SearchBoxInputOutcome::QueryChanged => TextPromptOutcome::Consumed,
             SearchBoxInputOutcome::Ignored => TextPromptOutcome::Consumed,
         }
     }
@@ -92,7 +87,7 @@ impl TextPrompt {
     }
 
     pub(crate) fn desired_height(&self) -> u16 {
-        5
+        4
     }
 }
 
@@ -104,17 +99,9 @@ pub(crate) fn draw(
 ) {
     let content = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Length(3)])
+        .constraints([Constraint::Length(1), Constraint::Length(3)])
         .split(area);
-    frame.render_widget(
-        Paragraph::new(prompt.explanation()).block(
-            Block::default()
-                .title(prompt.title())
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(context.highlight())),
-        ),
-        content[0],
-    );
+    frame.render_widget(Paragraph::new(prompt.explanation()), content[0]);
     search_box::draw(
         frame,
         content[1],

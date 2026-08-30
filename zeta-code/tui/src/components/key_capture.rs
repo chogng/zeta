@@ -21,24 +21,21 @@ impl KeyCapture {
     }
 
     pub(crate) fn desired_height(&self) -> u16 {
-        u16::try_from(self.lines.len().saturating_add(3)).unwrap_or(u16::MAX)
+        u16::try_from(self.lines.len().max(1)).unwrap_or(u16::MAX)
     }
 }
 
 use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 use ratatui::text::Line;
-use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     capture: &KeyCapture,
-    context: RenderContext<'_>,
+    _context: RenderContext<'_>,
 ) {
     frame.render_widget(
         Paragraph::new(
@@ -47,12 +44,6 @@ pub(crate) fn draw(
                 .iter()
                 .map(|line| Line::from(line.as_str()))
                 .collect::<Vec<_>>(),
-        )
-        .block(
-            Block::default()
-                .title(capture.title())
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(context.highlight())),
         ),
         area,
     );

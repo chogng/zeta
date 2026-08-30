@@ -59,7 +59,6 @@ enum PaneBody {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PaneView<'a> {
     body: PaneBodyView<'a>,
-    key_hints: &'a str,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -113,10 +112,7 @@ impl Pane {
             PaneBody::ListSelection(body) => PaneBodyView::ListSelection(body),
             PaneBody::TextPrompt(body) => PaneBodyView::TextPrompt(body),
         };
-        PaneView {
-            body,
-            key_hints: &self.key_hints,
-        }
+        PaneView { body }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> PaneOutcome {
@@ -182,12 +178,16 @@ impl Pane {
 }
 
 impl PaneView<'_> {
-    pub(crate) fn body(&self) -> PaneBodyView<'_> {
-        self.body
+    pub(crate) fn title(&self) -> &str {
+        match self.body {
+            PaneBodyView::KeyCapture(body) => body.title(),
+            PaneBodyView::ListSelection(body) => body.title(),
+            PaneBodyView::TextPrompt(body) => body.title(),
+        }
     }
 
-    pub(crate) fn key_hints(&self) -> &str {
-        self.key_hints
+    pub(crate) fn body(&self) -> PaneBodyView<'_> {
+        self.body
     }
 }
 
@@ -210,6 +210,10 @@ impl PaneStack {
 
     pub(crate) fn top_view(&self) -> Option<PaneView<'_>> {
         self.top().map(Pane::view)
+    }
+
+    pub(crate) fn top_key_hints(&self) -> Option<&str> {
+        self.top().map(|pane| pane.key_hints.as_str())
     }
 
     pub(crate) fn push_key_capture(&mut self, spec: PaneSpec<KeyCapture>) -> PaneId {

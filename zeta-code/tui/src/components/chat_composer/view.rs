@@ -62,16 +62,18 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             }
         }
 
-        chat_input::draw_chat_input(
-            frame,
-            areas.input,
-            self.view.input(),
-            self.view.input_cursor_width(),
-            self.view.input_cursor_line(),
-            self.view.input_prompt(),
-            self.cursor,
-            context,
-        );
+        if !areas.input.is_empty() {
+            chat_input::draw_chat_input(
+                frame,
+                areas.input,
+                self.view.input(),
+                self.view.input_cursor_width(),
+                self.view.input_cursor_line(),
+                self.view.input_prompt(),
+                self.cursor,
+                context,
+            );
+        }
 
         chat_input::draw_completion(
             frame,
@@ -148,7 +150,11 @@ pub(crate) fn areas(
     input_desired_height: u16,
     pane_sizes: &[(ChatComposerPaneKind, u16)],
 ) -> ChatComposerAreas {
-    let input_height = input_desired_height.min(area.height);
+    let input_height = if pane_sizes.is_empty() {
+        input_desired_height.min(area.height)
+    } else {
+        0
+    };
     let input_y = area
         .y
         .saturating_add(area.height)
@@ -161,8 +167,15 @@ pub(crate) fn areas(
     let mut next_y = input_y;
     let mut remaining_height = area.height.saturating_sub(input_height);
     let mut allocated = Vec::with_capacity(pane_sizes.len());
-    for (kind, desired_height) in pane_sizes {
-        let height = (*desired_height).min(remaining_height);
+    for (index, (kind, desired_height)) in pane_sizes.iter().enumerate() {
+        let absorbed_input_height = if index + 1 == pane_sizes.len() {
+            input_desired_height
+        } else {
+            0
+        };
+        let height = desired_height
+            .saturating_add(absorbed_input_height)
+            .min(remaining_height);
         next_y = next_y.saturating_sub(height);
         remaining_height = remaining_height.saturating_sub(height);
         allocated.push(ChatComposerPaneArea {

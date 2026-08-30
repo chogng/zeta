@@ -33,7 +33,6 @@ impl SearchBoxModel {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SearchBoxInputOutcome {
-    Consumed,
     Ignored,
     QueryChanged,
 }
@@ -70,16 +69,16 @@ impl SearchBoxState {
         self.input_active
     }
 
+    pub(crate) fn set_input_active(&mut self, input_active: bool) {
+        self.input_active = input_active;
+    }
+
     pub(crate) fn masked(&self) -> bool {
         self.model.masked
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SearchBoxInputOutcome {
         if !self.input_active {
-            if key.code == KeyCode::Char(' ') {
-                self.input_active = true;
-                return SearchBoxInputOutcome::Consumed;
-            }
             return SearchBoxInputOutcome::Ignored;
         }
 

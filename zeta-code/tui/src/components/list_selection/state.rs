@@ -161,8 +161,6 @@ struct ListSelectionPresentation {
     activation_mode: ListSelectionActivationMode,
     show_tabs: bool,
     initial_selected: usize,
-    title_top_margin: usize,
-    title_bottom_margin: usize,
 }
 
 impl ListSelectionModel {
@@ -180,8 +178,6 @@ impl ListSelectionModel {
                 activation_mode: ListSelectionActivationMode::Enter,
                 show_tabs: true,
                 initial_selected: 0,
-                title_top_margin: 0,
-                title_bottom_margin: 0,
             },
         }
     }
@@ -198,16 +194,6 @@ impl ListSelectionModel {
 
     pub(crate) fn with_initial_selected(mut self, index: usize) -> Self {
         self.presentation.initial_selected = index;
-        self
-    }
-
-    pub(crate) fn with_title_top_margin(mut self, rows: usize) -> Self {
-        self.presentation.title_top_margin = rows;
-        self
-    }
-
-    pub(crate) fn with_title_bottom_margin(mut self, rows: usize) -> Self {
-        self.presentation.title_bottom_margin = rows;
         self
     }
 
@@ -246,6 +232,14 @@ pub(crate) struct ListSelectionState {
     tabs: TabListState<ListSelectionGroup>,
     selected_visible: Option<usize>,
     search: Option<SearchBoxState>,
+    focus: ListSelectionFocus,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ListSelectionFocus {
+    Tabs,
+    Search,
+    Items,
 }
 
 impl ListSelectionState {
@@ -257,6 +251,7 @@ impl ListSelectionState {
             tabs: TabListState::new(tabs),
             selected_visible: None,
             search,
+            focus: ListSelectionFocus::Items,
         };
         state.selected_visible = (state.visible_len() > 0).then_some(
             state
@@ -280,18 +275,16 @@ impl ListSelectionState {
         self.model = model;
         self.tabs.replace_tabs(tabs);
         self.reconcile_selection();
+        if self.focus == ListSelectionFocus::Search && self.search.is_none()
+            || self.focus == ListSelectionFocus::Tabs && !self.show_tabs()
+        {
+            self.focus = ListSelectionFocus::Items;
+        }
+        self.sync_search_focus();
     }
 
     pub(crate) fn title(&self) -> &str {
         &self.model.title
-    }
-
-    pub(crate) fn title_top_margin(&self) -> usize {
-        self.model.title_top_margin
-    }
-
-    pub(crate) fn title_bottom_margin(&self) -> usize {
-        self.model.title_bottom_margin
     }
 
     pub(crate) fn tabs(&self) -> &[ListSelectionGroup] {
@@ -299,6 +292,7 @@ impl ListSelectionState {
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
+        self.set_focus(ListSelectionFocus::Tabs);
         match self.tabs.select(index) {
             TabListInputOutcome::ActiveChanged => {
                 self.select_first_visible();
@@ -313,6 +307,18 @@ impl ListSelectionState {
         &self.tabs
     }
 
+    pub(super) fn tabs_focused(&self) -> bool {
+        self.focus == ListSelectionFocus::Tabs
+    }
+
+    pub(super) fn search_focused(&self) -> bool {
+        self.focus == ListSelectionFocus::Search
+    }
+
+    pub(super) fn items_focused(&self) -> bool {
+        self.focus == ListSelectionFocus::Items
+    }
+
     pub(crate) fn query(&self) -> &str {
         self.search
             .as_ref()
@@ -322,13 +328,6 @@ impl ListSelectionState {
 
     pub(crate) fn show_tabs(&self) -> bool {
         self.model.show_tabs
-    }
-
-    #[cfg(test)]
-    pub(crate) fn search_active(&self) -> bool {
-        self.search
-            .as_ref()
-            .is_some_and(SearchBoxState::input_active)
     }
 
     pub(crate) fn search(&self) -> Option<&SearchBoxState> {
@@ -390,9 +389,7 @@ impl ListSelectionState {
             .and_then(ListSelectionItem::preview)
             .map(ListSelectionPreview::desired_height)
             .unwrap_or_default();
-        2u16.saturating_add(self.title_top_margin().min(u16::MAX as usize) as u16)
-            .saturating_add(self.title_bottom_margin().min(u16::MAX as usize) as u16)
-            .saturating_add(tab_rows)
+        1u16.saturating_add(tab_rows)
             .saturating_add(search_rows)
             .saturating_add(list_rows.min(u16::MAX as usize) as u16)
             .saturating_add(preview_rows.min(u16::MAX as usize) as u16)
@@ -414,9 +411,10 @@ impl ListSelectionState {
             return ListSelectionInputOutcome::Consumed;
         }
 
-        if let Some(search) = self.search.as_mut() {
+        if self.focus == ListSelectionFocus::Search
+            && let Some(search) = self.search.as_mut()
+        {
             match search.handle_key(key) {
-                SearchBoxInputOutcome::Consumed => return ListSelectionInputOutcome::Consumed,
                 SearchBoxInputOutcome::QueryChanged => {
                     self.select_first_visible();
                     return ListSelectionInputOutcome::Consumed;
@@ -426,31 +424,42 @@ impl ListSelectionState {
         }
 
         match key.code {
-            KeyCode::Up => self.move_selection(ListSelectionDirection::Previous),
-            KeyCode::Down => self.move_selection(ListSelectionDirection::Next),
-            KeyCode::Home => self.select_first_visible(),
-            KeyCode::End => self.select_last_visible(),
+            KeyCode::Tab | KeyCode::BackTab if self.show_tabs() => {
+                self.set_focus(ListSelectionFocus::Tabs);
+                self.switch_tab(key);
+            }
+            KeyCode::Up => self.move_focus_up(),
+            KeyCode::Down => self.move_focus_down(),
+            KeyCode::Home => {
+                self.set_focus(ListSelectionFocus::Items);
+                self.select_first_visible();
+            }
+            KeyCode::End => {
+                self.set_focus(ListSelectionFocus::Items);
+                self.select_last_visible();
+            }
             KeyCode::Enter => {
-                if let Some(id) = self.selected_item_id() {
+                if self.focus == ListSelectionFocus::Items
+                    && let Some(id) = self.selected_item_id()
+                {
                     return ListSelectionInputOutcome::Activate(id);
                 }
             }
-            KeyCode::Left | KeyCode::Right
-                if !self
-                    .search
-                    .as_ref()
-                    .is_some_and(SearchBoxState::input_active) =>
-            {
-                if let Some(id) = self.selected_item_id() {
-                    let adjustment = if key.code == KeyCode::Left {
-                        ListSelectionAdjustment::Previous
-                    } else {
-                        ListSelectionAdjustment::Next
-                    };
-                    return ListSelectionInputOutcome::Adjust(id, adjustment);
+            KeyCode::Left | KeyCode::Right => match self.focus {
+                ListSelectionFocus::Tabs => self.switch_tab(key),
+                ListSelectionFocus::Items => {
+                    if let Some(id) = self.selected_item_id() {
+                        let adjustment = if key.code == KeyCode::Left {
+                            ListSelectionAdjustment::Previous
+                        } else {
+                            ListSelectionAdjustment::Next
+                        };
+                        return ListSelectionInputOutcome::Adjust(id, adjustment);
+                    }
                 }
-            }
-            KeyCode::Char(' ') => {
+                ListSelectionFocus::Search => {}
+            },
+            KeyCode::Char(' ') if self.focus == ListSelectionFocus::Items => {
                 if self.model.activation_mode == ListSelectionActivationMode::EnterOrSpace
                     && let Some(id) = self.selected_item_id()
                 {
@@ -460,21 +469,69 @@ impl ListSelectionState {
             _ => {}
         }
 
+        ListSelectionInputOutcome::Consumed
+    }
+
+    pub(crate) fn handle_paste(&mut self, pasted: String) {
+        if self.focus == ListSelectionFocus::Search
+            && let Some(search) = self.search.as_mut()
+            && search.handle_paste(pasted) == SearchBoxInputOutcome::QueryChanged
+        {
+            self.select_first_visible();
+        }
+    }
+
+    fn switch_tab(&mut self, key: KeyEvent) {
         match self.tabs.handle_key(key) {
             TabListInputOutcome::ActiveChanged | TabListInputOutcome::Consumed => {
                 self.select_first_visible();
             }
             TabListInputOutcome::Unhandled => {}
         }
-
-        ListSelectionInputOutcome::Consumed
     }
 
-    pub(crate) fn handle_paste(&mut self, pasted: String) {
-        if let Some(search) = self.search.as_mut()
-            && search.handle_paste(pasted) == SearchBoxInputOutcome::QueryChanged
-        {
-            self.select_first_visible();
+    fn move_focus_up(&mut self) {
+        match self.focus {
+            ListSelectionFocus::Tabs => {}
+            ListSelectionFocus::Search => {
+                if self.show_tabs() {
+                    self.set_focus(ListSelectionFocus::Tabs);
+                }
+            }
+            ListSelectionFocus::Items => {
+                if self.selected_visible.unwrap_or_default() > 0 {
+                    self.move_selection(ListSelectionDirection::Previous);
+                } else if self.search.is_some() {
+                    self.set_focus(ListSelectionFocus::Search);
+                } else if self.show_tabs() {
+                    self.set_focus(ListSelectionFocus::Tabs);
+                }
+            }
+        }
+    }
+
+    fn move_focus_down(&mut self) {
+        match self.focus {
+            ListSelectionFocus::Tabs => {
+                if self.search.is_some() {
+                    self.set_focus(ListSelectionFocus::Search);
+                } else {
+                    self.set_focus(ListSelectionFocus::Items);
+                }
+            }
+            ListSelectionFocus::Search => self.set_focus(ListSelectionFocus::Items),
+            ListSelectionFocus::Items => self.move_selection(ListSelectionDirection::Next),
+        }
+    }
+
+    fn set_focus(&mut self, focus: ListSelectionFocus) {
+        self.focus = focus;
+        self.sync_search_focus();
+    }
+
+    fn sync_search_focus(&mut self) {
+        if let Some(search) = self.search.as_mut() {
+            search.set_input_active(self.focus == ListSelectionFocus::Search);
         }
     }
 
@@ -526,8 +583,8 @@ impl ListSelectionState {
         }
         let selected = self.selected_visible.unwrap_or(0).min(visible_len - 1);
         self.selected_visible = Some(match direction {
-            ListSelectionDirection::Previous => selected.checked_sub(1).unwrap_or(visible_len - 1),
-            ListSelectionDirection::Next => (selected + 1) % visible_len,
+            ListSelectionDirection::Previous => selected.saturating_sub(1),
+            ListSelectionDirection::Next => selected.saturating_add(1).min(visible_len - 1),
         });
     }
 

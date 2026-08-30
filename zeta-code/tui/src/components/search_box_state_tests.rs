@@ -23,13 +23,14 @@ fn search_box_is_visible_but_not_input_active_by_default() {
 }
 
 #[test]
-fn space_enters_input_mode_before_becoming_query_text() {
+fn owner_focus_controls_when_text_changes_the_query() {
     let mut search = search_box();
 
     assert_eq!(
         search.handle_key(key(KeyCode::Char(' '))),
-        SearchBoxInputOutcome::Consumed
+        SearchBoxInputOutcome::Ignored
     );
+    search.set_input_active(true);
     assert!(search.input_active());
     assert_eq!(search.query(), "");
     assert_eq!(
@@ -40,7 +41,7 @@ fn space_enters_input_mode_before_becoming_query_text() {
 }
 
 #[test]
-fn text_and_paste_only_change_an_active_search() {
+fn text_and_paste_only_change_a_focused_search() {
     let mut search = search_box();
 
     assert_eq!(
@@ -51,7 +52,7 @@ fn text_and_paste_only_change_an_active_search() {
         search.handle_paste("status".into()),
         SearchBoxInputOutcome::Ignored
     );
-    search.handle_key(key(KeyCode::Char(' ')));
+    search.set_input_active(true);
     search.handle_key(key(KeyCode::Char('s')));
     search.handle_paste("how\nstatus".into());
 
@@ -61,7 +62,7 @@ fn text_and_paste_only_change_an_active_search() {
 #[test]
 fn escape_is_left_for_the_owning_view() {
     let mut search = search_box();
-    search.handle_key(key(KeyCode::Char(' ')));
+    search.set_input_active(true);
     search.handle_key(key(KeyCode::Char('s')));
 
     assert_eq!(

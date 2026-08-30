@@ -72,7 +72,7 @@ pub(crate) fn model_pane_spec(
                 .with_initial_selected(selected)
                 .with_search(SearchBoxModel::new("Search models"))
                 .with_empty_message("No matching models"),
-            "Space search  ·  ↑/↓ select  ·  Enter apply  ·  Esc back",
+            "↑/↓ search/select  ·  Enter apply  ·  Esc back",
         ),
         actions,
     }

@@ -18,12 +18,11 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
-use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use std::rc::Rc;
 use unicode_width::UnicodeWidthStr;
 
-const ITEM_MARKER_WIDTH: u16 = 2;
+const ITEM_STATE_COLUMN_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
 #[cfg(test)]
@@ -46,49 +45,70 @@ pub(crate) fn draw_with_hover(
     let presentation_highlight = view
         .presentation_highlight()
         .unwrap_or_else(|| context.highlight());
-    frame.render_widget(
-        Block::default()
-            .borders(Borders::TOP)
-            .border_style(Style::default().fg(presentation_highlight)),
-        area,
-    );
     let content = content_area(area);
     if content.is_empty() {
         return;
     }
 
     let tab_height = if view.show_tabs() {
-        tab_list::desired_height(view.tabs(), content.width)
+        tab_list::desired_height(
+            view.tabs(),
+            content.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
+        )
     } else {
         0
     };
     let areas = selection_areas(content, view, tab_height);
 
-    frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            view.title(),
-            Style::default()
-                .fg(presentation_highlight)
-                .add_modifier(Modifier::BOLD),
-        ))),
-        areas[1],
-    );
     if view.show_tabs() {
+        let tab_area = content_after_state_column(areas[1]);
         tab_list::draw(
             frame,
-            areas[3],
+            tab_area,
             view.tab_list(),
             presentation_highlight,
             context,
         );
+        if view.tabs_focused() {
+            draw_focus_marker(
+                frame,
+                Rect::new(
+                    areas[1].x,
+                    areas[1]
+                        .y
+                        .saturating_add(view.tab_list().active_row(tab_area.width)),
+                    ITEM_STATE_COLUMN_WIDTH.min(areas[1].width),
+                    1,
+                ),
+                presentation_highlight,
+            );
+        }
     }
 
     if let Some(search) = view.search() {
-        search_box::draw(frame, areas[4], search, presentation_highlight, context);
+        search_box::draw(
+            frame,
+            content_after_state_column(areas[2]),
+            search,
+            presentation_highlight,
+            context,
+        );
+        if view.search_focused() {
+            draw_focus_marker(
+                frame,
+                Rect::new(
+                    areas[2].x,
+                    areas[2].y.saturating_add(areas[2].height / 2),
+                    ITEM_STATE_COLUMN_WIDTH.min(areas[2].width),
+                    1,
+                ),
+                presentation_highlight,
+            );
+        }
     }
 
     let visible_items = view.visible_items();
-    let rendered_rows = usize::from(areas[5].height).min(visible_items.len());
+    let rendered_rows = usize::from(areas[3].height).min(visible_items.len());
     let first_row = view.first_rendered_row(rendered_rows);
     if visible_items.is_empty() {
         frame.render_widget(
@@ -96,10 +116,10 @@ pub(crate) fn draw_with_hover(
                 view.empty_message(),
                 Style::default().fg(context.muted()),
             ))),
-            areas[5],
+            content_after_state_column(areas[3]),
         );
     } else {
-        let column_layout = ItemColumnLayout::new(areas[5].width, &visible_items);
+        let column_layout = ItemColumnLayout::new(areas[3].width, &visible_items);
         for (row, (index, item)) in visible_items
             .iter()
             .enumerate()
@@ -108,16 +128,17 @@ pub(crate) fn draw_with_hover(
             .enumerate()
         {
             let row_area = Rect::new(
-                areas[5].x,
-                areas[5].y.saturating_add(row as u16),
-                areas[5].width,
+                areas[3].x,
+                areas[3].y.saturating_add(row as u16),
+                areas[3].width,
                 1,
             );
             draw_item(
                 frame,
                 row_area,
                 item,
-                hovered.or(view.selected_visible_index()) == Some(index),
+                hovered == Some(index)
+                    || view.items_focused() && view.selected_visible_index() == Some(index),
                 column_layout,
                 context,
             );
@@ -140,7 +161,7 @@ pub(crate) fn draw_with_hover(
                 Constraint::Length(caption_height),
                 Constraint::Length(bottom_margin),
             ])
-            .split(areas[6]);
+            .split(content_after_state_column(areas[4]));
         let separator_color = preview.separator_color().unwrap_or_else(|| context.muted());
         frame.render_widget(
             Paragraph::new(dashed_rule(
@@ -184,9 +205,11 @@ impl ListSelectionState {
         if content.is_empty() {
             return None;
         }
-        let tab_height = tab_list::desired_height(self.tabs(), content.width);
+        let tab_area = content_after_state_column(content);
+        let tab_height = tab_list::desired_height(self.tabs(), tab_area.width);
         let areas = selection_areas(content, self, tab_height);
-        self.tab_list().index_at(areas[3], column, row)
+        self.tab_list()
+            .index_at(content_after_state_column(areas[1]), column, row)
     }
 
     pub(crate) fn item_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
@@ -195,28 +218,51 @@ impl ListSelectionState {
             return None;
         }
         let tab_height = if self.show_tabs() {
-            tab_list::desired_height(self.tabs(), content.width)
+            tab_list::desired_height(
+                self.tabs(),
+                content.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
+            )
         } else {
             0
         };
         let areas = selection_areas(content, self, tab_height);
         let visible_items = self.visible_items();
-        let rendered_rows = usize::from(areas[5].height).min(visible_items.len());
+        let rendered_rows = usize::from(areas[3].height).min(visible_items.len());
         let first_row = self.first_rendered_row(rendered_rows);
-        if column < areas[5].x
-            || column >= areas[5].right()
-            || row < areas[5].y
-            || row >= areas[5].y.saturating_add(rendered_rows as u16)
+        if column < areas[3].x
+            || column >= areas[3].right()
+            || row < areas[3].y
+            || row >= areas[3].y.saturating_add(rendered_rows as u16)
         {
             return None;
         }
-        let index = first_row.saturating_add(usize::from(row - areas[5].y));
+        let index = first_row.saturating_add(usize::from(row - areas[3].y));
         (index < visible_items.len()).then_some(index)
     }
 }
 
 fn content_area(area: Rect) -> Rect {
-    area.inset(Insets::tlbr(1, 2, 0, 2))
+    area.inset(Insets::tlbr(0, 0, 0, 2))
+}
+
+fn content_after_state_column(area: Rect) -> Rect {
+    Rect {
+        x: area
+            .x
+            .saturating_add(ITEM_STATE_COLUMN_WIDTH.min(area.width)),
+        width: area.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
+        ..area
+    }
+}
+
+fn draw_focus_marker(frame: &mut Frame<'_>, area: Rect, color: Color) {
+    frame.render_widget(
+        Paragraph::new(Span::styled(
+            "❯ ",
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        )),
+        area,
+    );
 }
 
 fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) -> Rc<[Rect]> {
@@ -227,14 +273,10 @@ fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) ->
         .map(|preview| preview.desired_height())
         .unwrap_or_default()
         .min(u16::MAX as usize) as u16;
-    let title_top_margin = view.title_top_margin().min(u16::MAX as usize) as u16;
-    let title_bottom_margin = view.title_bottom_margin().min(u16::MAX as usize) as u16;
     Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(title_top_margin),
             Constraint::Length(1),
-            Constraint::Length(title_bottom_margin),
             Constraint::Length(tab_height),
             Constraint::Length(search_height),
             Constraint::Min(1),
@@ -264,9 +306,9 @@ impl ItemColumnLayout {
             .map(|columns| columns.trailing.width().min(u16::MAX as usize) as u16)
             .max()
             .unwrap_or_default()
-            .min(width.saturating_sub(ITEM_MARKER_WIDTH));
+            .min(width.saturating_sub(ITEM_STATE_COLUMN_WIDTH));
         let width_before_trailing = width
-            .saturating_sub(ITEM_MARKER_WIDTH)
+            .saturating_sub(ITEM_STATE_COLUMN_WIDTH)
             .saturating_sub(trailing_width);
         let gap = ITEM_COLUMN_GAP.min(width_before_trailing / 2);
         let leading_width = desired_leading.min(
@@ -314,14 +356,14 @@ fn draw_item(
         Rect::new(
             area.x,
             area.y,
-            ITEM_MARKER_WIDTH.saturating_add(column_layout.leading_width),
+            ITEM_STATE_COLUMN_WIDTH.saturating_add(column_layout.leading_width),
             1,
         ),
     );
 
     let middle_x = area
         .x
-        .saturating_add(ITEM_MARKER_WIDTH)
+        .saturating_add(ITEM_STATE_COLUMN_WIDTH)
         .saturating_add(column_layout.leading_width)
         .saturating_add(column_layout.gap);
     let trailing_x = area
@@ -373,3 +415,7 @@ fn dashed_rule(width: u16, title: Option<&str>, color: Color) -> Line<'static> {
         Style::default().fg(color),
     ))
 }
+
+#[cfg(test)]
+#[path = "view_tests.rs"]
+mod tests;

@@ -10,22 +10,22 @@ use crate::render::test_context;
 use ratatui::layout::Rect;
 
 #[test]
-fn pane_stacks_above_the_persistent_input() {
+fn pane_consumes_the_persistent_input_area() {
     let entries = [(ChatComposerPaneKind::Stacked, 9)];
     let areas = areas(Rect::new(0, 10, 80, 12), 3, &entries);
 
-    assert_eq!(areas.panes[0].area, Rect::new(0, 10, 80, 9));
-    assert_eq!(areas.input, Rect::new(0, 19, 80, 3));
+    assert_eq!(areas.panes[0].area, Rect::new(0, 10, 80, 12));
+    assert_eq!(areas.input, Rect::new(0, 22, 80, 0));
     assert_eq!(desired_height(3, &entries), 12);
 }
 
 #[test]
-fn input_remains_visible_when_the_pane_is_clamped() {
+fn clamped_pane_keeps_the_input_hidden() {
     let entries = [(ChatComposerPaneKind::Stacked, 99)];
     let areas = areas(Rect::new(0, 10, 80, 7), 3, &entries);
 
-    assert_eq!(areas.panes[0].area, Rect::new(0, 10, 80, 4));
-    assert_eq!(areas.input, Rect::new(0, 14, 80, 3));
+    assert_eq!(areas.panes[0].area, Rect::new(0, 10, 80, 7));
+    assert_eq!(areas.input, Rect::new(0, 17, 80, 0));
 }
 
 #[test]

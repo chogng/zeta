@@ -74,6 +74,8 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
         ListSelectionInputOutcome::Consumed
     );
     assert_eq!(state.active_tab().label(), "Active (1)");
+    state.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    state.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let ListSelectionInputOutcome::Activate(item_id) =
         state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {

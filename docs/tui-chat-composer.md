@@ -17,6 +17,6 @@
 | 普通页面几何 | `app/screen_layout.rs` |
 | `/status` 只读覆盖层 | `components/quick_view.rs` + `features/status/` |
 
-正常页面由 App 按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → SubagentPane` 分配。Query 位于普通输入框上方并保留草稿；Approval 替换普通输入区域；QuickView 和 ChatInput 补全弹层覆盖既有内容。
+正常页面由 App 按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → SubagentPane` 分配。Query 位于普通输入框上方并保留草稿；Approval 替换普通输入区域；stacked Pane 保留 ChatInput 状态但接管其可见高度，并用自己的 KeyHints 替换底栏 StatusLine；QuickView 和 ChatInput 补全弹层覆盖既有内容。
 
 `ChatInput` 支持 Standard/Vim 两种本地编辑方式。补全弹层先处理导航、接受和 Esc；没有弹层时才由 Vim 的 Insert/Normal/Visual 状态或普通编辑器处理。该模式不改变 Pane、正文选择或应用级快捷键。

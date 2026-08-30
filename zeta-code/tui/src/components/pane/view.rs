@@ -1,19 +1,23 @@
 use super::PaneBodyView;
 use super::PaneView;
 use crate::components::key_capture;
-use crate::components::key_hint_bar;
 use crate::components::list_selection;
 use crate::components::text_prompt;
 use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
 
-const BODY_KEY_HINT_GAP: u16 = 2;
-const KEY_HINT_BAR_HEIGHT: u16 = 1;
+const TITLE_BAR_HEIGHT: u16 = 1;
 
 pub(crate) struct PaneAreas {
     pub(crate) body: Rect,
-    pub(crate) key_hint_bar: Rect,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -39,6 +43,28 @@ pub(crate) fn draw(
     context: RenderContext<'_>,
 ) {
     let pane_areas = areas(area);
+    let presentation_highlight = match view.body() {
+        PaneBodyView::ListSelection(body) => body
+            .presentation_highlight()
+            .unwrap_or_else(|| context.highlight()),
+        PaneBodyView::KeyCapture(_) | PaneBodyView::TextPrompt(_) => context.highlight(),
+    };
+    frame.render_widget(
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(presentation_highlight))
+            .title(Line::from(vec![
+                Span::styled("─", Style::default().fg(presentation_highlight)),
+                Span::styled(
+                    format!(" {} ", view.title()),
+                    Style::default()
+                        .fg(Color::White)
+                        .bg(presentation_highlight)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])),
+        area,
+    );
     match view.body() {
         PaneBodyView::KeyCapture(body) => key_capture::draw(frame, pane_areas.body, body, context),
         PaneBodyView::ListSelection(body) => {
@@ -50,7 +76,6 @@ pub(crate) fn draw(
         }
         PaneBodyView::TextPrompt(body) => text_prompt::draw(frame, pane_areas.body, body, context),
     }
-    key_hint_bar::draw(frame, pane_areas.key_hint_bar, view.key_hints(), context);
 }
 
 pub(crate) fn pointer_target_at(
@@ -72,27 +97,15 @@ pub(crate) fn pointer_target_at(
 }
 
 pub(crate) fn desired_height(body_height: u16) -> u16 {
-    body_height
-        .saturating_add(BODY_KEY_HINT_GAP)
-        .saturating_add(KEY_HINT_BAR_HEIGHT)
+    body_height.saturating_add(TITLE_BAR_HEIGHT)
 }
 
 pub(crate) fn areas(area: Rect) -> PaneAreas {
-    let key_hint_bar_height = KEY_HINT_BAR_HEIGHT.min(area.height);
-    let remaining = area.height.saturating_sub(key_hint_bar_height);
-    let gap_height = BODY_KEY_HINT_GAP.min(remaining);
-    let body_height = remaining.saturating_sub(gap_height);
+    let title_bar_height = TITLE_BAR_HEIGHT.min(area.height);
     PaneAreas {
         body: Rect {
-            height: body_height,
-            ..area
-        },
-        key_hint_bar: Rect {
-            y: area
-                .y
-                .saturating_add(area.height)
-                .saturating_sub(key_hint_bar_height),
-            height: key_hint_bar_height,
+            y: area.y.saturating_add(title_bar_height),
+            height: area.height.saturating_sub(title_bar_height),
             ..area
         },
     }

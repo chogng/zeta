@@ -842,6 +842,10 @@ impl App {
             .view(&self.thread_presentations.active().input)
     }
 
+    pub(crate) fn pane_key_hints(&self) -> Option<&str> {
+        self.chat_composer.pane_key_hints()
+    }
+
     pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
         if self.chat_composer.pane_active() {
             return None;

@@ -58,7 +58,7 @@ pub(crate) fn mcp_pane_spec(servers: &BTreeMap<String, McpServerConfigDto>) -> M
             .with_activation_mode(ListSelectionActivationMode::Enter)
             .with_search(SearchBoxModel::new("Search MCP servers"))
             .with_empty_message("No matching MCP servers"),
-            "Space search  ·  Tab/Shift-Tab tabs  ·  ↑/↓ select  ·  Enter toggle  ·  Esc back",
+            "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter toggle  ·  Esc back",
         ),
         actions,
     }

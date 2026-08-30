@@ -79,6 +79,9 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
         .unwrap();
 
     let description_column = column_of(permissions, "Current permission mode");
+    assert_eq!(column_of(permissions, "Permissions"), 2);
+    assert_eq!(column_of(model, "Model"), 2);
+    assert!(permissions.starts_with("❯ "));
     assert_eq!(column_of(model, "Configured model"), description_column);
     assert_eq!(
         column_of(git_branch, "Current Git branch"),

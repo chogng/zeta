@@ -73,7 +73,7 @@ Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Native 的 `/model` 属于 Session model selector；TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `features/theme` 拥有的固定 Zeta Code
 Theme Pane，带 ID 时静默直接切换；Theme Pane 不启用搜索，通用 Selection Pane 则以显式
-`Space search` 进入搜索模式。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
+的上下焦点移动进入 SearchBox。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
 整份合并结果，不按客户端优先级静默覆盖。Skill 与命令使用不同前缀；同名 Skill 仍因来源歧义不进入无来源限定的 `$name` 候选，但不会覆盖或屏蔽 `/name` 命令。
 
 ## Config 边界

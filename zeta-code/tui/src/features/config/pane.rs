@@ -241,7 +241,7 @@ pub(crate) fn config_pane_spec(
             )
             .with_search(SearchBoxModel::new("Search configuration"))
             .with_empty_message("No matching configuration"),
-            "Space search  ·  Tab/Shift-Tab tabs  ·  ←/→ change  ·  Enter select/toggle  ·  ↑/↓ inspect  ·  Esc back",
+            "↑/↓ focus  ·  Tab/Shift-Tab tabs  ·  ←/→ tab/change  ·  Enter select/toggle  ·  Esc back",
         ),
         actions,
     }

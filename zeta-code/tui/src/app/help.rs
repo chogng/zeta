@@ -16,6 +16,6 @@ pub(crate) fn help_pane_spec() -> PaneSpec<ListSelectionModel> {
         ListSelectionModel::new("Help", vec![ListSelectionGroup::new("Commands", commands)])
             .without_tab_bar()
             .with_search(SearchBoxModel::new("Search commands")),
-        "Space search  ·  ↑/↓ select  ·  Esc back",
+        "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Esc back",
     )
 }

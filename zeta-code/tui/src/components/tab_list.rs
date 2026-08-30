@@ -78,10 +78,10 @@ impl<T> TabListState<T> {
         }
         let previous = self.active;
         match key.code {
-            KeyCode::BackTab => {
+            KeyCode::BackTab | KeyCode::Left => {
                 self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
             }
-            KeyCode::Tab => {
+            KeyCode::Tab | KeyCode::Right => {
                 self.active = (self.active + 1) % self.tabs.len();
             }
             _ => return TabListInputOutcome::Unhandled,
@@ -95,6 +95,13 @@ impl<T> TabListState<T> {
 }
 
 impl<T: TabListItem> TabListState<T> {
+    pub(crate) fn active_row(&self, width: u16) -> u16 {
+        tab_positions(&self.tabs, width)
+            .get(self.active)
+            .map(|position| position.row.min(u16::MAX as usize) as u16)
+            .unwrap_or_default()
+    }
+
     pub(crate) fn index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
         if area.width == 0
             || area.height == 0

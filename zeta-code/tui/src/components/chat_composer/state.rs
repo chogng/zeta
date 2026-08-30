@@ -239,6 +239,10 @@ impl ChatComposer {
         !self.panes.is_empty()
     }
 
+    pub(crate) fn pane_key_hints(&self) -> Option<&str> {
+        self.panes.top_key_hints()
+    }
+
     pub(crate) fn activate_completion(
         &mut self,
         input: &mut ChatInput,

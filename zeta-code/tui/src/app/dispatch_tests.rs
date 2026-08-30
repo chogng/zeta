@@ -262,6 +262,8 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let action = app
         .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();

@@ -27,8 +27,7 @@ fn active_empty_search_keeps_the_cursor_clear_of_the_left_border() {
 
 #[test]
 fn active_search_places_the_terminal_cursor_after_the_query() {
-    let mut search = SearchBoxState::new(SearchBoxModel::new("Search"));
-    search.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+    let mut search = SearchBoxState::new(SearchBoxModel::new("Search").initially_active());
     search.handle_key(KeyEvent::new(KeyCode::Char('界'), KeyModifiers::NONE));
     search.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
     let backend = TestBackend::new(30, 3);

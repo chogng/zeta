@@ -30,11 +30,6 @@ fn tab_navigation_switches_tabs_and_wraps() {
 
     assert_eq!(
         tabs.handle_key(key(KeyCode::Right)),
-        TabListInputOutcome::Unhandled
-    );
-    assert_eq!(tabs.active_tab().tab_label(), "Overview");
-    assert_eq!(
-        tabs.handle_key(key(KeyCode::Tab)),
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Providers");
@@ -43,11 +38,16 @@ fn tab_navigation_switches_tabs_and_wraps() {
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Overview");
+    assert_eq!(
+        tabs.handle_key(key(KeyCode::Tab)),
+        TabListInputOutcome::ActiveChanged
+    );
+    assert_eq!(tabs.active_tab().tab_label(), "Providers");
     assert_eq!(
         tabs.handle_key(key(KeyCode::BackTab)),
         TabListInputOutcome::ActiveChanged
     );
-    assert_eq!(tabs.active_tab().tab_label(), "Providers");
+    assert_eq!(tabs.active_tab().tab_label(), "Overview");
 }
 
 #[test]

@@ -116,7 +116,7 @@ fn pane_spec(result: SessionDirListResult) -> DirPaneSpec {
             .without_tab_bar()
             .with_search(SearchBoxModel::new("Search directories"))
             .with_empty_message("No directories"),
-            "Space search  ·  ↑/↓ select  ·  Enter remove  ·  Esc back",
+            "↑/↓ search/select  ·  Enter remove  ·  Esc back",
         ),
         actions,
     }

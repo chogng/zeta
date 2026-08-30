@@ -524,7 +524,7 @@ fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn list_selection_pane_stacks_above_chat_input_and_keeps_history_visible() {
+fn list_selection_pane_replaces_chat_input_and_status_line_with_its_hint_bar() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(
         "Conversation remains visible.".into(),
@@ -537,17 +537,20 @@ fn list_selection_pane_stacks_above_chat_input_and_keeps_history_visible() {
     assert!(rendered.contains("Help"));
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
-    assert!(rendered.contains("Space search"));
+    assert!(rendered.contains("↑/↓ focus"));
     assert!(rendered.contains("Search commands and shortcuts"));
     assert!(rendered.contains("Tab/Shift-Tab tabs"));
     assert!(!rendered.contains("enter send"));
+    assert!(!rendered.contains("ask permissions on"));
     let rows = rendered.lines().collect::<Vec<_>>();
-    let last_item_row = rows.iter().position(|row| row.contains("/model")).unwrap();
-    let status_line_row = rows
+    let hint_bar_row = rows
         .iter()
-        .position(|row| row.contains("Space search"))
+        .position(|row| row.contains("↑/↓ focus"))
         .unwrap();
-    assert_eq!(status_line_row - last_item_row, 3);
+    assert_eq!(hint_bar_row, rows.len() - 1);
+    let layout = super::layout(&app, Rect::new(0, 0, 80, 24));
+    assert!(layout.input.input.is_empty());
+    assert_eq!(layout.input.panes[0].area.bottom(), layout.session.status.y);
 }
 
 #[test]
@@ -556,7 +559,7 @@ fn list_selection_pane_supports_keyboard_tab_switching_and_search() {
     app.update(AppEvent::ListSelectionPaneOpened(help_view()));
 
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
@@ -597,11 +600,15 @@ fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
         .y;
     assert_eq!(first[(2, 1)].fg, Color::Red);
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
+    assert_eq!(first[(1, interaction_y)].fg, Color::White);
+    assert_eq!(first[(1, interaction_y)].bg, Color::Red);
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let second = render_buffer(&app, 80, 24);
     assert_eq!(second[(2, 1)].fg, Color::Green);
     assert_eq!(second[(0, interaction_y)].fg, Color::Green);
+    assert_eq!(second[(1, interaction_y)].fg, Color::White);
+    assert_eq!(second[(1, interaction_y)].bg, Color::Green);
 }
 
 #[test]
@@ -887,7 +894,7 @@ fn help_view() -> PaneSpec<ListSelectionModel> {
             ],
         )
         .with_search(SearchBoxModel::new("Search commands and shortcuts")),
-        "Space search  ·  Tab/Shift-Tab tabs  ·  ↑/↓ select  ·  Esc back",
+        "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Esc back",
     )
 }
 
