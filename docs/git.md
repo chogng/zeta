@@ -35,12 +35,12 @@ Git 查询和修改使用不同 capability：
 
 只读入口要求 `Authorization<InspectRepository>`，修改入口要求 `Authorization<MutateRepository>`。Git query
 继续由 `zeta-git` 以禁用 hooks、非交互和有界进程的 query profile
-执行，不能借此启用 workspace code 或远程操作。
+执行，不能借此启用目录代码或远程操作。
 
 | 用户操作 | 当前行为 | 关键限制 |
 | --- | --- | --- |
-| 查看更改 | 自动读取并投影工作区范围内的 Git 状态 | 当前只支持单工作区 |
-| 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
+| 查看更改 | `git/repositories` 列出已授权目录内的仓库，并逐仓库读取状态 | 重复 worktree 只投影一次 |
+| 暂存或取消暂存 | 使用明确的 `repositoryId` 与仓库相对路径 | 不能越过对应目录 Grant |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
 | 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
 | 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，自动连续合并全部页面，按 lane 分配颜色并显示 local/remote refs；列表本身按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；不会自动 fetch；binary 或超限文件不作为文本 editor 打开 |
@@ -58,7 +58,7 @@ VS Code 的 extension-host 进程布局。
 | Workbench SCM | provider registry、通用 repository/resource/history contract、树与 Graph 展示、Editor 打开语义 | 尚未完成：`ScmViewPane`、`ScmGraphViewPane` 和 `ScmStatusContribution` 仍直接消费 `IGitService` | 需要解耦；新增 VCS 不应修改 SCM View |
 | Desktop Git provider adapter | 把 `IGitService` 的 status、refs、history、changed-file URI 和命令映射为 SCM contract | 尚未抽取为独立 provider；当前映射散落在 SCM consumer | 是前端迁移落点，不拥有 Git RPC 或 Git output parsing |
 | Desktop `IGitService` 与 Electron bridge | client-safe Git domain、连接事件和 typed `git/*` transport | 已实现 | 保持 Git 专属；不改名为 SCM service |
-| App Server `GitRuntime` / `GitService` | Git operation serialization、workspace authority、projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
+| App Server `GitRuntime` / `GitService` | Git operation serialization、`Authorization<InspectRepository>` / `Authorization<MutateRepository>`、repository projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
 | `zeta-git` | Git executable、命令、解析和 failure semantics | 已实现 | 与 SCM UI 无依赖 |
 | `zeta-worktree` | 组合 `zeta-git` inventory、维护 Thread 独占 checkout/目录和持久化绑定 | 已接入 App Server 的 Thread 创建与恢复 | 不拥有 Turn 归属、摘要或提交状态机 |
 
@@ -76,12 +76,12 @@ provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只
 | 层级 | 当前职责 | 不拥有 |
 | --- | --- | --- |
 | Desktop SCM（当前实现） | 分支/upstream、Merge/Staged/Working Tree 分组，提交输入，Git intent，history graph lane/ref/remote presentation，以及按 revision 接收自动状态更新；其中 Git DTO 到 SCM contract 的 provider adapter 尚待抽取 | Git process、porcelain parser、任意 host path authority |
-| Electron bridge | 校验 workspace-relative path、commit message 和空参数，再把 typed Git intent 转发给 App Server | Git domain semantics、最终路径授权 |
-| App Server `GitRuntime` | 串行化 operation、维护 workspace projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
-| App Server `GitService` | 冻结 workspace root、映射 workspace/repository path、持有 Tokio runtime并调用 `zeta-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
+| Electron bridge | 校验 `repositoryId`、仓库相对路径、commit message 和空参数，再把 typed Git intent 转发给 App Server | Git domain semantics、最终路径授权 |
+| App Server `GitRuntime` | 发现目录集合中的仓库，按 repository 串行化 operation、维护 projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
+| App Server `GitService` | 冻结 canonical `Dir` 与 repository projection root、映射目录/仓库路径、持有 Tokio runtime并调用 `zeta-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
-| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、分页 graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
-| `zeta-worktree` | 同仓库 worktree 清单、按 branch/path 解析可用 target、源 workspace nested cwd 映射、Codex Desktop settings 与 `codex-thread.json` 归属 | Git process、Session lifecycle、产品 workspace replacement、选择器 UI |
+| `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、分页 graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、目录产品边界、Renderer state |
+| `zeta-worktree` | 同仓库 worktree 清单、按 branch/path 解析可用 target、来源目录 nested cwd 映射、Codex Desktop settings 与 `codex-thread.json` 归属 | Git process、Session lifecycle、产品目录切换、选择器 UI |
 
 Thread 提交不走普通 `git/commit`。`zeta-turn-changes` 把每个 Turn 封存为不可变 before/after tree，
 `zeta-git::commit_tree_delta` 将这一个 delta 三方重放到目标分支最新 HEAD。目标 checkout 原有 index、
@@ -95,21 +95,21 @@ tree 指纹。事务 journal 位于 Git common directory，进程重启后可以
 
 当前已经实现 status 与常用用户 mutation 的完整纵向切片：
 
-- App Server 在 local composition 收到 workspace root 后声明 `initialize.capabilities.git = true`；
-  Restricted runtime 也创建只读 Git projection，只有 repository mutation 需要 trusted root；
-- `git/status` 不接受路径；mutation 只接受 workspace-relative path，Electron 和 Rust 边界都会
+- App Server 从具备 `InspectRepository` 的目录 Grant 发现仓库，并在存在可用仓库时声明 `initialize.capabilities.git = true`；
+  只有具备 `MutateRepository` 的仓库才能执行 mutation；
+- `git/repositories` 返回稳定、目录相对的 repository identity；`git/status` 与其他 query/mutation 接受可选 `repositoryId`，省略时选择排序后的首个仓库；mutation 只接受 repository-relative path，Electron 和 Rust 边界都会
   拒绝绝对路径、空路径和父目录逃逸；
-- workspace 位于更大 repository 内时，App Server 会过滤 repository 其他目录并把 path 重新映射为
-  workspace-relative；mutation 则把合法 workspace path 映射回 repository-relative path；
+- 授权目录位于更大 repository 内时，App Server 会过滤 repository 其他目录并把 path 重新映射为
+  directory-relative；mutation 则把合法目录 path 映射回 repository-relative path；
 - 每次请求重新打开仓库并读取 authoritative snapshot，不把旧 snapshot 当作 mutation 前提；
 - response 保留 HEAD branch/detached/unborn、upstream ahead/behind、index/worktree 状态、
-  rename original path、conflict 和 submodule flags，并带 repository-relative `workspacePath`、
-  Git runtime `streamInstanceId` 与在该实例内单调递增的 workspace status revision；协议不暴露
+  rename original path、conflict 和 submodule flags，并带 `repositoryId`、directory-relative `path`、
+  Git runtime `streamInstanceId` 与在该实例内单调递增的 repository status revision；协议不暴露
   repository 的 host 绝对路径；
 - `git/stage`、`git/unstage` 和 `git/discardWorktree` 使用明确 path set；discard 只恢复 tracked
   working-tree 内容，不删除 untracked 文件，Desktop 在执行前要求确认；
 - `git/commit` 从 stdin 传入经过校验的 message，并返回新 commit object ID；
-- `git/textDiff` 返回 workspace-scoped status、受限 UTF-8 HEAD/worktree 文本与增删行统计；
+- `git/textDiff` 返回 repository-scoped status、受限 UTF-8 HEAD/worktree 文本与增删行统计；
 - `git/branch/list` 返回现有本地分支，`git/branch/switch` 只接受 branch name，并在 host 重新解析为
   当前仓库真实分支后执行切换；
 - `git/graph` 首次接受有界 `limit`，后续使用不透明 `cursor` 继续同一次 `git log --all --topo-order`
@@ -119,9 +119,9 @@ tree 指纹。事务 journal 位于 Git common directory，进程重启后可以
 - `git/fetch` 执行 all-remotes prune，`git/pull` 仅允许 fast-forward，`git/push` 使用 Git 当前
   upstream/default 配置；所有 remote operation 都是 non-interactive；
 - 每个成功 mutation 都返回新的 `GitStatusResult`，Desktop 立即重绘；首次打开 View 也会自动刷新；
-- App Server 监听 workspace、Git metadata 和 workspace 上层 repository `.gitignore`，以 100ms
+- App Server 监听已授权目录、Git metadata 和目录上层 repository `.gitignore`，以 100ms
   debounce 合并 burst；事件只触发重新查询，不直接成为 Git 状态；
-- 新 snapshot 按 workspace 投影去重；HEAD/change 未改变时 revision 不推进也不发通知，变化时通过
+- 新 snapshot 按 repository 投影去重；HEAD/change 未改变时 revision 不推进也不发通知，变化时通过
   `git/statusChanged` 推送完整 snapshot；
 - SCM View 只在相同 `streamInstanceId` 内按 revision 拒绝旧 notification/response；连接重新
   ready 时主动刷新，并接受新 runtime 从较小 revision 开始的 snapshot。已退役实例的迟到通知
@@ -131,30 +131,30 @@ Native 通过 `zeta-app-server-client` 消费 `git/textDiff`，在 Composer 底�
 `Changes files • +additions -deletions`，并从协议中的原始/修改文本重建 presentation-only
 `DiffDocument`。文件内容读取、replacement 计数和 binary/size skip 规则仍由 `zeta-git` 统一拥有；
 Native 只负责标签、侧栏状态和 MultiDiff presentation。点击 Changes action 会请求刷新 Git
-projection、展开右栏并选择 Changes Pane。cwd picker 使用 `workspacePath` 从当前可信工作区还原
-repository root 快捷项；选择该项会把工作区切换到 repository root，使 Changes 投影覆盖整个仓库。
+projection、展开右栏并选择 Changes Pane。cwd picker 使用当前 Git status 与 Environment cwd 还原
+repository root 快捷项；选择该项会把 cwd 切换到 repository root，使 Changes 投影覆盖整个仓库。
 
 Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/branch/list`，切换通过
 `git/branch/switch`。Git 对脏工作树或 linked worktree 冲突保持权威：失败时不重试、不丢弃改动，
 菜单保留并显示失败；成功后使用新的 typed projection 刷新 Files、HEAD、Changes 和 MultiDiff。
 `app` 不再依赖 `zeta-git`。
 
-`zeta-worktree` 已能从任意 repository nested cwd 列出 primary、linked、locked 与 prunable checkout，并按 branch 或 checkout path 返回可用 workspace target。它还在 Thread 执行前创建持久化的独占受管工作区：Git 使用 detached linked worktree；非 Git 使用内容寻址快照支持的受管目录。失败时 Thread 创建失败，不会转回共享工作区。
+`zeta-worktree` 已能从任意 repository nested cwd 列出 primary、linked、locked 与 prunable checkout，并按 branch 或 checkout path 返回可用 worktree target。它还在 Thread 执行前创建持久化的独占受管目录：Git 使用 detached linked worktree；非 Git 使用内容寻址快照支持的受管目录。失败时 Thread 创建失败，不会转回来源目录。
 
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 
 ## 当前限制
 
-- 当前是单 workspace `GitRuntime`，尚无 multi-repository registry；
+- `GitRuntime` 已支持目录集合中的 multi-repository registry；前端仍需完成通用 SCM provider 抽取；
 - Workbench SCM 尚无通用 provider registry；现有 panes 直接依赖 `IGitService`，因此第二种 VCS
   仍会迫使 UI 分支。这是明确的前端架构债务，不是后端增加 `scm/*` facade 的理由；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
 - App Server 与 Native 已支持切换现有本地分支；系统仍无 branch 新建/删除/重命名、
-  tag/worktree 创建删除 mutation 或 credential prompt；`zeta-worktree` 已解析现有 worktree target，但 App Server 和产品选择器尚未接入 workspace retarget；`zeta code` TUI 只消费 branch/dirty 会话上下文，
+  tag/worktree 创建删除 mutation 或 credential prompt；`zeta-worktree` 已解析现有 worktree target，但 App Server 和产品选择器尚未接入 directory retarget；`zeta code` TUI 只消费 branch/dirty 会话上下文，
   当前产品定义不包含 SCM 管理 UI；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
-- 当前是单 workspace root contract，不是 multi-root repository collection；
+- 当前 registry 来自已授权目录集合，不接受客户端提交任意 repository root；
 - 工作树 change row 尚未接入 editor diff/open workflow；history changed-file row 已支持打开
   commit/parent 文本 Diff。
 - `git/graph` 展示的是本地 repository 中已经存在的 refs；当前不会读取 `~/.config/gh/hosts.yml`，

@@ -52,7 +52,7 @@ bazel test //zeta-rs/file-system-tool:file-system-tool-unit-tests
 
 修改 operation/schema 时同步更新 schema binding tests；修改 foundation trait 时同步检查
 `zeta-file-system` 与 App Server adapter。若本 crate 开始直接调用 `std::fs`、持有
-`WorkspaceRoot`、实现 client RPC 或维护目录展开/刷新状态，即表示 ownership 漂移。
+`Dir`、`Grant` 或目录 confinement、实现 client RPC 或维护目录展开/刷新状态，即表示 ownership 漂移。
 
 ## 当前限制与潜在方向
 

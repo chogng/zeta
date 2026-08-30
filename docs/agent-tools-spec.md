@@ -48,14 +48,14 @@
 **description（模型可见）：**
 
 ```text
-Executes a shell command in the workspace and returns its combined stdout and
+Executes a shell command in an authorized directory and returns its combined stdout and
 stderr with the exit code.
 
 Usage notes:
 - Use dedicated tools instead of shell equivalents when available: read_file
   instead of cat, grep instead of grep/rg, glob instead of find, apply_patch
   or edit instead of sed -i. Dedicated tools produce better results.
-- Commands run with the workspace root as the default working directory; state
+- Commands run with the selected directory as the default working directory; state
   such as environment variables does not persist between calls. Chain dependent
   steps with && in a single call.
 - Long output is truncated from the middle; rerun with a narrower command (e.g.
@@ -80,7 +80,7 @@ Usage notes:
     },
     "working_directory": {
       "type": ["string", "null"],
-      "description": "Absolute path to run in. Defaults to the workspace root. Must stay inside the workspace."
+      "description": "Absolute path to run in. Defaults to the selected directory and must stay inside an authorized directory."
     }
   },
   "required": ["command", "timeout_ms", "working_directory"],
@@ -93,7 +93,7 @@ Usage notes:
 | 情形 | 结果（`is_error: true` 的 Tool Result 文本） |
 | --- | --- |
 | `command` 为空/全空白 | `command must not be empty` |
-| `working_directory` 在 workspace 外 | `working_directory is outside the workspace: {path}. Use a path under {root}` |
+| `working_directory` 在授权目录外 | `working_directory is outside the authorized directories: {path}` |
 | `timeout_ms` 超上限 | `timeout_ms exceeds the maximum of 600000` |
 | 超时 | `command timed out after {n} ms. Partial output:\n{截断输出}` |
 | 非零退出 | 正常结果：输出 + `exit code: {n}`（非零退出不是工具错误） |
@@ -111,7 +111,7 @@ Usage notes:
 **description：**
 
 ```text
-Reads a file from the workspace and returns its content with line numbers.
+Reads a file from an authorized directory and returns its content with line numbers.
 
 Usage notes:
 - Returns at most 2000 lines starting from `offset` (1-based). The last line
@@ -154,7 +154,7 @@ Usage notes:
 | 文件不存在 | `file not found: {path}`；若同目录有相近命名，附 `did you mean {candidate}?` |
 | 是目录 | `{path} is a directory. Use glob to list its files` |
 | 二进制且非图片 | `{path} is a binary file and cannot be displayed as text` |
-| 超出 workspace | `path is outside the workspace: {path}` |
+| 超出授权目录 | `path is outside the authorized directories: {path}` |
 | 空文件 | 正常结果：`(file is empty)` |
 
 **输出格式：**`cat -n` 风格行号 + 制表符；截断尾注
@@ -207,7 +207,7 @@ Usage notes:
 | 情形 | 文案 |
 | --- | --- |
 | 覆盖未读过的既有文件 | `{path} exists but has not been read in this conversation. Read it first, or choose a new path` |
-| 超出 workspace | `path is outside the workspace: {path}` |
+| 超出授权目录 | `path is outside the authorized directories: {path}` |
 | 目标是目录 | `{path} is a directory` |
 
 "读过"判定由 App Server runtime 按 Thread scope 维护成功的 `read_file` 路径和内容 revision；
@@ -291,7 +291,7 @@ Usage notes:
 **description（模型可见）：**
 
 ```text
-Apply a validated workspace patch. Use *** Begin Patch and *** End Patch, with
+Apply a validated dir patch. Use *** Begin Patch and *** End Patch, with
 *** Update File:, *** Add File:, or *** Delete File: operations. Prefer this
 tool for general multi-hunk or multi-file code changes; use edit for one exact
 local replacement.
@@ -347,7 +347,7 @@ Finds files by glob pattern, sorted by most recently modified.
     },
     "path": {
       "type": ["string", "null"],
-      "description": "Directory to search in. Defaults to the workspace root."
+      "description": "Directory to search in. Defaults to the selected directory."
     }
   },
   "required": ["pattern", "path"],
@@ -389,7 +389,7 @@ Searches file contents with a regular expression.
     },
     "path": {
       "type": ["string", "null"],
-      "description": "File or directory to search. Defaults to the workspace root."
+      "description": "File or directory to search. Defaults to the selected directory."
     },
     "glob": {
       "type": ["string", "null"],
@@ -407,7 +407,7 @@ Searches file contents with a regular expression.
 
 **执行选择：**`ripgrep` 直接运行冻结的 `rg`；`fastRegex` 从正则提取必需文字，交叉稀疏 n-gram posting 后读取当前候选文件执行精确验证。开关只影响 Agent `grep`，不影响 `glob` 或编辑器 Search；一次 Tool generation 内不会根据查询内容暗中切换执行方式。无法提取至少三字节必需文字时，`fastRegex` 精确扫描全部已索引文件；性能基准把这种全量扫描也列为必须快于等价 `rg` 输出的底线。
 
-**错误文案：**正则非法 → 返回所选执行方式的稳定错误；无命中 → 正常结果 `no matches`。两种方式都遵守工作区 ignore 规则。
+**错误文案：**正则非法 → 返回所选执行方式的稳定错误；无命中 → 正常结果 `no matches`。两种方式都遵守目录 ignore 规则。
 
 ## 9. update_plan
 
@@ -517,7 +517,7 @@ digest 缺失/伪造或 catalog 已刷新时拒绝并要求重新 `search_tools`
 
 | | |
 | --- | --- |
-| 状态 | 已接入可信 Workspace 的 App Server Tool composition |
+| 状态 | 已接入具备有效目录 Grant 的 App Server Tool composition |
 | 执行 | `MultiAgentCoordinator` + 独立 child Thread；不经 MCP 自调用 |
 | 权限 | child 只获得 spawn 时冻结的 tool name ceiling 与 active Skill digest |
 
@@ -525,7 +525,7 @@ digest 缺失/伪造或 catalog 已刷新时拒绝并要求重新 `search_tools`
 
 创建一个独立历史的 child Agent Thread，立即返回 `delegation_id`、`child_thread_id`、
 `child_turn_id` 和冻结的 Agent definition reference。参数为完整 `task: string`、可空短标签
-`name`、可空 `agent` 和可空 `context`。`agent` 可显式指定 Workspace definition；省略时只在
+`name`、可空 `agent` 和可空 `context`。`agent` 可显式指定 Directory definition；省略时只在
 metadata 产生唯一匹配时自动选择，否则使用内置 general role。`context`
 支持 `fresh`、`full`、`lastTurns`、`checkpointAndTail`、`selected`；选中内容在 spawn 时固定
 source sequence、物化内容与 digest，再随 immutable seed 注入。definition 的 catalog generation、
@@ -586,7 +586,7 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
   after a narrow patch context mismatch. Extend old_string with surrounding
   lines when the match is ambiguous.
 - Use write_file only for new files or full rewrites of files you have read.
-- If apply_patch reports an unknown outcome, inspect the current workspace
+- If apply_patch reports an unknown outcome, inspect the current working tree
   state before proceeding. Never replay the same patch blindly.
 ```
 

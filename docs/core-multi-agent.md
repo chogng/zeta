@@ -5,7 +5,7 @@
 > exact-once delivery、结构性 tree budget，以及 App Server 的 `spawn_agent`、
 > `send_agent_message`、`wait_agent` 工具已落地。`Selected/ForkedPrefix` 在 spawn 时物化并进入
 > immutable seed；All/Any/Quorum join、向下 cancellation tree 与 canonical Agent-tree projection
-> 均使用 durable Thread/Session facts。Workspace Agent definition 的显式/唯一 metadata 自动选择会
+> 均使用 durable Thread/Session facts。Directory Agent definition 的显式/唯一 metadata 自动选择会
 > 冻结 generation、digest、reason 与 capability ceiling；Desktop 只消费 canonical tree 并可精确
 > 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
 > mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结

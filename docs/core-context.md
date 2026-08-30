@@ -241,7 +241,7 @@ ContextManager/Planner 完成。
 
 提示词按功能归属：`zeta-models-manager` 拥有所选模型的基础 instructions，Core Goal 和动态 context fragment 留在对应生命周期模块，`zeta-auto-review` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`zeta-prompts`](../zeta-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
 
-App Server 在接受普通 Turn 前把 `zeta-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 Workspace、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
+App Server 在接受普通 Turn 前把 `zeta-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 Directory、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 
 当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
 provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
@@ -257,7 +257,7 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 ```text
 1. System
 2. Product
-3. Workspace
+3. Directory
 4. Skill
 ```
 
@@ -548,7 +548,7 @@ zeta-rs/
 选择和组装算法；`context_manager` 保存 per-loaded-Thread 协调逻辑。Core 两个模块默认 private。
 `ContextSource` 是 Core 的通用可选 evidence port：host 可在 Turn 第一次 model invocation 前返回带
 provenance 的 bounded evidence。Core 对已知窗口最多分配 input budget 的 1/8，并把内容作为 user-level
-`trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/workspace instructions。普通来源
+`trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/directory instructions。普通来源
 失败降级为空；Turn cancellation 继续传播。Codebase 自动召回默认关闭，由产品设置显式开启。
 只有确有外部消费者时才从 `lib.rs` 导出窄 value/port，不能公开 cache、baseline、window mutable
 state 或 ContextManager 自身。

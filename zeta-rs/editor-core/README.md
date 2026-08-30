@@ -2,7 +2,7 @@
 
 > 本 README 拥有纯 Rust 编辑器核心的实现契约。跨运行时的分层、前端服务边界与迁移阶段由
 > [`docs/editor-core.md`](../../docs/editor-core.md) 规范；Native presentation 的当前能力见
-> [`zeta-editor`](../editor/README.md)。
+> [`zeta-editor`](../../app/editor/README.md)。
 
 `zeta-editor-core` 拥有 revision-bound 的文本事务、多选区值、UTF-16 offset 边界与有界 undo/redo。
 它不依赖 `zui`、`zeta-ui`、Native、DOM、文件、语法解析器或 IPC transport。当前真实消费者是 Native

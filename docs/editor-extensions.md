@@ -95,8 +95,7 @@ Legacy Plugin v1 的 `editorExtensions[]` 仍可作为本地兼容来源。Marke
 `zeta/editor-extensions.json` consumer sidecar 把声明绑定到同 digest 内的 exact `executable`
 capability；没有独立 `MarketplaceEditorExtensionAdmission` grant 时 deployment 不会被接纳或启动。
 Admission authority 必须为 policy commit 推进 generation，并在可变时发布变更；Host 据此撤销旧
-fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定 active Workspace
-trust，随后把绝对 executable 交给能够实施 sandbox 与 hard limits 的平台 launcher。默认安全策略缺少
+fleet 并重新评估 grant。两条来源都只发布规范化 deployment 与 live authority，不启动进程。Host adapter 还必须绑定当前 Environment 的显式 source 与目录 Grant，随后把绝对 executable 交给能够实施 sandbox 与 hard limits 的平台 launcher。默认安全策略缺少
 该 launcher 时失败关闭，不能自动改用可信开发 launcher。
 
 一个 `ExtensionHostSupervisor` 只监管一个扩展程序。它先取得 live activation lease，再 spawn、执行
@@ -201,7 +200,7 @@ Renderer 不能把任意 Host RPC method 直接透传给扩展进程。
 Language Provider 调用会把当前 immutable editor snapshot 的完整 normalized text、version、language ID、
 可选 resource URI 及本次 position/range/options 交给扩展程序；因此 grant 该 capability 必须被产品明确
 解释为“允许 broker 披露当前参与调用的文档内容”，但不等于任意工作区文件读取。传输仍受 512 KiB
-payload ceiling、Workspace/source live authority、activation generation 和 incarnation fence 约束，超限
+payload ceiling、Directory/source live authority、activation generation 和 incarnation fence 约束，超限
 请求拒绝。
 Frontend v1 当前只投影 completion、Parameter Hints、hover、formatting、Inlay Hints 和 Linked Editing；
 Host vocabulary 中虽有 definition、references、rename、code action 等 operation，尚无严格 Workbench
@@ -234,12 +233,11 @@ identity，但声明式消费不等于 executable grant；所有来源都只能�
 
 ### 5.2 可执行进程
 
-可执行扩展必须同时满足三层 gate：来源的 exact package/digest + enable/grant lease、active Workspace
-trust，以及平台 launcher 对 sandbox/hard limits 的实际实施。Marketplace 来源额外同时持有 Manager
+可执行扩展必须同时满足三层 gate：来源的 exact package/digest + enable/grant lease、当前 Environment 的有效 source/目录 Grant，以及平台 launcher 对 sandbox/hard limits 的实际实施。Marketplace 来源额外同时持有 Manager
 capability lease 与产品 admission lease；admission generation/notification 负责使 grant/revoke 触发
 fleet replacement。任一 gate 失效都拒绝新 activation
 和 invocation；App Server 还须取消 connection-owned invocation，并在 disable/update/uninstall 或
-Workspace 切换时停止旧进程。
+Environment 或有效目录集合切换时停止旧进程。
 
 默认 process/protocol limits 为 1 MiB frame、512 KiB payload、256 registrations、32 个普通和 8 个
 control in-flight requests、256 KiB stderr、4096 个 / 512 KiB queued/retained Output events、10 秒
@@ -291,7 +289,7 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 | Marketplace executable consumer adapter 与独立 admission | 已实现 | exact sidecar/executable binding、双 lease 与 deferred uninstall tests |
 | Host RPC v1、独立进程监管、取消、配额、restart | 已实现 | `zeta-editor-extension-host` standalone tests |
 | 扩展命名 Output event stream | 已实现 | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests |
-| App Server Host fleet、Workspace gate、async invoke/cancel/read | 已实现 | exact operation broker、连接配额/TTL、退役取消与 changed notification |
+| App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现 | exact operation broker、连接配额/TTL、退役取消与 changed notification |
 | Workbench Commands/Language/Tasks/Testing bridge | 已实现（窄契约） | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile |
 | Workbench executable Debug bridge | 尚未完成 | registration 可见并产生诊断，但没有异步 Host-broker DAP session seam |
 | 生产第三方 platform launcher | 尚未完成 | 无 launcher 时 capability=false；可信开发 launcher 不计生产支持 |
@@ -329,7 +327,7 @@ Node/VS Code compatibility 若未来立项，仍是独立产品项目：需要 N
 - 静态扩展资源读取绑定精确目录代次；刷新不能使旧描述读取到新 bytes。
 - 内置静态产品包不能被可变 profile 包以同 ID 静默覆盖。
 - 安装、启用或 manifest validation 都不等于 execution authority；每次 activation/invocation 复核 live
-  source admission/artifact lease + Workspace gate。
+  source admission/artifact lease + 目录 Grant gate。
 - 生产第三方扩展必须逐进程隔离并实施 hard limits；缺失实施者时失败关闭。
 - 请求、响应和 registration 同时绑定 extension、incarnation 与 activation generation；恢复不重用旧
   identity 或 lease。

@@ -39,7 +39,7 @@ MCP 客户端把外部 Server 的工具转换成 Zeta 的工具目录；方向�
 | Marketplace Plugin bundle 携带 MCP/Connector | 同一次安装按 capability 分给 MCP 与 Connector consumer | 不进入第二套 Plugin runtime |
 | Legacy Plugin 独立声明 MCP Server | 兼容 authority 只贡献声明，经激活和策略解析后由 MCP runtime 启动 | Plugin 启用不等于连接或授权 |
 | Connector 需要外部账号 | Connector connected 后发布 ready MCP binding | Connector 不启动 MCP session |
-| 用户或 Workspace 直接配置 MCP Server | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime | 不必须先安装 Plugin 或创建 Connector |
+| 用户或 Directory 直接配置 MCP Server | 配置经凭据、grant 和 policy 解析后直接进入 MCP runtime | 不必须先安装 Plugin 或创建 Connector |
 
 ## 1. 结论
 
@@ -73,7 +73,7 @@ Marketplace、Plugin、Connector 与 MCP 的 canonical 关系由 [`marketplace-i
 
 ```mermaid
 flowchart TD
-    U["User / Workspace MCP configuration"] --> R["MCP runtime"]
+    U["User / Directory MCP configuration"] --> R["MCP runtime"]
     P["Marketplace MCP capability"] --> R
     L["Legacy Plugin MCP contribution"] --> R
     C["Connected Connector"] --> B["Ready MCP binding"]
@@ -149,7 +149,7 @@ operation。[官方架构](https://modelcontextprotocol.io/specification/2025-11
 | Tools | Current 原始 list/call | Current catalog/binding/Core approval/durable result；Config/Connector hot rebuild Current |
 | Resources | 尚未暴露 | 首发只做 list/read，显式进入 context |
 | Prompts | 尚未暴露 | 首发只做 list/get，不当作 Skill |
-| Roots | 尚未暴露 | 只暴露已授权 workspace root，不能替代 OS sandbox |
+| Roots | 尚未暴露 | 只暴露已授权目录，不能替代 OS sandbox |
 | Sampling | 尚未暴露 | 默认不声明；需独立预算、隐私和审批 |
 | Elicitation | Current host callback | Current form → durable Core interaction；URL/array/multiselect/跨重启 remote recovery 不支持 |
 | Tasks | 尚未暴露 | experimental，不等同 Zeta Turn/Task |
@@ -185,7 +185,7 @@ form elicitation，以及通用 OAuth metadata discovery 和 concrete provider a
 
 - Marketplace/Plugin package 下载、签名、解压、版本解析、enable/disable authority；
 - API token、OAuth refresh token、client secret 的持久化；
-- workspace、filesystem 或 network 的最终授权策略；
+- directory、filesystem 或 network 的最终授权策略；
 - model selection、token budget、Core ContextAssembler 或 Agent loop；
 - tool approval、side-effect classification 的最终判定；
 - Thread event append、reducer、unknown-outcome recovery decision；
@@ -205,7 +205,7 @@ flowchart TD
     P["Marketplace Manager：verified MCP/Connector capabilities"] --> A["App Server composition"]
     L["legacy zeta-plugins：validated MCP declarations"] --> A
     C["zeta-connectors：ready runtime bindings"] --> A
-    U["User / Workspace MCP configuration"] --> A
+    U["User / Directory MCP configuration"] --> A
     H["Credential materializer + process/HTTP host adapters"] --> A
     A --> M["zeta-mcp：multi-server runtime"]
     M --> R["zeta-rmcp-client：protocol session / transport"]
@@ -226,7 +226,7 @@ flowchart TD
 - Marketplace Manager 只拥有 artifact/install/lease；App Server adapter 产出 server declaration；两者都不持有 live MCP session；
 - legacy Plugin authority 只产出经过验证的 server declaration，不持有 live MCP session；
 - Connector runtime 只产出 generation-bound ready binding，不持有 live MCP session 或 Tool registry；
-- App Server 注入 credential materializer、process launcher、HTTP transport、workspace roots 和
+- App Server 注入 credential materializer、process launcher、HTTP transport、directory roots 和
   policy，不能让 `zeta-mcp` 自己扫描全局环境；
 - RMCP wire DTO 停在 `zeta-rmcp-client` / `zeta-mcp` adapter boundary，不进入
   `zeta-protocol`、Core 或 App Server protocol。
@@ -272,7 +272,7 @@ pub enum McpCredentialBinding {
 }
 ```
 
-Plugin 贡献的 logical ID 解析为带 Plugin namespace 的 `McpServerId`；用户配置与 workspace 配置
+Plugin 贡献的 logical ID 解析为带 Plugin namespace 的 `McpServerId`；用户配置与 directory 配置
 使用各自 source namespace。不同来源不能通过同名静默覆盖。
 
 ### 6.2 远程 primitive 身份
@@ -384,7 +384,7 @@ stdio supervisor 负责：
 - 终止时处理完整 child process tree。
 
 Plugin manifest 中的 command/args/env 只是请求；真正启动前必须经过 install trust、runtime grant
-和 workspace policy。`PATH` 查找结果必须在 activation snapshot 中冻结，不能每次调用重新解析。
+和 directory policy。`PATH` 查找结果必须在 activation snapshot 中冻结，不能每次调用重新解析。
 
 ### 8.2 Streamable HTTP
 
@@ -459,13 +459,13 @@ MCP Prompt 是 user-controlled、带参数的远端模板：
 
 ### 10.1 根目录
 
-Roots 只告诉 server 当前 workspace 边界。它不是 sandbox，也不证明 server process 无法读取
+Roots 只告诉 server 当前已授权目录边界。它不是 sandbox，也不证明 server process 无法读取
 root 之外的文件。
 
-- root 来自 host 授权后的 workspace snapshot；
+- root 来自 host 授权后的 `Dir` 集合；
 - 只发送 canonicalized `file://` URI；
 - path traversal、symlink policy 和 root 可达性由 host 校验；
-- workspace 切换后发送 list-changed，并使旧 root grant 失效；
+- `Dir` 集合切换后发送 list-changed，并使旧 root grant 失效；
 - local MCP process 仍必须使用 OS/process sandbox；
 - remote MCP server 只得到 root metadata，不自动得到文件内容。
 
@@ -593,7 +593,7 @@ server definition
 enabled scope
 transport declaration
 credential reference
-workspace/root grant
+Dir/root grant
 requested runtime permissions
 local tool policy override
 ```
@@ -710,7 +710,7 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 - resource/prompt list/read/get；
 - context provenance、size/token budget 和 Resource store；
-- workspace root projection 与 list-changed；
+- `Dir` root projection 与 list-changed；
 - Desktop/CLI/TUI 的只读 catalog 与显式选择入口。
 
 完成条件：任何 MCP 内容都不会在未选择时自动进入模型 context。
@@ -736,7 +736,7 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 ## 17. 验证门
 
-除 workspace 常规 `fmt/clippy/test` 外，MCP 必须覆盖：
+除 working-tree 常规 `fmt/clippy/test` 外，MCP 必须覆盖：
 
 - revision negotiation 和 capability misuse；
 - stdio stdout 污染、oversized frame、stderr flood、child crash；

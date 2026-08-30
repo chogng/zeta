@@ -9,8 +9,8 @@
 
 | 执行请求 | 系统行为 | 当前边界 |
 | --- | --- | --- |
-| 工作区只读且禁止网络 | 选择当前平台的只读沙箱后端 | macOS、Linux 已接入；Windows 仍需真实平台验收 |
-| 工作区可写且禁止网络 | 只开放工作区写入，继续限制其他路径和网络 | 各平台按自身机制翻译相同共享策略 |
+| 目录只读且禁止网络 | 选择当前平台的只读沙箱后端 | macOS、Linux 已接入；Windows 仍需真实平台验收 |
+| 目录可写且禁止网络 | 只开放已授权目录写入，继续限制其他路径和网络 | 各平台按自身机制翻译相同共享策略 |
 | 完全文件访问且允许网络 | 共享策略允许直接执行，不伪装成受限沙箱 | 仍须先经过权限决定 |
 | 后端缺失或无法表达策略 | 失败即关闭，不降级为普通进程 | 返回明确的后端不可用错误 |
 | 沙箱拒绝动作 | 返回结构化执行证据 | 是否重试或扩权由 Core 与权限系统决定 |
@@ -33,7 +33,7 @@ flowchart TD
     sandboxing --> windows["Windows AppContainer 后端<br/><code>zeta-windows-sandbox</code>"]
 ```
 
-沙箱管理器 `SandboxManager` 只调度沙箱后端：它验证工作区相对路径、解析当前平台的策略，并生成
+沙箱管理器 `SandboxManager` 只调度沙箱后端：它在 canonical `Dir` 内解析命令工作目录、解析当前平台的策略，并生成
 可执行的主机启动计划。它不负责工具并行计划、用户批准、重试、确定性结果排序或工具调用与结果的
 持久化；这些仍属于 Core 的工具调度器 `ToolScheduler`。动作审查的风险判断见
 [`auto-review.md`](auto-review.md)；授权、用户批准与最终执行决定的整体语义见
@@ -65,9 +65,9 @@ flowchart TD
 - `SandboxPolicy`、`FileSystemAccess`、`NetworkAccess`；
 - `SandboxCommand` 与 `PreparedCommand`；
 - 沙箱后端契约 `SandboxBackend`；
-- `SandboxManager` 的工作区路径验证与后端分派；
+- `SandboxManager` 的目录路径验证与后端分派；
 - 当前 macOS Seatbelt 命令转换；
-- 现有工作区根目录约束 `WorkspaceRoot`。
+- `zeta-file-access::Dir` 提供的 canonical 目录边界。
 
 macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平台选择与共享策略紧密。
 当 macOS 原生实现需要独立 FFI、辅助程序、较重依赖，或接近 500 行代码时，再提取为
@@ -78,7 +78,7 @@ macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平�
 `zeta-linux-sandbox` 决定 Linux 下如何落实共享策略，并通过私有的类型化参数构造器生成 Bubblewrap 调用：
 
 - 非完全访问 `FullAccess` 的文件系统默认从只读根目录开始；
-- 工作区可写 `WorkspaceWrite` 通过更具体的读写挂载重新开放工作区；
+- 目录可写 `DirectoryWrite` 通过更具体的读写挂载重新开放已授权目录；
 - 禁止网络时使用独立网络命名空间；
 - 添加用户与进程命名空间、新建的 `/proc`、`/dev`、会话和父进程退出约束；
 - Bubblewrap 不可用或不支持所需能力时必须返回错误。
@@ -100,10 +100,10 @@ macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平�
 - Windows 辅助程序与启动器的生命周期和平台诊断。
 
 当前 `zeta-command-runner.exe` 先调用 `zeta-windows-sandbox-setup.exe` 创建或复用按
-规范工作区与读写模式隔离的 AppContainer 配置文件，为工作区和冻结的内部可执行文件安装 ACL，
+规范目录与读写模式隔离的 AppContainer 配置文件，为已授权目录和冻结的内部可执行文件安装 ACL，
 再以零能力的 AppContainer 令牌启动进程。零网络能力负责断网，配置文件 SID 与 ACL 负责文件
-访问；子进程限制与单进程 Job Object 补充进程树控制。当前只支持只读或工作区可写模式
-`ReadOnly` / `WorkspaceWrite` 与禁止网络 `NetworkDenied` 的组合；其他受限组合必须失败即关闭。
+访问；子进程限制与单进程 Job Object 补充进程树控制。当前只支持只读或目录可写模式
+`ReadOnly` / `DirectoryWrite` 与禁止网络 `Denied` 的组合；其他受限组合必须失败即关闭。
 
 这不是 Codex 专用本地用户与 WFP 防火墙实现的复制。Zeta v1 选择 Windows 原生 AppContainer
 边界，并明确记录 ACL 是持久化的文件系统元数据。辅助程序已接入包、资源发现、App Server 与
@@ -144,9 +144,9 @@ zeta-install-context → zeta-sandboxing / 平台沙箱 / shell-command
 
 ## 4. 安全不变量
 
-- 非“完全访问 + 允许网络” `FullAccess + AllowedNetwork` 请求必须由平台沙箱强制执行；
+- 非“完全访问 + 允许网络” `FullAccess + Allowed` 请求必须由平台沙箱强制执行；
 - 后端缺失、版本过旧或策略无法完整表达时必须失败即关闭；
-- 工作区根目录约束 `WorkspaceRoot` 不是操作系统沙箱，不能作为降级方案；
+- `Dir` 的目录 containment 不是操作系统沙箱，不能作为降级方案；
 - 模型或工具参数不能选择后端、扩大挂载、授予网络或要求降级；
 - 命令与 `bwrap` 参数始终以结构化参数数组传递；
 - 符号链接、不存在的写入路径、嵌套拒绝和只读例外必须在进入真实执行前处理；

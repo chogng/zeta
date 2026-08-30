@@ -1,6 +1,6 @@
 # Chat Session Inspector 与 Turn 变更账本
 
-> 状态：已实现。本文描述 Chat 内 Session Inspector、Thread 工作区、Turn ChangeSet 和异步提交的当前契约。
+> 状态：已实现。本文描述 Chat 内 Session Inspector、Thread 目录绑定、Turn ChangeSet 和异步提交的当前契约。
 > Session、Thread、Turn 的基础语义见 [`protocol.md`](protocol.md)，接口见
 > [`zeta-app-server-api.md`](zeta-app-server-api.md)，Git 行为见 [`git.md`](git.md)。
 
@@ -30,23 +30,23 @@ Workbench 通用 Agent Sidebar 不受影响。
 | Goal 自动续跑 | 创建新的 Turn |
 | shell Turn | 独立 Turn；读取范围按不透明操作保守处理 |
 | failed / interrupted | 仍封存 ChangeSet，界面显示 terminal 警告 |
-| 子代理 spawn | 子 Thread 从 spawn 时父 Thread 工作区检查点创建独立工作区 |
+| 子代理 spawn | 子 Thread 从 spawn 时父 Thread 目录检查点创建独立目录 |
 | Fork | 从 `parentSequence` 对应的最后一个封存检查点创建 |
 | Rewind | 从目标 Turn 的 before 检查点创建 |
 
 Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具；Turn terminal event、Hook 和执行任务
 结束后才封存 after 检查点。封存失败时现场保留，提交不可用。
 
-## Thread 工作区
+## Thread 目录绑定
 
-每个 Thread 在允许执行前必须先获得持久化的独立工作区绑定：
+每个 Thread 在允许执行前必须先获得持久化的独立目录绑定：
 
-- Git 工作区使用受管 linked worktree，Thread checkout 与提交目标分支分离；创建时绑定的目标分支不会随主界面切换而变化。
-- 非 Git 工作区使用受管目录和内容寻址的 manifest/blob 快照；可以查看、读取和丢弃变更，但不能提交，也不会初始化 Git。
-- 主工作区创建 Thread 时的已有内容成为不可变初始 baseline，不属于任何 Turn。
-- Session 结束后，只有该 Thread 的 ChangeSet 全部 committed 或 discarded，工作区才具备清理资格。
+- Git 目录使用受管 linked worktree，Thread checkout 与提交目标分支分离；创建时绑定的目标分支不会随主界面切换而变化。
+- 非 Git 目录使用受管目录和内容寻址的 manifest/blob 快照；可以查看、读取和丢弃变更，但不能提交，也不会初始化 Git。
+- 来源目录创建 Thread 时的已有内容成为不可变初始 baseline，不属于任何 Turn。
+- Session 结束后，只有该 Thread 的 ChangeSet 全部 committed 或 discarded，受管目录才具备清理资格。
 
-界面和协议只暴露 `managedWorktreeId`、来源工作区 ID、仓库/分支和 baseline 摘要，不暴露受管目录内部路径。
+界面和协议只暴露 `managedWorktreeId`、`sourceDirId`、仓库/分支和 baseline 摘要，不暴露受管目录内部路径。
 
 ## ChangeSet 状态
 
@@ -61,11 +61,11 @@ Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具
 `open` 会实时显示当前净变化，但提交按钮始终禁用。只有 `sealed`、有净变化、有提交文本、没有未满足依赖的
 ChangeSet 可以排队提交。`incomplete` 表示存在脱离已知工具生命周期的写入或工具写入结果未知，禁止自动提交。
 
-工具调用携带 `session_id/thread_id/turn_id/tool_call_id`。Hook 在对应 Thread 工作区执行并记录生命周期。已知
+工具调用携带 `session_id/thread_id/turn_id/tool_call_id`。Hook 在对应 Thread 目录执行并记录生命周期。已知
 read/write/edit/apply-patch 路径用于归属和依赖；shell、Hook 与未知写范围按当时全部待提交 baseline 保守依赖。
 文件监听刷新实时净变化；生命周期外写入会标为归属不明，不会猜成某个 Tool 的修改。
 
-初始脏工作区也参与依赖判断：如果 Turn 读取或修改了初始 baseline 中相对目标 HEAD 已变化的路径，
+来源目录的初始修改也参与依赖判断：如果 Turn 读取或修改了初始 baseline 中相对目标 HEAD 已变化的路径，
 `externalDependencyPaths` 会列出这些路径并拒绝提交。这样不会把用户原有修改静默带进 Turn commit。
 
 ## “提交上一轮，当前轮继续运行”
@@ -74,7 +74,7 @@ read/write/edit/apply-patch 路径用于归属和依赖；shell、Hook 与未知
 
 ```text
 Turn A: sealed · 10 files ── queue commit ── replay immutable A delta ── target branch
-Turn B: open   · 20 files ── continues writing in the isolated Thread workspace
+Turn B: open   · 20 files ── continues writing in the isolated Thread dir
 ```
 
 即使 A、B 修改同一文件，提交 A 也不会读取或改写 B 的内容、状态或执行任务。提交只占用目标仓库操作锁。
@@ -90,7 +90,7 @@ Turn B: open   · 20 files ── continues writing in the isolated Thread works
 
 ## 提交信息
 
-自动生成使用 `agent.commitMessageModel` 指定的 exact provider/model，不借用当前 Agent 模型。未配置或未对当前工作区
+自动生成使用 `agent.commitMessageModel` 指定的 exact provider/model，不借用当前 Agent 模型。未配置或未对当前目录
 授权 exact provider/model/endpoint 时，状态为 `unconfigured`；用户仍可填写 draft。
 
 输入严格截止目标 Turn terminal 边界，只含可见用户/Agent 消息、该 Turn steering、Goal、Plan、受限工具结果摘要和

@@ -25,8 +25,8 @@ Zeta 把 Auto Review 定义为“受确定性策略约束的风险审查建议�
 核心决策：
 
 - 主机先解析精确动作、来源、最小能力和沙箱兼容性；
-- `zeta-execpolicy` 对 Host / Organization / User / Workspace typed rules 做纯求值；更严格 effect
-  优先，Workspace 不能产生 `AllowUnsandboxed`；该结果和 exact `UserAllowlist` 都优先于 LLM；
+- `zeta-execpolicy` 对 Host / Organization / User / Directory typed rules 做纯求值；更严格 effect
+  优先，Directory 不能产生 `AllowUnsandboxed`；该结果和 exact `UserAllowlist` 都优先于 LLM；
 - `UserAllowlist` 只接受绑定动作摘要、完整能力集合与策略版本的精确沙箱外授权，不接受工具名称
   或命令前缀；
 - 风险审查器只给出批准 `Approve`、修改动作 `ReviseAction`、询问用户 `AskUser` 或拒绝 `Deny`

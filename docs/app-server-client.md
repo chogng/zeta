@@ -51,7 +51,7 @@ zeta-tui ──┘             │
 也不是 remote process executor。Desktop 的 JSONL/stdio client 仍不要求复用这个 Rust crate。
 
 `zeta-exec` 是无交互界面的 Agent 执行宿主。当前它启动 embedded App Server；交互式 TUI 则通过
-stdio 连接 profile/Workspace-scoped local authority。
+stdio 连接 profile-scoped local App Server，并把初始 `cwd` 作为执行位置交给服务端。
 后续远程调度系统以它作为 headless execution entry。Job/Attempt/lease/event cursor 属于
 [`exec.md`](exec.md) 定义的 scheduler adapter，不进入 App Server Client。
 
@@ -149,22 +149,25 @@ backend 选择应由产品宿主显式建模，但不应把 Remote 再做成
 
 ```rust
 pub(crate) enum AppServerBackend {
-    Local { workspace_root: PathBuf },
-    Remote { connection: SshAppServerConnectionOptions },
+    Local { cwd: PathBuf },
+    Remote {
+        connection: SshAppServerConnectionOptions,
+        cwd: PathBuf,
+    },
 }
 ```
 
-- Local backend 通过 `StdioAppServerCommand` 连接 profile/Workspace-scoped local authority；
+- Local backend 通过 `StdioAppServerCommand` 连接 profile-scoped local App Server，并传入初始 `cwd`；
 - Remote backend 由 `zeta-remote-connections` 建立 SSH/stdio 连接，再交给相同的
   `AppServerSession`；
 - 两者暴露相同 typed request handle、event stream 与 shutdown contract；
 - `AppServerHost` 是 `app` 的产品级横向协调层，不是 `zeta-rs` 的通用 App Server API；
 - remote scheduler 仍位于 `zeta-exec` 上层，不属于 App Server backend。
 
-在 app 中，这个产品边界位于 `app/src/app_server/`。Agent、Language 和 Terminal 通过
-`crate::app_server` 使用它导出的 session/event contract；`zui`、`zeta-ui-components`、Agent Sidebar
+在 app 中，这个产品边界位于 `app/workbench/app_server/`。Agent、Language 和 Terminal 通过
+Workbench 的 App Server host 使用它导出的 session/event contract；`zui`、`zeta-ui-components`、Agent Sidebar
 等 UI crate 不依赖 App Server client。这样 `zeta-rs` 提供核心协议和通用 client，app 提供
-产品启动、Workspace、Remote backend 与重连协调，两边不会再各自复制一套 client。
+产品启动、本地/Remote backend 与重连协调，两边不会再各自复制一套 client。
 
 ## 4. 启动流程
 

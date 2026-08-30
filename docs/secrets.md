@@ -130,7 +130,7 @@ MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成�
 | Standalone embedded host | injected | host 必须显式注入与自己 authority 一致的 backend |
 | Explicit keyring host | OS keyring | host 明确选择时注入 `KeyringSecretStore`，不是 daemon 默认 |
 
-生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `FileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 Workspace App Server、Connector、MCP 与 Provider credential adapter。
+生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `FileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 App Server connection、Connector、MCP 与 Provider credential adapter。
 
 profile file backend 的最低要求：
 
