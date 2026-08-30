@@ -6,10 +6,13 @@ use zeta_keybinding::Chord;
 use zeta_keybinding::HostPlatform;
 use zeta_keybinding::ShortcutModifiers;
 use zeta_keybinding::serialize_key_sequence;
+use zui::ui::CaretVisibility;
 use zui::ui::Color;
 use zui::ui::InteractionFrame;
 use zui::ui::Point;
 use zui::ui::Rect;
+use zui::ui::TextInput;
+use zui::ui::TextInputLayoutEngine;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;
 
@@ -23,7 +26,6 @@ use super::keyboard_shortcuts_ids;
 fn recording_collects_chords_and_commits_after_the_quiet_period() {
     let now = Instant::now();
     let mut state = KeyboardShortcutsState::default();
-    state.toggle();
     state.start_recording(AppCommandId::ToggleTabContainer);
     state.record(
         Chord::logical("k", ShortcutModifiers::primary()).expect("first chord"),
@@ -58,20 +60,23 @@ fn every_bindable_command_has_a_distinct_stable_row() {
 
 #[test]
 fn visible_shortcuts_are_modal_and_paint_keycaps() {
-    let mut state = KeyboardShortcutsState::default();
-    state.toggle();
+    let state = KeyboardShortcutsState::default();
+    let search = TextInput::default();
     let rows = keyboard_shortcut_rows(|_| None);
     let dispatch = UiDispatch::default();
+    let mut text_layout = TextInputLayoutEngine::default();
     let shortcuts = KeyboardShortcuts::new(
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
         &state,
+        &search,
         &rows,
         &[],
         keyboard_shortcuts_ids(zui::ui::ElementId::scoped(1, 1)),
         HostPlatform::current(),
+        CaretVisibility::Visible,
+        &mut text_layout,
         &dispatch,
-    )
-    .expect("visible shortcuts");
+    );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
     frame.draw_component(&shortcuts);
 

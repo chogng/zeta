@@ -1,4 +1,5 @@
 use super::*;
+use crate::QuickAccess;
 
 pub(crate) struct ProductApp {
     pub(super) window: Option<WindowHandle>,
@@ -38,6 +39,7 @@ pub(crate) struct ProductApp {
     pub(super) command_registry: command_dispatch::ProductCommandRegistry,
     pub(super) keybindings: keybindings::ProductKeybindings,
     pub(super) keybindings_resource: KeybindingsResource,
+    pub(super) quick_access: QuickAccess,
     pub(super) settings: SettingsState,
     pub(super) modifiers: ModifiersState,
     pub(super) pending_focus: Option<ElementId>,
@@ -153,6 +155,7 @@ impl ProductApp {
             command_registry: command_dispatch::builtin_command_registry(),
             keybindings,
             keybindings_resource,
+            quick_access: QuickAccess::default(),
             settings: SettingsState::default(),
             modifiers: ModifiersState::default(),
             pending_focus: None,

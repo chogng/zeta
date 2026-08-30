@@ -17,6 +17,7 @@ use crate::path_picker::DIRECTORY_SEARCH_INPUT;
 use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
 use zeta_files::FILE_SEARCH_INPUT;
 use zeta_session::interaction::COMPOSER;
+use zeta_settings::KEYBOARD_SHORTCUTS_SEARCH;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,6 +34,7 @@ enum InputMethodTarget {
     RemoteConnectionHost,
     RemoteConnectionDirectory,
     RemoteTunnelPort,
+    KeyboardShortcutsSearch,
     SettingsSearch,
     FileEditor,
     FileEditorFind,
@@ -56,6 +58,7 @@ struct InputMethodContext {
     remote_connection_search_focused: bool,
     remote_connection_manager_field: Option<RemoteConnectionManagerField>,
     remote_tunnel_port_focused: bool,
+    keyboard_shortcuts_search_focused: bool,
     settings_search_focused: bool,
 }
 
@@ -91,6 +94,9 @@ impl InputMethodTarget {
         }
         if context.remote_tunnel_port_focused {
             return Self::RemoteTunnelPort;
+        }
+        if context.keyboard_shortcuts_search_focused {
+            return Self::KeyboardShortcutsSearch;
         }
         if context.settings_search_focused {
             return Self::SettingsSearch;
@@ -217,6 +223,15 @@ impl ProductApp {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
+            InputMethodTarget::KeyboardShortcutsSearch => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.quick_access.apply_query_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
             InputMethodTarget::SettingsSearch => {
                 let Some(composition) = text_input_composition_event(event) else {
                     return;
@@ -296,6 +311,7 @@ impl ProductApp {
                 | InputMethodTarget::RemoteConnectionHost
                 | InputMethodTarget::RemoteConnectionDirectory
                 | InputMethodTarget::RemoteTunnelPort
+                | InputMethodTarget::KeyboardShortcutsSearch
                 | InputMethodTarget::SettingsSearch
                 | InputMethodTarget::FileEditor
                 | InputMethodTarget::FileEditorFind
@@ -327,6 +343,9 @@ impl ProductApp {
             .cancel_compositions_except(target.remote_connection_manager_field());
         if target != InputMethodTarget::RemoteTunnelPort {
             self.remote_tunnel_manager.cancel_remote_port_composition();
+        }
+        if target != InputMethodTarget::KeyboardShortcutsSearch {
+            self.quick_access.cancel_query_composition();
         }
         if target != InputMethodTarget::SettingsSearch {
             self.settings.cancel_search_composition();
@@ -372,6 +391,9 @@ impl ProductApp {
                 .focused()
                 .and_then(RemoteConnectionManagerField::from_element_id),
             remote_tunnel_port_focused: self.ui_dispatch.is_focused(REMOTE_TUNNEL_REMOTE_PORT),
+            keyboard_shortcuts_search_focused: self
+                .ui_dispatch
+                .is_focused(KEYBOARD_SHORTCUTS_SEARCH),
             settings_search_focused: self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT),
         })
     }

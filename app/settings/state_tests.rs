@@ -30,16 +30,6 @@ fn keybindings_viewport() -> SettingsKeybindingsViewport {
 }
 
 #[test]
-fn opening_shortcuts_selects_the_section_and_owns_the_recorder() {
-    let mut settings = SettingsState::default();
-
-    settings.open_keyboard_shortcuts();
-
-    assert_eq!(settings.section(), SettingsPageSection::Keybindings);
-    assert!(settings.keyboard_shortcuts().is_visible());
-}
-
-#[test]
 fn activation_selects_the_remote_section() {
     let mut settings = SettingsState::default();
 

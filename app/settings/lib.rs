@@ -16,9 +16,9 @@ mod sections;
 mod state;
 
 pub use keybindings::{
-    KEYBOARD_SHORTCUTS, KEYBOARD_SHORTCUTS_CLOSE, KeyboardShortcutRow, KeyboardShortcutsState,
-    ShortcutCommit, draw_keyboard_shortcuts_overlay, keyboard_shortcut_row_element,
-    keyboard_shortcut_rows, settings_keybinding_rows,
+    KEYBOARD_SHORTCUTS, KEYBOARD_SHORTCUTS_CLOSE, KEYBOARD_SHORTCUTS_SEARCH, KeyboardShortcutRow,
+    KeyboardShortcutsState, ShortcutCommit, draw_keyboard_shortcuts_overlay,
+    keyboard_shortcut_row_element, keyboard_shortcut_rows, settings_keybinding_rows,
 };
 pub use keybindings_section::{
     SETTINGS_KEYBINDINGS_LIST, SETTINGS_KEYBINDINGS_SCROLLBAR, SettingsKeybindingsViewport,

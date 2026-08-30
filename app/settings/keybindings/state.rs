@@ -7,9 +7,8 @@ use zeta_keybinding::MAX_CHORDS;
 
 const RECORDING_TIMEOUT: Duration = Duration::from_millis(1_000);
 
-/// Host-independent lifecycle for a keyboard-shortcut settings surface and recorder.
+/// Host-independent keyboard-shortcut recording state shared by Settings and QuickAccess.
 pub struct KeyboardShortcutsState<Command> {
-    visible: bool,
     recording: Option<ShortcutRecording<Command>>,
     status: Option<ShortcutStatus>,
 }
@@ -34,7 +33,6 @@ pub struct ShortcutCommit<Command> {
 impl<Command> Default for KeyboardShortcutsState<Command> {
     fn default() -> Self {
         Self {
-            visible: false,
             recording: None,
             status: None,
         }
@@ -42,25 +40,11 @@ impl<Command> Default for KeyboardShortcutsState<Command> {
 }
 
 impl<Command: Copy> KeyboardShortcutsState<Command> {
-    pub const fn is_visible(&self) -> bool {
-        self.visible
-    }
-
     pub const fn is_recording(&self) -> bool {
         self.recording.is_some()
     }
 
-    pub fn toggle(&mut self) {
-        if self.visible {
-            self.close();
-        } else {
-            self.visible = true;
-            self.status = None;
-        }
-    }
-
-    pub fn close(&mut self) {
-        self.visible = false;
+    pub fn reset(&mut self) {
         self.recording = None;
         self.status = None;
     }

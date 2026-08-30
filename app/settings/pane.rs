@@ -78,6 +78,7 @@ impl SettingsPaneStyle {
 /// Inputs needed to render one Settings frame without transferring feature ownership.
 pub struct SettingsPaneView<'a> {
     pub state: &'a SettingsState,
+    pub keyboard_shortcuts_visible: bool,
     pub features: SettingsFeatureSnapshot<'a>,
     pub caret_visibility: CaretVisibility,
     pub dispatch: &'a UiDispatch,
@@ -156,7 +157,7 @@ pub fn draw_settings_pane(
             view.features.general.connection_label,
             view.features.general.surface_label,
             view.features.keybindings.keybinding_rows,
-            view.state.keyboard_shortcuts().is_visible(),
+            view.keyboard_shortcuts_visible,
             view.features.keybindings.keybinding_diagnostics,
             view.features.appearance.scheme,
             view.features.appearance.follows_system,

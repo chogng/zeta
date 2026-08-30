@@ -25,6 +25,7 @@ use zui::ui::{
 };
 
 use crate::PaneBinding;
+use crate::QuickAccess;
 use crate::SessionSearchState;
 use crate::{
     FIRST_TAB_CONTAINER_SESSION_TAB, MainSurfaceKind, SESSION_SEARCH_INPUT, TabContextMenu,
@@ -349,6 +350,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub remote_connection_manager: &'a RemoteConnectionManagerState,
     pub remote_tunnel_manager: &'a RemoteTunnelManagerState,
     pub keybindings: &'a dyn WorkbenchKeybindings,
+    pub quick_access: &'a QuickAccess,
     pub settings: &'a SettingsState,
     pub keybinding_diagnostics: &'a [String],
     pub theme_scheme: zeta_theme::ColorScheme,
@@ -402,6 +404,7 @@ struct MainPresentationView<'a> {
     scm: &'a ScmState,
     environment_context: EnvironmentContextView<'a>,
     keybindings: &'a dyn WorkbenchKeybindings,
+    keyboard_shortcuts_visible: bool,
     keybinding_diagnostics: &'a [String],
     theme_scheme: zeta_theme::ColorScheme,
     theme_follows_system: bool,
@@ -618,6 +621,7 @@ fn build_workbench_presentation_with_bindings(
                 scm: model.scm,
                 environment_context: model.environment_context.clone(),
                 keybindings: model.keybindings,
+                keyboard_shortcuts_visible: model.quick_access.shortcuts_open(),
                 keybinding_diagnostics: model.keybinding_diagnostics,
                 theme_scheme: model.theme_scheme,
                 theme_follows_system: model.theme_follows_system,
@@ -862,19 +866,34 @@ fn draw_workbench_overlays(
             model.keybindings.platform(),
         );
     }
-    let shortcut_rows = zeta_settings::keyboard_shortcut_rows(|command| {
-        model.keybindings.binding_for_command(command)
-    });
-    zeta_settings::draw_keyboard_shortcuts_overlay(
-        frame,
-        viewport_bounds,
-        model.settings.keyboard_shortcuts(),
-        &shortcut_rows,
-        model.keybinding_diagnostics,
-        WINDOW,
-        model.keybindings.platform(),
-        model.dispatch,
-    );
+    let shortcut_search_caret = if model.quick_access.shortcuts_open() {
+        let shortcut_items = model.quick_access.shortcut_items(model.keybindings);
+        let shortcut_rows = shortcut_items
+            .iter()
+            .map(|item| item.row())
+            .collect::<Vec<_>>();
+        zeta_settings::draw_keyboard_shortcuts_overlay(
+            frame,
+            viewport_bounds,
+            model.settings.keyboard_shortcuts(),
+            model.quick_access.query_input(),
+            &shortcut_rows,
+            model.keybinding_diagnostics,
+            WINDOW,
+            model.keybindings.platform(),
+            model.caret_visibility,
+            text_layout,
+            model.dispatch,
+        )
+    } else {
+        None
+    };
+    if model
+        .dispatch
+        .is_focused(zeta_settings::KEYBOARD_SHORTCUTS_SEARCH)
+    {
+        ime_cursor_area = shortcut_search_caret;
+    }
     WorkbenchOverlayPresentation {
         ime_cursor_area,
         path_picker_scroll_metrics,
@@ -1245,6 +1264,7 @@ fn draw_main(
                     MAIN_SURFACE,
                     SettingsPaneView {
                         state: view.settings,
+                        keyboard_shortcuts_visible: view.keyboard_shortcuts_visible,
                         features: SettingsFeatureSnapshot {
                             general: GeneralSettingsSnapshot {
                                 directory_label: view.environment_context.working_directory,

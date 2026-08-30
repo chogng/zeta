@@ -26,6 +26,7 @@ use zeta_files::FilesAction;
 use zeta_session::interaction::{COMPOSER, COMPOSER_INTERACTION};
 use zeta_session::{ComposerInteractionActivation, SelectionDirection};
 use zeta_session::{ComposerRoute, ComposerSubmission};
+use zeta_settings::KEYBOARD_SHORTCUTS_SEARCH;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
 use zui::ui::{FocusDirection, NavigationAxis};
 
@@ -40,7 +41,7 @@ impl ProductApp {
             }
             return;
         }
-        if self.settings.keyboard_shortcuts().is_visible() {
+        if self.quick_access.shortcuts_open() {
             if self.settings.route_keyboard_shortcut_input(
                 &event,
                 self.modifiers,
@@ -51,7 +52,34 @@ impl ProductApp {
                 self.request_redraw();
                 return;
             }
+            if event.logical_key == Key::Named(NamedKey::Escape) {
+                self.quick_access.close();
+                self.settings.reset_keyboard_shortcut_recording();
+                self.rebuild_presentation();
+                self.request_redraw();
+                return;
+            }
+            if self.ui_dispatch.is_focused(KEYBOARD_SHORTCUTS_SEARCH)
+                && let Some(command) = text_input_command(&event, self.modifiers)
+            {
+                self.quick_access.apply_query(command);
+                self.caret_blink.activity(Instant::now());
+                self.rebuild_presentation();
+                self.update_ime_cursor_area();
+                self.request_redraw();
+                return;
+            }
             let _ = self.dispatch_primary_keyboard_input(&event);
+            return;
+        }
+        if self.settings.route_keyboard_shortcut_input(
+            &event,
+            self.modifiers,
+            self.keybindings.platform(),
+            Instant::now(),
+        ) {
+            self.rebuild_presentation();
+            self.request_redraw();
             return;
         }
         if self.route_settings_keyboard(&event) {
@@ -553,6 +581,14 @@ impl ProductApp {
     }
 
     pub(super) fn copy_keybinding_target(&mut self) {
+        if self.ui_dispatch.is_focused(KEYBOARD_SHORTCUTS_SEARCH) {
+            if let Some(text) = self.quick_access.selected_query_text()
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
+            {
+                eprintln!("could not copy keyboard shortcut search text: {error}");
+            }
+            return;
+        }
         if self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT) {
             if let Some(text) = self.settings.selected_search_text()
                 && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
@@ -603,6 +639,20 @@ impl ProductApp {
     }
 
     pub(super) fn paste_keybinding_target(&mut self) {
+        if self.ui_dispatch.is_focused(KEYBOARD_SHORTCUTS_SEARCH) {
+            let Some(text) = clipboard_text(
+                &self.clipboard,
+                "could not paste keyboard shortcut search text",
+            ) else {
+                return;
+            };
+            self.quick_access
+                .apply_query(TextInputCommand::Insert(text));
+            self.rebuild_presentation();
+            self.update_ime_cursor_area();
+            self.request_redraw();
+            return;
+        }
         if self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT) {
             let Some(text) =
                 clipboard_text(&self.clipboard, "could not paste settings search text")
@@ -671,6 +721,7 @@ impl ProductApp {
 
     fn is_direct_terminal_input(&self) -> bool {
         self.main_surface.is_terminal()
+            && !self.ui_dispatch.is_focused(KEYBOARD_SHORTCUTS_SEARCH)
             && !self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(FILE_SEARCH_INPUT)

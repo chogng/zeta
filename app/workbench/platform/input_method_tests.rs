@@ -24,6 +24,7 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         remote_connection_search_focused: false,
         remote_connection_manager_field: None,
         remote_tunnel_port_focused: false,
+        keyboard_shortcuts_search_focused: false,
         settings_search_focused: false,
     };
     let toolbar = InputMethodContext {
@@ -79,6 +80,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     };
     let settings_search = InputMethodContext {
         settings_search_focused: true,
+        ..terminal_grid
+    };
+    let keyboard_shortcuts_search = InputMethodContext {
+        keyboard_shortcuts_search_focused: true,
         ..terminal_grid
     };
     let remote_connection_dir = InputMethodContext {
@@ -153,6 +158,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     assert_eq!(
         InputMethodTarget::for_context(settings_search),
         InputMethodTarget::SettingsSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(keyboard_shortcuts_search),
+        InputMethodTarget::KeyboardShortcutsSearch
     );
     assert_eq!(
         InputMethodTarget::for_context(inactive_window),

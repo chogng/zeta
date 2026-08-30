@@ -129,6 +129,9 @@ impl ProductApp {
     }
 
     pub(super) fn activate_shell_element(&mut self, id: zui::ui::ElementId) {
+        if self.activate_quick_access_element(id) {
+            return;
+        }
         if self.activate_settings_element(id) {
             return;
         }
@@ -209,6 +212,23 @@ impl ProductApp {
         if let Some(request) = crate::command_request_for_element(id) {
             self.dispatch_command(request);
         }
+    }
+
+    fn activate_quick_access_element(&mut self, id: ElementId) -> bool {
+        if !self.quick_access.shortcuts_open() {
+            return false;
+        }
+        if id == zeta_settings::KEYBOARD_SHORTCUTS_CLOSE {
+            self.quick_access.close();
+            self.settings.reset_keyboard_shortcut_recording();
+        } else if let Some(command) = self.quick_access.shortcut_command(id) {
+            self.settings.start_keyboard_shortcut_recording(command);
+        } else {
+            return false;
+        }
+        self.rebuild_presentation();
+        self.request_redraw();
+        true
     }
 
     fn activate_settings_element(&mut self, id: ElementId) -> bool {
@@ -424,7 +444,7 @@ impl ProductApp {
     ) -> Option<zeta_settings::SettingsKeybindingsViewport> {
         if !self.workbench.workbench().tab_part().is_settings()
             || self.settings.section() != zeta_settings::SettingsPageSection::Keybindings
-            || self.settings.keyboard_shortcuts().is_visible()
+            || self.quick_access.shortcuts_open()
         {
             return None;
         }

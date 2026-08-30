@@ -22,7 +22,6 @@ use zui::ui::TextInput;
 use zui::ui::TextInputCommand;
 use zui::ui::TextInputCompositionEvent;
 
-use crate::KEYBOARD_SHORTCUTS_CLOSE;
 use crate::KeyboardShortcutsState;
 use crate::SETTINGS_NAV_APPEARANCE;
 use crate::SETTINGS_NAV_BACK;
@@ -291,25 +290,21 @@ impl SettingsState {
     }
 
     pub fn reopen(&mut self) {
-        self.keyboard_shortcuts.close();
+        self.keyboard_shortcuts.reset();
         self.cancel_keybindings_scrollbar();
     }
 
-    pub fn open_keyboard_shortcuts(&mut self) {
-        self.section = SettingsPageSection::Keybindings;
-        self.cancel_keybindings_scrollbar();
-        if !self.keyboard_shortcuts.is_visible() {
-            self.keyboard_shortcuts.toggle();
-        }
+    pub fn reset_keyboard_shortcut_recording(&mut self) {
+        self.keyboard_shortcuts.reset();
     }
 
-    pub fn close_keyboard_shortcuts(&mut self) {
-        self.keyboard_shortcuts.close();
+    pub fn start_keyboard_shortcut_recording(&mut self, command: AppCommandId) {
+        self.keyboard_shortcuts.start_recording(command);
     }
 
     pub fn close(&mut self) {
         self.search.cancel_composition();
-        self.keyboard_shortcuts.close();
+        self.keyboard_shortcuts.reset();
         self.cancel_keybindings_scrollbar();
     }
 
@@ -323,19 +318,12 @@ impl SettingsState {
                 self.section = SettingsPageSection::Remote;
                 SettingsActivation::OpenRemote
             }
-            KEYBOARD_SHORTCUTS_CLOSE if self.keyboard_shortcuts.is_visible() => {
-                self.keyboard_shortcuts.close();
-                SettingsActivation::Changed
-            }
             _ => {
                 let Some(command) = command_for_keyboard_shortcut_row(id) else {
                     return SettingsActivation::Ignored;
                 };
                 if self.section != SettingsPageSection::Keybindings {
                     return SettingsActivation::Ignored;
-                }
-                if !self.keyboard_shortcuts.is_visible() {
-                    self.keyboard_shortcuts.toggle();
                 }
                 self.keyboard_shortcuts.start_recording(command);
                 SettingsActivation::Changed
@@ -350,19 +338,12 @@ impl SettingsState {
         platform: HostPlatform,
         now: Instant,
     ) -> bool {
-        if !self.keyboard_shortcuts.is_visible() || event.state != ElementState::Pressed {
+        if event.state != ElementState::Pressed || !self.keyboard_shortcuts.is_recording() {
             return false;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {
-            if self.keyboard_shortcuts.is_recording() {
-                self.keyboard_shortcuts.cancel_recording();
-            } else {
-                self.keyboard_shortcuts.close();
-            }
+            self.keyboard_shortcuts.cancel_recording();
             return true;
-        }
-        if !self.keyboard_shortcuts.is_recording() {
-            return false;
         }
         if !event.repeat
             && let Some(chord) = recording_chord(event, modifiers, platform)

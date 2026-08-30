@@ -15,6 +15,7 @@ mod pane_binding;
 mod panepart;
 mod presentation;
 mod product;
+mod quick_access;
 mod surface;
 mod tabpart;
 
@@ -49,6 +50,7 @@ pub(crate) use presentation::{
     WorkbenchKeybindings, WorkbenchSceneLayout, build_workbench_presentation, draw_inspector_border,
 };
 pub use product::run;
+pub(crate) use quick_access::QuickAccess;
 pub(crate) use surface::{MainSurface, MainSurfaceKind};
 pub(crate) use tabpart::*;
 

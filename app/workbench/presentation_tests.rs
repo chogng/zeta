@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::PaneBinding;
+use crate::QuickAccess;
 use crate::{
     ADD_SESSION, EnvironmentContextView, INSPECTOR_RESIZE_HANDLE, InspectorPartState,
     LogicalViewport, PaneGroupId, PaneInput, PanePart, PaneSplitDirection, SESSION_SEARCH_INPUT,
@@ -354,6 +355,7 @@ fn presentation_with_active_tab_input(
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &TestKeybindings,
+            quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -410,6 +412,7 @@ fn presentation_with_active_tab_input(
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &TestKeybindings,
+            quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -607,6 +610,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &TestKeybindings,
+            quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -896,6 +900,7 @@ fn session_search_filters_tabs_by_session_name() {
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &TestKeybindings,
+            quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -1092,6 +1097,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &TestKeybindings,
+            quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -1338,6 +1344,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         remote_connection_manager: &remote_connection_manager,
         remote_tunnel_manager: &RemoteTunnelManagerState::default(),
         keybindings: &keybindings,
+        quick_access: &quick_access,
         settings: &settings,
         keybinding_diagnostics: &[],
         theme_scheme: zeta_theme::ColorScheme::Light,
@@ -1518,6 +1525,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &TestKeybindings,
+            quick_access: &QuickAccess::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,

@@ -134,6 +134,7 @@ impl App<ProductEvent> for ProductApp {
                 self.modifiers = ModifiersState::default();
                 self.keybindings.cancel_chord();
                 self.settings.keyboard_shortcuts_window_blurred();
+                self.quick_access.cancel_query_composition();
                 self.terminal_view_mut().pointer.cancel();
                 self.file_editor_input.cancel_pointer();
                 self.cancel_tab_container_resize();

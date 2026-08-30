@@ -168,11 +168,12 @@ fn execute_toggle_terminal_surface(app: &mut ProductApp, _request: &CommandReque
 }
 
 fn execute_open_keyboard_shortcuts(app: &mut ProductApp, _request: &CommandRequest) {
-    app.activate_settings_tab();
     app.remote_connection_picker.dismiss();
     app.dismiss_remote_connection_manager();
     app.dismiss_remote_tunnel_manager();
-    app.settings.open_keyboard_shortcuts();
+    app.quick_access.open_shortcuts();
+    app.settings.reset_keyboard_shortcut_recording();
+    app.pending_focus = Some(zeta_settings::KEYBOARD_SHORTCUTS_SEARCH);
     app.keybindings.cancel_chord();
 }
 
@@ -183,7 +184,8 @@ fn execute_manage_remote_tunnels(app: &mut ProductApp, _request: &CommandRequest
         return;
     }
     let restore_focus = app.ui_dispatch.focused();
-    app.settings.close_keyboard_shortcuts();
+    app.quick_access.close();
+    app.settings.reset_keyboard_shortcut_recording();
     app.activate_session_workbench_tab();
     app.open_remote_tunnel_manager(restore_focus);
     app.keybindings.cancel_chord();

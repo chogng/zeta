@@ -6,14 +6,17 @@ pub use view::KeyboardShortcutRow;
 
 use state::KeyboardShortcutsState as ShortcutRecorderState;
 use view::KeyboardShortcuts;
-use view::KeyboardShortcutsIds;
 use zeta_commands::AppCommandId;
 use zeta_keybinding::HostPlatform;
 use zeta_keybinding::KeySequence;
 use zeta_keybinding::format_key_sequence;
+use zeta_ui_components::QuickInputIds;
+use zui::ui::CaretVisibility;
 use zui::ui::ElementId;
 use zui::ui::InteractionFrame;
 use zui::ui::Rect;
+use zui::ui::TextInput;
+use zui::ui::TextInputLayoutEngine;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;
 
@@ -23,36 +26,47 @@ const SHORTCUT_SCOPE: u32 = 3;
 
 pub const KEYBOARD_SHORTCUTS: ElementId = ElementId::scoped(SHORTCUT_SCOPE, 1);
 pub const KEYBOARD_SHORTCUTS_CLOSE: ElementId = ElementId::scoped(SHORTCUT_SCOPE, 2);
+pub const KEYBOARD_SHORTCUTS_SEARCH: ElementId = ElementId::scoped(SHORTCUT_SCOPE, 3);
 
 pub type KeyboardShortcutsState = ShortcutRecorderState<AppCommandId>;
 
-const fn keyboard_shortcuts_ids(parent: ElementId) -> KeyboardShortcutsIds {
-    KeyboardShortcutsIds::new(parent, KEYBOARD_SHORTCUTS, KEYBOARD_SHORTCUTS_CLOSE)
+const fn keyboard_shortcuts_ids(parent: ElementId) -> QuickInputIds {
+    QuickInputIds::new(
+        parent,
+        KEYBOARD_SHORTCUTS,
+        KEYBOARD_SHORTCUTS_CLOSE,
+        KEYBOARD_SHORTCUTS_SEARCH,
+    )
 }
 
 pub fn draw_keyboard_shortcuts_overlay(
     frame: &mut UiFrame<InteractionFrame>,
     viewport: Rect,
     state: &KeyboardShortcutsState,
+    search_input: &TextInput,
     rows: &[KeyboardShortcutRow<'_, AppCommandId>],
     diagnostics: &[String],
     parent: ElementId,
     platform: HostPlatform,
+    caret_visibility: CaretVisibility,
+    text_layout: &mut TextInputLayoutEngine,
     dispatch: &UiDispatch,
-) -> bool {
-    let Some(shortcuts) = KeyboardShortcuts::new(
+) -> Option<Rect> {
+    let shortcuts = KeyboardShortcuts::new(
         viewport,
         state,
+        search_input,
         rows,
         diagnostics,
         keyboard_shortcuts_ids(parent),
         platform,
+        caret_visibility,
+        text_layout,
         dispatch,
-    ) else {
-        return false;
-    };
+    );
+    let caret = shortcuts.search_caret_bounds();
     frame.draw_component(&shortcuts);
-    true
+    caret
 }
 
 pub fn keyboard_shortcut_rows<'a>(
