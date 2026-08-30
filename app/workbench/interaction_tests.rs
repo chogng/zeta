@@ -1,8 +1,7 @@
 use crate::ADD_SESSION;
 use crate::{
-    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR, TAB_CONTEXT_MENU,
-    TITLEBAR_TAB_LIST, TabContextMenuAction,
+    FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR,
+    TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR, TAB_CONTEXT_MENU, TabContextMenuAction,
 };
 use zeta_files::{FILE_SEARCH_INPUT, FILES_TOOLBAR};
 use zeta_session::interaction::SESSION_HEADER;
@@ -29,8 +28,6 @@ fn session_identity_namespace_does_not_overlap_capability_elements() {
     let session_ids = [
         TAB_CONTAINER_LIST,
         FIRST_TAB_CONTAINER_SESSION_TAB,
-        TITLEBAR_TAB_LIST,
-        FIRST_TITLEBAR_SESSION_TAB,
         SESSION_HEADER,
     ];
     let capability_ids = [FILE_SEARCH_INPUT, FILES_TOOLBAR];
@@ -49,7 +46,7 @@ fn tab_context_menu_actions_have_stable_labels_and_identities() {
 
     assert_eq!(
         labels,
-        ["Pin tab", "Close tab", "Move to group  ›", "Rename tab"]
+        ["Pin tab", "Rename tab", "Move to group", "Close tab"]
     );
     assert_eq!(
         ids.into_iter()
@@ -60,6 +57,10 @@ fn tab_context_menu_actions_have_stable_labels_and_identities() {
     assert_eq!(
         TabContextMenuAction::from_element_id(ids[2]),
         Some(TabContextMenuAction::MoveToGroup)
+    );
+    assert_eq!(
+        TabContextMenuAction::from_hint("r"),
+        Some(TabContextMenuAction::Rename)
     );
     assert!(TabContextMenuAction::is_menu_element(TAB_CONTEXT_MENU));
 }

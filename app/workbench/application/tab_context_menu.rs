@@ -112,6 +112,12 @@ impl WorkbenchApplication {
                 self.ui_dispatch.activate_focused(frame)
             }
             Key::Character(text) if text == " " => self.ui_dispatch.activate_focused(frame),
+            Key::Character(text) => {
+                if let Some(action) = TabContextMenuAction::from_hint(text) {
+                    self.activate_tab_context_menu_element(action.element_id());
+                }
+                return true;
+            }
             _ => Default::default(),
         };
         self.apply_dispatch_outcome(outcome);

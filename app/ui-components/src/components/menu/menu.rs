@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use crate::{
-    AccessibilityRole, AccessibilitySelection, BoxShadow, Color, Component, ComponentContext,
-    ComponentElement, ComputedElement, CornerRadii, CursorFeedback, Edges, Element, ElementId,
-    FocusBehavior, ListView, NavigationAxis, NavigationGroupId, NodeAction, PaintRect, Point, Rect,
-    ScrollMetrics, ScrollState, ScrollViewStyle, Size, UiNode, UiScene, VirtualListLayout,
+    AccessibilityRole, AccessibilitySelection, Border, BoxShadow, Color, Component,
+    ComponentContext, ComponentElement, ComputedElement, CornerRadii, CursorFeedback, Edges,
+    Element, ElementId, FocusBehavior, ListView, NavigationAxis, NavigationGroupId, NodeAction,
+    PaintRect, Point, Rect, ScrollMetrics, ScrollState, ScrollViewStyle, Size, UiNode, UiScene,
+    VirtualListLayout,
 };
 
 use super::{
@@ -97,6 +98,8 @@ impl MenuScrollConfiguration {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MenuStyle {
     background: Color,
+    border: Border,
+    corner_radii: CornerRadii,
     button_style: ButtonStyle,
     item_size: Size,
     header_height: f32,
@@ -107,6 +110,8 @@ impl MenuStyle {
     pub fn new(background: Color, button_style: ButtonStyle, item_size: Size) -> Self {
         Self {
             background,
+            border: Border::default(),
+            corner_radii: CornerRadii::uniform(MENU_CORNER_RADIUS),
             button_style,
             item_size,
             header_height: 0.0,
@@ -117,6 +122,16 @@ impl MenuStyle {
     /// Reserves a leading row that the caller can fill through the menu composition methods.
     pub const fn with_header_height(mut self, header_height: f32) -> Self {
         self.header_height = header_height;
+        self
+    }
+
+    pub const fn with_border(mut self, border: Border) -> Self {
+        self.border = border;
+        self
+    }
+
+    pub const fn with_corner_radii(mut self, corner_radii: CornerRadii) -> Self {
+        self.corner_radii = corner_radii;
         self
     }
 
@@ -432,7 +447,7 @@ impl Menu {
     fn element_tree(&self) -> ComponentElement {
         Element::leaf("Menu")
             .padding(Edges::uniform(MENU_PADDING))
-            .corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS))
+            .corner_radii(self.style.corner_radii)
             .in_bounds(self.bounds)
             .with_identity(self.ids.root)
     }
@@ -440,12 +455,13 @@ impl Menu {
     fn paint_surface(&self, scene: &mut UiScene) {
         scene.draw_rect(
             PaintRect::new(self.bounds, self.style.background)
+                .with_border(self.style.border)
                 .with_shadow(
                     BoxShadow::new(MENU_SHADOW)
                         .with_offset(Point::new(0.0, MENU_SHADOW_OFFSET_Y))
                         .with_blur_radius(MENU_SHADOW_BLUR_RADIUS),
                 )
-                .with_corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS)),
+                .with_corner_radii(self.style.corner_radii),
         );
     }
 

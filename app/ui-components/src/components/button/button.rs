@@ -86,9 +86,11 @@ pub struct ButtonStyle {
     corner_radii: CornerRadii,
     padding: Edges,
     text_style: TextStyle,
+    hint_text_style: TextStyle,
     disabled_text_style: TextStyle,
     icon_size: f32,
     content_gap: f32,
+    hint_width: f32,
 }
 
 impl ButtonStyle {
@@ -99,10 +101,12 @@ impl ButtonStyle {
             border: Border::default(),
             corner_radii: CornerRadii::uniform(0.0),
             padding: Edges::uniform(8.0),
+            hint_text_style: text_style.clone(),
             disabled_text_style: text_style.clone(),
             text_style,
             icon_size: 16.0,
             content_gap: 6.0,
+            hint_width: 40.0,
         }
     }
 
@@ -116,6 +120,11 @@ impl ButtonStyle {
 
     pub fn with_disabled_text_style(mut self, disabled_text_style: TextStyle) -> Self {
         self.disabled_text_style = disabled_text_style;
+        self
+    }
+
+    pub fn with_hint_text_style(mut self, hint_text_style: TextStyle) -> Self {
+        self.hint_text_style = hint_text_style;
         self
     }
 
@@ -141,6 +150,11 @@ impl ButtonStyle {
 
     pub const fn with_content_gap(mut self, content_gap: f32) -> Self {
         self.content_gap = content_gap;
+        self
+    }
+
+    pub const fn with_hint_width(mut self, hint_width: f32) -> Self {
+        self.hint_width = hint_width;
         self
     }
 
@@ -182,6 +196,10 @@ impl ButtonStyle {
 #[derive(Clone, Debug, PartialEq)]
 enum ButtonContent {
     Label(String),
+    LabelAndHint {
+        label: String,
+        hint: String,
+    },
     Icon {
         icon: Icon,
         accessible_label: String,
@@ -217,6 +235,26 @@ impl Button {
         Self {
             bounds,
             content: ButtonContent::Label(label.into()),
+            state,
+            selection: ButtonSelection::Unselected,
+            style,
+        }
+    }
+
+    /// Creates a text button with a trailing keyboard hint or disclosure marker.
+    pub fn label_and_hint(
+        bounds: Rect,
+        label: impl Into<String>,
+        hint: impl Into<String>,
+        state: ButtonState,
+        style: ButtonStyle,
+    ) -> Self {
+        Self {
+            bounds,
+            content: ButtonContent::LabelAndHint {
+                label: label.into(),
+                hint: hint.into(),
+            },
             state,
             selection: ButtonSelection::Unselected,
             style,
@@ -298,6 +336,7 @@ impl Button {
     pub fn accessible_label(&self) -> &str {
         match &self.content {
             ButtonContent::Label(label)
+            | ButtonContent::LabelAndHint { label, .. }
             | ButtonContent::Icon {
                 accessible_label: label,
                 ..
@@ -382,6 +421,35 @@ impl Component for Button {
                         .with_content_gap(self.style.content_gap),
                 );
                 scene.draw_component(&label);
+                return;
+            }
+            ButtonContent::LabelAndHint { label, hint } => {
+                let hint_width = self.style.hint_width.max(0.0).min(content.size.width);
+                let label_width =
+                    (content.size.width - hint_width - self.style.content_gap.max(0.0)).max(0.0);
+                let text_height = text_style.line_height().max(0.0).min(content.size.height);
+                let text_y = content.origin.y + (content.size.height - text_height) * 0.5;
+                if !label.is_empty() && label_width > 0.0 && text_height > 0.0 {
+                    scene.draw_text(TextBlock::new(
+                        label.clone(),
+                        Point::new(content.origin.x, text_y),
+                        crate::Size::new(label_width, text_height),
+                        text_style.clone(),
+                    ));
+                }
+                if !hint.is_empty() && hint_width > 0.0 && text_height > 0.0 {
+                    let hint_style = if self.state == ButtonState::Disabled {
+                        &self.style.disabled_text_style
+                    } else {
+                        &self.style.hint_text_style
+                    };
+                    scene.draw_text(TextBlock::new(
+                        hint.clone(),
+                        Point::new(content.right() - hint_width, text_y),
+                        crate::Size::new(hint_width, text_height),
+                        hint_style.clone(),
+                    ));
+                }
                 return;
             }
             ButtonContent::Label(_) => {}

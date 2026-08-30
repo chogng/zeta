@@ -3,13 +3,11 @@ use super::TitlebarInsets;
 use crate::Color;
 use crate::Point;
 use crate::Rect;
-use crate::TabPart;
 use crate::tabpart::identity::{
     CHANGES_PANE_BUTTON, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON,
-    TITLEBAR_SETTINGS_CLOSE, TITLEBAR_TAB_CONTAINER,
 };
 use crate::tabpart::test_style;
-use crate::{TabInputKey, TabIntent, tab_intent_for_element};
+use crate::{TabInputKey, TabIntent, TabPart, tab_intent_for_element};
 use zeta_icons::icons;
 use zui::ui::InteractionFrame;
 use zui::ui::UiDispatch;
@@ -25,8 +23,6 @@ fn collapsed_tab_part_hides_tabs_and_keeps_titlebar_actions() {
     let titlebar = Titlebar::new(
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
         test_style(),
-        &part,
-        part.active_tab_key(),
         false,
         TitlebarInsets::new(70.0, 110.0),
         &dispatch,
@@ -40,7 +36,6 @@ fn collapsed_tab_part_hides_tabs_and_keeps_titlebar_actions() {
     );
     assert_eq!(frame.scene().icons()[1].icon(), icons::DIFF);
     assert_eq!(frame.scene().icons()[2].icon(), icons::GEAR);
-    assert!(frame.interaction().node(TITLEBAR_SETTINGS_CLOSE).is_none());
     assert!(
         frame
             .scene()
@@ -48,7 +43,6 @@ fn collapsed_tab_part_hides_tabs_and_keeps_titlebar_actions() {
             .iter()
             .all(|text| text.text() != "Settings")
     );
-    assert!(frame.interaction().node(TITLEBAR_TAB_CONTAINER).is_none());
 
     dispatch.pointer_moved(Point::new(400.0, 16.0), frame.interaction());
     assert_eq!(
@@ -111,8 +105,6 @@ fn expanded_tab_part_uses_the_changes_icon_without_titlebar_tabs() {
     let titlebar = Titlebar::new(
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
         test_style(),
-        &part,
-        part.active_tab_key(),
         true,
         TitlebarInsets::NONE,
         &dispatch,
@@ -132,7 +124,6 @@ fn expanded_tab_part_uses_the_changes_icon_without_titlebar_tabs() {
             .iter()
             .all(|text| text.text() != "Settings")
     );
-    assert!(frame.interaction().node(TITLEBAR_TAB_CONTAINER).is_none());
     assert_eq!(
         frame
             .interaction()

@@ -17,10 +17,9 @@ use super::identity::{
     TAB_CONTAINER_TOOLBAR,
 };
 
-pub const PART_PADDING: f32 = 10.0;
 pub const TOOLBAR_HEIGHT: f32 = 24.0;
-pub const TOOLBAR_CONTENT_GAP: f32 = 4.0;
 const ACTION_SIZE: f32 = TOOLBAR_HEIGHT;
+const TOOLBAR_HORIZONTAL_PADDING: f32 = 10.0;
 const TOOLBAR_GAP: f32 = 6.0;
 
 /// Tab Container toolbar with a leading Session SearchBox and trailing creation ActionBar.
@@ -33,18 +32,17 @@ pub struct TabContainerToolbar {
 
 impl TabContainerToolbar {
     pub fn new(
-        part_bounds: Rect,
+        bounds: Rect,
         search_input: &TextInput,
         caret_visibility: CaretVisibility,
         style: WorkbenchUiStyle,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
-        let bounds = Self::toolbar_bounds(part_bounds);
         let content_bounds = Rect::from_xywh(
-            bounds.origin.x + PART_PADDING,
+            bounds.origin.x + TOOLBAR_HORIZONTAL_PADDING,
             bounds.origin.y,
-            (bounds.size.width - PART_PADDING * 2.0).max(1.0),
+            (bounds.size.width - TOOLBAR_HORIZONTAL_PADDING * 2.0).max(1.0),
             bounds.size.height,
         );
         let action_width = ACTION_SIZE;
@@ -157,31 +155,17 @@ impl TabContainerToolbar {
     pub const fn search_caret_bounds(&self) -> Option<Rect> {
         self.search_box.caret_bounds()
     }
-
-    pub fn content_bounds(part_bounds: Rect) -> Rect {
-        Rect::from_xywh(
-            part_bounds.origin.x + PART_PADDING,
-            part_bounds.origin.y + PART_PADDING + TOOLBAR_HEIGHT + TOOLBAR_CONTENT_GAP,
-            (part_bounds.size.width - PART_PADDING * 2.0).max(1.0),
-            (part_bounds.size.height - PART_PADDING * 2.0 - TOOLBAR_HEIGHT - TOOLBAR_CONTENT_GAP)
-                .max(1.0),
-        )
-    }
-
-    fn toolbar_bounds(part_bounds: Rect) -> Rect {
-        Rect::from_xywh(
-            part_bounds.origin.x,
-            part_bounds.origin.y + PART_PADDING,
-            part_bounds.size.width,
-            TOOLBAR_HEIGHT,
-        )
-    }
 }
 
 impl Component for TabContainerToolbar {
     fn element(&self) -> ComponentElement {
         Element::leaf("TabContainerToolbar")
-            .padding(Edges::new(0.0, PART_PADDING, 0.0, PART_PADDING))
+            .padding(Edges::new(
+                0.0,
+                TOOLBAR_HORIZONTAL_PADDING,
+                0.0,
+                TOOLBAR_HORIZONTAL_PADDING,
+            ))
             .in_bounds(self.bounds)
             .with_identity(TAB_CONTAINER_TOOLBAR)
     }

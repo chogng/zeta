@@ -39,9 +39,9 @@ pub enum TabContextMenuAction {
 impl TabContextMenuAction {
     pub const ALL: [Self; 4] = [
         Self::TogglePin,
-        Self::Close,
-        Self::MoveToGroup,
         Self::Rename,
+        Self::MoveToGroup,
+        Self::Close,
     ];
 
     pub const fn element_id(self) -> ElementId {
@@ -58,8 +58,35 @@ impl TabContextMenuAction {
             Self::TogglePin if pinned => "Unpin tab",
             Self::TogglePin => "Pin tab",
             Self::Close => "Close tab",
-            Self::MoveToGroup => "Move to group  ›",
+            Self::MoveToGroup => "Move to group",
             Self::Rename => "Rename tab",
+        }
+    }
+
+    const fn menu_index(self) -> usize {
+        match self {
+            Self::TogglePin => 0,
+            Self::Rename => 1,
+            Self::MoveToGroup => 3,
+            Self::Close => 5,
+        }
+    }
+
+    const fn hint(self) -> &'static str {
+        match self {
+            Self::TogglePin => "P",
+            Self::Close => "W",
+            Self::MoveToGroup => "›",
+            Self::Rename => "R",
+        }
+    }
+
+    pub(crate) fn from_hint(text: &str) -> Option<Self> {
+        match text {
+            "p" | "P" => Some(Self::TogglePin),
+            "r" | "R" => Some(Self::Rename),
+            "w" | "W" => Some(Self::Close),
+            _ => None,
         }
     }
 

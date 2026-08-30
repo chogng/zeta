@@ -29,9 +29,9 @@ use crate::QuickAccess;
 use crate::SessionSearchState;
 use crate::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
-    PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState,
-    TabContainerToolbar, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets,
-    mounted_tab_element_id, pane_group_element_id, tab_input_element_id, workbench_tab_groups,
+    PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerState, TabInput, TabInputKey, TabPart,
+    Titlebar, TitlebarInsets, mounted_tab_element_id, pane_group_element_id, tab_input_element_id,
+    workbench_tab_groups,
 };
 use crate::{
     MainSurfaceKind, SESSION_SEARCH_INPUT, TabContextMenu, TabContextMenuState, WINDOW,
@@ -519,16 +519,10 @@ fn build_workbench_presentation_with_bindings(
         model.environment_context.git_branch,
         &model.environment_context.diff_summary,
     );
-    let selected_id = tab_input_element_id(
-        model.tab_part,
-        model.active_tab_input,
-        TabContainerPlacement::Body,
-    );
-    let mut titlebar = Titlebar::new(
+    let selected_id = tab_input_element_id(model.tab_part, model.active_tab_input);
+    let titlebar = Titlebar::new(
         layout.titlebar(),
         crate::WorkbenchUiStyle::from_theme(palette),
-        model.tab_part,
-        model.active_tab_input,
         model.tab_container.is_expanded(),
         TitlebarInsets::new(
             model.window_control_insets.left(),
@@ -536,11 +530,6 @@ fn build_workbench_presentation_with_bindings(
         ),
         model.dispatch,
     );
-    if let Some(tab) = model.tab_context_menu.target_tab().and_then(|tab| {
-        mounted_tab_element_id(model.tab_part, tab, TabContainerPlacement::Titlebar)
-    }) {
-        titlebar = titlebar.with_visible_tab_action_bar(tab);
-    }
     frame.draw_component(&titlebar);
     let tab_container_draw = if let Some(bounds) = layout.tab_container() {
         frame.with_context(|context| {
@@ -1151,32 +1140,17 @@ fn draw_tab_container(
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
 ) -> TabContainerDrawResult {
-    context.scene_mut().draw_rect(
-        PaintRect::new(bounds, palette.side_bar_background).with_border(Border::new(
-            zui::ui::Edges::new(0.0, 1.0, 0.0, 0.0),
-            palette.border,
-        )),
-    );
-    let toolbar = TabContainerToolbar::new(
-        bounds,
-        view.search.input(),
-        view.caret_visibility,
-        crate::WorkbenchUiStyle::from_theme(palette),
-        text_layout,
-        view.dispatch,
-    );
-    let search_caret = toolbar.search_caret_bounds();
-    context.draw_component(&toolbar);
-    let groups = workbench_tab_groups(view.tab_part, TabContainerPlacement::Body, |input| {
+    let groups = workbench_tab_groups(view.tab_part, |input| {
         input.is_settings() || view.search.matches_session_name(input.title())
     });
     let mut tab_container = TabContainer::new(
         bounds,
-        TabContainerToolbar::content_bounds(bounds),
+        view.search.input(),
+        view.caret_visibility,
         groups,
         view.selected_id,
-        TabContainerPlacement::Body,
         crate::WorkbenchUiStyle::from_theme(palette),
+        text_layout,
         view.dispatch,
     )
     .with_viewport(viewport)
@@ -1184,12 +1158,13 @@ fn draw_tab_container(
     .with_scrollbar_presentation(view.scrollbar_presentation);
     if let Some(tab) = view
         .visible_action_bar_tab
-        .and_then(|tab| mounted_tab_element_id(view.tab_part, tab, TabContainerPlacement::Body))
+        .and_then(|tab| mounted_tab_element_id(view.tab_part, tab))
     {
         tab_container = tab_container.with_visible_action_bar(tab);
     }
     let scroll_metrics = tab_container.scroll_metrics();
     let scroll_view = tab_container.scroll_view();
+    let search_caret = tab_container.search_caret_bounds();
     context.draw_component(&tab_container);
     TabContainerDrawResult {
         search_caret: view

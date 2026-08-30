@@ -9,10 +9,6 @@ use crate::{
 use super::identity::{
     CHANGES_PANE_BUTTON, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, WINDOW,
 };
-use super::tabs::TabContainer;
-use crate::TabInputKey;
-use crate::TabPart;
-use zui::ui::ElementId;
 use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
 
 pub const TITLEBAR_HEIGHT: f32 = 32.0;
@@ -39,25 +35,22 @@ impl TitlebarInsets {
 }
 
 /// Application-owned draggable titlebar for the single terminal surface.
-pub struct Titlebar<'a> {
+pub struct Titlebar {
     bounds: Rect,
     style: WorkbenchUiStyle,
     left_action_bar: ActionBar,
     right_action_bar: ActionBar,
     settings_action_index: Option<usize>,
-    tab_container: Option<TabContainer<'a>>,
     tab_container_toggle_label: &'static str,
 }
 
-impl<'a> Titlebar<'a> {
+impl Titlebar {
     pub fn new(
         bounds: Rect,
         style: WorkbenchUiStyle,
-        _tab_part: &'a TabPart,
-        _active_tab: Option<&TabInputKey>,
         tabs_expanded: bool,
         window_control_insets: TitlebarInsets,
-        dispatch: &'a UiDispatch,
+        dispatch: &UiDispatch,
     ) -> Self {
         let content_left = bounds.origin.x + window_control_insets.left;
         let content_right = (bounds.right() - window_control_insets.right).max(content_left);
@@ -167,18 +160,8 @@ impl<'a> Titlebar<'a> {
             left_action_bar,
             right_action_bar,
             settings_action_index,
-            tab_container: None,
             tab_container_toggle_label,
         }
-    }
-
-    /// Keeps one titlebar tab's action bar visible independently of pointer and focus state.
-    pub fn with_visible_tab_action_bar(mut self, tab: ElementId) -> Self {
-        self.tab_container = self
-            .tab_container
-            .take()
-            .map(|container| container.with_visible_action_bar(tab));
-        self
     }
 
     fn child_interaction_regions(&self) -> Vec<InteractionRegion> {
@@ -228,7 +211,7 @@ impl<'a> Titlebar<'a> {
     }
 }
 
-impl Component for Titlebar<'_> {
+impl Component for Titlebar {
     fn element(&self) -> ComponentElement {
         Element::leaf("Titlebar")
             .in_bounds(self.bounds)
@@ -257,9 +240,6 @@ impl Component for Titlebar<'_> {
                 Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.colors.border),
             ),
         );
-        if let Some(tab_container) = &self.tab_container {
-            context.draw_component(tab_container);
-        }
         context.draw_component(&self.left_action_bar);
         context.draw_component(&self.right_action_bar);
     }
@@ -270,9 +250,6 @@ impl Component for Titlebar<'_> {
                 Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.colors.border),
             ),
         );
-        if let Some(tab_container) = &self.tab_container {
-            scene.draw_component(tab_container);
-        }
         scene.draw_component(&self.left_action_bar);
         scene.draw_component(&self.right_action_bar);
     }

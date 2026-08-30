@@ -67,6 +67,29 @@ fn button_selects_background_from_host_provided_state() {
 }
 
 #[test]
+fn button_places_a_trailing_hint_in_its_own_text_column() {
+    let hint = Color::rgb(120, 121, 122);
+    let button = Button::label_and_hint(
+        Rect::from_xywh(20.0, 4.0, 100.0, 28.0),
+        "Rename",
+        "R",
+        ButtonState::Resting,
+        test_style()
+            .with_hint_text_style(TextStyle::new(11.0, hint))
+            .with_hint_width(12.0),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    scene.draw_component(&button);
+
+    assert_eq!(button.accessible_label(), "Rename");
+    assert_eq!(scene.text_blocks()[0].text(), "Rename");
+    assert_eq!(scene.text_blocks()[1].text(), "R");
+    assert_eq!(scene.text_blocks()[1].origin().x, 100.0);
+    assert_eq!(scene.text_blocks()[1].style().color(), hint);
+}
+
+#[test]
 fn button_lays_out_icon_and_label_inside_content_padding() {
     let button = Button::icon_and_label(
         Rect::from_xywh(20.0, 4.0, 100.0, 27.0),

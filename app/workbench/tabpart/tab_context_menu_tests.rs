@@ -11,8 +11,10 @@ use crate::TabPart;
 use crate::tabpart::identity::WINDOW;
 use zeta_protocol::SessionId;
 use zui::ui::AccessibilityRole;
+use zui::ui::Border;
 use zui::ui::CaretVisibility;
 use zui::ui::Color;
+use zui::ui::CornerRadii;
 use zui::ui::ElementId;
 use zui::ui::InteractionFrame;
 use zui::ui::Point;
@@ -30,6 +32,7 @@ fn style() -> TabContextMenuStyle {
         Color::WHITE,
         Color::rgb(220, 220, 220),
         Color::rgb(30, 30, 30),
+        Color::rgb(120, 120, 124),
         Color::rgb(226, 226, 228),
     )
 }
@@ -60,8 +63,48 @@ fn menu_owns_current_generic_tab_actions() {
     assert_eq!(state.target_tab(), Some(&target));
     assert_eq!(
         TabContextMenuAction::ALL.map(|action| action.label(false)),
-        ["Pin tab", "Close tab", "Move to group  ›", "Rename tab"]
+        ["Pin tab", "Rename tab", "Move to group", "Close tab"]
     );
+    assert_eq!(
+        TabContextMenuAction::ALL.map(TabContextMenuAction::hint),
+        ["P", "R", "›", "W"]
+    );
+    assert_eq!(menu.item_bounds(0).unwrap().size.width, 140.0);
+    assert_eq!(menu.item_bounds(0).unwrap().size.height, 28.0);
+    assert_eq!(
+        menu.item_bounds(3).unwrap().origin.y - menu.item_bounds(1).unwrap().bottom(),
+        8.0
+    );
+    assert_eq!(
+        frame
+            .scene()
+            .text_blocks()
+            .iter()
+            .map(|text| text.text())
+            .collect::<Vec<_>>(),
+        [
+            "Pin tab",
+            "Rename tab",
+            "Move to group",
+            "Close tab",
+            "P",
+            "R",
+            "›",
+            "W",
+        ]
+    );
+    let surface = frame
+        .scene()
+        .rects()
+        .iter()
+        .copied()
+        .find(|rect| rect.shadow().is_some())
+        .expect("menu surface");
+    assert_eq!(
+        surface.border(),
+        Border::uniform(1.0, Color::rgb(220, 220, 220))
+    );
+    assert_eq!(surface.corner_radii(), CornerRadii::uniform(8.0));
     assert_eq!(
         nodes
             .iter()

@@ -17,6 +17,10 @@ pub enum ActionBarOrientation {
 #[derive(Clone, Debug, PartialEq)]
 enum ActionViewItemContent {
     Label(String),
+    LabelAndHint {
+        label: String,
+        hint: String,
+    },
     Icon {
         icon: Icon,
         accessible_label: String,
@@ -45,6 +49,22 @@ impl ActionViewItem {
     pub fn label(label: impl Into<String>, state: ButtonState) -> Self {
         Self {
             content: ActionViewItemContent::Label(label.into()),
+            state,
+            selection: ButtonSelection::Unselected,
+            main_axis_extent: None,
+        }
+    }
+
+    pub fn label_and_hint(
+        label: impl Into<String>,
+        hint: impl Into<String>,
+        state: ButtonState,
+    ) -> Self {
+        Self {
+            content: ActionViewItemContent::LabelAndHint {
+                label: label.into(),
+                hint: hint.into(),
+            },
             state,
             selection: ButtonSelection::Unselected,
             main_axis_extent: None,
@@ -112,6 +132,7 @@ impl ActionViewItem {
     pub(crate) fn accessible_label(&self) -> &str {
         match &self.content {
             ActionViewItemContent::Label(label)
+            | ActionViewItemContent::LabelAndHint { label, .. }
             | ActionViewItemContent::IconAndLabel { label, .. } => label,
             ActionViewItemContent::Icon {
                 accessible_label, ..
@@ -131,6 +152,13 @@ impl ActionViewItem {
             ActionViewItemContent::Label(label) => {
                 Button::new(bounds, label.clone(), self.state, style.clone())
             }
+            ActionViewItemContent::LabelAndHint { label, hint } => Button::label_and_hint(
+                bounds,
+                label.clone(),
+                hint.clone(),
+                self.state,
+                style.clone(),
+            ),
             ActionViewItemContent::Icon {
                 icon,
                 accessible_label,

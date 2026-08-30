@@ -1,6 +1,6 @@
 //! Body-mounted Workbench toolbar tests.
 
-use super::{TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT, TabContainerToolbar};
+use super::{TOOLBAR_HEIGHT, TabContainerToolbar};
 use crate::tabpart::identity::{ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR};
 use crate::tabpart::test_style;
 use crate::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
@@ -9,11 +9,11 @@ use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
 fn toolbar_fills_the_container_row_with_search_and_add_action() {
-    let part_bounds = Rect::from_xywh(0.0, 32.0, 220.0, 668.0);
+    let bounds = Rect::from_xywh(0.0, 42.0, 220.0, TOOLBAR_HEIGHT);
     let mut dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let toolbar = TabContainerToolbar::new(
-        part_bounds,
+        bounds,
         &TextInput::new(),
         CaretVisibility::Visible,
         test_style(),
@@ -26,10 +26,6 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
 
     assert_eq!(toolbar.bounds.size.width, 220.0);
     assert_eq!(toolbar.bounds.size.height, TOOLBAR_HEIGHT);
-    assert_eq!(
-        TabContainerToolbar::content_bounds(part_bounds).origin.y - toolbar.bounds.bottom(),
-        TOOLBAR_CONTENT_GAP
-    );
     assert_eq!(scene.text_blocks()[0].text(), "Search sessions...");
     let target = scene
         .inspection()

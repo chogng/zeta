@@ -804,7 +804,13 @@ fn expanded_tab_container_reflows_the_terminal_without_a_placeholder_session() {
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        vec!["TabContainerToolbar", "SearchBox", "InputBox"]
+        vec![
+            "TabContainer",
+            "TabContainerHeader",
+            "TabContainerToolbar",
+            "SearchBox",
+            "InputBox",
+        ]
     );
     assert_eq!(search.role, AccessibilityRole::TextInput);
     assert_eq!(add_session.role, AccessibilityRole::Button);
@@ -1320,7 +1326,7 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
 
     assert_eq!(
         labels,
-        ["Pin tab", "Close tab", "Move to group  ›", "Rename tab"]
+        ["Pin tab", "Rename tab", "Move to group", "Close tab"]
     );
     assert_eq!(
         presentation.interaction_frame().target_at(Point::new(
@@ -1335,7 +1341,15 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
             .scene()
             .text_blocks()
             .iter()
-            .any(|text| text.text() == "Move to group  ›")
+            .any(|text| text.text() == "Move to group")
+    );
+    assert!(
+        presentation
+            .frame()
+            .scene()
+            .text_blocks()
+            .iter()
+            .any(|text| text.text() == "›")
     );
 }
 
