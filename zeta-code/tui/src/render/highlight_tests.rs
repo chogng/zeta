@@ -60,7 +60,7 @@ fn unknown_languages_and_oversized_code_remain_visible() {
 }
 
 #[test]
-fn crlf_and_trailing_empty_line_are_preserved() {
+fn crlf_content_is_preserved_without_an_extra_terminal_row() {
     let lines = highlight_code(
         "let one = 1;\r\nlet two = 2;\r\n",
         "rs",
@@ -69,6 +69,6 @@ fn crlf_and_trailing_empty_line_are_preserved() {
 
     assert_eq!(
         lines.iter().map(Line::to_string).collect::<Vec<_>>(),
-        ["let one = 1;", "let two = 2;", ""]
+        ["let one = 1;", "let two = 2;"]
     );
 }

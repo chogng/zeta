@@ -118,8 +118,12 @@ impl SubagentPaneState {
         u16::try_from(self.rows.len().min(DEFAULT_MAX_ROWS)).unwrap_or(u16::MAX)
     }
 
-    pub(crate) fn refresh_elapsed(&mut self) {
-        self.now_unix_ms = current_unix_millis();
+    pub(crate) fn refresh_elapsed(&mut self) -> bool {
+        let now_unix_ms = current_unix_millis();
+        let visible_second_changed =
+            !self.rows.is_empty() && self.now_unix_ms / 1_000 != now_unix_ms / 1_000;
+        self.now_unix_ms = now_unix_ms;
+        visible_second_changed
     }
 
     fn selected_index(&self) -> Option<usize> {

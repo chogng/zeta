@@ -66,6 +66,7 @@ pub(crate) struct TranscriptCell {
     cell_id: TranscriptCellId,
     source_entry_id: Option<String>,
     lifecycle: CellLifecycle,
+    render_revision: u64,
     body: TranscriptCellBody,
 }
 
@@ -152,7 +153,9 @@ impl TranscriptCell {
             } => Message::command(command.clone(), *status, result.clone())
                 .with_cell_id(self.cell_id.as_str()),
         };
-        message.with_cell_actions(self.can_expand(), expanded, self.has_details(), selected)
+        message
+            .with_render_revision(self.render_revision)
+            .with_cell_actions(self.can_expand(), expanded, self.has_details(), selected)
     }
 
     fn source_ids(&self) -> Vec<&str> {
@@ -167,6 +170,7 @@ impl TranscriptCell {
 pub(super) struct TranscriptProjection {
     cells: Vec<TranscriptCell>,
     next_local_id: u64,
+    next_render_revision: u64,
 }
 
 impl TranscriptProjection {
@@ -182,15 +186,15 @@ impl TranscriptProjection {
             .cells
             .iter()
             .flat_map(TranscriptCell::source_ids)
+            .map(str::to_owned)
             .collect::<BTreeSet<_>>();
-        let mut older = Self::default();
+        let mut current = std::mem::take(&mut self.cells);
         for entry in snapshot.entries {
             if !existing.contains(entry.entry_id()) {
-                older.upsert(entry);
+                self.upsert(entry);
             }
         }
-        older.cells.append(&mut self.cells);
-        self.cells = older.cells;
+        self.cells.append(&mut current);
     }
 
     pub(super) fn apply(&mut self, update: ThreadTranscriptUpdateEnvelope) {
@@ -236,40 +240,48 @@ impl TranscriptProjection {
 
     pub(super) fn push_message(&mut self, role: MessageRole, text: String) {
         let cell_id = self.local_id("message");
+        let render_revision = self.render_revision();
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
             lifecycle: CellLifecycle::Final,
+            render_revision,
             body: TranscriptCellBody::Message { role, text },
         });
     }
 
     pub(super) fn push_notice(&mut self, text: String) {
         let cell_id = self.local_id("notice");
+        let render_revision = self.render_revision();
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
             lifecycle: CellLifecycle::Final,
+            render_revision,
             body: TranscriptCellBody::Notice(text),
         });
     }
 
     pub(super) fn push_error(&mut self, text: String) {
         let cell_id = self.local_id("error");
+        let render_revision = self.render_revision();
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
             lifecycle: CellLifecycle::Final,
+            render_revision,
             body: TranscriptCellBody::Error(text),
         });
     }
 
     pub(super) fn command_started(&mut self, command: String) {
         let cell_id = self.local_id("command");
+        let render_revision = self.render_revision();
         self.cells.push(TranscriptCell {
             cell_id,
             source_entry_id: None,
             lifecycle: CellLifecycle::Live,
+            render_revision,
             body: TranscriptCellBody::Command {
                 command,
                 result: None,
@@ -279,6 +291,7 @@ impl TranscriptProjection {
     }
 
     pub(super) fn command_completed(&mut self, command: String, result: String) {
+        let render_revision = self.render_revision();
         if let Some(cell) = self.cells.iter_mut().rev().find(|cell| {
             matches!(
                 &cell.body,
@@ -290,6 +303,7 @@ impl TranscriptProjection {
             )
         }) {
             cell.lifecycle = CellLifecycle::Final;
+            cell.render_revision = render_revision;
             cell.body = TranscriptCellBody::Command {
                 command,
                 result: Some(result),
@@ -302,6 +316,7 @@ impl TranscriptProjection {
             cell_id,
             source_entry_id: None,
             lifecycle: CellLifecycle::Final,
+            render_revision,
             body: TranscriptCellBody::Command {
                 command,
                 result: Some(result),
@@ -311,6 +326,7 @@ impl TranscriptProjection {
     }
 
     fn upsert(&mut self, entry: ThreadTranscriptEntry) {
+        let render_revision = self.render_revision();
         match entry {
             ThreadTranscriptEntry::Item {
                 entry_id,
@@ -322,7 +338,13 @@ impl TranscriptProjection {
                         ..
                     },
                 ..
-            } => self.upsert_tool_call(entry_id, tool_call_id, name, pretty_json(&arguments_json)),
+            } => self.upsert_tool_call(
+                entry_id,
+                tool_call_id,
+                name,
+                pretty_json(&arguments_json),
+                render_revision,
+            ),
             ThreadTranscriptEntry::Item {
                 entry_id,
                 item:
@@ -333,15 +355,15 @@ impl TranscriptProjection {
                         ..
                     },
                 ..
-            } => self.complete_tool(entry_id, tool_call_id, text, is_error),
+            } => self.complete_tool(entry_id, tool_call_id, text, is_error, render_revision),
             ThreadTranscriptEntry::ToolOutput {
                 entry_id,
                 tool_call_id,
                 stream,
                 text,
                 ..
-            } => self.apply_tool_output(entry_id, tool_call_id, stream, text),
-            entry => self.upsert_regular(cell_from_entry(&entry)),
+            } => self.apply_tool_output(entry_id, tool_call_id, stream, text, render_revision),
+            entry => self.upsert_regular(cell_from_entry(&entry, render_revision)),
         }
     }
 
@@ -363,9 +385,14 @@ impl TranscriptProjection {
         tool_call_id: ToolCallId,
         name: zeta_protocol::ToolName,
         arguments: String,
+        render_revision: u64,
     ) {
-        if let Some(exec) = self.exec_for_call_mut(&tool_call_id) {
+        if let Some(cell) = self.cell_for_call_mut(&tool_call_id) {
+            let TranscriptCellBody::Exec(exec) = &mut cell.body else {
+                unreachable!("a matched ToolCall is owned by an ExecCell")
+            };
             exec.update_call(entry_id, &tool_call_id, &name, arguments);
+            cell.render_revision = render_revision;
             return;
         }
         if let Some(TranscriptCell {
@@ -375,12 +402,18 @@ impl TranscriptProjection {
             && exec.can_accept(&name)
         {
             exec.push_call(entry_id, tool_call_id, &name, arguments);
+            let last = self
+                .cells
+                .last_mut()
+                .expect("the grouped ExecCell remains the last cell");
+            last.render_revision = render_revision;
             return;
         }
         self.cells.push(TranscriptCell {
             cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
             source_entry_id: None,
             lifecycle: CellLifecycle::Live,
+            render_revision,
             body: TranscriptCellBody::Exec(ExecCell::start(
                 entry_id,
                 tool_call_id,
@@ -396,18 +429,25 @@ impl TranscriptProjection {
         tool_call_id: ToolCallId,
         stream: zeta_protocol::ToolOutputStream,
         text: String,
+        render_revision: u64,
     ) {
         if self.exec_for_call_mut(&tool_call_id).is_none() {
             self.cells.push(TranscriptCell {
                 cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
                 source_entry_id: None,
                 lifecycle: CellLifecycle::Live,
+                render_revision,
                 body: TranscriptCellBody::Exec(ExecCell::recovered(tool_call_id.clone())),
             });
         }
-        self.exec_for_call_mut(&tool_call_id)
-            .expect("the recovered ExecCell owns the ToolCall")
-            .apply_output(entry_id, &tool_call_id, stream, text);
+        let cell = self
+            .cell_for_call_mut(&tool_call_id)
+            .expect("the recovered ExecCell owns the ToolCall");
+        let TranscriptCellBody::Exec(exec) = &mut cell.body else {
+            unreachable!("a matched ToolCall is owned by an ExecCell")
+        };
+        exec.apply_output(entry_id, &tool_call_id, stream, text);
+        cell.render_revision = render_revision;
     }
 
     fn complete_tool(
@@ -416,18 +456,25 @@ impl TranscriptProjection {
         tool_call_id: ToolCallId,
         result: String,
         failed: bool,
+        render_revision: u64,
     ) {
         if self.exec_for_call_mut(&tool_call_id).is_none() {
             self.cells.push(TranscriptCell {
                 cell_id: TranscriptCellId::for_tool_call(&tool_call_id),
                 source_entry_id: None,
                 lifecycle: CellLifecycle::Final,
+                render_revision,
                 body: TranscriptCellBody::Exec(ExecCell::recovered(tool_call_id.clone())),
             });
         }
-        self.exec_for_call_mut(&tool_call_id)
-            .expect("the recovered ExecCell owns the ToolCall")
-            .complete(entry_id, &tool_call_id, result, failed);
+        let cell = self
+            .cell_for_call_mut(&tool_call_id)
+            .expect("the recovered ExecCell owns the ToolCall");
+        let TranscriptCellBody::Exec(exec) = &mut cell.body else {
+            unreachable!("a matched ToolCall is owned by an ExecCell")
+        };
+        exec.complete(entry_id, &tool_call_id, result, failed);
+        cell.render_revision = render_revision;
     }
 
     fn exec_for_call_mut(&mut self, tool_call_id: &ToolCallId) -> Option<&mut ExecCell> {
@@ -437,13 +484,21 @@ impl TranscriptProjection {
         })
     }
 
+    fn cell_for_call_mut(&mut self, tool_call_id: &ToolCallId) -> Option<&mut TranscriptCell> {
+        self.cells.iter_mut().find(|cell| {
+            matches!(&cell.body, TranscriptCellBody::Exec(exec) if exec.contains_call(tool_call_id))
+        })
+    }
+
     fn remove(&mut self, entry_ids: &[String]) {
         for entry_id in entry_ids {
+            let render_revision = self.render_revision();
             for cell in &mut self.cells {
                 if let TranscriptCellBody::Exec(exec) = &mut cell.body
                     && exec.contains_source(entry_id)
                 {
                     exec.remove_entry(entry_id);
+                    cell.render_revision = render_revision;
                 }
             }
             self.cells.retain(|cell| {
@@ -457,9 +512,11 @@ impl TranscriptProjection {
     }
 
     fn clear_transient(&mut self) {
+        let render_revision = self.render_revision();
         for cell in &mut self.cells {
             if let TranscriptCellBody::Exec(exec) = &mut cell.body {
                 exec.clear_live();
+                cell.render_revision = render_revision;
             }
         }
         self.cells.retain(|cell| {
@@ -472,9 +529,14 @@ impl TranscriptProjection {
         self.next_local_id = self.next_local_id.saturating_add(1);
         TranscriptCellId::local(kind, self.next_local_id)
     }
+
+    fn render_revision(&mut self) -> u64 {
+        self.next_render_revision = self.next_render_revision.wrapping_add(1).max(1);
+        self.next_render_revision
+    }
 }
 
-fn cell_from_entry(entry: &ThreadTranscriptEntry) -> TranscriptCell {
+fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> TranscriptCell {
     let entry_id = entry.entry_id().to_owned();
     let lifecycle = if entry.is_transient() {
         CellLifecycle::Live
@@ -521,6 +583,7 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry) -> TranscriptCell {
         cell_id: TranscriptCellId::for_entry(&entry_id),
         source_entry_id: Some(entry_id),
         lifecycle,
+        render_revision,
         body,
     }
 }

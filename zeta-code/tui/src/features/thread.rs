@@ -38,5 +38,6 @@ pub(crate) use subagent_pane::draw_subagent_pane;
 pub(crate) use subscription::ThreadSubscription;
 pub(crate) use subscription::ThreadSwitch;
 pub(crate) use subscription::ThreadUpdateDisposition;
+pub(crate) use subscription::TranscriptUpdateDisposition;
 pub(crate) use transcript::TranscriptCellId;
 pub(crate) use update::ThreadPresentationEvent;

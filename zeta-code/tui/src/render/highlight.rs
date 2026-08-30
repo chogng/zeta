@@ -1,6 +1,6 @@
 use super::RenderContext;
+use super::StreamingCodeHighlighter;
 use super::push_owned_lines;
-use super::styled_text_lines;
 use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -15,9 +15,9 @@ use syntect::parsing::SyntaxReference;
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
-const MAX_CODE_BYTES: usize = 512 * 1024;
-const MAX_CODE_LINES: usize = 10_000;
-const MAX_LINE_BYTES: usize = 4 * 1024;
+pub(super) const MAX_CODE_BYTES: usize = 512 * 1024;
+pub(super) const MAX_CODE_LINES: usize = 10_000;
+pub(super) const MAX_LINE_BYTES: usize = 4 * 1024;
 
 static SYNTAXES: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
 static SELECTORS: LazyLock<SyntaxSelectors> = LazyLock::new(SyntaxSelectors::new);
@@ -97,17 +97,20 @@ pub(crate) fn highlight_code(
     language: &str,
     palette: SyntaxPalette,
 ) -> Vec<Line<'static>> {
-    let Some(syntax) = syntax(language) else {
-        return plain_code(code, palette);
-    };
-    if exceeds_limits(code) {
-        return plain_code(code, palette);
+    if code.is_empty() {
+        return vec![Line::default()];
     }
-
-    highlight(code, syntax, palette).unwrap_or_else(|| plain_code(code, palette))
+    let complete = if code.ends_with('\n') {
+        std::borrow::Cow::Borrowed(code)
+    } else {
+        std::borrow::Cow::Owned(format!("{code}\n"))
+    };
+    StreamingCodeHighlighter::start(&complete, language, palette, 0)
+        .map(|(_, lines)| lines)
+        .unwrap_or_else(|| plain_code(code, palette))
 }
 
-fn syntax(language: &str) -> Option<&'static SyntaxReference> {
+pub(super) fn syntax(language: &str) -> Option<&'static SyntaxReference> {
     let language = language.trim();
     if language.is_empty() {
         return None;
@@ -117,31 +120,41 @@ fn syntax(language: &str) -> Option<&'static SyntaxReference> {
         .or_else(|| SYNTAXES.find_syntax_by_extension(language))
 }
 
-fn exceeds_limits(code: &str) -> bool {
+pub(super) fn exceeds_limits(code: &str) -> bool {
     code.len() > MAX_CODE_BYTES
         || code.lines().count() > MAX_CODE_LINES
         || code.lines().any(|line| line.len() > MAX_LINE_BYTES)
 }
 
+pub(crate) fn code_within_limits(code: &str) -> bool {
+    !exceeds_limits(code)
+}
+
 fn plain_code(code: &str, palette: SyntaxPalette) -> Vec<Line<'static>> {
-    let lines = styled_text_lines(code, Style::default().fg(palette.foreground));
+    if code.is_empty() {
+        return vec![Line::default()];
+    }
+    let lines = code
+        .lines()
+        .map(|line| {
+            Line::from(Span::styled(
+                line.to_owned(),
+                Style::default().fg(palette.foreground),
+            ))
+        })
+        .collect::<Vec<_>>();
     let mut output = Vec::with_capacity(lines.len());
     push_owned_lines(&lines, &mut output);
     output
 }
 
-fn highlight(
+pub(super) fn highlight_with_state(
     code: &str,
-    syntax: &SyntaxReference,
     palette: SyntaxPalette,
+    parser: &mut ParseState,
+    scopes: &mut ScopeStack,
 ) -> Option<Vec<Line<'static>>> {
-    if code.is_empty() {
-        return Some(vec![Line::default()]);
-    }
-    let mut parser = ParseState::new(syntax);
-    let mut scopes = ScopeStack::new();
     let mut output = Vec::new();
-
     for source_line in LinesWithEndings::from(code) {
         let without_newline = source_line.strip_suffix('\n').unwrap_or(source_line);
         let visible_len = without_newline
@@ -164,9 +177,6 @@ fn highlight(
             );
         }
         output.push(Line::from(spans));
-    }
-    if code.ends_with('\n') {
-        output.push(Line::default());
     }
     Some(output)
 }

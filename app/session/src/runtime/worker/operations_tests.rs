@@ -58,6 +58,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
                 durable_sequence: 7,
+                revision: 1,
                 entries: Vec::new(),
             },
             updates: Vec::new(),

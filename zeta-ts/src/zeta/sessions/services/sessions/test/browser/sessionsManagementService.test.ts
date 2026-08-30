@@ -182,7 +182,7 @@ function threadProjection(sessionId: string, threadId: string): SessionThreadPro
 			},
 			turns: [],
 		},
-		transcript: { sessionId, threadId, durableSequence: 1, entries: [] },
+		transcript: { sessionId, threadId, durableSequence: 1, revision: 0, entries: [] },
 		updates: [],
 	};
 }

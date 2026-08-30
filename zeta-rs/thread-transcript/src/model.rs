@@ -82,6 +82,8 @@ pub struct ThreadTranscriptSnapshot {
     pub thread_id: ThreadId,
     #[ts(type = "number")]
     pub durable_sequence: u64,
+    #[ts(type = "number")]
+    pub revision: u64,
     pub entries: Vec<ThreadTranscriptEntry>,
 }
 
@@ -119,6 +121,7 @@ impl ThreadTranscriptSnapshot {
             session_id: thread.session_id.clone(),
             thread_id: thread.thread_id.clone(),
             durable_sequence: thread.sequence,
+            revision: 0,
             entries,
         }
     }
@@ -145,6 +148,8 @@ pub struct ThreadTranscriptUpdateEnvelope {
     pub thread_id: ThreadId,
     #[ts(type = "number")]
     pub durable_sequence: u64,
+    #[ts(type = "number")]
+    pub revision: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub stream_cursor: Option<StreamCursor>,

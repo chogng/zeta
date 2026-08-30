@@ -2,6 +2,7 @@ use super::ChatHistoryPointerTarget;
 use super::ChatHistoryView;
 use super::message_lines;
 use super::pointer_target_at;
+use crate::components::chat_history::ChatHistoryRenderCache;
 use crate::components::chat_history::ChatHistoryScroll;
 use crate::components::chat_history::CommandStatus;
 use crate::components::chat_history::Message;
@@ -9,6 +10,8 @@ use crate::components::chat_history::MessageRole;
 use crate::components::welcome::WelcomeModel;
 use crate::render::Renderable;
 use crate::render::test_context;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 use std::path::Path;
@@ -45,10 +48,12 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
         "a response that wraps at narrow widths".into(),
     )];
     let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
     let welcome = WelcomeModel::for_workspace(Path::new("."));
     let view = ChatHistoryView {
         messages: &messages,
         scroll: &scroll,
+        render_cache: &render_cache,
         welcome: &welcome,
         presentation_highlight: test_context().highlight(),
     };
@@ -96,10 +101,74 @@ fn pointer_rows_follow_the_same_multiline_height_as_rendering() {
             Rect::new(0, 0, 30, 10),
             &messages,
             &ChatHistoryScroll::default(),
+            &ChatHistoryRenderCache::default(),
             test_context(),
             2,
             3,
         ),
         Some(ChatHistoryPointerTarget::Toggle("reasoning".into()))
     );
+}
+
+#[test]
+fn long_transcripts_buffer_only_visible_cells() {
+    let messages = (0..300)
+        .map(|index| {
+            Message::plain(MessageRole::Agent, format!("message {index}"))
+                .with_cell_id(format!("agent-{index}"))
+                .with_render_revision(1)
+        })
+        .collect::<Vec<_>>();
+    let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+    let welcome = WelcomeModel::for_workspace(Path::new("."));
+    let view = ChatHistoryView {
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        welcome: &welcome,
+        presentation_highlight: test_context().highlight(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(40, 6)).unwrap();
+
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), test_context()))
+        .unwrap();
+
+    assert!(render_cache.entry_count() <= 3);
+}
+
+#[test]
+fn follow_latest_reaches_content_beyond_the_u16_row_range() {
+    let mut text = "line\n".repeat(usize::from(u16::MAX) + 10);
+    text.push_str("visible tail");
+    let messages = vec![
+        Message::plain(MessageRole::Agent, text)
+            .with_cell_id("long-agent")
+            .with_render_revision(1),
+    ];
+    let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+    let welcome = WelcomeModel::for_workspace(Path::new("."));
+    let view = ChatHistoryView {
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        welcome: &welcome,
+        presentation_highlight: test_context().highlight(),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
+
+    terminal
+        .draw(|frame| view.render(frame, frame.area(), test_context()))
+        .unwrap();
+    let rendered = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+
+    assert!(rendered.contains("visible tail"));
 }

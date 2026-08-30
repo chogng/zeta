@@ -151,7 +151,7 @@ fn is_transient_notification(value: &Value) -> bool {
 }
 
 fn transcript_resets_for_dropped_notifications(values: &VecDeque<Value>) -> Vec<Value> {
-    let mut scopes = BTreeMap::<(String, String), u64>::new();
+    let mut scopes = BTreeMap::<(String, String), (u64, u64)>::new();
     for value in values {
         if value.get("method").and_then(Value::as_str) != Some("session/thread/transcript/update")
             || value.pointer("/params/streamCursor").is_none()
@@ -168,14 +168,21 @@ fn transcript_resets_for_dropped_notifications(values: &VecDeque<Value>) -> Vec<
             .pointer("/params/durableSequence")
             .and_then(Value::as_u64)
             .unwrap_or_default();
+        let revision = value
+            .pointer("/params/revision")
+            .and_then(Value::as_u64)
+            .unwrap_or_default();
         scopes
             .entry((session_id.to_owned(), thread_id.to_owned()))
-            .and_modify(|sequence| *sequence = (*sequence).max(durable_sequence))
-            .or_insert(durable_sequence);
+            .and_modify(|watermark| {
+                watermark.0 = watermark.0.max(durable_sequence);
+                watermark.1 = watermark.1.max(revision);
+            })
+            .or_insert((durable_sequence, revision));
     }
     scopes
         .into_iter()
-        .map(|((session_id, thread_id), durable_sequence)| {
+        .map(|((session_id, thread_id), (durable_sequence, revision))| {
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "method": "session/thread/transcript/update",
@@ -183,6 +190,7 @@ fn transcript_resets_for_dropped_notifications(values: &VecDeque<Value>) -> Vec<
                     "sessionId": session_id,
                     "threadId": thread_id,
                     "durableSequence": durable_sequence,
+                    "revision": revision,
                     "changes": [{ "type": "clearTransient" }]
                 }
             })

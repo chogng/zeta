@@ -29,6 +29,7 @@ export class ChatPaneModel extends Disposable {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
+	private transcriptRevision = 0;
 	private selection: ChatPaneSelection;
 	private _thread: Thread | undefined;
 	private _interaction: TurnInteraction | undefined;
@@ -72,6 +73,7 @@ export class ChatPaneModel extends Disposable {
 			const active = this.activeSession;
 			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId);
 			this.transcriptEntries = [];
+			this.transcriptRevision = 0;
 		}));
 		void this.initialize();
 	}
@@ -424,6 +426,7 @@ export class ChatPaneModel extends Disposable {
 		this._thread = undefined;
 		this._interaction = undefined;
 		this.transcriptEntries = [];
+		this.transcriptRevision = 0;
 		this._changeSets = [];
 		this.changeDetails.clear();
 		this.changesGeneration++;
@@ -435,7 +438,10 @@ export class ChatPaneModel extends Disposable {
 			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0);
 			if (this.isDisposed || generation !== this.generation) return;
 			this._thread = result.thread;
-			this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
+			if (result.transcript.revision >= this.transcriptRevision) {
+				this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
+				this.transcriptRevision = result.transcript.revision;
+			}
 			for (const update of result.updates) {
 				if (update.durableSequence > result.thread.sequence) {
 					this.acceptUpdate(update);
@@ -527,6 +533,13 @@ export class ChatPaneModel extends Disposable {
 	private acceptTranscriptUpdate(update: ThreadTranscriptUpdateEnvelope): void {
 		const selectedThreadId = this._thread?.threadId ?? this.threadId;
 		if (!selectedThreadId || update.threadId !== selectedThreadId || update.sessionId !== this.sessionId) return;
+		if (update.revision <= this.transcriptRevision) return;
+		const isNext = update.revision === this.transcriptRevision + 1;
+		const resetsTransientState = update.changes.some((change) => change.type === "clearTransient");
+		if (!isNext && !resetsTransientState) {
+			this.scheduleRefresh();
+			return;
+		}
 		for (const change of update.changes) {
 			switch (change.type) {
 				case "upsert": {
@@ -546,6 +559,7 @@ export class ChatPaneModel extends Disposable {
 					break;
 			}
 		}
+		this.transcriptRevision = update.revision;
 		this._onDidChange.fire();
 	}
 
@@ -571,7 +585,10 @@ export class ChatPaneModel extends Disposable {
 				result.thread.threadId !== this.threadId
 			) return;
 			this._thread = result.thread;
-			this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
+			if (result.transcript.revision >= this.transcriptRevision) {
+				this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
+				this.transcriptRevision = result.transcript.revision;
+			}
 			this._error = undefined;
 			this._state = "ready";
 			this._onDidChange.fire();

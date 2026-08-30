@@ -20,9 +20,12 @@ fn backend_changes_replace_entries_without_changing_their_order() {
     state.replace_snapshot(snapshot(vec![item_entry("first", "old", false)]));
 
     assert_eq!(
-        state.apply_update(update(vec![ThreadTranscriptChange::Upsert {
-            entry: item_entry("first", "new", true),
-        }])),
+        state.apply_update(update(
+            2,
+            vec![ThreadTranscriptChange::Upsert {
+                entry: item_entry("first", "new", true),
+            }]
+        )),
         TranscriptUpdateResult::Applied
     );
 
@@ -33,18 +36,24 @@ fn backend_changes_replace_entries_without_changing_their_order() {
 fn backend_changes_append_remove_and_clear_transient_entries() {
     let mut state = TranscriptState::default();
     state.replace_snapshot(snapshot(vec![item_entry("durable", "one", false)]));
-    state.apply_update(update(vec![
-        ThreadTranscriptChange::Upsert {
-            entry: item_entry("transient", "two", true),
-        },
-        ThreadTranscriptChange::Upsert {
-            entry: item_entry("removed", "three", false),
-        },
-    ]));
-    state.apply_update(update(vec![ThreadTranscriptChange::Remove {
-        entry_ids: vec!["item:removed".to_owned()],
-    }]));
-    state.apply_update(update(vec![ThreadTranscriptChange::ClearTransient]));
+    state.apply_update(update(
+        2,
+        vec![
+            ThreadTranscriptChange::Upsert {
+                entry: item_entry("transient", "two", true),
+            },
+            ThreadTranscriptChange::Upsert {
+                entry: item_entry("removed", "three", false),
+            },
+        ],
+    ));
+    state.apply_update(update(
+        3,
+        vec![ThreadTranscriptChange::Remove {
+            entry_ids: vec!["item:removed".to_owned()],
+        }],
+    ));
+    state.apply_update(update(4, vec![ThreadTranscriptChange::ClearTransient]));
 
     assert_eq!(state.entries(), [item_entry("durable", "one", false)]);
 }
@@ -53,9 +62,12 @@ fn backend_changes_append_remove_and_clear_transient_entries() {
 fn updates_for_another_thread_are_ignored() {
     let mut state = TranscriptState::default();
     state.replace_snapshot(snapshot(Vec::new()));
-    let mut foreign = update(vec![ThreadTranscriptChange::Upsert {
-        entry: item_entry("foreign", "ignored", false),
-    }]);
+    let mut foreign = update(
+        2,
+        vec![ThreadTranscriptChange::Upsert {
+            entry: item_entry("foreign", "ignored", false),
+        }],
+    );
     foreign.thread_id = ThreadId::new("other-thread").unwrap();
 
     assert_eq!(state.apply_update(foreign), TranscriptUpdateResult::Ignored);
@@ -67,15 +79,17 @@ fn snapshot(entries: Vec<ThreadTranscriptEntry>) -> ThreadTranscriptSnapshot {
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence: 4,
+        revision: 1,
         entries,
     }
 }
 
-fn update(changes: Vec<ThreadTranscriptChange>) -> ThreadTranscriptUpdateEnvelope {
+fn update(revision: u64, changes: Vec<ThreadTranscriptChange>) -> ThreadTranscriptUpdateEnvelope {
     ThreadTranscriptUpdateEnvelope {
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence: 4,
+        revision,
         stream_cursor: Some(StreamCursor {
             stream_instance_id: StreamInstanceId::new("stream").unwrap(),
             sequence: 1,

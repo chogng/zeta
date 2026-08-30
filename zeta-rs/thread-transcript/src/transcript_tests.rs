@@ -21,6 +21,8 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
     let snapshot = ThreadTranscriptSnapshot::from_thread(&Thread {
         session_id: session_id(),
         thread_id: thread_id(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 7,
@@ -93,6 +95,9 @@ fn deltas_emit_complete_upserts_and_committed_item_replaces_transient() {
     assert_eq!(entry_text(&first), "hel");
     assert_eq!(entry_text(&second), "hello");
     assert_eq!(entry_text(&committed), "hello");
+    assert_eq!(revision(&first), 1);
+    assert_eq!(revision(&second), 2);
+    assert_eq!(revision(&committed), 3);
     let TranscriptApplyResult::Applied(committed) = committed else {
         unreachable!()
     };
@@ -313,6 +318,8 @@ fn snapshot_includes_current_transient_entries_for_late_consumers() {
         .snapshot(&empty_thread())
         .expect("matching Thread scope");
 
+    assert_eq!(snapshot.revision, 1);
+
     assert!(matches!(
         &snapshot.entries[0],
         ThreadTranscriptEntry::Item {
@@ -344,6 +351,13 @@ fn entry_text(result: &TranscriptApplyResult) -> &str {
         ThreadItem::AgentMessage { text, .. } => text,
         _ => panic!("agent item"),
     }
+}
+
+fn revision(result: &TranscriptApplyResult) -> u64 {
+    let TranscriptApplyResult::Applied(update) = result else {
+        panic!("update applied")
+    };
+    update.revision
 }
 
 fn transient(sequence: u64, update: ThreadUpdate) -> ThreadUpdateEnvelope {
@@ -389,6 +403,8 @@ fn empty_thread() -> Thread {
     Thread {
         session_id: session_id(),
         thread_id: thread_id(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 0,

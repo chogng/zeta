@@ -7,6 +7,7 @@ use crate::components::chat_composer::ChatComposerOutcome;
 #[cfg(test)]
 use crate::components::chat_composer::ChatComposerPaneView;
 use crate::components::chat_composer::ChatComposerView;
+use crate::components::chat_history::ChatHistoryRenderCache;
 use crate::components::chat_history::ChatHistoryScroll;
 use crate::components::chat_history::Message;
 use crate::components::chat_input::ChatInputItem;
@@ -152,6 +153,7 @@ pub(crate) struct App {
     screen_selection: ScreenSelection,
     approval_mode_status: ApprovalModeStatus,
     render_theme: RenderTheme,
+    render_theme_revision: u64,
 }
 
 #[derive(Debug)]
@@ -198,6 +200,7 @@ impl App {
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
+            render_theme_revision: 0,
         }
     }
 
@@ -235,11 +238,12 @@ impl App {
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
+            render_theme_revision: 0,
         }
     }
 
     pub(crate) fn render_context(&self) -> RenderContext<'_> {
-        RenderContext::new(&self.render_theme)
+        RenderContext::new(&self.render_theme, self.render_theme_revision)
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<AppCommand> {
@@ -849,8 +853,8 @@ impl App {
 
     pub(crate) fn chat_input_focused(&self) -> bool {
         self.quick_view.is_none()
-            && self.approval.is_none()
-            && self.query.is_none()
+            && self.approval_view().is_none()
+            && self.query_view().is_none()
             && !self.sessions.manager().focused()
             && !self.subagent_pane.focused()
             && self.thread_presentations.active().selected_cell.is_none()
@@ -1161,6 +1165,10 @@ impl App {
         &self.thread_presentations.active().scroll
     }
 
+    pub(crate) fn transcript_render_cache(&self) -> &ChatHistoryRenderCache {
+        &self.thread_presentations.active().render_cache
+    }
+
     pub(crate) fn welcome(&self) -> &WelcomeModel {
         &self.welcome
     }
@@ -1311,8 +1319,8 @@ impl App {
     }
 
     pub(crate) fn accepts_input(&self) -> bool {
-        self.approval.is_none()
-            && self.query.is_none()
+        self.approval_view().is_none()
+            && self.query_view().is_none()
             && self.viewed_thread_accepts_input()
             && matches!(
                 &self.status,
@@ -1515,6 +1523,7 @@ impl App {
             AppEvent::ThemePaneOpened(view) => self.show_theme_pane(view),
             AppEvent::RenderThemeChanged(theme) => {
                 self.render_theme = theme;
+                self.render_theme_revision = self.render_theme_revision.wrapping_add(1).max(1);
             }
             AppEvent::ThreadTranscriptSnapshotReceived(transcript) => {
                 self.thread
@@ -1842,13 +1851,13 @@ impl App {
         }
     }
 
-    pub(crate) fn handle_tick(&mut self, now: Instant) {
+    pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {
         let context = self.app_keymap_context(true);
-        self.app_keymap.expire(context, now);
-        self.subagent_pane.refresh_elapsed();
-        if matches!(self.sessions.root(), Some(RootTarget::Manager)) {
-            self.sessions.refresh_manager_time(now);
-        }
+        let chord_expired = self.app_keymap.expire(context, now);
+        let elapsed_changed = self.subagent_pane.refresh_elapsed();
+        let manager_changed = matches!(self.sessions.root(), Some(RootTarget::Manager))
+            && self.sessions.refresh_manager_time(now);
+        chord_expired || elapsed_changed || manager_changed
     }
 
     pub(crate) fn pending_key_chord_label(&self) -> Option<String> {

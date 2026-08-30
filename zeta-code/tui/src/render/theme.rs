@@ -153,11 +153,15 @@ impl RenderTheme {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct RenderContext<'a> {
     theme: &'a RenderTheme,
+    theme_revision: u64,
 }
 
 impl<'a> RenderContext<'a> {
-    pub(crate) const fn new(theme: &'a RenderTheme) -> Self {
-        Self { theme }
+    pub(crate) const fn new(theme: &'a RenderTheme, theme_revision: u64) -> Self {
+        Self {
+            theme,
+            theme_revision,
+        }
     }
 
     pub(crate) const fn accent(self) -> Color {
@@ -202,12 +206,16 @@ impl<'a> RenderContext<'a> {
     pub(crate) const fn warning(self) -> Color {
         self.theme.warning()
     }
+
+    pub(crate) const fn theme_revision(self) -> u64 {
+        self.theme_revision
+    }
 }
 
 #[cfg(test)]
 pub(crate) fn test_context() -> RenderContext<'static> {
     static THEME: RenderTheme = RenderTheme::fallback();
-    RenderContext::new(&THEME)
+    RenderContext::new(&THEME, 0)
 }
 
 fn terminal_color(foreground: Rgba, background: Rgba, capability: ColorLevel) -> Color {

@@ -1,8 +1,10 @@
+mod cache;
 mod markdown;
 mod model;
 mod state;
 mod view;
 
+pub(crate) use cache::ChatHistoryRenderCache;
 pub(crate) use markdown::export_markdown;
 pub(crate) use markdown::latest_agent_response;
 pub(crate) use model::CommandStatus;

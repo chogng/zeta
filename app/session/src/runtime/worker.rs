@@ -352,11 +352,7 @@ fn drive(
                     select_next_approval_mode(active, approval_mode);
                 }
                 Ok(SessionRuntimeCommand::Refresh) => {
-                    active.subscription = subscribe_session(client, &active.session_id)?;
-                    active.sequence = active_thread_entry(&active.subscription, &active.thread_id)?
-                        .thread
-                        .sequence;
-                    publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
+                    refresh_active_subscription(event_sink, client, active)?;
                 }
                 Ok(SessionRuntimeCommand::SetEnvCwd { cwd, response }) => {
                     match prepare_cwd_reconnect(target, cwd.clone()) {
@@ -382,20 +378,14 @@ fn drive(
         match events.recv_timeout(EVENT_POLL_INTERVAL) {
             Ok(AppServerEvent::Notification(ServerNotification::SessionChanged(update))) => {
                 if update.session_id == active.session_id {
-                    active.subscription = subscribe_session(client, &active.session_id)?;
-                    publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
+                    refresh_active_subscription(event_sink, client, active)?;
                 }
             }
             Ok(AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update))) => {
                 if update.session_id == active.session_id && update.thread_id == active.thread_id {
                     active.sequence = active.sequence.max(update.durable_sequence);
                     if matches!(&update.update, ThreadUpdate::Committed { .. }) {
-                        active.subscription = subscribe_session(client, &active.session_id)?;
-                        active.sequence =
-                            active_thread_entry(&active.subscription, &active.thread_id)?
-                                .thread
-                                .sequence;
-                        publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
+                        refresh_active_subscription(event_sink, client, active)?;
                     }
                 }
             }
@@ -403,10 +393,26 @@ fn drive(
                 ServerNotification::SessionThreadTranscriptUpdate(update),
             )) => {
                 if update.session_id == active.session_id && update.thread_id == active.thread_id {
-                    send_event(
-                        event_sink,
-                        SessionRuntimeEvent::TranscriptUpdate(Box::new(update)),
-                    )?;
+                    if update.revision <= active.transcript_revision {
+                        continue;
+                    }
+                    let is_next =
+                        active.transcript_revision.checked_add(1) == Some(update.revision);
+                    let resets_transient_state = update.changes.iter().any(|change| {
+                        matches!(
+                            change,
+                            zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange::ClearTransient
+                        )
+                    });
+                    if !is_next && !resets_transient_state {
+                        refresh_active_subscription(event_sink, client, active)?;
+                    } else {
+                        active.transcript_revision = update.revision;
+                        send_event(
+                            event_sink,
+                            SessionRuntimeEvent::TranscriptUpdate(Box::new(update)),
+                        )?;
+                    }
                 }
             }
             Ok(AppServerEvent::Notification(notification)) => {
@@ -423,4 +429,17 @@ fn drive(
             }
         }
     }
+}
+
+fn refresh_active_subscription(
+    event_sink: &SessionRuntimeEventSink,
+    client: &mut AppServerRequestHandle,
+    active: &mut ActiveSession,
+) -> Result<()> {
+    let subscription = subscribe_session(client, &active.session_id)?;
+    let thread = active_thread_entry(&subscription, &active.thread_id)?;
+    active.sequence = thread.thread.sequence;
+    active.transcript_revision = thread.transcript.revision;
+    active.subscription = subscription;
+    publish_subscription(event_sink, &active.subscription, &active.thread_id)
 }

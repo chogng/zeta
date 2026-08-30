@@ -155,6 +155,7 @@ fn update(changes: Vec<ThreadTranscriptChange>) -> ThreadTranscriptUpdateEnvelop
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence: 7,
+        revision: 1,
         stream_cursor: None,
         changes,
     }
@@ -182,6 +183,7 @@ fn empty_snapshot() -> ThreadTranscriptSnapshot {
         session_id: session_id(),
         thread_id: thread_id(),
         durable_sequence: 7,
+        revision: 1,
         entries: Vec::new(),
     }
 }

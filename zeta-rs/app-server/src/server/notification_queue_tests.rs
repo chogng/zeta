@@ -36,6 +36,7 @@ fn assembled_transcript_stream_updates_are_droppable() {
                 "sessionId":"session-1",
                 "threadId":"thread-1",
                 "durableSequence":0,
+                "revision":sequence,
                 "streamCursor":{"streamInstanceId":"stream-1","sequence":sequence},
                 "changes":[{"type":"upsert"}]
             }
@@ -50,6 +51,10 @@ fn assembled_transcript_stream_updates_are_droppable() {
     let values = queue.drain();
     assert_eq!(values.len(), 2);
     assert_eq!(values[0]["method"], "session/thread/transcript/update");
+    assert_eq!(
+        values[0]["params"]["revision"],
+        MAX_NOTIFICATION_QUEUE_LEN as u64
+    );
     assert_eq!(values[0]["params"]["changes"][0]["type"], "clearTransient");
     assert_eq!(values[1]["method"], "config/changed");
 }

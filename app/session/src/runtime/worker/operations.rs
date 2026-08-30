@@ -63,6 +63,7 @@ pub(super) struct ActiveSession {
     pub(super) session_id: SessionId,
     pub(super) thread_id: ThreadId,
     pub(super) sequence: u64,
+    pub(super) transcript_revision: u64,
     pub(super) approval_mode: ApprovalMode,
     pub(super) subscription: SessionSubscribeResult,
 }
@@ -135,10 +136,12 @@ fn initialize_session(
     let subscription = subscribe_session(client, &session.session_id)?;
     let thread = active_thread_entry(&subscription, &thread_id)?;
     let sequence = thread.thread.sequence;
+    let transcript_revision = thread.transcript.revision;
     Ok(ActiveSession {
         session_id: subscription.session.session_id.clone(),
         thread_id,
         sequence,
+        transcript_revision,
         approval_mode: ApprovalMode::AskPermissions,
         subscription,
     })
@@ -327,6 +330,7 @@ pub(super) fn rewrite_agent_message(
     let subscription = subscribe_session(client, &session_id)?;
     let thread = active_thread_entry(&subscription, &thread_id)?;
     let sequence = thread.thread.sequence;
+    let transcript_revision = thread.transcript.revision;
     if sequence < rewritten.turn.sequence {
         return Err(anyhow!(
             "Session rewrite subscription did not include the replacement Turn"
@@ -336,6 +340,7 @@ pub(super) fn rewrite_agent_message(
         session_id,
         thread_id,
         sequence,
+        transcript_revision,
         approval_mode: active.approval_mode,
         subscription,
     };

@@ -1,6 +1,7 @@
 use super::HISTORY_PAGE_TURNS;
 use super::ThreadSubscription;
 use super::ThreadUpdateDisposition;
+use super::TranscriptUpdateDisposition;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -10,6 +11,8 @@ use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_protocol::SessionId;
 use zeta_protocol::StreamCursor;
 use zeta_protocol::StreamInstanceId;
@@ -125,6 +128,7 @@ fn latest_snapshot_replaces_a_stale_history_boundary() {
     let oldest_turn_id = TurnId::new("turn-51").unwrap();
     subscription.apply_latest_snapshot(
         &refreshed,
+        0,
         ThreadHistoryBoundary {
             has_older_turns: true,
             oldest_turn_id: Some(oldest_turn_id.clone()),
@@ -138,6 +142,58 @@ fn latest_snapshot_replaces_a_stale_history_boundary() {
             turn_limit: HISTORY_PAGE_TURNS,
         })
     );
+}
+
+#[test]
+fn transcript_revision_rejects_duplicates_and_requests_a_snapshot_for_gaps() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
+
+    assert_eq!(
+        subscription.classify_transcript_update(&transcript_update(1, Vec::new())),
+        TranscriptUpdateDisposition::Apply
+    );
+    assert_eq!(
+        subscription.classify_transcript_update(&transcript_update(1, Vec::new())),
+        TranscriptUpdateDisposition::Ignore
+    );
+    assert_eq!(
+        subscription.classify_transcript_update(&transcript_update(3, Vec::new())),
+        TranscriptUpdateDisposition::RefreshSnapshot
+    );
+}
+
+#[test]
+fn overflow_reset_advances_across_a_transcript_revision_gap() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
+
+    assert_eq!(
+        subscription.classify_transcript_update(&transcript_update(
+            9,
+            vec![ThreadTranscriptChange::ClearTransient],
+        )),
+        TranscriptUpdateDisposition::Apply
+    );
+}
+
+#[test]
+fn an_older_async_snapshot_cannot_replace_a_newer_transcript_update() {
+    let snapshot = thread("session-1", "thread-1", 4);
+    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
+    assert_eq!(
+        subscription.classify_transcript_update(&transcript_update(1, Vec::new())),
+        TranscriptUpdateDisposition::Apply
+    );
+
+    assert!(!subscription.apply_latest_snapshot(
+        &snapshot,
+        0,
+        ThreadHistoryBoundary {
+            has_older_turns: false,
+            oldest_turn_id: None,
+        },
+    ));
 }
 
 #[test]
@@ -236,6 +292,7 @@ fn switching_threads_unsubscribes_the_previous_session_and_thread() {
                         "sessionId": "session-2",
                         "threadId": "thread-2",
                         "durableSequence": 7,
+                        "revision": 0,
                         "entries": []
                     },
                     "updates": [],
@@ -278,6 +335,7 @@ fn bounded_snapshot_without_a_history_boundary_is_rejected() {
                     "sessionId": "session-1",
                     "threadId": "thread-1",
                     "durableSequence": 4,
+                    "revision": 0,
                     "entries": []
                 }
             }
@@ -346,6 +404,20 @@ fn update(session_id: &str, thread_id: &str, durable_sequence: u64) -> ThreadUpd
                 title: "Thread".into(),
             },
         },
+    }
+}
+
+fn transcript_update(
+    revision: u64,
+    changes: Vec<ThreadTranscriptChange>,
+) -> ThreadTranscriptUpdateEnvelope {
+    ThreadTranscriptUpdateEnvelope {
+        session_id: SessionId::new("session-1").unwrap(),
+        thread_id: ThreadId::new("thread-1").unwrap(),
+        durable_sequence: 4,
+        revision,
+        stream_cursor: None,
+        changes,
     }
 }
 

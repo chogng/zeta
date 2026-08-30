@@ -26984,6 +26984,11 @@
           },
           "type": "array"
         },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         },
@@ -26995,6 +27000,7 @@
         "sessionId",
         "threadId",
         "durableSequence",
+        "revision",
         "entries"
       ],
       "type": "object"
@@ -27009,6 +27015,11 @@
           "type": "array"
         },
         "durableSequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
@@ -27034,6 +27045,7 @@
         "sessionId",
         "threadId",
         "durableSequence",
+        "revision",
         "changes"
       ],
       "type": "object"

@@ -23,6 +23,7 @@ pub(crate) struct TranscriptState {
     session_id: Option<SessionId>,
     thread_id: Option<ThreadId>,
     durable_sequence: u64,
+    revision: u64,
     entries: Vec<ThreadTranscriptEntry>,
 }
 
@@ -31,6 +32,7 @@ impl TranscriptState {
         self.session_id = Some(snapshot.session_id);
         self.thread_id = Some(snapshot.thread_id);
         self.durable_sequence = snapshot.durable_sequence;
+        self.revision = snapshot.revision;
         self.entries = snapshot.entries;
     }
 
@@ -45,6 +47,7 @@ impl TranscriptState {
         if self.session_id.as_ref() != Some(&update.session_id)
             || self.thread_id.as_ref() != Some(&update.thread_id)
             || update.durable_sequence < self.durable_sequence
+            || update.revision <= self.revision
         {
             return TranscriptUpdateResult::Ignored;
         }
@@ -71,6 +74,7 @@ impl TranscriptState {
             }
         }
         self.durable_sequence = self.durable_sequence.max(update.durable_sequence);
+        self.revision = update.revision;
         TranscriptUpdateResult::Applied
     }
 }

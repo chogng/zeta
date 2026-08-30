@@ -56,6 +56,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         ChatHistoryView {
             messages: &messages,
             scroll: app.transcript_scroll(),
+            render_cache: app.transcript_render_cache(),
             welcome: app.welcome(),
             presentation_highlight,
         }
@@ -145,6 +146,7 @@ pub(crate) fn input_pointer_target_at(
             areas.session.transcript,
             &messages,
             app.transcript_scroll(),
+            app.transcript_render_cache(),
             app.render_context(),
             column,
             row,

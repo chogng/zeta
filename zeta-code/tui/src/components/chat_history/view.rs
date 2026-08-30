@@ -1,3 +1,4 @@
+use super::ChatHistoryRenderCache;
 use super::ChatHistoryScroll;
 use super::CommandStatus;
 use super::Message;
@@ -8,8 +9,8 @@ use crate::render::RenderContext;
 use crate::render::Renderable;
 use crate::render::horizontal_margin;
 use crate::render::prefix_lines;
+use crate::render::push_owned_lines;
 use crate::render::styled_text_lines;
-use crate::render::wrapped_height;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -17,13 +18,12 @@ use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
-use ratatui::widgets::Wrap;
 use zeta_ansi_escape::ansi_text;
 
 pub(crate) struct ChatHistoryView<'a> {
     pub(crate) messages: &'a [Message],
     pub(crate) scroll: &'a ChatHistoryScroll,
+    pub(crate) render_cache: &'a ChatHistoryRenderCache,
     pub(crate) welcome: &'a WelcomeModel,
     pub(crate) presentation_highlight: Color,
 }
@@ -34,9 +34,8 @@ impl Renderable for ChatHistoryView<'_> {
             return welcome::desired_height(width);
         }
         let content_width = horizontal_margin(Rect::new(0, 0, width, u16::MAX), 2).width;
-        self.messages
-            .iter()
-            .map(|message| message_height(message, content_width, context))
+        measured_heights(self.messages, self.render_cache, content_width, context)
+            .into_iter()
             .sum::<usize>()
             .min(u16::MAX as usize) as u16
     }
@@ -54,14 +53,20 @@ impl Renderable for ChatHistoryView<'_> {
             return;
         }
 
-        let history_height = content_area.height as usize;
-        let lines = message_lines(self.messages, context);
-        let history_rows = wrapped_height(&lines, content_area.width);
-        let history = Paragraph::new(lines).wrap(Wrap { trim: false });
-        let bottom_offset = history_rows.saturating_sub(history_height);
-        frame.render_widget(
-            history.scroll((self.scroll.paragraph_offset(bottom_offset), 0)),
+        let heights = measured_heights(
+            self.messages,
+            self.render_cache,
+            content_area.width,
+            context,
+        );
+        render_cells(
+            frame,
             content_area,
+            self.scroll,
+            self.messages,
+            &heights,
+            self.render_cache,
+            context,
         );
     }
 }
@@ -76,6 +81,7 @@ pub(crate) fn pointer_target_at(
     area: Rect,
     messages: &[Message],
     scroll: &ChatHistoryScroll,
+    render_cache: &ChatHistoryRenderCache,
     context: RenderContext<'_>,
     column: u16,
     row: u16,
@@ -88,16 +94,13 @@ pub(crate) fn pointer_target_at(
     {
         return None;
     }
-    let total_rows = messages
-        .iter()
-        .map(|message| message_height(message, content_area.width, context))
-        .sum::<usize>();
+    let heights = measured_heights(messages, render_cache, content_area.width, context);
+    let total_rows = heights.iter().sum::<usize>();
     let bottom_offset = total_rows.saturating_sub(content_area.height as usize);
-    let visible_offset = usize::from(scroll.paragraph_offset(bottom_offset));
+    let visible_offset = scroll.paragraph_offset(bottom_offset);
     let target_row = visible_offset.saturating_add(usize::from(row - content_area.y));
     let mut start = 0usize;
-    for message in messages {
-        let rows = message_height(message, content_area.width, context);
+    for (message, rows) in messages.iter().zip(heights) {
         let Some(cell_id) = message.cell_id.as_ref() else {
             start = start.saturating_add(rows);
             continue;
@@ -116,7 +119,17 @@ pub(crate) fn pointer_target_at(
     None
 }
 
+#[cfg(test)]
 fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec<Line<'a>> {
+    message_lines_with_code(messages, context, None, true)
+}
+
+fn message_lines_with_code<'a>(
+    messages: &'a [Message],
+    context: RenderContext<'_>,
+    cache: Option<&ChatHistoryRenderCache>,
+    highlight: bool,
+) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
     for message in messages {
         if message.role == MessageRole::Command {
@@ -127,7 +140,7 @@ fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec
                 None => (context.muted(), "●"),
             };
             let marker = expansion_marker(message).unwrap_or(status_marker);
-            let command_lines = styled_text_lines(&message.text, selected_style(message, context));
+            let command_lines = styled_body_lines(message, context, cache, highlight);
             lines.extend(prefix_lines(
                 command_lines,
                 Span::styled(
@@ -155,7 +168,7 @@ fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec
         };
         let marker = expansion_marker(message).unwrap_or(role_marker);
         lines.extend(prefix_lines(
-            styled_text_lines(&message.text, selected_style(message, context)),
+            styled_body_lines(message, context, cache, highlight),
             Span::styled(
                 format!("{marker}  "),
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
@@ -169,6 +182,113 @@ fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec
         lines.push(Line::default());
     }
     lines
+}
+
+fn styled_body_lines<'a>(
+    message: &'a Message,
+    context: RenderContext<'_>,
+    cache: Option<&ChatHistoryRenderCache>,
+    highlight: bool,
+) -> Vec<Line<'a>> {
+    if !message
+        .text
+        .lines()
+        .any(|line| line.trim_start().starts_with("```"))
+    {
+        return styled_text_lines(&message.text, selected_style(message, context));
+    }
+
+    let mut output = Vec::new();
+    let mut plain = String::new();
+    let mut code = String::new();
+    let mut language = String::new();
+    let mut in_code = false;
+    let mut block_index = 0;
+    for source_line in message.text.split_inclusive('\n') {
+        let visible = source_line.strip_suffix('\n').unwrap_or(source_line);
+        let visible = visible.strip_suffix('\r').unwrap_or(visible);
+        if !in_code {
+            if let Some(opening) = visible.trim_start().strip_prefix("```") {
+                push_plain_block(&mut output, &mut plain, selected_style(message, context));
+                language = opening.trim().to_owned();
+                in_code = true;
+            } else {
+                plain.push_str(source_line);
+            }
+            continue;
+        }
+
+        if visible.trim() == "```" {
+            push_code_block(
+                &mut output,
+                message,
+                block_index,
+                &language,
+                &code,
+                context,
+                cache,
+                highlight,
+            );
+            code.clear();
+            block_index += 1;
+            in_code = false;
+        } else {
+            code.push_str(source_line);
+        }
+    }
+    if in_code {
+        push_code_block(
+            &mut output,
+            message,
+            block_index,
+            &language,
+            &code,
+            context,
+            cache,
+            highlight,
+        );
+    } else {
+        push_plain_block(&mut output, &mut plain, selected_style(message, context));
+    }
+    if output.is_empty() {
+        output.push(Line::default());
+    }
+    output
+}
+
+fn push_plain_block(output: &mut Vec<Line<'static>>, text: &mut String, style: Style) {
+    if text.is_empty() {
+        return;
+    }
+    let lines = styled_text_lines(text.trim_end_matches('\n'), style);
+    push_owned_lines(&lines, output);
+    text.clear();
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_code_block(
+    output: &mut Vec<Line<'static>>,
+    message: &Message,
+    block_index: usize,
+    language: &str,
+    code: &str,
+    context: RenderContext<'_>,
+    cache: Option<&ChatHistoryRenderCache>,
+    highlight: bool,
+) {
+    if !highlight {
+        let lines = styled_text_lines(
+            code.strip_suffix('\n').unwrap_or(code),
+            Style::default().fg(context.foreground()),
+        );
+        push_owned_lines(&lines, output);
+        return;
+    }
+    let lines = cache.map_or_else(
+        || crate::render::highlight_code(code, language, context.into()),
+        |cache| cache.highlight_code_block(message, block_index, language, code, context),
+    );
+    output.extend(lines);
 }
 
 fn expansion_marker(message: &Message) -> Option<&'static str> {
@@ -235,11 +355,61 @@ fn push_detail_lines<'a>(
     ));
 }
 
-fn message_height(message: &Message, width: u16, context: RenderContext<'_>) -> usize {
-    wrapped_height(
-        &message_lines(std::slice::from_ref(message), context),
-        width,
-    )
+fn measured_heights(
+    messages: &[Message],
+    cache: &ChatHistoryRenderCache,
+    width: u16,
+    context: RenderContext<'_>,
+) -> Vec<usize> {
+    cache.retain_messages(messages);
+    messages
+        .iter()
+        .map(|message| {
+            cache.measure(message, width, context, || {
+                message_lines_with_code(std::slice::from_ref(message), context, None, false)
+            })
+        })
+        .collect()
+}
+
+fn render_cells(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    scroll: &ChatHistoryScroll,
+    messages: &[Message],
+    heights: &[usize],
+    cache: &ChatHistoryRenderCache,
+    context: RenderContext<'_>,
+) {
+    let total_rows = heights.iter().sum::<usize>();
+    let bottom_offset = total_rows.saturating_sub(usize::from(area.height));
+    let viewport_start = scroll.paragraph_offset(bottom_offset);
+    let viewport_end = viewport_start.saturating_add(usize::from(area.height));
+    let mut cell_start = 0usize;
+    for (message, height) in messages.iter().zip(heights) {
+        let cell_end = cell_start.saturating_add(*height);
+        let visible_start = cell_start.max(viewport_start);
+        let visible_end = cell_end.min(viewport_end);
+        if visible_start < visible_end {
+            let target_y = area
+                .y
+                .saturating_add((visible_start - viewport_start) as u16);
+            let target_height = (visible_end - visible_start) as u16;
+            let source_row = visible_start - cell_start;
+            let cell = cache.prepare(message, area.width, context, || {
+                message_lines_with_code(std::slice::from_ref(message), context, Some(cache), true)
+            });
+            cell.render(
+                frame.buffer_mut(),
+                Rect::new(area.x, target_y, area.width, target_height),
+                source_row,
+            );
+        }
+        cell_start = cell_end;
+        if cell_start >= viewport_end {
+            break;
+        }
+    }
 }
 
 #[cfg(test)]

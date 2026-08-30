@@ -325,6 +325,7 @@ function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto): Thre
 		sessionId: snapshot.sessionId,
 		threadId: snapshot.threadId,
 		durableSequence: snapshot.durableSequence,
+		revision: snapshot.revision,
 		entries: snapshot.entries.map(toThreadTranscriptEntry),
 	};
 }
@@ -334,6 +335,7 @@ function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): Th
 		sessionId: update.sessionId,
 		threadId: update.threadId,
 		durableSequence: update.durableSequence,
+		revision: update.revision,
 		changes: update.changes.map((change) => {
 			switch (change.type) {
 				case "upsert": return { type: "upsert", entry: toThreadTranscriptEntry(change.entry) };

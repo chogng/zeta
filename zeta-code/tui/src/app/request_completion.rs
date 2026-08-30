@@ -438,9 +438,18 @@ pub(super) fn apply_request_completion(
             result: Ok((steer, snapshot)),
         } => {
             conversation.set_thread_sequence(snapshot.thread.sequence.max(steer.sequence));
-            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
+            let install_transcript = thread_subscription.apply_latest_snapshot(
+                &snapshot.thread,
+                snapshot.transcript.revision,
+                snapshot.boundary,
+            );
             app.update(AppEvent::SteerCompleted(steer_id));
-            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
+            apply_thread_snapshot_parts(
+                app,
+                active_turn,
+                snapshot.thread,
+                install_transcript.then_some(snapshot.transcript),
+            );
         }
         RequestCompletion::TurnSteered {
             steer_id,
@@ -456,9 +465,18 @@ pub(super) fn apply_request_completion(
             result: Ok(snapshot),
         } => {
             conversation.set_thread_sequence(snapshot.thread.sequence);
-            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
+            let install_transcript = thread_subscription.apply_latest_snapshot(
+                &snapshot.thread,
+                snapshot.transcript.revision,
+                snapshot.boundary,
+            );
             app.update(AppEvent::ThreadRequestResolved(request));
-            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
+            apply_thread_snapshot_parts(
+                app,
+                active_turn,
+                snapshot.thread,
+                install_transcript.then_some(snapshot.transcript),
+            );
         }
         RequestCompletion::ThreadRequestResolved {
             request,
@@ -483,8 +501,17 @@ pub(super) fn apply_request_completion(
                 return None;
             }
             conversation.set_thread_sequence(snapshot.thread.sequence);
-            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
+            let install_transcript = thread_subscription.apply_latest_snapshot(
+                &snapshot.thread,
+                snapshot.transcript.revision,
+                snapshot.boundary,
+            );
+            apply_thread_snapshot_parts(
+                app,
+                active_turn,
+                snapshot.thread,
+                install_transcript.then_some(snapshot.transcript),
+            );
         }
         RequestCompletion::ThreadHistoryPage(Ok(page)) => {
             if page.thread.session_id != *conversation.session_id()
@@ -512,8 +539,17 @@ pub(super) fn apply_request_completion(
         }
         RequestCompletion::TurnInterrupted(Ok(snapshot)) => {
             conversation.set_thread_sequence(snapshot.thread.sequence);
-            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
+            let install_transcript = thread_subscription.apply_latest_snapshot(
+                &snapshot.thread,
+                snapshot.transcript.revision,
+                snapshot.boundary,
+            );
+            apply_thread_snapshot_parts(
+                app,
+                active_turn,
+                snapshot.thread,
+                install_transcript.then_some(snapshot.transcript),
+            );
         }
         RequestCompletion::TurnInterrupted(Err(error)) => {
             app.update(AppEvent::InterruptFailed(error.to_string()));
@@ -562,8 +598,17 @@ fn apply_turn_start_completion(
             match *snapshot {
                 Ok(snapshot) => {
                     conversation.set_thread_sequence(snapshot.thread.sequence.max(start.sequence));
-                    thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-                    apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
+                    let install_transcript = thread_subscription.apply_latest_snapshot(
+                        &snapshot.thread,
+                        snapshot.transcript.revision,
+                        snapshot.boundary,
+                    );
+                    apply_thread_snapshot_parts(
+                        app,
+                        active_turn,
+                        snapshot.thread,
+                        install_transcript.then_some(snapshot.transcript),
+                    );
                 }
                 Err(error) => {
                     app.update(AppEvent::HostOperationCompleted(Err(format!(
@@ -614,6 +659,15 @@ pub(super) fn apply_thread_snapshot(
     snapshot: Thread,
     transcript: ThreadTranscriptSnapshot,
 ) {
+    apply_thread_snapshot_parts(app, active_turn, snapshot, Some(transcript));
+}
+
+fn apply_thread_snapshot_parts(
+    app: &mut App,
+    active_turn: &mut Option<TurnId>,
+    snapshot: Thread,
+    transcript: Option<ThreadTranscriptSnapshot>,
+) {
     app.update(AppEvent::ThreadContextChanged {
         session_id: snapshot.session_id.clone(),
         thread_id: snapshot.thread_id.clone(),
@@ -645,7 +699,9 @@ pub(super) fn apply_thread_snapshot(
                     .map(|pending| (turn.turn_id.clone(), pending.request_id.clone()))
             })
     });
-    app.update(AppEvent::ThreadTranscriptSnapshotReceived(transcript));
+    if let Some(transcript) = transcript {
+        app.update(AppEvent::ThreadTranscriptSnapshotReceived(transcript));
+    }
     app.update(AppEvent::TurnPlanChanged(plan));
     app.update(AppEvent::PendingInteractionChanged(pending_interaction));
     apply_active_turn_update(app, active_turn_update);

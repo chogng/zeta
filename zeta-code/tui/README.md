@@ -61,6 +61,8 @@ Tool、approval policy 或 persistence。
 - `AppServerEvents` 与 terminal input 由独立、有界 event source 主动唤醒单写者 loop；typed request
   由 `RequestTask` 在后台执行，完成结果回到 event loop，排队的用户 intent 不会静默丢失；active
   Turn 不再使用 25 ms `session/thread/read` polling fallback；
+- `app::RedrawScheduler` 把连续服务端更新、请求完成、资源刷新和可见计时变化合并到首个 16 ms frame deadline，后续请求不能把 deadline 向后推迟；终端输入立即画，空 Tick 不画，Submit/Queue/Steer 不再额外插入重复帧；
+- `app::TranscriptBatch` 在同一 frame deadline 内只归约同 Session/Thread/durable sequence、同 stream instance 且 cursor/revision 连续的 transient 完整 `Upsert`；批次最多 256 个 identity、1024 次更新和 1 MiB 正文，同 identity 使用最后完整值，committed、Remove、ClearTransient、gap 和任意输入/控制事件都会结束批次且不被吞掉；
 - transcript 投影完整显示 user text/image、所有 agent message、reasoning、plan、ToolCall 与
   ToolResult；`ItemDelta`、`PlanUpdated` 与 `ToolOutputDelta` 按 stream instance/cursor 增量更新，
   gap 会清除不可信 transient row 并读取权威 snapshot；单个 transient row 限 256 KiB、最多保留
@@ -93,15 +95,12 @@ Tool、approval policy 或 persistence。
   不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane；成功时以状态圆点、`/theme <id>` 和以 `└─` 归属且与命令文字对齐的 `Theme set to …` transcript 记录执行结果，`/theme <id>` 保留直接切换；
   Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark；查询超时
   后依次回退 `COLORFGBG` 和 Dark。结果在会话内缓存，后续打开 Theme Pane 不重复查询；
-- transcript 的行生成、首行/续行前缀、Ratatui 实际折行高度、scroll 与鼠标命中共用同一套
-  `render::text` 结果；显式 transcript scroll 默认 follow-latest。`render::highlight` 使用 bundled
-  syntax 定义和当前 Zeta syntax token 生成代码行，未知语言、解析失败或超限源码保持可见原文；
-  Theme Pane 的 Rust diff preview 已使用该入口。
+- transcript 的行生成、首行/续行前缀、Ratatui 实际折行高度、scroll 与鼠标命中共用同一份派生结果；显式 transcript scroll 默认 follow-latest，逻辑偏移不受 `u16` 限制。每个 Thread 持有独立的 `ChatHistoryRenderCache`：轻量高度覆盖当前正文，Ratatui buffer 只为视口内 cell 生成并有界复用，切走 Thread 时释放重型缓存。`render::highlight` 使用 bundled syntax 定义和当前 Zeta syntax token 生成代码行，transcript fenced code block 通过 `StreamingCodeHighlighter` 只延续以换行结束的完整新增行；未知语言、解析失败或超限源码保持可见原文，Theme Pane 的 Rust diff preview 使用同一入口。
 
 ## 产品支持边界
 
 `zeta code` 是键盘优先、低带宽的终端产品，不以复刻 `app` rich UI 为完成条件。
-transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
+transcript 当前采用 plain-text wrapping 并识别 fenced code block 做代码高亮，但不实现完整 Markdown；桌面 Agent Timeline 的 Markdown block、table、selection、
 折叠与虚拟化由
 [`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
 [`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的鼠标交互覆盖所有页面：拖动选择当前 frame 中可见的字符并在松手时自动复制，没有拖动的左键手势才进入 Slash/File/Plugin Suggest、Pane、Approval、Query 与 transcript marker 的命中路径；hover 继续复用候选选中态。Config 标签页中的 Mouse interactions item 可关闭全部 TUI 鼠标捕获，关闭后框选与复制行为由终端负责。
@@ -161,6 +160,8 @@ src/
 ├── app/
 │   ├── event_loop.rs              # runtime coordination and command scheduling
 │   ├── event_pump.rs              # bounded merge of terminal/client/termination sources
+│   ├── redraw.rs                  # dirty frame deadline and input-priority redraw scheduling
+│   ├── transcript_batch.rs        # bounded coalescing of contiguous transient transcript values
 │   ├── state.rs                   # single-writer presentation state
 │   ├── event.rs / command.rs      # completed facts / typed side-effect intents
 │   ├── dispatch.rs                # built-in product command coordination
@@ -173,7 +174,7 @@ src/
 │   ├── notification.rs            # typed ServerNotification → ClientEvent mapping
 │   └── notification_source.rs     # AppServerEvents wait lifecycle
 ├── components/
-│   ├── chat_history.rs / chat_history/ # transcript rendering and scroll
+│   ├── chat_history.rs / chat_history/ # transcript rendering, per-Thread buffer cache and scroll
 │   ├── chat_composer.rs / chat_composer/ # ChatInput, Pane and temporary interaction coordination
 │   ├── chat_input.rs / chat_input/ # draft, editor, attachments and paste bindings
 │   ├── suggest.rs / suggest/       # Slash, Mention and Skill overlay state and drawing
@@ -212,6 +213,7 @@ src/
 ├── render.rs                      # Renderable measurement/draw contract and module root
 └── render/
     ├── highlight.rs               # bounded syntax highlighting with Zeta theme tokens
+    ├── highlight_streaming.rs     # complete-line incremental parser state
     ├── layout.rs                  # shared inset and pure geometry
     ├── text.rs                    # line ownership, prefixing and wrapped height
     └── theme.rs                   # immutable RenderTheme and terminal color-level mapping
@@ -230,11 +232,12 @@ src/
 | `ThreadFeatureState` | crate-private | active canonical `Thread` snapshot、transcript projection 与本地 optimistic/diagnostic overlay | 下一份 snapshot 替换 projection；不执行 RPC、不复制 product reducer |
 | `ThreadPresentationEvent` | crate-private | snapshot/transient/reset/user/notice/failure/interrupted/clear 的 feature-local 事实 | 只改变 active Thread presentation owner |
 | `components::chat_history::{Message,MessageRole,ChatHistoryView}` | crate-private | 定义 transcript-facing 展示值，并通过 `Renderable` 渲染 role chrome、empty state、wrapping 与 bottom scroll | 不依赖 feature/`App`、不保存 Thread/sequence、不处理输入 |
+| `components::chat_history::ChatHistoryRenderCache` | crate-private | 每个 Thread 独立持有的有界派生 buffer cache；height、draw 与 pointer hit test 复用同一结果 | 不保存正文或主题事实、不跨 Thread 共享、不缓存无 revision 或超大 cell |
 | `zeta_ansi_escape::ansi_text` | dependency public API | 把 Tool stdout/stderr 的 ANSI SGR 和 tab 转为 Ratatui-owned styled text | 实现归 [`zeta-ansi-escape`](../ansi-escape/README.md)；TUI 不复制 parser、不修改 protocol/Thread 原始输出 |
 | `render::{Renderable,RenderContext}` | private | 统一 surface 的宽度测量、绘制入口与只读主题传递 | 不读取 App/feature、不调用 terminal 或 RPC |
 | `render::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
 | `render::text` | private module | 行的借用/持有转换、批量复制、首行/续行前缀和 Ratatui 实际折行高度 | 不解释 transcript role、代码语言或滚动状态 |
-| `render::highlight` | private module | 在 512 KiB、10,000 行、单行 4 KiB 上限内把明确语言的源码映射为主题 syntax span | 不解析 Markdown、不选择或保存主题、不修改源文本 |
+| `render::{highlight,StreamingCodeHighlighter}` | private | 在 512 KiB、10,000 行、单行 4 KiB 上限内把明确语言的完整源码或以换行结束的完整新增行映射为主题 syntax span | 不解析 Markdown、不接受半行、不选择或保存主题、不修改源文本 |
 | `render::theme::RenderTheme` | private | 将 `zeta-theme::ThemeSnapshot` 的明确颜色子集映射到终端能力 | 不读取或保存用户配置、不定义产品状态 |
 | `features::theme::ThemeResource` | private | 加载主题目录、生成预览、选择并保存用户主题 | 只在事件循环和命令执行路径使用；draw path 不执行文件 I/O |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
@@ -249,17 +252,19 @@ src/
 | `features::keymap::pane` | private | 从 `AppKeymap` 快照和固定操作目录生成 `/shortcuts` 的 Pane 创建数据、动作菜单和按键录制状态 | 不执行快捷键、不建立第二套 Resolver |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 `ChatComposer` 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
-| `app::EventPump` | crate-private | 合并 terminal、client 与 termination 三种独立来源，通过 1024 项有界队列唤醒单写者 loop | Tick 可合并；control/input 不静默丢失；不读取终端或解释服务端通知 |
+| `app::EventPump` | crate-private | 合并 terminal、client 与 termination 三种独立来源；终止请求、终端输入、服务端事件使用明确优先级和各自有界车道唤醒单写者 loop | Tick 可合并；control/input 不静默丢失；不读取终端或解释服务端通知 |
+| `app::RedrawScheduler` | crate-private | 保留首个 16 ms 批量 deadline，并允许终端输入把待绘制帧提前到当前时刻 | 不读取 App、不绘制、不合并或丢弃状态事件 |
+| `app::TranscriptBatch` | crate-private | 在当前 frame deadline 内按 scope、stream instance 和连续 cursor/revision 归约 transient 完整 `Upsert`，同 identity 保留最后值，并限制 identity、更新数与文本字节 | 不拼接 token、不跨 committed/Remove/ClearTransient/input/control barrier、不推迟 deadline |
 | `terminal::TerminalEventSource` | crate-private | 轮询 Crossterm input，并产生 input、Tick 或 terminal failure | 不依赖 `app`、feature、client 或产品 ID |
 | `client::ClientEventSource` | crate-private | 持续等待 `AppServerEvents`，通过 `map_event` 输出 `ClientEvent` | 不读取终端、不注册进程信号、不应用 UI state |
 | `host::TerminationSource` | crate-private | 注册进程终止信号并提供一次性消费的 termination request | 不管理终端 suspend/reacquire，不依赖 `app` 或 feature |
 | `client::RequestTask<T>` | crate-private | 在独立 worker 执行一个 typed request 并以单槽 completion 非阻塞回投 | 不修改 `App`、不解释领域结果 |
 | `app::request_completion` | private module | 校验 request scope、安装 subscription/snapshot 并把 typed completion 映射为 `AppEvent` | 不执行 renderer、不复制 reducer |
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 agent request、skills/Git changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
-| `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
+| `ThreadSubscription` | crate-private | 分开维护 durable sequence、transcript revision 与 history Turn cursor，分类 duplicate/gap/runtime switch，阻止旧快照覆盖新流式正文并触发缺口重读 | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient 内容 |
 | `features::approval::Approval` | crate-private | 保存一次 Approval 的请求身份、选择、提交和错误状态，并生成准确响应 | 不拥有 ChatInput 草稿、不决定 policy 或 owner |
 | `features::query::Query` | crate-private | 保存一次 Query 的问题、选择、自定义文本、提交和错误状态，并生成准确响应 | 不借用 ChatInput 编辑答案、不决定 owner |
-| `features::thread::TranscriptProjection` | crate-private | 用稳定 `TranscriptCellId` 维护有序 `TranscriptCell`，单条 entry 和 Exec 分组采用确定性身份 | 不成为持久化层、不把 TUI 身份写成 Core 领域 ID、不从显示文字推断产品事实 |
+| `features::thread::TranscriptProjection` | crate-private | 用稳定 `TranscriptCellId` 维护有序 `TranscriptCell`，单条 entry 和 Exec 分组采用确定性身份，并为每次可见内容变化分配单调 render revision | 不成为持久化层、不把 TUI 身份写成 Core 领域 ID、不从显示文字推断产品事实 |
 | `features::thread::ExecCell` | crate-private | 按 `ToolCallId` 路由调用、流式输出和结果，执行稳定分组与有界保留 | 不把输出接到“当前命令”、不推测缺失的退出码或时长 |
 | `ChatComposer` | crate-private | 协调 `ChatInput`、`Suggest` 与 stacked Pane，统一路由它们的 key/paste/mouse | 不保存 Approval、Query、Turn、Plan 等产品事实，不执行外部副作用 |
 | `components::pane::PaneStack` + 内部 `Pane` | crate-private | 分配 `PaneId`、管理页面栈，并把四种封闭 `PaneBody` 的输入、高度、绘制、按键提示和命中统一映射为 `PaneOutcome` | 不拥有 feature action、RPC、Tab/Search 等正文专属能力 |
@@ -291,7 +296,6 @@ src/
 | `client::new_command_id` | private | process ID + wall-clock nanos 分配 `CommandId` | 一次逻辑 command 一个新 ID |
 | `app::frame::draw` | crate-private | frame 分区并协调 feature/component renderer，最后把当前屏幕选区样式应用到完整 buffer | 不改变 App state、不写剪贴板 |
 | `app::frame::input_pointer_target_at` | crate-private | 复用当前 Pane、Suggest、Approval、Query 与 ChatInput 区域映射可见行点击 | 不执行命令、不改变选择状态 |
-| `components::chat_history::row::estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
 | `TerminalSession::open` | crate-private | 进入 raw/alternate/paste mode、创建 backend，并保存最后完成的 Ratatui buffer 供松手复制读取 | partial failure 必须 rollback；鼠标捕获仍由 `set_mouse_mode` 决定 |
 | `ScreenSelection` / `ScreenSelectionRange` | crate-private | 在 `App` 中拥有一次左键手势的起点、终点、拖动判定与屏幕字符范围，并对完整 frame 绘制反色选区 | 不读取 buffer、不写剪贴板、不解释页面内容 |
 | `MouseMode` | crate-private | `App` 按本地 Mouse interactions 设置声明 `TerminalSelection` 或 `TuiCapture` | 不由局部页面决定、不执行终端副作用 |
@@ -319,7 +323,7 @@ run(session, options)
 ├─ StatusLineResource::refresh → AppEvent::StatusLineSettingsReceived → App::update
 ├─ client.read_config / git_status → AppEvent → App::update
 └─ loop
-   ├─ EventPump::recv
+   ├─ EventPump::recv / recv_timeout(redraw deadline)
    │  ├─ terminal event → input routing
    │  ├─ App Server event → typed notification mapping
    │  └─ termination request → orderly TUI exit
@@ -329,8 +333,9 @@ run(session, options)
    ├─ skills changed → queued background skills refresh
    ├─ newer active Thread durable update → queued session/thread/read snapshot resync
    ├─ transient update → cursor validation → bounded Thread projection
-   ├─ App::mouse_mode → TerminalSession::set_mouse_mode
-   ├─ TerminalSession::draw → app::frame::draw
+   ├─ state/resource change → RedrawScheduler::request
+   ├─ frame deadline due → App::mouse_mode → TerminalSession::set_mouse_mode
+   ├─ frame deadline due → TerminalSession::draw → app::frame::draw
    └─ terminal event
       ├─ key → App::handle_key
       │  ├─ Approval → feature-owned selection / response
@@ -591,8 +596,7 @@ v15 接受 `inline_visualization` 的终端 fallback，但当前 protocol 没有
 ## 测试与支持边界
 
 ```text
-cargo test -p zeta-tui
-bazel test //zeta-code/tui:tui-unit-tests
+just test zeta-tui
 ```
 
 测试当前覆盖后台路径句柄的增量查询、Git 忽略规则、稳定排序、高亮索引与旧结果过滤，
@@ -619,8 +623,7 @@ directory directory/preview 和 interaction deadline。
 
 生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter 和 `/config` 的 Config、Providers、Language servers 页面；`provider/list` 只投影供应商名、API key 策略与是否已配置，不返回密钥。Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 通过 `AppEvent::PreferredModelReceived` 与 `AppEvent::GitStatusReceived` 接收展示数据，通过本地 `StatusLineResource` 接收显示开关。新增 Tool Search 或 Codebase 配置字段不会扩散到这些不拥有该能力的展示组件。
 
-Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
-固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
-event-loop integration 可以继续加强当前 brokered-local 路径；连接恢复验证属于 CLI，不进入 TUI transport 测试。Native Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与
+Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，并覆盖 transcript 折行高度、prefix、scroll、pointer hit test、cell revision、cache key 失效与资源上限、完整源码和逐个完整新增行高亮的一致性，以及 batch deadline 不后移、输入提前 deadline、到期帧只消费一次、transient latest-value、identity 顺序、cursor/scope/barrier 和批量容量边界。命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
+event-loop integration 可以继续加强当前 brokered-local 路径；连接恢复验证属于 CLI，不进入 TUI transport 测试。桌面端 Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与
 owner 判断以 [`docs/tui.md`](../../docs/tui.md#17-已接受的架构迁移顺序) 和
 [`docs/product-lines.md`](../../docs/product-lines.md) 为准。

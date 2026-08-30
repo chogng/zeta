@@ -1,10 +1,13 @@
 mod highlight;
+mod highlight_streaming;
 mod layout;
 mod text;
 mod theme;
 
 pub(crate) use highlight::SyntaxPalette;
+pub(crate) use highlight::code_within_limits;
 pub(crate) use highlight::highlight_code;
+pub(crate) use highlight_streaming::StreamingCodeHighlighter;
 pub(crate) use layout::Insets;
 pub(crate) use layout::RectExt;
 pub(crate) use layout::bottom_anchored_area;

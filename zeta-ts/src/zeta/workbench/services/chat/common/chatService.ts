@@ -200,6 +200,7 @@ export interface ThreadTranscriptSnapshot {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly durableSequence: number;
+	readonly revision: number;
 	readonly entries: readonly ThreadTranscriptEntry[];
 }
 
@@ -212,6 +213,7 @@ export interface ThreadTranscriptUpdateEnvelope {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly durableSequence: number;
+	readonly revision: number;
 	readonly changes: readonly ThreadTranscriptChange[];
 }
 

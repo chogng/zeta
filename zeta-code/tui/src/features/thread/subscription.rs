@@ -8,7 +8,9 @@ use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
@@ -23,6 +25,7 @@ pub(crate) struct ThreadSubscription {
     session_id: SessionId,
     thread_id: ThreadId,
     confirmed_sequence: u64,
+    confirmed_transcript_revision: u64,
     history_turn_limit: u32,
     oldest_turn_id: Option<zeta_protocol::TurnId>,
     has_older_turns: bool,
@@ -33,6 +36,13 @@ const HISTORY_PAGE_TURNS: u32 = 50;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ThreadUpdateDisposition {
     Ignore,
+    RefreshSnapshot,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TranscriptUpdateDisposition {
+    Ignore,
+    Apply,
     RefreshSnapshot,
 }
 
@@ -90,11 +100,10 @@ impl ThreadSubscription {
         };
         validate_snapshot_scope(&snapshot, session_id, thread_id)?;
 
-        Ok((
-            Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, Some(boundary)),
-            snapshot,
-            transcript,
-        ))
+        let mut subscription =
+            Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, Some(boundary));
+        subscription.confirmed_transcript_revision = transcript.revision;
+        Ok((subscription, snapshot, transcript))
     }
 
     pub(crate) fn switch<T>(
@@ -122,6 +131,7 @@ impl ThreadSubscription {
                 self.history_turn_limit,
                 Some(boundary),
             );
+            self.confirmed_transcript_revision = transcript.revision;
             return Ok(ThreadSwitch::Complete {
                 snapshot,
                 transcript,
@@ -164,6 +174,28 @@ impl ThreadSubscription {
         ThreadUpdateDisposition::Ignore
     }
 
+    pub(crate) fn classify_transcript_update(
+        &mut self,
+        update: &ThreadTranscriptUpdateEnvelope,
+    ) -> TranscriptUpdateDisposition {
+        if update.thread_id != self.thread_id || update.session_id != self.session_id {
+            return TranscriptUpdateDisposition::Ignore;
+        }
+        if update.revision <= self.confirmed_transcript_revision {
+            return TranscriptUpdateDisposition::Ignore;
+        }
+        let is_next = self.confirmed_transcript_revision.checked_add(1) == Some(update.revision);
+        let resets_transient_state = update
+            .changes
+            .iter()
+            .any(|change| matches!(change, ThreadTranscriptChange::ClearTransient));
+        if !is_next && !resets_transient_state {
+            return TranscriptUpdateDisposition::RefreshSnapshot;
+        }
+        self.confirmed_transcript_revision = update.revision;
+        TranscriptUpdateDisposition::Apply
+    }
+
     pub(crate) fn confirm_sequence(&mut self, sequence: u64) {
         if sequence > self.confirmed_sequence {
             self.confirmed_sequence = sequence;
@@ -176,18 +208,24 @@ impl ThreadSubscription {
         }
     }
 
-    /// Applies the cursor and sequence returned with a latest-history snapshot.
+    /// Applies sequence, transcript revision, and history boundary from a latest snapshot.
     pub(crate) fn apply_latest_snapshot(
         &mut self,
         snapshot: &Thread,
+        transcript_revision: u64,
         boundary: ThreadHistoryBoundary,
-    ) {
+    ) -> bool {
         self.confirm_sequence(snapshot.sequence);
         self.oldest_turn_id = boundary
             .oldest_turn_id
             .clone()
             .or_else(|| snapshot.turns.first().map(|turn| turn.turn_id.clone()));
         self.has_older_turns = boundary.has_older_turns;
+        if transcript_revision < self.confirmed_transcript_revision {
+            return false;
+        }
+        self.confirmed_transcript_revision = transcript_revision;
+        true
     }
 
     pub(crate) fn older_history(&self) -> Option<ThreadSnapshotHistory> {
@@ -242,6 +280,7 @@ impl ThreadSubscription {
             session_id: snapshot.session_id.clone(),
             thread_id: snapshot.thread_id.clone(),
             confirmed_sequence: snapshot.sequence,
+            confirmed_transcript_revision: 0,
             history_turn_limit,
             oldest_turn_id,
             has_older_turns: boundary.is_some_and(|history| history.has_older_turns),

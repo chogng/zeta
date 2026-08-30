@@ -43,6 +43,7 @@ pub struct TranscriptAccumulator {
     session_id: SessionId,
     thread_id: ThreadId,
     durable_sequence: u64,
+    revision: u64,
     stream_instance_id: Option<StreamInstanceId>,
     stream_sequence: u64,
     stream_valid: bool,
@@ -58,6 +59,7 @@ impl TranscriptAccumulator {
             session_id,
             thread_id,
             durable_sequence: 0,
+            revision: 0,
             stream_instance_id: None,
             stream_sequence: 0,
             stream_valid: false,
@@ -80,7 +82,7 @@ impl TranscriptAccumulator {
             }
             self.durable_sequence = update.durable_sequence;
         } else if !self.accept_stream_cursor(update, &mut changes) {
-            return finish(update, changes);
+            return self.finish(update, changes);
         }
 
         match &update.update {
@@ -98,7 +100,7 @@ impl TranscriptAccumulator {
                 text,
             } => self.append_tool_output(turn_id, tool_call_id, *stream, text, &mut changes),
         }
-        finish(update, changes)
+        self.finish(update, changes)
     }
 
     /// Builds a complete client snapshot from durable Thread state plus current transient entries.
@@ -109,6 +111,7 @@ impl TranscriptAccumulator {
             return None;
         }
         let mut snapshot = crate::ThreadTranscriptSnapshot::from_thread(thread);
+        snapshot.revision = self.revision;
         let committed_entry_ids = snapshot
             .entries
             .iter()
@@ -393,22 +396,28 @@ impl TranscriptAccumulator {
             self.committed_item_ids.remove(&expired);
         }
     }
-}
 
-fn finish(
-    update: &ThreadUpdateEnvelope,
-    changes: Vec<ThreadTranscriptChange>,
-) -> TranscriptApplyResult {
-    if changes.is_empty() {
-        return TranscriptApplyResult::Ignored;
+    fn finish(
+        &mut self,
+        update: &ThreadUpdateEnvelope,
+        changes: Vec<ThreadTranscriptChange>,
+    ) -> TranscriptApplyResult {
+        if changes.is_empty() {
+            return TranscriptApplyResult::Ignored;
+        }
+        self.revision = self
+            .revision
+            .checked_add(1)
+            .expect("transcript revision should not exhaust u64");
+        TranscriptApplyResult::Applied(ThreadTranscriptUpdateEnvelope {
+            session_id: update.session_id.clone(),
+            thread_id: update.thread_id.clone(),
+            durable_sequence: update.durable_sequence,
+            revision: self.revision,
+            stream_cursor: update.stream_cursor.clone(),
+            changes,
+        })
     }
-    TranscriptApplyResult::Applied(ThreadTranscriptUpdateEnvelope {
-        session_id: update.session_id.clone(),
-        thread_id: update.thread_id.clone(),
-        durable_sequence: update.durable_sequence,
-        stream_cursor: update.stream_cursor.clone(),
-        changes,
-    })
 }
 
 fn item_from_delta(turn_id: &TurnId, item_id: &ItemId, delta: &ItemDelta) -> ThreadItem {

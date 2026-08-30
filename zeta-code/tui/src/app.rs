@@ -8,9 +8,11 @@ mod event_pump;
 mod frame;
 mod help;
 mod recovery;
+mod redraw;
 mod request_completion;
 mod screen_layout;
 mod state;
+mod transcript_batch;
 
 pub(crate) use crate::features::sessions::ActiveConversation;
 pub(crate) use bootstrap::ChatInputCatalogSnapshot;

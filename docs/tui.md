@@ -47,7 +47,7 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 | 本文的 ownership 与长期不变量 | Accepted architecture baseline | 本文 |
 | independent request driver、wakeable event pump | Current | [`app-server-client.md`](app-server-client.md) 与 crate README |
 | 非阻塞 request completion dispatch、后端有界 transient data plane、Session/Thread/Approval/Query 垂直切片 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
-| TUI 流式更新批处理、重绘合并与基于 revision 的渲染缓存 | Proposed | 本文 13.2.2 |
+| TUI 流式更新批处理、重绘合并与基于 revision 的渲染缓存 | Current | 本文 13.2.2 与 crate README |
 | 有序正文单元、命令输出边界、展开/详情、全屏字符框选与必要鼠标命中 | Current product support boundary | 本文与 crate README |
 | active-Turn follow-up Queue、多行 `ChatInput`、copy/export、分页历史与 suspend/resume | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
 | `ChatInput` 的 Standard/Vim 编辑模式 | Current | `components/chat_input/` 与本地 terminal settings |
@@ -187,7 +187,7 @@ adapter 和 renderer 只能产生 event 或完成结果，不能直接修改共�
 | --- | --- | --- |
 | 可重建 presentation state | active Thread snapshot、pending command、connection/resync、可展示错误 | 对应 feature 或 `app/`；可由 typed input 重建 |
 | 局部交互状态 | draft、cursor、selection、scroll、overlay 展开 | 明确生命周期的 component；不提升为全局 store |
-| runtime resource | terminal handle、channel、task、clock、client、cache | driver/client/terminal；不得进入可 replay state |
+| runtime resource | terminal handle、channel、task、clock、client、cache | driver、component runtime 或 terminal；不得进入可 replay state |
 | 产品权威状态 | Thread/Turn reducer、writer lease、approval policy、durable recovery | TUI 外的 canonical owner；TUI 不复制 |
 
 ### 纯渲染
@@ -246,7 +246,7 @@ zeta-code/tui/
 │   ├── features.rs / features/ # product-facing vertical features
 │   ├── components.rs
 │   ├── components/
-│   │   ├── chat_history.rs / chat_history/
+│   │   ├── chat_history.rs / chat_history/ # transcript renderer and bounded per-Thread buffer cache
 │   │   ├── chat_input.rs / chat_input/
 │   │   ├── chat_composer.rs / chat_composer/
 │   │   ├── pane.rs / pane/
@@ -264,7 +264,8 @@ zeta-code/tui/
 │   │   ├── layout.rs           # area allocation, inset, clip and viewport
 │   │   ├── text.rs             # owned lines, prefix, Unicode width and wrapping
 │   │   ├── theme.rs            # immutable RenderTheme and terminal color mapping
-│   │   └── cache.rs            # bounded revision-keyed derived render data
+│   │   ├── highlight.rs        # bounded complete-source syntax highlighting
+│   │   └── highlight_streaming.rs # complete-line incremental parser state
 │   ├── terminal.rs / terminal/ # terminal lifecycle and input source
 │   ├── host.rs / host/         # narrow OS and process adapters
 │   └── lib.rs
@@ -437,7 +438,7 @@ value；但不能调用领域接口或保存 canonical aggregate。
 | `chat_composer/` | 常驻 `ChatInput`、stacked Pane 与 Suggest 的局部 routing | Approval、Query、Queue、Goal、Plan、Session/Thread lifecycle |
 | `chat_input/` | draft、Unicode cursor、attachments 和 paste bindings | Suggest、Turn start、config mutation、App Server client |
 | `suggest/` | `/`、`@`、`$` 候选状态、选择、补全和鼠标命中 | ChatInput 草稿、Turn start、产品副作用 |
-| `chat_history/` | plain-text visible row、wrapping 与 scroll | canonical Thread snapshot、sequence、transient cursor |
+| `chat_history/` | plain-text visible row、wrapping、scroll 与每个 Thread 独立的有界派生 buffer cache | canonical Thread snapshot、sequence、transient cursor |
 | `pane/` | `PaneSpec`、`PaneStack`、`PaneId`、封闭 `PaneBody`、统一 `PaneOutcome`、存活 `Pane` 和当前帧只读 `PaneView`；集中输入、高度、绘制、提示和命中分派 | 具体产品动作、RPC、QuickView、`ListSelection` 专属的 Tab/Search/Adjust 状态 |
 | `quick_view.rs` | 不改变正常布局高度的通用只读覆盖层 | `/status` 等功能事实和产品动作 |
 | `tab_list.rs` | tab 集合、当前项、键盘与鼠标横向切换、窄宽度换行和绘制 | pane 内容、搜索、产品 action |
@@ -463,9 +464,8 @@ component 可以依赖 `render/` 原语和必要的 canonical value type，但�
 - `Renderable` 当前统一宽度测量与绘制 contract；滚动和光标仍由拥有局部交互状态的 component 处理，出现第二个相同需求后再扩展 contract；
 - area、inset 与 bottom anchor 等当前已复用的纯布局；column/flex、clip 与 scroll viewport 只有出现真实重复调用方后再加入；
 - line 的借用/持有转换、批量复制、首行/续行 prefix，以及直接复用 Ratatui wrapping 的高度计算；
-- 有资源上限、使用当前 `RenderTheme` syntax token 且不保存第二套主题状态的代码高亮；
+- 有资源上限、使用当前 `RenderTheme` syntax token 且不保存第二套主题状态的完整源码与逐个完整新增行代码高亮；
 - 不可变 `RenderTheme`、color 与 spacing 的 Ratatui 映射；
-- 后续由稳定 identity、content revision、width、theme revision 与 render mode 定位的有界派生缓存。
 
 `render/` 不得出现：
 
@@ -476,9 +476,9 @@ component 可以依赖 `render/` 原语和必要的 canonical value type，但�
 - frame deadline、event queue、terminal I/O 或后台 task；
 - 为所有 feature 定义统一的业务 view enum。
 
-通用横向 tab 交互放在 `components/tab_list.rs`，过滤和选择状态放在 `components/list_selection/`；“恢复哪个 Session”的 row model、typed ID 和 action 属于 `features/sessions/`。`render/` 只提供这些上层模块共同需要的纯布局、绘制与缓存机制。
+通用横向 tab 交互放在 `components/tab_list.rs`，过滤和选择状态放在 `components/list_selection/`；“恢复哪个 Session”的 row model、typed ID 和 action 属于 `features/sessions/`。`render/` 只提供这些上层模块共同需要的纯布局、绘制、文本处理与代码高亮原语；具体 component 的派生缓存由 component runtime 持有。
 
-当前实现已经把 inset、bottom anchor 等纯 geometry 迁入 `render/layout.rs`；`render/text.rs` 统一行的借用/持有转换、复制、前缀和实际折行高度；`render/highlight.rs` 使用 bundled syntax 定义与 Zeta syntax token 完成有界高亮。颜色合成、终端色阶映射与不可变 `RenderTheme` 位于 `render/theme.rs`，主题目录读取、预览、选择和保存位于 `features/theme/resource.rs`。活动主题由 `App` presentation state 持有，并通过只读 `RenderContext` 从根 Frame 传给所有 renderer；draw path 不再读取全局锁，也没有独立 syntax-theme 全局状态。`ui.rs` 与 `ui/` 已删除且没有转发层。`app/frame.rs` 继续拥有整页 surface 装配，component 继续拥有自己的 view model 与具体 renderer；`render/` 不接管页面结构或 feature 文案。
+当前实现已经把 inset、bottom anchor 等纯 geometry 迁入 `render/layout.rs`；`render/text.rs` 统一行的借用/持有转换、复制、前缀和实际折行高度；`render/highlight.rs` 与 `render/highlight_streaming.rs` 使用 bundled syntax 定义与 Zeta syntax token 完成有界高亮，流式入口只接受以换行结束的完整新增行并延续 parser state，半行、主题变化或资源上限变化要求调用方从完整 source 重算。颜色合成、终端色阶映射与不可变 `RenderTheme` 位于 `render/theme.rs`，主题目录读取、预览、选择和保存位于 `features/theme/resource.rs`。活动主题由 `App` presentation state 持有，并通过只读 `RenderContext` 从根 Frame 传给所有 renderer；draw path 不再读取全局锁，也没有独立 syntax-theme 全局状态。`ui.rs` 与 `ui/` 已删除且没有转发层。`app/frame.rs` 继续拥有整页 surface 装配，component 继续拥有自己的 view model 与具体 renderer；`render/` 不接管页面结构或 feature 文案。
 
 依赖方向固定为：
 
@@ -489,7 +489,7 @@ render primitives → ratatui
 terminal/session → ratatui backend draw
 ```
 
-`ChatHistoryView` 与 `ChatComposerSurface` 已是 `Renderable` 的首批真实消费者，同一实现同时提供宽度测量与绘制。`ChatHistoryView` 的多行正文、ANSI detail、首行/续行前缀、总高度、scroll 和 pointer row 现在都从同一组 `Line` 及 `Paragraph::wrap` 结果得出，不再保留另一套 Unicode 行数估算。Theme Pane 的 Rust diff preview 是高亮入口的首个真实调用方。其他 component 只有在需要同一测量 contract 时再迁入，不能为了统一外形一次性包装全部 `draw` function。后续 cache instance 由使用它的 component/runtime 持有；`render/` 只定义 key、容量和失效规则，不建立全局 cache service。
+`ChatHistoryView` 与 `ChatComposerSurface` 已是 `Renderable` 的首批真实消费者，同一实现同时提供宽度测量与绘制。`ChatHistoryView` 的多行正文、ANSI detail、首行/续行前缀、总高度、scroll 和 pointer row 现在都从同一份派生结果得出，不再保留另一套 Unicode 行数估算。每个 `ThreadPresentationState` 持有自己的 `ChatHistoryRenderCache`：轻量高度记录覆盖当前正文，Ratatui `Buffer` 只为视口内 cell 生成，并按稳定 cell identity、单调 content revision、width、theme revision 与 render mode 复用；buffer 的单项、总 cell 数和条目数都有硬上限，切走 Thread 时释放重型缓存。Theme Pane 的 Rust diff preview 与 transcript fenced code block 都使用代码高亮入口，活动代码块按完整新增行延续 parser state。其他 component 只有在需要同一测量 contract 时再迁入，不能为了统一外形一次性包装全部 `draw` function；不得建立全局 cache service。
 
 ## 10. `terminal/`：真实终端基础设施
 
@@ -745,7 +745,7 @@ buffer overflow、receiver lag 或 cursor gap 立即把对应 projection 标为�
 | 更新批处理、动画、frame deadline、重绘合并、渲染缓存 | 各端 presentation runtime | 前后台状态、刷新率、viewport 和交互延迟只在本端可知 |
 | transient 到 committed 的最终校正 | 后端给出 canonical item；各端替换 transient view | 完成事件必须能纠正被限流、丢弃或未显示的中间更新 |
 
-当前后端边界已经符合这项决定：`TranscriptAccumulator` 消费内部 `ItemDelta` 与 `ToolOutputDelta`，按稳定条目身份累计文本，每次向 App Server client 发完整的 `Upsert`，而不是要求客户端拼接 token；`ThreadTranscriptSnapshot` 则把持久 Thread 与仍有效的 transient 条目合成可重建快照。Workbench、Rust 应用和 TUI 都消费同一份 transcript contract，再建立各自的 presentation state。
+当前后端边界已经符合这项决定：`TranscriptAccumulator` 消费内部 `ItemDelta` 与 `ToolOutputDelta`，按稳定条目身份累计文本，每次向 App Server client 发完整的 `Upsert`，而不是要求客户端拼接 token；`ThreadTranscriptSnapshot` 则把持久 Thread 与仍有效的 transient 条目合成可重建快照。快照和更新共享单调 transcript revision；Workbench、Rust 应用和 TUI 都用它拒绝重复/旧值，在 revision 缺口时重读快照，因此流式内容组装由后端统一，三端只负责自己的展示节奏和渲染。
 
 ```mermaid
 flowchart LR
@@ -761,17 +761,18 @@ flowchart LR
 
 #### 13.2.2 为什么先建立通用 render
 
-streaming 会持续改变正文高度、可见尾部和滚动锚点。如果没有统一的测量、revision 与 cache contract，`chat_history`、Markdown、tool output 和 frame coordinator 会分别计算宽度与失效条件，随后即使增加 frame scheduler，也只能减少 draw 次数，不能减少每帧重复布局。因此 TUI 已先建立 `render/`；下一项工作是在这个边界上实现 streaming batch、cache 与 redraw 调度。
+streaming 会持续改变正文高度、可见尾部和滚动锚点。如果没有统一的测量、revision 与 cache contract，`chat_history`、结构化文本、tool output 和 frame coordinator 会分别计算宽度与失效条件，随后即使增加 frame scheduler，也只能减少 draw 次数，不能减少每帧重复布局。因此 TUI 已先建立 `render/`，并完成 transcript cell revision、有界派生 buffer cache、完整新增行代码高亮、redraw 调度，以及客户端 backlog 中连续 transient 完整值的有界归约。
 
 | 层 | 负责 | 不负责 |
 | --- | --- | --- |
-| `render/` | 当前拥有 `Renderable`、`RenderContext`、纯布局、行操作、实际折行高度、有界代码高亮和不可变主题映射；下一步增加 cache key 与有界缓存 | event、deadline、主题文件读写、RPC、feature state |
+| `render/` | `Renderable`、`RenderContext`、纯布局、行操作、实际折行高度、有界完整源码/逐行代码高亮和不可变主题映射 | event、deadline、主题文件读写、RPC、feature state、transcript cache owner |
 | component renderer | 把自己的只读 view model 转成 renderable，并定义局部命中区域 | 修改 feature state、读取文件、调度 task |
 | `app/frame.rs` | 装配整页 surface、overlay 顺序与最终 screen selection | 保存 component 内部缓存、解释 streaming delta |
-| `app/redraw.rs` | dirty revision、frame deadline、请求合并与速率限制 | 测量文本、保存正文、丢弃控制事件 |
+| `app/redraw.rs` | dirty deadline、16 ms 批量窗口与输入立即重绘 | 测量文本、保存正文、丢弃控制事件 |
+| `app/transcript_batch.rs` | 在当前 frame deadline 内归约同 scope、同 stream instance、cursor 连续的 transient 完整 `Upsert` | 拼接 token、跨越 committed/删除/清理/输入 barrier、推迟 frame deadline |
 | `terminal/session.rs` | 执行 Ratatui draw、保存最后完成的 buffer、恢复终端 | 决定何时需要新 frame |
 
-第一步已经完成：没有建立通用 Markdown renderer 或空 cache，而是让 `ChatHistoryView` 和 `ChatComposerSurface` 使用同一个 `Renderable` contract，补齐行操作、实际折行高度和主题驱动的有界代码高亮，并完成布局、主题资源拆分和旧目录删除。下一步为 transcript cell 引入 revision-bound cache，并让 `app/redraw.rs` 合并帧请求。
+渲染、缓存和调度已经完成：`ChatHistoryView` 和 `ChatComposerSurface` 使用同一个 `Renderable` contract，行操作、实际折行高度、主题驱动的有界代码高亮、transcript cell revision、每个 Thread 独立的派生 buffer cache、`TranscriptBatch` 和 `RedrawScheduler` 已落地。终端输入立即画，服务端更新、请求完成、资源刷新与可见计时变化共享首个 16 ms deadline；空 Tick 不触发 draw。`TranscriptBatch` 最多保留 256 个 identity，重复 identity 只保留最后一个完整值，不连续 cursor 或任何控制事件会结束当前批次并原样留到下一轮。
 
 #### 13.2.3 Codex TUI 的 streaming/render 经验与 Zeta 取舍
 
@@ -779,29 +780,32 @@ Codex TUI 的重要经验不是把 token 直接画到终端，而是把“源文
 
 | Codex TUI 机制 | 解决的问题 | Zeta 决定 |
 | --- | --- | --- |
-| 保留完整 Markdown source，只在换行后推进增量解析 | 半行、未闭合 fence 和未完成结构会反复改写 | 端侧始终保留 backend `Upsert` 的完整当前文本；若后续产品要求接受结构化文本，renderer 从 source 派生，不保存 rendered text 作为事实 |
+| 保留完整 source，只在换行后推进增量解析 | 半行和未完成结构会反复改写 | 端侧始终保留 backend `Upsert` 的完整当前文本；`StreamingCodeHighlighter` 只推进完整新增行，其他 renderer 从 source 派生，不保存 rendered text 作为事实 |
 | stable region 与 mutable tail 分离 | 已显示历史不能被后续片段改写，最后一个结构块仍可变化 | 不复制 scrollback line commit；在 `TranscriptCellId + revision` 上区分稳定 cell 与活动 cell，只允许活动 cell 的派生布局失效 |
 | table holdback | 新行可能改变全部列宽，不能过早固定旧行 | 只有产品要求接受相应结构后，表格、未闭合代码块和引用定义才由端侧 renderer 保持为活动尾部；后端不识别 Markdown 布局 |
 | completion 时从完整 source 重新渲染并合并 | 中间片段可能丢失，增量渲染也可能与最终结构不同 | committed entry 替换 transient entry，并使对应 cell cache 失效；最终内容不从已画出的行反推 |
 | resize 时从 source 重新折行 | 旧宽度产生的 rendered lines 不能复用 | cache key 至少包含 cell identity、revision、width、theme revision 与 render mode；resize 只失效布局，不改变正文 state |
-| `FrameRequester` 合并请求并限制帧率 | 高频 delta 或动画不应触发等量 terminal draw | Zeta TUI 增加独立 frame scheduler；state transition 只标 dirty，请求最早 deadline，多次请求合成一帧 |
-| backlog 时从逐行节奏切到 batch catch-up | 平滑动画不能让展示无限落后于真实输出 | Zeta 不要求逐行提交动画；同 identity 的累计 `Upsert` 优先 latest-wins，每轮按 event/time budget 归约一批，再只请求一帧 |
+| `FrameRequester` 合并请求并限制帧率 | 高频 delta 或动画不应触发等量 terminal draw | `RedrawScheduler` 保留首个批量 deadline，不因后续请求向后推迟；输入将 deadline 提前到当前时刻 |
+| backlog 时从逐行节奏切到 batch catch-up | 平滑动画不能让展示无限落后于真实输出 | Zeta 不要求逐行提交动画；`TranscriptBatch` 在首个 frame deadline 内归约一批连续完整 `Upsert`，同 identity 保留最新值，再只请求一帧 |
 
-Zeta TUI 当前已经直接应用后端组装的完整 transcript `Upsert`，但 `event_loop` 仍在每个 `RuntimeEvent` 处理完后调用整帧 `draw_terminal`，`chat_history` 也会为当前窗口重新生成全部 message lines。下一步 render 工作必须先收掉这个耦合，再增加局部 cache；不能先把 Markdown parser 或 frame request 分散进各 feature。
+Codex TUI 用 `FrameRequester → FrameScheduler → FrameRateLimiter` 管重绘，用独立 `StreamController` 管源内容累计，并让 App 只在 frame deadline 前有界消费事件。Zeta 沿用这条职责边界：`RedrawScheduler` 只管 deadline，`TranscriptBatch` 只管安全归约，`TranscriptProjection` 才应用正文变化。Zeta 的同步单写者 loop 不需要为 scheduler 再起一个 task。
+
+Zeta TUI 直接应用后端组装的完整 transcript `Upsert`；`TranscriptProjection` 给每次可见 cell 内容变化分配新的 render revision，`ChatHistoryView` 按 cell identity/revision/width/theme/mode 复用有界 buffer，height、draw 和 pointer hit test 共用同一结果。`event_loop` 不再在每个 `RuntimeEvent` 后无条件 draw，也不在 Submit/Queue/Steer 路径重复 draw；它通过 `EventPump::recv_timeout` 等待下一个事件或 frame deadline，并在该 deadline 内归约连续的 transient `Upsert`，避免 backlog 逐条重算活动 cell。
 
 目标调用路径固定为：
 
 ```text
 RuntimeEvent batch
+  → TranscriptBatch（只归约连续 transient 完整值）
   → App/feature state transition
   → dirty presentation revision
-  → FrameScheduler 合并 deadline
+  → RedrawScheduler 合并 deadline
   → app::frame::draw 只读 snapshot
   → component renderer 按 identity/revision/width 复用或重算布局
   → TerminalSession::draw
 ```
 
-`FrameScheduler` 只合并 draw request，不合并状态事实。输入、退出、approval、request completion 和 committed update 仍逐个进入单写者；transient `Upsert` 才能在同 scope、同 `entry_id` 且尚未跨过 completion barrier 时 latest-wins。绘制失败是 terminal failure，不能回滚已经应用的 presentation state；下一次成功 draw 直接读取最新 state。
+`RedrawScheduler` 只合并 draw request，不合并状态事实。`TranscriptBatch` 仅接受同 Session、Thread、durable sequence、stream instance 且 cursor 严格连续的 transient `Upsert`；不同 identity 保持首次出现顺序，同 identity 才替换为最后完整值。输入、退出、approval、request completion、committed update、删除与清理仍逐个进入单写者。绘制失败是 terminal failure，不能回滚已经应用的 presentation state；下一次成功 draw 直接读取最新 state。
 
 这些 streaming/render 机制只固定流式正文与绘制边界，不自动把 Codex TUI 的 Markdown、table、terminal scrollback 或动画加入 Zeta 产品 backlog。
 
@@ -1039,7 +1043,9 @@ lib.rs + lib_tests.rs
 | `components/list_selection` state/view 边界 | Current |
 | `chat_input` / `chat_composer` / `pane` component 物理边界 | Current |
 | 后端 Thread transient merge、cursor recovery 与 bounded notification data plane | Current |
-| TUI transcript batch reduction、frame scheduler 与 render cache | Proposed |
+| transcript cell revision 与每个 Thread 独立的有界 render cache | Current |
+| TUI frame scheduler 与输入优先重绘 | Current |
+| TUI transient batch reduction | Current |
 | Session picker/archive 与 Thread 恢复 | Current |
 | owner-directed approval / user input / deadline | Current |
 | 多行 `ChatInput` 与 active-Turn follow-up Queue | Current |
@@ -1123,11 +1129,11 @@ Skill、directory file mention、Git status、approval 与 user input 已按该�
 1. 建立 file-based `render.rs`，定义 crate-private `Renderable` 的测量与绘制 contract；（Current）
 2. 将纯布局迁入 `render/layout.rs`，把主题拆成 `render/theme.rs` 的纯颜色映射与 `features/theme/resource.rs` 的加载、预览、选择和保存，删除 `ui.rs` 与 `ui/`；（Current）
 3. 让 `ChatHistoryView` 与 `ChatComposerSurface` 成为首批消费者，使同一实现同时给出 desired height 与实际 draw；（Current）
-4. 为 transcript cell 增加稳定 content revision，并以 identity/revision/width/theme revision/render mode 作为有界 cache key；
-5. 建立 `app/redraw.rs`，使 state transition 只标记 dirty，由独立 deadline 合并实际 frame；
-6. 最后接入 transient `Upsert` 批量归约和活动尾部，committed barrier 继续逐个处理。
+4. 为 transcript cell 增加稳定 content revision，以 identity/revision/width/theme revision/render mode 作为有界 cache key，并让代码高亮按完整新增行延续 parser state；（Current）
+5. 建立 `app/redraw.rs`，使 state transition 只标记 dirty，由独立 deadline 合并实际 frame；（Current）
+6. 接入 transient `Upsert` 批量归约和活动尾部，committed barrier 继续逐个处理；（Current）
 
-渲染基础退出条件已经满足：`ui/` 已删除且不存在转发层；`render/` 不依赖 app、feature、component、client 或 terminal；两个首批消费者的测量行为由测试锁定。下一阶段退出条件是连续 transient 更新可以少画中间帧，但最终 committed 内容、输入和退出事件不丢失。
+渲染基础、派生缓存、redraw 调度与 transient batch 的退出条件已经满足：`ui/` 已删除且不存在转发层；`render/` 不依赖 app、feature、component、client 或 terminal；两个首批消费者的测量行为由测试锁定；同一 transcript cell 的内容、宽度、主题或展开/选择模式变化都会失效缓存，超大 cell 不进入缓存；连续服务端事件共享首个 16 ms frame deadline，输入不等待批量窗口，空 Tick 不画；批处理受 identity、更新数和文本字节三重上限约束，并保留最新 revision。
 
 ### 潜在阶段：抽取公共能力
 

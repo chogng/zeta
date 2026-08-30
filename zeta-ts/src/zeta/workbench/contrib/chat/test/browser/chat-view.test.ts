@@ -1011,6 +1011,7 @@ test("ChatPaneModel applies backend-assembled transcript entries", async () => {
 			sessionId: "session-1",
 			threadId: "thread-1",
 			durableSequence: 1,
+			revision: 2,
 			changes: [{
 				type: "upsert",
 				entry: {
@@ -1139,13 +1140,18 @@ test("ChatPaneModel mechanically clears and replaces transient transcript entrie
 	}, sessions);
 
 	await model.initialize();
-	const emitChanges = (changes: Extract<ServerNotification, { method: "session/thread/transcript/update" }>["params"]["changes"]): void => {
+	let transcriptRevision = 1;
+	const emitChanges = (
+		changes: Extract<ServerNotification, { method: "session/thread/transcript/update" }>["params"]["changes"],
+		revision = ++transcriptRevision,
+	): void => {
 		fake.emit({
 			method: "session/thread/transcript/update",
 			params: {
 				sessionId: "session-1",
 				threadId: "thread-1",
 				durableSequence: 1,
+				revision,
 				changes,
 			},
 		});
@@ -1168,6 +1174,13 @@ test("ChatPaneModel mechanically clears and replaces transient transcript entrie
 
 	emitChanges([item("new-item")]);
 	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
+	emitChanges([item("duplicate-is-ignored")], transcriptRevision);
+	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
+	emitChanges([item("gap-is-ignored")], transcriptRevision + 2);
+	await nextTask();
+	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
+	emitChanges([{ type: "clearTransient" }], transcriptRevision + 3);
+	assert.equal(model.items.length, 0);
 });
 
 test("ChatPaneModel projects a durable Turn failure into the conversation", async () => {
@@ -1758,6 +1771,7 @@ function transcript(value: Thread): ThreadTranscriptSnapshot {
 		sessionId: value.sessionId,
 		threadId: value.threadId,
 		durableSequence: value.sequence,
+		revision: value.sequence,
 		entries: value.turns.flatMap((turn) => [
 			...turn.items.map((item) => ({ type: "item" as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false })),
 			...(turn.plan ? [{ type: "turnPlan" as const, entryId: `turn-plan:${turn.turnId}`, turnId: turn.turnId, plan: turn.plan }] : []),

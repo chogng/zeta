@@ -10,6 +10,8 @@ use super::event_pump::EventPump;
 use super::event_pump::RuntimeEvent;
 use super::frame;
 use super::frame::InputPointerTarget;
+use super::redraw::RedrawPriority;
+use super::redraw::RedrawScheduler;
 use super::request_completion::RequestCompletion;
 use super::request_completion::apply_request_completion;
 use super::request_completion::apply_thread_snapshot;
@@ -22,6 +24,7 @@ use super::request_completion::resolve_thread_request_and_read;
 use super::request_completion::start_turn_and_read;
 use super::request_completion::steer_turn_and_read;
 use super::slash_command_registry;
+use super::transcript_batch::TranscriptBatch;
 use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
@@ -46,6 +49,7 @@ use crate::features::theme::ThemeResource;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadUpdateDisposition;
+use crate::features::thread::TranscriptUpdateDisposition;
 use crate::features::thread::read_older_thread_history;
 use crate::features::thread::read_thread_history;
 use crate::host;
@@ -182,6 +186,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut connectors_refresh_requested = false;
     let mut sessions_refresh_requested = false;
     let mut queued_turn_dispatch_requested = false;
+    let mut redraw = RedrawScheduler::default();
+    let mut pending_runtime_event = None;
     if let Err(error) = draw_terminal(&mut terminal, &app) {
         let _ = pump.shutdown();
         return Err(error.into());
@@ -189,7 +195,75 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let result = (|| {
         loop {
             let had_active_turn = active_turn.is_some();
-            let action = match pump.recv()? {
+            let mut runtime_event = match pending_runtime_event.take() {
+                Some(event) => event,
+                None => match redraw.wait_timeout(Instant::now()) {
+                    Some(timeout) => match pump.recv_timeout(timeout)? {
+                        Some(event) => event,
+                        None => {
+                            if redraw.take_due(Instant::now()) {
+                                draw_terminal(&mut terminal, &app)?;
+                            }
+                            continue;
+                        }
+                    },
+                    None => pump.recv()?,
+                },
+            };
+            match &runtime_event {
+                RuntimeEvent::Client(_) => {
+                    redraw.request(Instant::now(), RedrawPriority::Batched);
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Input(_)) => {
+                    redraw.request(Instant::now(), RedrawPriority::Immediate);
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Tick)
+                | RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(_))
+                | RuntimeEvent::TerminationRequested => {}
+            }
+            runtime_event = match runtime_event {
+                RuntimeEvent::Client(client::ClientEvent::ThreadTranscriptUpdated(update)) => {
+                    match TranscriptBatch::start(*update) {
+                        Ok(mut batch) => {
+                            while let Some(timeout) = redraw.wait_timeout(Instant::now()) {
+                                if timeout.is_zero() {
+                                    break;
+                                }
+                                let Some(next) = pump.recv_timeout(timeout)? else {
+                                    break;
+                                };
+                                match next {
+                                    RuntimeEvent::Client(
+                                        client::ClientEvent::ThreadTranscriptUpdated(update),
+                                    ) => match batch.push(*update) {
+                                        Ok(()) => {}
+                                        Err(update) => {
+                                            pending_runtime_event = Some(RuntimeEvent::Client(
+                                                client::ClientEvent::ThreadTranscriptUpdated(
+                                                    Box::new(update),
+                                                ),
+                                            ));
+                                            break;
+                                        }
+                                    },
+                                    event => {
+                                        pending_runtime_event = Some(event);
+                                        break;
+                                    }
+                                }
+                            }
+                            RuntimeEvent::Client(client::ClientEvent::ThreadTranscriptUpdated(
+                                Box::new(batch.finish()),
+                            ))
+                        }
+                        Err(update) => RuntimeEvent::Client(
+                            client::ClientEvent::ThreadTranscriptUpdated(Box::new(update)),
+                        ),
+                    }
+                }
+                event => event,
+            };
+            let action = match runtime_event {
                 RuntimeEvent::Client(event) => {
                     let event = match super::recovery::continue_or_exit(
                         event,
@@ -220,8 +294,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Tick) => {
                     let now = Instant::now();
-                    app.handle_tick(now);
-                    poll_keymap_resource(&mut keymap_resource, &mut app, now);
+                    let app_changed = app.handle_tick(now);
+                    let keymap_changed = poll_keymap_resource(&mut keymap_resource, &mut app, now);
+                    if app_changed || keymap_changed {
+                        redraw.request(now, RedrawPriority::Batched);
+                    }
                     None
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
@@ -268,6 +345,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 match task.poll() {
                     Ok(Some(completion)) => {
                         pending_request = None;
+                        redraw.request(Instant::now(), RedrawPriority::Batched);
                         if let Some(exit) = apply_request_completion(
                             completion,
                             &mut conversation,
@@ -281,6 +359,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     Ok(None) => {}
                     Err(error) => {
                         pending_request = None;
+                        redraw.request(Instant::now(), RedrawPriority::Batched);
                         app.update(AppEvent::FailureReported(error.to_string()));
                     }
                 }
@@ -301,7 +380,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
 
             if let Some(file_search) = file_search.as_mut() {
                 sync_file_search_query(&app, file_search);
-                for snapshot in file_search.poll() {
+                let snapshots = file_search.poll();
+                if !snapshots.is_empty() {
+                    redraw.request(Instant::now(), RedrawPriority::Batched);
+                }
+                for snapshot in snapshots {
                     app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
                 }
             }
@@ -920,7 +1003,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         app.cycle_next_approval_mode();
                     }
                     AppCommand::SubmitTurn { submission } => {
-                        draw_terminal(&mut terminal, &app)?;
                         if pending_request.is_none() {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
@@ -945,7 +1027,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         queue_id,
                         submission,
                     } => {
-                        draw_terminal(&mut terminal, &app)?;
                         if pending_request.is_none() {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
@@ -971,7 +1052,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         steer_id,
                         submission,
                     } => {
-                        draw_terminal(&mut terminal, &app)?;
                         if pending_request.is_none() {
                             if matches!(app.status(), Status::Working)
                                 && !app.steers_active_turn()
@@ -1083,7 +1163,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     connectors_refresh_requested = false;
                 }
             }
-            draw_terminal(&mut terminal, &app)?;
+            if redraw.take_due(Instant::now()) {
+                draw_terminal(&mut terminal, &app)?;
+            }
         }
     })();
     let pump_result = pump.shutdown();
@@ -1173,19 +1255,25 @@ fn draw_terminal(
     terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }
 
-fn poll_keymap_resource(resource: &mut Option<KeymapResource>, app: &mut App, now: Instant) {
+fn poll_keymap_resource(
+    resource: &mut Option<KeymapResource>,
+    app: &mut App,
+    now: Instant,
+) -> bool {
     let Some(resource) = resource else {
-        return;
+        return false;
     };
     match resource.poll(now, &mut app.app_keymap) {
-        KeymapResourcePoll::Unchanged => {}
+        KeymapResourcePoll::Unchanged => false,
         KeymapResourcePoll::Updated => {
             for diagnostic in resource.diagnostics().to_vec() {
                 app.report_keybinding_diagnostic(diagnostic);
             }
+            true
         }
         KeymapResourcePoll::Rejected(diagnostic) => {
             app.report_keybinding_diagnostic(diagnostic);
+            true
         }
     }
 }
@@ -1311,12 +1399,17 @@ fn refresh_server_event(
             }
         }
         client::ClientEvent::ThreadTranscriptUpdated(update) => {
-            if update.session_id == *conversation.session_id()
-                && update.thread_id == *conversation.thread_id()
-            {
-                app.update(AppEvent::ThreadTranscriptUpdateReceived(update));
+            match thread_subscription.classify_transcript_update(&update) {
+                TranscriptUpdateDisposition::Ignore => ServerRefresh::default(),
+                TranscriptUpdateDisposition::Apply => {
+                    app.update(AppEvent::ThreadTranscriptUpdateReceived(update));
+                    ServerRefresh::default()
+                }
+                TranscriptUpdateDisposition::RefreshSnapshot => ServerRefresh {
+                    thread: true,
+                    ..ServerRefresh::default()
+                },
             }
-            ServerRefresh::default()
         }
     }
 }

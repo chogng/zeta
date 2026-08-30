@@ -1,5 +1,6 @@
 use super::plan::PlanState;
 use super::transcript::TranscriptCellId;
+use crate::components::chat_history::ChatHistoryRenderCache;
 use crate::components::chat_history::ChatHistoryScroll;
 use crate::components::chat_input::ChatInput;
 use crate::components::chat_input::ChatInputMode;
@@ -16,6 +17,7 @@ pub(crate) struct ThreadPresentationState {
     pub(crate) plan: PlanState,
     pub(crate) queue: Queue,
     pub(crate) scroll: ChatHistoryScroll,
+    pub(crate) render_cache: ChatHistoryRenderCache,
     pub(crate) expanded_cells: BTreeSet<TranscriptCellId>,
     pub(crate) selected_cell: Option<TranscriptCellId>,
     pub(crate) scroll_anchor: Option<TranscriptScrollAnchor>,
@@ -29,6 +31,7 @@ impl Default for ThreadPresentationState {
             plan: PlanState::default(),
             queue: Queue::default(),
             scroll: ChatHistoryScroll::default(),
+            render_cache: ChatHistoryRenderCache::default(),
             expanded_cells: BTreeSet::new(),
             selected_cell: None,
             scroll_anchor: None,
@@ -91,7 +94,7 @@ impl ThreadPresentationState {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TranscriptScrollAnchor {
     pub(crate) cell_id: TranscriptCellId,
-    pub(crate) line_offset: u16,
+    pub(crate) line_offset: usize,
 }
 
 #[derive(Debug)]
@@ -113,6 +116,9 @@ impl ThreadPresentationStore {
     }
 
     pub(crate) fn switch(&mut self, thread_id: ThreadId) {
+        if thread_id != self.active {
+            self.active_mut().render_cache.clear();
+        }
         self.states
             .entry(thread_id.clone())
             .or_default()

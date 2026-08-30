@@ -32,10 +32,8 @@ impl ChatHistoryScroll {
         }
     }
 
-    pub(crate) fn paragraph_offset(&self, bottom_offset: usize) -> u16 {
-        bottom_offset
-            .saturating_sub(self.rows_from_bottom)
-            .min(u16::MAX as usize) as u16
+    pub(crate) fn paragraph_offset(&self, bottom_offset: usize) -> usize {
+        bottom_offset.saturating_sub(self.rows_from_bottom)
     }
 
     pub(crate) fn follow_latest(&mut self) {

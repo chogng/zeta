@@ -19,6 +19,7 @@ pub(crate) enum CommandStatus {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Message {
     pub(crate) cell_id: Option<String>,
+    pub(crate) render_revision: u64,
     pub(crate) role: MessageRole,
     pub(crate) text: String,
     pub(crate) detail: Option<String>,
@@ -33,6 +34,7 @@ impl Message {
     pub(crate) fn plain(role: MessageRole, text: String) -> Self {
         Self {
             cell_id: None,
+            render_revision: 0,
             role,
             text,
             detail: None,
@@ -47,6 +49,7 @@ impl Message {
     pub(crate) fn command(command: String, status: CommandStatus, detail: Option<String>) -> Self {
         Self {
             cell_id: None,
+            render_revision: 0,
             role: MessageRole::Command,
             text: command,
             detail,
@@ -60,6 +63,11 @@ impl Message {
 
     pub(crate) fn with_cell_id(mut self, cell_id: impl Into<String>) -> Self {
         self.cell_id = Some(cell_id.into());
+        self
+    }
+
+    pub(crate) fn with_render_revision(mut self, revision: u64) -> Self {
+        self.render_revision = revision;
         self
     }
 

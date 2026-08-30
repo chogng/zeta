@@ -116,11 +116,35 @@ fn exec_cell_identity_is_derived_from_the_first_tool_call_across_resync() {
     assert_eq!(projection.cells()[0].cell_id(), &first);
 }
 
+#[test]
+fn reinstalling_a_cell_advances_its_render_revision() {
+    let turn_id = turn_id("turn");
+    let entries = vec![ThreadTranscriptEntry::Item {
+        entry_id: "agent-entry".into(),
+        turn_id: turn_id.clone(),
+        item: ThreadItem::AgentMessage {
+            item_id: item_id("agent-item"),
+            turn_id,
+            text: "streamed answer".into(),
+        },
+        transient: false,
+    }];
+    let mut projection = TranscriptProjection::default();
+    projection.replace(snapshot(entries.clone()));
+    let first = projection.views(&BTreeSet::new(), None)[0].render_revision;
+
+    projection.replace(snapshot(entries));
+    let second = projection.views(&BTreeSet::new(), None)[0].render_revision;
+
+    assert!(second > first);
+}
+
 fn snapshot(entries: Vec<ThreadTranscriptEntry>) -> ThreadTranscriptSnapshot {
     ThreadTranscriptSnapshot {
         session_id: session_id("session"),
         thread_id: thread_id("thread"),
         durable_sequence: 1,
+        revision: 1,
         entries,
     }
 }
