@@ -658,3 +658,9 @@ Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，并覆盖
 event-loop integration 可以继续加强当前 brokered-local 路径；连接恢复验证属于 CLI，不进入 TUI transport 测试。桌面端 Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与
 owner 判断以 [`docs/tui.md`](../../docs/tui.md#17-已接受的架构迁移顺序) 和
 [`docs/product-lines.md`](../../docs/product-lines.md) 为准。
+
+渲染测试遵守以下边界；这里的测试快照只指渲染基线，与运行时的权威 Thread 快照无关：
+
+- 默认断言状态、事件、命令、语义身份以及关键文字、颜色、焦点和坐标；完整画面不能代替这些行为依据。
+- 当前不引入快照测试依赖。只有完整字符布局本身是稳定契约、逐格断言会遮蔽测试意图时，才在拥有该布局的组件测试中加入文本快照，并只固定代表性宽度以及可复现的时间、路径、版本和 ID。
+- 不为整个应用帧建立快照，也不使用终端截图或像素基线；快照变更必须逐项审查，不能批量接受后跳过行为核对。
