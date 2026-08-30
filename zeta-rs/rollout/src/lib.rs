@@ -1,7 +1,7 @@
-//! Composition boundary for one local authoritative Session and Thread event-history repository.
+//! Composition boundary for one local authoritative Thread event-history repository.
 //!
 //! This crate owns no event format or domain reducer. It opens the typed storage adapters as one
-//! repository and recovers the runtime in dependency order: every Thread before every Session.
+//! repository and recovers every durable Thread before callers use the controller.
 
 mod error;
 mod lease;
