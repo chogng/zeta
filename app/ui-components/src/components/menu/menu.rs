@@ -12,13 +12,9 @@ use super::{
 
 const MENU_PADDING: f32 = 2.0;
 const MENU_CORNER_RADIUS: f32 = 4.0;
-const MENU_AMBIENT_SHADOW: Color = Color::rgba(0, 0, 0, 24);
-const MENU_AMBIENT_SHADOW_OFFSET_Y: f32 = 1.0;
-const MENU_AMBIENT_SHADOW_BLUR_RADIUS: f32 = 10.0;
-const MENU_KEY_SHADOW: Color = Color::rgba(0, 0, 0, 36);
-const MENU_KEY_SHADOW_OFFSET_Y: f32 = 4.0;
-const MENU_KEY_SHADOW_BLUR_RADIUS: f32 = 6.0;
-const MENU_KEY_SHADOW_SPREAD_RADIUS: f32 = -1.0;
+const MENU_SHADOW: Color = Color::rgba(0, 0, 0, 64);
+const MENU_SHADOW_OFFSET_Y: f32 = 4.0;
+const MENU_SHADOW_BLUR_RADIUS: f32 = 26.352_942;
 
 /// Stable host-owned identities used by one menu.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -292,21 +288,11 @@ impl Menu {
 
     fn paint_surface(&self, scene: &mut UiScene) {
         scene.draw_rect(
-            PaintRect::new(self.bounds, Color::TRANSPARENT)
-                .with_shadow(
-                    BoxShadow::new(MENU_AMBIENT_SHADOW)
-                        .with_offset(Point::new(0.0, MENU_AMBIENT_SHADOW_OFFSET_Y))
-                        .with_blur_radius(MENU_AMBIENT_SHADOW_BLUR_RADIUS),
-                )
-                .with_corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS)),
-        );
-        scene.draw_rect(
             PaintRect::new(self.bounds, self.style.background)
                 .with_shadow(
-                    BoxShadow::new(MENU_KEY_SHADOW)
-                        .with_offset(Point::new(0.0, MENU_KEY_SHADOW_OFFSET_Y))
-                        .with_blur_radius(MENU_KEY_SHADOW_BLUR_RADIUS)
-                        .with_spread_radius(MENU_KEY_SHADOW_SPREAD_RADIUS),
+                    BoxShadow::new(MENU_SHADOW)
+                        .with_offset(Point::new(0.0, MENU_SHADOW_OFFSET_Y))
+                        .with_blur_radius(MENU_SHADOW_BLUR_RADIUS),
                 )
                 .with_corner_radii(CornerRadii::uniform(MENU_CORNER_RADIUS)),
         );

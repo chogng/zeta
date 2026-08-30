@@ -262,7 +262,7 @@ Session navigation 和后续 Editor tabs 可以复用同一 surface/排列 primi
 布局与 active panel 生命周期。
 `ContextView::new` 接收同一逻辑坐标空间中的 viewport、anchor 和期望 content size。它先把 padding 加入外壳尺寸，再按 `ContextViewPlacement` 尝试首选侧和对齐；首选位置不适合时先翻转，仍无法完整放入时贴紧 inset viewport 并约束外壳和内容尺寸。`ContextView::draw` 把外壳与调用方 closure 发出的任意 primitive 放入同一个新浮层；该层不继承 host component 的 clip，因此可以越过锚点所在控件的边界，调用方内容再单独裁剪到 `content_bounds`。Host 必须使用同一 `ContextViewLayout` 注册命中区域，并自行管理 open/close、outside click、Escape、focus restoration 和锚定内容的领域交互；这些 retained lifecycle 不进入 scene component。当前 `ContextViewStyle` 不暴露 border：浮层天然无边框；若某个具体浮层需要描边，应由其内容组件拥有并绘制，不能改变 ContextView 的定位几何。
 
-`Menu` 拥有无边框菜单外壳、低透明度 ambient shadow、向下偏移的 key shadow、2px padding、4px radius、纵向 `ActionBar`、选择展示和 item bounds/hit-test。`MenuIds` 与 `MenuItem` 接收 host 提供的稳定 identity，`Menu::compose` 用同一几何建立 `Menu`/`MenuItem` 无障碍节点、激活动作和纵向导航；host 只保留打开状态、关闭、焦点恢复与命令执行。`MenuStyle::with_header_height` 保留调用界面拥有的 header geometry，`Menu::{paint_with_header,draw_components_with_header}` 保证 header 与菜单项处于同一组件树。
+`Menu` 拥有无边框菜单外壳、与 macOS 原生弹出菜单同量级的单层下落阴影、2px padding、4px radius、纵向 `ActionBar`、选择展示和 item bounds/hit-test。`MenuIds` 与 `MenuItem` 接收 host 提供的稳定 identity，`Menu::compose` 用同一几何建立 `Menu`/`MenuItem` 无障碍节点、激活动作和纵向导航；host 只保留打开状态、关闭、焦点恢复与命令执行。`MenuStyle::with_header_height` 保留调用界面拥有的 header geometry，`Menu::{paint_with_header,draw_components_with_header}` 保证 header 与菜单项处于同一组件树。
 
 `ContextMenu` 使用 `ContextView` 定位一个完整 `Menu`，只增加锚定、viewport 翻转/约束和浮层层级。标签菜单与 SCM 工具栏菜单直接提供 `MenuIds`/`MenuItem`，不再分别创建菜单项交互节点；标签菜单的重命名输入仍通过 header 入口组合，状态和输入语义保留在 Workbench。
 `Dropdown` 是另一层 ContextView 组合：它使用无外层 padding 的浮层外壳，

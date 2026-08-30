@@ -35,7 +35,7 @@ fn menu(items: Vec<MenuItem>) -> Menu {
 }
 
 #[test]
-fn owns_soft_shadow_padding_and_corner_radius() {
+fn owns_native_menu_shadow_padding_and_corner_radius() {
     let menu = menu(vec![
         MenuItem::new(FIRST, "Pin", ButtonState::Resting),
         MenuItem::new(SECOND, "Close", ButtonState::Resting),
@@ -60,21 +60,12 @@ fn owns_soft_shadow_padding_and_corner_radius() {
     assert_eq!(
         scene.rects()[0].shadow(),
         Some(
-            BoxShadow::new(Color::rgba(0, 0, 0, 24))
-                .with_offset(Point::new(0.0, 1.0))
-                .with_blur_radius(10.0)
-        )
-    );
-    assert_eq!(
-        scene.rects()[1].shadow(),
-        Some(
-            BoxShadow::new(Color::rgba(0, 0, 0, 36))
+            BoxShadow::new(Color::rgba(0, 0, 0, 64))
                 .with_offset(Point::new(0.0, 4.0))
-                .with_blur_radius(6.0)
-                .with_spread_radius(-1.0)
+                .with_blur_radius(26.352_942)
         )
     );
-    assert_eq!(scene.rects()[1].corner_radii(), CornerRadii::uniform(4.0));
+    assert_eq!(scene.rects()[0].corner_radii(), CornerRadii::uniform(4.0));
 }
 
 #[test]
@@ -89,7 +80,7 @@ fn selection_skips_disabled_items_and_drives_hit_geometry() {
     scene.draw_component(&menu);
 
     assert_eq!(menu.selected_index(), Some(1));
-    assert_eq!(scene.rects()[3].fill(), SELECTED);
+    assert_eq!(scene.rects()[2].fill(), SELECTED);
     assert_eq!(
         menu.hit_test(Point::new(
             selected_bounds.origin.x + 1.0,
