@@ -1,4 +1,6 @@
-use super::{instance_range, linear_color, prepare_instances, validate_paint_rect};
+use super::{
+    instance_range, linear_color, prepare_instances, shadow_blur_extent, validate_paint_rect,
+};
 use crate::ui::foundation::{Color, CornerRadii, Edges, Point, Rect};
 use crate::ui::presentation::{Border, BoxShadow, PaintRect, UiScene};
 
@@ -51,7 +53,8 @@ fn prepares_soft_shadow_before_its_source_rect() {
             .with_shadow(
                 BoxShadow::new(Color::rgba(0, 0, 0, 64))
                     .with_offset(Point::new(0.0, 4.0))
-                    .with_blur_radius(8.0),
+                    .with_blur_radius(8.0)
+                    .with_spread_radius(2.0),
             )
             .with_corner_radii(CornerRadii::uniform(5.0)),
     );
@@ -60,11 +63,33 @@ fn prepares_soft_shadow_before_its_source_rect() {
     let instances = prepared.instances;
 
     assert_eq!(instances.len(), 2);
-    assert_eq!(instances[0].bounds, [4.0, 16.0, 132.0, 72.0]);
-    assert_eq!(instances[0].corner_radii, [10.0; 4]);
-    assert_eq!(instances[0].effect, [16.0, 16.0, 1.0, 0.0]);
+    assert_eq!(instances[0].bounds, [-8.0, 4.0, 156.0, 96.0]);
+    assert_eq!(instances[0].corner_radii, [14.0; 4]);
+    assert_eq!(instances[0].effect, [8.0, 24.0, 1.0, 0.0]);
     assert_eq!(instances[1].bounds, [20.0, 24.0, 100.0, 40.0]);
     assert_eq!(instances[1].effect, [0.0; 4]);
+}
+
+#[test]
+fn negative_spread_contracts_the_shadow_shape_and_corner_radii() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.draw_rect(
+        PaintRect::new(Rect::from_xywh(10.0, 12.0, 50.0, 20.0), Color::WHITE)
+            .with_shadow(
+                BoxShadow::new(Color::rgba(0, 0, 0, 64))
+                    .with_offset(Point::new(0.0, 4.0))
+                    .with_blur_radius(6.0)
+                    .with_spread_radius(-1.0),
+            )
+            .with_corner_radii(CornerRadii::uniform(5.0)),
+    );
+
+    let prepared = prepare_instances(&scene, UiViewport::new(200, 120, 2.0)).unwrap();
+    let shadow = prepared.instances[0];
+
+    assert_eq!(shadow.bounds, [4.0, 16.0, 132.0, 72.0]);
+    assert_eq!(shadow.corner_radii, [8.0; 4]);
+    assert_eq!(shadow.effect, [6.0, 18.0, 1.0, 0.0]);
 }
 
 #[test]
@@ -136,6 +161,25 @@ fn rejects_negative_shadow_blur_radius() {
             reason: "shadow blur radius must not be negative",
         })
     ));
+}
+
+#[test]
+fn rejects_non_finite_shadow_spread_radius() {
+    let rect = PaintRect::new(Rect::from_xywh(0.0, 0.0, 20.0, 20.0), Color::WHITE)
+        .with_shadow(BoxShadow::new(Color::rgba(0, 0, 0, 64)).with_spread_radius(f32::INFINITY));
+
+    assert!(matches!(
+        validate_paint_rect(3, rect),
+        Err(UiRenderError::InvalidPaintRect {
+            index: 3,
+            reason: "shadow metrics must be finite",
+        })
+    ));
+}
+
+#[test]
+fn uses_three_standard_deviations_for_the_shadow_tail() {
+    assert_eq!(shadow_blur_extent(4.0), 12.0);
 }
 
 #[test]

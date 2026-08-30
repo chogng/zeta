@@ -8,9 +8,9 @@ use super::SingleInstanceRun;
 
 #[test]
 fn keys_are_normalized_and_reject_path_or_namespace_ambiguity() {
-    let key = SingleInstanceKey::new("Com.Example_ZUI-Demo").unwrap();
+    let key = SingleInstanceKey::new("Com.Example_Sample-App").unwrap();
 
-    assert_eq!(key.as_str(), "com.example_zui-demo");
+    assert_eq!(key.as_str(), "com.example_sample-app");
     assert!(SingleInstanceKey::new("").is_err());
     assert!(SingleInstanceKey::new(".hidden").is_err());
     assert!(SingleInstanceKey::new("example/app").is_err());

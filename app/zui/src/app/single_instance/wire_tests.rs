@@ -8,7 +8,7 @@ use crate::app::SecondInstance;
 
 #[test]
 fn invocation_round_trips_without_utf8_conversion() {
-    let arguments = vec![OsString::from("zui-demo"), OsString::from("--new-window")];
+    let arguments = vec![OsString::from("sample-app"), OsString::from("--new-window")];
     #[cfg(unix)]
     let arguments = {
         use std::os::unix::ffi::OsStringExt;
@@ -25,8 +25,8 @@ fn invocation_round_trips_without_utf8_conversion() {
 
 #[test]
 fn oversized_invocations_are_rejected() {
-    let event =
-        SecondInstance::new(["zui-demo"], "/tmp").with_additional_data(vec![0; MAX_MESSAGE_BYTES]);
+    let event = SecondInstance::new(["sample-app"], "/tmp")
+        .with_additional_data(vec![0; MAX_MESSAGE_BYTES]);
 
     let error = encode(&event).unwrap_err();
 
@@ -35,7 +35,7 @@ fn oversized_invocations_are_rejected() {
 
 #[test]
 fn malformed_invocations_are_rejected() {
-    let event = SecondInstance::new(["zui-demo"], "/tmp");
+    let event = SecondInstance::new(["sample-app"], "/tmp");
     let mut encoded = encode(&event).unwrap();
     encoded.push(0);
 

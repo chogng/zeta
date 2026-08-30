@@ -33,8 +33,8 @@ impl ApplicationError {
         }
     }
 
-    /// Wraps a fatal product or platform-service failure with a stable operation label.
-    pub fn product(operation: &'static str, source: impl Error + Send + Sync + 'static) -> Self {
+    /// Wraps a fatal application-host or platform-service failure with a stable operation label.
+    pub fn host(operation: &'static str, source: impl Error + Send + Sync + 'static) -> Self {
         Self {
             operation,
             source: Box::new(source),

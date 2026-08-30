@@ -2,10 +2,18 @@ use std::{mem, ops::Range};
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::ui::foundation::{Color, Rect};
-use crate::ui::presentation::{BoxShadow, PaintRect, UiScene};
+use crate::ui::foundation::Color;
+use crate::ui::foundation::CornerRadii;
+use crate::ui::foundation::Rect;
+use crate::ui::presentation::BoxShadow;
+use crate::ui::presentation::PaintRect;
+use crate::ui::presentation::UiScene;
 
 use super::{UiRenderError, UiViewport};
+
+// Treat the public blur radius as two standard deviations and retain a three-deviation tail.
+const SHADOW_STANDARD_DEVIATION_SCALE: f32 = 0.5;
+const SHADOW_VISIBLE_STANDARD_DEVIATIONS: f32 = 3.0;
 
 const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
     0 => Float32x4,
@@ -211,28 +219,40 @@ fn prepare_rect_instances(
     let mut instances = Vec::with_capacity(if rect.shadow().is_some() { 2 } else { 1 });
     if let Some(shadow) = rect.shadow() {
         let blur_radius = shadow.blur_radius();
-        let shadow_extent = blur_radius;
-        let shadow_bounds = shadow_draw_bounds(bounds, shadow, shadow_extent);
-        instances.push(RectInstance {
-            bounds: scaled_rect(shadow_bounds, scale_factor),
-            fill: linear_color(shadow.color()),
-            border_color: linear_color(Color::TRANSPARENT),
-            border_widths: [0.0; 4],
-            corner_radii: [
-                radii.top_left * scale_factor,
-                radii.top_right * scale_factor,
-                radii.bottom_right * scale_factor,
-                radii.bottom_left * scale_factor,
-            ],
-            clip_bounds: scaled_rect(clip_bounds, scale_factor),
-            viewport,
-            effect: [
-                blur_radius * scale_factor,
-                shadow_extent * scale_factor,
-                1.0,
-                0.0,
-            ],
-        });
+        let shadow_shape = shadow_shape_bounds(bounds, shadow);
+        if !shadow_shape.is_empty() {
+            let standard_deviation = shadow_standard_deviation(blur_radius);
+            let shadow_extent = shadow_blur_extent(standard_deviation);
+            let shadow_bounds = expanded_rect(shadow_shape, shadow_extent);
+            let spread_radius = shadow.spread_radius();
+            let shadow_radii = CornerRadii::new(
+                (radii.top_left + spread_radius).max(0.0),
+                (radii.top_right + spread_radius).max(0.0),
+                (radii.bottom_right + spread_radius).max(0.0),
+                (radii.bottom_left + spread_radius).max(0.0),
+            )
+            .clamped_for(shadow_shape.size);
+            instances.push(RectInstance {
+                bounds: scaled_rect(shadow_bounds, scale_factor),
+                fill: linear_color(shadow.color()),
+                border_color: linear_color(Color::TRANSPARENT),
+                border_widths: [0.0; 4],
+                corner_radii: [
+                    shadow_radii.top_left * scale_factor,
+                    shadow_radii.top_right * scale_factor,
+                    shadow_radii.bottom_right * scale_factor,
+                    shadow_radii.bottom_left * scale_factor,
+                ],
+                clip_bounds: scaled_rect(clip_bounds, scale_factor),
+                viewport,
+                effect: [
+                    standard_deviation * scale_factor,
+                    shadow_extent * scale_factor,
+                    1.0,
+                    0.0,
+                ],
+            });
+        }
     }
     instances.push(RectInstance {
         bounds: scaled_rect(bounds, scale_factor),
@@ -336,7 +356,12 @@ fn validate_paint_rect(index: usize, rect: PaintRect) -> Result<(), UiRenderErro
     }
     if let Some(shadow) = rect.shadow() {
         let offset = shadow.offset();
-        let values = [offset.x, offset.y, shadow.blur_radius()];
+        let values = [
+            offset.x,
+            offset.y,
+            shadow.blur_radius(),
+            shadow.spread_radius(),
+        ];
         if values.into_iter().any(|value| !value.is_finite()) {
             return Err(UiRenderError::InvalidPaintRect {
                 index,
@@ -373,11 +398,29 @@ fn validate_paint_rect(index: usize, rect: PaintRect) -> Result<(), UiRenderErro
     Ok(())
 }
 
-fn shadow_draw_bounds(bounds: Rect, shadow: BoxShadow, extent: f32) -> Rect {
+fn shadow_shape_bounds(bounds: Rect, shadow: BoxShadow) -> Rect {
     let offset = shadow.offset();
+    let spread = shadow.spread_radius();
     Rect::from_xywh(
-        bounds.origin.x + offset.x - extent,
-        bounds.origin.y + offset.y - extent,
+        bounds.origin.x + offset.x - spread,
+        bounds.origin.y + offset.y - spread,
+        (bounds.size.width + spread * 2.0).max(0.0),
+        (bounds.size.height + spread * 2.0).max(0.0),
+    )
+}
+
+fn shadow_standard_deviation(blur_radius: f32) -> f32 {
+    blur_radius * SHADOW_STANDARD_DEVIATION_SCALE
+}
+
+fn shadow_blur_extent(standard_deviation: f32) -> f32 {
+    standard_deviation * SHADOW_VISIBLE_STANDARD_DEVIATIONS
+}
+
+fn expanded_rect(bounds: Rect, extent: f32) -> Rect {
+    Rect::from_xywh(
+        bounds.origin.x - extent,
+        bounds.origin.y - extent,
         bounds.size.width + extent * 2.0,
         bounds.size.height + extent * 2.0,
     )

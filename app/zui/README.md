@@ -208,7 +208,7 @@ let options = zui::app::SingleInstanceOptions::new(
 )
 .with_additional_data(b"new-window".to_vec());
 let outcome = zui::app::Application::builder()
-    .run_single_instance(options, ProductApp::new)?;
+    .run_single_instance(options, ExampleApp::new)?;
 ```
 
 `ApplicationBuilder::with_protocol_scheme` 只接收显式允许 scheme 的启动参数。主实例会从 second-instance argv 中再次应用同一 allowlist，在 `App::second_instance` 后按参数顺序统一进入 `App::open_url`；`AppProxy::send_open_url` 仍可供其他可信平台 bridge 显式转发。macOS runtime 在保留 winit application delegate 所有权的前提下补充 AppKit reopen/open-URL selector：Dock/Finder 对已运行应用的重新激活进入 `App::activated`，file URL 进入 `App::open_file`，非文件 URL 仍须通过 builder 的 scheme allowlist 才进入 `App::open_url`；三个 callback 都先进入 ZUI event queue，不在 Objective-C callback 内执行产品代码。Windows/Linux 文件关联启动目前保留在 second-instance argv 中，由产品解释，不伪装成原生 `App::open_file`。`BundleBuilder` 把相同的 `ProtocolScheme` 写入 macOS `Info.plist`、Linux desktop MIME handler 或 Windows 注册脚本；WiX installer 定义把 Windows scheme 写入每用户 registry。安装期声明、启动 allowlist 与 `ProtocolClientHandle` 的 runtime 默认-handler 选择是三条独立边界：runtime association 不会补写缺失的 macOS bundle declaration 或 Linux desktop entry。
@@ -238,14 +238,6 @@ cargo run -p zui --bin zui-packager -- release app/zui/examples/bundle-manifest.
 ```
 
 `InstallerBuilder::prepare` 可让发布系统先检查 `InstallerPlan`，`InstallerBuilder::execute` 再通过可注入 `InstallerTool` 执行。`ArtifactSigner` 同样把 signing plan 与 execution 分开，并通过可注入 `SigningTool` 保留确定性测试入口。默认实现不经过 shell，要求每条命令成功、声明的产物存在，并在完成后运行平台验证：macOS 使用 hardened-runtime codesign、`productsign`、`notarytool --wait`、stapling 与 Gatekeeper 验收；Windows 使用 SignTool 的 SHA-256 Authenticode、RFC 3161 timestamp 与 verify；Linux 生成并验证 armored GPG detached signature。
-
-仓库的 `.github/workflows/zui-distribution.yml` 在三平台 PR/main 构建 unsigned installer，在 `zui-v*` tag 导入临时凭证、调用 `release`、上传平台产物并创建 GitHub Release。凭证只从 Actions secrets 注入，不进入 manifest 或源码：
-
-| 平台 | `zui-packager release` 环境变量 | CI secret |
-| --- | --- | --- |
-| macOS | `ZUI_MACOS_APPLICATION_IDENTITY`、`ZUI_MACOS_INSTALLER_IDENTITY`、`ZUI_MACOS_NOTARY_PROFILE` | `ZUI_MACOS_CERTIFICATE_P12_BASE64`、`ZUI_MACOS_CERTIFICATE_PASSWORD`、`ZUI_MACOS_APPLICATION_IDENTITY`、`ZUI_MACOS_INSTALLER_IDENTITY`、`ZUI_MACOS_NOTARY_APPLE_ID`、`ZUI_MACOS_NOTARY_TEAM_ID`、`ZUI_MACOS_NOTARY_PASSWORD` |
-| Windows | `ZUI_WINDOWS_CERTIFICATE_SHA1`、`ZUI_WINDOWS_TIMESTAMP_URL` | `ZUI_WINDOWS_CERTIFICATE_PFX_BASE64`、`ZUI_WINDOWS_CERTIFICATE_PASSWORD` |
-| Linux | `ZUI_LINUX_GPG_KEY_ID` | `ZUI_LINUX_GPG_PRIVATE_KEY_BASE64`、`ZUI_LINUX_GPG_KEY_ID` |
 
 ZUI 拥有签名流程与验证契约，但不拥有签名身份、私钥或发布权限；缺少任何 tag-release 凭证会直接失败。
 
@@ -284,7 +276,7 @@ ZUI 拥有签名流程与验证契约，但不拥有签名身份、私钥或发�
 
 ## 11. 当前能力与剩余边界
 
-当前已实现单 crate 分发、能力目录与公共命名空间一一对应、同一 `UiFrame` 的提交契约、带 revision/subscription 的 `ViewState`、按稳定 `ElementId` 挂载的 `ComponentRuntime`、ZUI-owned event/window/proxy/文件拖放 contract、显式 application readiness/phase/exit reason、可取消的正常退出请求、跨平台 single-instance/second-instance、macOS application activation/open-file bridge、多窗口 lifecycle 与退出策略、产品窗口 registry/focus 查询、cross-thread application/window proxy command、异步 window creation、display topology snapshot/spatial query/diff、三平台 display event（Linux 使用有界 polling）、可查询且失败显式的 live window/geometry/policy/input capability、默认 wgpu backend、renderer/service injection、共享 worker-pool task 与 scoped timer、rich clipboard、异步 file/message dialog、opener/notification/process/update handle、三平台 tray/global shortcut、默认协议客户端 set/query/remove、OS recent documents、resource/process、严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer/signing/notarization tooling、bounded diagnostics/devtools、AccessKit publication/action routing，以及复用 lifecycle/frame core 的 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译 constructor-time readiness wait、双窗口、retained application/window handle、cross-thread-capable proxy、异步窗口创建、display snapshot/query/event、窗口位置/层级/resize constraint、组件状态订阅驱动的 redraw、任务、定时器、menu、tray、global shortcut、injected protocol-client association、single-instance/second-instance、application activation/open-file、protocol URL、diagnostics 与 accessibility 路径。
+当前已实现单 crate 分发、能力目录与公共命名空间一一对应、同一 `UiFrame` 的提交契约、带 revision/subscription 的 `ViewState`、按稳定 `ElementId` 挂载的 `ComponentRuntime`、ZUI-owned event/window/proxy/文件拖放 contract、显式 application readiness/phase/exit reason、可取消的正常退出请求、跨平台 single-instance/second-instance、macOS application activation/open-file bridge、多窗口 lifecycle 与退出策略、产品窗口 registry/focus 查询、cross-thread application/window proxy command、异步 window creation、display topology snapshot/spatial query/diff、三平台 display event（Linux 使用有界 polling）、可查询且失败显式的 live window/geometry/policy/input capability、默认 wgpu backend、renderer/service injection、共享 worker-pool task 与 scoped timer、rich clipboard、异步 file/message dialog、opener/notification/process/update handle、三平台 tray/global shortcut、默认协议客户端 set/query/remove、OS recent documents、resource/process、严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer/signing/notarization tooling、bounded diagnostics/devtools、AccessKit publication/action routing，以及复用 lifecycle/frame core 的 deterministic testing/headless renderer。
 
 这些能力构成 Electron 类原生应用 framework 的一组可用基础，但当前不能声明“完整核心职责边界”。剩余状态如下：
 
@@ -316,8 +308,5 @@ cargo check -p zui --no-default-features --features native --bins
 cargo check -p zui --no-default-features --features native --target x86_64-pc-windows-gnu --lib --bins
 bazel test //app/zui:zui-unit-tests
 cargo test -p zeta-ui-components
-cargo check -p zui-demo --features native --bin zui-native-demo
 python3 -B build/cargo_with_v8.py test -p app
 ```
-
-`zui-demo` 是不依赖终端、App Server 或产品 icon catalog 的最小宿主，用来验证 public namespaces、scene contract、renderer 替换、`ViewState` / `ComponentRuntime` retained composition 和默认 native Application composition。其 native binary 还覆盖 root/child 双窗口、proxy 异步窗口创建与退出、product window registry/relationship、display snapshot/spatial query/change callback、retained handle 关闭、位置/层级、subscription-driven redraw、task/timer、checkbox/accelerator/native-role menu 与 accessibility publication。

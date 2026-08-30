@@ -389,7 +389,7 @@ where
             ),
             Err(error) => {
                 if self.error.is_none() {
-                    self.error = Some(ApplicationError::product("zui DevTools rendering", error));
+                    self.error = Some(ApplicationError::host("zui DevTools rendering", error));
                 }
                 event_loop.exit();
             }

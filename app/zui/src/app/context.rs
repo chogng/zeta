@@ -136,7 +136,7 @@ impl<'a, T: 'static> AppContext<'a, T> {
             .menus()
             .attach_window(opened.handle())
             .map_err(|source| {
-                ApplicationError::product("native application menu attachment", source)
+                ApplicationError::host("native application menu attachment", source)
             })?;
         runtime.finish_open(parent);
         self.windows.insert(opened.id(), runtime);

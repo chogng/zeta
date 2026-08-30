@@ -41,6 +41,7 @@ pub struct BoxShadow {
     color: Color,
     offset: Point,
     blur_radius: f32,
+    spread_radius: f32,
 }
 
 impl BoxShadow {
@@ -49,6 +50,7 @@ impl BoxShadow {
             color,
             offset: Point::new(0.0, 0.0),
             blur_radius: 0.0,
+            spread_radius: 0.0,
         }
     }
 
@@ -62,6 +64,12 @@ impl BoxShadow {
         self
     }
 
+    /// Expands or contracts the shadow silhouette before blur is applied.
+    pub const fn with_spread_radius(mut self, spread_radius: f32) -> Self {
+        self.spread_radius = spread_radius;
+        self
+    }
+
     pub const fn color(self) -> Color {
         self.color
     }
@@ -72,6 +80,10 @@ impl BoxShadow {
 
     pub const fn blur_radius(self) -> f32 {
         self.blur_radius
+    }
+
+    pub const fn spread_radius(self) -> f32 {
+        self.spread_radius
     }
 }
 

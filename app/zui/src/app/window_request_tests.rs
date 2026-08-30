@@ -24,7 +24,7 @@ fn main_thread_creation_failure_retains_the_application_error() {
     let (_, response) = request.into_parts();
     assert!(
         response
-            .send(Err(crate::app::ApplicationError::product(
+            .send(Err(crate::app::ApplicationError::host(
                 "test window creation",
                 std::io::Error::other("renderer unavailable"),
             )))

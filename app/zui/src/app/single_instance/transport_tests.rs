@@ -13,7 +13,7 @@ use crate::app::SecondInstance;
 #[test]
 fn secondary_invocations_queue_before_runtime_attachment() {
     let secondary_event = SecondInstance::new(
-        ["zui-demo", "zui-demo://open/settings"],
+        ["sample-app", "sample-app://open/settings"],
         PathBuf::from("/secondary"),
     )
     .with_additional_data([1, 2, 3]);
@@ -86,7 +86,7 @@ fn secondary_process_invocation_crosses_the_operating_system_boundary() {
     assert_eq!(
         receiver.recv_timeout(Duration::from_secs(1)).unwrap(),
         SecondInstance::new(
-            ["secondary", "zui-demo://open/from-child"],
+            ["secondary", "sample-app://open/from-child"],
             PathBuf::from("/secondary-process"),
         )
         .with_additional_data([9, 8, 7])
@@ -104,7 +104,7 @@ fn secondary_process_helper() {
         socket: PathBuf::from(socket),
     };
     let event = SecondInstance::new(
-        ["secondary", "zui-demo://open/from-child"],
+        ["secondary", "sample-app://open/from-child"],
         PathBuf::from("/secondary-process"),
     )
     .with_additional_data([9, 8, 7]);

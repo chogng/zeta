@@ -13,7 +13,8 @@ fn paint_rect_retains_explicit_visual_properties() {
     let border = Border::new(Edges::new(1.0, 2.0, 3.0, 4.0), Color::WHITE);
     let shadow = BoxShadow::new(Color::rgba(0, 0, 0, 64))
         .with_offset(Point::new(0.0, 4.0))
-        .with_blur_radius(8.0);
+        .with_blur_radius(8.0)
+        .with_spread_radius(-1.0);
     let rect = PaintRect::new(bounds, Color::rgb(10, 20, 30))
         .with_shadow(shadow)
         .with_border(border)
@@ -21,6 +22,7 @@ fn paint_rect_retains_explicit_visual_properties() {
 
     assert_eq!(rect.bounds(), bounds);
     assert_eq!(rect.shadow(), Some(shadow));
+    assert_eq!(shadow.spread_radius(), -1.0);
     assert_eq!(rect.border(), border);
     assert_eq!(rect.corner_radii(), CornerRadii::uniform(6.0));
 }

@@ -82,9 +82,8 @@ fn erf_approximation(value: f32) -> f32 {
     return select(-result, result, value >= 0.0);
 }
 
-fn gaussian_shadow_coverage(distance: f32, blur_radius: f32) -> f32 {
-    let standard_deviation = max(blur_radius / 3.0, 0.16666667);
-    let normalized_distance = distance / (standard_deviation * 1.41421356);
+fn gaussian_shadow_coverage(distance: f32, standard_deviation: f32) -> f32 {
+    let normalized_distance = distance / (max(standard_deviation, 0.16666667) * 1.41421356);
     return 0.5 * (1.0 - erf_approximation(normalized_distance));
 }
 
@@ -111,8 +110,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             shape_size,
             input.corner_radii,
         );
-        let blur_radius = max(input.effect.x, 0.5);
-        let shadow_coverage = gaussian_shadow_coverage(shadow_distance, blur_radius);
+        let standard_deviation = input.effect.x;
+        let shadow_coverage = select(
+            coverage(shadow_distance),
+            gaussian_shadow_coverage(shadow_distance, standard_deviation),
+            standard_deviation > 0.0,
+        );
         let shadow_alpha = input.fill.a * shadow_coverage;
         if shadow_alpha <= 0.001 {
             discard;
