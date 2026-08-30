@@ -28,6 +28,36 @@ impl ProductApp {
     }
 
     pub(super) fn show_files_pane(&mut self) {
+        if self.active_main_pane_kind() == Some(PaneInputKind::Diff) {
+            let Some(tab_key) = self.active_session_tab_key() else {
+                return;
+            };
+            let Some(pane) = self
+                .workbench
+                .workbench()
+                .pane_part(&tab_key)
+                .map(|pane_part| pane_part.active_group())
+            else {
+                return;
+            };
+            if self
+                .workbench
+                .ensure_input_with(
+                    &tab_key,
+                    pane,
+                    PaneInput::files(self.env.working_directory().to_path_buf()),
+                    PaneBinding::new,
+                )
+                .is_none()
+            {
+                return;
+            }
+            self.files_pane_expanded = true;
+            self.main_surface.show_agent();
+            self.workbench.collapse_inspector();
+            let _ = self.activate_pane_context(tab_key, pane);
+            return;
+        }
         self.open_main_input(PaneInput::files(self.env.working_directory().to_path_buf()));
     }
 
@@ -62,6 +92,7 @@ impl ProductApp {
 
     /// Restores the active Session's Agent pane after a file feature pane is dismissed.
     pub(super) fn show_agent_pane(&mut self) {
+        self.files_pane_expanded = false;
         let _ = self.bind_agent_pane();
         self.main_surface.show_agent();
     }

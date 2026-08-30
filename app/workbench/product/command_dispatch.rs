@@ -199,8 +199,13 @@ fn execute_toggle_files_pane(app: &mut ProductApp, _request: &CommandRequest) {
         return;
     }
     match app.active_main_pane_kind() {
-        Some(crate::PaneInputKind::Files) | Some(crate::PaneInputKind::Diff) => {
-            app.show_agent_pane()
+        Some(crate::PaneInputKind::Files) => app.show_agent_pane(),
+        Some(crate::PaneInputKind::Diff) => {
+            if app.files_pane_expanded {
+                app.files_pane_expanded = false;
+            } else {
+                app.show_files_pane();
+            }
         }
         _ => app.show_files_pane(),
     }

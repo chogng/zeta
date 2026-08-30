@@ -345,6 +345,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub inspector_part: InspectorPartState,
     pub files: &'a FilesState,
     pub scm: &'a ScmState,
+    pub files_pane_expanded: bool,
     pub tab_context_menu: TabContextMenuState,
     pub git_branch_picker: &'a GitBranchPickerState,
     pub directory_picker: &'a DirectoryPickerState,
@@ -404,6 +405,7 @@ struct MainPresentationView<'a> {
     session_pane_context: &'a SessionPaneContext,
     files: &'a FilesState,
     scm: &'a ScmState,
+    files_pane_expanded: bool,
     environment_context: EnvironmentContextView<'a>,
     keybindings: &'a dyn WorkbenchKeybindings,
     keyboard_shortcuts_visible: bool,
@@ -621,6 +623,7 @@ fn build_workbench_presentation_with_bindings(
                 session_pane_context: &session_pane_context,
                 files: model.files,
                 scm: model.scm,
+                files_pane_expanded: model.files_pane_expanded,
                 environment_context: model.environment_context.clone(),
                 keybindings: model.keybindings,
                 keyboard_shortcuts_visible: model.quick_access.shortcuts_open(),
@@ -1025,15 +1028,58 @@ fn draw_changes_pane(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
     scm: &ScmState,
+    files_pane_expanded: bool,
+    files: &FilesState,
+    environment_context: &EnvironmentContextView<'_>,
     parent: ElementId,
+    caret_visibility: CaretVisibility,
     palette: UiTheme,
-) {
-    context.draw_component(&EditorPane::new(
-        bounds,
-        scm.editor(),
-        zeta_scm::ScmPaneStyle::from_theme(palette),
-        parent,
-    ));
+    dispatch: &UiDispatch,
+    text_layout: &mut TextInputLayoutEngine,
+) -> Option<Rect> {
+    let content_bounds = EditorPane::content_bounds_for(bounds);
+    let (editor_bounds, files_bounds) = if files_pane_expanded {
+        let editor_width = content_bounds.size.width * 0.5;
+        (
+            Rect::from_xywh(
+                content_bounds.origin.x,
+                content_bounds.origin.y,
+                editor_width,
+                content_bounds.size.height,
+            ),
+            Some(Rect::from_xywh(
+                content_bounds.origin.x + editor_width,
+                content_bounds.origin.y,
+                content_bounds.size.width - editor_width,
+                content_bounds.size.height,
+            )),
+        )
+    } else {
+        (content_bounds, None)
+    };
+    context.draw_component(
+        &EditorPane::new(
+            bounds,
+            scm.editor(),
+            zeta_scm::ScmPaneStyle::from_theme(palette),
+            parent,
+        )
+        .with_content_bounds(editor_bounds)
+        .with_toolbar(scm.toolbar(), dispatch),
+    );
+    files_bounds.and_then(|bounds| {
+        draw_files_pane(
+            context,
+            bounds,
+            files,
+            environment_context,
+            zeta_scm::CHANGES_PANE,
+            caret_visibility,
+            dispatch,
+            text_layout,
+            palette,
+        )
+    })
 }
 
 fn draw_file_editor_inspector(
@@ -1330,16 +1376,19 @@ fn draw_main(
                                 text_layout,
                                 palette,
                             ),
-                            PaneInputKind::Diff => {
-                                draw_changes_pane(
-                                    context,
-                                    layout.main(),
-                                    view.scm,
-                                    pane_group_id,
-                                    palette,
-                                );
-                                None
-                            }
+                            PaneInputKind::Diff => draw_changes_pane(
+                                context,
+                                layout.main(),
+                                view.scm,
+                                view.files_pane_expanded,
+                                view.files,
+                                &view.environment_context,
+                                pane_group_id,
+                                view.caret_visibility,
+                                palette,
+                                view.dispatch,
+                                text_layout,
+                            ),
                             _ => unreachable!("file input kind was checked above"),
                         });
                 } else {

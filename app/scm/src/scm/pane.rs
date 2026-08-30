@@ -18,6 +18,7 @@ use zui::ui::{
 use super::ScmDiff;
 use super::ScmPaneStyle;
 use crate::CHANGES_PANE;
+use crate::toolbar::ChangesToolbar;
 use crate::MULTI_DIFF_EDITOR;
 use crate::MULTI_DIFF_SCROLLBAR;
 
@@ -412,6 +413,7 @@ pub struct EditorPane<'a> {
     state: &'a EditorPaneState,
     style: ScmPaneStyle,
     parent: ElementId,
+    content_bounds: Option<Rect>,
 }
 
 impl<'a> EditorPane<'a> {
@@ -426,7 +428,31 @@ impl<'a> EditorPane<'a> {
             state,
             style,
             parent,
+            content_bounds: None,
         }
+    }
+
+    /// Overrides the area used by the diff content while keeping the Changes toolbar full width.
+    pub const fn with_content_bounds(mut self, bounds: Rect) -> Self {
+        self.content_bounds = Some(bounds);
+        self
+    }
+
+    /// Returns the content area below the Changes toolbar.
+    pub const fn content_bounds_for(bounds: Rect) -> Rect {
+        Rect::from_xywh(
+            bounds.origin.x,
+            bounds.origin.y + ChangesToolbar::height(),
+            bounds.size.width,
+            (bounds.size.height - ChangesToolbar::height()).max(0.0),
+        )
+    }
+
+    fn content_bounds(&self) -> Rect {
+        if let Some(bounds) = self.content_bounds {
+            return bounds;
+        }
+        self.bounds
     }
 
     fn interaction_node_for_bounds(&self, bounds: Rect) -> UiNode {
@@ -478,13 +504,14 @@ impl Component for EditorPane<'_> {
     fn compose(&self, context: &mut ComponentContext<'_, '_>, element: &ComputedElement) {
         let bounds = element.bounds();
         self.paint_surface(context.scene_mut(), bounds);
+        let content_bounds = self.content_bounds();
         if self.state.diffs().is_empty() {
-            self.paint_empty_state(context.scene_mut(), bounds);
+            self.paint_empty_state(context.scene_mut(), content_bounds);
             return;
         }
         let items = self.state.items();
         let editor =
-            MultiDiffEditor::new(bounds, &items, self.state.scroll_state, self.state.style())
+            MultiDiffEditor::new(content_bounds, &items, self.state.scroll_state, self.state.style())
                 .with_diff_presentation(DiffEditorPresentation::Unified)
                 .with_measured_layout(&self.state.measured_layout)
                 .with_scrollbar_presentation(self.state.scrollbar_presentation())
@@ -495,8 +522,9 @@ impl Component for EditorPane<'_> {
 
     fn paint(&self, scene: &mut UiScene) {
         self.paint_surface(scene, self.bounds);
+        let bounds = self.content_bounds();
         if self.state.diffs().is_empty() {
-            self.paint_empty_state(scene, self.bounds);
+            self.paint_empty_state(scene, bounds);
             return;
         }
         let items = self.state.items();

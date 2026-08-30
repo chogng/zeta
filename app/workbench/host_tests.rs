@@ -81,6 +81,43 @@ fn switching_group_inputs_preserves_each_binding() {
 }
 
 #[test]
+fn ensuring_group_input_keeps_the_existing_input_active() {
+    let session = session_id("session-1");
+    let tab = TabInputKey::session(session.clone());
+    let mut host = WorkbenchHost::new();
+    host.upsert_session_input_with(
+        session_input(session.clone()),
+        PaneInput::terminal(session),
+        || "terminal",
+    );
+    let pane = host
+        .workbench()
+        .pane_part(&tab)
+        .expect("session pane part")
+        .root_group();
+
+    let files = host
+        .ensure_input_with(&tab, pane, PaneInput::files("/dir".into()), || "files")
+        .expect("files input should be attached");
+
+    assert_eq!(
+        host.mount(&tab, pane).unwrap().kind(),
+        crate::PaneInputKind::Terminal
+    );
+    assert_eq!(host.binding(&files), Some(&"files"));
+    assert_eq!(
+        host.workbench()
+            .pane_part(&tab)
+            .unwrap()
+            .group(pane)
+            .unwrap()
+            .inputs()
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn closing_a_pane_detaches_all_group_input_bindings() {
     let session = session_id("session-1");
     let tab = TabInputKey::session(session.clone());

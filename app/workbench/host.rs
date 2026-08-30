@@ -728,6 +728,33 @@ impl<B> WorkbenchHost<B> {
         Some(PaneActivation { current })
     }
 
+    /// Adds an input to a pane group without changing the group's active input.
+    pub fn ensure_input_with(
+        &mut self,
+        tab: &TabInputKey,
+        pane: PaneGroupId,
+        input: PaneInput,
+        create_binding: impl FnOnce() -> B,
+    ) -> Option<PaneKey> {
+        let part = self.workbench.pane_part(tab)?;
+        let group = part.group(pane)?;
+        if let Some(input_id) = group
+            .input_ids()
+            .into_iter()
+            .find(|id| group.input(*id) == Some(&input))
+        {
+            return Some(PaneKey::new(tab.clone(), pane, input_id));
+        }
+        let input_id = self.workbench.open_input(tab, pane, input)?;
+        let key = PaneKey::new(tab.clone(), pane, input_id);
+        let previous_binding = self.pane_host.insert(key.clone(), create_binding());
+        assert!(
+            previous_binding.is_none(),
+            "new pane input must not replace a binding"
+        );
+        Some(key)
+    }
+
     /// Creates a sibling pane with its first content binding as one operation.
     pub fn try_split_active_with<E>(
         &mut self,

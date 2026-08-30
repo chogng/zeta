@@ -26,7 +26,7 @@ use zeta_files::{
 };
 use zeta_keybinding::{HostPlatform, KeySequence};
 use zeta_scm::GitBranchPickerState;
-use zeta_scm::{CHANGES_PANE, MULTI_DIFF_EDITOR, ScmDiff, ScmState};
+use zeta_scm::{CHANGES_PANE, CHANGES_TOOLBAR, MULTI_DIFF_EDITOR, ScmDiff, ScmState};
 use zeta_session::SessionPaneState;
 use zeta_session::interaction::{
     COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, ContextAction, SESSION_HEADER, THREAD_TIMELINE,
@@ -348,6 +348,7 @@ fn presentation_with_active_tab_input(
             inspector_part,
             files,
             scm,
+            files_pane_expanded: false,
             tab_context_menu: tab_context_menu.clone(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -405,6 +406,7 @@ fn presentation_with_active_tab_input(
             inspector_part,
             files,
             scm,
+            files_pane_expanded: false,
             tab_context_menu,
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -603,6 +605,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             inspector_part: InspectorPartState::expanded(),
             files: &files,
             scm: &scm,
+            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -893,6 +896,7 @@ fn session_search_filters_tabs_by_session_name() {
             inspector_part: InspectorPartState::default(),
             files: &files,
             scm: &scm,
+            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -1090,6 +1094,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             inspector_part: InspectorPartState::default(),
             files: &files,
             scm: &scm,
+            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
@@ -1143,6 +1148,141 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     assert!(!visible_text.contains(&"No changed files"));
     assert!(!visible_text.contains(&"HEAD"));
     assert!(!visible_text.contains(&"Working Tree"));
+}
+
+#[test]
+fn expanded_diff_attaches_files_to_the_right_side_of_its_content() {
+    let session_pane = SessionPaneState::default();
+    let session_search = SessionSearchState::default();
+    let tab_part = TabPart::default();
+    let environment_context =
+        TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(1));
+    let files = FilesState::default();
+    let mut scm = ScmState::default();
+    scm.set_branch(Some("main"));
+    scm.replace_diffs(
+        environment_context
+            .diffs()
+            .iter()
+            .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
+    );
+    let tab_key = TabInputKey::session(
+        zeta_protocol::SessionId::new("session-with-files").expect("test session ID is non-empty"),
+    );
+    let mut workbench = WorkbenchHost::new();
+    workbench.upsert_session_input_with(
+        TabInput::session(
+            tab_key
+                .session_id()
+                .expect("session tab must carry a session")
+                .clone(),
+            TabInputMetadata::new("Session", environment_context.working_directory_label()),
+        ),
+        PaneInput::diff(environment_context.working_directory().to_path_buf()),
+        PaneBinding::new,
+    );
+    let pane = workbench
+        .workbench()
+        .pane_part(&tab_key)
+        .expect("main pane part")
+        .root_group();
+    workbench
+        .ensure_input_with(
+            &tab_key,
+            pane,
+            PaneInput::files(environment_context.working_directory().to_path_buf()),
+            PaneBinding::new,
+        )
+        .expect("Files input should be attached to the Changes group");
+    let pane_group = workbench
+        .workbench()
+        .pane_part(&tab_key)
+        .expect("main pane part");
+    let active_pane = workbench.mount(&tab_key, pane);
+    let mut text_layout = TextInputLayoutEngine::new();
+    let dispatch = UiDispatch::default();
+    let file_editor_host = FileEditorHost::default();
+    let code_editor_style = CodeEditorStyle::light();
+    let presentation = build_workbench_presentation(
+        viewport(),
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
+            palette: zeta_ui_theme::DEFAULT_UI_THEME,
+            terminal: None,
+            terminal_panes: &[],
+            pane_group: Some(pane_group),
+            active_pane,
+            terminal_pane_resize_split: None,
+            terminal_scroll_offset: 0,
+            terminal_scrollbar_presentation: ScrollbarPresentation::default(),
+            terminal_selection: None,
+            main_surface: MainSurfaceKind::Agent,
+            file_editor_host: &file_editor_host,
+            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
+            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
+            file_editor_diagnostics: &[],
+            language_hover: None,
+            language_completions: None,
+            completion_selection: 0,
+            code_editor_style: &code_editor_style,
+            session_pane: &session_pane,
+            environment_context: environment_context_view(&environment_context),
+            session_search: &session_search,
+            tab_part: &tab_part,
+            active_tab_input: Some(&tab_key),
+            caret_visibility: CaretVisibility::Visible,
+            dispatch: &dispatch,
+            tab_container: TabContainerState::collapsed(),
+            inspector_part: InspectorPartState::default(),
+            files: &files,
+            scm: &scm,
+            files_pane_expanded: true,
+            tab_context_menu: TabContextMenuState::default(),
+            git_branch_picker: &GitBranchPickerState::default(),
+            directory_picker: &DirectoryPickerState::default(),
+            remote_connection_picker: &RemoteConnectionPickerState::default(),
+            remote_connection_manager: &RemoteConnectionManagerState::default(),
+            remote_tunnel_manager: &RemoteTunnelManagerState::default(),
+            keybindings: &TestKeybindings,
+            quick_access: &QuickAccess::default(),
+            settings: &SettingsState::default(),
+            keybinding_diagnostics: &[],
+            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_follows_system: true,
+            window_control_insets: WindowControlInsets::NONE,
+            pointer_position: None,
+        },
+        &mut text_layout,
+    );
+    let nodes = accessibility_nodes(&presentation, &dispatch);
+    let node = |id| {
+        nodes
+            .iter()
+            .find(|node| node.id == id)
+            .expect("accessible node")
+    };
+
+    assert_eq!(
+        node(CHANGES_TOOLBAR).bounds,
+        Rect::from_xywh(0.0, 32.0, 1000.0, 40.0)
+    );
+    assert_eq!(
+        node(MULTI_DIFF_EDITOR).bounds,
+        Rect::from_xywh(0.0, 72.0, 500.0, 628.0)
+    );
+    assert_eq!(
+        node(FILES_TOOLBAR).bounds,
+        Rect::from_xywh(500.0, 72.0, 500.0, 36.0)
+    );
+    assert_eq!(
+        node(FILES_PANE).bounds,
+        Rect::from_xywh(500.0, 108.0, 500.0, 592.0)
+    );
+    assert_eq!(node(FILES_PANE).parent, Some(CHANGES_PANE));
+    assert_eq!(node(FILES_TOOLBAR).parent, Some(CHANGES_PANE));
+    assert_eq!(node(CHANGES_TOOLBAR).parent, Some(CHANGES_PANE));
+    assert_eq!(active_pane.unwrap().kind(), crate::PaneInputKind::Diff);
+    assert_eq!(pane_group.group(pane).unwrap().inputs().count(), 2);
 }
 
 #[test]
@@ -1338,6 +1478,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         inspector_part: InspectorPartState::default(),
         files: &files,
         scm: &scm,
+        files_pane_expanded: false,
         tab_context_menu: TabContextMenuState::default(),
         git_branch_picker: &git_branch_picker,
         directory_picker: &directory_picker,
@@ -1519,6 +1660,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             inspector_part: InspectorPartState::default(),
             files: &files,
             scm: &scm,
+            files_pane_expanded: false,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_picker: &GitBranchPickerState::default(),
             directory_picker: &DirectoryPickerState::default(),
