@@ -5,7 +5,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
-import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
@@ -49,10 +49,9 @@ test('Registered editor commands retrigger inline completions after their edit',
 	viewport.layout({ width: 200, height: 40 });
 	const input = h(dom.window.document, 'textarea');
 	container.append(input);
-	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageInlineCompletionsProvider>();
+	const providers = new LanguageFeatureRegistry<LanguageInlineCompletionsProvider>();
 	const requests: string[] = [];
-	providers.register({
-		languageIds: ['plaintext'],
+	providers.register('plaintext', {
 		provideInlineCompletions: request => {
 			requests.push(request.triggerKind);
 			return [{ insertText: ' completion' }];

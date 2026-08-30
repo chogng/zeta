@@ -5,7 +5,7 @@ import { h } from '../../../../../base/browser/dom.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type EditorCommandExecutor } from '../../../../browser/editorExtensions.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
@@ -36,15 +36,14 @@ test('Rename reports its command after applying the provider edit', async () => 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resource = URI.file('C:\\project\\rename.ts');
-	using model = new TextModel('abc');
+	using model = new TextModel('abc', { languageId: 'typescript' });
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, 'textarea');
 	container.append(editorInput);
-	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageRenameProvider>();
-	providers.register({
-		languageIds: ['typescript'],
+	const providers = new LanguageFeatureRegistry<LanguageRenameProvider>();
+	providers.register('typescript', {
 		prepareRename: () => ({ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)), placeholder: 'abc' }),
 		provideRenameEdits: () => ({ entries: [{ kind: 'textDocument', resource, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)), text: 'xyz' }] }] }),
 	});

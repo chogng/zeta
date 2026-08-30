@@ -3,7 +3,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface LanguageHierarchyItem {
@@ -32,13 +32,13 @@ export interface LanguageHierarchyFollowupRequest extends LanguageFeatureRequest
 	readonly item: LanguageHierarchyItem;
 }
 
-export interface LanguageCallHierarchyProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageCallHierarchyProvider {
 	prepareCallHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
 	provideIncomingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
 	provideOutgoingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
 }
 
-export interface LanguageTypeHierarchyProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageTypeHierarchyProvider {
 	prepareTypeHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
 	provideSupertypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
 	provideSubtypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
@@ -58,12 +58,12 @@ export interface PreparedTypeHierarchy {
 
 /** Coordinates prepare/follow-up hierarchy requests while preserving provider identity and revision freshness. */
 export class LanguageHierarchyService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly callProviders: OwnedLanguageFeatureProviderRegistry<LanguageCallHierarchyProvider>, private readonly typeProviders: OwnedLanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>) { super(); }
+	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly callProviders: LanguageFeatureRegistry<LanguageCallHierarchyProvider>, private readonly typeProviders: LanguageFeatureRegistry<LanguageTypeHierarchyProvider>) { super(); }
 
 	async prepareCallHierarchy(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedCallHierarchy[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };
 		const prepared: PreparedCallHierarchy[] = [];
-		for (const provider of this.callProviders.getProviders(languageId)) {
+		for (const provider of this.callProviders.ordered(this.model)) {
 			const roots = normalizeItems(await provider.prepareCallHierarchy(request, signal));
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			if (roots.length === 0) continue;
@@ -79,7 +79,7 @@ export class LanguageHierarchyService extends Disposable {
 	async prepareTypeHierarchy(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedTypeHierarchy[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };
 		const prepared: PreparedTypeHierarchy[] = [];
-		for (const provider of this.typeProviders.getProviders(languageId)) {
+		for (const provider of this.typeProviders.ordered(this.model)) {
 			const roots = normalizeItems(await provider.prepareTypeHierarchy(request, signal));
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			if (roots.length === 0) continue;

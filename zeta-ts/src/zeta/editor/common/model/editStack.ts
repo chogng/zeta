@@ -1,16 +1,21 @@
 import { type OffsetTextEdit } from "./historyCoalescing.js";
-import { TextEditHistoryGroup } from "../core/editOperation.js";
+import { Selection } from "../core/selection.js";
+import { TextChange } from "../core/textChange.js";
 import { EndOfLineSequence } from '../model.js';
+import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 
 export interface TextModelHistoryEntry {
 	readonly edits: readonly OffsetTextEdit[];
+	readonly textChanges: readonly TextChange[];
 	readonly textUnits: number;
 	readonly transactionId: number;
 	readonly alternativeVersionId: number;
 	readonly editsEOL: EndOfLineSequence;
 	readonly eol: EndOfLineSequence;
-	readonly historyGroup: TextEditHistoryGroup | undefined;
+	readonly historyGroup: UndoRedoGroup | undefined;
 	readonly lineIds: readonly string[] | undefined;
+	readonly beforeCursorState: Selection[] | null;
+	readonly afterCursorState: Selection[] | null;
 }
 
 export interface TextModelHistorySnapshot {
@@ -23,7 +28,8 @@ export class TextModelHistory {
 	private readonly undoStack: TextModelHistoryEntry[] = [];
 	private readonly redoStack: TextModelHistoryEntry[] = [];
 	private historyTextUnits = 0;
-	private protectedGroup: TextEditHistoryGroup | undefined;
+	private protectedGroup: UndoRedoGroup | undefined;
+	private stackElementOpen = false;
 
 	constructor(
 		private readonly transactionLimit: number,
@@ -53,28 +59,37 @@ export class TextModelHistory {
 		this.undoStack.push(...snapshot.undo.map(cloneEntry));
 		this.redoStack.push(...snapshot.redo.map(cloneEntry));
 		this.historyTextUnits = this.undoStack.concat(this.redoStack).reduce((total, entry) => total + entry.textUnits, 0);
+		this.stackElementOpen = false;
 		this.trim();
 	}
 
-	isRevisionActive(historyGroup: TextEditHistoryGroup): boolean {
+	pushStackElement(): void {
+		this.stackElementOpen = false;
+	}
+
+	popStackElement(): void {
+		this.stackElementOpen = this.undoStack.length > 0 && this.redoStack.length === 0;
+	}
+
+	isRevisionActive(historyGroup: UndoRedoGroup): boolean {
 		return this.protectedGroup === historyGroup;
 	}
 
-	prepareForEdit(historyGroup: TextEditHistoryGroup | undefined): void {
+	prepareForEdit(historyGroup: UndoRedoGroup | undefined): void {
 		if (this.protectedGroup && this.protectedGroup !== historyGroup) {
 			this.protectedGroup = undefined;
 			this.trim();
 		}
 	}
 
-	beginRevision(historyGroup: TextEditHistoryGroup): void {
+	beginRevision(historyGroup: UndoRedoGroup): void {
 		if (this.protectedGroup) {
 			throw new Error("A history revision is already active");
 		}
 		this.protectedGroup = historyGroup;
 	}
 
-	finishRevision(historyGroup: TextEditHistoryGroup): boolean {
+	finishRevision(historyGroup: UndoRedoGroup): boolean {
 		this.assertProtectedGroup(historyGroup);
 		this.protectedGroup = undefined;
 		this.trim();
@@ -84,19 +99,19 @@ export class TextModelHistory {
 	}
 
 	getRevisionEntry(
-		historyGroup: TextEditHistoryGroup,
+		historyGroup: UndoRedoGroup,
 	): TextModelHistoryEntry | undefined {
 		this.assertProtectedGroup(historyGroup);
 		const entry = this.undoStack[this.undoStack.length - 1];
 		return entry?.historyGroup === historyGroup ? entry : undefined;
 	}
 
-	discardRevision(historyGroup: TextEditHistoryGroup): void {
+	discardRevision(historyGroup: UndoRedoGroup): void {
 		this.cancelRevision(historyGroup);
 	}
 
 	cancelRevision(
-		historyGroup: TextEditHistoryGroup,
+		historyGroup: UndoRedoGroup,
 	): TextModelHistoryEntry | undefined {
 		this.assertProtectedGroup(historyGroup);
 		this.protectedGroup = undefined;
@@ -109,12 +124,15 @@ export class TextModelHistory {
 	}
 
 	findUndoEntry(
-		historyGroup: TextEditHistoryGroup | undefined,
+		historyGroup: UndoRedoGroup | undefined,
 		accepts: (entry: TextModelHistoryEntry) => boolean,
 	): TextModelHistoryEntry | undefined {
-		if (!historyGroup || this.redoStack.length > 0) return undefined;
+		if (this.redoStack.length > 0) return undefined;
 		const previous = this.undoStack[this.undoStack.length - 1];
-		return previous?.historyGroup === historyGroup && accepts(previous)
+		const canAppend = this.stackElementOpen && (
+			historyGroup === undefined || previous?.historyGroup === historyGroup
+		);
+		return previous && canAppend && accepts(previous)
 			? previous
 			: undefined;
 	}
@@ -122,6 +140,8 @@ export class TextModelHistory {
 	replaceUndoEntry(
 		previous: TextModelHistoryEntry,
 		edits: readonly OffsetTextEdit[],
+		textChanges: readonly TextChange[],
+		afterCursorState: Selection[] | null = previous.afterCursorState,
 	): void {
 		if (this.undoStack[this.undoStack.length - 1] !== previous) {
 			throw new Error("Only the latest undo entry can be replaced");
@@ -134,6 +154,9 @@ export class TextModelHistory {
 			previous.eol,
 			previous.historyGroup,
 			previous.lineIds,
+			previous.beforeCursorState,
+			afterCursorState,
+			textChanges,
 		);
 		this.historyTextUnits += replacement.textUnits - previous.textUnits;
 		this.undoStack[this.undoStack.length - 1] = replacement;
@@ -146,10 +169,14 @@ export class TextModelHistory {
 		alternativeVersionId: number,
 		editsEOL: EndOfLineSequence,
 		eol: EndOfLineSequence,
-		historyGroup: TextEditHistoryGroup | undefined,
+		historyGroup: UndoRedoGroup | undefined,
 		lineIds?: readonly string[],
+		beforeCursorState: Selection[] | null = null,
+		afterCursorState: Selection[] | null = null,
+		textChanges: readonly TextChange[] = [],
 	): void {
-		this.push(this.undoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds);
+		this.push(this.undoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
+		this.stackElementOpen = true;
 		this.trim();
 	}
 
@@ -159,10 +186,14 @@ export class TextModelHistory {
 		alternativeVersionId: number,
 		editsEOL: EndOfLineSequence,
 		eol: EndOfLineSequence,
-		historyGroup: TextEditHistoryGroup | undefined,
+		historyGroup: UndoRedoGroup | undefined,
 		lineIds?: readonly string[],
+		beforeCursorState: Selection[] | null = null,
+		afterCursorState: Selection[] | null = null,
+		textChanges: readonly TextChange[] = [],
 	): void {
-		this.push(this.redoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds);
+		this.push(this.redoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
+		this.stackElementOpen = false;
 		this.trim();
 	}
 
@@ -183,6 +214,7 @@ export class TextModelHistory {
 		this.redoStack.length = 0;
 		this.historyTextUnits = 0;
 		this.protectedGroup = undefined;
+		this.stackElementOpen = false;
 	}
 
 	dispose(): void {
@@ -196,10 +228,13 @@ export class TextModelHistory {
 		alternativeVersionId: number,
 		editsEOL: EndOfLineSequence,
 		eol: EndOfLineSequence,
-		historyGroup: TextEditHistoryGroup | undefined,
+		historyGroup: UndoRedoGroup | undefined,
 		lineIds?: readonly string[],
+		beforeCursorState: Selection[] | null = null,
+		afterCursorState: Selection[] | null = null,
+		textChanges: readonly TextChange[] = [],
 	): void {
-		const entry = createEntry(edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds);
+		const entry = createEntry(edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
 		stack.push(entry);
 		this.historyTextUnits += entry.textUnits;
 	}
@@ -208,7 +243,10 @@ export class TextModelHistory {
 		stack: TextModelHistoryEntry[],
 	): TextModelHistoryEntry | undefined {
 		const entry = stack.pop();
-		if (entry) this.historyTextUnits -= entry.textUnits;
+		if (entry) {
+			this.historyTextUnits -= entry.textUnits;
+			this.stackElementOpen = false;
+		}
 		return entry;
 	}
 
@@ -240,7 +278,7 @@ export class TextModelHistory {
 		}
 	}
 
-	private assertProtectedGroup(historyGroup: TextEditHistoryGroup): void {
+	private assertProtectedGroup(historyGroup: UndoRedoGroup): void {
 		if (this.protectedGroup !== historyGroup) {
 			throw new Error("The history revision is no longer active");
 		}
@@ -253,11 +291,15 @@ function createEntry(
 	alternativeVersionId: number,
 	editsEOL: EndOfLineSequence,
 	eol: EndOfLineSequence,
-	historyGroup: TextEditHistoryGroup | undefined,
+	historyGroup: UndoRedoGroup | undefined,
 	lineIds?: readonly string[],
+	beforeCursorState: Selection[] | null = null,
+	afterCursorState: Selection[] | null = null,
+	textChanges: readonly TextChange[] = [],
 ): TextModelHistoryEntry {
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => Object.freeze({ ...edit }))),
+		textChanges: Object.freeze(textChanges.map(change => new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText))),
 		textUnits: edits.reduce(
 			(total, edit) => total + edit.text.length,
 			0,
@@ -268,9 +310,15 @@ function createEntry(
 		eol,
 		historyGroup,
 		lineIds: lineIds === undefined ? undefined : Object.freeze([...lineIds]),
+		beforeCursorState: cloneSelections(beforeCursorState),
+		afterCursorState: cloneSelections(afterCursorState),
 	});
 }
 
 function cloneEntry(entry: TextModelHistoryEntry): TextModelHistoryEntry {
-	return createEntry(entry.edits, entry.transactionId, entry.alternativeVersionId, entry.editsEOL, entry.eol, entry.historyGroup, entry.lineIds);
+	return createEntry(entry.edits, entry.transactionId, entry.alternativeVersionId, entry.editsEOL, entry.eol, entry.historyGroup, entry.lineIds, entry.beforeCursorState, entry.afterCursorState, entry.textChanges);
+}
+
+function cloneSelections(selections: Selection[] | null): Selection[] | null {
+	return selections?.map(Selection.liftSelection) ?? null;
 }

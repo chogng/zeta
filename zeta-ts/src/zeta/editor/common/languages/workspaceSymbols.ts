@@ -1,7 +1,7 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { type URI } from "../../../base/common/uri.js";
 import { type Range } from "../core/range.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../languageFeatureRegistry.js";
 
 export type LanguageWorkspaceSymbolKind = string | number;
 
@@ -14,19 +14,19 @@ export interface LanguageWorkspaceSymbol {
 	readonly data?: unknown;
 }
 
-export interface LanguageWorkspaceSymbolProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageWorkspaceSymbolProvider {
 	provideWorkspaceSymbols(query: string, signal: AbortSignal): readonly LanguageWorkspaceSymbol[] | Promise<readonly LanguageWorkspaceSymbol[]>;
 	resolveWorkspaceSymbol?(symbol: LanguageWorkspaceSymbol, signal: AbortSignal): LanguageWorkspaceSymbol | Promise<LanguageWorkspaceSymbol>;
 }
 
 /** Aggregates workspace symbol providers independently from one editor model. */
 export class WorkspaceSymbolService extends Disposable {
-	constructor(private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageWorkspaceSymbolProvider>) {
+	constructor(private readonly providers: LanguageFeatureRegistry<LanguageWorkspaceSymbolProvider>) {
 		super();
 	}
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal = new AbortController().signal, onDidUpdate?: (symbols: readonly LanguageWorkspaceSymbol[]) => void): Promise<readonly LanguageWorkspaceSymbol[]> {
-		const providers = this.providers.getProviders("*");
+		const providers = this.providers.allNoModel();
 		const completed = new Array<readonly LanguageWorkspaceSymbol[] | undefined>(providers.length);
 		await Promise.all(providers.map(async (provider, index) => {
 			try {
@@ -41,7 +41,7 @@ export class WorkspaceSymbolService extends Disposable {
 	}
 
 	async resolveWorkspaceSymbol(symbol: LanguageWorkspaceSymbol, signal: AbortSignal = new AbortController().signal): Promise<LanguageWorkspaceSymbol> {
-		for (const provider of this.providers.getProviders("*")) {
+		for (const provider of this.providers.allNoModel()) {
 			if (!provider.resolveWorkspaceSymbol) continue;
 			return normalizeWorkspaceSymbol(await provider.resolveWorkspaceSymbol(symbol, signal));
 		}

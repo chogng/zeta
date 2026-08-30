@@ -2,7 +2,6 @@ import { type Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
 
 import { type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
 import { type TextEdit } from '../../../common/languages.js';
 
 export interface LanguageInlineCompletionItem {
@@ -18,6 +17,6 @@ export interface LanguageInlineCompletionsRequest extends LanguageFeatureRequest
 	readonly triggerKind: "automatic" | "explicit";
 }
 
-export interface LanguageInlineCompletionsProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageInlineCompletionsProvider {
 	provideInlineCompletions(request: LanguageInlineCompletionsRequest, signal: AbortSignal): readonly LanguageInlineCompletionItem[] | Promise<readonly LanguageInlineCompletionItem[]>;
 }

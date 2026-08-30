@@ -78,9 +78,35 @@ test('TextModel exposes the editor model reading contract', () => {
 	assert.deepEqual(model.modifyPosition(new Position(3, 5), 100), new Position(3, 5));
 });
 
+test('TextModel owns word lookup at a model position', () => {
+	using model = new TextModel('alpha  beta.\ntail');
+
+	assert.deepEqual(model.getWordAtPosition(position(0, 2)), {
+		word: 'alpha',
+		startColumn: 1,
+		endColumn: 6,
+	});
+	assert.deepEqual(model.getWordAtPosition(position(0, 5)), {
+		word: 'alpha',
+		startColumn: 1,
+		endColumn: 6,
+	});
+	assert.equal(model.getWordAtPosition(position(0, 6)), null);
+	assert.deepEqual(model.getWordAtPosition(position(0, 7)), {
+		word: 'beta',
+		startColumn: 8,
+		endColumn: 12,
+	});
+	assert.deepEqual(model.getWordAtPosition(position(1, 4)), {
+		word: 'tail',
+		startColumn: 1,
+		endColumn: 5,
+	});
+});
+
 test('TextModel delegates unusual-line-terminator state to ITextBuffer', () => {
 	using model = new TextModel('alpha');
-	model.applyEdits([{ range: new Range(1, 6, 1, 6), text: '\u2028omega' }]);
+	model.applyOperations([{ range: new Range(1, 6, 1, 6), text: '\u2028omega' }]);
 
 	assert.equal(model.mightContainUnusualLineTerminators(), true);
 	model.removeUnusualLineTerminators();
@@ -179,7 +205,7 @@ test("TextModel reset replaces content and clears undo and redo history", () => 
 	const snapshot = model.createVersionedSnapshot();
 	const events: unknown[] = [];
 	using listener = model.onDidChangeContent(change => events.push(change));
-	model.applyEdits([{ range: range(0, 0, 0, 7), text: "edited" }]);
+	model.applyOperations([{ range: range(0, 0, 0, 7), text: "edited" }]);
 	model.undo();
 
 	const reset = model.reset("next\r\nline");
@@ -217,7 +243,7 @@ test('TextModel EOL changes preserve positions, history, and event identity', ()
 	const events: Array<{ readonly eol: string; readonly isEolChange: boolean }> = [];
 	using listener = model.onDidChangeContent(event => events.push(event));
 
-	model.applyEdits([{ range: range(1, 0, 1, 1), text: 'S' }]);
+	model.applyOperations([{ range: range(1, 0, 1, 1), text: 'S' }]);
 	model.setEOL(EndOfLineSequence.CRLF);
 	assert.equal(model.getText(), 'first\r\nSecond');
 	assert.deepEqual(tracked.range, range(1, 1, 1, 4));
@@ -244,7 +270,7 @@ test("TextModel applies unordered edits against one atomic snapshot", () => {
 	const events: unknown[] = [];
 	using listener = model.onDidChangeContent(event => events.push(event));
 
-	const change = model.applyEdits([
+	const change = model.applyOperations([
 		{ range: range(2, 0, 2, 5), text: "G" },
 		{ range: range(0, 5, 0, 5), text: "!" },
 		{ range: range(1, 0, 1, 4), text: "B\r\nB2" },
@@ -265,6 +291,7 @@ test("TextModel applies unordered edits against one atomic snapshot", () => {
 			eol: '\n',
 			isEolChange: false,
 			detailedReasons: [],
+			resultingSelection: null,
 			changes: [
 				{
 					range: range(0, 5, 0, 5),
@@ -317,7 +344,7 @@ test("TextModel undo and redo preserve transaction boundaries", () => {
 	const reasons: TextModelChangeReason[] = [];
 	using listener = model.onDidChangeContent(event => reasons.push(event.reason));
 
-	model.applyEdits([
+	model.applyOperations([
 		{ range: range(0, 1, 0, 3), text: "LONG" },
 		{ range: range(0, 5, 0, 6), text: "" },
 	]);
@@ -353,9 +380,9 @@ test('TextModel alternative version follows document states through undo and red
 	using model = new TextModel('a');
 	assert.equal(model.getAlternativeVersionId(), 1);
 
-	model.applyEdits([{ range: range(0, 1, 0, 1), text: 'b' }]);
+	model.applyOperations([{ range: range(0, 1, 0, 1), text: 'b' }]);
 	const firstEditedAlternativeVersion = model.getAlternativeVersionId();
-	model.applyEdits([{ range: range(0, 2, 0, 2), text: 'c' }]);
+	model.applyOperations([{ range: range(0, 2, 0, 2), text: 'c' }]);
 	const secondEditedAlternativeVersion = model.getAlternativeVersionId();
 	assert.deepEqual([firstEditedAlternativeVersion, secondEditedAlternativeVersion], [2, 3]);
 
@@ -385,14 +412,14 @@ test("TextModel clears redo on a new edit and ignores exact no-ops", () => {
 	let eventCount = 0;
 	using listener = model.onDidChangeContent(() => eventCount += 1);
 
-	assert.equal(model.applyEdits([
+	assert.equal(model.applyOperations([
 		{ range: range(0, 0, 0, 3), text: "abc" },
 	]), undefined);
-	model.applyEdits([
+	model.applyOperations([
 		{ range: range(0, 0, 0, 1), text: "A" },
 	]);
 	model.undo();
-	model.applyEdits([
+	model.applyOperations([
 		{ range: range(0, 1, 0, 2), text: "B" },
 	]);
 
@@ -442,7 +469,7 @@ test("TextModel owns VS Code tracked-range identifiers", () => {
 	using model = new TextModel("abc");
 	const id = model._setTrackedRange(null, new Range(1, 2, 1, 3), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 	assert.deepEqual(model._getTrackedRange(id), new Range(1, 2, 1, 3));
-	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: "X" }]);
+	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: "X" }]);
 	assert.deepEqual(model._getTrackedRange(id), new Range(1, 3, 1, 4));
 	assert.equal(model._setTrackedRange(id, null, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges), null);
 	assert.equal(model._getTrackedRange(id), null);
@@ -454,13 +481,13 @@ test("TextModel commits history before reentrant change listeners run", () => {
 	using listener = model.onDidChangeContent(event => {
 		versions.push(event.version);
 		if (event.version === 2) {
-			model.applyEdits([
+			model.applyOperations([
 				{ range: range(0, 1, 0, 2), text: "B" },
 			]);
 		}
 	});
 
-	model.applyEdits([
+	model.applyOperations([
 		{ range: range(0, 0, 0, 1), text: "A" },
 	]);
 	model.undo();

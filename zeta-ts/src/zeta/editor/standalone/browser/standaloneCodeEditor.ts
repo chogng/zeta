@@ -1,5 +1,6 @@
 import type { Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import { type IContentWidget, type IOverlayWidget, type IViewZoneChangeAccessor } from '../../browser/editorBrowser.js';
 import { ConfiguredCodeEditor, type ConfiguredCodeEditorOptions, type EditorTextViewState, type IConfiguredCodeEditor } from '../../browser/configuredCodeEditor.js';
@@ -10,7 +11,10 @@ import type { CodeEditorWidget } from '../../browser/widget/codeEditor/codeEdito
 import type { CursorsController } from '../../common/cursor/cursor.js';
 import type { IDimension } from '../../common/core/2d/dimension.js';
 import type { Range } from '../../common/core/range.js';
+import type { ILanguageSelection, ILanguageService } from '../../common/languages/language.js';
+import type { ITextModel } from '../../common/model.js';
 import type { TextModel } from '../../common/model/textModel.js';
+import type { IModelService } from '../../common/services/model.js';
 
 export interface IStandaloneCodeEditor extends IConfiguredCodeEditor {
 	getModel(): TextModel;
@@ -62,4 +66,19 @@ export class StandaloneEditor extends Disposable implements IStandaloneCodeEdito
 	public removeOverlayWidget(widget: IOverlayWidget): void { this.editor.removeOverlayWidget(widget); }
 	public changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void { this.editor.changeViewZones(callback); }
 	public prepareSave(): Promise<void> { return this.editor.prepareSave(); }
+}
+
+/** @internal */
+export function createTextModel(modelService: IModelService, languageService: ILanguageService, value: string, languageId: string | undefined, uri: URI | undefined): ITextModel {
+	value ||= '';
+	if (!languageId) {
+		const firstLineBreak = value.indexOf('\n');
+		const firstLine = firstLineBreak === -1 ? value : value.substring(0, firstLineBreak);
+		return createModel(modelService, value, languageService.createByFilepathOrFirstLine(uri ?? null, firstLine), uri);
+	}
+	return createModel(modelService, value, languageService.createById(languageId), uri);
+}
+
+function createModel(modelService: IModelService, value: string, languageSelection: ILanguageSelection, uri: URI | undefined): ITextModel {
+	return modelService.createModel(value, languageSelection, uri);
 }

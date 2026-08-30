@@ -12,13 +12,12 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type CursorSelectionSetChange, type CursorsController } from '../../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
-import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../../common/languages.js';
-import { type LanguageFeatureProviderMetadata, type OwnedLanguageFeatureProviderRegistry } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
-import type { IEditorLanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { resolveDocumentHighlightPresentation } from './highlightDecorations.js';
 import { TextualHighlightTargetRegistration } from './textualHighlightProvider.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
@@ -28,10 +27,9 @@ type OccurrencesHighlightMode = 'off' | 'singleFile' | 'multiFile';
 interface WordHighlighterOptions {
 	readonly resource: URI;
 	readonly languageId: string;
-	readonly languageFeaturesService: IEditorLanguageFeaturesService;
+	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly mode?: OccurrencesHighlightMode;
 	readonly delay?: number;
-	readonly wordPattern?: () => RegExp | undefined;
 	readonly onError?: (error: unknown) => void;
 }
 
@@ -40,11 +38,7 @@ interface DocumentHighlightTarget {
 	readonly model: TextModel;
 	readonly snapshot: ReturnType<TextModel['createVersionedSnapshot']>;
 	readonly languageId: string;
-	readonly wordPattern?: RegExp;
 }
-
-type RegisteredDocumentHighlightProvider = DocumentHighlightProvider & LanguageFeatureProviderMetadata;
-type RegisteredMultiDocumentHighlightProvider = MultiDocumentHighlightProvider & LanguageFeatureProviderMetadata;
 
 /** Owns semantic word highlights and their editor-local lifecycle. */
 class WordHighlighter extends Disposable {
@@ -52,10 +46,9 @@ class WordHighlighter extends Disposable {
 	private readonly languageId: string;
 	private readonly mode: OccurrencesHighlightMode;
 	private readonly delay: number;
-	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private readonly onError: (error: unknown) => void;
-	private readonly providers: OwnedLanguageFeatureProviderRegistry<RegisteredDocumentHighlightProvider>;
-	private readonly multiDocumentProviders: OwnedLanguageFeatureProviderRegistry<RegisteredMultiDocumentHighlightProvider>;
+	private readonly providers: LanguageFeatureRegistry<DocumentHighlightProvider>;
+	private readonly multiDocumentProviders: LanguageFeatureRegistry<MultiDocumentHighlightProvider>;
 	private readonly coordinator: WordHighlightCoordinator;
 	private request: CancellationTokenSource | undefined;
 	private readonly scheduler: RunOnceScheduler;
@@ -76,7 +69,6 @@ class WordHighlighter extends Disposable {
 		this.languageId = options.languageId;
 		this.mode = options.mode ?? 'singleFile';
 		this.delay = options.delay ?? 250;
-		this.wordPattern = options.wordPattern;
 		this.onError = options.onError ?? reportHighlightError;
 		this.providers = options.languageFeaturesService.documentHighlightProvider;
 		this.multiDocumentProviders = options.languageFeaturesService.multiDocumentHighlightProvider;
@@ -113,15 +105,11 @@ class WordHighlighter extends Disposable {
 		return this.focused;
 	}
 
-	get currentWordPattern(): RegExp | undefined {
-		return this.wordPattern?.();
-	}
-
-	get documentHighlightProvider(): OwnedLanguageFeatureProviderRegistry<RegisteredDocumentHighlightProvider> {
+	get documentHighlightProvider(): LanguageFeatureRegistry<DocumentHighlightProvider> {
 		return this.providers;
 	}
 
-	get multiDocumentHighlightProvider(): OwnedLanguageFeatureProviderRegistry<RegisteredMultiDocumentHighlightProvider> {
+	get multiDocumentHighlightProvider(): LanguageFeatureRegistry<MultiDocumentHighlightProvider> {
 		return this.multiDocumentProviders;
 	}
 
@@ -144,13 +132,11 @@ class WordHighlighter extends Disposable {
 	}
 
 	createTarget(): DocumentHighlightTarget {
-		const wordPattern = this.currentWordPattern;
 		return Object.freeze({
 			resource: this.resource,
 			model: this.textModel,
 			snapshot: this.textModel.createVersionedSnapshot(),
 			languageId: this.languageId,
-			...(wordPattern ? { wordPattern } : {}),
 		});
 	}
 
@@ -222,8 +208,10 @@ class WordHighlighter extends Disposable {
 		if (this.selections.selections.selections.length !== 1) return undefined;
 		const selection = this.selections.selections.primary;
 		if (!selectionFitsModel(this.textModel, selection) || selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return undefined;
-		const range = getWordSelectionRange(this.textModel, selection.getStartPosition(), this.currentWordPattern);
-		if (range.isEmpty() || Position.compare(range.getStartPosition(), selection.getStartPosition()) > 0 || Position.compare(range.getEndPosition(), selection.getEndPosition()) < 0) return undefined;
+		const word = this.textModel.getWordAtPosition(selection.getStartPosition());
+		if (!word) return undefined;
+		const range = new Range(selection.startLineNumber, word.startColumn, selection.startLineNumber, word.endColumn);
+		if (Position.compare(range.getStartPosition(), selection.getStartPosition()) > 0 || Position.compare(range.getEndPosition(), selection.getEndPosition()) < 0) return undefined;
 		return selection.getStartPosition();
 	}
 
@@ -265,8 +253,8 @@ class WordHighlighter extends Disposable {
 	}
 }
 
-export async function getOccurrencesAtPosition(registry: OwnedLanguageFeatureProviderRegistry<RegisteredDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
-	for (const provider of orderedProviders(registry, model.languageId)) {
+export async function getOccurrencesAtPosition(registry: LanguageFeatureRegistry<DocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+	for (const provider of registry.ordered(model.model)) {
 		if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
 		const highlights = await provider.provideDocumentHighlights(model.model, position, token);
 		if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
@@ -278,19 +266,15 @@ export async function getOccurrencesAtPosition(registry: OwnedLanguageFeaturePro
 	return new ResourceMap();
 }
 
-export async function getOccurrencesAcrossMultipleModels(registry: OwnedLanguageFeatureProviderRegistry<RegisteredMultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[]): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+export async function getOccurrencesAcrossMultipleModels(registry: LanguageFeatureRegistry<MultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[]): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 	const targets = Object.freeze([model, ...otherModels]);
-	for (const provider of orderedProviders(registry, model.languageId)) {
+	for (const provider of registry.ordered(model.model)) {
 		if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
 		const highlights = await provider.provideMultiDocumentHighlights(model.model, position, otherModels.map(target => target.model), token);
 		if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
 		if (highlights !== undefined && highlights !== null) return normalizeHighlightMap(highlights, targets);
 	}
 	return new ResourceMap();
-}
-
-function orderedProviders<TProvider extends LanguageFeatureProviderMetadata>(registry: OwnedLanguageFeatureProviderRegistry<TProvider>, languageId: string): readonly TProvider[] {
-	return Object.freeze([...registry.getProviders(languageId)].sort((left, right) => Number(left.languageIds.includes('*')) - Number(right.languageIds.includes('*'))));
 }
 
 function isDocumentHighlightRequestCurrent(request: DocumentHighlightTarget, token: CancellationToken, targets: readonly DocumentHighlightTarget[] = []): boolean {
@@ -326,7 +310,7 @@ class WordHighlightCoordinator {
 	private readonly controllers = new Set<WordHighlighter>();
 	private readonly clearTimer = new TimeoutTimer();
 
-	constructor(private readonly service: IEditorLanguageFeaturesService) {}
+	constructor(private readonly service: ILanguageFeaturesService) {}
 
 	add(controller: WordHighlighter): void {
 		this.controllers.add(controller);
@@ -355,7 +339,7 @@ class WordHighlightCoordinator {
 			? [...this.controllers].filter(controller => controller.highlightMode === 'multiFile').map(controller => controller.createTarget())
 			: [source.createTarget()];
 		const primary = source.createTarget();
-		if (targets.length > 1 && source.multiDocumentHighlightProvider.getProviders(source.documentLanguageId).length > 0) {
+		if (targets.length > 1 && source.multiDocumentHighlightProvider.has(source.textModel)) {
 			return getOccurrencesAcrossMultipleModels(source.multiDocumentHighlightProvider, primary, position, token, targets.filter(target => target.model !== primary.model));
 		}
 		return getOccurrencesAtPosition(source.documentHighlightProvider, primary, position, token);
@@ -370,9 +354,9 @@ class WordHighlightCoordinator {
 	}
 }
 
-const coordinators = new WeakMap<IEditorLanguageFeaturesService, WordHighlightCoordinator>();
+const coordinators = new WeakMap<ILanguageFeaturesService, WordHighlightCoordinator>();
 
-function acquireCoordinator(service: IEditorLanguageFeaturesService, controller: WordHighlighter): WordHighlightCoordinator {
+function acquireCoordinator(service: ILanguageFeaturesService, controller: WordHighlighter): WordHighlightCoordinator {
 	let coordinator = coordinators.get(service);
 	if (!coordinator) {
 		coordinator = new WordHighlightCoordinator(service);
@@ -387,7 +371,6 @@ function validateControllerDependencies(view: EditorView, selections: CursorsCon
 	if (!options || typeof options !== 'object' || !options.resource || !options.languageId || !options.languageFeaturesService) throw new TypeError('Word highlighter requires resource and language services');
 	if (options.mode !== undefined && options.mode !== 'off' && options.mode !== 'singleFile' && options.mode !== 'multiFile') throw new TypeError('Word highlighter mode is invalid');
 	if (options.delay !== undefined && (!Number.isSafeInteger(options.delay) || options.delay < 0 || options.delay > 2_000)) throw new RangeError('Word highlighter delay must be an integer between 0 and 2000');
-	if (options.wordPattern !== undefined && typeof options.wordPattern !== 'function') throw new TypeError('Word highlighter word pattern resolver must be a function');
 	if (options.onError !== undefined && typeof options.onError !== 'function') throw new TypeError('Word highlighter error handler must be a function');
 }
 
@@ -444,7 +427,6 @@ registerTextEditorCapabilityContribution({
 		context.register(new TextualHighlightTargetRegistration(context.languageFeaturesService, {
 			resource: context.options.input.resource,
 			model: context.model,
-			wordPattern: () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern,
 		}));
 	},
 	install: context => {
@@ -455,7 +437,6 @@ registerTextEditorCapabilityContribution({
 			languageFeaturesService: context.languageFeaturesService,
 			mode: context.options.occurrencesHighlight,
 			delay: context.options.occurrencesHighlightDelay,
-			wordPattern: () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern,
 			onError: context.onLanguageError,
 		}));
 	},

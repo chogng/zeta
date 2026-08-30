@@ -1,5 +1,5 @@
 import { Position } from "../../../common/core/position.js";
-import "./media/linkedEditing.css";
+import "./linkedEditing.css";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { type EditorView } from '../../../browser/editorView.js';
 import { type View } from "../../../browser/view.js";

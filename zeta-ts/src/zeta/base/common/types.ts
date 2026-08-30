@@ -52,6 +52,14 @@ export function isObject(value: unknown): value is object {
 	return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof RegExp) && !(value instanceof Date);
 }
 
+/**
+ * @returns whether the provided parameter is an Iterable, casting to the given generic
+ */
+export function isIterable<T>(obj: unknown): obj is Iterable<T> {
+	// eslint-disable-next-line local/code-no-any-casts
+	return !!obj && typeof (obj as any)[Symbol.iterator] === 'function';
+}
+
 export function assertReturnsDefined<T>(value: T | null | undefined): NonNullable<T> {
 	assertDefined(value, 'Value must not be null or undefined');
 	return value;

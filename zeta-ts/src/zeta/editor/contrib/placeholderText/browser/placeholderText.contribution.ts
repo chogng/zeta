@@ -1,4 +1,4 @@
-import './media/placeholderText.css';
+import './placeholderText.css';
 import { wrapInReloadableClass1 } from '../../../../platform/observable/common/wrapInReloadableClass.js';
 import { EditorContributionInstantiation } from '../../../browser/editorExtensions.js';
 import { registerCodeEditorContribution } from '../../../browser/widget/codeEditor/codeEditorContributions.js';

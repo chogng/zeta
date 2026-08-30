@@ -4,35 +4,24 @@ import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
 
-export interface OccurrenceSelectionControllerOptions {
-	readonly wordPattern?: () => RegExp | undefined;
-}
-
 /** Routes VS Code-compatible occurrence-selection shortcuts through Stanza's common model. */
 export class OccurrenceSelectionController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: View,
 		private readonly selections: CursorsController,
-		options: OccurrenceSelectionControllerOptions = {},
 	) {
 		super();
 		try {
 			if (viewport.textModel !== selections.textModel) {
 				throw new TypeError("Stanza occurrence selection dependencies must share one text model");
 			}
-			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-				throw new TypeError("Stanza occurrence word pattern resolver must be a function");
-			}
-			this.wordPattern = options.wordPattern;
 			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
 	}
-
-	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
@@ -43,13 +32,12 @@ export class OccurrenceSelectionController extends Disposable {
 				this.viewport.textModel,
 				this.selections.selections,
 				EditorOccurrenceDirection.Next,
-				this.wordPattern?.(),
 			));
 			return;
 		}
 		if (event.shiftKey && event.key.toLowerCase() === "l") {
 			stopEvent(event);
-			this.setSelections(selectAllOccurrences(this.viewport.textModel, this.selections.selections, this.wordPattern?.()));
+			this.setSelections(selectAllOccurrences(this.viewport.textModel, this.selections.selections));
 		}
 	}
 

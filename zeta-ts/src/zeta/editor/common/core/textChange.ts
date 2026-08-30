@@ -1,4 +1,5 @@
 import { Range } from "./range.js";
+import type { Selection } from "./selection.js";
 import { decodeUTF16LE } from "./stringBuilder.js";
 
 /** A compact offset change used by incremental buffers and worker protocols. */
@@ -85,6 +86,7 @@ export interface TextModelChange {
 	readonly eol: '\n' | '\r\n';
 	readonly isEolChange: boolean;
 	readonly detailedReasons: readonly TextModelEditSource[];
+	readonly resultingSelection: Selection[] | null;
 }
 
 import type { TextModelEditSource } from '../textModelEditSource.js';

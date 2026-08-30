@@ -5,7 +5,7 @@ import { type ConfiguredCodeEditorOptions } from '../../browser/configuredCodeEd
 import { PositionAffinity, type ITextModel } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type NamedEditorThemeData } from "../common/namedEditorTheme.js";
-import { StandaloneEditor, type IStandaloneCodeEditor } from './standaloneCodeEditor.js';
+import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor } from './standaloneCodeEditor.js';
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 
 type StandaloneConfiguredCodeEditorOptions = Omit<ConfiguredCodeEditorOptions,
@@ -125,8 +125,8 @@ export function create(
 
 export function createModel(value: string, language?: string, uri?: URI): ITextModel {
 	const services = StandaloneServices.get();
-	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
-	return services.modelService.createModel(value, services.languageService.createById(languageId), uri);
+	const languageId = services.languageService.getLanguageIdByMimeType(language) || language;
+	return createTextModel(services.modelService, services.languageService, value, languageId, uri);
 }
 
 export function getModel(uri: URI): ITextModel | null {

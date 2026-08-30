@@ -11,6 +11,12 @@ import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
+
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -19,6 +25,7 @@ for (const [name, value] of Object.entries({
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -51,10 +58,13 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 test("Multi-cursor shortcut replaces selected rows with line-end carets", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	using model = new TextModel("zero\none\ntwo");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((2) + 1, (0) + 1))));
+	using model = new TextModel("zero\none\ntwo\nthree");
+	using selections = new CursorsController(model, SelectionSet.withPrimary([
+		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((2) + 1, (0) + 1)),
+		Selection.fromPositions(new Position((2) + 1, (0) + 1), new Position((3) + 1, (2) + 1)),
+	], 1));
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	viewport.layout({ width: 200, height: 60 });
+	viewport.layout({ width: 200, height: 80 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using controller = new MultiCursorController(input, viewport, selections);
@@ -65,7 +75,16 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
 		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
 		Selection.fromPositions(new Position((1) + 1, (3) + 1)),
-	], 0));
+		Selection.fromPositions(new Position((2) + 1, (3) + 1)),
+		Selection.fromPositions(new Position((3) + 1, (2) + 1)),
+	], 2));
+
+	const collapsed = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1)));
+	selections.setSelections(collapsed);
+	const ignoredAddEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
+	input.dispatchEvent(ignoredAddEnds);
+	assert.equal(ignoredAddEnds.defaultPrevented, false);
+	assert.equal(selections.selections, collapsed);
 
 	dom.window.close();
 });

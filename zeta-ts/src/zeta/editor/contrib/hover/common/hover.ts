@@ -3,7 +3,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
 
@@ -19,19 +19,19 @@ export interface LanguageHoverRequest extends LanguageFeatureRequest {
 	readonly position: Position;
 }
 
-export interface LanguageHoverProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageHoverProvider {
 	provideHover(request: LanguageHoverRequest, signal: AbortSignal): LanguageHover | undefined | Promise<LanguageHover | undefined>;
 }
 
 /** Stores hover providers and exposes deterministic first-provider semantics. */
 export class LanguageHoverService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageHoverProvider>, private readonly resource?: URI) {
+	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageHoverProvider>, private readonly resource?: URI) {
 		super();
 	}
 
 	async provideHover(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<LanguageHover | undefined> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), position };
-		for (const provider of this.providers.getProviders(languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return undefined;
 			const value = await provider.provideHover(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return undefined;

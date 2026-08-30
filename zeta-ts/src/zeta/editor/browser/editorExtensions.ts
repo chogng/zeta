@@ -5,7 +5,7 @@ import { type CursorsController } from "../common/cursor/cursor.js";
 import { type LanguageConfigurationSource } from "../common/languages/ownedLanguageConfigurationContributions.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
-import type { IEditorLanguageFeaturesService } from '../common/services/languageFeatures.js';
+import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
 import type { IResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokens.js';
 import type { ISemanticTokensStylingService } from '../common/services/semanticTokensStyling.js';
 import { type DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
@@ -46,7 +46,7 @@ export interface TextEditorContributionConfigurationContext {
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
-	readonly languageFeaturesService: IEditorLanguageFeaturesService;
+	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly semanticTokensStylingService: ISemanticTokensStylingService;
 	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;
 	readonly configurations: LanguageConfigurationSource;
@@ -70,7 +70,7 @@ export interface TextEditorContributionContext {
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
-	readonly languageFeaturesService: IEditorLanguageFeaturesService;
+	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: LanguageConfigurationSource;
 	readonly view: EditorView;
 	readonly viewport: View;

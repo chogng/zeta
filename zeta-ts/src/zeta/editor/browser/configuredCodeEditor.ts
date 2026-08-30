@@ -12,9 +12,9 @@ import { type Range } from "../common/core/range.js";
 import { type IDimension } from '../common/core/2d/dimension.js';
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
-import type { IEditorLanguageFeaturesService } from '../common/services/languageFeatures.js';
+import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
 import { ComposableLanguageConfigurationService, type IComposableLanguageConfigurationService } from '../common/languages/ownedLanguageConfigurationContributions.js';
-import { EditorLanguageFeaturesService } from '../common/services/languageFeaturesService.js';
+import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type PositionAffinity } from '../common/model.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../common/core/misc/indentation.js';
@@ -94,7 +94,7 @@ export interface ConfiguredCodeEditorOptions {
 	/** Optional host-scoped Tab-focus state shared by multiple editor instances. */
 	readonly tabFocus?: TabFocus;
 	/** Optional shared language registrations and providers for this editor host. */
-	readonly languageFeaturesService?: IEditorLanguageFeaturesService;
+	readonly languageFeaturesService?: ILanguageFeaturesService;
 	/** Optional shared language editing configuration for this editor host. */
 	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	/** Window-scoped constructor service for runtime editor contributions. */
@@ -243,7 +243,7 @@ export class ConfiguredCodeEditor extends Disposable implements IConfiguredCodeE
 				throw new TypeError('Editor language features require their language configuration service');
 			}
 			const languageConfigurationService = options.languageConfigurationService ?? this._register(new ComposableLanguageConfigurationService());
-			const languageFeaturesService = options.languageFeaturesService ?? this._register(new EditorLanguageFeaturesService(languageConfigurationService));
+			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(languageConfigurationService));
 			const semanticTokensStylingService = this._register(new SemanticTokensStylingService());
 			const resolvedSemanticTokensService = this._register(new ResolvedSemanticTokensService());
 			const configurations = languageConfigurationService;
@@ -369,9 +369,6 @@ export class ConfiguredCodeEditor extends Disposable implements IConfiguredCodeE
 					wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
 					stickyTabStops: EditorOptions.stickyTabStops.validate(options.stickyTabStops) as boolean,
 					tabSize: resolveEditorIndentationOptions(options.indentation).tabSize,
-				},
-				mouseHandler: {
-					wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
 				},
 			}));
 			if (options.codeEditorService) this._register(options.codeEditorService.addCodeEditor(this.codeEditor));

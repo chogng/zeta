@@ -14,7 +14,15 @@ export interface LanguageFilter {
 export type LanguageSelector = string | LanguageFilter | ReadonlyArray<string | LanguageFilter>;
 
 export function score(selector: LanguageSelector | undefined, candidateUri: URI, candidateLanguage: string, candidateIsSynchronized: boolean, candidateNotebookUri: URI | undefined, candidateNotebookType: string | undefined): number {
-	if (Array.isArray(selector)) return selector.reduce((maximum, item) => Math.max(maximum, score(item, candidateUri, candidateLanguage, candidateIsSynchronized, candidateNotebookUri, candidateNotebookType)), 0);
+	if (Array.isArray(selector)) {
+		let ret = 0;
+		for (const item of selector) {
+			const value = score(item, candidateUri, candidateLanguage, candidateIsSynchronized, candidateNotebookUri, candidateNotebookType);
+			if (value === 10) return value;
+			if (value > ret) ret = value;
+		}
+		return ret;
+	}
 	if (typeof selector === 'string') {
 		if (!candidateIsSynchronized) return 0;
 		return selector === candidateLanguage ? 10 : selector === '*' ? 5 : 0;
@@ -40,7 +48,7 @@ export function score(selector: LanguageSelector | undefined, candidateUri: URI,
 		else return 0;
 	}
 	if (filter.pattern) {
-		const path = candidateUri.scheme === 'file' ? candidateUri.fsPath : decodeURIComponent(candidateUri.path);
+		const path = candidateUri.fsPath;
 		if (!matchGlobPattern(filter.pattern, path)) return 0;
 		result = 10;
 	}

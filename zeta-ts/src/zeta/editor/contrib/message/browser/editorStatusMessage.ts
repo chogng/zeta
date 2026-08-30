@@ -1,4 +1,4 @@
-import "./media/editorStatusMessage.css";
+import "./messageController.css";
 import { h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";

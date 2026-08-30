@@ -4,7 +4,7 @@ import { ViewStableEditorScrollState } from '../../../browser/stableEditorScroll
 import { TimeoutTimer } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { type OwnedLanguageFeatureProviderRegistry } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type LanguageCodeLensCommand, type LanguageCodeLensProvider } from '../common/languageCodeLenses.js';
 import { codeLensCache } from './codeLensCache.js';
 import { LanguageCodeLensModel, getLanguageCodeLensModel, resolveLanguageCodeLensItem, type LanguageCodeLensItem } from './codelens.js';
@@ -30,7 +30,7 @@ export class EditorCodeLensContribution extends Disposable {
 
 	public constructor(
 		private readonly viewport: View,
-		private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>,
+		private readonly providers: LanguageFeatureRegistry<LanguageCodeLensProvider>,
 		private readonly languageId: string,
 		private readonly resource: URI | undefined,
 		private readonly onExecuteCommand: ExecuteCodeLensCommand | undefined,
@@ -71,7 +71,7 @@ export class EditorCodeLensContribution extends Disposable {
 
 	private bindProviderListeners(): void {
 		this.providerListeners.clear();
-		for (const provider of this.providers.getProviders(this.languageId)) {
+		for (const provider of this.providers.ordered(this.viewport.textModel)) {
 			if (provider.onDidChange) this.providerListeners.add(provider.onDidChange(() => this.scheduleRefresh()));
 		}
 	}
@@ -90,7 +90,7 @@ export class EditorCodeLensContribution extends Disposable {
 		this.resolvePromise = undefined;
 		this.resolvingWidgets.clear();
 		this.cacheExpiry.cancel();
-		if (this.providers.getProviders(this.languageId).length === 0) {
+		if (!this.providers.has(this.viewport.textModel)) {
 			this.showCachedModelUntilExpiry();
 			return;
 		}

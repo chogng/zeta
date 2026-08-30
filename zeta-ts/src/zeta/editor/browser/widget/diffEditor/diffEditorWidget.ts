@@ -1,4 +1,4 @@
-import "./diffEditorWidget.css";
+import "./style.css";
 import { addDisposableListener, fragment as createFragment, getWindow, h, isHTMLElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { getClientArea } from "../../../../base/browser/dom.js";

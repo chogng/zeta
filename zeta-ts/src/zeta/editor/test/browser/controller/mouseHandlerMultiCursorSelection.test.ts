@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
-import { PointerMultiCursorModifier } from "../../../common/cursor/cursorMoveCommands.js";
+import { type PointerMultiCursorModifier as PointerMultiCursorModifierType } from "../../../browser/controller/mouseHandler.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
@@ -23,6 +23,12 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 }
 
+class TestResizeObserver {
+	observe(): void {}
+	unobserve(): void {}
+	disconnect(): void {}
+}
+
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
@@ -31,6 +37,7 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	ResizeObserver: TestResizeObserver,
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -39,7 +46,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import("../../../browser/view.js");
-const { EditorPointerSelectionHandler } = await import("../../../browser/controller/mouseHandler.js");
+const { EditorPointerSelectionHandler, PointerMultiCursorModifier } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Alt pointer gestures add, toggle, drag, and track multiple selections", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -61,6 +68,10 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 	viewport.layout({ width: 200, height: 60 });
 	viewport.element.getBoundingClientRect = () => editorBounds();
 	using pointer = new EditorPointerSelectionHandler(viewport, selections);
+
+	click(dom.window, viewport.element, 9, 168, 95, { altKey: true, ctrlKey: true });
+	assert.deepEqual(selections.selections, SelectionSet.single(caret(2, 3)));
+	selections.setSelections(SelectionSet.single(caret(0, 1)));
 
 	click(dom.window, viewport.element, 1, 158, 75, { altKey: true });
 	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
@@ -89,6 +100,21 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 		caret(0, 0),
 		Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)),
 	], 1));
+
+	selections.setSelections(SelectionSet.withPrimary([
+		caret(0, 1),
+		caret(1, 2),
+		caret(2, 3),
+	], 2));
+	click(dom.window, viewport.element, 10, 158, 75, {
+		altKey: true,
+		detail: 2,
+	});
+	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
+		caret(0, 1),
+		caret(2, 3),
+		Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (4) + 1)),
+	], 2));
 
 	selections.setSelections(SelectionSet.withPrimary([
 		caret(0, 1),
@@ -174,7 +200,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 	);
 	assert.throws(
 		() => new EditorPointerSelectionHandler(viewport, selections, {
-			multiCursorModifier: "shift" as PointerMultiCursorModifier,
+			multiCursorModifier: "shift" as PointerMultiCursorModifierType,
 		}),
 		/Unknown Stanza pointer multi-cursor modifier/,
 	);

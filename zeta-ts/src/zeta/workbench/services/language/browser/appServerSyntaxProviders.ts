@@ -27,15 +27,14 @@ export class AppServerSyntaxProviders extends Disposable {
 		super();
 		const provider = new AppServerSyntaxProvider(api);
 		this._register(languageFeatures.syntaxProvider.register(provider));
-		this._register(languageFeatures.documentSymbolProvider.register(provider));
-		this._register(languageFeatures.foldingRangeProvider.register(provider));
-		this._register(languageFeatures.selectionRangeProvider.register(provider));
+		this._register(languageFeatures.documentSymbolProvider.register(APP_SERVER_SYNTAX_LANGUAGE_IDS, provider));
+		this._register(languageFeatures.foldingRangeProvider.register(APP_SERVER_SYNTAX_LANGUAGE_IDS, provider));
+		this._register(languageFeatures.selectionRangeProvider.register(APP_SERVER_SYNTAX_LANGUAGE_IDS, provider));
 	}
 }
 
 class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolProvider, LanguageFoldingRangeProvider, LanguageSelectionRangeProvider {
 	readonly id = "zeta.appServer.syntax";
-	readonly providerId = this.id;
 	readonly languageIds = APP_SERVER_SYNTAX_LANGUAGE_IDS;
 	readonly tokenPriority = 100;
 	readonly diagnosticPriority = 100;

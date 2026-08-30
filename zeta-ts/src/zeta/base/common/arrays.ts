@@ -1,5 +1,17 @@
 export type Comparator<T> = (left: T, right: T) => number;
 
+export type CompareResult = number;
+
+export namespace CompareResult {
+	export function isLessThan(result: CompareResult): boolean { return result < 0; }
+	export function isLessThanOrEqual(result: CompareResult): boolean { return result <= 0; }
+	export function isGreaterThan(result: CompareResult): boolean { return result > 0; }
+	export function isNeitherLessOrGreaterThan(result: CompareResult): boolean { return result === 0; }
+	export const greaterThan = 1;
+	export const lessThan = -1;
+	export const neitherLessOrGreaterThan = 0;
+}
+
 export const numberComparator: Comparator<number> = (left, right) => left - right;
 export const booleanComparator: Comparator<boolean> = (left, right) => numberComparator(left ? 1 : 0, right ? 1 : 0);
 
@@ -121,6 +133,17 @@ export function isNonEmptyArray<T>(obj: T[] | readonly T[] | undefined | null): 
 	return Array.isArray(obj) && obj.length > 0;
 }
 
+/** Removes duplicate values while retaining the first value for each key. */
+export function distinct<T>(array: ReadonlyArray<T>, keyFn: (value: T) => unknown = value => value): T[] {
+	const seen = new Set<unknown>();
+	return array.filter(element => {
+		const key = keyFn(element);
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
+}
+
 /** Returns the number of equal items at the beginning of two sequences. */
 export function commonPrefixLength<T>(
 	left: readonly T[],
@@ -157,4 +180,67 @@ export function commonArraySuffixLength<T>(
 
 function strictEquals<T>(left: T, right: T): boolean {
 	return left === right;
+}
+
+/** A callback-based lazy sequence that can stop iteration early. */
+export class CallbackIterable<T> {
+	public static readonly empty = new CallbackIterable<never>(_callback => {});
+
+	constructor(public readonly iterate: (callback: (item: T) => boolean) => void) {}
+
+	forEach(handler: (item: T) => void): void {
+		this.iterate(item => { handler(item); return true; });
+	}
+
+	toArray(): T[] {
+		const result: T[] = [];
+		this.iterate(item => { result.push(item); return true; });
+		return result;
+	}
+
+	filter(predicate: (item: T) => boolean): CallbackIterable<T> {
+		return new CallbackIterable(callback => this.iterate(item => predicate(item) ? callback(item) : true));
+	}
+
+	map<TResult>(mapFn: (item: T) => TResult): CallbackIterable<TResult> {
+		return new CallbackIterable<TResult>(callback => this.iterate(item => callback(mapFn(item))));
+	}
+
+	some(predicate: (item: T) => boolean): boolean {
+		let result = false;
+		this.iterate(item => { result = predicate(item); return !result; });
+		return result;
+	}
+
+	findFirst(predicate: (item: T) => boolean): T | undefined {
+		let result: T | undefined;
+		this.iterate(item => {
+			if (!predicate(item)) return true;
+			result = item;
+			return false;
+		});
+		return result;
+	}
+
+	findLast(predicate: (item: T) => boolean): T | undefined {
+		let result: T | undefined;
+		this.iterate(item => {
+			if (predicate(item)) result = item;
+			return true;
+		});
+		return result;
+	}
+
+	findLastMaxBy(comparator: Comparator<T>): T | undefined {
+		let result: T | undefined;
+		let first = true;
+		this.iterate(item => {
+			if (first || CompareResult.isGreaterThan(comparator(item, result!))) {
+				first = false;
+				result = item;
+			}
+			return true;
+		});
+		return result;
+	}
 }

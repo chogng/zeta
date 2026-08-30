@@ -1,4 +1,4 @@
-import './media/colorPicker.css';
+import './colorPicker.css';
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Color, RGBA } from '../../../../base/common/color.js';

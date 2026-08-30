@@ -30,12 +30,12 @@ test('Workbench installs product languages while Editor owns provider registries
 test('Language features service atomically owns a replaceable cross-kind provider batch', async () => {
 	using languageConfigurations = new ComposableLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
-	using model = new TextModel('answer');
+	using model = new TextModel('answer', { languageId: 'typescript' });
 	using hover = new LanguageHoverService(model, languageFeatures.hoverProvider);
-	const registration = languageFeatures.registerProviderBatch({ hovers: [{ providerId: 'host.first', languageIds: ['typescript'], provideHover: () => ({ contents: ['first'] }) }] });
+	const registration = languageFeatures.registerProviderBatch({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['first'] }) } }] });
 
 	assert.deepEqual(await hover.provideHover('typescript', new Position((0) + 1, (1) + 1)), { contents: ['first'] });
-	registration.replace({ hovers: [{ providerId: 'host.second', languageIds: ['typescript'], provideHover: () => ({ contents: ['second'] }) }] });
+	registration.replace({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['second'] }) } }] });
 	assert.deepEqual(await hover.provideHover('typescript', new Position((0) + 1, (1) + 1)), { contents: ['second'] });
 
 	registration.dispose();

@@ -2,7 +2,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export type LanguageSymbolKind = string | number;
@@ -20,7 +20,7 @@ export interface LanguageDocumentSymbolRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
 }
 
-export interface LanguageDocumentSymbolProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageDocumentSymbolProvider {
 	provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): readonly LanguageDocumentSymbol[] | Promise<readonly LanguageDocumentSymbol[]>;
 }
 
@@ -31,7 +31,7 @@ export interface DocumentSymbolServiceOptions {
 
 /** Provider-backed document symbol service used by outline and symbol navigation. */
 export class DocumentSymbolService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageDocumentSymbolProvider>, private readonly options: DocumentSymbolServiceOptions = {}) {
+	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>, private readonly options: DocumentSymbolServiceOptions = {}) {
 		super();
 	}
 
@@ -41,7 +41,7 @@ export class DocumentSymbolService extends Disposable {
 
 	async provideDocumentSymbols(languageId: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageDocumentSymbol[]> {
 		const request: LanguageDocumentSymbolRequest = Object.freeze({ ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.options.resource ? { resource: this.options.resource } : {}) });
-		for (const provider of this.providers.getProviders(languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			const symbols = await provider.provideDocumentSymbols(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);

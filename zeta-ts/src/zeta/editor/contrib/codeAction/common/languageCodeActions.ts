@@ -2,7 +2,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Range } from "../../../common/core/range.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 import { type URI } from "../../../../base/common/uri.js";
@@ -25,21 +25,21 @@ export interface LanguageCodeActionRequest extends LanguageFeatureRequest {
 	readonly only?: readonly string[];
 }
 
-export interface LanguageCodeActionProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageCodeActionProvider {
 	provideCodeActions(request: LanguageCodeActionRequest, signal: AbortSignal): readonly LanguageCodeAction[] | Promise<readonly LanguageCodeAction[]>;
 	resolveCodeAction?(action: LanguageCodeAction, request: LanguageCodeActionRequest, signal: AbortSignal): LanguageCodeAction | Promise<LanguageCodeAction>;
 }
 
 /** Collects code actions and keeps edit application in the editor command layer. */
 export class CodeActionService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageCodeActionProvider>) {
+	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly providers: LanguageFeatureRegistry<LanguageCodeActionProvider>) {
 		super();
 	}
 
 	async provideCodeActions(languageId: string, range: Range, diagnostics: readonly LanguageDiagnostic[] = [], only?: readonly string[], signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageCodeAction[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, range, diagnostics, ...(only ? { only } : {}) };
 		const result: LanguageCodeAction[] = [];
-		for (const provider of this.providers.getProviders(languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			const actions = await provider.provideCodeActions(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
@@ -50,7 +50,7 @@ export class CodeActionService extends Disposable {
 
 	async resolveCodeAction(languageId: string, range: Range, action: LanguageCodeAction, diagnostics: readonly LanguageDiagnostic[] = [], signal: AbortSignal = new AbortController().signal): Promise<LanguageCodeAction> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, range, diagnostics };
-		for (const provider of this.providers.getProviders(languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			if (!provider.resolveCodeAction) continue;
 			const resolved = await provider.resolveCodeAction(action, request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) throw new Error("Code action result became stale");

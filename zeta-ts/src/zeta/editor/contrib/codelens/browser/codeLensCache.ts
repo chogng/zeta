@@ -20,7 +20,6 @@ interface CacheEntry {
 }
 
 const cachedCodeLensProvider: LanguageCodeLensProvider = {
-	languageIds: ['*'],
 	provideCodeLenses: () => { throw new Error('Cached CodeLens entries cannot provide results'); },
 };
 

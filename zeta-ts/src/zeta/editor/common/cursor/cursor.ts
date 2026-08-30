@@ -1,15 +1,21 @@
+import { onUnexpectedError } from '../../../base/common/errors.js';
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { SelectionSet } from './selectionSet.js';
 import { SelectionSetTracker, validateSelectionSet } from '../model/selectionSetTracker.js';
 import { calculateResultLength, selectionSetFromOffsets, selectionSetsEqual, validateSelectionOffsets } from '../commands/selectionSetEditOperations.js';
-import { Range } from '../core/range.js';
+import { type IRange, Range } from '../core/range.js';
+import { type ISelection, Selection, SelectionDirection } from '../core/selection.js';
 import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange } from '../core/textChange.js';
-import { TextEditHistoryGroup, TextEditHistoryMergeMode } from '../core/editOperation.js';
+import { TextEditHistoryMergeMode } from '../core/editOperation.js';
+import type * as editorCommon from '../editorCommon.js';
+import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
 import { TextModel } from "../model/textModel.js";
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../commands/editorEditCommand.js";
 import { CursorChangeReason } from '../cursorEvents.js';
+import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
+import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 
 export interface CursorSelectionSetChange {
 	readonly selections: SelectionSet;
@@ -45,7 +51,7 @@ interface SelectionHistoryEntry {
 }
 
 interface ActiveComposition {
-	readonly historyGroup: TextEditHistoryGroup;
+	readonly historyGroup: UndoRedoGroup;
 	transactionId?: number;
 	valid: boolean;
 }
@@ -68,7 +74,7 @@ export class CursorsController extends Disposable {
 	private readonly selectionHistoryOrder: number[] = [];
 	private readonly cursorHistory: SelectionSet[] = [];
 	private currentSelections: SelectionSet;
-	private activeHistoryGroup: TextEditHistoryGroup | undefined;
+	private activeHistoryGroup: UndoRedoGroup | undefined;
 	private activeHistoryMode: EditorCommandHistoryMode | undefined;
 	private activeComposition: ActiveComposition | undefined;
 	private executingCommand = false;
@@ -193,7 +199,7 @@ export class CursorsController extends Disposable {
 		const startOffset = this.model.offsetAt(initialRange.getStartPosition());
 		const endOffset = this.model.offsetAt(initialRange.getEndPosition());
 		const state: ActiveComposition = {
-			historyGroup: TextEditHistoryGroup.create(),
+			historyGroup: new UndoRedoGroup(),
 			valid: true,
 		};
 		this.model.beginHistoryRevision(state.historyGroup);
@@ -250,7 +256,7 @@ export class CursorsController extends Disposable {
 
 	private executeCommand(
 		command: EditorEditCommand,
-		historyGroup: TextEditHistoryGroup | undefined,
+		historyGroup: UndoRedoGroup | undefined,
 		historyMergeMode: TextEditHistoryMergeMode,
 	): TextModelChange | undefined {
 		const resultLength = calculateResultLength(this.model, command.edits);
@@ -264,7 +270,7 @@ export class CursorsController extends Disposable {
 		let change: TextModelChange | undefined;
 		this.executingCommand = true;
 		try {
-			change = this.model.applyEdits(
+			change = this.model.applyOperations(
 				command.edits,
 				historyGroup
 					? { historyGroup, historyMergeMode }
@@ -457,7 +463,7 @@ export class CursorsController extends Disposable {
 
 	private historyGroupFor(
 		mode: EditorCommandHistoryMode | undefined,
-	): TextEditHistoryGroup | undefined {
+	): UndoRedoGroup | undefined {
 		if (
 			mode === undefined ||
 			mode === EditorCommandHistoryMode.Isolated
@@ -467,7 +473,7 @@ export class CursorsController extends Disposable {
 		}
 		if (mode === EditorCommandHistoryMode.BeginCoalescedTyping) {
 			this.breakHistoryGroup();
-			this.activeHistoryGroup = TextEditHistoryGroup.create();
+			this.activeHistoryGroup = new UndoRedoGroup();
 			this.activeHistoryMode = EditorCommandHistoryMode.CoalesceTyping;
 			return this.activeHistoryGroup;
 		}
@@ -479,7 +485,7 @@ export class CursorsController extends Disposable {
 			throw new TypeError("Unknown editor command history mode");
 		}
 		if (!this.activeHistoryGroup || this.activeHistoryMode !== mode) {
-			this.activeHistoryGroup = TextEditHistoryGroup.create();
+			this.activeHistoryGroup = new UndoRedoGroup();
 			this.activeHistoryMode = mode;
 		}
 		return this.activeHistoryGroup;
@@ -509,6 +515,168 @@ export class CursorsController extends Disposable {
 		this.activeComposition = undefined;
 	}
 
+}
+
+interface IExecContext {
+	readonly model: ITextModel;
+	readonly selectionsBefore: Selection[];
+	readonly trackedRanges: string[];
+	readonly trackedRangesDirection: SelectionDirection[];
+}
+
+interface ICommandData {
+	operations: IIdentifiedSingleEditOperation[];
+	hadTrackedEditOperation: boolean;
+}
+
+interface ICommandsData {
+	operations: IIdentifiedSingleEditOperation[];
+	hadTrackedEditOperation: boolean;
+}
+
+export class CommandExecutor {
+	public static executeCommands(model: ITextModel, selectionsBefore: Selection[], commands: (editorCommon.ICommand | null)[], editReason: TextModelEditSource = EditSources.unknown({ name: 'executeCommands' })): Selection[] | null {
+		const context: IExecContext = {
+			model,
+			selectionsBefore,
+			trackedRanges: [],
+			trackedRangesDirection: [],
+		};
+		try {
+			return this._innerExecuteCommands(context, commands, editReason);
+		} finally {
+			for (const trackedRange of context.trackedRanges) {
+				context.model._setTrackedRange(trackedRange, null, TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges);
+			}
+		}
+	}
+
+	private static _innerExecuteCommands(context: IExecContext, commands: (editorCommon.ICommand | null)[], editReason: TextModelEditSource): Selection[] | null {
+		if (this._arrayIsEmpty(commands)) return null;
+
+		const commandsData = this._getEditOperations(context, commands);
+		if (commandsData.operations.length === 0) return null;
+
+		const loserCursorsMap = this._getLoserCursorMap(commandsData.operations);
+		if (Object.prototype.hasOwnProperty.call(loserCursorsMap, '0')) {
+			console.warn('Ignoring commands');
+			return null;
+		}
+
+		const filteredOperations = commandsData.operations.filter(operation => !Object.prototype.hasOwnProperty.call(loserCursorsMap, operation.identifier!.major.toString()));
+		if (commandsData.hadTrackedEditOperation && filteredOperations.length > 0) filteredOperations[0]._isTracked = true;
+
+		let selectionsAfter = context.model.pushEditOperations(context.selectionsBefore, filteredOperations, inverseEditOperations => {
+			const groupedInverseEditOperations: IValidEditOperation[][] = context.selectionsBefore.map(() => []);
+			for (const operation of inverseEditOperations) {
+				if (operation.identifier) groupedInverseEditOperations[operation.identifier.major].push(operation);
+			}
+			return context.selectionsBefore.map((selection, index) => {
+				const inverseOperations = groupedInverseEditOperations[index];
+				if (inverseOperations.length === 0) return selection;
+				inverseOperations.sort((left, right) => left.identifier!.minor - right.identifier!.minor);
+				return commands[index]!.computeCursorState(context.model, {
+					getInverseEditOperations: () => inverseOperations,
+					getTrackedSelection: id => {
+						const trackedRangeIndex = Number.parseInt(id, 10);
+						const range = context.model._getTrackedRange(context.trackedRanges[trackedRangeIndex])!;
+						return context.trackedRangesDirection[trackedRangeIndex] === SelectionDirection.LTR
+							? new Selection(range.startLineNumber, range.startColumn, range.endLineNumber, range.endColumn)
+							: new Selection(range.endLineNumber, range.endColumn, range.startLineNumber, range.startColumn);
+					},
+				});
+			});
+		}, undefined, editReason) ?? context.selectionsBefore;
+
+		const losingCursors = Object.keys(loserCursorsMap).map(Number).sort((left, right) => right - left);
+		for (const losingCursor of losingCursors) selectionsAfter.splice(losingCursor, 1);
+		return selectionsAfter;
+	}
+
+	private static _arrayIsEmpty(commands: (editorCommon.ICommand | null)[]): boolean {
+		return commands.every(command => command === null);
+	}
+
+	private static _getEditOperations(context: IExecContext, commands: (editorCommon.ICommand | null)[]): ICommandsData {
+		let operations: IIdentifiedSingleEditOperation[] = [];
+		let hadTrackedEditOperation = false;
+		for (let index = 0; index < commands.length; index += 1) {
+			const command = commands[index];
+			if (!command) continue;
+			const commandData = this._getEditOperationsFromCommand(context, index, command);
+			operations = operations.concat(commandData.operations);
+			hadTrackedEditOperation ||= commandData.hadTrackedEditOperation;
+		}
+		return { operations, hadTrackedEditOperation };
+	}
+
+	private static _getEditOperationsFromCommand(context: IExecContext, majorIdentifier: number, command: editorCommon.ICommand): ICommandData {
+		const operations: IIdentifiedSingleEditOperation[] = [];
+		let operationMinor = 0;
+		const addEditOperation = (range: IRange, text: string | null, forceMoveMarkers = false): void => {
+			if (Range.isEmpty(range) && text === '') return;
+			operations.push({
+				identifier: { major: majorIdentifier, minor: operationMinor++ },
+				range,
+				text,
+				forceMoveMarkers,
+				isAutoWhitespaceEdit: command.insertsAutoWhitespace,
+			});
+		};
+
+		let hadTrackedEditOperation = false;
+		const addTrackedEditOperation = (range: IRange, text: string | null, forceMoveMarkers?: boolean): void => {
+			hadTrackedEditOperation = true;
+			addEditOperation(range, text, forceMoveMarkers);
+		};
+
+		const trackSelection = (rawSelection: ISelection, trackPreviousOnEmpty?: boolean): string => {
+			const selection = Selection.liftSelection(rawSelection);
+			let stickiness: TrackedRangeStickiness;
+			if (!selection.isEmpty()) {
+				stickiness = TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges;
+			} else if (typeof trackPreviousOnEmpty === 'boolean') {
+				stickiness = trackPreviousOnEmpty ? TrackedRangeStickiness.GrowsOnlyWhenTypingBefore : TrackedRangeStickiness.GrowsOnlyWhenTypingAfter;
+			} else {
+				stickiness = selection.startColumn === context.model.getLineMaxColumn(selection.startLineNumber)
+					? TrackedRangeStickiness.GrowsOnlyWhenTypingBefore
+					: TrackedRangeStickiness.GrowsOnlyWhenTypingAfter;
+			}
+			const index = context.trackedRanges.length;
+			context.trackedRanges[index] = context.model._setTrackedRange(null, selection, stickiness);
+			context.trackedRangesDirection[index] = selection.getDirection();
+			return index.toString();
+		};
+
+		try {
+			command.getEditOperations(context.model, { addEditOperation, addTrackedEditOperation, trackSelection });
+		} catch (error) {
+			onUnexpectedError(error);
+			return { operations: [], hadTrackedEditOperation: false };
+		}
+		return { operations, hadTrackedEditOperation };
+	}
+
+	private static _getLoserCursorMap(rawOperations: IIdentifiedSingleEditOperation[]): Record<string, boolean> {
+		const operations = rawOperations.slice().sort((left, right) => -Range.compareRangesUsingEnds(left.range, right.range));
+		const loserCursorsMap: Record<string, boolean> = {};
+		for (let index = 1; index < operations.length; index += 1) {
+			const previousOperation = operations[index - 1];
+			const currentOperation = operations[index];
+			if (!Range.getStartPosition(previousOperation.range).isBefore(Range.getEndPosition(currentOperation.range))) continue;
+
+			const losingMajor = Math.max(previousOperation.identifier!.major, currentOperation.identifier!.major);
+			loserCursorsMap[losingMajor.toString()] = true;
+			for (let operationIndex = 0; operationIndex < operations.length; operationIndex += 1) {
+				if (operations[operationIndex].identifier!.major !== losingMajor) continue;
+				operations.splice(operationIndex, 1);
+				if (operationIndex < index) index -= 1;
+				operationIndex -= 1;
+			}
+			if (index > 0) index -= 1;
+		}
+		return loserCursorsMap;
+	}
 }
 
 export class CompositionSession {

@@ -16,22 +16,6 @@ export class EditOperation {
 	static replaceMove(range: Range, text: string | null): ISingleEditOperation { return { range, text, forceMoveMarkers: true }; }
 }
 
-/**
- * Nominal identity used only while consecutive compatible edits may share one
- * undo step.
- */
-export class TextEditHistoryGroup {
-	private readonly identity = undefined;
-
-	private constructor() {
-		Object.freeze(this);
-	}
-
-	static create(): TextEditHistoryGroup {
-		return new TextEditHistoryGroup();
-	}
-}
-
 /** Selects how a compatible edit updates the latest grouped undo step. */
 export enum TextEditHistoryMergeMode {
 	Sequential = "sequential",

@@ -12,7 +12,7 @@ import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { DocumentHighlightKind } from '../../../../common/languages.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { TestLanguageFeaturesService as EditorLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
+import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver {
@@ -40,7 +40,7 @@ const { TextualHighlightTargetRegistration } = await import('../../browser/textu
 const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');
 
 test('Word highlighter uses the textual provider for complete Unicode words', async () => {
-	using languages = new EditorLanguageFeaturesService();
+	using languages = new TestLanguageFeaturesService();
 	using harness = createHarness('café caféine café\nCafé', languages, URI.parse('file:///one.ts'), 'singleFile');
 
 	harness.controller.restoreViewState(true);
@@ -53,9 +53,8 @@ test('Word highlighter uses the textual provider for complete Unicode words', as
 });
 
 test('Word highlighter prefers semantic providers and renders read and write kinds independently', async () => {
-	using languages = new EditorLanguageFeaturesService();
-	using semanticProvider = languages.documentHighlightProvider.register({
-		languageIds: ['typescript'],
+	using languages = new TestLanguageFeaturesService();
+	using semanticProvider = languages.documentHighlightProvider.register('typescript', {
 		provideDocumentHighlights: () => [
 			{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)), kind: DocumentHighlightKind.Read },
 			{ range: Range.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (9) + 1)), kind: DocumentHighlightKind.Write },
@@ -72,7 +71,7 @@ test('Word highlighter prefers semantic providers and renders read and write kin
 });
 
 test('Multi-file word highlighting updates every open editor sharing the language service', async () => {
-	using languages = new EditorLanguageFeaturesService();
+	using languages = new TestLanguageFeaturesService();
 	using first = createHarness('item one item', languages, URI.parse('file:///one.ts'), 'multiFile');
 	using second = createHarness('item two', languages, URI.parse('file:///two.ts'), 'multiFile');
 
@@ -83,10 +82,9 @@ test('Multi-file word highlighting updates every open editor sharing the languag
 });
 
 test('Word highlighter cancels a stale provider request when the selection changes', async () => {
-	using languages = new EditorLanguageFeaturesService();
+	using languages = new TestLanguageFeaturesService();
 	let aborted = false;
-	using semanticProvider = languages.documentHighlightProvider.register({
-		languageIds: ['typescript'],
+	using semanticProvider = languages.documentHighlightProvider.register('typescript', {
 		provideDocumentHighlights: (_model, _position, token) => new Promise(resolve => {
 			token.onCancellationRequested(() => {
 				aborted = true;
@@ -106,7 +104,7 @@ test('Word highlighter cancels a stale provider request when the selection chang
 });
 
 test('Word highlighter obeys the off mode and navigates existing highlights', async () => {
-	using languages = new EditorLanguageFeaturesService();
+	using languages = new TestLanguageFeaturesService();
 	using disabled = createHarness('item item', languages, URI.parse('file:///disabled.ts'), 'off');
 	disabled.controller.restoreViewState(true);
 	await settleHighlights();
@@ -121,12 +119,12 @@ test('Word highlighter obeys the off mode and navigates existing highlights', as
 	assert.deepEqual(enabled.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 });
 
-function createHarness(text: string, languages: EditorLanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile'): EditorHarness {
+function createHarness(text: string, languages: TestLanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile'): EditorHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
-	const model = new TextModel(text);
+	const model = new TextModel(text, { languageId: 'typescript', resource });
 	const selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource, model, wordPattern: () => undefined });
+	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource, model });
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
 	const viewport = new View({
 		container,

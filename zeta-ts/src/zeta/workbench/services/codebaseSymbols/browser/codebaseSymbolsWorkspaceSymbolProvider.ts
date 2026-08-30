@@ -10,13 +10,10 @@ const MAX_WORKSPACE_SYMBOL_RESULTS = 100;
 
 /** Registers the local syntax declaration projection as one Workspace Symbol provider. */
 export function registerCodebaseSymbolsWorkspaceSymbolProvider(languageFeatures: ILanguageFeaturesService, symbols: ICodebaseSymbolsService, workspace: IWorkspaceContextService) {
-	return languageFeatures.workspaceSymbolProvider.register(new CodebaseSymbolsWorkspaceSymbolProvider(symbols, workspace));
+	return languageFeatures.workspaceSymbolProvider.register('*', new CodebaseSymbolsWorkspaceSymbolProvider(symbols, workspace));
 }
 
 class CodebaseSymbolsWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvider {
-	readonly languageIds = Object.freeze(["*"]);
-	readonly providerId = "zeta.codebaseSymbols.workspaceSymbols";
-
 	constructor(private readonly symbols: ICodebaseSymbolsService, private readonly workspace: IWorkspaceContextService) {}
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly LanguageWorkspaceSymbol[]> {

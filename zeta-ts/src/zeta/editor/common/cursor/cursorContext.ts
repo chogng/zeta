@@ -1,15 +1,19 @@
-import { type ICoordinatesConverter } from '../coordinatesConverter.js';
-import { type CursorConfiguration, type ICursorSimpleModel } from '../cursorCommon.js';
-import { type ITextModel } from '../model.js';
+import { ITextModel } from '../model.js';
+import { CursorConfiguration, ICursorSimpleModel } from '../cursorCommon.js';
+import { ICoordinatesConverter } from '../coordinatesConverter.js';
 
-/** Shared model/view/configuration state consumed by all cursor operations. */
 export class CursorContext {
 	_cursorContextBrand: void = undefined;
 
-	constructor(
-		public readonly model: ITextModel,
-		public readonly viewModel: ICursorSimpleModel,
-		public readonly coordinatesConverter: ICoordinatesConverter,
-		public readonly cursorConfig: CursorConfiguration,
-	) {}
+	public readonly model: ITextModel;
+	public readonly viewModel: ICursorSimpleModel;
+	public readonly coordinatesConverter: ICoordinatesConverter;
+	public readonly cursorConfig: CursorConfiguration;
+
+	constructor(model: ITextModel, viewModel: ICursorSimpleModel, coordinatesConverter: ICoordinatesConverter, cursorConfig: CursorConfiguration) {
+		this.model = model;
+		this.viewModel = viewModel;
+		this.coordinatesConverter = coordinatesConverter;
+		this.cursorConfig = cursorConfig;
+	}
 }

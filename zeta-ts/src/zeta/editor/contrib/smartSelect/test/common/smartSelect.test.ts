@@ -30,9 +30,9 @@ test("Smart select prefers the smallest parser scope before lexical pair and lin
 	];
 	const caret = Selection.fromPositions(model.positionAt(valueStart + 2));
 
-	const word = expandSmartSelection(model, caret, undefined, syntaxRanges);
-	const declaration = expandSmartSelection(model, word, undefined, syntaxRanges);
-	const functionScope = expandSmartSelection(model, declaration, undefined, syntaxRanges);
+	const word = expandSmartSelection(model, caret, syntaxRanges);
+	const declaration = expandSmartSelection(model, word, syntaxRanges);
+	const functionScope = expandSmartSelection(model, declaration, syntaxRanges);
 
 	assert.equal(model.getTextInRange(word), "value");
 	assert.equal(model.getTextInRange(declaration), "let value = call(1 + 2);");

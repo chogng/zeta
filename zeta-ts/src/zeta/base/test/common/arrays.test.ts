@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { arraysEqual, commonArraySuffixLength, commonPrefixLength, isNonEmptyArray } from '../../common/arrays.js';
+import { arraysEqual, CallbackIterable, commonArraySuffixLength, commonPrefixLength, distinct, isNonEmptyArray } from '../../common/arrays.js';
 
 test('arraysEqual compares complete sequences', () => {
 	assert.equal(arraysEqual([1, 2], [1, 2]), true);
@@ -28,4 +28,21 @@ test('isNonEmptyArray rejects nullish and empty sequences', () => {
 	assert.equal(isNonEmptyArray([]), false);
 	assert.equal(isNonEmptyArray(undefined), false);
 	assert.equal(isNonEmptyArray(null), false);
+});
+
+test('distinct retains the first value for every computed key', () => {
+	assert.deepEqual(distinct(['A', 'a', 'B'], value => value.toLowerCase()), ['A', 'B']);
+});
+
+test('CallbackIterable composes lazy mapping and early termination', () => {
+	const visited: number[] = [];
+	const values = new CallbackIterable<number>(callback => {
+		for (const value of [1, 2, 3, 4]) {
+			visited.push(value);
+			if (!callback(value)) break;
+		}
+	});
+	assert.equal(values.map(value => value * 2).some(value => value === 6), true);
+	assert.deepEqual(visited, [1, 2, 3]);
+	assert.deepEqual(values.filter(value => value % 2 === 0).toArray(), [2, 4]);
 });

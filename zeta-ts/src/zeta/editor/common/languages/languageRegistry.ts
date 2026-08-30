@@ -256,7 +256,7 @@ function normalizeFirstLinePattern(value: string): string {
 
 function normalizeFirstLineText(value: string | undefined): string | undefined {
 	if (value === undefined) return undefined;
-	const withoutByteOrderMark = value.charCodeAt(0) === CharCode.ByteOrderMark ? value.slice(1) : value;
+	const withoutByteOrderMark = value.charCodeAt(0) === CharCode.UTF8_BOM ? value.slice(1) : value;
 	return withoutByteOrderMark.slice(0, 1000);
 }
 

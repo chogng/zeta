@@ -2,7 +2,6 @@ import { type Event } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type Range } from '../../../common/core/range.js';
 import { type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
-import { type LanguageFeatureProviderMetadata } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
 
 export interface LanguageCodeLensCommand {
 	readonly id: string;
@@ -20,7 +19,7 @@ export interface LanguageCodeLensRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
 }
 
-export interface LanguageCodeLensProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageCodeLensProvider {
 	readonly onDidChange?: Event<void>;
 	provideCodeLenses(request: LanguageCodeLensRequest, signal: AbortSignal): readonly LanguageCodeLens[] | Promise<readonly LanguageCodeLens[]>;
 	resolveCodeLens?(lens: LanguageCodeLens, request: LanguageCodeLensRequest, signal: AbortSignal): LanguageCodeLens | Promise<LanguageCodeLens>;

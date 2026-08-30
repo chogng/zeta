@@ -1,4 +1,4 @@
-import "./media/middleScroll.css";
+import "./middleScroll.css";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";

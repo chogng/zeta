@@ -23,11 +23,11 @@ export function createExtensionHostLanguageProviderBatch(registration: Extension
 	const languageIds = registration.languageIds;
 	return Object.freeze({
 		completions: Object.freeze(operations.has("completion") ? [completionProvider(providerId, languageIds, invoke)] : []),
-		hovers: Object.freeze(operations.has("hover") ? [hoverProvider(providerId, languageIds, invoke)] : []),
-		formatting: Object.freeze(operations.has("formatting") ? [formattingProvider(providerId, languageIds, invoke)] : []),
-		inlayHints: Object.freeze(operations.has("inlayHints") ? [inlayHintsProvider(providerId, languageIds, invoke)] : []),
-		linkedEditing: Object.freeze(operations.has("linkedEditing") ? [linkedEditingProvider(providerId, languageIds, invoke)] : []),
-		parameterHints: Object.freeze(operations.has("parameterHints") ? [parameterHintsProvider(providerId, languageIds, invoke)] : []),
+		hovers: Object.freeze(operations.has("hover") ? [Object.freeze({ selector: languageIds, provider: hoverProvider(invoke) })] : []),
+		formatting: Object.freeze(operations.has("formatting") ? [Object.freeze({ selector: languageIds, provider: formattingProvider(invoke) })] : []),
+		inlayHints: Object.freeze(operations.has("inlayHints") ? [Object.freeze({ selector: languageIds, provider: inlayHintsProvider(invoke) })] : []),
+		linkedEditing: Object.freeze(operations.has("linkedEditing") ? [Object.freeze({ selector: languageIds, provider: linkedEditingProvider(invoke) })] : []),
+		parameterHints: Object.freeze(operations.has("parameterHints") ? [Object.freeze({ selector: languageIds, provider: parameterHintsProvider(invoke) })] : []),
 	});
 }
 
@@ -48,45 +48,35 @@ function completionProvider(id: string, languageIds: readonly string[], invoke: 
 	});
 }
 
-function hoverProvider(providerId: string, languageIds: readonly string[], invoke: ExtensionHostProviderInvoker): LanguageHoverProvider {
+function hoverProvider(invoke: ExtensionHostProviderInvoker): LanguageHoverProvider {
 	return Object.freeze({
-		providerId,
-		languageIds,
 		provideHover: async (request: LanguageHoverRequest, signal: AbortSignal): Promise<LanguageHover | undefined> => normalizeHoverResult(await invoke("hover", featurePayload(request, { position: positionValue(request.position) }), signal), request.snapshot),
 	});
 }
 
-function formattingProvider(providerId: string, languageIds: readonly string[], invoke: ExtensionHostProviderInvoker): LanguageFormattingProvider {
+function formattingProvider(invoke: ExtensionHostProviderInvoker): LanguageFormattingProvider {
 	const call = async (kind: "document" | "range" | "onType", request: LanguageFormattingRequest, signal: AbortSignal): Promise<readonly TextEdit[]> => normalizeFormattingResult(await invoke("formatting", formattingPayload(kind, request), signal), request.snapshot);
 	return Object.freeze({
-		providerId,
-		languageIds,
 		provideDocumentFormattingEdits: (request: LanguageFormattingRequest, signal: AbortSignal) => call("document", request, signal),
 		provideRangeFormattingEdits: (request: LanguageFormattingRequest, signal: AbortSignal) => call("range", request, signal),
 		provideOnTypeFormattingEdits: (request: LanguageFormattingRequest, signal: AbortSignal) => call("onType", request, signal),
 	});
 }
 
-function inlayHintsProvider(providerId: string, languageIds: readonly string[], invoke: ExtensionHostProviderInvoker): LanguageInlayHintsProvider {
+function inlayHintsProvider(invoke: ExtensionHostProviderInvoker): LanguageInlayHintsProvider {
 	return Object.freeze({
-		providerId,
-		languageIds,
 		provideInlayHints: async (request: LanguageInlayHintsRequest, signal: AbortSignal): Promise<readonly LanguageInlayHint[]> => normalizeInlayHintsResult(await invoke("inlayHints", featurePayload(request, { range: rangeValue(request.range) }), signal), request.snapshot),
 	});
 }
 
-function linkedEditingProvider(providerId: string, languageIds: readonly string[], invoke: ExtensionHostProviderInvoker): LanguageLinkedEditingProvider {
+function linkedEditingProvider(invoke: ExtensionHostProviderInvoker): LanguageLinkedEditingProvider {
 	return Object.freeze({
-		providerId,
-		languageIds,
 		provideLinkedEditingRanges: async (request: LanguageLinkedEditingRequest, signal: AbortSignal): Promise<LanguageLinkedEditingRanges | undefined> => normalizeLinkedEditingResult(await invoke("linkedEditing", featurePayload(request, { position: positionValue(request.position) }), signal), request.snapshot),
 	});
 }
 
-function parameterHintsProvider(providerId: string, languageIds: readonly string[], invoke: ExtensionHostProviderInvoker): LanguageParameterHintsProvider {
+function parameterHintsProvider(invoke: ExtensionHostProviderInvoker): LanguageParameterHintsProvider {
 	return Object.freeze({
-		providerId,
-		languageIds,
 		provideParameterHints: async (request: LanguageParameterHintsRequest, signal: AbortSignal): Promise<LanguageParameterHints | undefined> => normalizeParameterHintsResult(await invoke("parameterHints", featurePayload(request, { position: positionValue(request.position), context: parameterHintsContextValue(request) }), signal)),
 	});
 }

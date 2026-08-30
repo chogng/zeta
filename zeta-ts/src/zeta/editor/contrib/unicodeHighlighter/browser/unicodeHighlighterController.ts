@@ -1,4 +1,4 @@
-import "./media/unicodeHighlighter.css";
+import "./unicodeHighlighter.css";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 

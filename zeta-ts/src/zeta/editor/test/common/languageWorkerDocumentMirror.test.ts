@@ -3,6 +3,8 @@ import test from "node:test";
 import { LanguageWorkerDocumentMirror } from '../../common/services/textModelSync/textModelSync.impl.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
+import type { TextModelChange } from '../../common/core/textChange.js';
+import type { IIdentifiedSingleEditOperation } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
 import { EndOfLineSequence } from '../../common/model.js';
 
@@ -10,7 +12,7 @@ test("Worker document mirror applies model transactions through its Piece Tree",
 	using model = new TextModel("abc\ndef");
 	const mirror = new LanguageWorkerDocumentMirror(model.createVersionedSnapshot());
 	const captured = mirror.createSnapshot();
-	const change = model.applyEdits([
+	const change = pushEdits(model, [
 		{
 			range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)),
 			text: "XYZ",
@@ -35,6 +37,19 @@ test("Worker document mirror applies model transactions through its Piece Tree",
 	mirror.synchronize(undo.version - 1, undo.version, undo.changes);
 	assert.equal(mirror.createSnapshot().getText(), "abc\ndef");
 });
+
+function pushEdits(model: TextModel, edits: IIdentifiedSingleEditOperation[]): TextModelChange | undefined {
+	let change: TextModelChange | undefined;
+	const listener = model.onDidChangeContent(event => {
+		change = event;
+	});
+	try {
+		model.pushEditOperations(null, edits, () => null);
+	} finally {
+		listener.dispose();
+	}
+	return change;
+}
 
 test("Worker document mirror rejects invalid synchronization atomically", () => {
 	using model = new TextModel("value");

@@ -10,8 +10,8 @@ import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxSe
 import { type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { registerBuiltinLanguageDescriptions } from "../../common/languages/languageBuiltinDescriptions.js";
-import { IEditorLanguageFeaturesService } from '../../common/services/languageFeatures.js';
-import { EditorLanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
+import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageService, type IZetaLanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
 import { IComposableLanguageConfigurationService, ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
@@ -27,7 +27,7 @@ import { NamedEditorThemeService } from "./namedEditorThemeService.js";
 export interface StandaloneServiceOverrides {
 	readonly languageService?: IZetaLanguageService;
 	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
-	readonly languageFeaturesService?: IEditorLanguageFeaturesService;
+	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
 	/** Explicit Worker authority that replaces the local completion provider registry. */
@@ -39,7 +39,7 @@ export class StandaloneServiceCollection extends Disposable {
 	readonly modelService: ModelService;
 	readonly languageService: IZetaLanguageService;
 	readonly languageConfigurationService: IComposableLanguageConfigurationService;
-	readonly languageFeaturesService: IEditorLanguageFeaturesService;
+	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly themeService: INamedEditorThemeService;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 	readonly editorWorkerFactory: VersionedEditorWorkerFactory;
@@ -57,8 +57,8 @@ export class StandaloneServiceCollection extends Disposable {
 		else instantiationService.registerSingleton(ILanguageService, () => new LanguageService());
 		if (overrides.languageConfigurationService) instantiationService.registerInstance(IComposableLanguageConfigurationService, overrides.languageConfigurationService);
 		else instantiationService.registerSingleton(IComposableLanguageConfigurationService, () => new ComposableLanguageConfigurationService());
-		if (overrides.languageFeaturesService) instantiationService.registerInstance(IEditorLanguageFeaturesService, overrides.languageFeaturesService);
-		else instantiationService.registerSingleton(IEditorLanguageFeaturesService, accessor => new EditorLanguageFeaturesService(accessor.get(IComposableLanguageConfigurationService)));
+		if (overrides.languageFeaturesService) instantiationService.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
+		else instantiationService.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(IComposableLanguageConfigurationService)));
 		instantiationService.registerSingleton(IThemeService, () => new NamedEditorThemeService(window));
 		this.themeService = instantiationService.get(IThemeService) as INamedEditorThemeService;
 		instantiationService.registerSingleton(IModelService, accessor => new ModelService(
@@ -68,7 +68,7 @@ export class StandaloneServiceCollection extends Disposable {
 		this.modelService = instantiationService.get(IModelService) as ModelService;
 		this.languageService = instantiationService.get(ILanguageService);
 		this.languageConfigurationService = instantiationService.get(IComposableLanguageConfigurationService);
-		this.languageFeaturesService = instantiationService.get(IEditorLanguageFeaturesService);
+		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService.configurations));
 		const browserServices = createEditorBrowserServices();

@@ -1,4 +1,4 @@
-import "./media/peekView.css";
+import "./media/peekViewWidget.css";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { type View } from "../../../browser/view.js";

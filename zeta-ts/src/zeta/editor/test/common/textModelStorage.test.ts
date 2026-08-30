@@ -8,7 +8,7 @@ test("TextModel snapshots remain immutable across edits and disposal", () => {
 	const model = new TextModel("alpha\nbeta");
 	const snapshot = model.createVersionedSnapshot();
 
-	model.applyEdits([{
+	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(5)),
 		text: "ALPHA",
 	}]);
@@ -46,7 +46,7 @@ test("TextModel bounds history by transaction count", () => {
 
 	for (const character of "abc") {
 		const end = model.positionAt(model.getText().length);
-		model.applyEdits([{
+		model.applyOperations([{
 			range: Range.fromPositions(end),
 			text: character,
 		}]);
@@ -76,7 +76,7 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 			textUnits: 3,
 		},
 	});
-	replacement.applyEdits([{
+	replacement.applyOperations([{
 		range: Range.fromPositions(
 			replacement.positionAt(0),
 			replacement.positionAt(6),
@@ -97,7 +97,7 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 			textUnits: 3,
 		},
 	});
-	insertion.applyEdits([{
+	insertion.applyOperations([{
 		range: Range.fromPositions(insertion.positionAt(0)),
 		text: "abcdef",
 	}]);
@@ -138,12 +138,12 @@ test("TextModel compaction remains transparent to snapshots and history", () => 
 	const insertedText = "0123456789".repeat(10_000);
 	const retainedText = insertedText.slice(-10_000);
 
-	model.applyEdits([{
+	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0)),
 		text: insertedText,
 	}]);
 	const snapshot = model.createVersionedSnapshot();
-	model.applyEdits([{
+	model.applyOperations([{
 		range: Range.fromPositions(
 			model.positionAt(0),
 			model.positionAt(insertedText.length - retainedText.length),
@@ -185,12 +185,12 @@ test("TextModel defers reclaiming piece-tree storage through product-owned maint
 	});
 	const insertedText = "0123456789".repeat(10_000);
 	const retainedText = insertedText.slice(-10_000);
-	model.applyEdits([{
+	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0)),
 		text: insertedText,
 	}]);
 	const snapshot = model.createVersionedSnapshot();
-	model.applyEdits([{
+	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(insertedText.length - retainedText.length)),
 		text: "",
 	}]);
@@ -221,8 +221,8 @@ test("TextModel cancels queued maintenance when disposed", () => {
 		},
 	});
 	const insertedText = "0123456789".repeat(10_000);
-	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0)), text: insertedText }]);
-	model.applyEdits([{
+	model.applyOperations([{ range: Range.fromPositions(model.positionAt(0)), text: insertedText }]);
+	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(90_000)),
 		text: "",
 	}]);

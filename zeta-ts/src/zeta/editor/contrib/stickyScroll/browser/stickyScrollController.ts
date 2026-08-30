@@ -1,4 +1,4 @@
-import "./media/stickyScroll.css";
+import "./stickyScroll.css";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";

@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import { EditorCommandHistoryMode } from '../../common/commands/editorEditCommand.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
 import { Selection } from "../../common/core/selection.js";
 import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
-import { TextEditHistoryGroup } from "../../common/core/editOperation.js";
+import type { TextModelChange } from '../../common/core/textChange.js';
+import type { IIdentifiedSingleEditOperation } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
@@ -37,16 +39,30 @@ const selections = (
 	primaryIndex,
 );
 
+function pushEdits(model: TextModel, edits: IIdentifiedSingleEditOperation[], group?: UndoRedoGroup): TextModelChange | undefined {
+	let change: TextModelChange | undefined;
+	const listener = model.onDidChangeContent(event => {
+		change = event;
+	});
+	try {
+		model.pushEditOperations(null, edits, () => null, group);
+	} finally {
+		listener.dispose();
+	}
+	return change;
+}
+
 test("TextModel coalesces consecutive adjacent insertions", () => {
 	using model = new TextModel("");
-	const historyGroup = TextEditHistoryGroup.create();
+	const historyGroup = new UndoRedoGroup();
 	const transactionIds: number[] = [];
 
 	for (const character of "abc") {
 		const end = model.positionAt(model.getText().length);
-		const change = model.applyEdits(
+		const change = pushEdits(
+			model,
 			[{ range: Range.fromPositions(end), text: character }],
-			{ historyGroup },
+			historyGroup,
 		);
 		transactionIds.push(change?.transactionId ?? -1);
 	}
@@ -73,14 +89,16 @@ test("TextModel coalesces consecutive adjacent insertions", () => {
 
 test("TextModel starts a new step for non-adjacent group edits", () => {
 	using model = new TextModel("");
-	const historyGroup = TextEditHistoryGroup.create();
-	const first = model.applyEdits(
+	const historyGroup = new UndoRedoGroup();
+	const first = pushEdits(
+		model,
 		[{ range: range(0, 0), text: "A" }],
-		{ historyGroup },
+		historyGroup,
 	);
-	const second = model.applyEdits(
+	const second = pushEdits(
+		model,
 		[{ range: range(0, 0), text: "B" }],
-		{ historyGroup },
+		historyGroup,
 	);
 
 	model.undo();

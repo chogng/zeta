@@ -2,7 +2,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface LanguageLink {
@@ -15,13 +15,13 @@ export interface LanguageLinkRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
 }
 
-export interface LanguageLinkProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageLinkProvider {
 	provideLinks(request: LanguageLinkRequest, signal: AbortSignal): readonly LanguageLink[] | Promise<readonly LanguageLink[]>;
 }
 
 /** Provides link candidates; opening a target remains a host-owned operation. */
 export class LinkService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageLinkProvider>, private readonly resource?: URI) {
+	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageLinkProvider>, private readonly resource?: URI) {
 		super();
 	}
 
@@ -29,7 +29,7 @@ export class LinkService extends Disposable {
 		const request: LanguageLinkRequest = Object.freeze({ ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}) });
 		const links: LanguageLink[] = [];
 		const seen = new Set<string>();
-		for (const provider of this.providers.getProviders(languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			const result = await provider.provideLinks(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);

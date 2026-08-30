@@ -68,28 +68,28 @@ export class AppServerLanguageProviders extends Disposable {
 	private install(): DisposableStore {
 		const adapter = new AppServerLanguageProvider(this.api, this.workspace);
 		const registrations = new DisposableStore();
-		registrations.add(this.languageFeatures.hoverProvider.register(adapter));
+		registrations.add(this.languageFeatures.hoverProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		registrations.add(this.languageFeatures.completionProvider.register(adapter));
-		registrations.add(this.languageFeatures.declarationProvider.register(adapter));
-		registrations.add(this.languageFeatures.definitionProvider.register(adapter));
-		registrations.add(this.languageFeatures.implementationProvider.register(adapter));
-		registrations.add(this.languageFeatures.typeDefinitionProvider.register(adapter));
-		registrations.add(this.languageFeatures.referenceProvider.register(adapter));
-		registrations.add(this.languageFeatures.callHierarchyProvider.register(adapter));
-		registrations.add(this.languageFeatures.typeHierarchyProvider.register(adapter));
-		registrations.add(this.languageFeatures.workspaceSymbolProvider.register(new AppServerWorkspaceSymbolProvider(this.api, this.workspace)));
-		registrations.add(this.languageFeatures.renameProvider.register(adapter));
-		registrations.add(this.languageFeatures.codeActionProvider.register(adapter));
-		registrations.add(this.languageFeatures.formattingProvider.register(adapter));
-		registrations.add(this.languageFeatures.parameterHintsProvider.register(adapter));
-		registrations.add(this.languageFeatures.inlayHintsProvider.register(adapter));
-		registrations.add(this.languageFeatures.linkedEditingProvider.register(adapter));
-		registrations.add(this.languageFeatures.semanticTokensProvider.register(adapter));
-		registrations.add(this.languageFeatures.documentSymbolProvider.register(adapter));
-		registrations.add(this.languageFeatures.codeLensProvider.register(adapter));
-		registrations.add(this.languageFeatures.linkProvider.register(adapter));
-		registrations.add(this.languageFeatures.colorProvider.register(adapter));
-		registrations.add(this.languageFeatures.foldingRangeProvider.register(adapter));
+		registrations.add(this.languageFeatures.declarationProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.definitionProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.implementationProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.typeDefinitionProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.referenceProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.callHierarchyProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.typeHierarchyProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace)));
+		registrations.add(this.languageFeatures.renameProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.codeActionProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.formattingProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.parameterHintsProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.inlayHintsProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.linkedEditingProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.semanticTokensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.documentSymbolProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.codeLensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.linkProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.colorProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.foldingRangeProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
 		return registrations;
 	}
 
@@ -126,7 +126,6 @@ export interface AppServerLanguageProvidersOptions {
 
 class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageHoverProvider, LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageTypeDefinitionProvider, LanguageReferenceProvider, LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider, LanguageRenameProvider, LanguageCodeActionProvider, LanguageFormattingProvider, LanguageParameterHintsProvider, LanguageInlayHintsProvider, LanguageLinkedEditingProvider, LanguageSemanticTokensProvider, LanguageDocumentSymbolProvider, LanguageCodeLensProvider, LanguageLinkProvider, LanguageColorProvider, LanguageFoldingRangeProvider {
 	readonly languageIds = APP_SERVER_LANGUAGE_IDS;
-	readonly providerId = "zeta.appServer.language";
 	readonly id = "zeta.appServer.completions";
 	readonly triggerCharacters = Object.freeze([".", ":", "<", "\"", "'", "/", "@", "#"]);
 
@@ -433,9 +432,6 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 }
 
 class AppServerWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvider {
-	readonly languageIds = Object.freeze(["*"]);
-	readonly providerId = "zeta.appServer.workspaceSymbols";
-
 	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService) {}
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly LanguageWorkspaceSymbol[]> {

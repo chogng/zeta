@@ -320,24 +320,24 @@ function currentValue(entry: IKeyboardMappingEntry, event: KeybindingEvent): str
 
 function isCombiningCharacter(value: string): boolean {
 	const code = value.charCodeAt(0);
-	return value.length === 1 && code >= CharCode.CombiningGraveAccent && code <= CharCode.CombiningDiacriticalMarksEnd;
+	return value.length === 1 && code >= CharCode.U_Combining_Grave_Accent && code <= CharCode.U_Combining_Latin_Small_Letter_X;
 }
 
 function spacingAccent(value: string): string {
 	switch (value.charCodeAt(0)) {
-		case CharCode.CombiningGraveAccent: return '`';
-		case CharCode.CombiningAcuteAccent: return '´';
-		case CharCode.CombiningCircumflexAccent: return '^';
-		case CharCode.CombiningTilde: return '~';
-		case CharCode.CombiningMacron: return '¯';
-		case CharCode.CombiningBreve: return '˘';
-		case CharCode.CombiningDotAbove: return '˙';
-		case CharCode.CombiningDiaeresis: return '¨';
-		case CharCode.CombiningRingAbove: return '˚';
-		case CharCode.CombiningDoubleAcuteAccent: return '˝';
-		case CharCode.CombiningCaron: return 'ˇ';
-		case CharCode.CombiningCedilla: return '¸';
-		case CharCode.CombiningOgonek: return '˛';
+		case CharCode.U_Combining_Grave_Accent: return '`';
+		case CharCode.U_Combining_Acute_Accent: return '´';
+		case CharCode.U_Combining_Circumflex_Accent: return '^';
+		case CharCode.U_Combining_Tilde: return '~';
+		case CharCode.U_Combining_Macron: return '¯';
+		case CharCode.U_Combining_Breve: return '˘';
+		case CharCode.U_Combining_Dot_Above: return '˙';
+		case CharCode.U_Combining_Diaeresis: return '¨';
+		case CharCode.U_Combining_Ring_Above: return '˚';
+		case CharCode.U_Combining_Double_Acute_Accent: return '˝';
+		case CharCode.U_Combining_Caron: return 'ˇ';
+		case CharCode.U_Combining_Cedilla: return '¸';
+		case CharCode.U_Combining_Ogonek: return '˛';
 		default: return value;
 	}
 }

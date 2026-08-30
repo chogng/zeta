@@ -13,7 +13,7 @@ export class WorkbenchLanguageFeatures extends Disposable {
 		this._register(registerBuiltinLanguageDescriptions(languageService.languages));
 		this._register(registerBuiltinLanguageConfigurations(languageConfigurationService.configurations));
 		this._register(languageFeaturesService.completionProvider.register(createJsonCompletionProvider()));
-		this._register(languageFeaturesService.hoverProvider.register(createJsonHoverProvider()));
-		this._register(languageFeaturesService.formattingProvider.register(createJsonFormattingProvider()));
+		this._register(languageFeaturesService.hoverProvider.register(['json', 'jsonc'], createJsonHoverProvider()));
+		this._register(languageFeaturesService.formattingProvider.register(['json', 'jsonc'], createJsonFormattingProvider()));
 	}
 }

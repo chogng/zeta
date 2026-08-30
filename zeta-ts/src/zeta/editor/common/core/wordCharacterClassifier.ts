@@ -1,58 +1,97 @@
-import { Lazy } from "../../../base/common/lazy.js";
-import { LRUCache } from "../../../base/common/map.js";
-import { CharacterClassifier } from "./characterClassifier.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { CharCode } from '../../../base/common/charCode.js';
+import { safeIntl } from '../../../base/common/date.js';
+import { Lazy } from '../../../base/common/lazy.js';
+import { LRUCache } from '../../../base/common/map.js';
+import { CharacterClassifier } from './characterClassifier.js';
 
 export const enum WordCharacterClass {
 	Regular = 0,
 	Whitespace = 1,
-	WordSeparator = 2,
+	WordSeparator = 2
 }
 
-/** Character classes and optional locale-aware word segmentation for cursor commands. */
 export class WordCharacterClassifier extends CharacterClassifier<WordCharacterClass> {
-	readonly intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[];
-	private readonly _segmenter: Lazy<Intl.Segmenter> | null;
+
+	public readonly intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[];
+	private readonly _segmenter: Lazy<Intl.Segmenter> | null = null;
 	private _cachedLine: string | null = null;
 	private _cachedSegments: IntlWordSegmentData[] = [];
 
 	constructor(wordSeparators: string, intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[]) {
 		super(WordCharacterClass.Regular);
 		this.intlSegmenterLocales = intlSegmenterLocales;
-		this._segmenter = this.intlSegmenterLocales.length === 0
-			? null
-			: new Lazy(() => new Intl.Segmenter(this.intlSegmenterLocales, { granularity: "word" }));
-		for (let index = 0; index < wordSeparators.length; index += 1) this.set(wordSeparators.charCodeAt(index), WordCharacterClass.WordSeparator);
-		this.set(32, WordCharacterClass.Whitespace);
-		this.set(9, WordCharacterClass.Whitespace);
+		if (this.intlSegmenterLocales.length > 0) {
+			this._segmenter = safeIntl.Segmenter(this.intlSegmenterLocales, { granularity: 'word' });
+		} else {
+			this._segmenter = null;
+		}
+
+		for (let i = 0, len = wordSeparators.length; i < len; i++) {
+			this.set(wordSeparators.charCodeAt(i), WordCharacterClass.WordSeparator);
+		}
+
+		this.set(CharCode.Space, WordCharacterClass.Whitespace);
+		this.set(CharCode.Tab, WordCharacterClass.Whitespace);
 	}
 
-	findPrevIntlWordBeforeOrAtOffset(line: string, offset: number): IntlWordSegmentData | null {
+	public findPrevIntlWordBeforeOrAtOffset(line: string, offset: number): IntlWordSegmentData | null {
 		let candidate: IntlWordSegmentData | null = null;
 		for (const segment of this._getIntlSegmenterWordsOnLine(line)) {
-			if (segment.index > offset) break;
+			if (segment.index > offset) {
+				break;
+			}
 			candidate = segment;
 		}
 		return candidate;
 	}
 
-	findNextIntlWordAtOrAfterOffset(line: string, offset: number): IntlWordSegmentData | null {
-		return this._getIntlSegmenterWordsOnLine(line).find(segment => segment.index >= offset) ?? null;
+	public findNextIntlWordAtOrAfterOffset(lineContent: string, offset: number): IntlWordSegmentData | null {
+		for (const segment of this._getIntlSegmenterWordsOnLine(lineContent)) {
+			if (segment.index < offset) {
+				continue;
+			}
+			return segment;
+		}
+		return null;
 	}
 
 	private _getIntlSegmenterWordsOnLine(line: string): IntlWordSegmentData[] {
-		if (!this._segmenter) return [];
-		if (this._cachedLine === line) return this._cachedSegments;
+		if (!this._segmenter) {
+			return [];
+		}
+
+		// Check if the line has changed from the previous call
+		if (this._cachedLine === line) {
+			return this._cachedSegments;
+		}
+
+		// Update the cache with the new line
 		this._cachedLine = line;
 		this._cachedSegments = this._filterWordSegments(this._segmenter.value.segment(line));
+
 		return this._cachedSegments;
 	}
 
 	private _filterWordSegments(segments: Intl.Segments): IntlWordSegmentData[] {
-		return [...segments].filter((segment): segment is IntlWordSegmentData => this._isWordLike(segment));
+		const result: IntlWordSegmentData[] = [];
+		for (const segment of segments) {
+			if (this._isWordLike(segment)) {
+				result.push(segment);
+			}
+		}
+		return result;
 	}
 
 	private _isWordLike(segment: Intl.SegmentData): segment is IntlWordSegmentData {
-		return segment.isWordLike === true;
+		if (segment.isWordLike) {
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -60,13 +99,14 @@ export interface IntlWordSegmentData extends Intl.SegmentData {
 	isWordLike: true;
 }
 
-const classifierCache = new LRUCache<string, WordCharacterClassifier>(10);
+const wordClassifierCache = new LRUCache<string, WordCharacterClassifier>(10);
 
 export function getMapForWordSeparators(wordSeparators: string, intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[]): WordCharacterClassifier {
-	const key = `${wordSeparators}/${intlSegmenterLocales.join(",")}`;
-	const cached = classifierCache.get(key);
-	if (cached) return cached;
-	const classifier = new WordCharacterClassifier(wordSeparators, intlSegmenterLocales);
-	classifierCache.set(key, classifier);
-	return classifier;
+	const key = `${wordSeparators}/${intlSegmenterLocales.join(',')}`;
+	let result = wordClassifierCache.get(key)!;
+	if (!result) {
+		result = new WordCharacterClassifier(wordSeparators, intlSegmenterLocales);
+		wordClassifierCache.set(key, result);
+	}
+	return result;
 }

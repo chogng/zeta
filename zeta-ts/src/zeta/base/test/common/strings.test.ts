@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { commonPrefixLength, commonSuffixLength, containsRTL, escapeRegExpCharacters, getCharContainingOffset, GraphemeIterator, isBasicASCII, isHighSurrogate, isLowSurrogate, splitLines } from '../../common/strings.js';
+import { commonPrefixLength, commonSuffixLength, containsRTL, createRegExp, escapeRegExpCharacters, getCharContainingOffset, getLeadingWhitespace, GraphemeIterator, isBasicASCII, isHighSurrogate, isLowSurrogate, splitLines } from '../../common/strings.js';
 
 test('escapeRegExpCharacters turns arbitrary text into a literal pattern', () => {
 	const value = 'a.*(b)+[c]?\\d^$|{}';
 	assert.equal(new RegExp(`^${escapeRegExpCharacters(value)}$`, 'u').test(value), true);
+});
+
+test('createRegExp and getLeadingWhitespace preserve editor search boundaries', () => {
+	const expression = createRegExp('word', false, { wholeWord: true, global: true });
+	assert.deepEqual([...('word sword word').matchAll(expression)].map(match => match.index), [0, 11]);
+	assert.equal(getLeadingWhitespace('x\t  value', 1), '\t  ');
 });
 
 test('ASCII and line helpers share editor text boundary semantics', () => {

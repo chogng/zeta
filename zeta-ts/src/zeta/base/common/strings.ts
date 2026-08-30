@@ -14,6 +14,33 @@ export function escapeRegExpCharacters(value: string): string {
 	return value.replace(/[\\^$.*+?()[\]{}|]/gu, '\\$&');
 }
 
+export function convertSimple2RegExpPattern(pattern: string): string {
+	return pattern.replace(/[\-\\\{\}\+\?\|\^\$\.\,\[\]\(\)\#\s]/g, '\\$&').replace(/[\*]/g, '.*');
+}
+
+export interface RegExpOptions {
+	matchCase?: boolean;
+	wholeWord?: boolean;
+	multiline?: boolean;
+	global?: boolean;
+	unicode?: boolean;
+}
+
+export function createRegExp(searchString: string, isRegex: boolean, options: RegExpOptions = {}): RegExp {
+	if (!searchString) throw new Error('Cannot create regex from empty string');
+	if (!isRegex) searchString = escapeRegExpCharacters(searchString);
+	if (options.wholeWord) {
+		if (!/\B/.test(searchString.charAt(0))) searchString = '\\b' + searchString;
+		if (!/\B/.test(searchString.charAt(searchString.length - 1))) searchString += '\\b';
+	}
+	let modifiers = '';
+	if (options.global) modifiers += 'g';
+	if (!options.matchCase) modifiers += 'i';
+	if (options.multiline) modifiers += 'm';
+	if (options.unicode) modifiers += 'u';
+	return new RegExp(searchString, modifiers);
+}
+
 /** Returns the number of equal UTF-16 code units at the beginning of two strings. */
 export function commonPrefixLength(left: string, right: string): number {
 	const limit = Math.min(left.length, right.length);
@@ -120,6 +147,15 @@ export function firstNonWhitespaceIndex(value: string): number {
 		if (characterCode !== 32 && characterCode !== 9) return index;
 	}
 	return -1;
+}
+
+/** Returns the leading spaces and tabs in the selected string interval. */
+export function getLeadingWhitespace(value: string, start = 0, end = value.length): string {
+	for (let index = start; index < end; index++) {
+		const characterCode = value.charCodeAt(index);
+		if (characterCode !== CharCode.Space && characterCode !== CharCode.Tab) return value.substring(start, index);
+	}
+	return value.substring(start, end);
 }
 
 export function lastNonWhitespaceIndex(value: string, startIndex = value.length - 1): number {

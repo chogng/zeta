@@ -1,4 +1,4 @@
-import './media/codelens.css';
+import './codelensWidget.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';

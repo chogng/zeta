@@ -1,6 +1,7 @@
 import { runWithBufferedEvents } from '../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata, type LanguageFeatureProviderRegistration } from '../ownedLanguageFeatureProviderRegistry.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver } from '../languageFeatureRegistry.js';
+import { type URI } from '../../../base/common/uri.js';
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegistration } from '../languages/completion/languageCompletionProviders.js';
 import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
 import type { DocumentHighlightProvider, MultiDocumentHighlightProvider } from '../languages.js';
@@ -25,37 +26,39 @@ import type { LanguageParameterHintsProvider } from '../../contrib/parameterHint
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
 import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';
 import type { LanguageSemanticTokensProvider } from '../../contrib/semanticTokens/common/semanticTokens.js';
-import type { IEditorLanguageFeaturesService, LanguageProviderBatch, LanguageProviderBatchRegistration } from './languageFeatures.js';
+import type { ILanguageFeaturesService, LanguageProviderBatch, LanguageProviderBatchEntry, LanguageProviderBatchRegistration } from './languageFeatures.js';
 
 /** Owns the Editor provider registries without knowing their Workbench implementations. */
-export class EditorLanguageFeaturesService extends Disposable implements IEditorLanguageFeaturesService {
+export class LanguageFeaturesService extends Disposable implements ILanguageFeaturesService {
+	declare readonly _serviceBrand: undefined;
 	public readonly syntaxProvider: SyntaxProviderRegistry;
 	public readonly completionProvider: LanguageCompletionProviderRegistry;
-	public readonly codeActionProvider: OwnedLanguageFeatureProviderRegistry<LanguageCodeActionProvider>;
-	public readonly codeLensProvider: OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>;
-	public readonly documentSymbolProvider: OwnedLanguageFeatureProviderRegistry<LanguageDocumentSymbolProvider>;
-	public readonly formattingProvider: OwnedLanguageFeatureProviderRegistry<LanguageFormattingProvider>;
-	public readonly hoverProvider: OwnedLanguageFeatureProviderRegistry<LanguageHoverProvider>;
-	public readonly inlayHintsProvider: OwnedLanguageFeatureProviderRegistry<LanguageInlayHintsProvider>;
-	public readonly inlineCompletionsProvider: OwnedLanguageFeatureProviderRegistry<LanguageInlineCompletionsProvider>;
-	public readonly linkedEditingProvider: OwnedLanguageFeatureProviderRegistry<LanguageLinkedEditingProvider>;
-	public readonly linkProvider: OwnedLanguageFeatureProviderRegistry<LanguageLinkProvider>;
-	public readonly parameterHintsProvider: OwnedLanguageFeatureProviderRegistry<LanguageParameterHintsProvider>;
-	public readonly renameProvider: OwnedLanguageFeatureProviderRegistry<LanguageRenameProvider>;
-	public readonly colorProvider: OwnedLanguageFeatureProviderRegistry<LanguageColorProvider>;
-	public readonly definitionProvider: OwnedLanguageFeatureProviderRegistry<LanguageDefinitionProvider>;
-	public readonly declarationProvider: OwnedLanguageFeatureProviderRegistry<LanguageDeclarationProvider>;
-	public readonly implementationProvider: OwnedLanguageFeatureProviderRegistry<LanguageImplementationProvider>;
-	public readonly typeDefinitionProvider: OwnedLanguageFeatureProviderRegistry<LanguageTypeDefinitionProvider>;
-	public readonly referenceProvider: OwnedLanguageFeatureProviderRegistry<LanguageReferenceProvider>;
-	public readonly workspaceSymbolProvider: OwnedLanguageFeatureProviderRegistry<LanguageWorkspaceSymbolProvider>;
-	public readonly callHierarchyProvider: OwnedLanguageFeatureProviderRegistry<LanguageCallHierarchyProvider>;
-	public readonly typeHierarchyProvider: OwnedLanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>;
-	public readonly semanticTokensProvider: OwnedLanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>;
-	public readonly foldingRangeProvider: OwnedLanguageFeatureProviderRegistry<LanguageFoldingRangeProvider>;
-	public readonly selectionRangeProvider: OwnedLanguageFeatureProviderRegistry<LanguageSelectionRangeProvider>;
-	public readonly documentHighlightProvider: OwnedLanguageFeatureProviderRegistry<DocumentHighlightProvider & LanguageFeatureProviderMetadata>;
-	public readonly multiDocumentHighlightProvider: OwnedLanguageFeatureProviderRegistry<MultiDocumentHighlightProvider & LanguageFeatureProviderMetadata>;
+	public readonly codeActionProvider: LanguageFeatureRegistry<LanguageCodeActionProvider>;
+	public readonly codeLensProvider: LanguageFeatureRegistry<LanguageCodeLensProvider>;
+	public readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
+	public readonly formattingProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	public readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
+	public readonly inlayHintsProvider: LanguageFeatureRegistry<LanguageInlayHintsProvider>;
+	public readonly inlineCompletionsProvider: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>;
+	public readonly linkedEditingProvider: LanguageFeatureRegistry<LanguageLinkedEditingProvider>;
+	public readonly linkProvider: LanguageFeatureRegistry<LanguageLinkProvider>;
+	public readonly parameterHintsProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
+	public readonly renameProvider: LanguageFeatureRegistry<LanguageRenameProvider>;
+	public readonly colorProvider: LanguageFeatureRegistry<LanguageColorProvider>;
+	public readonly definitionProvider: LanguageFeatureRegistry<LanguageDefinitionProvider>;
+	public readonly declarationProvider: LanguageFeatureRegistry<LanguageDeclarationProvider>;
+	public readonly implementationProvider: LanguageFeatureRegistry<LanguageImplementationProvider>;
+	public readonly typeDefinitionProvider: LanguageFeatureRegistry<LanguageTypeDefinitionProvider>;
+	public readonly referenceProvider: LanguageFeatureRegistry<LanguageReferenceProvider>;
+	public readonly workspaceSymbolProvider: LanguageFeatureRegistry<LanguageWorkspaceSymbolProvider>;
+	public readonly callHierarchyProvider: LanguageFeatureRegistry<LanguageCallHierarchyProvider>;
+	public readonly typeHierarchyProvider: LanguageFeatureRegistry<LanguageTypeHierarchyProvider>;
+	public readonly semanticTokensProvider: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
+	public readonly foldingRangeProvider: LanguageFeatureRegistry<LanguageFoldingRangeProvider>;
+	public readonly selectionRangeProvider: LanguageFeatureRegistry<LanguageSelectionRangeProvider>;
+	public readonly documentHighlightProvider: LanguageFeatureRegistry<DocumentHighlightProvider>;
+	public readonly multiDocumentHighlightProvider: LanguageFeatureRegistry<MultiDocumentHighlightProvider>;
+	private _notebookTypeResolver: NotebookInfoResolver | undefined;
 
 	constructor(languageConfigurations: LanguageConfigurationSource) {
 		super();
@@ -63,40 +66,48 @@ export class EditorLanguageFeaturesService extends Disposable implements IEditor
 		this._register(this.syntaxProvider.register(createLanguageLexicalSyntaxProvider({ languageConfigurations })));
 		this.completionProvider = this._register(new LanguageCompletionProviderRegistry());
 		this._register(this.completionProvider.register(createLanguageWordCompletionProvider()));
-		this.codeActionProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.codeLensProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.documentSymbolProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.formattingProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.hoverProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.inlayHintsProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.inlineCompletionsProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.linkedEditingProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.linkProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.parameterHintsProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.renameProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.colorProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.definitionProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.declarationProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.implementationProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.typeDefinitionProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.referenceProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.workspaceSymbolProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.callHierarchyProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.typeHierarchyProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.semanticTokensProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.foldingRangeProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.selectionRangeProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.documentHighlightProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
-		this.multiDocumentHighlightProvider = this._register(new OwnedLanguageFeatureProviderRegistry());
+		this.codeActionProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.codeLensProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.documentSymbolProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.formattingProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.hoverProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.inlayHintsProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.inlineCompletionsProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.linkedEditingProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.linkProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.parameterHintsProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.renameProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.colorProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.definitionProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.declarationProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.implementationProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.typeDefinitionProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.referenceProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.workspaceSymbolProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.callHierarchyProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.typeHierarchyProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.semanticTokensProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.foldingRangeProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.selectionRangeProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.documentHighlightProvider = new LanguageFeatureRegistry(this._score.bind(this));
+		this.multiDocumentHighlightProvider = new LanguageFeatureRegistry(this._score.bind(this));
+	}
+
+	public setNotebookTypeResolver(resolver: NotebookInfoResolver | undefined): void {
+		this._notebookTypeResolver = resolver;
+	}
+
+	private _score(uri: URI): NotebookInfo | undefined {
+		return this._notebookTypeResolver?.(uri);
 	}
 
 	public registerProviderBatch(providers: LanguageProviderBatch): LanguageProviderBatchRegistration {
 		const completions = this.completionProvider.registerGroup([]);
-		const hovers = this.hoverProvider.registerGroup([]);
-		const formatting = this.formattingProvider.registerGroup([]);
-		const inlayHints = this.inlayHintsProvider.registerGroup([]);
-		const linkedEditing = this.linkedEditingProvider.registerGroup([]);
-		const parameterHints = this.parameterHintsProvider.registerGroup([]);
+		const hovers = new LanguageFeatureBatchRegistration(this.hoverProvider);
+		const formatting = new LanguageFeatureBatchRegistration(this.formattingProvider);
+		const inlayHints = new LanguageFeatureBatchRegistration(this.inlayHintsProvider);
+		const linkedEditing = new LanguageFeatureBatchRegistration(this.linkedEditingProvider);
+		const parameterHints = new LanguageFeatureBatchRegistration(this.parameterHintsProvider);
 		const registrations = { completions, hovers, formatting, inlayHints, linkedEditing, parameterHints };
 		let current = emptyProviderBatch();
 		let disposed = false;
@@ -137,11 +148,48 @@ export class EditorLanguageFeaturesService extends Disposable implements IEditor
 
 interface LanguageProviderRegistrations {
 	readonly completions: LanguageCompletionProviderRegistration;
-	readonly hovers: LanguageFeatureProviderRegistration<LanguageHoverProvider>;
-	readonly formatting: LanguageFeatureProviderRegistration<LanguageFormattingProvider>;
-	readonly inlayHints: LanguageFeatureProviderRegistration<LanguageInlayHintsProvider>;
-	readonly linkedEditing: LanguageFeatureProviderRegistration<LanguageLinkedEditingProvider>;
-	readonly parameterHints: LanguageFeatureProviderRegistration<LanguageParameterHintsProvider>;
+	readonly hovers: LanguageFeatureBatchRegistration<LanguageHoverProvider>;
+	readonly formatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
+	readonly inlayHints: LanguageFeatureBatchRegistration<LanguageInlayHintsProvider>;
+	readonly linkedEditing: LanguageFeatureBatchRegistration<LanguageLinkedEditingProvider>;
+	readonly parameterHints: LanguageFeatureBatchRegistration<LanguageParameterHintsProvider>;
+}
+
+class LanguageFeatureBatchRegistration<TProvider> implements IDisposable {
+	private registrations: IDisposable[] = [];
+
+	constructor(private readonly registry: LanguageFeatureRegistry<TProvider>) { }
+
+	replace(entries: readonly LanguageProviderBatchEntry<TProvider>[]): void {
+		const next: IDisposable[] = [];
+		try {
+			for (const entry of entries) {
+				next.push(this.registry.register(entry.selector, entry.provider));
+			}
+		} catch (error) {
+			disposeRegistrations(next);
+			throw error;
+		}
+		const previous = this.registrations;
+		this.registrations = next;
+		disposeRegistrations(previous);
+	}
+
+	dispose(): void {
+		const registrations = this.registrations;
+		this.registrations = [];
+		disposeRegistrations(registrations);
+	}
+
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
+}
+
+function disposeRegistrations(registrations: readonly IDisposable[]): void {
+	for (let index = registrations.length - 1; index >= 0; index -= 1) {
+		registrations[index]!.dispose();
+	}
 }
 
 function replaceProviderRegistrations(registrations: LanguageProviderRegistrations, providers: Required<LanguageProviderBatch>): void {
@@ -164,11 +212,11 @@ function normalizeProviderBatch(value: LanguageProviderBatch): Required<Language
 	}
 	return Object.freeze({
 		completions: frozenProviderArray(value.completions, 'completion'),
-		hovers: frozenProviderArray(value.hovers, 'hover'),
-		formatting: frozenProviderArray(value.formatting, 'formatting'),
-		inlayHints: frozenProviderArray(value.inlayHints, 'Inlay Hints'),
-		linkedEditing: frozenProviderArray(value.linkedEditing, 'Linked Editing'),
-		parameterHints: frozenProviderArray(value.parameterHints, 'Parameter Hints'),
+		hovers: frozenLanguageFeatureEntries(value.hovers, 'hover'),
+		formatting: frozenLanguageFeatureEntries(value.formatting, 'formatting'),
+		inlayHints: frozenLanguageFeatureEntries(value.inlayHints, 'Inlay Hints'),
+		linkedEditing: frozenLanguageFeatureEntries(value.linkedEditing, 'Linked Editing'),
+		parameterHints: frozenLanguageFeatureEntries(value.parameterHints, 'Parameter Hints'),
 	});
 }
 
@@ -185,4 +233,14 @@ function frozenProviderArray<T>(value: readonly T[] | undefined, owner: string):
 		throw new TypeError(`Language ${owner} providers must be an array`);
 	}
 	return Object.freeze([...value]);
+}
+
+function frozenLanguageFeatureEntries<TProvider>(value: readonly LanguageProviderBatchEntry<TProvider>[] | undefined, owner: string): readonly LanguageProviderBatchEntry<TProvider>[] {
+	const entries = frozenProviderArray(value, owner);
+	return Object.freeze(entries.map(entry => {
+		if (!entry || typeof entry !== 'object' || !('selector' in entry) || !entry.provider || typeof entry.provider !== 'object') {
+			throw new TypeError(`Language ${owner} provider entry must contain a selector and provider`);
+		}
+		return Object.freeze({ selector: entry.selector, provider: entry.provider });
+	}));
 }

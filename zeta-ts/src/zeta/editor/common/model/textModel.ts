@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
+import { onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
 import { DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
@@ -10,9 +11,10 @@ import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { OffsetRange } from "../core/ranges/offsetRange.js";
 import { type IPosition, Position } from "../core/position.js";
 import { type IRange, Range } from "../core/range.js";
-import type { Selection } from '../core/selection.js';
-import { TextModelChangeReason, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/textChange.js";
-import { TextEditHistoryGroup, TextEditHistoryMergeMode, type ISingleEditOperation } from "../core/editOperation.js";
+import { Selection } from '../core/selection.js';
+import { DEFAULT_WORD_REGEXP, getWordAtText, type IWordAtPosition } from '../core/wordHelper.js';
+import { compressConsecutiveTextChanges, TextModelChangeReason, type TextChange, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/textChange.js";
+import { TextEditHistoryMergeMode, type ISingleEditOperation } from "../core/editOperation.js";
 import { TextLength } from "../core/text/textLength.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
 import { guessIndentation } from './indentationGuesser.js';
@@ -30,15 +32,23 @@ import type { DocumentTransaction } from "./documentTransaction.js";
 import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
-import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot } from '../model.js';
+import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
 import * as languages from '../languages.js';
 import type { IModelLanguageChangedEvent, IModelOptionsChangedEvent } from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
+import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 
 interface OffsetEdit extends OffsetTextEdit {}
 
-interface PreparedEdit extends OffsetEdit {
+interface AnnotatedOffsetEdit extends OffsetEdit {
+	readonly identifier: IIdentifiedSingleEditOperation['identifier'];
+	readonly forceMoveMarkers: boolean;
+	readonly isAutoWhitespaceEdit: boolean;
+	readonly _isTracked: boolean;
+}
+
+interface PreparedEdit extends AnnotatedOffsetEdit {
 	readonly range: Range;
 	readonly replacedText: string;
 }
@@ -49,6 +59,16 @@ interface CommitContext {
 	readonly eol?: EndOfLineSequence;
 	readonly transactionId?: number;
 	readonly lineIds?: readonly LineId[];
+	readonly resultingSelection?: Selection[] | null;
+	readonly cursorStateComputer?: ICursorStateComputer | null;
+}
+
+interface CommitResult {
+	readonly change: TextModelChange;
+	readonly inverseEdits: OffsetEdit[];
+	readonly inverseEditOperations: IValidEditOperation[];
+	readonly textChanges: TextChange[];
+	readonly previousLineIds: readonly LineId[] | undefined;
 }
 
 export interface TextModelHistoryLimit {
@@ -93,7 +113,7 @@ export interface TextModelBlockInitialization extends TextModelBlockOptions {
 }
 
 export interface TextEditOptions {
-	readonly historyGroup?: TextEditHistoryGroup;
+	readonly historyGroup?: UndoRedoGroup;
 	readonly historyMergeMode?: TextEditHistoryMergeMode;
 	readonly editSource?: TextModelEditSource;
 }
@@ -740,23 +760,34 @@ export class TextModel implements ITextModel {
 		const targetEOL = requireEndOfLineSequence(eol);
 		const previousEOL = this.getEndOfLineSequence();
 		if (targetEOL === previousEOL) return;
+		const coalescingEntry = this.history.findUndoEntry(undefined, () => true);
 		const previousAlternativeVersionId = this._alternativeVersion;
 		const result = this.commitOffsetEdits([], {
 			reason: TextModelChangeReason.EOL,
 			eol: targetEOL,
 			editSource: EditSources.eolChange(),
+			transactionId: coalescingEntry?.transactionId,
 		});
 		if (!result) return;
 		this.history.prepareForEdit(undefined);
 		this.history.clearRedo();
-		this.history.pushUndo(
-			[],
-			result.change.transactionId,
-			previousAlternativeVersionId,
-			targetEOL,
-			previousEOL,
-			undefined,
-		);
+		if (coalescingEntry) {
+			const textChanges = compressConsecutiveTextChanges([...coalescingEntry.textChanges], result.textChanges);
+			this.history.replaceUndoEntry(coalescingEntry, inverseEditsFromTextChanges(textChanges), textChanges, null);
+		} else {
+			this.history.pushUndo(
+				[],
+				result.change.transactionId,
+				previousAlternativeVersionId,
+				targetEOL,
+				previousEOL,
+				undefined,
+				undefined,
+				null,
+				null,
+				result.textChanges,
+			);
+		}
 		this.changeEmitter.fire(result.change);
 	}
 
@@ -840,6 +871,13 @@ export class TextModel implements ITextModel {
 		return this.getLanguageId();
 	}
 
+	getWordAtPosition(position: IPosition): IWordAtPosition | null {
+		this.assertNotDisposed();
+		const validPosition = this.validatePosition(position);
+		const word = getWordAtText(validPosition.column, DEFAULT_WORD_REGEXP, this.getLineContent(validPosition.lineNumber), 0);
+		return word && word.startColumn <= position.column && position.column <= word.endColumn ? word : null;
+	}
+
 	normalizePosition(position: Position, _affinity: PositionAffinity): Position {
 		return position;
 	}
@@ -913,13 +951,13 @@ export class TextModel implements ITextModel {
 		return nextId;
 	}
 
-	beginHistoryRevision(historyGroup: TextEditHistoryGroup): void {
+	beginHistoryRevision(historyGroup: UndoRedoGroup): void {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		this.history.beginRevision(historyGroup);
 	}
 
-	finishHistoryRevision(historyGroup: TextEditHistoryGroup): boolean {
+	finishHistoryRevision(historyGroup: UndoRedoGroup): boolean {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		const entry = this.history.getRevisionEntry(historyGroup);
@@ -932,7 +970,7 @@ export class TextModel implements ITextModel {
 	}
 
 	cancelHistoryRevision(
-		historyGroup: TextEditHistoryGroup,
+		historyGroup: UndoRedoGroup,
 	): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
@@ -943,6 +981,7 @@ export class TextModel implements ITextModel {
 			eol: entry.eol,
 			transactionId: entry.transactionId,
 			lineIds: entry.lineIds,
+			resultingSelection: entry.beforeCursorState,
 		});
 		if (!result) {
 			throw new Error("History revision contained an empty transaction");
@@ -960,19 +999,58 @@ export class TextModel implements ITextModel {
 	 */
 	applyOperations(operations: readonly ISingleEditOperation[], options: TextEditOptions = {}): TextModelChange | undefined {
 		if (!Array.isArray(operations)) throw new TypeError("Edit operations must be an array");
-		return this.applyEdits(operations.map(operation => ({ range: operation.range, text: operation.text ?? "" })), options);
+		if (options.historyGroup === undefined) this.history.pushStackElement();
+		try {
+			return this.pushEditOperationsWithOptions(null, operations, null, options)?.change;
+		} finally {
+			if (options.historyGroup === undefined) this.history.pushStackElement();
+		}
 	}
 
 	edit(edit: TextEdit, options: { reason?: TextModelEditSource } = {}): void {
-		this.applyEdits(edit.replacements, { editSource: options.reason });
+		this.pushEditOperations(
+			null,
+			edit.replacements.map(replacement => ({ range: replacement.range, text: replacement.text })),
+			null,
+			undefined,
+			options.reason,
+		);
 	}
 
-	applyEdits(
-		edits: readonly languages.TextEdit[],
-		options: TextEditOptions = {},
-	): TextModelChange | undefined {
+	pushStackElement(): void {
+		this.assertNotDisposed();
+		this.history.pushStackElement();
+	}
+
+	popStackElement(): void {
+		this.assertNotDisposed();
+		this.history.popStackElement();
+	}
+
+	pushEditOperations(
+		beforeCursorState: Selection[] | null,
+		editOperations: IIdentifiedSingleEditOperation[],
+		cursorStateComputer: ICursorStateComputer | null,
+		group?: UndoRedoGroup,
+		reason?: TextModelEditSource,
+	): Selection[] | null {
+		return this.pushEditOperationsWithOptions(
+			beforeCursorState,
+			editOperations,
+			cursorStateComputer,
+			{ historyGroup: group, editSource: reason ?? EditSources.unknown({ name: 'pushEditOperations' }) },
+		)?.change.resultingSelection ?? null;
+	}
+
+	private pushEditOperationsWithOptions(
+		beforeCursorState: Selection[] | null,
+		editOperations: readonly IIdentifiedSingleEditOperation[],
+		cursorStateComputer: ICursorStateComputer | null,
+		options: TextEditOptions,
+	): { readonly change: TextModelChange; readonly inverseEditOperations: IValidEditOperation[] } | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
+		if (!Array.isArray(editOperations)) throw new TypeError("Edit operations must be an array");
 		const historyMergeMode =
 			options.historyMergeMode ??
 			TextEditHistoryMergeMode.Sequential;
@@ -991,15 +1069,13 @@ export class TextModel implements ITextModel {
 				"ReplacePrevious requires an active history revision",
 			);
 		}
-		const offsetEdits = edits.map(edit => {
-			if (typeof edit.text !== "string") {
-				throw new TypeError("TextEdit.text must be a string");
-			}
-			const range = Range.lift(edit.range);
+		const validatedOperations = this.validateEditOperations(editOperations);
+		const offsetEdits = validatedOperations.map(edit => {
+			const range = edit.range;
 			return {
 				startOffset: this.offsetAt(range.getStartPosition()),
 				endOffset: this.offsetAt(range.getEndPosition()),
-				text: this.normalizeTextToBufferEOL(edit.text),
+				text: this.normalizeTextToBufferEOL(edit.text ?? ''),
 			};
 		});
 		const sortedOffsetEdits = [...offsetEdits].sort(compareOffsetEdits);
@@ -1010,20 +1086,26 @@ export class TextModel implements ITextModel {
 		);
 		const previousAlternativeVersionId = this._alternativeVersion;
 		const previousEOL = this.getEndOfLineSequence();
-		const result = this.commitOffsetEdits(
-			offsetEdits,
+		const result = this.commitEditOperations(
+			validatedOperations,
 			{
 				reason: TextModelChangeReason.Edit,
 				transactionId: coalescingEntry?.transactionId,
 				editSource: options.editSource,
+				cursorStateComputer,
 			},
 		);
 		if (!result) return undefined;
 		this.history.prepareForEdit(options.historyGroup);
 		this.history.clearRedo();
 		if (coalescingEntry) {
-			const mergedEdits =
-				historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
+			const mergedTextChanges = compressConsecutiveTextChanges(
+				[...coalescingEntry.textChanges],
+				result.textChanges,
+			);
+			const mergedEdits = options.historyGroup === undefined
+				? inverseEditsFromTextChanges(mergedTextChanges)
+				: historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
 					? replaceHistoryUndoEdits(
 						coalescingEntry.edits,
 						result.inverseEdits,
@@ -1033,7 +1115,12 @@ export class TextModel implements ITextModel {
 						sortedOffsetEdits,
 						result.inverseEdits,
 					);
-			this.history.replaceUndoEntry(coalescingEntry, mergedEdits);
+			this.history.replaceUndoEntry(
+				coalescingEntry,
+				mergedEdits,
+				mergedTextChanges,
+				result.change.resultingSelection,
+			);
 		} else {
 			this.history.pushUndo(
 				result.inverseEdits,
@@ -1043,10 +1130,38 @@ export class TextModel implements ITextModel {
 				previousEOL,
 				options.historyGroup,
 				result.previousLineIds,
+				beforeCursorState,
+				result.change.resultingSelection,
+				result.textChanges,
 			);
 		}
 		this.changeEmitter.fire(result.change);
-		return result.change;
+		return result;
+	}
+
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[]): void;
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], reason: TextModelEditSource): void;
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], computeUndoEdits: false): void;
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], computeUndoEdits: true): IValidEditOperation[];
+	applyEdits(
+		operations: readonly IIdentifiedSingleEditOperation[],
+		computeUndoEditsOrReason: boolean | TextModelEditSource = false,
+	): void | IValidEditOperation[] {
+		this.assertNotDisposed();
+		this.ensureDirectTextMutationAllowed();
+		if (!Array.isArray(operations)) throw new TypeError("Edit operations must be an array");
+		const computeUndoEdits = typeof computeUndoEditsOrReason === 'boolean'
+			? computeUndoEditsOrReason
+			: false;
+		const reason = typeof computeUndoEditsOrReason === 'boolean'
+			? EditSources.applyEdits()
+			: computeUndoEditsOrReason;
+		const result = this.commitEditOperations(
+			this.validateEditOperations(operations),
+			{ reason: TextModelChangeReason.Edit, editSource: reason },
+		);
+		if (result) this.changeEmitter.fire(result.change);
+		return computeUndoEdits ? result?.inverseEditOperations ?? [] : undefined;
 	}
 
 	/** Clears edit history and replaces changed content as a non-undoable document reset. */
@@ -1091,6 +1206,7 @@ export class TextModel implements ITextModel {
 			eol: this.buffer.getEOL(),
 			isEolChange: false,
 			detailedReasons: Object.freeze([editSource]),
+			resultingSelection: null,
 		});
 		this.changeEmitter.fire(change);
 		return change;
@@ -1111,6 +1227,7 @@ export class TextModel implements ITextModel {
 				eol: entry.eol,
 				transactionId: entry.transactionId,
 				lineIds: entry.lineIds,
+				resultingSelection: entry.beforeCursorState,
 			},
 		);
 		if (!result) {
@@ -1124,6 +1241,9 @@ export class TextModel implements ITextModel {
 			previousEOL,
 			entry.historyGroup,
 			result.previousLineIds,
+			entry.beforeCursorState,
+			entry.afterCursorState,
+			result.textChanges,
 		);
 		this._alternativeVersion = entry.alternativeVersionId;
 		this.changeEmitter.fire(result.change);
@@ -1145,6 +1265,7 @@ export class TextModel implements ITextModel {
 				eol: entry.eol,
 				transactionId: entry.transactionId,
 				lineIds: entry.lineIds,
+				resultingSelection: entry.afterCursorState,
 			},
 		);
 		if (!result) {
@@ -1158,7 +1279,11 @@ export class TextModel implements ITextModel {
 			previousEOL,
 			entry.historyGroup,
 			result.previousLineIds,
+			entry.beforeCursorState,
+			entry.afterCursorState,
+			result.textChanges,
 		);
+		this.history.pushStackElement();
 		this._alternativeVersion = entry.alternativeVersionId;
 		this.changeEmitter.fire(result.change);
 		return result.change;
@@ -1166,26 +1291,83 @@ export class TextModel implements ITextModel {
 
 	private findCoalescingEntry(
 		edits: readonly OffsetEdit[],
-		historyGroup: TextEditHistoryGroup | undefined,
+		historyGroup: UndoRedoGroup | undefined,
 		historyMergeMode: TextEditHistoryMergeMode,
 	): TextModelHistoryEntry | undefined {
 		return this.history.findUndoEntry(
 			historyGroup,
-			previous =>
+			previous => historyGroup === undefined || (
 				historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
 					? canReplaceHistoryEdits(previous.edits, edits)
-					: canCoalesceHistoryEdits(previous.edits, edits),
+					: canCoalesceHistoryEdits(previous.edits, edits)
+			),
 		);
+	}
+
+	private validateEditOperation(rawOperation: IIdentifiedSingleEditOperation): ValidAnnotatedEditOperation {
+		if (rawOperation instanceof ValidAnnotatedEditOperation) return rawOperation;
+		const range = this.validateRange(rawOperation.range);
+		let text = rawOperation.text;
+		if (
+			text &&
+			this.getEOL() === '\r\n' &&
+			text.charCodeAt(text.length - 1) === 13 &&
+			range.endColumn === this.getLineMaxColumn(range.endLineNumber)
+		) {
+			text = text.slice(0, -1);
+		}
+		return new ValidAnnotatedEditOperation(
+			rawOperation.identifier ?? null,
+			range,
+			text,
+			rawOperation.forceMoveMarkers ?? false,
+			rawOperation.isAutoWhitespaceEdit ?? false,
+			rawOperation._isTracked ?? false,
+		);
+	}
+
+	private validateEditOperations(rawOperations: readonly IIdentifiedSingleEditOperation[]): ValidAnnotatedEditOperation[] {
+		return rawOperations.map(operation => this.validateEditOperation(operation));
 	}
 
 	private commitOffsetEdits(
 		edits: readonly OffsetEdit[],
 		context: CommitContext,
-	): {
-		readonly change: TextModelChange;
-		readonly inverseEdits: OffsetEdit[];
-		readonly previousLineIds: readonly LineId[] | undefined;
-	} | undefined {
+	): CommitResult | undefined {
+		return this.commitAnnotatedOffsetEdits(
+			edits.map(edit => ({
+				...edit,
+				identifier: null,
+				forceMoveMarkers: false,
+				isAutoWhitespaceEdit: false,
+				_isTracked: false,
+			})),
+			context,
+		);
+	}
+
+	private commitEditOperations(
+		operations: readonly ValidAnnotatedEditOperation[],
+		context: CommitContext,
+	): CommitResult | undefined {
+		return this.commitAnnotatedOffsetEdits(
+			operations.map(operation => ({
+				startOffset: this.offsetAt(operation.range.getStartPosition()),
+				endOffset: this.offsetAt(operation.range.getEndPosition()),
+				text: operation.text ?? '',
+				identifier: operation.identifier,
+				forceMoveMarkers: operation.forceMoveMarkers,
+				isAutoWhitespaceEdit: operation.isAutoWhitespaceEdit,
+				_isTracked: operation._isTracked,
+			})),
+			context,
+		);
+	}
+
+	private commitAnnotatedOffsetEdits(
+		edits: readonly AnnotatedOffsetEdit[],
+		context: CommitContext,
+	): CommitResult | undefined {
 		const previousEOL = this.getEndOfLineSequence();
 		const targetEOL = context.eol ?? previousEOL;
 		const prepared = this.prepareEdits(edits);
@@ -1196,28 +1378,39 @@ export class TextModel implements ITextModel {
 			context.transactionId ??
 			this.nextTransactionId++;
 
-		const inverseEdits: OffsetEdit[] = [];
-		let cumulativeDelta = 0;
-		for (const edit of prepared) {
-			const newStartOffset = edit.startOffset + cumulativeDelta;
-			inverseEdits.push({
-				startOffset: newStartOffset,
-				endOffset: newStartOffset + edit.text.length,
-				text: edit.replacedText,
-			});
-			cumulativeDelta +=
-				edit.text.length - (edit.endOffset - edit.startOffset);
-		}
-
-		const appliedChanges = Object.freeze(
-			prepared.map<TextModelContentChange>(edit => Object.freeze({
-				range: edit.range,
-				rangeOffset: edit.startOffset,
-				rangeLength: edit.endOffset - edit.startOffset,
-				text: edit.text,
-			})),
+		const bufferResult = this.buffer.applyEdits(
+			prepared.map(edit => new ValidAnnotatedEditOperation(
+				edit.identifier ?? null,
+				edit.range,
+				edit.text,
+				edit.forceMoveMarkers,
+				edit.isAutoWhitespaceEdit,
+				edit._isTracked,
+			)),
+			this.modelOptionsValue.trimAutoWhitespace,
+			true,
 		);
-		this.buffer.applyEdits(prepared.map(edit => new ValidAnnotatedEditOperation(null, edit.range, edit.text, false, false, false)), false, false);
+		const inverseEditOperations = bufferResult.reverseEdits ?? [];
+		const textChanges = inverseEditOperations
+			.map((operation, index) => ({ index, textChange: operation.textChange }))
+			.sort((left, right) => left.textChange.oldPosition - right.textChange.oldPosition || left.index - right.index)
+			.map(entry => entry.textChange);
+		const inverseEdits = inverseEditOperations.map<OffsetEdit>(operation => ({
+			startOffset: this.buffer.getOffsetAt(operation.range.startLineNumber, operation.range.startColumn),
+			endOffset: this.buffer.getOffsetAt(operation.range.endLineNumber, operation.range.endColumn),
+			text: operation.text,
+		})).sort(compareOffsetEdits);
+		const appliedChanges = Object.freeze(
+			bufferResult.changes
+				.slice()
+				.sort((left, right) => left.rangeOffset - right.rangeOffset || left.rangeLength - right.rangeLength)
+				.map<TextModelContentChange>(change => Object.freeze({
+					range: change.range,
+					rangeOffset: change.rangeOffset,
+					rangeLength: change.rangeLength,
+					text: change.text,
+				})),
+		);
 		if (this.plainLineIds) {
 			this.plainLineIds = context.lineIds === undefined ? this.mapLineIds(prepared) : this.validateCommittedLineIds(context.lineIds);
 			this.plainLineSnapshot = undefined;
@@ -1240,6 +1433,9 @@ export class TextModel implements ITextModel {
 		}
 		this.scheduleMaintenance();
 
+		const resultingSelection = context.cursorStateComputer
+			? this.computeCursorState(context.cursorStateComputer, inverseEditOperations)
+			: cloneSelections(context.resultingSelection ?? null);
 		this._version += 1;
 		this._alternativeVersion = this._version;
 		const changes = eolChanged
@@ -1256,12 +1452,27 @@ export class TextModel implements ITextModel {
 			eol: endOfLineText(targetEOL),
 			isEolChange: eolChanged && changes.length === 0,
 			detailedReasons: Object.freeze(context.editSource ? [context.editSource] : []),
+			resultingSelection,
 		});
 		return {
 			change,
 			inverseEdits: normalizeInverseEdits(committedInverseEdits),
+			inverseEditOperations,
+			textChanges,
 			previousLineIds,
 		};
+	}
+
+	private computeCursorState(
+		cursorStateComputer: ICursorStateComputer,
+		inverseEditOperations: IValidEditOperation[],
+	): Selection[] | null {
+		try {
+			return cloneSelections(cursorStateComputer(inverseEditOperations));
+		} catch (error) {
+			onUnexpectedError(error);
+			return null;
+		}
 	}
 
 	private scheduleMaintenance(): void {
@@ -1294,7 +1505,7 @@ export class TextModel implements ITextModel {
 		this.pendingMaintenance.value = pending;
 	}
 
-	private prepareEdits(edits: readonly OffsetEdit[]): PreparedEdit[] {
+	private prepareEdits(edits: readonly AnnotatedOffsetEdit[]): PreparedEdit[] {
 		const sorted = edits.map(edit => {
 			this.assertOffsetRange(edit);
 			return {
@@ -1379,6 +1590,7 @@ export class TextModel implements ITextModel {
 			eol: this.buffer.getEOL(),
 			isEolChange: false,
 			detailedReasons: Object.freeze([]),
+			resultingSelection: null,
 			changes: Object.freeze([Object.freeze<TextModelContentChange>({
 				range: Range.fromPositions(new Position((0) + 1, (0) + 1), this.positionAt(this.buffer.getLength())),
 				rangeOffset: 0,
@@ -1527,6 +1739,18 @@ export class TextModel implements ITextModel {
 function compareOffsetEdits(left: OffsetEdit, right: OffsetEdit): number {
 	return left.startOffset - right.startOffset ||
 		left.endOffset - right.endOffset;
+}
+
+function cloneSelections(selections: readonly Selection[] | null): Selection[] | null {
+	return selections?.map(Selection.liftSelection) ?? null;
+}
+
+function inverseEditsFromTextChanges(changes: readonly TextChange[]): OffsetEdit[] {
+	return normalizeInverseEdits(changes.map(change => ({
+		startOffset: change.newPosition,
+		endOffset: change.newEnd,
+		text: change.oldText,
+	})).sort(compareOffsetEdits));
 }
 
 function readHistoryLimit(

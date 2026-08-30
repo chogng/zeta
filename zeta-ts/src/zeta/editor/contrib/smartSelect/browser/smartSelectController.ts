@@ -17,7 +17,7 @@ export class SmartSelectController extends Disposable {
 	private readonly history: SelectionSet[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly onError: (error: unknown) => void) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
@@ -69,7 +69,7 @@ export class SmartSelectController extends Disposable {
 	private commitExpansion(before: SelectionSet, snapshot: TextSnapshot, syntaxRanges: readonly Range[]): void {
 		if (this.viewport.textModel.version !== snapshot.version || !this.selections.selections.equals(before)) return;
 		this.history.push(before);
-		this.selections.setSelections(before.map(selection => expandSmartSelection(this.viewport.textModel, selection, this.wordPattern?.(), syntaxRanges)));
+		this.selections.setSelections(before.map(selection => expandSmartSelection(this.viewport.textModel, selection, syntaxRanges)));
 		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
 	}
 }
@@ -79,6 +79,6 @@ registerTextEditorCapabilityContribution({
 	install: context => {
 		if (context.kind !== "text") return;
 		const selectionRanges = context.register(new SelectionRangeService(context.model, context.languageFeaturesService.selectionRangeProvider, context.options.input.resource));
-		context.register(new SmartSelectController(context.view.element, context.viewport, context.selections, context.languageId, selectionRanges, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
+		context.register(new SmartSelectController(context.view.element, context.viewport, context.selections, context.languageId, selectionRanges, context.onLanguageError));
 	},
 });

@@ -1,26 +1,23 @@
-import { Position } from "../../../common/core/position.js";
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type EditorView } from '../../../browser/editorView.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { type Range } from '../../../common/core/range.js';
+import { USUAL_WORD_SEPARATORS } from '../../../common/core/wordHelper.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
-import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
-import { findTextMatches } from '../../../common/model/textModelSearch.js';
 
-import type { IEditorLanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 const MAX_SELECTION_HIGHLIGHTS = 10_000;
 
 interface SelectionHighlighterOptions {
 	readonly languageId: string;
-	readonly languageFeaturesService: IEditorLanguageFeaturesService;
+	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly enabled?: boolean;
 	readonly multiline?: boolean;
 	readonly maxLength?: number;
 	readonly occurrenceHighlights?: boolean;
-	readonly wordPattern?: () => RegExp | undefined;
 }
 
 /** Owns textual matches for non-empty editor selections. */
@@ -30,8 +27,7 @@ export class EditorSelectionHighlighter extends Disposable {
 	private readonly maxLength: number;
 	private readonly occurrenceHighlights: boolean;
 	private readonly languageId: string;
-	private readonly languageFeaturesService: IEditorLanguageFeaturesService;
-	private readonly wordPattern: (() => RegExp | undefined) | undefined;
+	private readonly languageFeaturesService: ILanguageFeaturesService;
 	private lastKey = '';
 
 	constructor(
@@ -48,7 +44,6 @@ export class EditorSelectionHighlighter extends Disposable {
 		this.occurrenceHighlights = options.occurrenceHighlights ?? true;
 		this.languageId = options.languageId;
 		this.languageFeaturesService = options.languageFeaturesService;
-		this.wordPattern = options.wordPattern;
 		this._register(selections.onDidChange(() => this.update()));
 		this._register(selections.textModel.onDidChangeContent(() => this.update()));
 		this.update();
@@ -56,7 +51,7 @@ export class EditorSelectionHighlighter extends Disposable {
 
 	private update(): void {
 		const ranges = this.findRanges();
-		const hasSemanticHighlights = this.occurrenceHighlights && this.languageFeaturesService.documentHighlightProvider.getProviders(this.languageId).length > 0;
+		const hasSemanticHighlights = this.occurrenceHighlights && this.languageFeaturesService.documentHighlightProvider.has(this.selections.textModel);
 		const key = `${hasSemanticHighlights}:${ranges.map(range => `${this.selections.textModel.offsetAt(range.getStartPosition())}-${this.selections.textModel.offsetAt(range.getEndPosition())}`).join(',')}`;
 		if (key === this.lastKey) return;
 		this.lastKey = key;
@@ -76,17 +71,11 @@ export class EditorSelectionHighlighter extends Disposable {
 		const text = this.selections.textModel.getTextInRange(source);
 		if (!text || /^\s+$/u.test(text) || (this.maxLength > 0 && text.length > this.maxLength)) return Object.freeze([]);
 		if (!selectionsContainSameText(this.selections, selected, text)) return Object.freeze([]);
-		const wordPattern = this.wordPattern?.();
-		const wordRange = getWordSelectionRange(this.selections.textModel, source.getStartPosition(), wordPattern);
-		const wholeWord = rangesEqual(wordRange, source);
-		const matches = findTextMatches(this.selections.textModel, {
-			pattern: text,
-			matchCase: true,
-			wholeWord: wholeWord && !wordPattern,
-		}, { resultLimit: MAX_SELECTION_HIGHLIGHTS });
+		const word = this.selections.textModel.getWordAtPosition(source.getStartPosition());
+		const wholeWord = word !== null && source.startLineNumber === source.endLineNumber && source.startColumn === word.startColumn && source.endColumn === word.endColumn;
+		const matches = this.selections.textModel.findMatches(text, true, false, true, wholeWord ? USUAL_WORD_SEPARATORS : null, false, MAX_SELECTION_HIGHLIGHTS);
 		return Object.freeze(matches.flatMap(match => {
 			if (selected.some(selection => rangesIntersect(this.selections, match.range, selection))) return [];
-			if (wholeWord && wordPattern && !rangesEqual(getWordSelectionRange(this.selections.textModel, match.range.getStartPosition(), wordPattern), match.range)) return [];
 			return [match.range];
 		}));
 	}
@@ -99,7 +88,6 @@ function validateSelectionHighlighter(view: EditorView, selections: CursorsContr
 	if (options.multiline !== undefined && typeof options.multiline !== 'boolean') throw new TypeError('Selection highlighter multiline option must be boolean');
 	if (options.occurrenceHighlights !== undefined && typeof options.occurrenceHighlights !== 'boolean') throw new TypeError('Selection highlighter semantic option must be boolean');
 	if (options.maxLength !== undefined && (!Number.isSafeInteger(options.maxLength) || options.maxLength < 0)) throw new RangeError('Selection highlighter maximum length must be a non-negative integer');
-	if (options.wordPattern !== undefined && typeof options.wordPattern !== 'function') throw new TypeError('Selection highlighter word pattern resolver must be a function');
 }
 
 function selectionsContainSameText(controller: CursorsController, selections: readonly Selection[], text: string): boolean {
@@ -112,8 +100,4 @@ function rangesIntersect(controller: CursorsController, left: Range, right: Rang
 	const rightStart = controller.textModel.offsetAt(right.getStartPosition());
 	const rightEnd = controller.textModel.offsetAt(right.getEndPosition());
 	return leftStart < rightEnd && rightStart < leftEnd;
-}
-
-function rangesEqual(left: Range, right: Range): boolean {
-	return Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 && Position.compare(left.getEndPosition(), right.getEndPosition()) === 0;
 }

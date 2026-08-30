@@ -70,6 +70,7 @@ export interface IDisposableTracker {
 	): void;
 	clearDisposableOwner(disposable: TrackableDisposable): void;
 	markAsDisposed(disposable: TrackableDisposable): void;
+	markAsSingleton(disposable: TrackableDisposable): void;
 }
 
 let disposableTracker: IDisposableTracker | undefined;
@@ -129,6 +130,12 @@ export function markAsDisposed(disposable: TrackableDisposable): void {
 	if (!isNoneDisposable(disposable)) disposableTracker?.markAsDisposed(disposable);
 }
 
+/** Marks a process-lifetime disposable as intentionally not owned by a disposable store. */
+export function markAsSingleton<T extends IDisposable>(singleton: T): T {
+	if (!isNoneDisposable(singleton)) disposableTracker?.markAsSingleton(singleton);
+	return singleton;
+}
+
 export interface DisposableLeak {
 	readonly disposable: TrackableDisposable;
 	readonly label: string;
@@ -141,6 +148,7 @@ interface DisposableRecord {
 	readonly label: string;
 	readonly createdAt?: string;
 	readonly children: Set<TrackableDisposable>;
+	isSingleton: boolean;
 	owner?: TrackableDisposable;
 }
 
@@ -169,6 +177,7 @@ export class DisposableTracker implements IDisposableTracker {
 			label,
 			createdAt: captureCreationStack(),
 			children: new Set(),
+			isSingleton: false,
 		});
 	}
 
@@ -235,8 +244,14 @@ export class DisposableTracker implements IDisposableTracker {
 		this.disposed.add(disposable);
 	}
 
+	markAsSingleton(disposable: TrackableDisposable): void {
+		this.trackDisposable(disposable);
+		const record = this.records.get(disposable);
+		if (record) record.isSingleton = true;
+	}
+
 	leaks(): readonly DisposableLeak[] {
-		return [...this.records.values()].map((record) => ({
+		return [...this.records.values()].filter(record => !record.isSingleton).map((record) => ({
 			disposable: record.disposable,
 			label: record.label,
 			ownerLabel: record.owner ? this.label(record.owner) : undefined,

@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { EditorLanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
@@ -54,7 +54,7 @@ test.after(() => browserEnvironment.window.close());
 
 test("standalone service collection honors explicit first-scope overrides", () => {
 	const languageConfigurations = new ComposableLanguageConfigurationService();
-	const languages = new EditorLanguageFeaturesService(languageConfigurations);
+	const languages = new LanguageFeaturesService(languageConfigurations);
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
 	assert.equal(services.themeService.getColorTheme(), lightColorTheme);
@@ -120,21 +120,18 @@ test('standalone languages API replaces one language generation without stale re
 
 test('standalone languages API replaces provider batches atomically', () => {
 	const first = {
-		providerId: 'stanza.batch.first',
-		languageIds: ['stanza-batch'],
 		provideHover: () => ({ contents: ['first'] }),
 	};
 	const second = {
-		providerId: 'stanza.batch.second',
-		languageIds: ['stanza-batch'],
 		provideHover: () => ({ contents: ['second'] }),
 	};
-	using batch = stanza.languages.registerProviderBatch({ hovers: [first] });
+	using model = new stanza.TextModel('', { languageId: 'stanza-batch' });
+	using batch = stanza.languages.registerProviderBatch({ hovers: [{ selector: 'stanza-batch', provider: first }] });
 	const providers = StandaloneServices.get().languageFeaturesService.hoverProvider;
 
-	assert.deepEqual(providers.getProviders('stanza-batch'), [first]);
-	batch.replace({ hovers: [second] });
-	assert.deepEqual(providers.getProviders('stanza-batch'), [second]);
+	assert.deepEqual(providers.ordered(model), [first]);
+	batch.replace({ hovers: [{ selector: 'stanza-batch', provider: second }] });
+	assert.deepEqual(providers.ordered(model), [second]);
 });
 
 test("standalone languages API feeds the shared editor registries", async () => {
@@ -216,6 +213,32 @@ test("standalone API registers URI and language identity with model lifecycle ev
 	assert.deepEqual(disposed, [resource.toString()]);
 });
 
+test("standalone createModel infers language from URI or first line unless language is explicit", () => {
+	using descriptions = stanza.languages.registerLanguages([
+		{ description: { id: "stanza-uri-inferred", extensions: [".stanza-inferred"] } },
+		{ description: { id: "stanza-first-line-inferred", firstLine: "^#!.*\\bstanza-inferred\\b" } },
+	]);
+	using uriModel = stanza.editor.createModel(
+		"plain content",
+		undefined,
+		URI.parse("inmemory://stanza/model.stanza-inferred"),
+	);
+	using firstLineModel = stanza.editor.createModel(
+		"#!/usr/bin/env stanza-inferred\nplain content",
+		undefined,
+		URI.parse("inmemory://stanza/script"),
+	);
+	using explicitModel = stanza.editor.createModel(
+		"#!/usr/bin/env stanza-inferred",
+		"plaintext",
+		URI.parse("inmemory://stanza/explicit.stanza-inferred"),
+	);
+
+	assert.equal(uriModel.getLanguageId(), "stanza-uri-inferred");
+	assert.equal(firstLineModel.getLanguageId(), "stanza-first-line-inferred");
+	assert.equal(explicitModel.getLanguageId(), "plaintext");
+});
+
 test("standalone editors share caller-owned models and dispose independently", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main><aside></aside></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -267,7 +290,7 @@ test("standalone editor rejects unregistered models and conflicting model option
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
 	registered.dispose();
 	const lateConfigurations = new ComposableLanguageConfigurationService();
-	const lateOverride = new EditorLanguageFeaturesService(lateConfigurations);
+	const lateOverride = new LanguageFeaturesService(lateConfigurations);
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();
 	lateConfigurations.dispose();

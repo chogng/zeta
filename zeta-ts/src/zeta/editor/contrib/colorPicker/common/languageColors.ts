@@ -3,7 +3,7 @@ import { type URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../common/core/range.js';
 
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IColor, type IColorInformation, type IColorPresentation } from '../../../common/languages.js';
 
@@ -17,7 +17,7 @@ export interface LanguageColorPresentationRequest extends LanguageFeatureRequest
 	readonly resource?: URI;
 }
 
-export interface LanguageColorProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageColorProvider {
 	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | undefined | Promise<readonly IColorInformation[] | undefined>;
 	provideColorPresentations(request: LanguageColorPresentationRequest, signal: AbortSignal): readonly IColorPresentation[] | undefined | Promise<readonly IColorPresentation[] | undefined>;
 }
@@ -32,11 +32,11 @@ export type DefaultColorDecoratorsEnablement = 'auto' | 'always' | 'never';
 /** Resolves version-bound document colors while retaining the provider that owns each presentation. */
 export class ColorService {
 	private readonly defaultProvider = new DefaultDocumentColorProvider();
-	readonly onDidChange: Event<void>;
+	readonly onDidChange: Event<number>;
 
 	constructor(
 		private readonly model: TextModel,
-		private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageColorProvider>,
+		private readonly providers: LanguageFeatureRegistry<LanguageColorProvider>,
 		private readonly resource?: URI,
 		private readonly onError: (error: unknown) => void = error => console.error('Stanza document color provider failed', error),
 	) {
@@ -47,7 +47,7 @@ export class ColorService {
 		const request = this.createRequest(languageId, signal);
 		const result: ColorData[] = [];
 		let validProviderFound = false;
-		for (const provider of this.providers.getProviders(languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			const colors = await this.requestDocumentColors(provider, request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			if (!colors) continue;
@@ -111,9 +111,6 @@ export class ColorService {
 
 /** Detects common CSS color literals when a language does not provide document colors. */
 export class DefaultDocumentColorProvider implements LanguageColorProvider {
-	readonly languageIds = Object.freeze(['*']);
-	readonly providerId = 'stanza.defaultDocumentColorProvider';
-
 	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] {
 		const text = request.snapshot.getText();
 		const colors: IColorInformation[] = [];

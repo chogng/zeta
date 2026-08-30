@@ -2,7 +2,6 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, type TextSearchMatch } from "../../../common/model/textModelSearch.js";
-import { getWordSelectionRange } from '../../../common/cursor/wordSelection.js';
 
 const MAX_OCCURRENCE_SELECTIONS = 100_000;
 
@@ -18,11 +17,11 @@ export enum EditorOccurrenceDirection {
  * A collapsed primary cursor first selects its current word-like segment. The
  * model remains unchanged; callers own the resulting live selection state.
  */
-export function addOccurrenceSelection(model: TextModel, selections: SelectionSet, direction: EditorOccurrenceDirection, wordPattern?: RegExp): SelectionSet {
+export function addOccurrenceSelection(model: TextModel, selections: SelectionSet, direction: EditorOccurrenceDirection): SelectionSet {
 	if (!Object.values(EditorOccurrenceDirection).includes(direction)) {
 		throw new TypeError("Unknown editor occurrence direction");
 	}
-	const source = sourceSelection(model, selections, wordPattern);
+	const source = sourceSelection(model, selections);
 	if (!source) return selections;
 	if (selections.primary.isEmpty()) return replacePrimarySelection(selections, source);
 
@@ -42,8 +41,8 @@ export function addOccurrenceSelection(model: TextModel, selections: SelectionSe
 }
 
 /** Selects every exact occurrence of the primary selection or cursor word. */
-export function selectAllOccurrences(model: TextModel, selections: SelectionSet, wordPattern?: RegExp): SelectionSet {
-	const source = sourceSelection(model, selections, wordPattern);
+export function selectAllOccurrences(model: TextModel, selections: SelectionSet): SelectionSet {
+	const source = sourceSelection(model, selections);
 	if (!source) return selections;
 	const matches = findOccurrences(model, source);
 	if (matches.length === 0) return selections;
@@ -53,12 +52,11 @@ export function selectAllOccurrences(model: TextModel, selections: SelectionSet,
 	return SelectionSet.withPrimary(nextSelections, primaryIndex < 0 ? 0 : primaryIndex);
 }
 
-function sourceSelection(model: TextModel, selections: SelectionSet, wordPattern: RegExp | undefined): Selection | undefined {
+function sourceSelection(model: TextModel, selections: SelectionSet): Selection | undefined {
 	const primary = selections.primary;
 	if (!primary.isEmpty()) return primary;
-	const range = getWordSelectionRange(model, primary.getPosition(), wordPattern);
-	if (range.isEmpty()) return undefined;
-	return Selection.fromPositions(range.getStartPosition(), range.getEndPosition());
+	const word = model.getWordAtPosition(primary.getPosition());
+	return word ? new Selection(primary.positionLineNumber, word.startColumn, primary.positionLineNumber, word.endColumn) : undefined;
 }
 
 function findOccurrences(model: TextModel, source: Selection): readonly TextSearchMatch[] {

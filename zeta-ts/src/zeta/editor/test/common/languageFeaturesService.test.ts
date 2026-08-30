@@ -1,44 +1,75 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { URI } from '../../../base/common/uri.js';
+import { LanguageFeatureRegistry } from '../../common/languageFeatureRegistry.js';
 import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
-import { EditorLanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { LanguageService } from '../../common/services/languageService.js';
 
 test('language identity, configuration, and feature providers have separate owners', () => {
 	using languageService = new LanguageService();
 	using languageConfigurationService = new ComposableLanguageConfigurationService();
-	using languageFeaturesService = new EditorLanguageFeaturesService(languageConfigurationService);
+	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
+	using model = new TextModel('', { languageId: 'demo' });
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), undefined);
 	assert.equal(languageConfigurationService.getLanguageConfiguration('typescript').comments.lineComment, undefined);
-	assert.deepEqual(languageFeaturesService.hoverProvider.getProviders('demo'), []);
+	assert.deepEqual(languageFeaturesService.hoverProvider.ordered(model), []);
 
 	using language = languageService.registerLanguage({ id: 'demo', extensions: ['.demo'] });
 	using configuration = languageConfigurationService.register('demo', { comments: { lineComment: '//' } });
-	using hover = languageFeaturesService.hoverProvider.register({ languageIds: ['demo'], provideHover: () => undefined });
+	using hover = languageFeaturesService.hoverProvider.register('demo', { provideHover: () => undefined });
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.demo') }), 'demo');
 	assert.equal(languageConfigurationService.getLanguageConfiguration('demo').comments.lineComment, '//');
-	assert.equal(languageFeaturesService.hoverProvider.getProviders('demo').length, 1);
+	assert.equal(languageFeaturesService.hoverProvider.ordered(model).length, 1);
 });
 
 test('language feature registries report effective provider changes', () => {
 	using languageConfigurationService = new ComposableLanguageConfigurationService();
-	using languageFeaturesService = new EditorLanguageFeaturesService(languageConfigurationService);
+	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
 	let changes = 0;
 	using listener = languageFeaturesService.colorProvider.onDidChange(() => changes += 1);
-	const registration = languageFeaturesService.colorProvider.registerGroup([]);
-
 	assert.equal(changes, 0);
-	registration.replace([{
-		languageIds: ['css'],
+	const registration = languageFeaturesService.colorProvider.register('css', {
 		provideDocumentColors: () => [],
 		provideColorPresentations: () => [],
-	}]);
+	});
 	assert.equal(changes, 1);
-	registration.replace([]);
+	registration.dispose();
 	assert.equal(changes, 2);
 	registration.dispose();
 	assert.equal(changes, 2);
+});
+
+test('language feature registries preserve canonical selector ordering and candidate invalidation', () => {
+	using model = new TextModel('value', { languageId: 'typescript', resource: URI.parse('file:///workspace/value.ts') });
+	const registry = new LanguageFeatureRegistry<string>();
+	const counts: number[] = [];
+	using listener = registry.onDidChange(count => counts.push(count));
+
+	registry.register('*', 'wildcard');
+	registry.register('typescript', 'first');
+	const second = registry.register('typescript', 'second');
+	registry.register({ language: 'typescript', isBuiltin: true }, 'builtin');
+	assert.deepEqual(registry.ordered(model), ['second', 'first', 'builtin', 'wildcard']);
+	assert.deepEqual(registry.orderedGroups(model), [['second', 'first', 'builtin'], ['wildcard']]);
+	assert.equal(registry.has(model), true);
+	assert.deepEqual([...registry.registeredLanguageIds], ['typescript', '*']);
+
+	second.dispose();
+	assert.deepEqual(registry.ordered(model), ['first', 'builtin', 'wildcard']);
+	assert.deepEqual(counts, [1, 2, 3, 4, 3]);
+});
+
+test('exclusive language feature selectors replace ordinary matches except during recursive lookup', () => {
+	using model = new TextModel('value', { languageId: 'typescript' });
+	const registry = new LanguageFeatureRegistry<string>();
+	registry.register('*', 'wildcard');
+	registry.register('typescript', 'language');
+	registry.register({ language: 'typescript', exclusive: true }, 'exclusive');
+
+	assert.deepEqual(registry.ordered(model), ['exclusive']);
+	assert.deepEqual(registry.ordered(model, true), ['language', 'wildcard']);
 });

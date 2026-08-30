@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../../../common/languages/languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../../../common/languages/languageResultStore.js";
 import { createLanguageTokenStore, type LanguageToken, type LanguageTokenResult } from "../../../common/tokens/languageTokens.js";
@@ -19,7 +19,7 @@ export interface LanguageSemanticTokensRequest {
 	readonly resource?: URI;
 }
 
-export interface LanguageSemanticTokensProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageSemanticTokensProvider {
 	provideSemanticTokens(request: LanguageSemanticTokensRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
 }
 
@@ -41,7 +41,7 @@ export class SemanticTokensService extends Disposable {
 
 	constructor(
 		model: TextModel,
-		providers: OwnedLanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>,
+		providers: LanguageFeatureRegistry<LanguageSemanticTokensProvider>,
 		private readonly stylingService: ISemanticTokensStylingService,
 		private readonly resource?: URI,
 	) {
@@ -72,11 +72,11 @@ interface SemanticTokensProviderResult {
 }
 
 class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane, SemanticTokensPayload, SemanticTokensProviderResult> {
-	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>) {}
+	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageSemanticTokensProvider>) {}
 
 	async run(request: LanguageWorkerRequest<SemanticTokensLane, SemanticTokensPayload>, signal: AbortSignal): Promise<SemanticTokensProviderResult> {
 		const providerRequest = Object.freeze({ requestId: request.requestId, model: this.model, snapshot: request.snapshot, languageId: request.payload.languageId, ...(request.payload.resource ? { resource: request.payload.resource } : {}) });
-		for (const provider of this.providers.getProviders(request.payload.languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			signal.throwIfAborted();
 			const result = await provider.provideSemanticTokens(providerRequest, signal);
 			signal.throwIfAborted();

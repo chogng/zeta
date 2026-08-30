@@ -1,6 +1,6 @@
 import { type URI } from '../../../../base/common/uri.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../common/languages/languageFeatureRequest.js';
-import { type OwnedLanguageFeatureProviderRegistry } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type LanguageCodeLens, type LanguageCodeLensProvider, type LanguageCodeLensRequest } from '../common/languageCodeLenses.js';
 
@@ -21,7 +21,7 @@ export class LanguageCodeLensModel {
 
 export interface CodeLensRequestContext {
 	readonly model: TextModel;
-	readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>;
+	readonly providers: LanguageFeatureRegistry<LanguageCodeLensProvider>;
 	readonly languageId: string;
 	readonly resource?: URI;
 	readonly signal: AbortSignal;
@@ -31,7 +31,7 @@ export interface CodeLensRequestContext {
 /** Collects code lenses while retaining the provider that owns each deferred resolve. */
 export async function getLanguageCodeLensModel(context: CodeLensRequestContext): Promise<LanguageCodeLensModel> {
 	const request = createRequest(context);
-	const providers = context.providers.getProviders(context.languageId);
+	const providers = context.providers.ordered(context.model);
 	const providerRanks = new Map(providers.map((provider, index) => [provider, index] as const));
 	const results = await Promise.all(providers.map(async provider => {
 		try {

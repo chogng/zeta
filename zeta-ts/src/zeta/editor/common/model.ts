@@ -160,6 +160,13 @@ export interface ISingleEditOperationIdentifier {
 	minor: number;
 }
 
+/** A single edit operation carrying the command that produced it. */
+export interface IIdentifiedSingleEditOperation extends ISingleEditOperation {
+	identifier?: ISingleEditOperationIdentifier | null;
+	isAutoWhitespaceEdit?: boolean;
+	_isTracked?: boolean;
+}
+
 export interface IValidEditOperation {
 	identifier: ISingleEditOperationIdentifier | null;
 	range: Range;
@@ -167,11 +174,16 @@ export interface IValidEditOperation {
 	textChange: TextChange;
 }
 
+/** Computes cursor state from the inverse operations returned by the text buffer. */
+export interface ICursorStateComputer {
+	(inverseEditOperations: IValidEditOperation[]): Selection[] | null;
+}
+
 export interface IInternalModelContentChange extends TextModelContentChange {
 	readonly forceMoveMarkers: boolean;
 }
 
-export class ValidAnnotatedEditOperation {
+export class ValidAnnotatedEditOperation implements IIdentifiedSingleEditOperation {
 	constructor(
 		public readonly identifier: ISingleEditOperationIdentifier | null,
 		public readonly range: Range,
@@ -276,7 +288,15 @@ export interface ITextModel extends IDisposable {
 	_getTrackedRange(id: string): Range | null;
 	_setTrackedRange(id: string | null, newRange: null, newStickiness: TrackedRangeStickiness): null;
 	_setTrackedRange(id: string | null, newRange: Range, newStickiness: TrackedRangeStickiness): string;
+	pushStackElement(): void;
+	popStackElement(): void;
 	edit(edit: TextEdit, options?: { reason?: TextModelEditSource }): void;
+	pushEditOperations(beforeCursorState: Selection[] | null, editOperations: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer): Selection[] | null;
+	pushEditOperations(beforeCursorState: Selection[] | null, editOperations: IIdentifiedSingleEditOperation[], cursorStateComputer: ICursorStateComputer, group?: UndoRedoGroup, reason?: TextModelEditSource): Selection[] | null;
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[]): void;
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], reason: TextModelEditSource): void;
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], computeUndoEdits: false): void;
+	applyEdits(operations: readonly IIdentifiedSingleEditOperation[], computeUndoEdits: true): IValidEditOperation[];
 	mightContainRTL(): boolean;
 	mightContainUnusualLineTerminators(): boolean;
 	removeUnusualLineTerminators(selections?: Selection[]): void;
@@ -291,6 +311,7 @@ export interface ITextModel extends IDisposable {
 	findPreviousMatch(searchString: string, searchStart: IPosition, isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean): FindMatch | null;
 	getLanguageId(): string;
 	setLanguage(languageId: string | ILanguageSelection, source?: string): void;
+	getWordAtPosition(position: IPosition): IWordAtPosition | null;
 	getOptions(): TextModelResolvedOptions;
 	getFormattingOptions(): FormattingOptions;
 	getVersionId(): number;
@@ -340,11 +361,14 @@ import type { URI } from '../../base/common/uri.js';
 import type { IPosition, Position } from './core/position.js';
 import type { IRange, Range } from './core/range.js';
 import type { Selection } from './core/selection.js';
+import type { IWordAtPosition } from './core/wordHelper.js';
 import type { WordCharacterClassifier } from './core/wordCharacterClassifier.js';
 import type { ILanguageSelection } from './languages/language.js';
 import type { FormattingOptions } from './languages.js';
 import type { TextBufferSnapshot } from './model/textBufferSnapshot.js';
 import type { TextEdit } from './core/edits/textEdit.js';
+import type { ISingleEditOperation } from './core/editOperation.js';
 import type { IModelLanguageChangedEvent, IModelOptionsChangedEvent } from './textModelEvents.js';
 import { TextChange, type TextModelChange, type TextModelContentChange } from './core/textChange.js';
 import type { TextModelEditSource } from './textModelEditSource.js';
+import type { UndoRedoGroup } from '../../platform/undoRedo/common/undoRedo.js';

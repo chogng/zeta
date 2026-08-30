@@ -6,7 +6,7 @@ import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextEdit } from '../../../common/languages.js';
@@ -25,7 +25,7 @@ export interface LanguageFormattingRequest extends LanguageFeatureRequest {
 	readonly ch?: string;
 }
 
-export interface LanguageFormattingProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageFormattingProvider {
 	provideDocumentFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 	provideRangeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 	provideOnTypeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
@@ -33,7 +33,7 @@ export interface LanguageFormattingProvider extends LanguageFeatureProviderMetad
 
 /** Owns formatting provider dispatch; edit validation/application stays in TextModel and cursor. */
 export class FormatService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageFormattingProvider>, private readonly resource?: URI) {
+	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageFormattingProvider>, private readonly resource?: URI) {
 		super();
 	}
 
@@ -51,7 +51,7 @@ export class FormatService extends Disposable {
 
 	private async provide(languageId: string, fields: Partial<LanguageFormattingRequest>, method: "provideDocumentFormattingEdits" | "provideRangeFormattingEdits" | "provideOnTypeFormattingEdits", signal = new AbortController().signal): Promise<readonly TextEdit[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), ...fields } as LanguageFormattingRequest;
-		for (const provider of this.providers.getProviders(languageId)) {
+		for (const provider of this.providers.ordered(this.model)) {
 			const provide = provider[method];
 			if (!provide || !isLanguageFeatureRequestCurrent(request)) continue;
 			const edits = await provide.call(provider, request, signal);

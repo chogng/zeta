@@ -44,8 +44,6 @@ export function createJsonCompletionProvider(registry: JsonSchemaRegistry = Json
 /** Creates schema descriptions for JSON property keys and values. */
 export function createJsonHoverProvider(registry: JsonSchemaRegistry = JsonSchemasRegistry): LanguageHoverProvider {
 	return Object.freeze({
-		providerId: 'zeta.json.schemaHover',
-		languageIds: jsonLanguageIds,
 		provideHover(request: LanguageHoverRequest, signal: AbortSignal): LanguageHover | undefined {
 			signal.throwIfAborted();
 			const schema = registry.getSchemaForResource(request.resource);
@@ -70,8 +68,6 @@ export function createJsonHoverProvider(registry: JsonSchemaRegistry = JsonSchem
 /** Creates one comment-preserving formatter shared by JSON and JSONC resources. */
 export function createJsonFormattingProvider(): LanguageFormattingProvider {
 	return Object.freeze({
-		providerId: 'zeta.json.formatting',
-		languageIds: jsonLanguageIds,
 		provideDocumentFormattingEdits(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] {
 			signal.throwIfAborted();
 			const source = request.snapshot.getText();

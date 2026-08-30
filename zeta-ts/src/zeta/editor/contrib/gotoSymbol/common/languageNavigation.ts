@@ -3,7 +3,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
+import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 /** One source or target position returned by a cross-resource language feature. */
@@ -23,32 +23,32 @@ export interface LanguageReferenceRequest extends LanguageLocationRequest {
 	readonly includeDeclaration: boolean;
 }
 
-export interface LanguageDefinitionProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageDefinitionProvider {
 	provideDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
-export interface LanguageDeclarationProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageDeclarationProvider {
 	provideDeclaration(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
-export interface LanguageImplementationProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageImplementationProvider {
 	provideImplementation(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
-export interface LanguageTypeDefinitionProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageTypeDefinitionProvider {
 	provideTypeDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
-export interface LanguageReferenceProvider extends LanguageFeatureProviderMetadata {
+export interface LanguageReferenceProvider {
 	provideReferences(request: LanguageReferenceRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
 }
 
 export interface LanguageNavigationProviderRegistries {
-	readonly definitions: OwnedLanguageFeatureProviderRegistry<LanguageDefinitionProvider>;
-	readonly declarations: OwnedLanguageFeatureProviderRegistry<LanguageDeclarationProvider>;
-	readonly implementations: OwnedLanguageFeatureProviderRegistry<LanguageImplementationProvider>;
-	readonly typeDefinitions: OwnedLanguageFeatureProviderRegistry<LanguageTypeDefinitionProvider>;
-	readonly references: OwnedLanguageFeatureProviderRegistry<LanguageReferenceProvider>;
+	readonly definitions: LanguageFeatureRegistry<LanguageDefinitionProvider>;
+	readonly declarations: LanguageFeatureRegistry<LanguageDeclarationProvider>;
+	readonly implementations: LanguageFeatureRegistry<LanguageImplementationProvider>;
+	readonly typeDefinitions: LanguageFeatureRegistry<LanguageTypeDefinitionProvider>;
+	readonly references: LanguageFeatureRegistry<LanguageReferenceProvider>;
 }
 
 /** Coordinates cancellable cross-resource language requests for one source model. */
@@ -78,14 +78,14 @@ export class LanguageNavigationService extends Disposable {
 		return this.collectRequest(languageId, request, this.providers.references, (provider) => provider.provideReferences(request, signal));
 	}
 
-	private async collect<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, position: Position, signal: AbortSignal, registry: OwnedLanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider, request: LanguageLocationRequest) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
+	private async collect<TProvider>(languageId: string, position: Position, signal: AbortSignal, registry: LanguageFeatureRegistry<TProvider>, provide: (provider: TProvider, request: LanguageLocationRequest) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };
 		return this.collectRequest(languageId, request, registry, provider => provide(provider, request));
 	}
 
-	private async collectRequest<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, request: LanguageLocationRequest, registry: OwnedLanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
+	private async collectRequest<TProvider>(languageId: string, request: LanguageLocationRequest, registry: LanguageFeatureRegistry<TProvider>, provide: (provider: TProvider) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
 		const locations: LanguageLocation[] = [];
-		for (const provider of registry.getProviders(languageId)) {
+		for (const provider of registry.ordered(this.model)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			const provided = await provide(provider);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);

@@ -1,4 +1,4 @@
-import './media/zoneWidget.css';
+import './zoneWidget.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Sash, SashState, type SashDragEvent } from '../../../../base/browser/ui/sash/sash.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';

@@ -1,4 +1,4 @@
-import "./media/parameterHints.css";
+import "./parameterHints.css";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";

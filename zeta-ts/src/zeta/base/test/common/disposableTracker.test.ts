@@ -7,6 +7,7 @@ import {
 	Disposable,
 	DisposableTracker,
 	installDisposableTracker,
+	markAsSingleton,
 	MutableDisposable,
 	type IDisposable,
 	noneDisposable,
@@ -43,6 +44,15 @@ test("DisposableTracker reports an unowned disposable until it is disposed", () 
 
 	resource[Symbol.dispose]();
 	tracker.assertNoLeaks();
+});
+
+test("markAsSingleton excludes a process-lifetime disposable from leak reports", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	const resource = markAsSingleton(toDisposable(() => {}));
+
+	tracker.assertNoLeaks();
+	resource.dispose();
 });
 
 test("DisposableTracker records ownership and closes the complete subtree", () => {

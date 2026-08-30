@@ -3,12 +3,12 @@ import test from 'node:test';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { ColorService, type LanguageColorProvider } from '../../common/languageColors.js';
 
 test('default document colors parse CSS hex, RGB, HSL, alpha, and presentations', async () => {
 	using model = new TextModel('a:#f00; b:rgba(0, 128, 255, .5); c:hsl(120, 100%, 25%); d:#11223344; invalid:rgb(1, 2, 3, 4, 5);');
-	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageColorProvider>();
+	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
 	const service = new ColorService(model, providers);
 	const signal = new AbortController().signal;
 
@@ -32,10 +32,9 @@ test('default document colors parse CSS hex, RGB, HSL, alpha, and presentations'
 });
 
 test('explicit providers suppress the default provider in auto mode and retain presentation ownership', async () => {
-	using model = new TextModel('const color = #f00;');
-	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageColorProvider>();
-	using registration = providers.register({
-		languageIds: ['typescript'],
+	using model = new TextModel('const color = #f00;', { languageId: 'typescript' });
+	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
+	using registration = providers.register('typescript', {
 		provideDocumentColors: () => [{
 			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (model.getLineContent((0) + 1).length) + 1)),
 			color: { red: 1 / 255, green: 2 / 255, blue: 3 / 255, alpha: 1 },

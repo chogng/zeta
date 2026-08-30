@@ -1,19 +1,19 @@
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../common/cursor/cursor.js";
 import { ColumnSelection } from "../../common/cursor/cursorColumnSelection.js";
+import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
+import { SelectionStartKind, SingleCursorState } from '../../common/cursorCommon.js';
 import { SelectionDirection, Selection } from "../../common/core/selection.js";
 import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type TrackedRange } from "../../common/model/trackedRange.js";
-import { getWordSelectionRange } from '../../common/cursor/wordSelection.js';
 import { type View } from "../view.js";
 import { BidirectionalDragScrolling } from "./bidirectionalDragScrolling.js";
 import { PointerEventRouter } from "./pointerEventRouter.js";
 import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from "./semanticMouseTarget.js";
 import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
-import { CursorMoveCommands, PointerMultiCursorModifier, type PointerModifierState } from "../../common/cursor/cursorMoveCommands.js";
 import { TrackedRangeStickiness } from '../../common/model.js';
 
 enum MouseSelectionKind {
@@ -45,10 +45,20 @@ interface AdditionalMouseSelections {
 	readonly toggleCandidateIndex: number | undefined;
 }
 
+export enum PointerMultiCursorModifier {
+	Alt = "alt",
+	ControlOrMeta = "controlOrMeta",
+}
+
+interface PointerModifierState {
+	readonly altKey: boolean;
+	readonly ctrlKey: boolean;
+	readonly metaKey: boolean;
+	readonly shiftKey: boolean;
+}
+
 export interface MouseHandlerOptions {
 	readonly multiCursorModifier?: PointerMultiCursorModifier;
-	/** Resolves the current language-specific word pattern for double-click selection. */
-	readonly wordPattern?: () => RegExp | undefined;
 }
 
 /**
@@ -63,7 +73,6 @@ export class EditorPointerSelectionHandler extends Disposable {
 	private readonly pointerHandler: PointerEventRouter;
 	private readonly mouseTargetFactory: SemanticMouseTargetFactory;
 	private readonly multiCursorModifier: PointerMultiCursorModifier;
-	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private activeSelection: ActiveMouseSelection | undefined;
 	private autoScroller: BidirectionalDragScrolling | undefined;
 
@@ -74,13 +83,9 @@ export class EditorPointerSelectionHandler extends Disposable {
 	) {
 		super();
 		try {
-			this.multiCursorModifier = CursorMoveCommands.readPointerMultiCursorModifier(
+			this.multiCursorModifier = readPointerMultiCursorModifier(
 				options.multiCursorModifier,
 			);
-			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-				throw new TypeError("Stanza pointer word pattern resolver must be a function");
-			}
-			this.wordPattern = options.wordPattern;
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -108,7 +113,7 @@ export class EditorPointerSelectionHandler extends Disposable {
 		this.viewport.element.focus({ preventScroll: true });
 		this.stopPointerSelection();
 		const pointerId = readPointerId(event);
-		const addSelection = CursorMoveCommands.isPointerMultiCursorGesture(
+		const addSelection = isPointerMultiCursorGesture(
 			event,
 			this.multiCursorModifier,
 		);
@@ -201,7 +206,7 @@ export class EditorPointerSelectionHandler extends Disposable {
 				);
 			} else {
 				kind = MouseSelectionKind.Word;
-				anchorRange = getWordSelectionRange(this.viewport.textModel, hitTarget.position, this.wordPattern?.());
+				anchorRange = mouseWordRange(this.viewport, hitTarget.position);
 			}
 		} else {
 			kind = MouseSelectionKind.Character;
@@ -215,10 +220,9 @@ export class EditorPointerSelectionHandler extends Disposable {
 		));
 		const initialSelection = selectionForTarget(
 			kind,
-			this.viewport.textModel,
+			this.viewport,
 			anchorRange,
 			hitTarget,
-			this.wordPattern?.(),
 		);
 		return {
 			kind,
@@ -248,7 +252,7 @@ export class EditorPointerSelectionHandler extends Disposable {
 				direction: selection.getDirection(),
 			})),
 			primaryIndex: base.primaryIndex,
-			toggleCandidateIndex: CursorMoveCommands.findPointerToggleCandidate(
+			toggleCandidateIndex: findPointerToggleCandidate(
 				base,
 				initialSelection,
 			),
@@ -312,10 +316,9 @@ export class EditorPointerSelectionHandler extends Disposable {
 		}
 		const selection = selectionForTarget(
 			active.kind,
-			this.viewport.textModel,
+			this.viewport,
 			anchorRange,
 			hitTarget,
-			this.wordPattern?.(),
 		);
 		const additional = active.additionalSelections;
 		if (!additional) {
@@ -323,7 +326,7 @@ export class EditorPointerSelectionHandler extends Disposable {
 			return;
 		}
 		const base = trackedSelectionSet(additional);
-		this.selectionController.setSelections(CursorMoveCommands.combinePointerSelection(
+		this.selectionController.setSelections(combinePointerSelection(
 			base,
 			selection,
 			additional.toggleCandidateIndex,
@@ -362,14 +365,72 @@ export function isPositionInSelections(position: Position, selections: Selection
 	return selections.selections.some(selection => !selection.isEmpty() && Position.compare(position, selection.getStartPosition()) >= 0 && Position.compare(position, selection.getEndPosition()) < 0);
 }
 
-function selectionForTarget(kind: MouseSelectionKind, model: TextModel, anchorRange: Range, hitTarget: EditorHitTarget, wordPattern: RegExp | undefined): Selection {
+function readPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
+	const resolved = value ?? PointerMultiCursorModifier.Alt;
+	if (resolved !== PointerMultiCursorModifier.Alt && resolved !== PointerMultiCursorModifier.ControlOrMeta) {
+		throw new TypeError('Unknown Stanza pointer multi-cursor modifier');
+	}
+	return resolved;
+}
+
+function isPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
+	if (state.shiftKey) return false;
+	if (modifier === PointerMultiCursorModifier.Alt) return state.altKey && !state.ctrlKey && !state.metaKey;
+	return (state.ctrlKey || state.metaKey) && !state.altKey;
+}
+
+function findPointerToggleCandidate(base: SelectionSet, selection: Selection): number | undefined {
+	const index = base.selections.findIndex(candidate => selectionsHaveSameRange(candidate, selection));
+	return index >= 0 ? index : undefined;
+}
+
+function combinePointerSelection(base: SelectionSet, active: Selection, toggleCandidateIndex: number | undefined): SelectionSet {
+	if (toggleCandidateIndex !== undefined && selectionsHaveSameRange(base.selections[toggleCandidateIndex]!, active)) {
+		if (base.selections.length === 1) return base;
+		const selections = base.selections.filter((_, index) => index !== toggleCandidateIndex);
+		return SelectionSet.withPrimary(selections, primaryAfterRemoval(base.primaryIndex, toggleCandidateIndex, selections.length));
+	}
+
+	const retained = toggleCandidateIndex === undefined
+		? [...base.selections]
+		: base.selections.filter((_, index) => index !== toggleCandidateIndex);
+	const duplicateIndex = retained.findIndex(selection => selectionsHaveSameRange(selection, active));
+	if (duplicateIndex >= 0) return SelectionSet.withPrimary(retained, duplicateIndex);
+	const nonOverlapping = retained.filter(selection => !selectionRangesOverlap(selection, active));
+	if (nonOverlapping.length === 0) return SelectionSet.single(active);
+	return SelectionSet.withPrimary([...nonOverlapping, active], nonOverlapping.length);
+}
+
+function selectionsHaveSameRange(left: Selection, right: Selection): boolean {
+	return Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 && Position.compare(left.getEndPosition(), right.getEndPosition()) === 0;
+}
+
+function selectionRangesOverlap(left: Selection, right: Selection): boolean {
+	if (left.isEmpty()) return pointOverlapsRange(left.getStartPosition(), right);
+	if (right.isEmpty()) return pointOverlapsRange(right.getStartPosition(), left);
+	return Position.compare(left.getStartPosition(), right.getEndPosition()) < 0 && Position.compare(right.getStartPosition(), left.getEndPosition()) < 0;
+}
+
+function pointOverlapsRange(point: Position, selection: Selection): boolean {
+	if (selection.isEmpty()) return Position.compare(point, selection.getStartPosition()) === 0;
+	return Position.compare(point, selection.getStartPosition()) >= 0 && Position.compare(point, selection.getEndPosition()) < 0;
+}
+
+function primaryAfterRemoval(primaryIndex: number, removedIndex: number, remainingCount: number): number {
+	if (primaryIndex < removedIndex) return primaryIndex;
+	if (primaryIndex > removedIndex) return primaryIndex - 1;
+	return Math.min(removedIndex, remainingCount - 1);
+}
+
+function selectionForTarget(kind: MouseSelectionKind, viewport: View, anchorRange: Range, hitTarget: EditorHitTarget): Selection {
+	const model = viewport.textModel;
 	const anchor = anchorRange.getStartPosition();
 	if (kind === MouseSelectionKind.Character) {
 		return Selection.fromPositions(anchor, hitTarget.position);
 	}
 	if (kind === MouseSelectionKind.Column) return Selection.fromPositions(anchor);
 	if (kind === MouseSelectionKind.Word) {
-		return wordSelection(model, anchorRange, hitTarget.position, wordPattern);
+		return wordSelection(viewport, anchorRange, hitTarget.position);
 	}
 	if (kind === MouseSelectionKind.WholeLine) {
 		return wholeLineSelection(
@@ -379,7 +440,7 @@ function selectionForTarget(kind: MouseSelectionKind, model: TextModel, anchorRa
 		);
 	}
 	if (kind === MouseSelectionKind.ExtendToWord) {
-		return extendSelectionToWord(model, anchor, hitTarget.position, wordPattern);
+		return extendSelectionToWord(viewport, anchor, hitTarget.position);
 	}
 	return extendSelectionToLine(model, anchor, hitTarget.position.lineNumber);
 }
@@ -396,19 +457,24 @@ function trackedSelectionSet(additional: AdditionalMouseSelections): SelectionSe
 	);
 }
 
-function wordSelection(model: TextModel, anchorRange: Range, activePosition: Position, wordPattern: RegExp | undefined): Selection {
-	const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
+function wordSelection(viewport: View, anchorRange: Range, activePosition: Position): Selection {
+	const activeRange = mouseWordRange(viewport, activePosition);
 	return Position.compare(activeRange.getStartPosition(), anchorRange.getStartPosition()) < 0
 		? Selection.fromPositions(anchorRange.getEndPosition(), activeRange.getStartPosition())
 		: Selection.fromPositions(anchorRange.getStartPosition(), activeRange.getEndPosition());
 }
 
-function extendSelectionToWord(model: TextModel, anchor: Position, activePosition: Position, wordPattern: RegExp | undefined): Selection {
-	const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
+function extendSelectionToWord(viewport: View, anchor: Position, activePosition: Position): Selection {
+	const activeRange = mouseWordRange(viewport, activePosition);
 	const active = Position.compare(activeRange.getStartPosition(), anchor) < 0
 		? activeRange.getStartPosition()
 		: activeRange.getEndPosition();
 	return Selection.fromPositions(anchor, active);
+}
+
+function mouseWordRange(viewport: View, position: Position): Range {
+	const cursor = new SingleCursorState(Range.fromPositions(position), SelectionStartKind.Simple, 0, position, 0);
+	return WordOperations.word(viewport.cursorConfig, viewport.cursorModel, cursor, false, position).selectionStart;
 }
 
 function wholeLineSelection(

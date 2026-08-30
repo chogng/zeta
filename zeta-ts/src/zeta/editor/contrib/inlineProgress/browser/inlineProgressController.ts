@@ -1,4 +1,4 @@
-import "./media/inlineProgress.css";
+import "./inlineProgressWidget.css";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";

@@ -4,9 +4,10 @@
 
 ## 当前结论
 
-- 已扫描 491 个本地生产文件，并与 661 个 VS Code Editor 生产文件比较。
-- 初始确认 118 组同名声明结构差异；已处理 106 组，剩余 12 组。此前通过改成本地名称隐藏的 cursor 与 observable editor 差异已经重新纳入待处理项。
-- 当前没有已知的 import owner 路径错误、全局唯一 owner 冲突或同 basename 放错路径候选。
+- 2026-08-30 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Zeta Editor 568 个，VS Code Editor 727 个；287 个同路径，281 个仅本地，440 个仅上游。
+- 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
+- 账目摘要：初始确认 118 组同名声明结构差异，已处理 7 组，剩余 111 组。原先标成已处理的 106 组已经逐项重查；只有 7 个声明通过文件集合、import owner、生产调用链和生命周期复核，其余全部退回待处理表。
+- 281 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Zeta 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题，也不新增 Editor 生产文件。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
 - 输入、参数和返回类型一致不代表行为已经一致。剩余项仍需继续核对状态 owner、事件顺序、失效条件、调度阶段、坐标转换、可见副作用、失败语义和释放时机。
 
@@ -21,10 +22,20 @@
 
 | 文件 | 声明 | 结果 |
 | --- | --- | --- |
+| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 字段、构造行为和外部数据转换与上游一致；生产调用经过输入上下文、Clipboard contribution 和 Observable Editor，浏览器测试覆盖 metadata 与外部数据转换 |
+| `common/cursor/cursorColumnSelection.ts` | `ColumnSelection` | 同路径实现与上游归一化文本一致；生产鼠标列选经过 `MouseHandler`、`CursorConfiguration`、视觉行模型和坐标转换，直接测试覆盖方向与短行行为 |
+| `contrib/colorPicker/browser/colorPickerModel.ts` | `ColorPickerModel` | 公共成员、颜色与 presentation 事件、切换和释放生命周期与上游一致；生产由 Color Picker controller 创建并由 dialog 消费 |
+| `standalone/browser/standaloneEditor.ts` | `createModel`、`getModel`、`getModels`、`setModelLanguage` | 公共模型边界使用 `ITextModel`；`createModel` 委托 `standaloneCodeEditor.ts::createTextModel`，未显式给语言时按 URI 和首行推断，显式语言优先；模型注册、查询、语言事件和释放由 Standalone 测试覆盖 |
+
+## 尚未补齐的同名契约
+
+下表第一部分保留此前的处理说明，便于追查错误判断；这些结论已经撤回，表内所有声明都需要按对应 owner 切片继续迁移。三个 Render Strategy 的路径已从错误的 `gpu/raster` 修正为上游实际的 `gpu/renderStrategy`。
+
+| 文件 | 声明 | 此前结论（已撤回） |
+| --- | --- | --- |
 | `browser/controller/dragScrolling.ts` | `DragScrolling` | 本地职责已改名或移出上游 owner |
 | `browser/controller/mouseHandler.ts` | `MouseHandler` | 本地 pointer/selection owner 改为 `EditorPointerSelectionHandler` |
 | `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 本地职责已改名或移出上游 owner |
-| `browser/controller/editContext/clipboardUtils.ts` | `IClipboardPasteEvent` | 已按上游契约对齐 |
 | `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 本地职责已改名或移出上游 owner |
 | `browser/controller/editContext/native/debugEditContext.ts` | `DebugEditContext` | 本地职责已改名或移出上游 owner |
 | `browser/controller/editContext/native/nativeEditContextUtils.ts` | `FocusTracker` | 本地 DOM 焦点助手改为明确的 `EditContextFocusTracker` |
@@ -41,9 +52,9 @@
 | `browser/gpu/atlas/textureAtlasSlabAllocator.ts` | `TextureAtlasSlabAllocator` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/raster/glyphRasterizer.ts` | `GlyphRasterizer` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/rectangleRenderer.ts` | `RectangleRenderer` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/raster/baseRenderStrategy.ts` | `BaseRenderStrategy` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/raster/fullFileRenderStrategy.ts` | `FullFileRenderStrategy` | 本地职责已改名或移出上游 owner |
-| `browser/gpu/raster/viewportRenderStrategy.ts` | `ViewportRenderStrategy` | 本地职责已改名或移出上游 owner |
+| `browser/gpu/renderStrategy/baseRenderStrategy.ts` | `BaseRenderStrategy` | 本地职责已改名或移出上游 owner |
+| `browser/gpu/renderStrategy/fullFileRenderStrategy.ts` | `FullFileRenderStrategy` | 本地职责已改名或移出上游 owner |
+| `browser/gpu/renderStrategy/viewportRenderStrategy.ts` | `ViewportRenderStrategy` | 本地职责已改名或移出上游 owner |
 | `browser/gpu/viewGpuContext.ts` | `ViewGpuContext` | 本地职责已改名或移出上游 owner |
 | `browser/observableCodeEditor.ts` | `observableCodeEditor` | 已恢复上游公开名、单参数入口和单例 facade 身份 |
 | `browser/viewParts/overlayWidgets/overlayWidgets.ts` | `ViewOverlayWidgets` | 已恢复上游公开名、成员边界、DOM owner、配置更新、布局缓存和 widget 生命周期 |
@@ -94,13 +105,11 @@
 | `common/viewLayout/viewLayout.ts` | `ViewLayout` | 本地 viewport layout owner 改为 `EditorViewportLayoutManager` |
 | `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 已恢复上游公开名与成员边界；selection offset 归并留在文件私有 helper，不再伪装成 class API |
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 已恢复上游公开名与 `_runAutoClosingOvertype` 内部阶段，现有多光标 overtype 行为保持不变 |
-| `common/cursor/cursorColumnSelection.ts` | `ColumnSelection` | 已恢复上游 5 个公开方法；鼠标列选通过 `CursorConfiguration`、视觉行模型和 `ICoordinatesConverter` 往返模型坐标，方向与短行行为由生产调用链测试覆盖 |
 | `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 成员边界与上游比较为 0；字符、折行、visible column、sticky tab stop、上下移动、空行与 buffer 边界行为使用 `CursorConfiguration` 和 `ICursorSimpleModel`。本地 `SelectionSet` 键盘导航已迁到 `cursorNavigation.ts` |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `PieceTreeTextBuffer` | 已恢复 `common/model.ts` 的 `ITextBuffer` owner、1-based Position/Range 查询、原子编辑与逆编辑、逐行搜索、内容事件、BOM/EOL 和释放契约；红黑树内部结构保持本地实现 |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | `PieceTreeTextBufferBuilder` | 已按上游两阶段 builder/factory 契约对齐 |
 | `common/services/model.ts` | `IModelService` | 已恢复 `ITextModel`、buffer factory、creation options 与 edit source 契约 |
 | `common/services/modelService.ts` | `ModelService` | 模型创建配置改由 `platform/configuration` 注入；语言/资源配置失效会更新现有模型，EOL 由 `ITextResourcePropertiesService` 决定，关闭文件的 undo/redo 以 SHA-1 校验内容并受内存上限约束 |
-| `contrib/colorPicker/browser/colorPickerModel.ts` | `ColorPickerModel` | 已按上游契约对齐 |
 | `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 本地职责已改名或移出上游 owner |
 | `contrib/folding/browser/foldingDecorations.ts` | `FoldingDecorationProvider` | 本地职责已改名或移出上游 owner |
 | `contrib/message/browser/messageController.ts` | `MessageController` | 本地职责已改名或移出上游 owner |
@@ -120,11 +129,10 @@
 | `contrib/suggest/browser/suggestController.ts` | `SuggestController` | 本地 contribution 实现改为 `EditorSuggestController` |
 | `contrib/zoneWidget/browser/zoneWidget.ts` | `ZoneWidget` | 本地 View/DOM 基类改为 `EditorZoneWidget` |
 | `contrib/wordHighlighter/browser/textualHighlightProvider.ts` | `TextualMultiDocumentHighlightFeature` | 单模型 target 生命周期改为明确的 `TextualHighlightTargetRegistration` |
-| `standalone/browser/standaloneEditor.ts` | `createModel`、`getModel`、`getModels`、`setModelLanguage` | 公共模型边界已改用 `ITextModel` |
 | `standalone/browser/standaloneEditor.ts` | `getEditors` | 改由 `IWidgetCodeEditorRegistry` 统一持有并返回实际编辑器对象 |
 | `standalone/browser/standaloneEditor.ts` | `create` | 返回 `standaloneCodeEditor.ts` 的 `StandaloneEditor`；`create()`、`onDidCreateEditor()` 与 `getEditors()` 现在共享同一对象身份和释放时机，不再把内部 widget 当成另一个编辑器暴露 |
 
-## 尚未补齐的同名契约
+### 原待处理项
 
 | 文件 | 声明 | 分类 |
 | --- | --- | --- |
@@ -141,45 +149,28 @@
 | `common/model/textModel.ts` | `TextModel` | 文本模型与 Piece Tree |
 | `common/model.ts` | `ITextModel` | 文本模型与 Piece Tree |
 
-## 本轮已经落实
+## 当前已验证能力
 
-- `browser/editorBrowser.ts` 只保留上游同路径的编辑器公共契约；完整装配根、输入资源和输入控制分别由 `configuredCodeEditor.ts`、`editorInput.ts`、`editorView.ts` 负责。
-- `browser/view.ts` 直接导出 `View`，所有生产调用方、测试和文档已移除 `EditorViewport` 兼容别名。
-- `browser/viewParts` 已按区分大小写的上游路径落盘；`ViewOverlayWidgets` 已恢复上游公开名与成员边界，DOM owner、配置更新、布局缓存和 widget 生命周期均由该 owner 负责。本地专有 GPU、颜色弹窗、折叠装饰、预览面板和状态消息仍使用明确的本地名称。
-- cursor owner 组已移除 `EditorSelection*` / `ModelColumnSelection` 等本地公开名。`CursorConfiguration`、`CursorContext`、`ICursorSimpleModel` 和投影坐标转换已经建立；`Cursor` 与 `CursorCollection` 的成员比较为 0，直接测试覆盖 marker 恢复、primary-first、重叠合并和折行 model/view state。生产 `CursorsController` 尚未改由统一 `ViewModel` 持有，因此这两项仍留在待处理表。
-- `MoveOperations` 已恢复上游完整成员和状态输入；原先混在该 class 里的 `SelectionSet` 导航职责迁到 `cursorNavigation.ts`。base `strings` 提供同路径的 grapheme `nextCharLength`、`prevCharLength` 与左删 offset，因此 common cursor 不再反向持有另一套字符边界。
-- `DeleteOperations` 与 `WordOperations` 的成员比较均为 0；上游命令使用 `editorCommon.ts` 的 `ICommand` 和 `commands/replaceCommand.ts`，本地 `SelectionSet` 到事务命令的转换使用显式的 `selectionSetDeleteOperations.ts`、`selectionSetWordOperations.ts`。浏览器正则词选区位于 `wordSelection.ts`，不再伪装成上游 `WordOperations` 成员。
-- `LinesLayout` 与 `LineHeightsManager` 恢复 1 基行号和 whitespace 契约；`EditorViewportLinesLayout` 只适配本地零基行号、overscan 和快照格式，行高、padding、View Zone/whitespace 排序、总高度与偏移均走 `LinesLayout`。
-- `TextAreaState` 不再二次反转 RTL 选择方向，也不再保留旧调试常量别名。
-- 参数提示配置在 editor 边界使用 `IEditorOptions['parameterHints']` 对象；Workbench 的布尔配置只在接入边界转换一次。
-- `editor/browser/dataTransfer.ts` 负责浏览器 `DataTransfer` 到 `VSDataTransfer` 的转换；通用 MIME 留在 base，桌面文件路径解析留在 platform。
-- citation 工具栏已从真实 owner `contrib/citation/common/citationCommands.ts` 导入命令，移除了不存在的聚合路径。
-- `RangeUtil` 按渲染行的 `ownerDocument` 复用 DOM Range，不再错误使用全局 document；RTL 选区、光标和跨 document 编辑器都走实际所在文档的几何。
-- `ITextModel` 已恢复读取、配置、可变 EOL、`isDisposed()`、attached-view 计数/事件和内部 tracked-range ID 契约；View 会把可见逻辑行写入实际 attached handle，并在释放时 detach。尚未实现的 model-owned decoration、tokenization、完整 ViewModel 注册与完整编辑栈契约仍保留在待处理项中，不用空声明冒充完成。
-- `ModelService` 现在由 `platform/configuration` 和 `ITextResourcePropertiesService` 驱动；相关配置变化会更新已打开模型，关闭文件 history 通过 SHA-1、URI 策略和内存预算决定是否恢复。模型配置键由 editor common owner 注册，Workbench 只消费，不再反向拥有。
-- `standaloneEditor.create` 返回 `standaloneCodeEditor.ts` 的 `StandaloneEditor`；创建事件、`getEditors()` 和调用者持有的是同一对象，内部 `CodeEditorWidget` 不再冒充第二个独立编辑器。
-- `standaloneLanguages.ts` 的公共 provider 注册已恢复上游名称和 `(LanguageSelector, provider)` 输入边界；selector 只在入口转换成内部 registry 所需的 `languageIds` owner 元数据，旧的 `registerLanguage*Provider` 和 provider 内嵌 selector 写法已经移除。Zeta 的 worker provider batch、syntax provider 与跨文档 highlight 仍以明确的扩展入口存在。
-- `TextModel.createSnapshot` 已恢复上游的顺序读取协议；本地语言请求需要的版本化随机读取快照迁到独立 `createVersionedSnapshot`，Editor 与 Workbench 调用方已按职责迁移。
-- `common/coordinatesConverter.ts` 已建立上游同 owner 的 `ICoordinatesConverter` 和真实的 `IdentityCoordinatesConverter`；`ViewModelLines.createCoordinatesConverter()` 使用同一份折行与隐藏行映射完成 model/view 往返，逻辑行换行输入由独立 `ILineBreaksComputerContext` 提供，不与视觉行 `getLineContent` 混用。
-- `browser/services/editorWorkerService.ts` 现在持有生产使用的 `VersionedEditorWorkerClient`，浏览器 Worker factory、Configured Editor 和相关 contribution 都从该 owner 导入；旧 `versionedEditorWorkerClient.ts` 已删除。公共 worker 启动入口也已迁到 `editor.worker.start.ts` 的 `start()`，三个 worker main 使用同一路径。
-- `browser/services/inlineCompletionsService.ts` 已建立 editor 级 snooze 生命周期；provider 收集仍由职责不同的 `inlineCompletionProviderService.ts` 持有，inline completion contribution 通过 capability 显式连接两者。
-- `browser/config/editorConfiguration.ts` 已成为生产 `View` 使用的浏览器配置 owner；此前塞在 `view.ts` 内的私有配置类已删除，common 只保留 `IEditorConfiguration` 契约。option ID 事件和 layout height 更新有直接测试；完整上游环境计算仍随 `View` / `CodeEditorWidget` 继续收口。
+- 118 项严格完成项只有上表 4 行、7 个声明；“类名已改名”“成员数量相同”或“本地实现能工作”都不再作为完成依据。
+- Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
+- `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
+- `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 118 项完成数。
 
-## 基础 owner 阻塞
+## 待处理 owner 顺序
 
-同名差异表只统计“两边已经存在同路径声明”的项目，不包含上游存在而 Zeta 尚未建立的文件。架构测试当前明确暴露了这些基础缺口：
-
-- `CursorContext`、`CursorConfiguration`、`ICursorSimpleModel` 与投影坐标转换已经存在并有直接测试；当前 `CursorsController` 仍早于 `ViewModelLines` 创建，尚未由统一 `ViewModel` 持有，因此 context 还没有进入完整生产生命周期。
-- `browser/view/domLineBreaksComputer.ts` 已承担浏览器测量和批量换行请求，`common/modelLineProjectionData.ts` 拥有通用契约；注入文本装饰仍需由 `TextModel` 的 decoration owner 接入。
-- `common/services/semanticTokensStylingService.ts` 已承担按 provider 缓存 styling 的服务生命周期，`semanticTokensProviderStyling.ts` 负责单 provider 解析；本地 provider 的 `LanguageToken` 表示与上游 legend metadata 仍不同。
-- `browser/editorBrowser.ts` 还没有完整的 `ICodeEditor` / `IDiffEditor` 契约，因此稳定滚动、编辑器服务和多个 contrib 仍不能按上游调用链收口。
-- `common/services/resolverService.ts` 已恢复 URI text-model resolver 契约，`platform/editor/common/editor.ts` 提供其异步 model 生命周期；它不承担 Workbench 的脏状态、保存、revert 和冲突处理，那些职责继续留在独立的 `ITextModelResourceService`。
-- 架构必需文件检查现在一次报告全部缺口；只剩依赖统一 `ViewModel` rendering/decorations 查询的 `common/viewLayout/viewLinesViewportData.ts`。browser `EditorConfiguration`、resolver service、worker service 与 worker 入口已经建立。
-- 上游 `IClipboardCopyEvent` / `createClipboardCopyEvent` 依赖 ViewModel 生成 `dataToCopy` 并负责写入编辑器元数据；本地现有 DOM 包装已改为 `IEditorClipboardCopyEvent` / `createEditorClipboardCopyEvent`，不再冒充该能力。
+| 顺序 | 所有权切片 | 当前问题 | 闭环条件 |
+| --- | --- | --- | --- |
+| 1 | Platform 配置与语言身份 | 配置 override 事件、全局 Registry、Modes Registry、语言实例 Registry 和语言配置 Registry 未形成上游链；现有语言配置服务有 28 个生产调用方 | 先统一配置键、override 与 Registry，再迁移语言身份和语言配置调用方，删除旧 owner |
+| 2 | TextModel parts | token 状态仍由每个 Editor 持有；decoration、tokenization、ViewModel 注册和 Piece Tree 内部 owner 均未完整对应 | TextModel 唯一持有 tokenization/decoration parts；Model Service、Piece Tree、undo/redo 构造与测试同步完成 |
+| 3 | ViewModel 与 Cursor | `CursorsController` 仍使用 `SelectionSet + EditorEditCommand`，并早于 `ViewModelLines` 创建；Cursor 目录 7 个仅本地文件仍承载上游职责 | 建立 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor` 唯一链，迁移调用方后删除 7 个旧文件 |
+| 4 | ViewContext、ViewPart 与 View | 23 个同路径 View Part 被本地 scheduler 类占用，事件、render 阶段和释放由手工 coordinator 调度 | 先恢复 ViewContext 事件与 ViewPart 生命周期，再迁移 View 和全部 Part；不能逐个复制叶子类 |
+| 5 | CodeEditor Widget 与服务 | `CodeEditorWidget`、`ICodeEditor`、编辑器服务和 contribution 生命周期不完整；Workbench 仍导入缺失的 Diff/MultiDiff canonical export | Widget、服务、贡献初始化、model attach/detach、view state 和公开对象身份同批闭环 |
+| 6 | GPU 与 Editor contribution | Styled GPU 是一条独立生产链；19 个 contribution 通过改成 `Editor*` 隐藏同路径声明缺口 | GPU 按 atlas→rasterizer→strategy→context→ViewLinesGpu 整链迁移；contribution 随各自 Widget/服务 owner 迁移 |
 
 ## 验证状态
 
-- 本轮 cursor movement、delete、word、`SelectionSet` 输入事务、键盘/折行导航、公共入口与架构联合回归共 64 项，其中 63 项通过；唯一失败是下述 `ViewportData` owner 缺口。`Cursor` / `CursorCollection` 的 marker、primary-first、overlap normalize 和 model/view state 另有直接测试。
-- `tsconfig.test.json` 的 editor 范围已无类型错误；全仓仍被 Workbench 调用端漂移阻塞。
-- Editor 架构测试仍有 1 项失败，明确只列出 `ViewportData` 这个真实 owner 缺口；resolver service、browser EditorConfiguration、worker service 与 worker 入口已经通过。公共入口和 standalone language provider API 回归已经通过。
-- 118 项账目当前为 106 项已处理、12 项待处理。下一批先让统一 `ViewModel` 持有 `ViewModelLines`、坐标转换和 `CursorsController`，再收口其余 cursor 类以及 `View` / `CodeEditorWidget`。
+- 文件集合审计：287 个同路径、0 个大小写错误、281 个仅本地、440 个仅上游；Zeta 568 个生产文件，VS Code 727 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
+- 118 项账本校验通过：7 项已处理、111 项待处理、总计 118 个唯一声明。
+- `tsconfig.stanza.json --noEmit` 通过；已处理项定向测试 20/20 通过，其中 Standalone 13 项，Clipboard、Column Selection 与 Color Picker Model 7 项。
+- `tsconfig.test.json` 仍报告 11 个已有错误，集中在 Workbench Dialog、Diff/MultiDiff canonical export 与 PDF getter 调用；本次 Standalone 文件没有新增类型错误。
+- 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 111 项中扣减。

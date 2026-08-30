@@ -11,7 +11,7 @@ import { Range } from '../../../../common/core/range.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { TestLanguageFeaturesService as EditorLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
+import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver {
@@ -38,7 +38,7 @@ const { TextualHighlightTargetRegistration } = await import('../../../wordHighli
 const { EditorSelectionHighlighter } = await import('../../browser/multicursor.js');
 
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
-	using languages = new EditorLanguageFeaturesService();
+	using languages = new TestLanguageFeaturesService();
 	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
@@ -50,7 +50,7 @@ test('Selection highlighter owns non-empty textual matches and excludes active s
 });
 
 test('Selection highlighter applies whole-word, whitespace, multiline, and maximum-length policy', () => {
-	using languages = new EditorLanguageFeaturesService();
+	using languages = new TestLanguageFeaturesService();
 	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
@@ -63,12 +63,12 @@ test('Selection highlighter applies whole-word, whitespace, multiline, and maxim
 	assert.equal(harness.decorations.size, 0);
 });
 
-function createHarness(text: string, languages: EditorLanguageFeaturesService, initialSelection: Selection): SelectionHarness {
+function createHarness(text: string, languages: TestLanguageFeaturesService, initialSelection: Selection): SelectionHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
 	const selections = new CursorsController(model, SelectionSet.single(initialSelection));
-	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource: URI.parse('file:///selection.ts'), model, wordPattern: () => undefined });
+	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource: URI.parse('file:///selection.ts'), model });
 	const decorations = new TextDecorationCollection<boolean>(model);
 	const viewport = new View({
 		container,
