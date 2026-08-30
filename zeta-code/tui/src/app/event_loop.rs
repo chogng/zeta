@@ -14,6 +14,7 @@ use super::redraw::RedrawScheduler;
 use super::request_completion::RequestCompletion;
 use super::request_completion::apply_request_completion;
 use super::request_completion::apply_thread_snapshot;
+use super::request_completion::apply_tui_config;
 use super::request_completion::create_manager_session_and_start;
 use super::request_completion::finish_conversation_request;
 use super::request_completion::finish_product_command_request;
@@ -34,15 +35,14 @@ use crate::features::approval::Approval;
 use crate::features::config;
 use crate::features::dirs;
 use crate::features::file_search::FileSearchManager;
-use crate::features::keymap::KeymapResource;
-use crate::features::keymap::KeymapResourcePoll;
+use crate::features::keymap;
 use crate::features::mcp;
 use crate::features::query::Query;
 use crate::features::rewind;
 use crate::features::sessions;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::skills;
-use crate::features::status_line::StatusLineResource;
+use crate::features::status_line;
 use crate::features::theme as theme_feature;
 use crate::features::theme::ThemeResource;
 use crate::features::thread::ThreadRequestScope;
@@ -85,8 +85,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         display_dir_root,
         host_dir_root,
         host_file_search_root,
-        keybindings_path,
-        status_line_path,
         theme_root,
         recovery,
     } = options;
@@ -148,13 +146,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         Err(error) => app.update(AppEvent::FailureReported(error)),
     }
     match initial_config {
-        Ok(config) => {
-            match config::TerminalSettings::from_tui(&config.tui) {
-                Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
-                Err(error) => app.update(AppEvent::FailureReported(error)),
-            }
-            app.update(AppEvent::PreferredModelReceived(config.preferred_model));
-        }
+        Ok(config) => apply_tui_config(config, &mut app),
         Err(error) => app.update(AppEvent::FailureReported(format!(
             "could not read server configuration: {error}"
         ))),
@@ -165,9 +157,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             "could not load Sessions: {error}"
         ))),
     }
-    let now = Instant::now();
-    let mut keymap_resource = keybindings_path.map(|path| KeymapResource::new(path, now));
-    let mut status_line_resource = status_line_path.map(StatusLineResource::new);
     apply_thread_snapshot(
         &mut app,
         &mut active_turn,
@@ -177,13 +166,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     app.update(AppEvent::SkillDiagnosticsReceived(
         initial_skill_diagnostics,
     ));
-    poll_keymap_resource(&mut keymap_resource, &mut app, now);
-    if let Some(resource) = status_line_resource.as_mut() {
-        match resource.refresh() {
-            Ok(settings) => app.update(AppEvent::StatusLineSettingsReceived(settings)),
-            Err(error) => app.update(AppEvent::FailureReported(error)),
-        }
-    }
     if let Ok(status) = client.git_status() {
         app.update(AppEvent::GitStatusReceived(status));
     }
@@ -192,6 +174,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut pending_request: Option<client::RequestTask<RequestCompletion>> = None;
     let mut queued_actions = VecDeque::new();
     let mut thread_refresh_requested = false;
+    let mut config_refresh_requested = false;
     let mut skills_refresh_requested = false;
     let mut connectors_refresh_requested = false;
     let mut sessions_refresh_requested = false;
@@ -291,6 +274,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         &mut app,
                     );
                     thread_refresh_requested |= refresh.thread;
+                    config_refresh_requested |= refresh.config;
                     skills_refresh_requested |= refresh.skills;
                     connectors_refresh_requested |= refresh.connectors;
                     sessions_refresh_requested |= refresh.sessions;
@@ -304,9 +288,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Tick) => {
                     let now = Instant::now();
-                    let app_changed = app.handle_tick(now);
-                    let keymap_changed = poll_keymap_resource(&mut keymap_resource, &mut app, now);
-                    if app_changed || keymap_changed {
+                    if app.handle_tick(now) {
                         redraw.request(now, RedrawPriority::Batched);
                     }
                     None
@@ -604,63 +586,58 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenKeymapPane => match keymap_resource.as_ref() {
-                        Some(resource) => {
-                            app.update(AppEvent::KeymapPaneOpened(
-                                resource.pane_spec(&app.app_keymap),
-                            ));
-                        }
-                        None => app.update(AppEvent::FailureReported(
-                            "shortcuts are unavailable because no active profile root was configured"
-                                .to_owned(),
-                        )),
-                    },
-                    AppCommand::OpenStatusLinePane => match status_line_resource.as_mut() {
-                        Some(resource) => match resource.refresh() {
-                            Ok(settings) => {
-                                app.update(AppEvent::StatusLineSettingsReceived(settings));
-                                app.update(AppEvent::StatusLinePaneOpened(resource.setup_pane_spec()));
-                            }
-                            Err(error) => app.update(AppEvent::FailureReported(error)),
-                        },
-                        None => app.update(AppEvent::FailureReported(
-                            "status-line settings are unavailable because no active profile root was configured"
-                                .to_owned(),
-                        )),
-                    },
-                    AppCommand::EditStatusLine(edit) => match status_line_resource.as_mut() {
-                        Some(resource) => match resource.apply_edit(&edit) {
-                            Ok((settings, view)) => {
-                                app.update(AppEvent::StatusLineSettingsReceived(settings));
-                                app.update(AppEvent::StatusLinePaneReplaced(view));
-                            }
-                            Err(error) => app.update(AppEvent::FailureReported(error)),
-                        },
-                        None => app.update(AppEvent::FailureReported(
-                            "status-line settings are unavailable because no active profile root was configured"
-                                .to_owned(),
-                        )),
-                    },
-                    AppCommand::EditKeymap(edit) => match keymap_resource.as_mut() {
-                        Some(resource) => match resource.apply_edit(
-                            &edit,
-                            &mut app.app_keymap,
-                            Instant::now(),
-                        ) {
-                            Ok(notice) => {
-                                app.update(AppEvent::KeymapPanesClosed);
-                                app.update(AppEvent::KeymapPaneOpened(
-                                    resource.pane_spec(&app.app_keymap),
-                                ));
-                                app.update(AppEvent::HostOperationCompleted(Ok(notice)));
-                            }
-                            Err(error) => app.update(AppEvent::FailureReported(error)),
-                        },
-                        None => app.update(AppEvent::FailureReported(
-                            "shortcuts are unavailable because no active profile root was configured"
-                                .to_owned(),
-                        )),
-                    },
+                    AppCommand::OpenKeymapPane => {
+                        let mut request_client = client.clone();
+                        pending_request = spawn_request(
+                            "zeta-tui-read-keymap",
+                            move || {
+                                RequestCompletion::Presentation(
+                                    keymap::read_keymap(&mut request_client)
+                                        .map(AppEvent::KeymapPaneOpened),
+                                )
+                            },
+                            &mut app,
+                        );
+                    }
+                    AppCommand::OpenStatusLinePane => {
+                        let mut request_client = client.clone();
+                        pending_request = spawn_request(
+                            "zeta-tui-read-status-line",
+                            move || {
+                                RequestCompletion::Presentation(
+                                    status_line::read_status_line(&mut request_client)
+                                        .map(AppEvent::StatusLinePaneOpened),
+                                )
+                            },
+                            &mut app,
+                        );
+                    }
+                    AppCommand::EditStatusLine(edit) => {
+                        let mut request_client = client.clone();
+                        pending_request = spawn_request(
+                            "zeta-tui-set-status-line",
+                            move || {
+                                RequestCompletion::Presentation(
+                                    status_line::set_status_line(&mut request_client, edit)
+                                        .map(AppEvent::StatusLinePaneReplaced),
+                                )
+                            },
+                            &mut app,
+                        );
+                    }
+                    AppCommand::EditKeymap(edit) => {
+                        let mut request_client = client.clone();
+                        pending_request = spawn_request(
+                            "zeta-tui-set-keymap",
+                            move || {
+                                RequestCompletion::Presentation(
+                                    keymap::set_keymap(&mut request_client, edit)
+                                        .map(AppEvent::KeymapPaneOpened),
+                                )
+                            },
+                            &mut app,
+                        );
+                    }
                     AppCommand::ExportTranscript { requested_path } => {
                         let markdown = app.transcript_markdown();
                         let result = if markdown.is_empty() {
@@ -1170,6 +1147,23 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                 }
             }
+            if pending_request.is_none() && config_refresh_requested {
+                let mut request_client = client.clone();
+                pending_request = spawn_request(
+                    "zeta-tui-refresh-config",
+                    move || {
+                        RequestCompletion::ConfigRefreshed(
+                            request_client
+                                .read_config()
+                                .map_err(|error| error.to_string()),
+                        )
+                    },
+                    &mut app,
+                );
+                if pending_request.is_some() {
+                    config_refresh_requested = false;
+                }
+            }
             if pending_request.is_none() && thread_refresh_requested {
                 let mut request_client = client.clone();
                 let session_id = conversation.session_id().clone();
@@ -1370,29 +1364,6 @@ fn draw_terminal(
     terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }
 
-fn poll_keymap_resource(
-    resource: &mut Option<KeymapResource>,
-    app: &mut App,
-    now: Instant,
-) -> bool {
-    let Some(resource) = resource else {
-        return false;
-    };
-    match resource.poll(now, &mut app.app_keymap) {
-        KeymapResourcePoll::Unchanged => false,
-        KeymapResourcePoll::Updated => {
-            for diagnostic in resource.diagnostics().to_vec() {
-                app.report_keybinding_diagnostic(diagnostic);
-            }
-            true
-        }
-        KeymapResourcePoll::Rejected(diagnostic) => {
-            app.report_keybinding_diagnostic(diagnostic);
-            true
-        }
-    }
-}
-
 fn schedule_action(
     action: Option<AppCommand>,
     request_pending: bool,
@@ -1423,10 +1394,6 @@ fn uses_request_task(action: &AppCommand) -> bool {
         AppCommand::Quit
             | AppCommand::Suspend
             | AppCommand::CopyLastResponse
-            | AppCommand::OpenKeymapPane
-            | AppCommand::OpenStatusLinePane
-            | AppCommand::EditKeymap(_)
-            | AppCommand::EditStatusLine(_)
             | AppCommand::ExportTranscript { .. }
             | AppCommand::ReadClipboardImage
     )
@@ -1434,6 +1401,7 @@ fn uses_request_task(action: &AppCommand) -> bool {
 
 #[derive(Default)]
 struct ServerRefresh {
+    config: bool,
     connectors: bool,
     sessions: bool,
     thread: bool,
@@ -1448,6 +1416,10 @@ fn refresh_server_event(
     app: &mut App,
 ) -> ServerRefresh {
     match event {
+        client::ClientEvent::ConfigChanged => ServerRefresh {
+            config: true,
+            ..ServerRefresh::default()
+        },
         client::ClientEvent::AgentRequest(request) => {
             if request.session_id == *conversation.session_id()
                 && request.thread_id == *conversation.thread_id()

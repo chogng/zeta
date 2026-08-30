@@ -8,7 +8,8 @@ use crate::features::config::ConfigPaneSpec;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorPaneSpec;
 use crate::features::dirs::DirPaneSpec;
-use crate::features::keymap::KeymapPaneSpec;
+use crate::features::keymap::KeymapPaneUpdate;
+use crate::features::keymap::KeymapSettings;
 use crate::features::mcp::McpPaneSpec;
 use crate::features::models::ModelPaneSpec;
 use crate::features::query::Query;
@@ -16,7 +17,7 @@ use crate::features::queue::QueueId;
 use crate::features::rewind::RewindPaneSpec;
 use crate::features::sessions::SessionPaneSpec;
 use crate::features::skills::SkillPaneSpec;
-use crate::features::status_line::StatusLinePaneSpec;
+use crate::features::status_line::StatusLinePaneUpdate;
 use crate::features::status_line::StatusLineSettings;
 use crate::features::theme::ThemePaneSpec;
 use crate::features::thread::ThreadRequestIdentity;
@@ -74,11 +75,11 @@ pub(crate) enum AppEvent {
         request: ThreadRequestIdentity,
         error: String,
     },
-    KeymapPaneOpened(KeymapPaneSpec),
-    KeymapPanesClosed,
+    KeymapSettingsReceived(KeymapSettings),
+    KeymapPaneOpened(KeymapPaneUpdate),
     StatusLineSettingsReceived(StatusLineSettings),
-    StatusLinePaneOpened(StatusLinePaneSpec),
-    StatusLinePaneReplaced(StatusLinePaneSpec),
+    StatusLinePaneOpened(StatusLinePaneUpdate),
+    StatusLinePaneReplaced(StatusLinePaneUpdate),
     McpPaneOpened(McpPaneSpec),
     McpPaneReplaced(McpPaneSpec),
     ModelPaneOpened(ModelPaneSpec),

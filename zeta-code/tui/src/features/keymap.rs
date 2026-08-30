@@ -1,15 +1,13 @@
-use std::fs;
-use std::io;
-use std::path::Path;
-use std::path::PathBuf;
-use std::time::Duration;
-use std::time::Instant;
-
 use serde_json::Value;
+use zeta_app_server_client::AppServerClient;
+use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 use zeta_keybinding::HostPlatform;
 use zeta_keybinding::user_binding_diagnostics;
-use zeta_utils_path::write_atomically;
+use zeta_protocol::Patch;
 
+use crate::client::new_command_id;
 use crate::keymap::AppKeymap;
 use crate::keymap::compile_app_user_bindings;
 
@@ -23,14 +21,7 @@ pub(crate) use pane::keymap_action_menu;
 pub(crate) use pane::keymap_capture_pane_spec;
 pub(crate) use pane::keymap_pane_spec;
 
-const MAX_RESOURCE_BYTES: u64 = 1024 * 1024;
-const POLL_INTERVAL: Duration = Duration::from_secs(1);
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum ResourceSnapshot {
-    Missing,
-    Contents(Vec<u8>),
-}
+const CONFIG_KEY: &str = "keybindings";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum KeymapCaptureMode {
@@ -60,138 +51,133 @@ pub(crate) struct KeymapEdit {
     pub(crate) kind: KeymapEditKind,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum KeymapResourcePoll {
-    Unchanged,
-    Updated,
-    Rejected(String),
+pub(crate) struct KeymapSettings {
+    pub(crate) keymap: AppKeymap,
+    pub(crate) diagnostics: Vec<String>,
 }
 
-/// Host-local, product-scoped user keybindings for the Zeta Code TUI.
-pub(crate) struct KeymapResource {
-    path: PathBuf,
-    platform: HostPlatform,
-    observed: Option<ResourceSnapshot>,
-    diagnostics: Vec<String>,
-    revision: u64,
-    next_poll: Instant,
+pub(crate) struct KeymapPaneUpdate {
+    pub(crate) settings: KeymapSettings,
+    pub(crate) pane_spec: KeymapPaneSpec,
+    pub(crate) notice: Option<String>,
 }
 
-impl KeymapResource {
-    pub(crate) fn new(path: PathBuf, now: Instant) -> Self {
-        Self {
-            path,
-            platform: HostPlatform::current(),
-            observed: None,
-            diagnostics: Vec::new(),
-            revision: 0,
-            next_poll: now,
-        }
+pub(crate) fn settings_from_tui(section: &FrontendConfigDto) -> Result<KeymapSettings, String> {
+    let document = section
+        .0
+        .get(CONFIG_KEY)
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+    if !document.is_array() {
+        return Err("invalid [tui].keybindings: expected an array of shortcut rules".into());
     }
-
-    pub(crate) fn poll(&mut self, now: Instant, keymap: &mut AppKeymap) -> KeymapResourcePoll {
-        if now < self.next_poll {
-            return KeymapResourcePoll::Unchanged;
-        }
-        self.next_poll = now + POLL_INTERVAL;
-        let snapshot = match read_snapshot(&self.path) {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                return self.reject(format!("could not read {}: {error}", self.path.display()));
-            }
-        };
-        if self.observed.as_ref() == Some(&snapshot) {
-            return KeymapResourcePoll::Unchanged;
-        }
-        self.observed = Some(snapshot.clone());
-        self.revision = self.revision.saturating_add(1);
-        let rules = match snapshot {
-            ResourceSnapshot::Missing => Vec::new(),
-            ResourceSnapshot::Contents(contents) => {
-                match compile_app_user_bindings(&contents, self.platform) {
-                    Ok(rules) => rules,
-                    Err(error) => {
-                        return self.reject(format!("rejected {}: {error}", self.path.display()));
-                    }
-                }
-            }
-        };
-        let diagnostics = user_binding_diagnostics(&rules, self.platform);
-        if let Err(error) = keymap.replace_user_bindings(rules) {
-            return self.reject(format!("rejected {}: {error}", self.path.display()));
-        }
-        self.diagnostics = diagnostics;
-        KeymapResourcePoll::Updated
-    }
-
-    pub(crate) fn diagnostics(&self) -> &[String] {
-        &self.diagnostics
-    }
-
-    pub(crate) fn pane_spec(&self, keymap: &AppKeymap) -> KeymapPaneSpec {
-        keymap_pane_spec(
-            keymap.setup_actions(),
-            &self.path,
-            &self.diagnostics,
-            self.revision,
-        )
-    }
-
-    pub(crate) fn apply_edit(
-        &mut self,
-        edit: &KeymapEdit,
-        keymap: &mut AppKeymap,
-        now: Instant,
-    ) -> Result<String, String> {
-        if edit.expected_revision != self.revision {
-            return Err(
-                "keybindings changed after the editor opened; reopen /shortcuts and try again"
-                    .to_owned(),
-            );
-        }
-        let current = read_snapshot(&self.path)
-            .map_err(|error| format!("could not read {}: {error}", self.path.display()))?;
-        if self.observed.as_ref() != Some(&current) {
-            return Err("keybindings changed on disk; reopen /shortcuts and try again".to_owned());
-        }
-        let (contents, notice) = edited_document(&current, edit)?;
-        let rules = compile_app_user_bindings(&contents, self.platform)
-            .map_err(|error| format!("rejected shortcut edit: {error}"))?;
-        let diagnostics = user_binding_diagnostics(&rules, self.platform);
-        let mut next_keymap = AppKeymap::default();
-        next_keymap.replace_user_bindings(rules)?;
-        write_atomically(&self.path, &contents)
-            .map_err(|error| format!("could not save {}: {error}", self.path.display()))?;
-        self.observed = Some(ResourceSnapshot::Contents(contents));
-        self.diagnostics = diagnostics;
-        self.revision = self.revision.saturating_add(1);
-        self.next_poll = now + POLL_INTERVAL;
-        *keymap = next_keymap;
-        Ok(notice)
-    }
-
-    fn reject(&mut self, diagnostic: String) -> KeymapResourcePoll {
-        if self.diagnostics.as_slice() == [diagnostic.as_str()] {
-            return KeymapResourcePoll::Unchanged;
-        }
-        self.diagnostics = vec![diagnostic.clone()];
-        KeymapResourcePoll::Rejected(diagnostic)
-    }
+    compile_settings(&document)
 }
 
-fn edited_document(
-    snapshot: &ResourceSnapshot,
-    edit: &KeymapEdit,
-) -> Result<(Vec<u8>, String), String> {
-    let mut document = match snapshot {
-        ResourceSnapshot::Missing => Value::Array(Vec::new()),
-        ResourceSnapshot::Contents(contents) => {
-            serde_json::from_slice(contents).map_err(|error| format!("invalid JSON: {error}"))?
-        }
-    };
-    let entries = document
+pub(crate) fn read_keymap<T>(client: &mut AppServerClient<T>) -> Result<KeymapPaneUpdate, String>
+where
+    T: JsonRpcTransport,
+{
+    let config = client.read_config().map_err(|error| error.to_string())?;
+    let settings = settings_from_tui(&config.tui)?;
+    let pane_spec = keymap_pane_spec(
+        settings.keymap.setup_actions(),
+        &settings.diagnostics,
+        config.revision,
+    );
+    Ok(KeymapPaneUpdate {
+        settings,
+        pane_spec,
+        notice: None,
+    })
+}
+
+pub(crate) fn set_keymap<T>(
+    client: &mut AppServerClient<T>,
+    edit: KeymapEdit,
+) -> Result<KeymapPaneUpdate, String>
+where
+    T: JsonRpcTransport,
+{
+    let config = client.read_config().map_err(|error| error.to_string())?;
+    if config.revision != edit.expected_revision {
+        return Err(
+            "configuration changed after the shortcut editor opened; reopen /shortcuts and try again"
+                .into(),
+        );
+    }
+
+    let current = config
+        .tui
+        .0
+        .get(CONFIG_KEY)
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+    let (document, notice) = edited_document(current, &edit)?;
+    compile_settings(&document)?;
+
+    let mut tui = config.tui.0;
+    tui.insert(CONFIG_KEY.into(), document);
+    client
+        .update_config(ConfigUpdateParams {
+            command_id: new_command_id("keybindings"),
+            expected_revision: config.revision,
+            preferred_model: Patch::Missing,
+            approval_review_model: Patch::Missing,
+            commit_message_model: Patch::Missing,
+            tool_mode: Patch::Missing,
+            agent_grep_backend: Patch::Missing,
+            gui: Patch::Missing,
+            tui: Patch::Value(FrontendConfigDto(tui)),
+        })
+        .map_err(|error| error.to_string())?;
+
+    let config = client.read_config().map_err(|error| error.to_string())?;
+    let settings = settings_from_tui(&config.tui)?;
+    let pane_spec = keymap_pane_spec(
+        settings.keymap.setup_actions(),
+        &settings.diagnostics,
+        config.revision,
+    );
+    Ok(KeymapPaneUpdate {
+        settings,
+        pane_spec,
+        notice: Some(notice),
+    })
+}
+
+fn compile_settings(document: &Value) -> Result<KeymapSettings, String> {
+    let mut compiler_document = document.clone();
+    for entry in compiler_document
         .as_array_mut()
-        .ok_or_else(|| "the keybindings resource root must be an array".to_owned())?;
+        .expect("keybinding root was checked before compilation")
+    {
+        if entry.get("command") == Some(&Value::Bool(false))
+            && let Some(entry) = entry.as_object_mut()
+        {
+            entry.insert("command".into(), Value::Null);
+        }
+    }
+    let contents = serde_json::to_vec(&compiler_document)
+        .map_err(|error| format!("could not encode [tui].keybindings: {error}"))?;
+    let platform = HostPlatform::current();
+    let rules = compile_app_user_bindings(&contents, platform)
+        .map_err(|error| format!("invalid [tui].keybindings: {error}"))?;
+    let diagnostics = user_binding_diagnostics(&rules, platform);
+    let mut keymap = AppKeymap::default();
+    keymap
+        .replace_user_bindings(rules)
+        .map_err(|error| format!("invalid [tui].keybindings: {error}"))?;
+    Ok(KeymapSettings {
+        keymap,
+        diagnostics,
+    })
+}
+
+fn edited_document(mut document: Value, edit: &KeymapEdit) -> Result<(Value, String), String> {
+    let entries = document.as_array_mut().ok_or_else(|| {
+        "invalid [tui].keybindings: expected an array of shortcut rules".to_owned()
+    })?;
     let command_matches = |entry: &Value| {
         entry.get("command").and_then(Value::as_str) == Some(edit.command_id.as_str())
     };
@@ -206,7 +192,7 @@ fn edited_document(
                     && entry.get("when").is_none()
             }) {
                 return Ok((
-                    snapshot_contents(snapshot),
+                    document,
                     format!("No change: `{}` already uses `{key}`.", edit.command_id),
                 ));
             }
@@ -216,9 +202,7 @@ fn edited_document(
             }));
             match intent {
                 KeymapEditIntent::ReplaceUser => format!("Set user shortcut to `{key}`."),
-                KeymapEditIntent::AddAlternate => {
-                    format!("Added user shortcut `{key}`.")
-                }
+                KeymapEditIntent::AddAlternate => format!("Added user shortcut `{key}`."),
             }
         }
         KeymapEditKind::ClearUser => {
@@ -226,49 +210,14 @@ fn edited_document(
             entries.retain(|entry| !command_matches(entry));
             if entries.len() == before {
                 return Ok((
-                    snapshot_contents(snapshot),
-                    "No change: this action has no user shortcuts.".to_owned(),
+                    document,
+                    "No change: this action has no user shortcuts.".into(),
                 ));
             }
-            "Cleared user shortcuts.".to_owned()
+            "Cleared user shortcuts.".into()
         }
     };
-
-    let mut contents = serde_json::to_vec_pretty(&document)
-        .map_err(|error| format!("could not serialize keybindings: {error}"))?;
-    contents.push(b'\n');
-    Ok((contents, notice))
-}
-
-fn snapshot_contents(snapshot: &ResourceSnapshot) -> Vec<u8> {
-    match snapshot {
-        ResourceSnapshot::Missing => b"[]\n".to_vec(),
-        ResourceSnapshot::Contents(contents) => contents.clone(),
-    }
-}
-
-fn read_snapshot(path: &Path) -> io::Result<ResourceSnapshot> {
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Ok(ResourceSnapshot::Missing);
-        }
-        Err(error) => return Err(error),
-    };
-    if metadata.len() > MAX_RESOURCE_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("resource exceeds {MAX_RESOURCE_BYTES} bytes"),
-        ));
-    }
-    let contents = fs::read(path)?;
-    if contents.len() as u64 > MAX_RESOURCE_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("resource exceeds {MAX_RESOURCE_BYTES} bytes"),
-        ));
-    }
-    Ok(ResourceSnapshot::Contents(contents))
+    Ok((document, notice))
 }
 
 #[cfg(test)]

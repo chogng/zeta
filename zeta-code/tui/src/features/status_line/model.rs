@@ -176,27 +176,19 @@ impl StatusLineModel {
 
     fn configured_values(&self, approval: ApprovalModeStatus) -> Vec<DisplayValue> {
         let mut values = Vec::new();
-        if self.settings.enabled(StatusLineItem::Permissions) {
-            let permission = approval_mode_text(approval);
-            values.push(DisplayValue {
-                full: permission.clone(),
-                compact: permission,
-            });
-        }
-        if self.settings.enabled(StatusLineItem::Model)
-            && let Some(model) = &self.preferred_model
-        {
-            values.push(model.clone());
-        }
-        if self.settings.enabled(StatusLineItem::GitBranch)
-            && let Some(branch) = &self.git_branch
-        {
-            values.push(branch.clone());
-        }
-        if self.settings.enabled(StatusLineItem::GitChanges)
-            && let Some(changes) = &self.git_changes
-        {
-            values.push(changes.clone());
+        for item in self.settings.items() {
+            match item {
+                StatusLineItem::Permissions => {
+                    let permission = approval_mode_text(approval);
+                    values.push(DisplayValue {
+                        full: permission.clone(),
+                        compact: permission,
+                    });
+                }
+                StatusLineItem::Model => values.extend(self.preferred_model.iter().cloned()),
+                StatusLineItem::GitBranch => values.extend(self.git_branch.iter().cloned()),
+                StatusLineItem::GitChanges => values.extend(self.git_changes.iter().cloned()),
+            }
         }
         values
     }

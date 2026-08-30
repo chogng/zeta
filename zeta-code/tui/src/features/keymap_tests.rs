@@ -1,17 +1,16 @@
-use std::fs;
-use std::time::Duration;
-use std::time::Instant;
+use std::collections::BTreeMap;
 
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use serde_json::json;
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 
 use super::KeymapEdit;
 use super::KeymapEditIntent;
 use super::KeymapEditKind;
-use super::KeymapResource;
-use super::KeymapResourcePoll;
-use crate::keymap::AppKeymap;
+use super::edited_document;
+use super::settings_from_tui;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
 
@@ -25,36 +24,32 @@ fn context() -> AppKeymapContext {
 }
 
 #[test]
-fn valid_updates_replace_user_rules_and_missing_resource_restores_builtins() {
-    let path = temporary_resource("valid");
-    fs::write(
-        &path,
-        br#"[{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]"#,
-    )
-    .unwrap();
-    let started = Instant::now();
-    let mut resource = KeymapResource::new(path.clone(), started);
-    let mut keymap = AppKeymap::default();
+fn configured_rules_replace_user_keybindings() {
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "keybindings".into(),
+        json!([{
+            "key": "ctrl+y",
+            "command": "zetaCode.action.copyLastResponse"
+        }]),
+    )]));
+
+    let settings = settings_from_tui(&section).unwrap();
 
     assert_eq!(
-        resource.poll(started, &mut keymap),
-        KeymapResourcePoll::Updated
-    );
-    assert_eq!(
-        keymap.resolve_single(
+        settings.keymap.resolve_single(
             &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
             context(),
         ),
         Some(AppKeymapAction::CopyLastResponse)
     );
+}
 
-    fs::remove_file(&path).unwrap();
+#[test]
+fn missing_keybindings_restore_builtins_without_user_rules() {
+    let settings = settings_from_tui(&FrontendConfigDto::default()).unwrap();
+
     assert_eq!(
-        resource.poll(started + Duration::from_secs(1), &mut keymap),
-        KeymapResourcePoll::Updated
-    );
-    assert_eq!(
-        keymap.resolve_single(
+        settings.keymap.resolve_single(
             &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
             context(),
         ),
@@ -63,51 +58,13 @@ fn valid_updates_replace_user_rules_and_missing_resource_restores_builtins() {
 }
 
 #[test]
-fn rejected_update_preserves_the_last_valid_keymap() {
-    let path = temporary_resource("rejected");
-    fs::write(
-        &path,
-        br#"[{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]"#,
-    )
-    .unwrap();
-    let started = Instant::now();
-    let mut resource = KeymapResource::new(path.clone(), started);
-    let mut keymap = AppKeymap::default();
-    resource.poll(started, &mut keymap);
-
-    fs::write(&path, br#"[{"key":"ctrl+k escape","command":null}]"#).unwrap();
-    assert!(matches!(
-        resource.poll(started + Duration::from_secs(1), &mut keymap),
-        KeymapResourcePoll::Rejected(message) if message.contains("plain Escape")
-    ));
-    assert_eq!(
-        keymap.resolve_single(
-            &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
-            context(),
-        ),
-        Some(AppKeymapAction::CopyLastResponse)
-    );
-
-    fs::remove_file(path).unwrap();
-}
-
-#[test]
-fn shortcut_edit_preserves_unrelated_rules_and_rejects_stale_revision() {
-    let path = temporary_resource("edit");
-    fs::write(
-        &path,
-        br#"[{"key":"ctrl+x","command":"zetaCode.action.cycleApprovalMode"}]"#,
-    )
-    .unwrap();
-    let started = Instant::now();
-    let mut resource = KeymapResource::new(path.clone(), started);
-    let mut keymap = AppKeymap::default();
-    assert_eq!(
-        resource.poll(started, &mut keymap),
-        KeymapResourcePoll::Updated
-    );
+fn shortcut_edit_preserves_unrelated_rules() {
+    let document = json!([{
+        "key": "ctrl+x",
+        "command": "zetaCode.action.cycleApprovalMode"
+    }]);
     let edit = KeymapEdit {
-        expected_revision: 1,
+        expected_revision: 7,
         command_id: "zetaCode.action.copyLastResponse".into(),
         kind: KeymapEditKind::Set {
             key: "ctrl+y".into(),
@@ -115,37 +72,38 @@ fn shortcut_edit_preserves_unrelated_rules_and_rejects_stale_revision() {
         },
     };
 
-    let notice = resource
-        .apply_edit(&edit, &mut keymap, started + Duration::from_millis(10))
-        .unwrap();
+    let (edited, notice) = edited_document(document, &edit).unwrap();
 
     assert_eq!(notice, "Added user shortcut `ctrl+y`.");
-    let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(saved.as_array().unwrap().len(), 2);
+    assert_eq!(edited.as_array().unwrap().len(), 2);
+    let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), edited)]));
+    let settings = settings_from_tui(&section).unwrap();
     assert_eq!(
-        keymap.resolve_single(
+        settings.keymap.resolve_single(
             &KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL),
             context(),
         ),
         Some(AppKeymapAction::CopyLastResponse)
     );
-    assert!(
-        resource
-            .apply_edit(&edit, &mut keymap, started + Duration::from_millis(20))
-            .unwrap_err()
-            .contains("changed after the editor opened")
-    );
-
-    fs::remove_file(path).unwrap();
 }
 
-fn temporary_resource(label: &str) -> std::path::PathBuf {
-    let unique = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "zeta-code-keybindings-{label}-{}-{unique}.json",
-        std::process::id(),
-    ))
+#[test]
+fn invalid_keybinding_root_and_rules_are_rejected() {
+    for keybindings in [
+        json!({}),
+        json!([{"key": "ctrl+k escape", "command": null}]),
+    ] {
+        let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), keybindings)]));
+        assert!(settings_from_tui(&section).is_err());
+    }
+}
+
+#[test]
+fn false_command_represents_a_toml_blocker() {
+    let section = FrontendConfigDto(BTreeMap::from([(
+        "keybindings".into(),
+        json!([{"key": "ctrl+o", "command": false}]),
+    )]));
+
+    assert!(settings_from_tui(&section).is_ok());
 }

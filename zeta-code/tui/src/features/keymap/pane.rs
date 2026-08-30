@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-use std::path::Path;
-
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use std::collections::BTreeMap;
 
 use crate::components::key_capture::KeyCapture;
 use crate::components::list_selection::ListSelectionGroup;
@@ -47,7 +45,6 @@ pub(crate) struct KeymapPaneSpec {
 
 pub(crate) fn keymap_pane_spec(
     actions: Vec<KeymapActionSnapshot>,
-    resource_path: &Path,
     diagnostics: &[String],
     revision: u64,
 ) -> KeymapPaneSpec {
@@ -81,10 +78,7 @@ pub(crate) fn keymap_pane_spec(
             .collect(),
         "No keymap diagnostics",
     );
-    let key_hints = format!(
-        "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter edit  ·  Esc back  ·  {}",
-        resource_path.display()
-    );
+    let key_hints = "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter edit  ·  Esc back  ·  config.toml [tui.keybindings]";
     KeymapPaneSpec {
         model: PaneSpec::new(
             ListSelectionModel::new(

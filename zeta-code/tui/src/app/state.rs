@@ -1586,13 +1586,35 @@ impl App {
             AppEvent::ThreadRequestSubmissionFailed { request, error } => {
                 self.fail_thread_request(&request, error)
             }
-            AppEvent::KeymapPaneOpened(view) => self.show_keymap_pane(view),
-            AppEvent::KeymapPanesClosed => self.close_keymap_panes(),
+            AppEvent::KeymapSettingsReceived(settings) => {
+                self.app_keymap = settings.keymap;
+                for diagnostic in settings.diagnostics {
+                    self.report_keybinding_diagnostic(diagnostic);
+                }
+            }
+            AppEvent::KeymapPaneOpened(update) => {
+                self.app_keymap = update.settings.keymap;
+                for diagnostic in update.settings.diagnostics {
+                    self.report_keybinding_diagnostic(diagnostic);
+                }
+                if let Some(notice) = update.notice {
+                    self.close_keymap_panes();
+                    self.thread
+                        .update(ThreadPresentationEvent::NoticeReceived(notice));
+                }
+                self.show_keymap_pane(update.pane_spec);
+            }
             AppEvent::StatusLineSettingsReceived(settings) => {
                 self.status_line.apply_settings(settings)
             }
-            AppEvent::StatusLinePaneOpened(view) => self.show_status_line_pane(view),
-            AppEvent::StatusLinePaneReplaced(view) => self.replace_status_line_pane(view),
+            AppEvent::StatusLinePaneOpened(update) => {
+                self.status_line.apply_settings(update.settings);
+                self.show_status_line_pane(update.pane_spec);
+            }
+            AppEvent::StatusLinePaneReplaced(update) => {
+                self.status_line.apply_settings(update.settings);
+                self.replace_status_line_pane(update.pane_spec);
+            }
             AppEvent::ConnectorPaneOpened(view) => self.show_connector_pane(view),
             AppEvent::ConnectorPaneReplaced(view) => self.replace_connector_pane(view),
             AppEvent::McpPaneOpened(view) => self.show_mcp_pane(view),

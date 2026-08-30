@@ -56,8 +56,6 @@ pub struct TuiOptions {
     display_dir_root: PathBuf,
     host_dir_root: PathBuf,
     host_file_search_root: Option<PathBuf>,
-    keybindings_path: Option<PathBuf>,
-    status_line_path: Option<PathBuf>,
     theme_root: Option<PathBuf>,
     recovery: Option<TuiRecoveryState>,
 }
@@ -70,8 +68,6 @@ impl TuiOptions {
             display_dir_root: dir_root.clone(),
             host_dir_root: dir_root.clone(),
             host_file_search_root: Some(dir_root),
-            keybindings_path: None,
-            status_line_path: None,
             theme_root: None,
             recovery: None,
         }
@@ -97,14 +93,9 @@ impl TuiOptions {
         self
     }
 
-    /// Enables host-local Zeta Code keybindings, status line settings, and themes from the active profile.
-    ///
-    /// Product-scoped storage keeps terminal preferences and theme documents independent from
-    /// graphical interface configuration.
+    /// Enables Zeta Code theme documents from the active profile.
     pub fn with_profile_root(mut self, profile_root: impl Into<PathBuf>) -> Self {
         let product_root = profile_root.into().join("zeta-code");
-        self.keybindings_path = Some(product_root.join("keybindings.json"));
-        self.status_line_path = Some(product_root.join("statusline.json"));
         self.theme_root = Some(product_root);
         self
     }

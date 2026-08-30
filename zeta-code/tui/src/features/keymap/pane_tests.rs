@@ -69,12 +69,7 @@ fn escape_cancels_capture_without_emitting_an_edit() {
 
 #[test]
 fn keymap_pane_spec_lists_keys_before_responsibilities() {
-    let view = super::keymap_pane_spec(
-        AppKeymap::default().setup_actions(),
-        std::path::Path::new("/profile/zeta-code/keybindings.json"),
-        &[],
-        1,
-    );
+    let view = super::keymap_pane_spec(AppKeymap::default().setup_actions(), &[], 1);
     let state = ListSelectionState::new(view.model.into_body());
     let labels = state
         .visible_items()
@@ -110,12 +105,7 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
     .unwrap();
     let mut keymap = AppKeymap::default();
     keymap.replace_user_bindings(rules).unwrap();
-    let view = super::keymap_pane_spec(
-        keymap.setup_actions(),
-        std::path::Path::new("/profile/zeta-code/keybindings.json"),
-        &[],
-        1,
-    );
+    let view = super::keymap_pane_spec(keymap.setup_actions(), &[], 1);
     let state = ListSelectionState::new(view.model.into_body());
     let backend = TestBackend::new(100, 20);
     let mut terminal = Terminal::new(backend).unwrap();

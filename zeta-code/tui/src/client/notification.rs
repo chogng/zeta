@@ -11,6 +11,7 @@ use zeta_protocol::ThreadUpdateEnvelope;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ClientEvent {
     AgentRequest(Box<AgentRequestEnvelope>),
+    ConfigChanged,
     ConnectionClosed(ConnectionCloseReason),
     GitStatusChanged(GitStatusResult),
     ConnectorsChanged,
@@ -34,6 +35,7 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
             Some(ClientEvent::AgentRequest(Box::new(request)))
         }
         ServerNotification::ConnectorsChanged(_) => Some(ClientEvent::ConnectorsChanged),
+        ServerNotification::ConfigChanged(_) => Some(ClientEvent::ConfigChanged),
         ServerNotification::MarketplaceChanged(_) | ServerNotification::PluginsChanged(_) => {
             Some(ClientEvent::PackageSourcesChanged)
         }

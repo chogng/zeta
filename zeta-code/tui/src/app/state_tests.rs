@@ -22,14 +22,18 @@ use crate::features::config::config_pane_spec;
 use crate::features::file_search::FileSearchManager;
 use crate::features::keymap::KeymapEditIntent;
 use crate::features::keymap::KeymapEditKind;
+use crate::features::keymap::KeymapPaneUpdate;
 use crate::features::keymap::keymap_pane_spec;
+use crate::features::keymap::settings_from_tui as keymap_settings_from_tui;
 use crate::features::query::Query;
 use crate::features::query::QueryChoice;
 use crate::features::query::QueryCustomAnswer;
 use crate::features::query::QueryQuestion;
 use crate::features::rewind::rewind_pane_spec;
 use crate::features::status_line::StatusLineItem;
-use crate::features::status_line::StatusLineResource;
+use crate::features::status_line::StatusLinePaneUpdate;
+use crate::features::status_line::StatusLineSettings;
+use crate::features::status_line::status_line_pane_spec;
 use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
@@ -37,7 +41,6 @@ use crate::features::theme::ThemePreviewPalette;
 use crate::features::theme::custom_theme_pane_spec;
 use crate::features::theme::theme_pane_spec;
 use crate::features::thread::TurnActivity;
-use crate::keymap::AppKeymap;
 use crate::mouse::MouseMode;
 use crate::render::RenderTheme;
 use crate::test_support::empty_config_snapshot;
@@ -881,18 +884,20 @@ fn statusline_slash_command_is_owned_by_the_local_host() {
 
 #[test]
 fn statusline_selection_emits_a_revision_bound_edit() {
-    let directory = tempfile::tempdir().unwrap();
-    let mut resource = StatusLineResource::new(directory.path().join("statusline.json"));
-    resource.refresh().unwrap();
+    let settings = StatusLineSettings::default();
+    let pane_spec = status_line_pane_spec(&settings, 7);
     let mut app = App::new();
-    app.update(AppEvent::StatusLinePaneOpened(resource.setup_pane_spec()));
+    app.update(AppEvent::StatusLinePaneOpened(StatusLinePaneUpdate {
+        settings,
+        pane_spec,
+    }));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(matches!(
         action,
         Some(AppCommand::EditStatusLine(edit))
-            if edit.expected_revision == 1
+            if edit.expected_revision == 7
                 && edit.item == StatusLineItem::Permissions
                 && !edit.enabled
     ));
@@ -901,12 +906,13 @@ fn statusline_selection_emits_a_revision_bound_edit() {
 #[test]
 fn shortcut_capture_emits_a_revision_bound_edit() {
     let mut app = App::new();
-    app.update(AppEvent::KeymapPaneOpened(keymap_pane_spec(
-        AppKeymap::default().setup_actions(),
-        Path::new("/profile/zeta-code/keybindings.json"),
-        &[],
-        7,
-    )));
+    let settings = keymap_settings_from_tui(&Default::default()).unwrap();
+    let pane_spec = keymap_pane_spec(settings.keymap.setup_actions(), &[], 7);
+    app.update(AppEvent::KeymapPaneOpened(KeymapPaneUpdate {
+        settings,
+        pane_spec,
+        notice: None,
+    }));
 
     assert_eq!(app.list_selection().unwrap().title(), "Keymap");
     assert_eq!(

@@ -12,7 +12,7 @@ use unicode_width::UnicodeWidthStr;
 fn setup_lists_each_item_with_a_description_checkbox_and_toggle_action() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
-    let view = list_selection(settings, 7);
+    let view = list_selection(&settings, 7);
     let state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Status line");
@@ -45,7 +45,7 @@ fn setup_lists_each_item_with_a_description_checkbox_and_toggle_action() {
 fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
-    let view = list_selection(settings, 1);
+    let view = list_selection(&settings, 1);
     let state = ListSelectionState::new(view.model.into_body());
     let backend = TestBackend::new(80, 10);
     let mut terminal = Terminal::new(backend).unwrap();

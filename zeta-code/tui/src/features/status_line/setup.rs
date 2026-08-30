@@ -21,7 +21,7 @@ pub(crate) struct StatusLinePaneSpec {
     pub(crate) actions: BTreeMap<ListSelectionItemId, StatusLineSelectionAction>,
 }
 
-pub(super) fn list_selection(settings: StatusLineSettings, revision: u64) -> StatusLinePaneSpec {
+pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> StatusLinePaneSpec {
     let mut actions = BTreeMap::new();
     let items = StatusLineItem::ALL
         .into_iter()

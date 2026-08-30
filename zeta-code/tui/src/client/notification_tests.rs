@@ -1,6 +1,7 @@
 use super::ClientEvent;
 use super::map_event;
 use zeta_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotification};
+use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
@@ -20,6 +21,19 @@ fn skills_changed_is_mapped_without_exposing_the_wire_notification() {
             ServerNotification::SkillsChanged(SkillsChanged { generation: 7 })
         )),
         Some(ClientEvent::SkillsChanged)
+    );
+}
+
+#[test]
+fn config_changed_requests_a_tui_config_refresh() {
+    assert_eq!(
+        map_event(AppServerEvent::Notification(
+            ServerNotification::ConfigChanged(ConfigChanged {
+                revision: 4,
+                generation: 6,
+            })
+        )),
+        Some(ClientEvent::ConfigChanged)
     );
 }
 

@@ -73,8 +73,8 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；Manager、Pane 和其他需要明确操作键的表面由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
-- 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各 component 拥有；
+- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，配置行按 `[tui].statusLine` 的顺序显示 `/statusline` 启用的权限模式、模型、Git 分支和 Git 变更；Manager、Pane 和其他需要明确操作键的表面由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
+- 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 解释 `[tui].keybindings` 的 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、config revision 校验和完整规则校验；保存通过 App Server 替换完整 `[tui]` 表，坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各 component 拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
   通过 App Server 的 durable Turn cursor 请求更早的 50 个 Turn，并在 presentation projection 中
@@ -106,7 +106,7 @@ TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，�
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Add-dir、Providers 与 Language servers。主题、Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认授权都保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端只保存完整键值表，字段默认值和校验由 TUI 负责。默认授权不保存路径；当前 Session 的目录授权也不写入 `[tui]`。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 编辑 `[tui].statusLine` 中有顺序的权限、模型、Git 分支和 Git 变更项；Config 页面展示 Config、Add-dir、Providers 与 Language servers。快捷键、状态栏、主题、Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认授权都保存在 `<profile>/config.toml` 的根级 `[tui]` 表；配置后端只保存完整键值表，字段默认值和校验由 TUI 负责。默认授权不保存路径；当前 Session 的目录授权也不写入 `[tui]`。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
 
 从 repository root 启动当前 TUI：
 
@@ -126,7 +126,7 @@ cargo run --manifest-path Cargo.toml -p zeta-cli
 | --- | --- |
 | `TuiOptions::new` | 提供 Session/Thread title，并默认以当前目录作为 file mention root |
 | `TuiOptions::with_dir_root` | 显式覆盖有界 file mention root |
-| `TuiOptions::with_profile_root` | 启用 host-local、产品作用域的 `zeta-code/keybindings.json`、`zeta-code/statusline.json` 与 `zeta-code/themes/*.json` 资源；普通 TUI 设置来自 App Server 配置 authority 的 `[tui]` |
+| `TuiOptions::with_profile_root` | 启用产品作用域的 `zeta-code/themes/*.json` 主题文档；其他 TUI 设置来自 App Server 配置 authority 的 `[tui]` |
 | `TuiRecoveryState::new` | 从 CLI 参数构造需要重新读取的持久化 Session/Thread 身份，不携带 connection 或待执行请求 |
 | `run` | 接管 ready `AppServerSession`，校验 initialize snapshot、驱动 terminal/client events，并在退出时显式 shutdown |
 | `TuiExit::UserRequested` | 用户通过按键或 command 请求正常退出 |
@@ -224,10 +224,10 @@ src/
 │   ├── queue.rs / queue/          # stable Queue identity, inline rows and management Pane
 │   ├── goal.rs / plan.rs          # one-row Thread-derived content
 │   ├── skills/                    # skill request and selection presentation mapping
-│   ├── keymap.rs                  # keymap resource, profile polling and atomic edits
+│   ├── keymap.rs                  # [tui].keybindings parsing, requests and validated edits
 │   ├── keymap/                    # searchable view, action menu and key/chord capture
 │   ├── status_line.rs             # status-line module root
-│   ├── status_line/               # runtime facts, item settings, resource, setup and bounded view
+│   ├── status_line/               # runtime facts, ordered item settings, config requests, setup and bounded view
 │   ├── file_search.rs              # file-mention search module root
 │   └── file_search/                # bounded async file-search runtime
 ├── mouse.rs                        # session-wide mouse mode and hover state
@@ -274,13 +274,13 @@ src/
 | `features::theme::ThemeResource` | private | 从 TUI 产品目录加载用户主题、解析选择并生成预览 | 不读取或保存配置；draw path 不执行文件 I/O |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 按配置顺序把当前权限、preferred model、Git 分支和变更映射为长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
-| `StatusLineResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/statusline.json` | 只保存四个显示开关，不进入 App Server 配置、不拥有被显示的数据 |
+| `StatusLineSettings` | crate-private | 解释和校验 `[tui].statusLine` 的项目、开关与顺序 | 不拥有被显示的数据；写入时保留 `[tui]` 的其他键 |
 | `features::config::TerminalSettings` | crate-private | 解释和校验 `[tui]` 中的终端设置，并在更新已知键时保留该表的其他键 | App Server 只做 revision 校验和完整表替换，不解释 TUI 字段 |
 | `components::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 directory 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 `ChatInput` 编辑、`ListSelection` 导航、滚动、I/O 或命令副作用 |
-| `features::keymap::KeymapResource` | private | 有界读取产品 profile JSON、检测外部修改、revision 校验、原子保存，并在完整编译后替换 User rules | 不解析按键语法、不执行 action、不读取远程目录文件 |
+| `features::keymap::KeymapSettings` | private | 解释 `[tui].keybindings`，完整编译后构造 User rules 与诊断 | 不执行 action；写入时保留 `[tui]` 的其他键 |
 | `features::keymap::pane` | private | 从 `AppKeymap` 快照和固定操作目录生成 `/shortcuts` 的 Pane 创建数据、动作菜单和按键录制状态 | 不执行快捷键、不建立第二套 Resolver |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 `ChatComposer` 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
@@ -351,8 +351,7 @@ run(session, options)
 ├─ app::EventPump::start → TerminalEventSource + ClientEventSource + TerminationSource
 ├─ FileSearchManager::new
 ├─ App::for_dir → WelcomeModel::for_dir + StatusLineModel::new
-├─ StatusLineResource::refresh → AppEvent::StatusLineSettingsReceived → App::update
-├─ client.read_config → `[tui]` parse + preferred model → AppEvent → App::update
+├─ client.read_config → `[tui]` terminal/keybindings/statusLine parse + preferred model → AppEvent → App::update
 ├─ client.git_status → AppEvent → App::update
 └─ loop
    ├─ EventPump::recv / recv_timeout(redraw deadline)
@@ -643,7 +642,7 @@ response lifecycle/error/interrupted transitions、Pane 打开期间的聊天草
 approval 与多问题 option/free-form user input、blocked Esc/Ctrl-C semantics、搜索过滤/选择修复、
 selection render、全屏拖拽选择、松手复制、反向范围、宽字符与点击/拖动分流，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role
-label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export，以及 status-line item 顺序/开关、profile 保存、Git 长短值降级、Unicode-safe truncation、welcome home-relative 路径，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
+label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export，以及 status-line item 顺序/开关、config 保存、Git 长短值降级、Unicode-safe truncation、welcome home-relative 路径，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
 restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session picker/archive 与 Thread recovery、
 directory directory/preview 和 interaction deadline。
 
@@ -652,7 +651,7 @@ directory directory/preview 和 interaction deadline。
 `ConfigReadResult` 新字段在 App Server 或消费该字段的 feature 中被静默忽略。相反，直接构造
 `ThreadItem` variant 的测试必须明确填写其全部字段，因为这些字段属于被测试对象本身的领域语义。
 
-生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter 和 `/config` 的 Config、Providers、Language servers 页面；`provider/list` 只投影供应商名、API key 策略与是否已配置，不返回密钥。Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 通过 `AppEvent::PreferredModelReceived` 与 `AppEvent::GitStatusReceived` 接收展示数据，通过本地 `StatusLineResource` 接收显示开关。新增 Tool Search 或 Codebase 配置字段不会扩散到这些不拥有该能力的展示组件。
+生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter；各 feature 只解释自己拥有的字段。`provider/list` 只投影供应商名、API key 策略与是否已配置，不返回密钥。Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 通过 `AppEvent::PreferredModelReceived` 与 `AppEvent::GitStatusReceived` 接收展示数据，通过 `StatusLineSettings` 接收 `[tui].statusLine` 项目。新增 Tool Search 或 Codebase 配置字段不会扩散到这些不拥有该能力的展示组件。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，并覆盖 transcript 折行高度、prefix、scroll、pointer hit test、cell revision、cache key 失效与资源上限、完整源码和逐个完整新增行高亮的一致性，以及 batch deadline 不后移、输入提前 deadline、到期帧只消费一次、transient latest-value、identity 顺序、cursor/scope/barrier 和批量容量边界。命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
 event-loop integration 可以继续加强当前 brokered-local 路径；连接恢复验证属于 CLI，不进入 TUI transport 测试。桌面端 Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与

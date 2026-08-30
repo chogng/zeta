@@ -1,5 +1,7 @@
-use serde::Deserialize;
-use serde::Serialize;
+use serde_json::Value;
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
+
+const CONFIG_KEY: &str = "statusLine";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StatusLineItem {
@@ -16,6 +18,16 @@ impl StatusLineItem {
         Self::GitBranch,
         Self::GitChanges,
     ];
+
+    pub(crate) fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "permissions" => Some(Self::Permissions),
+            "model" => Some(Self::Model),
+            "git-branch" => Some(Self::GitBranch),
+            "git-changes" => Some(Self::GitChanges),
+            _ => None,
+        }
+    }
 
     pub(crate) fn id(self) -> &'static str {
         match self {
@@ -45,31 +57,63 @@ impl StatusLineItem {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct StatusLineSettings {
-    permissions: bool,
-    model: bool,
-    git_branch: bool,
-    git_changes: bool,
+    items: Vec<StatusLineItem>,
 }
 
 impl StatusLineSettings {
-    pub(crate) fn enabled(self, item: StatusLineItem) -> bool {
-        match item {
-            StatusLineItem::Permissions => self.permissions,
-            StatusLineItem::Model => self.model,
-            StatusLineItem::GitBranch => self.git_branch,
-            StatusLineItem::GitChanges => self.git_changes,
+    pub(crate) fn from_tui(section: &FrontendConfigDto) -> Result<Self, String> {
+        let Some(value) = section.0.get(CONFIG_KEY) else {
+            return Ok(Self::default());
+        };
+        let values = value.as_array().ok_or_else(|| {
+            "invalid [tui].statusLine: expected an array of item names".to_owned()
+        })?;
+        let mut items = Vec::with_capacity(values.len());
+        for value in values {
+            let id = value.as_str().ok_or_else(|| {
+                "invalid [tui].statusLine: every item name must be a string".to_owned()
+            })?;
+            let item = StatusLineItem::from_id(id)
+                .ok_or_else(|| format!("invalid [tui].statusLine item `{id}`"))?;
+            if items.contains(&item) {
+                return Err(format!("invalid [tui].statusLine: duplicate item `{id}`"));
+            }
+            items.push(item);
         }
+        Ok(Self { items })
+    }
+
+    pub(crate) fn write_to_tui(&self, section: &FrontendConfigDto) -> FrontendConfigDto {
+        let mut values = section.0.clone();
+        values.insert(
+            CONFIG_KEY.into(),
+            Value::Array(
+                self.items
+                    .iter()
+                    .map(|item| Value::String(item.id().into()))
+                    .collect(),
+            ),
+        );
+        FrontendConfigDto(values)
+    }
+
+    pub(crate) fn enabled(&self, item: StatusLineItem) -> bool {
+        self.items.contains(&item)
+    }
+
+    pub(crate) fn items(&self) -> impl Iterator<Item = StatusLineItem> + '_ {
+        self.items.iter().copied()
     }
 
     pub(crate) fn set(&mut self, item: StatusLineItem, enabled: bool) {
-        match item {
-            StatusLineItem::Permissions => self.permissions = enabled,
-            StatusLineItem::Model => self.model = enabled,
-            StatusLineItem::GitBranch => self.git_branch = enabled,
-            StatusLineItem::GitChanges => self.git_changes = enabled,
+        if enabled {
+            if !self.items.contains(&item) {
+                self.items.push(item);
+            }
+        } else {
+            self.items.retain(|candidate| *candidate != item);
         }
     }
 }
@@ -77,10 +121,11 @@ impl StatusLineSettings {
 impl Default for StatusLineSettings {
     fn default() -> Self {
         Self {
-            permissions: true,
-            model: true,
-            git_branch: true,
-            git_changes: true,
+            items: StatusLineItem::ALL.to_vec(),
         }
     }
 }
+
+#[cfg(test)]
+#[path = "settings_tests.rs"]
+mod tests;

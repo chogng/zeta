@@ -8,12 +8,14 @@ use crate::components::chat_input::ChatInputCatalog;
 use crate::components::chat_input::ChatSubmission;
 use crate::components::steer::SteerId;
 use crate::features::config;
+use crate::features::keymap;
 use crate::features::queue::QueueId;
 use crate::features::sessions::ConversationChange;
 use crate::features::sessions::ConversationTranscript;
 use crate::features::sessions::NewConversationKind;
 use crate::features::skills;
 use crate::features::skills::SkillPaneSpec;
+use crate::features::status_line::StatusLineSettings;
 use crate::features::thread::ActiveTurnUpdate;
 use crate::features::thread::LatestThreadSnapshot;
 use crate::features::thread::OlderThreadHistoryPage;
@@ -32,6 +34,7 @@ use crate::features::thread::submit_prompt;
 use crate::render::RenderTheme;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
+use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
@@ -46,6 +49,7 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 
 pub(super) enum RequestCompletion {
+    ConfigRefreshed(Result<ConfigReadResult, String>),
     ConversationChanged {
         command: String,
         result: Result<ConversationRequestCompletion, String>,
@@ -283,6 +287,10 @@ pub(super) fn apply_request_completion(
     app: &mut App,
 ) -> Option<TuiExit> {
     match completion {
+        RequestCompletion::ConfigRefreshed(Ok(config)) => apply_tui_config(config, app),
+        RequestCompletion::ConfigRefreshed(Err(error)) => {
+            app.update(AppEvent::FailureReported(error));
+        }
         RequestCompletion::ManagerSessionCreated(Ok(ManagerSessionCompletion {
             conversation:
                 ConversationRequestCompletion {
@@ -577,6 +585,22 @@ pub(super) fn apply_request_completion(
         }
     }
     None
+}
+
+pub(super) fn apply_tui_config(config: ConfigReadResult, app: &mut App) {
+    match config::TerminalSettings::from_tui(&config.tui) {
+        Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
+        Err(error) => app.update(AppEvent::FailureReported(error)),
+    }
+    match keymap::settings_from_tui(&config.tui) {
+        Ok(settings) => app.update(AppEvent::KeymapSettingsReceived(settings)),
+        Err(error) => app.update(AppEvent::FailureReported(error)),
+    }
+    match StatusLineSettings::from_tui(&config.tui) {
+        Ok(settings) => app.update(AppEvent::StatusLineSettingsReceived(settings)),
+        Err(error) => app.update(AppEvent::FailureReported(error)),
+    }
+    app.update(AppEvent::PreferredModelReceived(config.preferred_model));
 }
 
 fn report_turn_start_failure(app: &mut App, active_turn: &Option<TurnId>, error: String) {

@@ -601,9 +601,9 @@ owning crate interface / typed App Server result
           pure layout + Ratatui render
 ```
 
-`status_line/` 定义稳定的 item identity、固定顺序、用户开关、separator 和 overflow policy；`StatusLineResource` 把四个产品显示开关保存到 CLI 显式提供的 `<profile>/zeta-code/statusline.json`，资源不进入 App Server，renderer 也不读取文件。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
+`status_line/` 定义稳定的 item identity、用户排序、开关、separator 和 overflow policy；项目列表保存在 `config.toml` 的 `[tui].statusLine`。TUI 负责解释与校验字段，App Server 只按完整 `[tui]` 表持久化并校验 config revision。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 组合 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按“权限、模型、Git 分支、Git 变更”排序的配置项。`features/status_line/view.rs` 最多绘制两行。总 Session Manager、Pane、SubagentPane 或 Chord 等表面需要明确按键时，固定一行 KeyHints 直接替换 StatusLine；Pane 打开时同时保留 ChatInput 状态但接管其可见高度。StatusLine/KeyHints 与存在内容的 SubagentPane 之间保留一行。`features/status_line/resource.rs` 仍负责显示开关的有界读取、revision 校验和原子保存。
+当前实现由 `features/status_line/model.rs` 组合 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，以及按 `[tui].statusLine` 数组顺序展示的权限、模型、Git 分支和 Git 变更。`features/status_line/view.rs` 最多绘制两行。总 Session Manager、Pane、SubagentPane 或 Chord 等表面需要明确按键时，固定一行 KeyHints 直接替换 StatusLine；Pane 打开时同时保留 ChatInput 状态但接管其可见高度。StatusLine/KeyHints 与存在内容的 SubagentPane 之间保留一行。`features/status_line/request.rs` 负责带 revision 的读写和成功后重读。
 
 ## 12. `host/`：窄宿主能力
 
@@ -960,7 +960,7 @@ lib.rs + lib_tests.rs
 - `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 与左右键循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、列表/SearchBox/Tab 焦点、输入 outcome 与列表 Ratatui view；上下键在三个区域间移动焦点，焦点位于 item 时左右调整当前配置项，位于 Tab 栏时左右切换标签；只读详情、文本输入和按键录制已分别交给 `DetailList`、`TextPrompt` 和 `KeyCapture`；
 - `render/layout.rs` 已拥有跨 presentation surface 复用的纯 geometry；`render/theme.rs` 拥有 TUI 完整调色板和终端色彩能力转换，`features/theme/resource.rs` 负责 TUI 产品目录的读取、预览、选择和保存；`App` 持有活动主题并通过 `RenderContext` 向下传递，component 不反向依赖 frame coordinator；
 - 根级 `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和一行 KeyHints；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；`ChatInput` 编辑、`ListSelection` 导航与 `ChatHistory` 滚动继续由局部 component 拥有；
-- `features/keymap` 已读取 CLI 显式提供的 active profile 下 `zeta-code/keybindings.json`，在 event-loop Tick 中有界热重载 User command/blocker、平台覆盖与 `when`；`/shortcuts` 打开 Keymap 设置界面，汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单、单键/两段 Chord 录制和资源路径。保存要求打开界面时的 revision 仍有效，完整编译和 TUI Chord 安全校验成功后才原子替换文件与 `AppKeymap`；坏更新或保存失败保留上一份有效映射。资源不进入 App Server，也不从远程目录读取客户端按键配置；
+- `features/keymap` 解释 `config.toml` 的 `[tui].keybindings`，完整校验 User command/blocker、平台覆盖与 `when`；`/shortcuts` 打开 Keymap 设置界面，汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单和单键/两段 Chord 录制。保存要求打开界面时的 config revision 仍有效，完整编译成功后才通过 `config/update` 替换 `[tui]` 并安装新 `AppKeymap`；坏更新或保存失败保留上一份有效映射，`config/changed` 触发重读；
 - `App` 处理 presentation coordination 与 Keymap action，并把普通输入委托给 `ChatComposer`；`app/screen_layout.rs` 为 Session 页面统一分配 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPane`，为 Manager 页面分配 `Welcome → 分组 Session rows → ChatInput → KeyHints`；
 - `ChatInput`、editor、attachment、paste 和 `/`、`@`、`$` completion 位于 `components/chat_input/`；补全目录由 provider/domain 提供快照，每个 Thread 的 `ChatInput` 独立保存活动 token、popup 和 selection；`components/pane/` 以 `PaneStack + PaneBody + PaneOutcome` 统一页面身份、生命周期和正文分派；Queue、Goal、Plan、Approval、Query 和 SubagentPane 的状态留在对应 feature，区域留在 `app/screen_layout.rs`；
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
@@ -976,7 +976,7 @@ lib.rs + lib_tests.rs
 - `app/frame.rs` 只装配 frame 并选择普通 status line 或临时操作提示；Pane 打开时由它把 Pane KeyHints 放进同一个底栏。`components/chat_composer/view.rs` 组合普通输入区和接管输入高度的 Pane，ChatInput completion view 拥有补全绘制与命中语义，各 component/feature view 拥有自己的 surface。补全弹层从输入框上沿覆盖；Query 使用输入框上方的独立区域，Approval 使用输入区域本身；
 - `TerminalModeGuard` 在任一 mode 获取失败时按逆序恢复已经获取的 terminal mode，显式
   restore 和 Drop 共享幂等清理路径；
-- `StatusLineModel` 映射运行事实与 typed config/Git result，`StatusLineResource` 保存四个本地显示开关，`features/status_line/view.rs` 在最多两行内按可用宽度降级；`WelcomeModel` 在 App 构造阶段把 workspace 路径缩写为 home-relative 文案，供空会话和 Manager 顶部复用；
+- `StatusLineModel` 映射运行事实与 typed config/Git result，`StatusLineSettings` 解释 `[tui].statusLine` 的项目与顺序，`features/status_line/view.rs` 在最多两行内按可用宽度降级；`WelcomeModel` 在 App 构造阶段把 workspace 路径缩写为 home-relative 文案，供空会话和 Manager 顶部复用；
 - `/status` 使用 Session snapshot 的实际模型、`model/list` 的完整/可用 context capacity 与最新 Turn typed `contextUsage` 展示模型、上下文窗口和 Session/Thread identity；剩余窗口不从 transcript 或累计 Thread usage 推导；
 - `ChatInput` 拥有 popup keys、活动 token、候选 selection、range completion 应用和提交解析；`zeta-slash-commands` 拥有 slash grammar、catalog、matches 与 dismiss，Ratatui popup renderer 根据自身 viewport 投影可见范围。`TextArea` 只拥有 UTF-8 buffer、光标和原子元素；`components/chat_input/vim.rs` 在 `ChatInput` 内拥有 Insert/Normal/Visual、operator、count、selection 与 yank 状态。补全弹层优先处理按键，之后才进入 Vim 或普通编辑；Vim 状态不进入 `App`，也不改变 Pane/正文的应用级导航；
 - bracketed paste 使用独立事件路径；超过 1000 个 Unicode scalar value 的内容由 `PendingPastes`
@@ -1006,7 +1006,7 @@ lib.rs + lib_tests.rs
 - 图片输入已形成“本地路径/系统 clipboard → 草稿 data URL → App Server 分块上传 →
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
-- status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；当前目录路径只在空会话和 Manager 顶部 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
+- status line 已按 `[tui].statusLine` 顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；当前目录路径只在空会话和 Manager 顶部 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
 - Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。主题仍通过 `/theme` Pane 选择；主题、Mouse interactions、Follow-up messages、Input mode 和 Add-dir 的新增目录默认 Permission 都由 App Server 保存到 `<profile>/config.toml` 的根级 `[tui]`。Input mode 在 item 焦点下用左右或 Enter 选择 Standard/Vim，只影响 `ChatInput`。Follow-up messages 默认 Queue，在 item 焦点下用左右明确选择 Queue/Steer，Enter 在两者间切换；上下键在列表、SearchBox 和 Tab 栏间移动焦点，Tab/Shift-Tab 直接切标签。默认 Permission 只保存权限集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个目录的独立 Permission，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
 
 `inline_visualization` 已接受为普通 `TranscriptCell` 种类，但当前 protocol 尚未提供 canonical visualization artifact、结构化 fallback 或安全引用。TUI 在该契约出现前不解析任意 HTML，也不凭显示文本伪造图表；契约到位后由 Thread transcript 投影生成稳定 `TranscriptCellId`，小型 fallback 可展开，大型 fallback 进入现有 QuickView。

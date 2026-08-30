@@ -359,6 +359,51 @@ fn theme_selection_updates_the_tui_toml_section() {
 }
 
 #[test]
+fn keybindings_and_status_line_are_persisted_in_the_tui_toml_section() {
+    let (mut client, state_root) = client();
+    let revision = client.read_config().unwrap().revision;
+
+    crate::features::keymap::set_keymap(
+        &mut client,
+        crate::features::keymap::KeymapEdit {
+            expected_revision: revision,
+            command_id: "zetaCode.action.copyLastResponse".into(),
+            kind: crate::features::keymap::KeymapEditKind::Set {
+                key: "ctrl+y".into(),
+                intent: crate::features::keymap::KeymapEditIntent::AddAlternate,
+            },
+        },
+    )
+    .unwrap();
+    let revision = client.read_config().unwrap().revision;
+    crate::features::status_line::set_status_line(
+        &mut client,
+        crate::features::status_line::StatusLineEdit {
+            expected_revision: revision,
+            item: crate::features::status_line::StatusLineItem::GitChanges,
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let config = client.read_config().unwrap();
+    assert_eq!(
+        config.tui.0.get("keybindings"),
+        Some(&serde_json::json!([{
+            "key": "ctrl+y",
+            "command": "zetaCode.action.copyLastResponse"
+        }]))
+    );
+    assert_eq!(
+        config.tui.0.get("statusLine"),
+        Some(&serde_json::json!(["permissions", "model", "git-branch"]))
+    );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn resume_and_model_without_arguments_open_actionable_panes() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();
