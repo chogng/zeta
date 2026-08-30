@@ -1003,6 +1003,45 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
 }
 
 #[test]
+fn help_uses_the_runtime_command_catalog_and_descriptions() {
+    let dir = temporary_dir("runtime-slash-help");
+    let registry = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        [SlashCommandDefinition {
+            name: "diagnose".into(),
+            description: "inspect the current dir".into(),
+            argument_mode: SlashCommandArgumentMode::Optional,
+        }],
+    )
+    .unwrap();
+    let mut app = App::for_dir_with_slash_commands(&dir, registry);
+    app.insert_text("/help");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, None);
+    assert_eq!(app.status(), &Status::Ready);
+    let selection = app.list_selection().unwrap();
+    assert_eq!(selection.active_tab().label(), "Commands");
+    assert_eq!(selection.tabs().len(), 1);
+    let commands = selection.visible_items();
+    let diagnose = commands
+        .iter()
+        .find(|item| item.label() == "/diagnose")
+        .expect("the server command is included in help");
+    assert_eq!(diagnose.description(), Some("inspect the current dir"));
+    let status = commands
+        .iter()
+        .find(|item| item.label() == "/status")
+        .expect("the local command is included in help");
+    assert_eq!(
+        status.description(),
+        Some("show the active session, thread, and model")
+    );
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
 fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
     let dir = temporary_dir("skill-selector");
     let skill = SkillRef::pinned(

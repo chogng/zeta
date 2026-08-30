@@ -19,7 +19,6 @@ pub(crate) use slash_commands::TuiSlashCommandAction;
 #[cfg(test)]
 pub(crate) use slash_commands::built_in_catalog_command;
 pub(crate) use slash_commands::built_in_slash_command_definitions;
-pub(crate) use slash_commands::built_in_slash_commands;
 #[cfg(test)]
 pub(crate) use slash_commands::default_slash_command_catalog;
 pub(crate) use state::ChatInput;

@@ -1,15 +1,17 @@
-use crate::components::chat_input::built_in_slash_commands;
+use crate::components::chat_input::SlashCommandCatalog;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
 
-pub(crate) fn help_pane_spec() -> PaneSpec<ListSelectionModel> {
-    let commands = built_in_slash_commands()
-        .into_iter()
-        .map(|(name, command)| {
-            ListSelectionItem::new(format!("/{name}")).with_description(command.description())
+pub(crate) fn help_pane_spec(slash_commands: &SlashCommandCatalog) -> PaneSpec<ListSelectionModel> {
+    let commands = slash_commands
+        .commands()
+        .iter()
+        .map(|command| {
+            ListSelectionItem::new(format!("/{}", command.name))
+                .with_description(&command.description)
         })
         .collect();
     PaneSpec::new(

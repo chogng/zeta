@@ -1,38 +1,42 @@
-use super::{TuiSlashCommandAction, built_in_slash_command_definitions, built_in_slash_commands};
+use super::{TuiSlashCommandAction, built_in_slash_command_definitions};
 use zeta_slash_commands::SlashCommandArgumentMode;
 
 #[test]
 fn builtins_follow_enum_presentation_order() {
+    let definitions = built_in_slash_command_definitions();
     assert_eq!(
-        built_in_slash_commands(),
+        definitions
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
         vec![
-            ("status", TuiSlashCommandAction::Status),
-            ("statusline", TuiSlashCommandAction::StatusLine),
-            ("skills", TuiSlashCommandAction::Skills),
-            ("mcp", TuiSlashCommandAction::Mcp),
-            ("resume", TuiSlashCommandAction::Resume),
-            ("archive", TuiSlashCommandAction::Archive),
-            ("connectors", TuiSlashCommandAction::Connectors),
-            ("rewind", TuiSlashCommandAction::Rewind),
-            ("clear", TuiSlashCommandAction::Clear),
-            ("config", TuiSlashCommandAction::Config),
-            ("add-dir", TuiSlashCommandAction::AddDir),
-            ("fork", TuiSlashCommandAction::Fork),
-            ("help", TuiSlashCommandAction::Help),
-            ("shortcuts", TuiSlashCommandAction::Shortcuts),
-            ("copy", TuiSlashCommandAction::Copy),
-            ("export", TuiSlashCommandAction::Export),
-            ("model", TuiSlashCommandAction::Model),
-            ("theme", TuiSlashCommandAction::Theme),
-            ("new", TuiSlashCommandAction::New),
-            ("quit", TuiSlashCommandAction::Quit),
-            ("sessions", TuiSlashCommandAction::Sessions),
-            ("agents", TuiSlashCommandAction::Agents),
-            ("subagents", TuiSlashCommandAction::Subagents),
-            ("queue", TuiSlashCommandAction::Queue),
+            "status",
+            "statusline",
+            "skills",
+            "mcp",
+            "resume",
+            "archive",
+            "connectors",
+            "rewind",
+            "clear",
+            "config",
+            "add-dir",
+            "fork",
+            "help",
+            "shortcuts",
+            "copy",
+            "export",
+            "model",
+            "theme",
+            "new",
+            "quit",
+            "sessions",
+            "agents",
+            "subagents",
+            "queue",
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 24);
+    assert_eq!(definitions.len(), 24);
 }
 
 #[test]

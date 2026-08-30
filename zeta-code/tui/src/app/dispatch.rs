@@ -1,7 +1,6 @@
 //! Built-in product command dispatch for the active Session and Thread.
 
 use crate::app::AppEvent;
-use crate::app::help_pane_spec;
 use crate::components::chat_input::ChatInputItem;
 use crate::components::chat_input::SlashCommandInvocation;
 use crate::components::chat_input::TuiSlashCommandAction;
@@ -259,14 +258,10 @@ impl ActiveConversation {
                         .map_err(session_error)?,
                 );
             }
-            TuiSlashCommandAction::Help => {
-                output
-                    .events
-                    .push(AppEvent::ListSelectionPaneOpened(help_pane_spec()));
-            }
             TuiSlashCommandAction::Copy
             | TuiSlashCommandAction::Config
             | TuiSlashCommandAction::Export
+            | TuiSlashCommandAction::Help
             | TuiSlashCommandAction::Shortcuts
             | TuiSlashCommandAction::StatusLine => {
                 return Err(CommandExecutionError(

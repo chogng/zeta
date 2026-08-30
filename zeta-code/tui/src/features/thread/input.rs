@@ -5,6 +5,7 @@ use crate::components::chat_history::ChatHistoryScroll;
 use crate::components::chat_input::ChatInput;
 use crate::components::chat_input::ChatInputCatalog;
 use crate::components::chat_input::ChatInputMode;
+use crate::components::chat_input::SlashCommandCatalog;
 use crate::features::queue::Queue;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -148,6 +149,10 @@ impl ThreadPresentationStore {
         for state in self.states.values_mut() {
             state.input.replace_catalog(input_catalog.clone());
         }
+    }
+
+    pub(crate) fn slash_commands(&self) -> &SlashCommandCatalog {
+        self.input_catalog.slash_commands()
     }
 
     pub(crate) fn set_input_mode(&mut self, input_mode: ChatInputMode) {

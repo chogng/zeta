@@ -1,4 +1,5 @@
 use crate::components::detail_list::DetailList;
+#[cfg(test)]
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::steer::SteerId;
@@ -93,6 +94,7 @@ pub(crate) enum AppEvent {
     ThreadGoalChanged(Option<ThreadGoal>),
     StatusQuickViewOpened(PaneSpec<DetailList>),
     ListSelectionPaneClosed,
+    #[cfg(test)]
     ListSelectionPaneOpened(PaneSpec<ListSelectionModel>),
     SkillsPaneOpened(SkillPaneSpec),
     SkillsPaneReplaced(SkillPaneSpec),

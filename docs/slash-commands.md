@@ -20,10 +20,7 @@ Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户
 | app 展示文件或 Plugin 上下文 | `@` context selector | 对应上下文来源 |
 | 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner |
 
-App Server 当前在 `initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的
-local commands 合并。命令定义、名称冲突、补全和提交解析属于 Slash Commands；列表组合、跨来源
-匹配和面板选择属于 Slash Launcher；行布局、DOM/WGPU/Ratatui 绘制和平台输入事件仍留在各 renderer。
-默认 server snapshot 包含 `/compact`，允许可选 inline 保留提示。
+App Server 当前在 `initialize.slashCommands` 发布服务端命令；每个客户端再与自身真正可执行的本地命令合并。TUI 的 `/` 补全和 `/help` 同时投影这份合并目录，因此本地与服务端命令使用同一名称、描述和参数声明。命令定义、名称冲突、补全和提交解析属于 Slash Commands；列表组合、跨来源匹配和面板选择属于 Slash Launcher；行布局、DOM、WGPU、Ratatui 绘制和平台输入事件仍留在各呈现层。默认服务端快照包含 `/compact`，允许保留可选的行内提示。
 
 ## Launcher 分层
 

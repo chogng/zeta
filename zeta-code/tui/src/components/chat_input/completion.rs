@@ -50,7 +50,6 @@ impl ChatInputCatalog {
         Self::new(slash_commands, Vec::new(), Vec::new())
     }
 
-    #[cfg(test)]
     pub(crate) fn slash_commands(&self) -> &SlashCommandCatalog {
         &self.slash_commands
     }

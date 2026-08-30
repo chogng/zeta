@@ -35,7 +35,7 @@ Tool、approval policy 或 persistence。
 - `/resume`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入覆盖完整 Session catalog 的唯一 Session Manager，`/subagents` 聚焦常驻 SubagentPane，`/queue` 管理当前 Thread 的 Queue；Manager 保留顶部 Welcome，按 Pinned、Needs input、Working、Ready for review、Failed、Stopped、Completed、Idle 分组，每行以状态图标开头并显示名称、当前操作/问题和状态时长；Approval 和 Query 仍由各自请求直接打开，不提供总括页面；
 - `/status` 使用不改变正常布局高度的 QuickView，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
-- `/help` 向 `ChatComposer` 推入可搜索的 `ListSelection` Pane；上下键在 item、SearchBox 和 Tab 栏间移动输入焦点，Tab 栏用左右键或 Tab 切换，焦点不再额外绘制紫色状态列；Esc/Ctrl-C 逐层返回保留原草稿的 `ChatInput`；Pane 打开期间自身占用 ChatInput 的可见高度，底栏只保留 `←/→/Tab to switch · Esc to close`；快捷键只由 `/shortcuts` 展示；
+- `/help` 从 `ThreadPresentationStore` 保存的合并 `SlashCommandCatalog` 构造可搜索的 `ListSelection` Pane，本地与服务端命令使用和 `/` 补全一致的名称、描述及顺序；上下键在 item、SearchBox 和 Tab 栏间移动输入焦点，Tab 栏用左右键或 Tab 切换，焦点不再额外绘制紫色状态列；Esc/Ctrl-C 逐层返回保留原草稿的 `ChatInput`；Pane 打开期间自身占用 ChatInput 的可见高度，底栏只保留 `←/→/Tab to switch · Esc to close`；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
   All/Enabled/Disabled/Manage tabs、数量、搜索和 source-qualified metadata；只有 Manage
   tab 的动作通过 revision-checked `skill/enablement/set` 修改 enablement；该页面是目录管理入口，
@@ -459,11 +459,7 @@ popup query；补全返回 `SlashCommandCompletion { range, replacement }`，因
 普通 prompt。Catalog 可以合并已校验的 dynamic metadata，并拒绝非法名称、空描述和 built-in
 冲突；App Server 在 initialize snapshot 中提供 host-composed dynamic command source。
 
-Built-in command 进入 `app::dispatch::execute_product_command`：dispatcher 从 clone 的
-`ActiveConversation` 调用 typed Session/Thread API，只返回 `ProductCommandOutput`；主循环不在
-dispatcher 内等待 RPC。查询命令读取 authoritative config，`/model` 通过 expected revision
-mutation 更新 preferred model。`/help` 和 `/skills` 复用 `ListSelection` Pane；关闭
-它们后一直保留的 `ChatInput` 重新获得焦点。`/skills` 映射 App Server 的 immutable catalog snapshot；Manage
+需要服务端数据或修改请求的内置命令进入 `app::dispatch::execute_product_command`：dispatcher 从克隆的 `ActiveConversation` 调用类型化的 Session/Thread API，只返回 `ProductCommandOutput`；主循环不在 dispatcher 内等待 RPC。查询命令读取权威配置，`/model` 通过预期版本修改 preferred model。`/help` 由 `App` 直接从当前合并命令目录构造，`/help` 和 `/skills` 复用 `ListSelection` Pane；关闭它们后一直保留的 `ChatInput` 重新获得焦点。`/skills` 映射 App Server 的不可变目录快照；Manage
 tab 的 `Enter` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
 catalog/file watcher 变化通过 `skills/changed` 同时刷新管理页面和 `$` Skill 候选。TUI 不读取
 Skill filesystem；`$name` 只提交 typed `SkillRef`，正文 activation/context injection 仍由 App

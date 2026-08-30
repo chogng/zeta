@@ -1,5 +1,4 @@
 use super::ActiveConversation;
-use crate::app::help_pane_spec;
 use crate::app::{App, AppCommand, AppEvent, Status};
 use crate::components::chat_history::MessageRole;
 use crate::components::chat_input::{
@@ -32,30 +31,6 @@ use zeta_client::OperationClient;
 use zeta_protocol::CommandId;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::ThreadStatus;
-
-#[test]
-fn help_lists_only_builtins_with_execution_paths() {
-    let help =
-        crate::components::list_selection::ListSelectionState::new(help_pane_spec().into_body());
-    let help = help
-        .visible_items()
-        .into_iter()
-        .map(|item| item.label())
-        .collect::<Vec<_>>();
-
-    assert!(help.contains(&"/status"));
-    assert!(help.contains(&"/resume"));
-    assert!(help.contains(&"/archive"));
-    assert!(help.contains(&"/rewind"));
-    assert!(help.contains(&"/add-dir"));
-    assert!(help.contains(&"/model"));
-    assert!(help.contains(&"/theme"));
-    assert!(!help.contains(&"/login"));
-    assert!(!help.contains(&"/plugins"));
-    assert!(!help.contains(&"/review"));
-    assert!(!help.contains(&"/archive-thread"));
-    assert!(!help.contains(&"/archive-session"));
-}
 
 #[test]
 fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
@@ -171,7 +146,7 @@ fn archive_persists_status_requests_exit_and_does_not_call_the_model() {
 }
 
 #[test]
-fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
+fn status_mcp_connectors_and_skills_return_real_surfaces() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "commands".into()).unwrap();
     let mut app = App::new();
@@ -212,16 +187,6 @@ fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
     assert_eq!(selection.title(), "Skills");
     assert_eq!(selection.active_tab().label(), "All (1)");
     assert_eq!(selection.visible_items()[0].label(), "skill-creator");
-
-    conversation.execute(
-        &mut client,
-        invocation(TuiSlashCommandAction::Help, ""),
-        &mut app,
-    );
-    assert_eq!(app.status(), &Status::Ready);
-    let selection = app.list_selection().unwrap();
-    assert_eq!(selection.active_tab().label(), "Commands");
-    assert_eq!(selection.tabs().len(), 1);
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

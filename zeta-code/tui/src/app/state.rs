@@ -3,6 +3,7 @@ use super::escape::RootEscapeOutcome;
 use super::escape::RootEscapeSequence;
 use super::event::AppEvent;
 use super::frame::InputPointerTarget;
+use super::help::help_pane_spec;
 use super::status_notice::StatusNotice;
 use crate::components::chat_composer::ChatComposer;
 use crate::components::chat_composer::ChatComposerOutcome;
@@ -1640,6 +1641,7 @@ impl App {
                 self.quick_view = Some(QuickViewState::new(spec));
             }
             AppEvent::ListSelectionPaneClosed => self.close_top_pane(),
+            #[cfg(test)]
             AppEvent::ListSelectionPaneOpened(model) => self.show_list_selection_pane(model),
             AppEvent::SkillsPaneOpened(view) => self.show_skills_pane(view),
             AppEvent::SkillsPaneReplaced(view) => self.replace_skills_pane(view),
@@ -2138,6 +2140,11 @@ impl App {
                 Some(AppCommand::SetTheme {
                     preference: invocation.display_arguments.trim().to_owned(),
                 })
+            }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Help)) => {
+                let spec = help_pane_spec(self.thread_presentations.slash_commands());
+                self.show_list_selection_pane(spec);
+                None
             }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();

@@ -100,12 +100,6 @@ impl TuiSlashCommandAction {
     }
 }
 
-pub(crate) fn built_in_slash_commands() -> Vec<(&'static str, TuiSlashCommandAction)> {
-    TuiSlashCommandAction::iter()
-        .map(|command| (command.command(), command))
-        .collect()
-}
-
 pub(crate) fn built_in_slash_command_definitions() -> Vec<SlashCommandDefinition> {
     TuiSlashCommandAction::iter()
         .map(TuiSlashCommandAction::definition)
