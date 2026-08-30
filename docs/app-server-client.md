@@ -495,13 +495,11 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
 | `start_in_process_client` / generic `AppServerClient<T>` | MCP、rust-app 与 contract tests 的同步适配面；TUI/CLI 不再依赖 drain |
 | typed method 同步等待 completion | shared handle 保持同步 typed API；TUI 已用 `RequestTask` 把等待移出单写者 loop |
 | bounded event/data plane | Current：1024 event + 4096 server queue；显式 `Lagged` event 尚未提供 |
-| stdio remote backend | 已实现；`AppServerSession::start_stdio` 完成 initialize/schema gate 与同一 request/event contract；product-level reconnect/subscription restoration 仍由上层负责 |
+| stdio child backend | 已实现；`AppServerSession::start_stdio` 完成 initialize/schema gate 与同一 request/event contract；本地与 Remote `zeta code` 的 30 秒有界重连和 snapshot 恢复由 CLI 宿主负责 |
 | initialize gate 只存在于一个 helper | 裸 `AppServerClient::new` 可以在未初始化时发送业务请求 |
 | server error 被压成 code/string | 丢失 typed error name/data |
 
-因此 owned embedded session 的 request/event/shutdown 与有界交付主路径已经完成；下一阶段集中
-下一阶段集中在 typed error、显式 lag lifecycle 和 product-level reconnect；不要把这些策略回退到
-notification drain，也不要把 durable subscription restoration 偷塞进低层 stdio transport。
+因此 owned embedded session 的 request/event/shutdown 与有界交付主路径已经完成；下一阶段集中在 typed error、显式 lag lifecycle，以及其他产品宿主需要的连接恢复。不要把这些策略回退到 notification drain，也不要把 durable subscription restoration 偷塞进低层 stdio transport。
 
 ## 11. 目标模块
 

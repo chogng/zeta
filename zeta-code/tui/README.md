@@ -104,11 +104,7 @@ transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown
 [`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的鼠标交互覆盖所有页面：拖动选择当前 frame 中可见的字符并在松手时自动复制，没有拖动的左键手势才进入 Slash/File/Plugin Suggest、Pane、Approval、Query 与 transcript marker 的命中路径；hover 继续复用候选选中态。Config 标签页中的 Mouse interactions item 可关闭全部 TUI 鼠标捕获，关闭后框选与复制行为由终端负责。
 Vim 只改变 `ChatInput` 的文字编辑行为，不把 Normal/Visual 状态扩散到 Pane、正文选择或应用级快捷键。
 
-TUI 当前连接 CLI 提供的 profile/Directory-scoped local App Server authority，不提供 remote
-connection selector 或自动 reconnect；Desktop 与 app 在相同 authority partition 下可以实时读取
-同一份 Session catalog 和 Thread event。若未来产品要求远程运行，必须先由
-`zeta-app-server-client` 接受 connection/recovery contract，TUI 只消费其 typed state，不能自建
-transport retry。File mention 插入当前目录的相对路径，Plugin mention 插入 effective package 的原子 `@plugin-id`；TUI 不另造 `app://`/`plugin://` 协议身份。
+TUI 当前连接 CLI 提供的 profile/Directory-scoped App Server authority，不拥有 connection selector 或 transport retry。连接中断时，TUI 丢弃本代 pending request 和 queued action，只向 CLI 交还持久化的 Session/Thread 身份；本地和 Remote CLI 宿主都在 30 秒有界窗口内重建连接，再让 TUI 从权威 snapshot 恢复。Desktop 与 app 在相同 authority partition 下可以实时读取同一份 Session catalog 和 Thread event。File mention 插入当前目录的相对路径，Plugin mention 插入 effective package 的原子 `@plugin-id`；TUI 不另造 `app://`/`plugin://` 协议身份。
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
@@ -615,7 +611,6 @@ directory directory/preview 和 interaction deadline。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
 固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
-event-loop integration 可以继续加强当前 brokered-local 路径，但 remote reconnect trace、Native
-Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与
+event-loop integration 可以继续加强当前 brokered-local 路径；连接恢复验证属于 CLI，不进入 TUI transport 测试。Native Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与
 owner 判断以 [`docs/tui.md`](../../docs/tui.md#17-已接受的架构迁移顺序) 和
 [`docs/product-lines.md`](../../docs/product-lines.md) 为准。

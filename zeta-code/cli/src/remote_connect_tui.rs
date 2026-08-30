@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use std::thread;
-use std::time::Duration;
 use std::time::Instant;
 
 use zeta_remote::RemoteProfile;
@@ -8,10 +7,8 @@ use zeta_remote_connections::RemoteConnectionFailureKind;
 
 use super::runtime;
 use super::runtime::ReadyRemoteRuntime;
-
-const RECONNECT_WINDOW: Duration = Duration::from_secs(30);
-const INITIAL_RECONNECT_DELAY: Duration = Duration::from_millis(250);
-const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(2);
+use crate::reconnect;
+use crate::reconnect::Failure;
 
 pub(super) fn run(
     ready: ReadyRemoteRuntime,
@@ -56,14 +53,15 @@ fn reconnect(
     initial_reason: &str,
 ) -> Result<ReadyRemoteRuntime, String> {
     let started = Instant::now();
-    retry(
+    reconnect::retry(
+        "Remote App Server",
         initial_reason,
         || match runtime::reconnect_exact(profile, ssh_executable) {
             Ok(ready) => Ok(ready),
             Err(error) if error.kind() == RemoteConnectionFailureKind::Transport => {
-                Err(ReconnectFailure::Retryable(error.to_string()))
+                Err(Failure::Retryable(error.to_string()))
             }
-            Err(error) => Err(ReconnectFailure::Terminal(format!(
+            Err(error) => Err(Failure::Terminal(format!(
                 "Remote App Server reconnect stopped because the verified runtime changed or rejected the connection: {error}"
             ))),
         },
@@ -77,50 +75,3 @@ fn reconnect(
         },
     )
 }
-
-enum ReconnectFailure {
-    Retryable(String),
-    Terminal(String),
-}
-
-fn retry<T>(
-    initial_reason: &str,
-    mut reconnect: impl FnMut() -> Result<T, ReconnectFailure>,
-    mut wait: impl FnMut(Duration),
-    mut elapsed: impl FnMut() -> Duration,
-    mut report: impl FnMut(usize, Duration),
-) -> Result<T, String> {
-    let mut attempts = 0;
-    let mut last_reason = initial_reason.to_owned();
-    loop {
-        let Some(delay) = reconnect_delay_within_window(elapsed(), attempts) else {
-            return Err(format!(
-                "Remote App Server did not recover within {} seconds after {attempts} attempts: {last_reason}",
-                RECONNECT_WINDOW.as_secs()
-            ));
-        };
-        attempts += 1;
-        report(attempts, delay);
-        wait(delay);
-        match reconnect() {
-            Ok(ready) => return Ok(ready),
-            Err(ReconnectFailure::Retryable(error)) => last_reason = error,
-            Err(ReconnectFailure::Terminal(error)) => return Err(error),
-        }
-    }
-}
-
-fn reconnect_delay_within_window(elapsed: Duration, attempt: usize) -> Option<Duration> {
-    let remaining = RECONNECT_WINDOW.checked_sub(elapsed)?;
-    let delay = reconnect_delay(attempt);
-    (delay <= remaining).then_some(delay)
-}
-
-fn reconnect_delay(attempt: usize) -> Duration {
-    let multiplier = 1_u32 << (attempt.min(31) as u32);
-    (INITIAL_RECONNECT_DELAY * multiplier).min(MAX_RECONNECT_DELAY)
-}
-
-#[cfg(test)]
-#[path = "remote_connect_tui_tests.rs"]
-mod tests;

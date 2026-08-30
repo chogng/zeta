@@ -1,12 +1,9 @@
 use signal_hook::SigId;
 use signal_hook::consts::SIGINT;
 use std::env;
-use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use zeta_app_server_client::AppServerSession;
-use zeta_app_server_client::StdioAppServerCommand;
 use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::turn::InputItem;
@@ -24,6 +21,8 @@ use zeta_exec::JsonLinesExecEventSink;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
+mod local_tui;
+mod reconnect;
 mod remote;
 
 fn main() {
@@ -63,36 +62,7 @@ fn ask(prompt: String) -> Result<(), CliError> {
 }
 
 fn interactive() -> Result<(), String> {
-    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
-        return Err(
-            "interactive mode requires a TTY; use `zeta ask` or `zeta exec` instead".into(),
-        );
-    }
-    let profile_root = local_profile_root();
-    let executable = env::current_exe()
-        .map_err(|error| format!("could not resolve zeta executable: {error}"))?;
-    let dir_root = configured_dir()?;
-    let command = StdioAppServerCommand::new(executable)
-        .with_argument("app-server")
-        .with_argument("connect")
-        .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.clone().into_os_string())
-        .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.clone().into_os_string());
-    let session = AppServerSession::start_stdio(
-        command,
-        ClientInfo {
-            name: "zeta-cli".into(),
-            version: env!("CARGO_PKG_VERSION").into(),
-        },
-        zeta_tui::client_capabilities(),
-    )
-    .map_err(|error| error.to_string())?;
-    let options = zeta_tui::TuiOptions::new("TUI conversation")
-        .with_dir_root(&dir_root)
-        .with_profile_root(&profile_root);
-    match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
-        zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => Ok(()),
-        zeta_tui::TuiExit::ConnectionLost { reason, .. } => Err(reason),
-    }
+    local_tui::run(configured_dir()?, local_profile_root())
 }
 
 fn run_app_server(arguments: Vec<String>) -> Result<(), String> {

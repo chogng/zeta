@@ -2,9 +2,9 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::time::Duration;
 
-use super::RECONNECT_WINDOW;
-use super::ReconnectFailure;
-use super::reconnect_delay;
+use super::Failure;
+use super::WINDOW;
+use super::delay;
 use super::retry;
 
 #[test]
@@ -14,14 +14,13 @@ fn transport_failures_retry_with_bounded_backoff_until_success() {
     let reports = RefCell::new(Vec::new());
 
     let result = retry(
+        "App Server",
         "initial disconnect",
         || {
             let attempt = attempts.get() + 1;
             attempts.set(attempt);
             if attempt < 3 {
-                Err(ReconnectFailure::Retryable(format!(
-                    "transport failure {attempt}"
-                )))
+                Err(Failure::Retryable(format!("transport failure {attempt}")))
             } else {
                 Ok("ready")
             }
@@ -45,13 +44,14 @@ fn transport_failures_retry_with_bounded_backoff_until_success() {
 }
 
 #[test]
-fn runtime_or_protocol_change_stops_without_more_retries() {
+fn protocol_change_stops_without_more_retries() {
     let attempts = Cell::new(0_usize);
     let error = retry::<()>(
+        "App Server",
         "initial disconnect",
         || {
             attempts.set(attempts.get() + 1);
-            Err(ReconnectFailure::Terminal("schema changed".into()))
+            Err(Failure::Terminal("schema changed".into()))
         },
         |_| {},
         || Duration::ZERO,
@@ -67,19 +67,20 @@ fn runtime_or_protocol_change_stops_without_more_retries() {
 fn exhausted_window_does_not_start_an_unbounded_attempt() {
     let attempts = Cell::new(0_usize);
     let error = retry::<()>(
-        "ssh stream closed",
+        "App Server",
+        "stream closed",
         || {
             attempts.set(attempts.get() + 1);
-            Err(ReconnectFailure::Retryable("still closed".into()))
+            Err(Failure::Retryable("still closed".into()))
         },
         |_| {},
-        || RECONNECT_WINDOW,
+        || WINDOW,
         |_, _| {},
     )
     .unwrap_err();
 
     assert_eq!(attempts.get(), 0);
     assert!(error.contains("within 30 seconds after 0 attempts"));
-    assert!(error.contains("ssh stream closed"));
-    assert_eq!(reconnect_delay(10), Duration::from_secs(2));
+    assert!(error.contains("stream closed"));
+    assert_eq!(delay(10), Duration::from_secs(2));
 }
