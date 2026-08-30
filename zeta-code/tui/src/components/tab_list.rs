@@ -1,12 +1,13 @@
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
-use ratatui::style::Modifier;
-use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
@@ -127,8 +128,10 @@ impl<T: TabListItem> TabListState<T> {
 }
 
 pub(crate) fn desired_height<T: TabListItem>(tabs: &[T], width: u16) -> u16 {
-    tab_lines(tabs, 0, width, Color::Reset, Color::Reset)
-        .len()
+    tab_positions(tabs, width)
+        .last()
+        .map(|position| position.row.saturating_add(1))
+        .unwrap_or_default()
         .min(u16::MAX as usize) as u16
 }
 
@@ -136,7 +139,9 @@ pub(crate) fn draw<T: TabListItem>(
     frame: &mut Frame<'_>,
     area: Rect,
     state: &TabListState<T>,
-    highlight: Color,
+    focused: bool,
+    hovered: Option<usize>,
+    pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
     frame.render_widget(
@@ -144,8 +149,10 @@ pub(crate) fn draw<T: TabListItem>(
             state.tabs(),
             state.active_index(),
             area.width,
-            highlight,
-            context.muted(),
+            focused,
+            hovered,
+            pressed,
+            context,
         )),
         area,
     );
@@ -155,8 +162,10 @@ fn tab_lines<T: TabListItem>(
     tabs: &[T],
     active: usize,
     width: u16,
-    highlight: Color,
-    muted: Color,
+    focused: bool,
+    hovered: Option<usize>,
+    pressed: Option<usize>,
+    context: RenderContext<'_>,
 ) -> Vec<Line<'static>> {
     if tabs.is_empty() {
         return Vec::new();
@@ -179,20 +188,25 @@ fn tab_lines<T: TabListItem>(
             spans.push(Span::raw(" ".repeat(position.start - *row_width)));
             *row_width = position.start;
         }
-        if index == active {
-            spans.push(Span::styled(
-                format!(" {} ", tab.tab_label()),
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(highlight)
-                    .add_modifier(Modifier::BOLD),
-            ));
+        let target = if index == active {
+            InteractionTarget::Active
         } else {
-            spans.push(Span::styled(
-                format!(" {} ", tab.tab_label()),
-                Style::default().fg(muted),
-            ));
+            InteractionTarget::Rest
+        };
+        let attention = if focused && index == active {
+            InteractionAttention::Keyboard
+        } else if pressed == Some(index) {
+            InteractionAttention::Pressed
+        } else if hovered == Some(index) {
+            InteractionAttention::Hovered
+        } else {
+            InteractionAttention::None
+        };
+        let mut style = interaction_style(context, InteractionState { target, attention });
+        if target == InteractionTarget::Rest && attention == InteractionAttention::None {
+            style = style.fg(context.muted());
         }
+        spans.push(Span::styled(format!(" {} ", tab.tab_label()), style));
         *row_width = position.start.saturating_add(position.width);
     }
     lines.into_iter().map(Line::from).collect()

@@ -90,7 +90,7 @@ pub(crate) fn draw_scrolled(
             Block::default()
                 .title(detail.title())
                 .borders(Borders::TOP)
-                .border_style(Style::default().fg(context.highlight())),
+                .border_style(Style::default().fg(context.focus())),
         ),
         horizontal_margin(area, 2),
     );

@@ -4,8 +4,13 @@ use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::tab_list;
 use crate::render::Insets;
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RectExt;
 use crate::render::RenderContext;
+use crate::render::focus_style;
+use crate::render::interaction_style;
 use crate::render::line_to_borrowed;
 use ratatui::Frame;
 use ratatui::layout::Constraint;
@@ -13,7 +18,6 @@ use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
-use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -32,19 +36,23 @@ pub(crate) fn draw(
     view: &ListSelectionState,
     context: RenderContext<'_>,
 ) {
-    draw_with_hover(frame, area, view, None, context);
+    draw_with_pointer(
+        frame, area, view, None, None, false, false, None, None, context,
+    );
 }
 
-pub(crate) fn draw_with_hover(
+pub(crate) fn draw_with_pointer(
     frame: &mut Frame<'_>,
     area: Rect,
     view: &ListSelectionState,
-    hovered: Option<usize>,
+    hovered_tab: Option<usize>,
+    pressed_tab: Option<usize>,
+    hovered_search: bool,
+    pressed_search: bool,
+    hovered_item: Option<usize>,
+    pressed_item: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    let presentation_highlight = view
-        .presentation_highlight()
-        .unwrap_or_else(|| context.highlight());
     let content = content_area(area);
     if content.is_empty() {
         return;
@@ -66,7 +74,9 @@ pub(crate) fn draw_with_hover(
             frame,
             tab_area,
             view.tab_list(),
-            presentation_highlight,
+            view.tabs_focused(),
+            hovered_tab,
+            pressed_tab,
             context,
         );
         if view.tabs_focused() {
@@ -80,7 +90,7 @@ pub(crate) fn draw_with_hover(
                     ITEM_STATE_COLUMN_WIDTH.min(areas[1].width),
                     1,
                 ),
-                presentation_highlight,
+                context,
             );
         }
     }
@@ -90,7 +100,7 @@ pub(crate) fn draw_with_hover(
             frame,
             content_after_state_column(areas[2]),
             search,
-            presentation_highlight,
+            search_attention(hovered_search, pressed_search),
             context,
         );
         if view.search_focused() {
@@ -102,7 +112,7 @@ pub(crate) fn draw_with_hover(
                     ITEM_STATE_COLUMN_WIDTH.min(areas[2].width),
                     1,
                 ),
-                presentation_highlight,
+                context,
             );
         }
     }
@@ -137,8 +147,11 @@ pub(crate) fn draw_with_hover(
                 frame,
                 row_area,
                 item,
-                hovered == Some(index)
-                    || view.items_focused() && view.selected_visible_index() == Some(index),
+                item_attention(
+                    view.items_focused() && view.selected_visible_index() == Some(index),
+                    hovered_item == Some(index),
+                    pressed_item == Some(index),
+                ),
                 column_layout,
                 context,
             );
@@ -239,6 +252,26 @@ impl ListSelectionState {
         let index = first_row.saturating_add(usize::from(row - areas[3].y));
         (index < visible_items.len()).then_some(index)
     }
+
+    pub(crate) fn search_contains(&self, area: Rect, column: u16, row: u16) -> bool {
+        if self.search().is_none() {
+            return false;
+        }
+        let content = content_area(area);
+        if content.is_empty() {
+            return false;
+        }
+        let tab_height = if self.show_tabs() {
+            tab_list::desired_height(
+                self.tabs(),
+                content.width.saturating_sub(ITEM_STATE_COLUMN_WIDTH),
+            )
+        } else {
+            0
+        };
+        content_after_state_column(selection_areas(content, self, tab_height)[2])
+            .contains(ratatui::layout::Position::new(column, row))
+    }
 }
 
 fn content_area(area: Rect) -> Rect {
@@ -255,14 +288,33 @@ fn content_after_state_column(area: Rect) -> Rect {
     }
 }
 
-fn draw_focus_marker(frame: &mut Frame<'_>, area: Rect, color: Color) {
+fn draw_focus_marker(frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
     frame.render_widget(
-        Paragraph::new(Span::styled(
-            "❯ ",
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        )),
+        Paragraph::new(Span::styled("❯ ", focus_style(context))),
         area,
     );
+}
+
+fn item_attention(selected: bool, hovered: bool, pressed: bool) -> InteractionAttention {
+    if selected {
+        InteractionAttention::Keyboard
+    } else if pressed {
+        InteractionAttention::Pressed
+    } else if hovered {
+        InteractionAttention::Hovered
+    } else {
+        InteractionAttention::None
+    }
+}
+
+fn search_attention(hovered: bool, pressed: bool) -> InteractionAttention {
+    if pressed {
+        InteractionAttention::Pressed
+    } else if hovered {
+        InteractionAttention::Hovered
+    } else {
+        InteractionAttention::None
+    }
 }
 
 fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) -> Rc<[Rect]> {
@@ -328,22 +380,39 @@ fn draw_item(
     frame: &mut Frame<'_>,
     area: Rect,
     item: &ListSelectionItem,
-    selected: bool,
+    attention: InteractionAttention,
     column_layout: ItemColumnLayout,
     context: RenderContext<'_>,
 ) {
-    let label_style = if selected {
-        Style::default()
-            .fg(item
-                .selection_foreground()
-                .unwrap_or_else(|| context.highlight()))
-            .add_modifier(Modifier::BOLD)
+    let row_style = interaction_style(
+        context,
+        InteractionState {
+            target: InteractionTarget::Rest,
+            attention,
+        },
+    );
+    frame.render_widget(Block::default().style(row_style), area);
+    let label_style = if attention == InteractionAttention::Keyboard {
+        item.selection_foreground()
+            .map(|foreground| row_style.fg(foreground))
+            .unwrap_or(row_style)
+    } else if attention != InteractionAttention::None {
+        row_style
     } else {
         Style::default()
     };
-    let marker = if selected { "❯ " } else { "  " };
+    let marker = if attention == InteractionAttention::Keyboard {
+        "❯ "
+    } else {
+        "  "
+    };
+    let detail_style = if attention == InteractionAttention::None {
+        Style::default().fg(context.muted())
+    } else {
+        row_style
+    };
     let Some(columns) = item.columns() else {
-        let spans = item_spans(item, marker, label_style, context);
+        let spans = item_spans(item, marker, label_style, detail_style);
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
         return;
     };
@@ -372,7 +441,6 @@ fn draw_item(
     let middle_width = trailing_x
         .saturating_sub(column_layout.gap)
         .saturating_sub(middle_x);
-    let detail_style = Style::default().fg(context.muted());
     frame.render_widget(
         Paragraph::new(Span::styled(columns.middle.as_str(), detail_style)),
         Rect::new(middle_x, area.y, middle_width, 1),
@@ -387,7 +455,7 @@ fn item_spans<'a>(
     item: &'a ListSelectionItem,
     marker: &'static str,
     label_style: Style,
-    context: RenderContext<'_>,
+    detail_style: Style,
 ) -> Vec<Span<'a>> {
     let Some(description) = item.description() else {
         return vec![
@@ -398,8 +466,8 @@ fn item_spans<'a>(
     vec![
         Span::styled(marker, label_style),
         Span::styled(item.label(), label_style),
-        Span::styled("  ·  ", Style::default().fg(context.muted())),
-        Span::styled(description, Style::default().fg(context.muted())),
+        Span::styled("  ·  ", detail_style),
+        Span::styled(description, detail_style),
     ]
 }
 

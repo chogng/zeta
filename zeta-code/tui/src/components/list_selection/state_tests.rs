@@ -97,6 +97,19 @@ fn mouse_click_switches_tabs() {
 }
 
 #[test]
+fn search_hit_testing_and_explicit_focus_share_the_search_geometry() {
+    let mut state = state();
+    let area = Rect::new(0, 0, 80, 10);
+
+    assert!(state.search_contains(area, 2, 2));
+    assert!(!state.search_contains(area, 1, 2));
+    assert!(state.focus_search());
+    state.handle_key(key(KeyCode::Char('m')));
+
+    assert_eq!(state.query(), "m");
+}
+
+#[test]
 fn tab_keys_switch_tabs_and_wrap() {
     let mut state = state();
 

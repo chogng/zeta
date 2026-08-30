@@ -2,6 +2,7 @@ use crate::components::search_box;
 use crate::components::search_box::SearchBoxInputOutcome;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
+use crate::render::InteractionAttention;
 use crate::render::RenderContext;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -106,7 +107,7 @@ pub(crate) fn draw(
         frame,
         content[1],
         prompt.input(),
-        context.highlight(),
+        InteractionAttention::None,
         context,
     );
 }

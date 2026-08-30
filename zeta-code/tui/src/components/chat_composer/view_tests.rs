@@ -37,6 +37,7 @@ fn renderable_measurement_matches_the_composer_area_allocation() {
         view: &view,
         cursor: ChatInputCursor::Hidden,
         hovered: None,
+        pressed: None,
     };
 
     let height = surface.desired_height(80, test_context());

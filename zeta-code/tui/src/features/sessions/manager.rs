@@ -3,7 +3,11 @@ use super::session_size_label;
 use crate::components::detail_list::DetailList;
 use crate::components::detail_list::DetailListRow;
 use crate::components::pane::PaneSpec;
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
@@ -330,6 +334,7 @@ pub(crate) fn draw_manager(
     area: Rect,
     view: SessionManagerView<'_>,
     hovered: Option<&SessionManagerPointerTarget>,
+    pressed: Option<&SessionManagerPointerTarget>,
     context: RenderContext<'_>,
 ) {
     if area.is_empty() {
@@ -347,9 +352,8 @@ pub(crate) fn draw_manager(
         return;
     }
     let visible_rows = usize::from(area.height);
-    // Hover temporarily chooses the row drawn with selection styling. It never replaces the
-    // keyboard-owned selection used by navigation and activation.
-    let presented = hovered.map(|target| &target.0).or(view.selected);
+    let hovered = hovered.map(|target| &target.0);
+    let pressed = pressed.map(|target| &target.0);
     let selected_row = rows.iter().position(|row| {
         view.selected
             .is_some_and(|selected| row.selection() == *selected)
@@ -373,13 +377,23 @@ pub(crate) fn draw_manager(
                     group,
                     count,
                     view.collapsed.contains(&group),
-                    presented == Some(&ManagerSelection::Group(group)),
+                    manager_attention(
+                        &ManagerSelection::Group(group),
+                        view.selected,
+                        hovered,
+                        pressed,
+                    ),
                     usize::from(area.width),
                     context,
                 ),
                 ManagerRow::Session(session) => session_line(
                     session,
-                    presented == Some(&ManagerSelection::Session(session.session_id.clone())),
+                    manager_attention(
+                        &ManagerSelection::Session(session.session_id.clone()),
+                        view.selected,
+                        hovered,
+                        pressed,
+                    ),
                     view.animation_frame,
                     view.now_unix_ms,
                     usize::from(area.width),
@@ -550,7 +564,7 @@ fn manager_rows<'a>(
 
 fn session_line<'a>(
     session: &'a Session,
-    selected: bool,
+    attention: InteractionAttention,
     animation_frame: usize,
     now_unix_ms: u64,
     width: usize,
@@ -568,8 +582,14 @@ fn session_line<'a>(
     let (name_width, middle_gap, middle_width) = column_widths(body_width, !middle.is_empty());
     let name = pad_to_width(&truncate_to_width(&session.title, name_width), name_width);
     let middle = pad_to_width(&truncate_to_width(middle, middle_width), middle_width);
-    let row_style = if selected {
-        selected_style(context)
+    let row_style = if attention != InteractionAttention::None {
+        interaction_style(
+            context,
+            InteractionState {
+                target: InteractionTarget::Rest,
+                attention,
+            },
+        )
     } else {
         Style::default().fg(context.muted())
     };
@@ -591,14 +611,21 @@ fn group_line(
     group: SessionGroup,
     count: usize,
     collapsed: bool,
-    selected: bool,
+    attention: InteractionAttention,
     width: usize,
     context: RenderContext<'_>,
 ) -> Line<'static> {
     let arrow = if collapsed { '▸' } else { '▾' };
     let text = format!("{arrow} {} ({count})", group.label());
-    let style = if selected {
-        selected_style(context).add_modifier(Modifier::BOLD)
+    let style = if attention != InteractionAttention::None {
+        interaction_style(
+            context,
+            InteractionState {
+                target: InteractionTarget::Rest,
+                attention,
+            },
+        )
+        .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
             .fg(context.muted())
@@ -623,10 +650,21 @@ fn more_line(
     )
 }
 
-fn selected_style(context: RenderContext<'_>) -> Style {
-    Style::default()
-        .fg(context.active_selection_foreground())
-        .bg(context.active_selection_background())
+fn manager_attention(
+    target: &ManagerSelection,
+    selected: Option<&ManagerSelection>,
+    hovered: Option<&ManagerSelection>,
+    pressed: Option<&ManagerSelection>,
+) -> InteractionAttention {
+    if selected == Some(target) {
+        InteractionAttention::Keyboard
+    } else if pressed == Some(target) {
+        InteractionAttention::Pressed
+    } else if hovered == Some(target) {
+        InteractionAttention::Hovered
+    } else {
+        InteractionAttention::None
+    }
 }
 
 fn column_widths(body_width: usize, has_middle: bool) -> (usize, usize, usize) {

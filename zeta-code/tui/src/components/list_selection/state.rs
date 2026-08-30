@@ -303,6 +303,14 @@ impl ListSelectionState {
         }
     }
 
+    pub(crate) fn focus_search(&mut self) -> bool {
+        if self.search.is_none() {
+            return false;
+        }
+        self.set_focus(ListSelectionFocus::Search);
+        true
+    }
+
     pub(super) fn tab_list(&self) -> &TabListState<ListSelectionGroup> {
         &self.tabs
     }

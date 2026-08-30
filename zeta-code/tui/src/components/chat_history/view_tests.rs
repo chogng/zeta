@@ -55,7 +55,7 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
         scroll: &scroll,
         render_cache: &render_cache,
         welcome: &welcome,
-        presentation_highlight: test_context().highlight(),
+        presentation_highlight: test_context().focus(),
     };
 
     assert!(view.desired_height(12, test_context()) > view.desired_height(80, test_context()));
@@ -127,7 +127,7 @@ fn long_transcripts_buffer_only_visible_cells() {
         scroll: &scroll,
         render_cache: &render_cache,
         welcome: &welcome,
-        presentation_highlight: test_context().highlight(),
+        presentation_highlight: test_context().focus(),
     };
     let mut terminal = Terminal::new(TestBackend::new(40, 6)).unwrap();
 
@@ -155,7 +155,7 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
         scroll: &scroll,
         render_cache: &render_cache,
         welcome: &welcome,
-        presentation_highlight: test_context().highlight(),
+        presentation_highlight: test_context().focus(),
     };
     let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
 

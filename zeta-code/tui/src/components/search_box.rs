@@ -123,10 +123,14 @@ impl fmt::Debug for SearchBoxState {
     }
 }
 
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::focus_style;
+use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -142,7 +146,7 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     search: &SearchBoxState,
-    active_color: Color,
+    attention: InteractionAttention,
     context: RenderContext<'_>,
 ) {
     let rendered_query = search
@@ -153,16 +157,24 @@ pub(crate) fn draw(
     } else {
         Span::raw(rendered_query.as_deref().unwrap_or(search.query()))
     };
-    let border_color = if search.input_active() {
-        active_color
+    let border_style = if attention != InteractionAttention::None {
+        interaction_style(
+            context,
+            InteractionState {
+                target: InteractionTarget::Rest,
+                attention,
+            },
+        )
+    } else if search.input_active() {
+        focus_style(context)
     } else {
-        context.muted()
+        Style::default().fg(context.muted())
     };
     frame.render_widget(
         Paragraph::new(Line::from(text)).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color))
+                .border_style(border_style)
                 .padding(Padding::left(SEARCH_BOX_LEFT_PADDING)),
         ),
         area,

@@ -12,7 +12,7 @@ use crate::render::ThemeRgb;
 
 const MAX_DOCUMENT_BYTES: u64 = 1_048_576;
 const MAX_THEME_FILES: usize = 128;
-const USER_THEME_VERSION: u8 = 1;
+const USER_THEME_VERSION: u8 = 2;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -74,24 +74,31 @@ impl UserThemeDocument {
 fn apply_color(palette: &mut ThemePalette, name: &str, color: ThemeRgb) -> Result<(), String> {
     let target = match name {
         "accent" => &mut palette.accent,
+        "accentSurfaceBackground" => &mut palette.accent_surface_background,
+        "accentSurfaceForeground" => &mut palette.accent_surface_foreground,
         "background" => &mut palette.background,
         "border" => &mut palette.border,
         "chatInputChrome" => &mut palette.chat_input_chrome,
         "danger" => &mut palette.danger,
+        "disabledForeground" => &mut palette.disabled_foreground,
+        "focus" => &mut palette.focus,
         "foreground" => &mut palette.foreground,
         "function" => &mut palette.function,
-        "highlight" => &mut palette.highlight,
+        "hoverBackground" => &mut palette.hover_background,
+        "hoverForeground" => &mut palette.hover_foreground,
         "insertedBackground" => &mut palette.inserted_background,
         "insertedMarker" => &mut palette.inserted_marker,
         "keyword" => &mut palette.keyword,
         "muted" => &mut palette.muted,
+        "pressedBackground" => &mut palette.pressed_background,
+        "pressedForeground" => &mut palette.pressed_foreground,
         "quickViewBackground" => &mut palette.quick_view_background,
         "removedBackground" => &mut palette.removed_background,
         "removedMarker" => &mut palette.removed_marker,
         "string" => &mut palette.string,
         "success" => &mut palette.success,
-        "activeSelectionBackground" => &mut palette.active_selection_background,
-        "activeSelectionForeground" => &mut palette.active_selection_foreground,
+        "selectionBackground" => &mut palette.selection_background,
+        "selectionForeground" => &mut palette.selection_foreground,
         "screenSelectionBackground" => &mut palette.screen_selection_background,
         "screenSelectionForeground" => &mut palette.screen_selection_foreground,
         "type" => &mut palette.r#type,

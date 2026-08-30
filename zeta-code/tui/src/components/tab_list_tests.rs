@@ -9,7 +9,6 @@ use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TestTab(&'static str);
@@ -91,17 +90,28 @@ fn narrow_width_wraps_tabs_without_hiding_them() {
 }
 
 #[test]
-fn draw_highlights_the_active_tab() {
+fn draw_marks_the_active_tab_with_the_accent_surface() {
     let mut tabs = TabListState::new(vec![TestTab("One"), TestTab("Two")]);
     tabs.handle_key(key(KeyCode::Tab));
     let backend = TestBackend::new(20, 1);
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| super::draw(frame, frame.area(), &tabs, Color::Blue, test_context()))
+        .draw(|frame| {
+            super::draw(
+                frame,
+                frame.area(),
+                &tabs,
+                false,
+                None,
+                None,
+                test_context(),
+            )
+        })
         .unwrap();
 
     let active_label = &terminal.backend().buffer()[(8, 0)];
     assert_eq!(active_label.symbol(), "T");
-    assert_eq!(active_label.bg, Color::Blue);
+    assert_eq!(active_label.fg, test_context().accent_surface_foreground());
+    assert_eq!(active_label.bg, test_context().accent_surface_background());
 }

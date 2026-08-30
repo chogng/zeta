@@ -58,7 +58,7 @@ use crate::features::sessions::SessionManagerView;
 use crate::features::sessions::SessionPaneSpec;
 use crate::features::sessions::SessionSelectionAction;
 use crate::features::sessions::SessionsState;
-use crate::features::skills::{SkillPaneSpec, SkillSelectionAction};
+use crate::features::skills::{SkillDiagnosticWarnings, SkillPaneSpec, SkillSelectionAction};
 use crate::features::status_line::ApprovalModeStatus;
 use crate::features::status_line::StatusLineModel;
 use crate::features::status_line::StatusLinePaneSpec;
@@ -162,6 +162,7 @@ pub(crate) struct App {
     approval_mode_status: ApprovalModeStatus,
     render_theme: RenderTheme,
     render_theme_revision: u64,
+    skill_diagnostic_warnings: SkillDiagnosticWarnings,
 }
 
 #[derive(Debug)]
@@ -211,6 +212,7 @@ impl App {
             approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
+            skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
         }
     }
 
@@ -260,6 +262,7 @@ impl App {
             approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
             render_theme_revision: 0,
+            skill_diagnostic_warnings: SkillDiagnosticWarnings::default(),
         }
     }
 
@@ -278,7 +281,7 @@ impl App {
 
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
         if key.kind == KeyEventKind::Press {
-            self.pointer.clear_hover();
+            self.pointer.clear();
         }
         if matches!(self.top_pane_actions(), Some(PaneActions::KeymapCapture(_))) {
             let input = &mut self.thread_presentations.active_mut().input;
@@ -792,7 +795,7 @@ impl App {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        self.pointer.clear_hover();
+        self.pointer.clear();
         if matches!(self.sessions.root(), Some(RootTarget::Session(_))) {
             if self.approval.is_some() {
                 return;
@@ -883,6 +886,22 @@ impl App {
 
     pub(crate) fn hovered_pointer_target(&self) -> Option<&InputPointerTarget> {
         self.pointer.hovered()
+    }
+
+    pub(crate) fn update_pointer_pressed(&mut self, target: Option<InputPointerTarget>) {
+        self.pointer.update_pressed(target);
+    }
+
+    pub(crate) fn clear_pointer_pressed(&mut self) {
+        self.pointer.clear_pressed();
+    }
+
+    pub(crate) fn clear_pointer_interaction(&mut self) {
+        self.pointer.clear();
+    }
+
+    pub(crate) fn pressed_pointer_target(&self) -> Option<&InputPointerTarget> {
+        self.pointer.pressed()
     }
 
     pub(crate) const fn screen_selection(&self) -> &ScreenSelection {
@@ -1027,7 +1046,13 @@ impl App {
     }
 
     fn show_skills_pane(&mut self, pane_spec: SkillPaneSpec) {
-        self.push_list_selection_pane(pane_spec.model, PaneActions::Skills(pane_spec.actions));
+        let SkillPaneSpec {
+            model,
+            actions,
+            diagnostics,
+        } = pane_spec;
+        self.report_skill_diagnostics(&diagnostics);
+        self.push_list_selection_pane(model, PaneActions::Skills(actions));
     }
 
     fn show_mcp_pane(&mut self, pane_spec: McpPaneSpec) {
@@ -1094,7 +1119,23 @@ impl App {
     }
 
     fn replace_skills_pane(&mut self, pane_spec: SkillPaneSpec) {
-        self.replace_list_selection_pane(pane_spec.model, PaneActions::Skills(pane_spec.actions));
+        let SkillPaneSpec {
+            model,
+            actions,
+            diagnostics,
+        } = pane_spec;
+        self.report_skill_diagnostics(&diagnostics);
+        self.replace_list_selection_pane(model, PaneActions::Skills(actions));
+    }
+
+    fn report_skill_diagnostics(
+        &mut self,
+        diagnostics: &[zeta_app_server_protocol::protocol::skills::SkillDiagnosticDto],
+    ) {
+        for notice in self.skill_diagnostic_warnings.update(diagnostics) {
+            self.thread
+                .update(ThreadPresentationEvent::NoticeReceived(notice));
+        }
     }
 
     fn show_theme_pane(&mut self, pane_spec: ThemePaneSpec) {
@@ -1143,6 +1184,10 @@ impl App {
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
         self.chat_composer.select_tab(index)
+    }
+
+    pub(crate) fn focus_pane_search(&mut self) -> bool {
+        self.chat_composer.focus_search()
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<AppCommand> {
@@ -1416,7 +1461,7 @@ impl App {
     }
 
     pub(crate) fn update(&mut self, event: AppEvent) {
-        self.pointer.clear_hover();
+        self.pointer.clear();
         match event {
             AppEvent::DirsPaneOpened(view) => self.show_dirs_pane(view),
             AppEvent::DirRemoved { path, pane_spec } => {
@@ -1434,6 +1479,7 @@ impl App {
             AppEvent::ConfigSettingsReceived(settings) => {
                 self.terminal_settings = settings;
                 if !settings.mouse_interactions() {
+                    self.pointer.clear();
                     self.screen_selection.clear();
                 }
                 self.thread_presentations
@@ -1560,6 +1606,9 @@ impl App {
             AppEvent::ListSelectionPaneOpened(model) => self.show_list_selection_pane(model),
             AppEvent::SkillsPaneOpened(view) => self.show_skills_pane(view),
             AppEvent::SkillsPaneReplaced(view) => self.replace_skills_pane(view),
+            AppEvent::SkillDiagnosticsReceived(diagnostics) => {
+                self.report_skill_diagnostics(&diagnostics)
+            }
             AppEvent::SteerCompleted(steer_id) => {
                 self.chat_composer.finish_steer(steer_id);
             }
@@ -1611,6 +1660,7 @@ impl App {
                 .update(ThreadPresentationEvent::TranscriptUpdateReceived(update)),
             AppEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
+                self.skill_diagnostic_warnings.clear();
                 self.thread_presentations
                     .active_mut()
                     .scroll

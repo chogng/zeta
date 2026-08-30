@@ -6,7 +6,7 @@ pub(crate) struct ThemePreviewPalette {
     pub(crate) border: Color,
     pub(crate) foreground: Color,
     pub(crate) muted: Color,
-    pub(crate) highlight: Color,
+    pub(crate) focus: Color,
     pub(crate) keyword: Color,
     pub(crate) string: Color,
     pub(crate) function: Color,

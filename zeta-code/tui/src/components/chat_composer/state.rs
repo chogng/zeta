@@ -258,6 +258,10 @@ impl ChatComposer {
         self.panes.select_tab(index)
     }
 
+    pub(crate) fn focus_search(&mut self) -> bool {
+        self.panes.focus_search()
+    }
+
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ChatComposerOutcome> {
         self.panes
             .activate_visible_item(index)

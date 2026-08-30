@@ -185,7 +185,11 @@ pub(crate) struct ApprovalView<'a> {
     pub(crate) error: Option<&'a str>,
 }
 
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -210,9 +214,9 @@ pub(crate) fn draw(
     area: Rect,
     view: ApprovalView<'_>,
     hovered: Option<usize>,
+    pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    let presented = hovered.and_then(decision_at).unwrap_or(view.selected);
     let mut lines = vec![Line::styled(
         view.reason,
         Style::default().add_modifier(Modifier::BOLD),
@@ -225,12 +229,22 @@ pub(crate) fn draw(
     );
     lines.push(choice_line(
         "Approve once",
-        presented == ApprovalDecision::ApproveOnce,
+        choice_attention(
+            0,
+            view.selected == ApprovalDecision::ApproveOnce,
+            hovered,
+            pressed,
+        ),
         context,
     ));
     lines.push(choice_line(
         "Decline",
-        presented == ApprovalDecision::Decline,
+        choice_attention(
+            1,
+            view.selected == ApprovalDecision::Decline,
+            hovered,
+            pressed,
+        ),
         context,
     ));
     if view.submitting {
@@ -239,10 +253,7 @@ pub(crate) fn draw(
             Style::default().fg(context.muted()),
         ));
     } else if let Some(error) = view.error {
-        lines.push(Line::styled(
-            error,
-            Style::default().fg(ratatui::style::Color::Red),
-        ));
+        lines.push(Line::styled(error, Style::default().fg(context.danger())));
     }
     frame.render_widget(
         Paragraph::new(lines).block(
@@ -273,19 +284,44 @@ pub(crate) fn choice_index_at(
     (row >= first_choice_row && index < 2).then_some(index)
 }
 
-fn choice_line<'a>(label: &'a str, selected: bool, context: RenderContext<'_>) -> Line<'a> {
-    let marker = if selected { "› " } else { "  " };
-    let style = if selected {
-        Style::default()
-            .fg(context.highlight())
-            .add_modifier(Modifier::BOLD)
+fn choice_line<'a>(
+    label: &'a str,
+    attention: InteractionAttention,
+    context: RenderContext<'_>,
+) -> Line<'a> {
+    let marker = if attention == InteractionAttention::Keyboard {
+        "❯ "
     } else {
-        Style::default()
+        "  "
     };
+    let style = interaction_style(
+        context,
+        InteractionState {
+            target: InteractionTarget::Rest,
+            attention,
+        },
+    );
     Line::from(vec![
         Span::styled(marker, style),
         Span::styled(label, style),
     ])
+}
+
+fn choice_attention(
+    index: usize,
+    selected: bool,
+    hovered: Option<usize>,
+    pressed: Option<usize>,
+) -> InteractionAttention {
+    if selected {
+        InteractionAttention::Keyboard
+    } else if pressed == Some(index) {
+        InteractionAttention::Pressed
+    } else if hovered == Some(index) {
+        InteractionAttention::Hovered
+    } else {
+        InteractionAttention::None
+    }
 }
 
 #[cfg(test)]

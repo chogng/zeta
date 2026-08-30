@@ -1,6 +1,10 @@
 use crate::features::thread::ThreadRequestKind;
 use crate::features::thread::ThreadRequestResponse;
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -306,9 +310,9 @@ pub(crate) fn draw(
     area: Rect,
     view: QueryView<'_>,
     hovered: Option<usize>,
+    pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    let presented = hovered.unwrap_or(view.selected);
     let mut lines = vec![Line::styled(
         &view.question.prompt,
         Style::default().add_modifier(Modifier::BOLD),
@@ -323,7 +327,7 @@ pub(crate) fn draw(
                 choice_line(
                     &choice.label,
                     &choice.description,
-                    index == presented,
+                    choice_attention(index, view.selected, hovered, pressed),
                     context,
                 )
             }),
@@ -334,13 +338,13 @@ pub(crate) fn draw(
         lines.push(choice_line(
             "自己输入",
             "在下方输入框中回答",
-            presented == view.question.choices.len(),
+            choice_attention(view.question.choices.len(), view.selected, hovered, pressed),
             context,
         ));
     }
     if let Some(custom_answer) = view.custom_answer {
         lines.push(Line::from(vec![
-            Span::styled("> ", Style::default().fg(context.highlight())),
+            Span::styled("> ", Style::default().fg(context.focus())),
             Span::raw(custom_answer),
         ]));
     }
@@ -350,10 +354,7 @@ pub(crate) fn draw(
             Style::default().fg(context.muted()),
         ));
     } else if let Some(error) = view.error {
-        lines.push(Line::styled(
-            error,
-            Style::default().fg(ratatui::style::Color::Red),
-        ));
+        lines.push(Line::styled(error, Style::default().fg(context.danger())));
     }
     frame.render_widget(
         Paragraph::new(lines).block(
@@ -393,25 +394,50 @@ pub(crate) fn choice_index_at(
 fn choice_line<'a>(
     label: &'a str,
     description: &'a str,
-    selected: bool,
+    attention: InteractionAttention,
     context: RenderContext<'_>,
 ) -> Line<'a> {
-    let marker = if selected { "› " } else { "  " };
-    let style = if selected {
-        Style::default()
-            .fg(context.highlight())
-            .add_modifier(Modifier::BOLD)
+    let marker = if attention == InteractionAttention::Keyboard {
+        "❯ "
     } else {
-        Style::default()
+        "  "
     };
+    let style = interaction_style(
+        context,
+        InteractionState {
+            target: InteractionTarget::Rest,
+            attention,
+        },
+    );
     Line::from(vec![
         Span::styled(marker, style),
         Span::styled(label, style),
         Span::styled(
             format!("  {description}"),
-            Style::default().fg(context.muted()),
+            if attention == InteractionAttention::None {
+                Style::default().fg(context.muted())
+            } else {
+                style
+            },
         ),
     ])
+}
+
+fn choice_attention(
+    index: usize,
+    selected: usize,
+    hovered: Option<usize>,
+    pressed: Option<usize>,
+) -> InteractionAttention {
+    if index == selected {
+        InteractionAttention::Keyboard
+    } else if pressed == Some(index) {
+        InteractionAttention::Pressed
+    } else if hovered == Some(index) {
+        InteractionAttention::Hovered
+    } else {
+        InteractionAttention::None
+    }
 }
 
 #[cfg(test)]

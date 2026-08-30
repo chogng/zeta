@@ -427,6 +427,10 @@ pub(super) fn apply_request_completion(
             app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
                 app.update(AppEvent::SkillsPaneReplaced(refresh.pane_spec));
+            } else {
+                app.update(AppEvent::SkillDiagnosticsReceived(
+                    refresh.pane_spec.diagnostics,
+                ));
             }
         }
         RequestCompletion::SkillsRefreshed(Err(error)) => {

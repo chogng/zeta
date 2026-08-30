@@ -6,7 +6,7 @@ use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::skills::{
-    SkillEnablementDto, SkillListResult, SkillSourceKindDto,
+    SkillDiagnosticDto, SkillEnablementDto, SkillListResult, SkillSourceKindDto,
 };
 use zeta_protocol::SkillId;
 
@@ -21,6 +21,7 @@ pub(crate) enum SkillSelectionAction {
 pub(crate) struct SkillPaneSpec {
     pub(crate) model: PaneSpec<ListSelectionModel>,
     pub(crate) actions: BTreeMap<ListSelectionItemId, SkillSelectionAction>,
+    pub(crate) diagnostics: Vec<SkillDiagnosticDto>,
 }
 
 pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
@@ -54,14 +55,6 @@ pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
         .filter(|(_, skill)| skill.enablement == SkillEnablementDto::Disabled)
         .map(|(item, _)| item.clone())
         .collect::<Vec<_>>();
-    let errors = catalog
-        .diagnostics
-        .iter()
-        .map(|diagnostic| {
-            ListSelectionItem::new(diagnostic.subject.as_deref().unwrap_or(&diagnostic.source))
-                .with_description(&diagnostic.message)
-        })
-        .collect::<Vec<_>>();
     let manage = catalog
         .skills
         .iter()
@@ -91,7 +84,6 @@ pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
         .collect::<Vec<_>>();
     let enabled_count = enabled.len();
     let disabled_count = disabled.len();
-    let error_count = errors.len();
 
     SkillPaneSpec {
         model: PaneSpec::new(
@@ -102,7 +94,6 @@ pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
                     ListSelectionGroup::new(format!("Enabled ({enabled_count})"), enabled),
                     ListSelectionGroup::new(format!("Disabled ({disabled_count})"), disabled),
                     ListSelectionGroup::new("Manage", manage),
-                    ListSelectionGroup::new(format!("Errors ({error_count})"), errors),
                 ],
             )
             .with_search(SearchBoxModel::new("Search available skills"))
@@ -110,6 +101,7 @@ pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
             "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter select  ·  Esc back",
         ),
         actions,
+        diagnostics: catalog.diagnostics.clone(),
     }
 }
 
@@ -129,3 +121,7 @@ fn enablement_label(enablement: SkillEnablementDto) -> &'static str {
         SkillEnablementDto::Enabled => "enabled",
     }
 }
+
+#[cfg(test)]
+#[path = "pane_tests.rs"]
+mod tests;

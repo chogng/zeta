@@ -278,6 +278,12 @@ impl PaneStack {
             .is_some_and(|body| body.select_tab(index))
     }
 
+    pub(crate) fn focus_search(&mut self) -> bool {
+        self.top_mut()
+            .and_then(Pane::list_selection_mut)
+            .is_some_and(ListSelectionState::focus_search)
+    }
+
     pub(crate) fn activate_visible_item(
         &mut self,
         index: usize,

@@ -56,6 +56,7 @@ use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
+use zeta_app_server_protocol::protocol::skills::{SkillDiagnosticCodeDto, SkillDiagnosticDto};
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
@@ -79,6 +80,36 @@ fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
     let mut settings = TerminalSettings::default();
     settings.set_follow_up_mode(mode);
     app.update(AppEvent::ConfigSettingsReceived(settings));
+}
+
+#[test]
+fn skill_diagnostics_are_notices_and_are_suppressed_until_they_clear() {
+    let mut app = App::new();
+    let diagnostic = SkillDiagnosticDto {
+        source: "user:skill-source:personal".into(),
+        subject: Some("broken/SKILL.md".into()),
+        code: SkillDiagnosticCodeDto::InvalidFrontmatter,
+        message: "frontmatter is invalid".into(),
+    };
+
+    app.update(AppEvent::SkillDiagnosticsReceived(vec![diagnostic.clone()]));
+    assert_eq!(app.messages().len(), 2);
+    assert!(
+        app.messages()
+            .iter()
+            .all(|message| message.role == MessageRole::Notice)
+    );
+    assert_eq!(
+        app.messages()[1].text,
+        "broken/SKILL.md: frontmatter is invalid"
+    );
+
+    app.update(AppEvent::SkillDiagnosticsReceived(vec![diagnostic.clone()]));
+    assert_eq!(app.messages().len(), 2);
+
+    app.update(AppEvent::SkillDiagnosticsReceived(Vec::new()));
+    app.update(AppEvent::SkillDiagnosticsReceived(vec![diagnostic]));
+    assert_eq!(app.messages().len(), 4);
 }
 
 fn config_session() -> SessionId {
@@ -335,7 +366,7 @@ fn theme_palette() -> ThemePreviewPalette {
         border: Color::Gray,
         foreground: Color::White,
         muted: Color::DarkGray,
-        highlight: Color::Magenta,
+        focus: Color::Magenta,
         keyword: Color::Red,
         string: Color::Blue,
         function: Color::Magenta,

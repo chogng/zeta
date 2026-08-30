@@ -19,13 +19,13 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 
-fn palette(highlight: Color) -> ThemePreviewPalette {
+fn palette(focus: Color) -> ThemePreviewPalette {
     ThemePreviewPalette {
         background: Color::Black,
         border: Color::Gray,
         foreground: Color::White,
         muted: Color::DarkGray,
-        highlight,
+        focus,
         keyword: Color::Red,
         string: Color::Blue,
         function: Color::Magenta,
@@ -137,6 +137,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
                 },
                 pane_view,
                 None,
+                None,
                 test_context(),
             );
             crate::components::key_hint_bar::draw(
@@ -187,8 +188,14 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
         .unwrap();
     assert_eq!(preview_row - custom_row, 3);
     assert_eq!(key_hint_row - palette_row, 1);
-    assert_eq!(buffer[(1, 0)].fg, Color::White);
-    assert_eq!(buffer[(1, 0)].bg, Color::Indexed(1));
+    assert_eq!(
+        buffer[(1, 0)].fg,
+        test_context().accent_surface_foreground()
+    );
+    assert_eq!(
+        buffer[(1, 0)].bg,
+        test_context().accent_surface_background()
+    );
     assert_eq!(buffer[(2, preview_row as u16)].fg, Color::DarkGray);
 
     assert_eq!(

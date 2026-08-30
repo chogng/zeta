@@ -573,7 +573,7 @@ fn list_selection_pane_supports_keyboard_tab_switching_and_search() {
 }
 
 #[test]
-fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
+fn selection_candidate_color_repaints_frames_without_changing_the_pane_title_surface() {
     let mut app = App::new();
     app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
         ListSelectionModel::new(
@@ -600,15 +600,27 @@ fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
         .y;
     assert_eq!(first[(2, 1)].fg, Color::Red);
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
-    assert_eq!(first[(1, interaction_y)].fg, Color::White);
-    assert_eq!(first[(1, interaction_y)].bg, Color::Red);
+    assert_eq!(
+        first[(1, interaction_y)].fg,
+        test_context().accent_surface_foreground()
+    );
+    assert_eq!(
+        first[(1, interaction_y)].bg,
+        test_context().accent_surface_background()
+    );
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let second = render_buffer(&app, 80, 24);
     assert_eq!(second[(2, 1)].fg, Color::Green);
     assert_eq!(second[(0, interaction_y)].fg, Color::Green);
-    assert_eq!(second[(1, interaction_y)].fg, Color::White);
-    assert_eq!(second[(1, interaction_y)].bg, Color::Green);
+    assert_eq!(
+        second[(1, interaction_y)].fg,
+        test_context().accent_surface_foreground()
+    );
+    assert_eq!(
+        second[(1, interaction_y)].bg,
+        test_context().accent_surface_background()
+    );
 }
 
 #[test]
@@ -678,8 +690,8 @@ fn slash_popup_inherits_the_theme_surface_and_bolds_the_selected_command() {
     let unselected = &buffer[(2, 11)];
     let surface_background = buffer[(0, 0)].bg;
 
-    assert_eq!(selected.fg, test_context().highlight());
-    assert_eq!(selected.bg, surface_background);
+    assert_eq!(selected.fg, test_context().selection_foreground());
+    assert_eq!(selected.bg, test_context().selection_background());
     assert_eq!(selected.symbol(), "/");
     assert!(selected.modifier.contains(Modifier::BOLD));
     assert_eq!(unselected.fg, test_context().muted());

@@ -82,7 +82,7 @@ fn row_starts_with_status_icon_and_keeps_name_activity_and_time_columns() {
     );
     let text = line_text(&session_line(
         &session,
-        false,
+        InteractionAttention::None,
         0,
         7_210_000,
         72,
@@ -227,6 +227,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
                 Rect::new(0, 0, 32, 5),
                 state.view(&sessions),
                 None,
+                None,
                 crate::render::test_context(),
             )
         })
@@ -244,8 +245,8 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
     assert!(rendered.contains("▾ Idle (8)"));
     assert!(rendered.contains("more below"));
     let context = crate::render::test_context();
-    assert_eq!(buffer[(0, 0)].fg, context.active_selection_foreground());
-    assert_eq!(buffer[(0, 0)].bg, context.active_selection_background());
+    assert_eq!(buffer[(0, 0)].fg, context.selection_foreground());
+    assert_eq!(buffer[(0, 0)].bg, context.selection_background());
     assert_eq!(buffer[(2, 1)].fg, context.muted());
 
     for _ in 0..5 {
@@ -257,6 +258,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
                 frame,
                 Rect::new(0, 0, 32, 5),
                 state.view(&sessions),
+                None,
                 None,
                 crate::render::test_context(),
             )

@@ -470,7 +470,7 @@ component 可以依赖 `render/` 原语和必要的 canonical value type，但�
 
 通用横向 tab 交互放在 `components/tab_list.rs`，过滤和选择状态放在 `components/list_selection/`；“恢复哪个 Session”的 row model、typed ID 和 action 属于 `features/sessions/`。`render/` 只提供这些上层模块共同需要的纯布局、绘制、文本处理与代码高亮原语；具体 component 的派生缓存由 component runtime 持有。
 
-当前实现已经把 inset、bottom anchor 等纯 geometry 迁入 `render/layout.rs`；`render/text.rs` 统一行的借用/持有转换、复制、前缀和实际折行高度；`render/highlight.rs` 与 `render/highlight_streaming.rs` 使用 bundled syntax 定义与 Zeta syntax token 完成有界高亮，流式入口只接受以换行结束的完整新增行并延续 parser state，半行、主题变化或资源上限变化要求调用方从完整 source 重算。颜色合成、终端色阶映射与不可变 `RenderTheme` 位于 `render/theme.rs`，主题目录读取、预览、选择和保存位于 `features/theme/resource.rs`。活动主题由 `App` presentation state 持有，并通过只读 `RenderContext` 从根 Frame 传给所有 renderer；draw path 不再读取全局锁，也没有独立 syntax-theme 全局状态。`ui.rs` 与 `ui/` 已删除且没有转发层。`app/frame.rs` 继续拥有整页 surface 装配，component 继续拥有自己的 view model 与具体 renderer；`render/` 不接管页面结构或 feature 文案。
+当前实现已经把 inset、bottom anchor 等纯 geometry 迁入 `render/layout.rs`；`render/text.rs` 统一行的借用/持有转换、复制、前缀和实际折行高度；`render/highlight.rs` 与 `render/highlight_streaming.rs` 使用 bundled syntax 定义与 Zeta syntax token 完成有界高亮，流式入口只接受以换行结束的完整新增行并延续 parser state，半行、主题变化或资源上限变化要求调用方从完整 source 重算。颜色合成、终端色阶映射与不可变 `RenderTheme` 位于 `render/theme.rs`，主题目录读取、预览、选择和保存位于 `features/theme/resource.rs`；键盘、鼠标与交互颜色的统一含义由 [TUI 交互与颜色语义](tui-interaction.md) 定义。活动主题由 `App` presentation state 持有，并通过只读 `RenderContext` 从根 Frame 传给所有 renderer；draw path 不再读取全局锁，也没有独立 syntax-theme 全局状态。`ui.rs` 与 `ui/` 已删除且没有转发层。`app/frame.rs` 继续拥有整页 surface 装配，component 继续拥有自己的 view model 与具体 renderer；`render/` 不接管页面结构或 feature 文案。
 
 依赖方向固定为：
 
@@ -967,9 +967,10 @@ lib.rs + lib_tests.rs
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
 - `ChatComposer` 在 caller-owned `ChatInput` 与 stacked Pane 之间路由输入，并按 Running/Queue/Steer 状态选择提交目标；Pane 打开时保留草稿但接管 ChatInput 的可见高度，Pane KeyHints 在底栏替换 StatusLine。Approval、Query、Queue 与 Plan 均不由它保存。Turn 为 Running 时 Enter 按 Follow-up messages 设置把完整草稿放入 Queue 或通过 typed `SteerTurn` 发送。普通 Up 只访问输入历史；`/queue` Pane 负责恢复、删除、调序、立即发送和完整内容 QuickView。当前 Turn 结束后队首才调用 `StartTurn`，请求被拒绝时保留条目，服务端接受后才移除。`ListSelection` Pane 用上下键在 item、SearchBox 与 Tab 栏间移动焦点，支持 Tab/Shift-Tab 切页、搜索、过滤和逐层出栈。`$` Skill、`/` command 和 `@` Mention 由 `ChatInput` 的 `CompletionView` 保证同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
-  All/Enabled/Disabled/Manage/Errors catalog tabs；Errors 只读展示 Skill 目录诊断，没有诊断时显示 `Errors (0)`；
+  All/Enabled/Disabled/Manage catalog tabs；Skill 目录诊断由 App Server 判断并脱敏，TUI 只把新出现的
+  诊断写入 Notice。同一条持续存在的诊断不重复提示，消失后再出现或内容变化时重新提示；
 - `$name` 候选和 `/skills` 都只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；候选选中后保留原子 `$name` 文本并绑定 exact pinned `SkillRef`；
-  `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
+  Manage tab 的 `Enter` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
   `skills/changed` 也会刷新前台页面。enablement 不等于正文 activation，TUI 当前没有
   Skill context injection；
 - `app/frame.rs` 只装配 frame 并选择普通 status line 或临时操作提示；Pane 打开时由它把 Pane KeyHints 放进同一个底栏。`components/chat_composer/view.rs` 组合普通输入区和接管输入高度的 Pane，ChatInput completion view 拥有补全绘制与命中语义，各 component/feature view 拥有自己的 surface。补全弹层从输入框上沿覆盖；Query 使用输入框上方的独立区域，Approval 使用输入区域本身；

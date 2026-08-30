@@ -73,12 +73,16 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
     fs::write(
         product_root.join("themes/graphite.json"),
         r##"{
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "graphite",
   "label": "Graphite",
   "appearance": "dark",
   "colors": {
     "background": "#101010",
+    "focus": "#112233",
+    "hoverBackground": "#223344",
+    "pressedForeground": "#334455",
+    "selectionBackground": "#445566",
     "quickViewBackground": "#303030",
     "screenSelectionBackground": "#80cfff",
     "screenSelectionForeground": "#101820"
@@ -101,6 +105,13 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
 
     let selected = resource.resolve("graphite").unwrap();
     assert_eq!(selected.theme.background(), Color::Rgb(16, 16, 16));
+    assert_eq!(selected.theme.focus(), Color::Rgb(17, 34, 51));
+    assert_eq!(selected.theme.hover_background(), Color::Rgb(34, 51, 68));
+    assert_eq!(selected.theme.pressed_foreground(), Color::Rgb(51, 68, 85));
+    assert_eq!(
+        selected.theme.selection_background(),
+        Color::Rgb(68, 85, 102)
+    );
     assert_eq!(
         selected.theme.quick_view_background(),
         Color::Rgb(48, 48, 48)
@@ -128,7 +139,7 @@ fn graphical_theme_tokens_are_rejected_by_the_tui_theme_reader() {
     fs::write(
         product_root.join("themes/desktop.json"),
         r##"{
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "desktop",
   "label": "Desktop",
   "appearance": "dark",

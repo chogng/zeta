@@ -16,11 +16,15 @@ pub(crate) enum MouseMode {
 #[derive(Debug)]
 pub(crate) struct PointerInteraction<T> {
     hovered: Option<T>,
+    pressed: Option<T>,
 }
 
 impl<T> Default for PointerInteraction<T> {
     fn default() -> Self {
-        Self { hovered: None }
+        Self {
+            hovered: None,
+            pressed: None,
+        }
     }
 }
 
@@ -29,12 +33,25 @@ impl<T> PointerInteraction<T> {
         self.hovered = target;
     }
 
-    pub(crate) fn clear_hover(&mut self) {
+    pub(crate) fn update_pressed(&mut self, target: Option<T>) {
+        self.pressed = target;
+    }
+
+    pub(crate) fn clear_pressed(&mut self) {
+        self.pressed = None;
+    }
+
+    pub(crate) fn clear(&mut self) {
         self.hovered = None;
+        self.pressed = None;
     }
 
     pub(crate) fn hovered(&self) -> Option<&T> {
         self.hovered.as_ref()
+    }
+
+    pub(crate) fn pressed(&self) -> Option<&T> {
+        self.pressed.as_ref()
     }
 }
 

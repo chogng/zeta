@@ -25,6 +25,7 @@ mod mention {
         area: Rect,
         popup: Option<MentionPopupView<'_>>,
         hovered: Option<usize>,
+        pressed: Option<usize>,
         context: RenderContext<'_>,
     ) {
         let Some(popup) = popup else {
@@ -50,13 +51,8 @@ mod mention {
                 .skip(layout.first_path)
                 .take(layout.visible_rows)
                 .map(|(index, mention_match)| {
-                    let base_style = if Some(index) == hovered.or(Some(popup.selected)) {
-                        Style::default()
-                            .fg(context.highlight())
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(context.muted())
-                    };
+                    let base_style =
+                        super::item_style(index, popup.selected, hovered, pressed, context);
                     let mut matched_indices = mention_match.indices.iter().peekable();
                     let mut spans = mention_match
                         .label
@@ -75,10 +71,7 @@ mod mention {
                         })
                         .collect::<Vec<_>>();
                     if mention_match.kind == MentionMatchKind::Plugin {
-                        spans.push(Span::styled(
-                            "  plugin",
-                            Style::default().fg(context.muted()),
-                        ));
+                        spans.push(Span::styled("  plugin", base_style));
                     }
                     Line::from(spans)
                 })
@@ -135,7 +128,6 @@ mod skill {
     use crate::render::horizontal_margin;
     use ratatui::Frame;
     use ratatui::layout::Rect;
-    use ratatui::style::Modifier;
     use ratatui::style::Style;
     use ratatui::text::Line;
     use ratatui::text::Span;
@@ -149,6 +141,7 @@ mod skill {
         area: Rect,
         popup: Option<SkillCompletionView<'_>>,
         hovered: Option<usize>,
+        pressed: Option<usize>,
         context: RenderContext<'_>,
     ) {
         let Some(popup) = popup else {
@@ -170,19 +163,10 @@ mod skill {
                 .skip(first_item)
                 .take(visible_rows)
                 .map(|(index, item)| {
-                    let style = if Some(index) == hovered.or(Some(popup.selected)) {
-                        Style::default()
-                            .fg(context.highlight())
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(context.muted())
-                    };
+                    let style = super::item_style(index, popup.selected, hovered, pressed, context);
                     Line::from(vec![
                         Span::styled(format!("${}", item.name()), style),
-                        Span::styled(
-                            format!("  {}", item.description()),
-                            Style::default().fg(context.muted()),
-                        ),
+                        Span::styled(format!("  {}", item.description()), style),
                     ])
                 })
                 .collect()
@@ -239,7 +223,6 @@ mod slash {
     use crate::render::horizontal_margin;
     use ratatui::Frame;
     use ratatui::layout::Rect;
-    use ratatui::style::Modifier;
     use ratatui::style::Style;
     use ratatui::text::Line;
     use ratatui::text::Span;
@@ -259,6 +242,7 @@ mod slash {
         area: Rect,
         popup: Option<SlashCommandsView<'_>>,
         hovered: Option<usize>,
+        pressed: Option<usize>,
         context: RenderContext<'_>,
     ) {
         let Some(popup) = popup else {
@@ -280,14 +264,8 @@ mod slash {
                 .skip(layout.first_command)
                 .take(layout.visible_rows)
                 .map(|(index, command)| {
-                    let selected = Some(index) == hovered.or(Some(popup.selected));
-                    let command_style = if selected {
-                        Style::default()
-                            .fg(context.highlight())
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(context.muted())
-                    };
+                    let command_style =
+                        super::item_style(index, popup.selected, hovered, pressed, context);
                     Line::from(vec![
                         Span::styled(
                             format!("/{:<width$}", command.name, width = COMMAND_COLUMN_WIDTH),
@@ -342,7 +320,11 @@ mod slash {
 }
 
 use super::CompletionView;
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
@@ -351,15 +333,50 @@ pub(crate) fn draw(
     area: Rect,
     completion: Option<CompletionView<'_>>,
     hovered: Option<usize>,
+    pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
     match completion {
-        Some(CompletionView::Slash(view)) => slash::draw(frame, area, Some(view), hovered, context),
-        Some(CompletionView::Mention(view)) => {
-            mention::draw(frame, area, Some(view), hovered, context)
+        Some(CompletionView::Slash(view)) => {
+            slash::draw(frame, area, Some(view), hovered, pressed, context)
         }
-        Some(CompletionView::Skill(view)) => skill::draw(frame, area, Some(view), hovered, context),
+        Some(CompletionView::Mention(view)) => {
+            mention::draw(frame, area, Some(view), hovered, pressed, context)
+        }
+        Some(CompletionView::Skill(view)) => {
+            skill::draw(frame, area, Some(view), hovered, pressed, context)
+        }
         None => {}
+    }
+}
+
+fn item_style(
+    index: usize,
+    selected: usize,
+    hovered: Option<usize>,
+    pressed: Option<usize>,
+    context: RenderContext<'_>,
+) -> ratatui::style::Style {
+    let attention = if index == selected {
+        InteractionAttention::Keyboard
+    } else if pressed == Some(index) {
+        InteractionAttention::Pressed
+    } else if hovered == Some(index) {
+        InteractionAttention::Hovered
+    } else {
+        InteractionAttention::None
+    };
+    let style = interaction_style(
+        context,
+        InteractionState {
+            target: InteractionTarget::Rest,
+            attention,
+        },
+    );
+    if attention == InteractionAttention::None {
+        style.fg(context.muted())
+    } else {
+        style
     }
 }
 

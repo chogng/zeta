@@ -55,10 +55,11 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     );
     let areas = layout(app, frame.area());
     let hovered = app.hovered_pointer_target();
+    let pressed = app.pressed_pointer_target();
     let presentation_highlight = app
         .list_selection()
         .and_then(|view| view.presentation_highlight())
-        .unwrap_or_else(|| context.highlight());
+        .unwrap_or_else(|| context.focus());
 
     if let Some(manager) = app.session_manager_view() {
         let manager_areas = super::screen_layout::manager_areas(
@@ -76,11 +77,16 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             Some(InputPointerTarget::SessionManager(target)) => Some(target),
             _ => None,
         };
+        let pressed_manager = match pressed {
+            Some(InputPointerTarget::SessionManager(target)) => Some(target),
+            _ => None,
+        };
         sessions::draw_manager(
             frame,
             manager_areas.sessions,
             manager,
             hovered_manager,
+            pressed_manager,
             context,
         );
     } else {
@@ -105,15 +111,24 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             Some(InputPointerTarget::Approval(index)) => Some(*index),
             _ => None,
         };
+        let pressed_choice = match pressed {
+            Some(InputPointerTarget::Approval(index)) => Some(*index),
+            _ => None,
+        };
         approval::draw(
             frame,
             areas.session.composer,
             approval,
             hovered_choice,
+            pressed_choice,
             context,
         );
     } else {
         let hovered_composer = match hovered {
+            Some(InputPointerTarget::Composer(target)) => Some(*target),
+            _ => None,
+        };
+        let pressed_composer = match pressed {
             Some(InputPointerTarget::Composer(target)) => Some(*target),
             _ => None,
         };
@@ -122,6 +137,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             view: &input_view,
             cursor,
             hovered: hovered_composer,
+            pressed: pressed_composer,
         }
         .render(frame, areas.session.composer, context);
     }
@@ -130,7 +146,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             Some(InputPointerTarget::Query(index)) => Some(*index),
             _ => None,
         };
-        query::draw(frame, areas.session.request, query, hovered_choice, context);
+        let pressed_choice = match pressed {
+            Some(InputPointerTarget::Query(index)) => Some(*index),
+            _ => None,
+        };
+        query::draw(
+            frame,
+            areas.session.request,
+            query,
+            hovered_choice,
+            pressed_choice,
+            context,
+        );
     }
     if app.session_manager_view().is_none() {
         goal::draw(frame, areas.session.goal, app.goal_view(), context);
@@ -282,6 +309,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
         hovered: None,
+        pressed: None,
     }
     .desired_height(terminal_area.width, app.render_context());
     let approval_rows = app

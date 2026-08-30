@@ -25,6 +25,7 @@ pub(crate) struct ChatComposerPaneArea {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChatComposerPointerTarget {
     PaneTab(usize),
+    PaneSearch,
     PaneItem(usize),
     CompletionItem(usize),
 }
@@ -34,6 +35,7 @@ pub(crate) struct ChatComposerSurface<'a, 'view> {
     pub(crate) view: &'view ChatComposerView<'a>,
     pub(crate) cursor: ChatInputCursor,
     pub(crate) hovered: Option<ChatComposerPointerTarget>,
+    pub(crate) pressed: Option<ChatComposerPointerTarget>,
 }
 
 impl Renderable for ChatComposerSurface<'_, '_> {
@@ -55,9 +57,24 @@ impl Renderable for ChatComposerSurface<'_, '_> {
                         Some(ChatComposerPointerTarget::PaneItem(index)) => {
                             Some(PanePointerTarget::Item(index))
                         }
+                        Some(ChatComposerPointerTarget::PaneSearch) => {
+                            Some(PanePointerTarget::Search)
+                        }
                         Some(ChatComposerPointerTarget::CompletionItem(_)) | None => None,
                     };
-                    pane::draw(frame, allocation.area, view, hovered, context);
+                    let pressed = match self.pressed {
+                        Some(ChatComposerPointerTarget::PaneTab(index)) => {
+                            Some(PanePointerTarget::Tab(index))
+                        }
+                        Some(ChatComposerPointerTarget::PaneItem(index)) => {
+                            Some(PanePointerTarget::Item(index))
+                        }
+                        Some(ChatComposerPointerTarget::PaneSearch) => {
+                            Some(PanePointerTarget::Search)
+                        }
+                        Some(ChatComposerPointerTarget::CompletionItem(_)) | None => None,
+                    };
+                    pane::draw(frame, allocation.area, view, hovered, pressed, context);
                 }
             }
         }
@@ -80,6 +97,10 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             self.overlay_area,
             self.view.input_completion(),
             match self.hovered {
+                Some(ChatComposerPointerTarget::CompletionItem(index)) => Some(index),
+                _ => None,
+            },
+            match self.pressed {
                 Some(ChatComposerPointerTarget::CompletionItem(index)) => Some(index),
                 _ => None,
             },
@@ -106,6 +127,7 @@ pub(crate) fn pointer_target_at(
                 if let Some(target) = pane::pointer_target_at(allocation.area, view, column, row) {
                     return Some(match target {
                         PanePointerTarget::Tab(index) => ChatComposerPointerTarget::PaneTab(index),
+                        PanePointerTarget::Search => ChatComposerPointerTarget::PaneSearch,
                         PanePointerTarget::Item(index) => {
                             ChatComposerPointerTarget::PaneItem(index)
                         }

@@ -13,6 +13,7 @@ use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
+use crate::components::search_box::SearchBoxModel;
 use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -163,6 +164,44 @@ fn pointer_click_switches_a_selection_tab() {
 
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
     assert_eq!(app.list_selection().unwrap().active_tab().label(), "Second");
+}
+
+#[test]
+fn pointer_click_explicitly_focuses_the_pane_search_box() {
+    let mut app = App::new();
+    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+        ListSelectionModel::new(
+            "Feature",
+            vec![ListSelectionGroup::new(
+                "Items",
+                vec![ListSelectionItem::new("Searchable")],
+            )],
+        )
+        .with_search(SearchBoxModel::new("Search features")),
+        "Esc back",
+    )));
+    let area = Rect::new(0, 0, 80, 24);
+    let mut target = None;
+    'cells: for row in area.y..area.bottom() {
+        for column in area.x..area.right() {
+            if frame::input_pointer_target_at(&app, area, column, row)
+                == Some(InputPointerTarget::Composer(
+                    ChatComposerPointerTarget::PaneSearch,
+                ))
+            {
+                target = Some((column, row));
+                break 'cells;
+            }
+        }
+    }
+    let (column, row) = target.expect("pane search box should be clickable");
+
+    update_pointer_hover(&mut app, area, column, row);
+    assert_eq!(app.list_selection().unwrap().query(), "");
+    assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
+    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+
+    assert_eq!(app.list_selection().unwrap().query(), "s");
 }
 
 #[test]

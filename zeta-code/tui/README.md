@@ -37,9 +37,10 @@ Tool、approval policy 或 persistence。
 - `/status` 使用不改变正常布局高度的 QuickView，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
 - `/help` 向 `ChatComposer` 推入可搜索的 `ListSelection` Pane；上下键在 item、SearchBox 和 Tab 栏间移动焦点，焦点到 Tab 栏后用左右键切换，Tab/Shift-Tab 也可直接切换；Esc/Ctrl-C 逐层返回保留原草稿的 `ChatInput`；Pane 打开期间自身占用 ChatInput 的可见高度，操作提示在底栏替换 StatusLine；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
-  All/Enabled/Disabled/Manage/Errors tabs、数量、搜索和 source-qualified metadata；只有 Manage
+  All/Enabled/Disabled/Manage tabs、数量、搜索和 source-qualified metadata；只有 Manage
   tab 的动作通过 revision-checked `skill/enablement/set` 修改 enablement；该页面是目录管理入口，
-  不直接激活 Skill；Errors 只读展示 `skills/list` 返回的目录诊断，没有诊断时为 `Errors (0)`；
+  不直接激活 Skill；Skill 错误由 App Server 判断并通过 `skills/list` 返回，TUI 将新出现的诊断写成
+  Notice，同一条持续存在的诊断不重复提示，消失后再出现或内容变化时重新提示；
 - `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
   generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
   API token/OAuth 连接仍由 Desktop Settings 完成；
@@ -142,6 +143,8 @@ slash snapshot，并且只取一次 connection event stream。
 
 ## TUI 主题文件
 
+键盘焦点、键盘当前项、已生效项、鼠标悬停/按下、禁用和文字框选的统一含义及内置颜色由 [TUI 交互与颜色语义](../../docs/tui-interaction.md) 定义；本节只拥有用户主题文件格式。
+
 主题选择由共享 `<profile>/config.toml` 保存：
 
 ```toml
@@ -153,19 +156,21 @@ Mouse interactions、Follow-up messages、Input mode 和新增目录默认授权
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "graphite",
   "label": "Graphite",
   "appearance": "dark",
   "colors": {
     "background": "#101010",
     "quickViewBackground": "#303030",
-    "highlight": "#8b80f9"
+    "focus": "#8b80f9",
+    "hoverBackground": "#25233a",
+    "hoverForeground": "#f0edff"
   }
 }
 ```
 
-可覆盖字段为 `accent`、`background`、`border`、`chatInputChrome`、`danger`、`foreground`、`function`、`highlight`、`insertedBackground`、`insertedMarker`、`keyword`、`muted`、`quickViewBackground`、`removedBackground`、`removedMarker`、`string`、`success`、`activeSelectionBackground`、`activeSelectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`type`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
+可覆盖字段为 `accent`、`accentSurfaceBackground`、`accentSurfaceForeground`、`background`、`border`、`chatInputChrome`、`danger`、`disabledForeground`、`focus`、`foreground`、`function`、`hoverBackground`、`hoverForeground`、`insertedBackground`、`insertedMarker`、`keyword`、`muted`、`pressedBackground`、`pressedForeground`、`quickViewBackground`、`removedBackground`、`removedMarker`、`selectionBackground`、`selectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`string`、`success`、`type`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
 
 ## 文件与职责
 

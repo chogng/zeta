@@ -100,18 +100,23 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     } else {
         Vec::new()
     };
-    let input_catalog = client
+    let initial_skill_catalog = client
         .list_skills(SkillListParams {
             reload: SkillCatalogReloadDto::Cached,
             session_id: None,
         })
-        .ok()
+        .ok();
+    let input_catalog = initial_skill_catalog
+        .as_ref()
         .and_then(|catalog| {
-            chat_input_catalog_snapshot(&server_slash_commands, &catalog, &plugins).ok()
+            chat_input_catalog_snapshot(&server_slash_commands, catalog, &plugins).ok()
         })
         .unwrap_or(ChatInputCatalog::with_slash_commands(
             slash_command_registry(&server_slash_commands)?,
         ));
+    let initial_skill_diagnostics = initial_skill_catalog
+        .map(|catalog| catalog.diagnostics)
+        .unwrap_or_default();
     let mut conversation = match recovery {
         Some(recovery) => ActiveConversation::recover(&mut client, recovery)?,
         None => ActiveConversation::start(&mut client, thread_title)?,
@@ -170,6 +175,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         initial_thread,
         initial_transcript,
     );
+    app.update(AppEvent::SkillDiagnosticsReceived(
+        initial_skill_diagnostics,
+    ));
     poll_keymap_resource(&mut keymap_resource, &mut app, now);
     if let Some(resource) = status_line_resource.as_mut() {
         match resource.refresh() {
@@ -309,6 +317,13 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     Event::Mouse(mouse)
                         if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
                     {
+                        let terminal_area = terminal.area()?;
+                        app.update_pointer_pressed(frame::input_pointer_target_at(
+                            &app,
+                            terminal_area,
+                            mouse.column,
+                            mouse.row,
+                        ));
                         app.begin_screen_selection(ratatui::layout::Position::new(
                             mouse.column,
                             mouse.row,
@@ -318,6 +333,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     Event::Mouse(mouse)
                         if mouse.kind == MouseEventKind::Drag(MouseButton::Left) =>
                     {
+                        app.clear_pointer_pressed();
                         app.drag_screen_selection(ratatui::layout::Position::new(
                             mouse.column,
                             mouse.row,
@@ -350,7 +366,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         None
                     }
                     Event::Resize(_, _) => {
-                        app.update_pointer_hover(None);
+                        app.clear_pointer_interaction();
                         None
                     }
                     _ => None,
@@ -1266,10 +1282,13 @@ fn activate_pointer_item(
     row: u16,
 ) -> Option<AppCommand> {
     let target = frame::input_pointer_target_at(app, area, column, row)?;
-    app.update_pointer_hover(None);
     match target {
         InputPointerTarget::Composer(ChatComposerPointerTarget::PaneTab(index)) => {
             app.select_tab(index);
+            None
+        }
+        InputPointerTarget::Composer(ChatComposerPointerTarget::PaneSearch) => {
+            app.focus_pane_search();
             None
         }
         InputPointerTarget::Composer(ChatComposerPointerTarget::PaneItem(index)) => {
@@ -1301,7 +1320,9 @@ fn finish_pointer_gesture(
     terminal: &terminal::TerminalSession,
     position: ratatui::layout::Position,
 ) -> Result<Option<AppCommand>, std::io::Error> {
-    match app.finish_screen_selection(position, Instant::now()) {
+    let outcome = app.finish_screen_selection(position, Instant::now());
+    app.clear_pointer_pressed();
+    match outcome {
         Some(ScreenSelectionOutcome::Click {
             position,
             count: ClickCount::Single,

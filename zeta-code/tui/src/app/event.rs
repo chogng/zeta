@@ -23,6 +23,7 @@ use crate::features::thread::TurnActivity;
 use crate::render::RenderTheme;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
+use zeta_app_server_protocol::protocol::skills::SkillDiagnosticDto;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_file_search::PathSearchSnapshot;
@@ -92,6 +93,7 @@ pub(crate) enum AppEvent {
     ListSelectionPaneOpened(PaneSpec<ListSelectionModel>),
     SkillsPaneOpened(SkillPaneSpec),
     SkillsPaneReplaced(SkillPaneSpec),
+    SkillDiagnosticsReceived(Vec<SkillDiagnosticDto>),
     SteerCompleted(SteerId),
     SteerSubmissionFailed {
         steer_id: SteerId,

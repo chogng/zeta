@@ -1,6 +1,7 @@
 use super::draw;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
+use crate::render::InteractionAttention;
 use crate::render::test_context;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -8,7 +9,6 @@ use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Position;
-use ratatui::style::Color;
 
 #[test]
 fn active_empty_search_keeps_the_cursor_clear_of_the_left_border() {
@@ -17,7 +17,15 @@ fn active_empty_search_keeps_the_cursor_clear_of_the_left_border() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue, test_context()))
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &search,
+                InteractionAttention::None,
+                test_context(),
+            )
+        })
         .unwrap();
 
     terminal
@@ -34,7 +42,15 @@ fn active_search_places_the_terminal_cursor_after_the_query() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue, test_context()))
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &search,
+                InteractionAttention::None,
+                test_context(),
+            )
+        })
         .unwrap();
 
     terminal
@@ -52,7 +68,15 @@ fn masked_search_renders_bullets_without_exposing_the_query() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue, test_context()))
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &search,
+                InteractionAttention::None,
+                test_context(),
+            )
+        })
         .unwrap();
 
     let rendered = terminal.backend().to_string();
@@ -61,4 +85,43 @@ fn masked_search_renders_bullets_without_exposing_the_query() {
     let debug = format!("{search:?}");
     assert!(debug.contains("[REDACTED]"));
     assert!(!debug.contains("query: \"sk\""));
+}
+
+#[test]
+fn hover_and_pressed_use_their_distinct_border_colors() {
+    let search = SearchBoxState::new(SearchBoxModel::new("Search"));
+    let backend = TestBackend::new(20, 3);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &search,
+                InteractionAttention::Hovered,
+                test_context(),
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(0, 0)].fg,
+        test_context().hover_foreground()
+    );
+
+    terminal
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &search,
+                InteractionAttention::Pressed,
+                test_context(),
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(0, 0)].fg,
+        test_context().pressed_foreground()
+    );
 }

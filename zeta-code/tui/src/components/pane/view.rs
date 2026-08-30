@@ -3,11 +3,13 @@ use super::PaneView;
 use crate::components::key_capture;
 use crate::components::list_selection;
 use crate::components::text_prompt;
+use crate::render::InteractionAttention;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
-use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -23,6 +25,7 @@ pub(crate) struct PaneAreas {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PanePointerTarget {
     Tab(usize),
+    Search,
     Item(usize),
 }
 
@@ -40,41 +43,62 @@ pub(crate) fn draw(
     area: Rect,
     view: PaneView<'_>,
     hovered: Option<PanePointerTarget>,
+    pressed: Option<PanePointerTarget>,
     context: RenderContext<'_>,
 ) {
     let pane_areas = areas(area);
     let presentation_highlight = match view.body() {
         PaneBodyView::ListSelection(body) => body
             .presentation_highlight()
-            .unwrap_or_else(|| context.highlight()),
-        PaneBodyView::KeyCapture(_) | PaneBodyView::TextPrompt(_) => context.highlight(),
+            .unwrap_or_else(|| context.focus()),
+        PaneBodyView::KeyCapture(_) | PaneBodyView::TextPrompt(_) => context.focus(),
     };
+    let title_style = interaction_style(
+        context,
+        InteractionState {
+            target: InteractionTarget::Active,
+            attention: InteractionAttention::None,
+        },
+    );
     frame.render_widget(
         Block::default()
             .borders(Borders::TOP)
             .border_style(Style::default().fg(presentation_highlight))
             .title(Line::from(vec![
                 Span::styled("─", Style::default().fg(presentation_highlight)),
-                Span::styled(
-                    format!(" {} ", view.title()),
-                    Style::default()
-                        .fg(Color::White)
-                        .bg(presentation_highlight)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                Span::styled(format!(" {} ", view.title()), title_style),
             ])),
         area,
     );
     match view.body() {
         PaneBodyView::KeyCapture(body) => key_capture::draw(frame, pane_areas.body, body, context),
-        PaneBodyView::ListSelection(body) => {
-            let hovered_item = match hovered {
-                Some(PanePointerTarget::Item(index)) => Some(index),
-                Some(PanePointerTarget::Tab(_)) | None => None,
-            };
-            list_selection::draw_with_hover(frame, pane_areas.body, body, hovered_item, context)
-        }
+        PaneBodyView::ListSelection(body) => list_selection::draw_with_pointer(
+            frame,
+            pane_areas.body,
+            body,
+            tab_index(hovered),
+            tab_index(pressed),
+            hovered == Some(PanePointerTarget::Search),
+            pressed == Some(PanePointerTarget::Search),
+            item_index(hovered),
+            item_index(pressed),
+            context,
+        ),
         PaneBodyView::TextPrompt(body) => text_prompt::draw(frame, pane_areas.body, body, context),
+    }
+}
+
+fn tab_index(target: Option<PanePointerTarget>) -> Option<usize> {
+    match target {
+        Some(PanePointerTarget::Tab(index)) => Some(index),
+        Some(PanePointerTarget::Search | PanePointerTarget::Item(_)) | None => None,
+    }
+}
+
+fn item_index(target: Option<PanePointerTarget>) -> Option<usize> {
+    match target {
+        Some(PanePointerTarget::Item(index)) => Some(index),
+        Some(PanePointerTarget::Tab(_) | PanePointerTarget::Search) | None => None,
     }
 }
 
@@ -90,6 +114,10 @@ pub(crate) fn pointer_target_at(
     let body_area = areas(area).body;
     body.tab_index_at(body_area, column, row)
         .map(PanePointerTarget::Tab)
+        .or_else(|| {
+            body.search_contains(body_area, column, row)
+                .then_some(PanePointerTarget::Search)
+        })
         .or_else(|| {
             body.item_index_at(body_area, column, row)
                 .map(PanePointerTarget::Item)
