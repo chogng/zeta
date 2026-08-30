@@ -103,7 +103,8 @@ fn theme_item(
     let current = if choice.selected { " ✓" } else { "" };
     ListSelectionItem::new(format!("{}. {}{current}", index + 1, choice.label))
         .with_id(item_id)
-        .with_selection_foreground(choice.palette.focus)
+        .with_selection_foreground(choice.palette.selection_foreground)
+        .with_presentation_focus(choice.palette.focus)
         .with_preview(
             ListSelectionPreview::new("Diff preview", diff_preview(choice.palette))
                 .with_caption(Line::from(Span::styled(

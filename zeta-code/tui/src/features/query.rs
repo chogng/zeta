@@ -1,6 +1,5 @@
 use crate::features::thread::ThreadRequestKind;
 use crate::features::thread::ThreadRequestResponse;
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -327,7 +326,7 @@ pub(crate) fn draw(
                 choice_line(
                     &choice.label,
                     &choice.description,
-                    choice_attention(index, view.selected, hovered, pressed),
+                    choice_state(index, view.selected, hovered, pressed),
                     context,
                 )
             }),
@@ -338,7 +337,7 @@ pub(crate) fn draw(
         lines.push(choice_line(
             "自己输入",
             "在下方输入框中回答",
-            choice_attention(view.question.choices.len(), view.selected, hovered, pressed),
+            choice_state(view.question.choices.len(), view.selected, hovered, pressed),
             context,
         ));
     }
@@ -394,27 +393,17 @@ pub(crate) fn choice_index_at(
 fn choice_line<'a>(
     label: &'a str,
     description: &'a str,
-    attention: InteractionAttention,
+    state: InteractionState,
     context: RenderContext<'_>,
 ) -> Line<'a> {
-    let marker = if attention == InteractionAttention::Keyboard {
-        "❯ "
-    } else {
-        "  "
-    };
-    let style = interaction_style(
-        context,
-        InteractionState {
-            target: InteractionTarget::Rest,
-            attention,
-        },
-    );
+    let marker = if state.selected { "❯ " } else { "  " };
+    let style = interaction_style(context, state);
     Line::from(vec![
         Span::styled(marker, style),
         Span::styled(label, style),
         Span::styled(
             format!("  {description}"),
-            if attention == InteractionAttention::None {
+            if !state.selected && !state.hovered && !state.pressed {
                 Style::default().fg(context.muted())
             } else {
                 style
@@ -423,20 +412,17 @@ fn choice_line<'a>(
     ])
 }
 
-fn choice_attention(
+fn choice_state(
     index: usize,
     selected: usize,
     hovered: Option<usize>,
     pressed: Option<usize>,
-) -> InteractionAttention {
-    if index == selected {
-        InteractionAttention::Keyboard
-    } else if pressed == Some(index) {
-        InteractionAttention::Pressed
-    } else if hovered == Some(index) {
-        InteractionAttention::Hovered
-    } else {
-        InteractionAttention::None
+) -> InteractionState {
+    InteractionState {
+        target: InteractionTarget::Rest,
+        selected: index == selected,
+        hovered: hovered == Some(index),
+        pressed: pressed == Some(index),
     }
 }
 

@@ -11,8 +11,8 @@ pub(crate) enum MouseMode {
 ///
 /// A pointer move may change only `hovered`. Components continue to own their keyboard cursor,
 /// while a click carries its resolved target directly to the component activation path.
-/// Rendering may give hover and keyboard selection the same highlight or different highlights;
-/// that visual choice must never merge their state or make hover affect keyboard behavior.
+/// Rendering resolves hover, press, and keyboard selection independently; that visual choice must
+/// never merge their state or make hover affect keyboard behavior.
 #[derive(Debug)]
 pub(crate) struct PointerInteraction<T> {
     hovered: Option<T>,

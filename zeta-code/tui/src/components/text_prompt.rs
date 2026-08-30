@@ -2,7 +2,6 @@ use crate::components::search_box;
 use crate::components::search_box::SearchBoxInputOutcome;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
-use crate::render::InteractionAttention;
 use crate::render::RenderContext;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -103,13 +102,7 @@ pub(crate) fn draw(
         .constraints([Constraint::Length(1), Constraint::Length(3)])
         .split(area);
     frame.render_widget(Paragraph::new(prompt.explanation()), content[0]);
-    search_box::draw(
-        frame,
-        content[1],
-        prompt.input(),
-        InteractionAttention::None,
-        context,
-    );
+    search_box::draw(frame, content[1], prompt.input(), false, false, context);
 }
 
 #[cfg(test)]

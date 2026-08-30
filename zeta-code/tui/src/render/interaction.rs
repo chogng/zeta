@@ -13,18 +13,11 @@ pub(crate) enum InteractionTarget {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum InteractionAttention {
-    #[default]
-    None,
-    Keyboard,
-    Hovered,
-    Pressed,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct InteractionState {
     pub(crate) target: InteractionTarget,
-    pub(crate) attention: InteractionAttention,
+    pub(crate) selected: bool,
+    pub(crate) hovered: bool,
+    pub(crate) pressed: bool,
 }
 
 pub(crate) fn interaction_style(context: RenderContext<'_>, state: InteractionState) -> Style {
@@ -34,42 +27,45 @@ pub(crate) fn interaction_style(context: RenderContext<'_>, state: InteractionSt
             .add_modifier(Modifier::DIM);
     }
 
-    let mut style = match state.attention {
-        InteractionAttention::None => match state.target {
+    let mut style = if state.pressed {
+        Style::default()
+            .fg(context.pressed_foreground())
+            .bg(context.pressed_background())
+    } else if state.selected {
+        Style::default()
+            .fg(context.selection_foreground())
+            .bg(context.selection_background())
+    } else if state.hovered {
+        Style::default()
+            .fg(context.hover_foreground())
+            .bg(context.hover_background())
+    } else {
+        match state.target {
             InteractionTarget::Active => Style::default()
                 .fg(context.accent_surface_foreground())
                 .bg(context.accent_surface_background()),
             InteractionTarget::Rest | InteractionTarget::Disabled => Style::default(),
-        },
-        InteractionAttention::Keyboard => Style::default()
-            .fg(context.selection_foreground())
-            .bg(context.selection_background()),
-        InteractionAttention::Hovered => Style::default()
-            .fg(context.hover_foreground())
-            .bg(context.hover_background()),
-        InteractionAttention::Pressed => Style::default()
-            .fg(context.pressed_foreground())
-            .bg(context.pressed_background()),
+        }
     };
-    if state.target == InteractionTarget::Active
-        || state.attention == InteractionAttention::Keyboard
-        || state.attention == InteractionAttention::Pressed
-    {
+    if state.target == InteractionTarget::Active || state.selected || state.pressed {
         style = style.add_modifier(Modifier::BOLD);
     }
     if interaction_colors_are_unavailable(context) {
-        style = match state.attention {
-            InteractionAttention::Hovered => style.add_modifier(Modifier::UNDERLINED),
-            InteractionAttention::Keyboard | InteractionAttention::Pressed => {
-                style.add_modifier(Modifier::REVERSED)
-            }
-            InteractionAttention::None if state.target == InteractionTarget::Active => {
-                style.add_modifier(Modifier::REVERSED)
-            }
-            InteractionAttention::None => style,
+        style = if state.pressed || state.selected || state.target == InteractionTarget::Active {
+            style.add_modifier(Modifier::REVERSED)
+        } else if state.hovered {
+            style.add_modifier(Modifier::UNDERLINED)
+        } else {
+            style
         };
     }
     style
+}
+
+pub(crate) fn action_style(context: RenderContext<'_>) -> Style {
+    Style::default()
+        .fg(context.action_foreground())
+        .add_modifier(Modifier::BOLD)
 }
 
 pub(crate) fn focus_style(context: RenderContext<'_>) -> Style {

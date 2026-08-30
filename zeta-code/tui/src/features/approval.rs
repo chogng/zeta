@@ -185,7 +185,6 @@ pub(crate) struct ApprovalView<'a> {
     pub(crate) error: Option<&'a str>,
 }
 
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -229,7 +228,7 @@ pub(crate) fn draw(
     );
     lines.push(choice_line(
         "Approve once",
-        choice_attention(
+        choice_state(
             0,
             view.selected == ApprovalDecision::ApproveOnce,
             hovered,
@@ -239,7 +238,7 @@ pub(crate) fn draw(
     ));
     lines.push(choice_line(
         "Decline",
-        choice_attention(
+        choice_state(
             1,
             view.selected == ApprovalDecision::Decline,
             hovered,
@@ -286,41 +285,28 @@ pub(crate) fn choice_index_at(
 
 fn choice_line<'a>(
     label: &'a str,
-    attention: InteractionAttention,
+    state: InteractionState,
     context: RenderContext<'_>,
 ) -> Line<'a> {
-    let marker = if attention == InteractionAttention::Keyboard {
-        "❯ "
-    } else {
-        "  "
-    };
-    let style = interaction_style(
-        context,
-        InteractionState {
-            target: InteractionTarget::Rest,
-            attention,
-        },
-    );
+    let marker = if state.selected { "❯ " } else { "  " };
+    let style = interaction_style(context, state);
     Line::from(vec![
         Span::styled(marker, style),
         Span::styled(label, style),
     ])
 }
 
-fn choice_attention(
+fn choice_state(
     index: usize,
     selected: bool,
     hovered: Option<usize>,
     pressed: Option<usize>,
-) -> InteractionAttention {
-    if selected {
-        InteractionAttention::Keyboard
-    } else if pressed == Some(index) {
-        InteractionAttention::Pressed
-    } else if hovered == Some(index) {
-        InteractionAttention::Hovered
-    } else {
-        InteractionAttention::None
+) -> InteractionState {
+    InteractionState {
+        target: InteractionTarget::Rest,
+        selected,
+        hovered: hovered == Some(index),
+        pressed: pressed == Some(index),
     }
 }
 

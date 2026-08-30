@@ -163,6 +163,7 @@ Mouse interactions、Follow-up messages、Input mode 和新增目录默认授权
   "colors": {
     "background": "#101010",
     "quickViewBackground": "#303030",
+    "actionForeground": "#58a6ff",
     "focus": "#8b80f9",
     "hoverBackground": "#25233a",
     "hoverForeground": "#f0edff"
@@ -170,7 +171,7 @@ Mouse interactions、Follow-up messages、Input mode 和新增目录默认授权
 }
 ```
 
-可覆盖字段为 `accent`、`accentSurfaceBackground`、`accentSurfaceForeground`、`background`、`border`、`chatInputChrome`、`danger`、`disabledForeground`、`focus`、`foreground`、`function`、`hoverBackground`、`hoverForeground`、`insertedBackground`、`insertedMarker`、`keyword`、`muted`、`pressedBackground`、`pressedForeground`、`quickViewBackground`、`removedBackground`、`removedMarker`、`selectionBackground`、`selectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`string`、`success`、`type`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
+可覆盖字段为 `accent`、`accentSurfaceBackground`、`accentSurfaceForeground`、`actionForeground`、`background`、`border`、`chatInputChrome`、`danger`、`disabledForeground`、`focus`、`foreground`、`function`、`hoverBackground`、`hoverForeground`、`insertedBackground`、`insertedMarker`、`keyword`、`muted`、`pressedBackground`、`pressedForeground`、`quickViewBackground`、`removedBackground`、`removedMarker`、`selectionBackground`、`selectionForeground`、`screenSelectionBackground`、`screenSelectionForeground`、`string`、`success`、`type`、`variable` 与 `warning`。未写字段继承所选 `appearance` 的内置调色板；该格式不接受图形界面 token、别名、透明色或颜色变换。
 
 ## 文件与职责
 

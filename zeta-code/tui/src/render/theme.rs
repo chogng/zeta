@@ -35,6 +35,7 @@ pub(crate) struct ThemePalette {
     pub(crate) accent: ThemeRgb,
     pub(crate) accent_surface_background: ThemeRgb,
     pub(crate) accent_surface_foreground: ThemeRgb,
+    pub(crate) action_foreground: ThemeRgb,
     pub(crate) background: ThemeRgb,
     pub(crate) border: ThemeRgb,
     pub(crate) chat_input_chrome: ThemeRgb,
@@ -71,6 +72,7 @@ impl ThemePalette {
             accent: ThemeRgb::new(0x58, 0xa6, 0xff),
             accent_surface_background: ThemeRgb::new(0x66, 0x58, 0xc7),
             accent_surface_foreground: ThemeRgb::new(0xff, 0xff, 0xff),
+            action_foreground: ThemeRgb::new(0x58, 0xa6, 0xff),
             background: ThemeRgb::new(0x0d, 0x11, 0x17),
             border: ThemeRgb::new(0x2b, 0x2b, 0x2b),
             chat_input_chrome: ThemeRgb::new(0x8b, 0x94, 0x9e),
@@ -107,6 +109,7 @@ impl ThemePalette {
             accent: ThemeRgb::new(0x09, 0x69, 0xda),
             accent_surface_background: ThemeRgb::new(0x66, 0x58, 0xc7),
             accent_surface_foreground: ThemeRgb::new(0xff, 0xff, 0xff),
+            action_foreground: ThemeRgb::new(0x09, 0x69, 0xda),
             background: ThemeRgb::new(0xff, 0xff, 0xff),
             border: ThemeRgb::new(0xe5, 0xe5, 0xe5),
             chat_input_chrome: ThemeRgb::new(0x57, 0x60, 0x6a),
@@ -141,6 +144,7 @@ impl ThemePalette {
     pub(crate) const fn colorblind_dark() -> Self {
         Self {
             accent_surface_background: ThemeRgb::new(0x09, 0x69, 0xda),
+            action_foreground: ThemeRgb::new(0x58, 0xa6, 0xff),
             danger: ThemeRgb::new(0xd4, 0x76, 0x16),
             focus: ThemeRgb::new(0x58, 0xa6, 0xff),
             hover_background: ThemeRgb::new(0x17, 0x2a, 0x46),
@@ -164,6 +168,7 @@ impl ThemePalette {
     pub(crate) const fn colorblind_light() -> Self {
         Self {
             accent_surface_background: ThemeRgb::new(0x09, 0x69, 0xda),
+            action_foreground: ThemeRgb::new(0x09, 0x69, 0xda),
             danger: ThemeRgb::new(0xb3, 0x59, 0x00),
             focus: ThemeRgb::new(0x09, 0x69, 0xda),
             hover_background: ThemeRgb::new(0xee, 0xf8, 0xff),
@@ -217,6 +222,7 @@ pub(crate) struct RenderTheme {
     accent: Color,
     accent_surface_background: Color,
     accent_surface_foreground: Color,
+    action_foreground: Color,
     background: Color,
     border: Color,
     chat_input_chrome: Color,
@@ -254,6 +260,7 @@ impl RenderTheme {
             accent: projected(palette.accent),
             accent_surface_background: projected(palette.accent_surface_background),
             accent_surface_foreground: projected(palette.accent_surface_foreground),
+            action_foreground: projected(palette.action_foreground),
             background: projected(palette.background),
             border: projected(palette.border),
             chat_input_chrome: projected(palette.chat_input_chrome),
@@ -290,6 +297,7 @@ impl RenderTheme {
             accent: hex("#69aaff"),
             accent_surface_background: hex("#6658c7"),
             accent_surface_foreground: hex("#ffffff"),
+            action_foreground: hex("#69aaff"),
             background: hex("#0d1117"),
             border: hex("#808080"),
             chat_input_chrome: hex("#9b9b9b"),
@@ -329,6 +337,9 @@ impl RenderTheme {
     }
     pub(crate) const fn accent_surface_foreground(self) -> Color {
         self.accent_surface_foreground
+    }
+    pub(crate) const fn action_foreground(self) -> Color {
+        self.action_foreground
     }
     pub(crate) const fn background(self) -> Color {
         self.background
@@ -438,6 +449,9 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn accent_surface_foreground(self) -> Color {
         self.theme.accent_surface_foreground()
+    }
+    pub(crate) const fn action_foreground(self) -> Color {
+        self.theme.action_foreground()
     }
     pub(crate) const fn background(self) -> Color {
         self.theme.background()

@@ -1,4 +1,7 @@
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
+use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -29,6 +32,7 @@ pub(crate) struct SubagentPaneRow {
 pub(crate) struct SubagentPaneState {
     rows: Vec<SubagentPaneRow>,
     selected: Option<ThreadId>,
+    viewed: Option<ThreadId>,
     viewport_start: usize,
     focused: bool,
     now_unix_ms: u64,
@@ -42,6 +46,9 @@ impl SubagentPaneState {
     ) {
         self.refresh_elapsed();
         self.rows = session.map(active_rows).unwrap_or_default();
+        self.viewed = viewed_thread
+            .filter(|viewed| self.rows.iter().any(|row| &row.thread_id == *viewed))
+            .cloned();
         let selected_is_valid = self
             .selected
             .as_ref()
@@ -110,6 +117,8 @@ impl SubagentPaneState {
         SubagentPaneView {
             rows: &self.rows[self.viewport_start..end],
             selected: self.selected.as_ref(),
+            viewed: self.viewed.as_ref(),
+            focused: self.focused,
             now_unix_ms: self.now_unix_ms,
         }
     }
@@ -147,6 +156,8 @@ impl SubagentPaneState {
 pub(crate) struct SubagentPaneView<'a> {
     pub(crate) rows: &'a [SubagentPaneRow],
     pub(crate) selected: Option<&'a ThreadId>,
+    pub(crate) viewed: Option<&'a ThreadId>,
+    pub(crate) focused: bool,
     pub(crate) now_unix_ms: u64,
 }
 
@@ -161,9 +172,22 @@ pub(crate) fn draw_subagent_pane(
         .iter()
         .map(|row| {
             let selected = view.selected == Some(&row.thread_id);
-            let marker = if selected { '●' } else { '○' };
-            let style = if selected {
-                Style::default().fg(context.foreground())
+            let active = view.viewed == Some(&row.thread_id);
+            let marker = if active { '●' } else { '○' };
+            let style = if view.focused && selected || active {
+                interaction_style(
+                    context,
+                    InteractionState {
+                        target: if active {
+                            InteractionTarget::Active
+                        } else {
+                            InteractionTarget::Rest
+                        },
+                        selected: view.focused && selected,
+                        hovered: false,
+                        pressed: false,
+                    },
+                )
             } else {
                 Style::default().fg(context.muted())
             };

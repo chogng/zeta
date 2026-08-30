@@ -76,6 +76,7 @@ fn apply_color(palette: &mut ThemePalette, name: &str, color: ThemeRgb) -> Resul
         "accent" => &mut palette.accent,
         "accentSurfaceBackground" => &mut palette.accent_surface_background,
         "accentSurfaceForeground" => &mut palette.accent_surface_foreground,
+        "actionForeground" => &mut palette.action_foreground,
         "background" => &mut palette.background,
         "border" => &mut palette.border,
         "chatInputChrome" => &mut palette.chat_input_chrome,

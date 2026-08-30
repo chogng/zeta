@@ -26,6 +26,7 @@ fn palette(focus: Color) -> ThemePreviewPalette {
         foreground: Color::White,
         muted: Color::DarkGray,
         focus,
+        selection_foreground: focus,
         keyword: Color::Red,
         string: Color::Blue,
         function: Color::Magenta,

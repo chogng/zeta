@@ -14,6 +14,7 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
 
     assert!(matches!(true_color.accent(), Color::Rgb(..)));
     assert_eq!(true_color.focus(), Color::Rgb(154, 145, 235));
+    assert_eq!(true_color.action_foreground(), Color::Rgb(88, 166, 255));
     assert_eq!(true_color.selection_foreground(), Color::Rgb(240, 237, 255));
     assert_eq!(true_color.selection_background(), Color::Rgb(47, 43, 82));
     assert_eq!(true_color.hover_background(), Color::Rgb(37, 35, 58));
@@ -45,6 +46,7 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
     let cases = [
         (
             ThemePalette::dark(),
+            Color::Rgb(88, 166, 255),
             Color::Rgb(154, 145, 235),
             Color::Rgb(47, 43, 82),
             Color::Rgb(37, 35, 58),
@@ -52,6 +54,7 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
         ),
         (
             ThemePalette::light(),
+            Color::Rgb(9, 105, 218),
             Color::Rgb(102, 88, 199),
             Color::Rgb(233, 229, 255),
             Color::Rgb(242, 240, 255),
@@ -60,6 +63,7 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
         (
             ThemePalette::colorblind_dark(),
             Color::Rgb(88, 166, 255),
+            Color::Rgb(88, 166, 255),
             Color::Rgb(18, 41, 75),
             Color::Rgb(23, 42, 70),
             Color::Rgb(31, 79, 133),
@@ -67,14 +71,16 @@ fn built_in_palettes_keep_the_documented_interaction_colors() {
         (
             ThemePalette::colorblind_light(),
             Color::Rgb(9, 105, 218),
+            Color::Rgb(9, 105, 218),
             Color::Rgb(221, 244, 255),
             Color::Rgb(238, 248, 255),
             Color::Rgb(182, 227, 255),
         ),
     ];
 
-    for (palette, focus, selection, hover, pressed) in cases {
+    for (palette, action, focus, selection, hover, pressed) in cases {
         let theme = RenderTheme::from_palette(palette, ColorLevel::TrueColor);
+        assert_eq!(theme.action_foreground(), action);
         assert_eq!(theme.focus(), focus);
         assert_eq!(theme.selection_background(), selection);
         assert_eq!(theme.hover_background(), hover);

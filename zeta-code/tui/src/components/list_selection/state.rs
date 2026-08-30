@@ -30,6 +30,7 @@ pub(crate) struct ListSelectionItem {
     description: Option<String>,
     columns: Option<ListSelectionItemColumns>,
     selection_foreground: Option<Color>,
+    presentation_focus: Option<Color>,
     preview: Option<ListSelectionPreview>,
 }
 
@@ -48,6 +49,7 @@ impl ListSelectionItem {
             description: None,
             columns: None,
             selection_foreground: None,
+            presentation_focus: None,
             preview: None,
         }
     }
@@ -83,6 +85,11 @@ impl ListSelectionItem {
         self
     }
 
+    pub(crate) fn with_presentation_focus(mut self, color: Color) -> Self {
+        self.presentation_focus = Some(color);
+        self
+    }
+
     pub(crate) fn with_preview(mut self, preview: ListSelectionPreview) -> Self {
         self.preview = Some(preview);
         self
@@ -106,6 +113,10 @@ impl ListSelectionItem {
 
     pub(crate) fn selection_foreground(&self) -> Option<Color> {
         self.selection_foreground
+    }
+
+    pub(crate) fn presentation_focus(&self) -> Option<Color> {
+        self.presentation_focus
     }
 
     pub(crate) fn preview(&self) -> Option<&ListSelectionPreview> {
@@ -556,8 +567,8 @@ impl ListSelectionState {
         self.visible_items().get(selected).copied()
     }
 
-    pub(crate) fn presentation_highlight(&self) -> Option<Color> {
-        self.selected_item()?.selection_foreground()
+    pub(crate) fn presentation_focus(&self) -> Option<Color> {
+        self.selected_item()?.presentation_focus()
     }
 
     fn visible_indices(&self) -> Vec<usize> {

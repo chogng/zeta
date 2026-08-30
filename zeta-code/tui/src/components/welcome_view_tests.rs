@@ -21,10 +21,10 @@ fn wide_banner_uses_the_two_column_welcome_presentation() {
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Use @ to mention workspace files"));
     assert!(rendered.contains("Try asking"));
-    assert_eq!(buffer[(2, 1)].fg, test_context().focus());
-    assert_eq!(buffer[(77, 11)].fg, test_context().focus());
-    assert_eq!(buffer[(30, 2)].fg, test_context().focus());
-    assert_eq!(buffer[(33, 5)].fg, test_context().focus());
+    assert_eq!(buffer[(2, 1)].fg, test_context().accent());
+    assert_eq!(buffer[(77, 11)].fg, test_context().accent());
+    assert_eq!(buffer[(30, 2)].fg, test_context().accent());
+    assert_eq!(buffer[(33, 5)].fg, test_context().accent());
     assert_eq!(buffer[(9, 1)].symbol(), "Z");
     assert_eq!(buffer[(9, 1)].fg, test_context().accent());
     assert!(!buffer[(9, 1)].modifier.contains(Modifier::BOLD));
@@ -59,7 +59,6 @@ fn render(width: u16, height: u16) -> ratatui::buffer::Buffer {
                 frame,
                 frame.area(),
                 &WelcomeModel::for_workspace(Path::new("/work/zeta")),
-                test_context().focus(),
                 test_context(),
             )
         })

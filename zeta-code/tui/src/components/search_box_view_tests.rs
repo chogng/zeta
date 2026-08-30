@@ -1,7 +1,6 @@
 use super::draw;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
-use crate::render::InteractionAttention;
 use crate::render::test_context;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -17,15 +16,7 @@ fn active_empty_search_keeps_the_cursor_clear_of_the_left_border() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| {
-            draw(
-                frame,
-                frame.area(),
-                &search,
-                InteractionAttention::None,
-                test_context(),
-            )
-        })
+        .draw(|frame| draw(frame, frame.area(), &search, false, false, test_context()))
         .unwrap();
 
     terminal
@@ -42,15 +33,7 @@ fn active_search_places_the_terminal_cursor_after_the_query() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| {
-            draw(
-                frame,
-                frame.area(),
-                &search,
-                InteractionAttention::None,
-                test_context(),
-            )
-        })
+        .draw(|frame| draw(frame, frame.area(), &search, false, false, test_context()))
         .unwrap();
 
     terminal
@@ -68,15 +51,7 @@ fn masked_search_renders_bullets_without_exposing_the_query() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| {
-            draw(
-                frame,
-                frame.area(),
-                &search,
-                InteractionAttention::None,
-                test_context(),
-            )
-        })
+        .draw(|frame| draw(frame, frame.area(), &search, false, false, test_context()))
         .unwrap();
 
     let rendered = terminal.backend().to_string();
@@ -94,15 +69,7 @@ fn hover_and_pressed_use_their_distinct_border_colors() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| {
-            draw(
-                frame,
-                frame.area(),
-                &search,
-                InteractionAttention::Hovered,
-                test_context(),
-            )
-        })
+        .draw(|frame| draw(frame, frame.area(), &search, true, false, test_context()))
         .unwrap();
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].fg,
@@ -110,15 +77,7 @@ fn hover_and_pressed_use_their_distinct_border_colors() {
     );
 
     terminal
-        .draw(|frame| {
-            draw(
-                frame,
-                frame.area(),
-                &search,
-                InteractionAttention::Pressed,
-                test_context(),
-            )
-        })
+        .draw(|frame| draw(frame, frame.area(), &search, true, true, test_context()))
         .unwrap();
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].fg,

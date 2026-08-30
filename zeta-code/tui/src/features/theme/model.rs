@@ -7,6 +7,7 @@ pub(crate) struct ThemePreviewPalette {
     pub(crate) foreground: Color,
     pub(crate) muted: Color,
     pub(crate) focus: Color,
+    pub(crate) selection_foreground: Color,
     pub(crate) keyword: Color,
     pub(crate) string: Color,
     pub(crate) function: Color,

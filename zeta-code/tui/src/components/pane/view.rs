@@ -3,7 +3,6 @@ use super::PaneView;
 use crate::components::key_capture;
 use crate::components::list_selection;
 use crate::components::text_prompt;
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -47,25 +46,27 @@ pub(crate) fn draw(
     context: RenderContext<'_>,
 ) {
     let pane_areas = areas(area);
-    let presentation_highlight = match view.body() {
-        PaneBodyView::ListSelection(body) => body
-            .presentation_highlight()
-            .unwrap_or_else(|| context.focus()),
+    let presentation_focus = match view.body() {
+        PaneBodyView::ListSelection(body) => {
+            body.presentation_focus().unwrap_or_else(|| context.focus())
+        }
         PaneBodyView::KeyCapture(_) | PaneBodyView::TextPrompt(_) => context.focus(),
     };
     let title_style = interaction_style(
         context,
         InteractionState {
             target: InteractionTarget::Active,
-            attention: InteractionAttention::None,
+            selected: false,
+            hovered: false,
+            pressed: false,
         },
     );
     frame.render_widget(
         Block::default()
             .borders(Borders::TOP)
-            .border_style(Style::default().fg(presentation_highlight))
+            .border_style(Style::default().fg(presentation_focus))
             .title(Line::from(vec![
-                Span::styled("─", Style::default().fg(presentation_highlight)),
+                Span::styled("─", Style::default().fg(presentation_focus)),
                 Span::styled(format!(" {} ", view.title()), title_style),
             ])),
         area,

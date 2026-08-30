@@ -5,15 +5,18 @@ use super::Message;
 use super::MessageRole;
 use crate::components::welcome;
 use crate::components::welcome::WelcomeModel;
+use crate::render::InteractionState;
+use crate::render::InteractionTarget;
 use crate::render::RenderContext;
 use crate::render::Renderable;
+use crate::render::action_style;
 use crate::render::horizontal_margin;
+use crate::render::interaction_style;
 use crate::render::prefix_lines;
 use crate::render::push_owned_lines;
 use crate::render::styled_text_lines;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -25,7 +28,15 @@ pub(crate) struct ChatHistoryView<'a> {
     pub(crate) scroll: &'a ChatHistoryScroll,
     pub(crate) render_cache: &'a ChatHistoryRenderCache,
     pub(crate) welcome: &'a WelcomeModel,
-    pub(crate) presentation_highlight: Color,
+    pub(crate) pointer: ChatHistoryPointerState<'a>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ChatHistoryPointerState<'a> {
+    pub(crate) hovered_toggle: Option<&'a str>,
+    pub(crate) hovered_details: Option<&'a str>,
+    pub(crate) pressed_toggle: Option<&'a str>,
+    pub(crate) pressed_details: Option<&'a str>,
 }
 
 impl Renderable for ChatHistoryView<'_> {
@@ -43,13 +54,7 @@ impl Renderable for ChatHistoryView<'_> {
     fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
         let content_area = horizontal_margin(area, 2);
         if self.messages.is_empty() {
-            welcome::draw(
-                frame,
-                area,
-                self.welcome,
-                self.presentation_highlight,
-                context,
-            );
+            welcome::draw(frame, area, self.welcome, context);
             return;
         }
 
@@ -66,6 +71,7 @@ impl Renderable for ChatHistoryView<'_> {
             self.messages,
             &heights,
             self.render_cache,
+            self.pointer,
             context,
         );
     }
@@ -128,7 +134,7 @@ fn message_lines_with_code<'a>(
     messages: &'a [Message],
     context: RenderContext<'_>,
     cache: Option<&ChatHistoryRenderCache>,
-    highlight: bool,
+    syntax_highlighting: bool,
 ) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
     for message in messages {
@@ -140,13 +146,15 @@ fn message_lines_with_code<'a>(
                 None => (context.muted(), "●"),
             };
             let marker = expansion_marker(message).unwrap_or(status_marker);
-            let command_lines = styled_body_lines(message, context, cache, highlight);
+            let marker_style = if message.can_expand {
+                action_style(context)
+            } else {
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
+            };
+            let command_lines = styled_body_lines(message, context, cache, syntax_highlighting);
             lines.extend(prefix_lines(
                 command_lines,
-                Span::styled(
-                    format!("{marker}  "),
-                    Style::default().fg(color).add_modifier(Modifier::BOLD),
-                ),
+                Span::styled(format!("{marker}  "), marker_style),
                 Span::raw("   "),
             ));
             if let Some(detail) = &message.detail {
@@ -167,12 +175,14 @@ fn message_lines_with_code<'a>(
             MessageRole::Command => unreachable!("command messages render as a grouped surface"),
         };
         let marker = expansion_marker(message).unwrap_or(role_marker);
+        let marker_style = if message.can_expand {
+            action_style(context)
+        } else {
+            Style::default().fg(color).add_modifier(Modifier::BOLD)
+        };
         lines.extend(prefix_lines(
-            styled_body_lines(message, context, cache, highlight),
-            Span::styled(
-                format!("{marker}  "),
-                Style::default().fg(color).add_modifier(Modifier::BOLD),
-            ),
+            styled_body_lines(message, context, cache, syntax_highlighting),
+            Span::styled(format!("{marker}  "), marker_style),
             Span::raw("   "),
         ));
         if let Some(detail) = &message.detail {
@@ -188,7 +198,7 @@ fn styled_body_lines<'a>(
     message: &'a Message,
     context: RenderContext<'_>,
     cache: Option<&ChatHistoryRenderCache>,
-    highlight: bool,
+    syntax_highlighting: bool,
 ) -> Vec<Line<'a>> {
     if !message
         .text
@@ -227,7 +237,7 @@ fn styled_body_lines<'a>(
                 &code,
                 context,
                 cache,
-                highlight,
+                syntax_highlighting,
             );
             code.clear();
             block_index += 1;
@@ -245,7 +255,7 @@ fn styled_body_lines<'a>(
             &code,
             context,
             cache,
-            highlight,
+            syntax_highlighting,
         );
     } else {
         push_plain_block(&mut output, &mut plain, selected_style(message, context));
@@ -274,9 +284,9 @@ fn push_code_block(
     code: &str,
     context: RenderContext<'_>,
     cache: Option<&ChatHistoryRenderCache>,
-    highlight: bool,
+    syntax_highlighting: bool,
 ) {
-    if !highlight {
+    if !syntax_highlighting {
         let lines = styled_text_lines(
             code.strip_suffix('\n').unwrap_or(code),
             Style::default().fg(context.foreground()),
@@ -299,9 +309,15 @@ fn expansion_marker(message: &Message) -> Option<&'static str> {
 
 fn selected_style(message: &Message, context: RenderContext<'_>) -> Style {
     if message.selected {
-        Style::default()
-            .fg(context.accent())
-            .add_modifier(Modifier::BOLD)
+        interaction_style(
+            context,
+            InteractionState {
+                target: InteractionTarget::Rest,
+                selected: true,
+                hovered: false,
+                pressed: false,
+            },
+        )
     } else {
         Style::default()
     }
@@ -315,9 +331,7 @@ fn push_details_affordance<'a>(
     if message.expanded && message.has_details {
         lines.push(Line::from(Span::styled(
             "   view full",
-            Style::default()
-                .fg(context.accent())
-                .add_modifier(Modifier::BOLD),
+            action_style(context),
         )));
     }
 }
@@ -379,6 +393,7 @@ fn render_cells(
     messages: &[Message],
     heights: &[usize],
     cache: &ChatHistoryRenderCache,
+    pointer: ChatHistoryPointerState<'_>,
     context: RenderContext<'_>,
 ) {
     let total_rows = heights.iter().sum::<usize>();
@@ -404,12 +419,104 @@ fn render_cells(
                 Rect::new(area.x, target_y, area.width, target_height),
                 source_row,
             );
+            render_pointer_feedback(
+                frame,
+                area,
+                message,
+                cell_start,
+                cell_end,
+                viewport_start,
+                pointer,
+                context,
+            );
         }
         cell_start = cell_end;
         if cell_start >= viewport_end {
             break;
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_pointer_feedback(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    message: &Message,
+    cell_start: usize,
+    cell_end: usize,
+    viewport_start: usize,
+    pointer: ChatHistoryPointerState<'_>,
+    context: RenderContext<'_>,
+) {
+    let Some(cell_id) = message.cell_id.as_deref() else {
+        return;
+    };
+    let toggle_hovered = pointer.hovered_toggle == Some(cell_id);
+    let toggle_pressed = pointer.pressed_toggle == Some(cell_id);
+    if message.can_expand && (toggle_hovered || toggle_pressed) {
+        render_action_feedback(
+            frame,
+            area,
+            cell_start,
+            viewport_start,
+            1,
+            toggle_hovered,
+            toggle_pressed,
+            context,
+        );
+    }
+    let details_hovered = pointer.hovered_details == Some(cell_id);
+    let details_pressed = pointer.pressed_details == Some(cell_id);
+    if message.expanded && message.has_details && (details_hovered || details_pressed) {
+        render_action_feedback(
+            frame,
+            area,
+            cell_end.saturating_sub(2),
+            viewport_start,
+            "   view full".len() as u16,
+            details_hovered,
+            details_pressed,
+            context,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_action_feedback(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    logical_row: usize,
+    viewport_start: usize,
+    width: u16,
+    hovered: bool,
+    pressed: bool,
+    context: RenderContext<'_>,
+) {
+    let Some(row) = logical_row.checked_sub(viewport_start) else {
+        return;
+    };
+    if row >= usize::from(area.height) {
+        return;
+    }
+    let style = interaction_style(
+        context,
+        InteractionState {
+            target: InteractionTarget::Rest,
+            selected: false,
+            hovered,
+            pressed,
+        },
+    )
+    .add_modifier(Modifier::BOLD);
+    frame.buffer_mut().set_style(
+        Rect::new(
+            area.x,
+            area.y.saturating_add(row as u16),
+            width.min(area.width),
+            1,
+        ),
+        style,
+    );
 }
 
 #[cfg(test)]

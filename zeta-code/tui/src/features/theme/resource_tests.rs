@@ -80,6 +80,7 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
   "colors": {
     "background": "#101010",
     "focus": "#112233",
+    "actionForeground": "#334477",
     "hoverBackground": "#223344",
     "pressedForeground": "#334455",
     "selectionBackground": "#445566",
@@ -106,6 +107,7 @@ fn custom_themes_are_read_only_from_the_zeta_code_theme_directory() {
     let selected = resource.resolve("graphite").unwrap();
     assert_eq!(selected.theme.background(), Color::Rgb(16, 16, 16));
     assert_eq!(selected.theme.focus(), Color::Rgb(17, 34, 51));
+    assert_eq!(selected.theme.action_foreground(), Color::Rgb(51, 68, 119));
     assert_eq!(selected.theme.hover_background(), Color::Rgb(34, 51, 68));
     assert_eq!(selected.theme.pressed_foreground(), Color::Rgb(51, 68, 85));
     assert_eq!(

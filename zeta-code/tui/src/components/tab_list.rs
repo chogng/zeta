@@ -1,4 +1,3 @@
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -193,17 +192,15 @@ fn tab_lines<T: TabListItem>(
         } else {
             InteractionTarget::Rest
         };
-        let attention = if focused && index == active {
-            InteractionAttention::Keyboard
-        } else if pressed == Some(index) {
-            InteractionAttention::Pressed
-        } else if hovered == Some(index) {
-            InteractionAttention::Hovered
-        } else {
-            InteractionAttention::None
+        let state = InteractionState {
+            target,
+            selected: focused && index == active,
+            hovered: hovered == Some(index),
+            pressed: pressed == Some(index),
         };
-        let mut style = interaction_style(context, InteractionState { target, attention });
-        if target == InteractionTarget::Rest && attention == InteractionAttention::None {
+        let mut style = interaction_style(context, state);
+        if target == InteractionTarget::Rest && !state.selected && !state.hovered && !state.pressed
+        {
             style = style.fg(context.muted());
         }
         spans.push(Span::styled(format!(" {} ", tab.tab_label()), style));

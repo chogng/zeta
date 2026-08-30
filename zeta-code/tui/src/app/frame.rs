@@ -4,6 +4,7 @@ use crate::components::chat_composer::ChatComposerAreas;
 use crate::components::chat_composer::ChatComposerPointerTarget;
 use crate::components::chat_composer::ChatComposerSurface;
 use crate::components::chat_history;
+use crate::components::chat_history::ChatHistoryPointerState;
 use crate::components::chat_history::ChatHistoryView;
 use crate::components::chat_input;
 use crate::components::key_hint_bar;
@@ -56,23 +57,12 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let areas = layout(app, frame.area());
     let hovered = app.hovered_pointer_target();
     let pressed = app.pressed_pointer_target();
-    let presentation_highlight = app
-        .list_selection()
-        .and_then(|view| view.presentation_highlight())
-        .unwrap_or_else(|| context.focus());
-
     if let Some(manager) = app.session_manager_view() {
         let manager_areas = super::screen_layout::manager_areas(
             areas.session.transcript,
             welcome::desired_height(areas.session.transcript.width),
         );
-        welcome::draw(
-            frame,
-            manager_areas.welcome,
-            app.welcome(),
-            presentation_highlight,
-            context,
-        );
+        welcome::draw(frame, manager_areas.welcome, app.welcome(), context);
         let hovered_manager = match hovered {
             Some(InputPointerTarget::SessionManager(target)) => Some(target),
             _ => None,
@@ -96,7 +86,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             scroll: app.transcript_scroll(),
             render_cache: app.transcript_render_cache(),
             welcome: app.welcome(),
-            presentation_highlight,
+            pointer: transcript_pointer_state(hovered, pressed),
         }
         .render(frame, areas.session.transcript, context);
     }
@@ -243,6 +233,30 @@ pub(crate) enum InputPointerTarget {
     SessionManager(crate::features::sessions::SessionManagerPointerTarget),
     TranscriptToggle(String),
     TranscriptDetails(String),
+}
+
+fn transcript_pointer_state<'a>(
+    hovered: Option<&'a InputPointerTarget>,
+    pressed: Option<&'a InputPointerTarget>,
+) -> ChatHistoryPointerState<'a> {
+    ChatHistoryPointerState {
+        hovered_toggle: match hovered {
+            Some(InputPointerTarget::TranscriptToggle(cell_id)) => Some(cell_id.as_str()),
+            _ => None,
+        },
+        hovered_details: match hovered {
+            Some(InputPointerTarget::TranscriptDetails(cell_id)) => Some(cell_id.as_str()),
+            _ => None,
+        },
+        pressed_toggle: match pressed {
+            Some(InputPointerTarget::TranscriptToggle(cell_id)) => Some(cell_id.as_str()),
+            _ => None,
+        },
+        pressed_details: match pressed {
+            Some(InputPointerTarget::TranscriptDetails(cell_id)) => Some(cell_id.as_str()),
+            _ => None,
+        },
+    }
 }
 
 pub(crate) fn input_pointer_target_at(

@@ -367,6 +367,7 @@ fn theme_palette() -> ThemePreviewPalette {
         foreground: Color::White,
         muted: Color::DarkGray,
         focus: Color::Magenta,
+        selection_foreground: Color::Magenta,
         keyword: Color::Red,
         string: Color::Blue,
         function: Color::Magenta,

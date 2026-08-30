@@ -41,7 +41,6 @@ use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -68,7 +67,6 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     model: &WelcomeModel,
-    presentation_highlight: Color,
     context: RenderContext<'_>,
 ) {
     let available = horizontal_margin(area, 2);
@@ -87,7 +85,7 @@ pub(crate) fn draw(
     };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(presentation_highlight));
+        .border_style(Style::default().fg(context.accent()));
     let content = block.inner(banner_area);
     frame.render_widget(block, banner_area);
     if content.is_empty() {
@@ -111,7 +109,7 @@ pub(crate) fn draw(
     draw_title(frame, title_area, context);
 
     if expanded {
-        draw_expanded(frame, content, model, presentation_highlight, context);
+        draw_expanded(frame, content, model, context);
     } else {
         draw_compact(frame, content, model, context);
     }
@@ -121,14 +119,13 @@ fn draw_expanded(
     frame: &mut Frame<'_>,
     area: Rect,
     model: &WelcomeModel,
-    presentation_highlight: Color,
     context: RenderContext<'_>,
 ) {
     let columns = expanded_columns(area);
     frame.render_widget(
         Block::default()
             .borders(Borders::RIGHT)
-            .border_style(Style::default().fg(presentation_highlight)),
+            .border_style(Style::default().fg(context.accent())),
         columns[0],
     );
     let welcome_area = Rect {
@@ -190,7 +187,7 @@ fn draw_expanded(
     );
     let prompts = Block::default()
         .borders(Borders::TOP)
-        .border_style(Style::default().fg(presentation_highlight));
+        .border_style(Style::default().fg(context.accent()));
     let prompts_content = prompts.inner(sections[1]);
     frame.render_widget(prompts, sections[1]);
     frame.render_widget(

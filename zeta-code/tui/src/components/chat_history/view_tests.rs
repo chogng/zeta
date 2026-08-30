@@ -1,3 +1,4 @@
+use super::ChatHistoryPointerState;
 use super::ChatHistoryPointerTarget;
 use super::ChatHistoryView;
 use super::message_lines;
@@ -55,7 +56,7 @@ fn renderable_measurement_uses_the_same_wrapped_message_rows_as_drawing() {
         scroll: &scroll,
         render_cache: &render_cache,
         welcome: &welcome,
-        presentation_highlight: test_context().focus(),
+        pointer: ChatHistoryPointerState::default(),
     };
 
     assert!(view.desired_height(12, test_context()) > view.desired_height(80, test_context()));
@@ -72,6 +73,67 @@ fn multiline_content_uses_the_same_continuation_prefix_for_measurement_and_drawi
 
     assert_eq!(lines[0].to_string(), "◆  first line");
     assert_eq!(lines[1].to_string(), "   second line");
+}
+
+#[test]
+fn selected_transcript_cell_uses_the_shared_selection_style() {
+    let messages = vec![
+        Message::plain(MessageRole::Agent, "selected".into())
+            .with_cell_actions(false, false, false, true),
+    ];
+
+    let lines = message_lines(&messages, test_context());
+    let body = &lines[0].spans[1];
+
+    assert_eq!(body.style.fg, Some(test_context().selection_foreground()));
+    assert_eq!(body.style.bg, Some(test_context().selection_background()));
+}
+
+#[test]
+fn transcript_actions_apply_hover_and_pressed_feedback_after_cache_reuse() {
+    let messages = vec![
+        Message::plain(MessageRole::Reasoning, "Thought".into())
+            .with_cell_id("reasoning")
+            .with_render_revision(1)
+            .with_cell_actions(true, false, false, false),
+    ];
+    let scroll = ChatHistoryScroll::default();
+    let render_cache = ChatHistoryRenderCache::default();
+    let welcome = WelcomeModel::for_workspace(Path::new("."));
+    let mut terminal = Terminal::new(TestBackend::new(30, 4)).unwrap();
+
+    let hovered = ChatHistoryView {
+        messages: &messages,
+        scroll: &scroll,
+        render_cache: &render_cache,
+        welcome: &welcome,
+        pointer: ChatHistoryPointerState {
+            hovered_toggle: Some("reasoning"),
+            ..Default::default()
+        },
+    };
+    terminal
+        .draw(|frame| hovered.render(frame, frame.area(), test_context()))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(2, 0)].bg,
+        test_context().hover_background()
+    );
+
+    let pressed = ChatHistoryView {
+        pointer: ChatHistoryPointerState {
+            pressed_toggle: Some("reasoning"),
+            ..Default::default()
+        },
+        ..hovered
+    };
+    terminal
+        .draw(|frame| pressed.render(frame, frame.area(), test_context()))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(2, 0)].bg,
+        test_context().pressed_background()
+    );
 }
 
 #[test]
@@ -127,7 +189,7 @@ fn long_transcripts_buffer_only_visible_cells() {
         scroll: &scroll,
         render_cache: &render_cache,
         welcome: &welcome,
-        presentation_highlight: test_context().focus(),
+        pointer: ChatHistoryPointerState::default(),
     };
     let mut terminal = Terminal::new(TestBackend::new(40, 6)).unwrap();
 
@@ -155,7 +217,7 @@ fn follow_latest_reaches_content_beyond_the_u16_row_range() {
         scroll: &scroll,
         render_cache: &render_cache,
         welcome: &welcome,
-        presentation_highlight: test_context().focus(),
+        pointer: ChatHistoryPointerState::default(),
     };
     let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
 

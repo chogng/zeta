@@ -82,7 +82,7 @@ fn row_starts_with_status_icon_and_keeps_name_activity_and_time_columns() {
     );
     let text = line_text(&session_line(
         &session,
-        InteractionAttention::None,
+        InteractionState::default(),
         0,
         7_210_000,
         72,
@@ -218,6 +218,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
         .collect::<Vec<_>>();
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
+    state.focus();
     let backend = TestBackend::new(32, 5);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
@@ -275,6 +276,49 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
         .join("\n");
     assert!(rendered.contains("more above"));
     assert!(rendered.contains("more below"));
+}
+
+#[test]
+fn blurred_manager_keeps_its_cursor_without_rendering_keyboard_selection() {
+    let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
+    let mut state = SessionManagerState::default();
+    state.reconcile(&sessions);
+    let mut terminal = Terminal::new(TestBackend::new(32, 3)).unwrap();
+
+    terminal
+        .draw(|frame| {
+            draw_manager(
+                frame,
+                frame.area(),
+                state.view(&sessions),
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(0, 0)].fg,
+        crate::render::test_context().muted()
+    );
+
+    state.focus();
+    terminal
+        .draw(|frame| {
+            draw_manager(
+                frame,
+                frame.area(),
+                state.view(&sessions),
+                None,
+                None,
+                crate::render::test_context(),
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(0, 0)].bg,
+        crate::render::test_context().selection_background()
+    );
 }
 
 fn session(

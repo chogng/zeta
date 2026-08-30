@@ -573,7 +573,7 @@ fn list_selection_pane_supports_keyboard_tab_switching_and_search() {
 }
 
 #[test]
-fn selection_candidate_color_repaints_frames_without_changing_the_pane_title_surface() {
+fn theme_candidate_focus_repaints_only_the_pane_focus_border() {
     let mut app = App::new();
     app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
         ListSelectionModel::new(
@@ -581,8 +581,12 @@ fn selection_candidate_color_repaints_frames_without_changing_the_pane_title_sur
             vec![ListSelectionGroup::new(
                 "Themes",
                 vec![
-                    ListSelectionItem::new("First").with_selection_foreground(Color::Red),
-                    ListSelectionItem::new("Second").with_selection_foreground(Color::Green),
+                    ListSelectionItem::new("First")
+                        .with_selection_foreground(Color::LightRed)
+                        .with_presentation_focus(Color::Red),
+                    ListSelectionItem::new("Second")
+                        .with_selection_foreground(Color::LightGreen)
+                        .with_presentation_focus(Color::Green),
                 ],
             )],
         ),
@@ -598,7 +602,7 @@ fn selection_candidate_color_repaints_frames_without_changing_the_pane_title_sur
         .unwrap()
         .area
         .y;
-    assert_eq!(first[(2, 1)].fg, Color::Red);
+    assert_eq!(first[(2, 1)].fg, test_context().accent());
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
     assert_eq!(
         first[(1, interaction_y)].fg,
@@ -611,7 +615,7 @@ fn selection_candidate_color_repaints_frames_without_changing_the_pane_title_sur
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let second = render_buffer(&app, 80, 24);
-    assert_eq!(second[(2, 1)].fg, Color::Green);
+    assert_eq!(second[(2, 1)].fg, test_context().accent());
     assert_eq!(second[(0, interaction_y)].fg, Color::Green);
     assert_eq!(
         second[(1, interaction_y)].fg,

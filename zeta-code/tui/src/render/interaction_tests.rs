@@ -1,4 +1,3 @@
-use super::InteractionAttention;
 use super::InteractionState;
 use super::InteractionTarget;
 use super::interaction_style;
@@ -18,28 +17,36 @@ fn interaction_states_use_distinct_theme_pairs() {
         context,
         InteractionState {
             target: InteractionTarget::Rest,
-            attention: InteractionAttention::Keyboard,
+            selected: true,
+            hovered: false,
+            pressed: false,
         },
     );
     let hovered = interaction_style(
         context,
         InteractionState {
             target: InteractionTarget::Rest,
-            attention: InteractionAttention::Hovered,
+            selected: false,
+            hovered: true,
+            pressed: false,
         },
     );
     let pressed = interaction_style(
         context,
         InteractionState {
             target: InteractionTarget::Rest,
-            attention: InteractionAttention::Pressed,
+            selected: false,
+            hovered: false,
+            pressed: true,
         },
     );
     let disabled = interaction_style(
         context,
         InteractionState {
             target: InteractionTarget::Disabled,
-            attention: InteractionAttention::Hovered,
+            selected: true,
+            hovered: true,
+            pressed: true,
         },
     );
 
@@ -54,6 +61,24 @@ fn interaction_states_use_distinct_theme_pairs() {
 }
 
 #[test]
+fn pressed_feedback_overrides_selection_without_losing_selection_state() {
+    let context = test_context();
+    let state = InteractionState {
+        target: InteractionTarget::Active,
+        selected: true,
+        hovered: true,
+        pressed: true,
+    };
+
+    let style = interaction_style(context, state);
+
+    assert!(state.selected);
+    assert_eq!(style.fg, Some(context.pressed_foreground()));
+    assert_eq!(style.bg, Some(context.pressed_background()));
+    assert!(style.add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
 fn monochrome_preserves_interaction_without_color() {
     let theme = RenderTheme::from_palette(ThemePalette::dark(), ColorLevel::Monochrome);
     let context = RenderContext::new(&theme, 0);
@@ -62,14 +87,18 @@ fn monochrome_preserves_interaction_without_color() {
         context,
         InteractionState {
             target: InteractionTarget::Rest,
-            attention: InteractionAttention::Hovered,
+            selected: false,
+            hovered: true,
+            pressed: false,
         },
     );
     let selected = interaction_style(
         context,
         InteractionState {
             target: InteractionTarget::Rest,
-            attention: InteractionAttention::Keyboard,
+            selected: true,
+            hovered: false,
+            pressed: false,
         },
     );
 

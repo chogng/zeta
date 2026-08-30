@@ -4,7 +4,6 @@ use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::tab_list;
 use crate::render::Insets;
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RectExt;
@@ -100,7 +99,8 @@ pub(crate) fn draw_with_pointer(
             frame,
             content_after_state_column(areas[2]),
             search,
-            search_attention(hovered_search, pressed_search),
+            hovered_search,
+            pressed_search,
             context,
         );
         if view.search_focused() {
@@ -147,11 +147,9 @@ pub(crate) fn draw_with_pointer(
                 frame,
                 row_area,
                 item,
-                item_attention(
-                    view.items_focused() && view.selected_visible_index() == Some(index),
-                    hovered_item == Some(index),
-                    pressed_item == Some(index),
-                ),
+                view.items_focused() && view.selected_visible_index() == Some(index),
+                hovered_item == Some(index),
+                pressed_item == Some(index),
                 column_layout,
                 context,
             );
@@ -295,28 +293,6 @@ fn draw_focus_marker(frame: &mut Frame<'_>, area: Rect, context: RenderContext<'
     );
 }
 
-fn item_attention(selected: bool, hovered: bool, pressed: bool) -> InteractionAttention {
-    if selected {
-        InteractionAttention::Keyboard
-    } else if pressed {
-        InteractionAttention::Pressed
-    } else if hovered {
-        InteractionAttention::Hovered
-    } else {
-        InteractionAttention::None
-    }
-}
-
-fn search_attention(hovered: bool, pressed: bool) -> InteractionAttention {
-    if pressed {
-        InteractionAttention::Pressed
-    } else if hovered {
-        InteractionAttention::Hovered
-    } else {
-        InteractionAttention::None
-    }
-}
-
 fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) -> Rc<[Rect]> {
     let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
     let preview_height = view
@@ -380,7 +356,9 @@ fn draw_item(
     frame: &mut Frame<'_>,
     area: Rect,
     item: &ListSelectionItem,
-    attention: InteractionAttention,
+    selected: bool,
+    hovered: bool,
+    pressed: bool,
     column_layout: ItemColumnLayout,
     context: RenderContext<'_>,
 ) {
@@ -388,25 +366,23 @@ fn draw_item(
         context,
         InteractionState {
             target: InteractionTarget::Rest,
-            attention,
+            selected,
+            hovered,
+            pressed,
         },
     );
     frame.render_widget(Block::default().style(row_style), area);
-    let label_style = if attention == InteractionAttention::Keyboard {
+    let label_style = if selected && !pressed {
         item.selection_foreground()
             .map(|foreground| row_style.fg(foreground))
             .unwrap_or(row_style)
-    } else if attention != InteractionAttention::None {
+    } else if selected || hovered || pressed {
         row_style
     } else {
         Style::default()
     };
-    let marker = if attention == InteractionAttention::Keyboard {
-        "❯ "
-    } else {
-        "  "
-    };
-    let detail_style = if attention == InteractionAttention::None {
+    let marker = if selected { "❯ " } else { "  " };
+    let detail_style = if !selected && !hovered && !pressed {
         Style::default().fg(context.muted())
     } else {
         row_style

@@ -356,6 +356,7 @@ fn preview_palette(theme: RenderTheme) -> ThemePreviewPalette {
         foreground: theme.foreground(),
         muted: theme.muted(),
         focus: theme.focus(),
+        selection_foreground: theme.selection_foreground(),
         keyword: theme.keyword(),
         string: theme.string(),
         function: theme.function(),

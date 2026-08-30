@@ -123,7 +123,6 @@ impl fmt::Debug for SearchBoxState {
     }
 }
 
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -146,7 +145,8 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     search: &SearchBoxState,
-    attention: InteractionAttention,
+    hovered: bool,
+    pressed: bool,
     context: RenderContext<'_>,
 ) {
     let rendered_query = search
@@ -157,12 +157,14 @@ pub(crate) fn draw(
     } else {
         Span::raw(rendered_query.as_deref().unwrap_or(search.query()))
     };
-    let border_style = if attention != InteractionAttention::None {
+    let border_style = if hovered || pressed {
         interaction_style(
             context,
             InteractionState {
                 target: InteractionTarget::Rest,
-                attention,
+                selected: false,
+                hovered,
+                pressed,
             },
         )
     } else if search.input_active() {

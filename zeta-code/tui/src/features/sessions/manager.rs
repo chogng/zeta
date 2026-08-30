@@ -3,7 +3,6 @@ use super::session_size_label;
 use crate::components::detail_list::DetailList;
 use crate::components::detail_list::DetailListRow;
 use crate::components::pane::PaneSpec;
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -218,6 +217,7 @@ impl SessionManagerState {
         SessionManagerView {
             sessions,
             selected: self.selected.as_ref(),
+            focused: self.focused,
             pinned: &self.pinned,
             collapsed: &self.collapsed,
             animation_frame: self.animation_frame,
@@ -292,6 +292,7 @@ fn thread_status_label(status: zeta_protocol::ThreadStatus) -> &'static str {
 pub(crate) struct SessionManagerView<'a> {
     sessions: &'a [Session],
     selected: Option<&'a ManagerSelection>,
+    focused: bool,
     pinned: &'a BTreeSet<SessionId>,
     collapsed: &'a BTreeSet<SessionGroup>,
     animation_frame: usize,
@@ -377,9 +378,10 @@ pub(crate) fn draw_manager(
                     group,
                     count,
                     view.collapsed.contains(&group),
-                    manager_attention(
+                    manager_state(
                         &ManagerSelection::Group(group),
                         view.selected,
+                        view.focused,
                         hovered,
                         pressed,
                     ),
@@ -388,9 +390,10 @@ pub(crate) fn draw_manager(
                 ),
                 ManagerRow::Session(session) => session_line(
                     session,
-                    manager_attention(
+                    manager_state(
                         &ManagerSelection::Session(session.session_id.clone()),
                         view.selected,
+                        view.focused,
                         hovered,
                         pressed,
                     ),
@@ -564,7 +567,7 @@ fn manager_rows<'a>(
 
 fn session_line<'a>(
     session: &'a Session,
-    attention: InteractionAttention,
+    state: InteractionState,
     animation_frame: usize,
     now_unix_ms: u64,
     width: usize,
@@ -582,14 +585,8 @@ fn session_line<'a>(
     let (name_width, middle_gap, middle_width) = column_widths(body_width, !middle.is_empty());
     let name = pad_to_width(&truncate_to_width(&session.title, name_width), name_width);
     let middle = pad_to_width(&truncate_to_width(middle, middle_width), middle_width);
-    let row_style = if attention != InteractionAttention::None {
-        interaction_style(
-            context,
-            InteractionState {
-                target: InteractionTarget::Rest,
-                attention,
-            },
-        )
+    let row_style = if state.selected || state.hovered || state.pressed {
+        interaction_style(context, state)
     } else {
         Style::default().fg(context.muted())
     };
@@ -611,21 +608,14 @@ fn group_line(
     group: SessionGroup,
     count: usize,
     collapsed: bool,
-    attention: InteractionAttention,
+    state: InteractionState,
     width: usize,
     context: RenderContext<'_>,
 ) -> Line<'static> {
     let arrow = if collapsed { '▸' } else { '▾' };
     let text = format!("{arrow} {} ({count})", group.label());
-    let style = if attention != InteractionAttention::None {
-        interaction_style(
-            context,
-            InteractionState {
-                target: InteractionTarget::Rest,
-                attention,
-            },
-        )
-        .add_modifier(Modifier::BOLD)
+    let style = if state.selected || state.hovered || state.pressed {
+        interaction_style(context, state).add_modifier(Modifier::BOLD)
     } else {
         Style::default()
             .fg(context.muted())
@@ -650,20 +640,18 @@ fn more_line(
     )
 }
 
-fn manager_attention(
+fn manager_state(
     target: &ManagerSelection,
     selected: Option<&ManagerSelection>,
+    focused: bool,
     hovered: Option<&ManagerSelection>,
     pressed: Option<&ManagerSelection>,
-) -> InteractionAttention {
-    if selected == Some(target) {
-        InteractionAttention::Keyboard
-    } else if pressed == Some(target) {
-        InteractionAttention::Pressed
-    } else if hovered == Some(target) {
-        InteractionAttention::Hovered
-    } else {
-        InteractionAttention::None
+) -> InteractionState {
+    InteractionState {
+        target: InteractionTarget::Rest,
+        selected: focused && selected == Some(target),
+        hovered: hovered == Some(target),
+        pressed: pressed == Some(target),
     }
 }
 

@@ -80,6 +80,39 @@ fn rows_use_selection_dots_lowercase_names_and_right_aligned_elapsed_time() {
 }
 
 #[test]
+fn viewed_thread_and_focused_cursor_keep_separate_visual_identities() {
+    let session = session();
+    let mut pane = SubagentPaneState::default();
+    pane.reconcile(Some(&session), Some(&thread_id("child-a")));
+    pane.focus();
+    pane.select_next();
+    let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
+
+    terminal
+        .draw(|frame| draw_subagent_pane(frame, frame.area(), pane.view(), test_context()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 1)].symbol(), "●");
+    assert_eq!(
+        buffer[(0, 1)].bg,
+        test_context().accent_surface_background()
+    );
+    assert_eq!(buffer[(0, 2)].symbol(), "○");
+    assert_eq!(buffer[(0, 2)].bg, test_context().selection_background());
+
+    pane.blur();
+    terminal
+        .draw(|frame| draw_subagent_pane(frame, frame.area(), pane.view(), test_context()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(0, 1)].bg,
+        test_context().accent_surface_background()
+    );
+    assert_eq!(buffer[(0, 2)].fg, test_context().muted());
+}
+
+#[test]
 fn pane_is_absent_without_an_active_subagent() {
     let mut session = session();
     session.threads.truncate(1);

@@ -320,7 +320,6 @@ mod slash {
 }
 
 use super::CompletionView;
-use crate::render::InteractionAttention;
 use crate::render::InteractionState;
 use crate::render::InteractionTarget;
 use crate::render::RenderContext;
@@ -357,23 +356,14 @@ fn item_style(
     pressed: Option<usize>,
     context: RenderContext<'_>,
 ) -> ratatui::style::Style {
-    let attention = if index == selected {
-        InteractionAttention::Keyboard
-    } else if pressed == Some(index) {
-        InteractionAttention::Pressed
-    } else if hovered == Some(index) {
-        InteractionAttention::Hovered
-    } else {
-        InteractionAttention::None
+    let state = InteractionState {
+        target: InteractionTarget::Rest,
+        selected: index == selected,
+        hovered: hovered == Some(index),
+        pressed: pressed == Some(index),
     };
-    let style = interaction_style(
-        context,
-        InteractionState {
-            target: InteractionTarget::Rest,
-            attention,
-        },
-    );
-    if attention == InteractionAttention::None {
+    let style = interaction_style(context, state);
+    if !state.selected && !state.hovered && !state.pressed {
         style.fg(context.muted())
     } else {
         style
