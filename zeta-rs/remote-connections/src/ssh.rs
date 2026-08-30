@@ -168,15 +168,12 @@ impl SshAppServerConnectionOptions {
 
 /// Builds the POSIX shell command executed after OpenSSH reaches the selected host.
 ///
-/// The command carries only the Remote Workspace root and the profile-selected runtime. Local
+/// The command carries only the Remote Directory root and the profile-selected runtime. Local
 /// host environment and credentials stay attached to the local OpenSSH child process.
 pub fn remote_app_server_command(profile: &RemoteProfile) -> String {
     [
         "env".to_owned(),
-        format!(
-            "ZETA_WORKSPACE_ROOT={}",
-            profile.target().workspace().as_str()
-        ),
+        format!("ZETA_WORKSPACE_ROOT={}", profile.target().dir().as_str()),
         profile.runtime().executable().to_owned(),
         "remote-server".to_owned(),
         "connect".to_owned(),

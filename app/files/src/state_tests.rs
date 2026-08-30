@@ -6,20 +6,20 @@ use zui::ui::Size;
 use super::DirectoryEntry;
 use super::FilesState;
 
-static NEXT_WORKSPACE_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_DIR_ID: AtomicU64 = AtomicU64::new(0);
 
 #[test]
-fn replacing_workspace_rebuilds_the_files_root() {
-    let fixture = test_workspace("replace");
+fn replacing_dir_rebuilds_the_files_root() {
+    let fixture = test_dir("replace");
     let first = fixture.join("first");
     let second = fixture.join("second");
     std::fs::create_dir_all(&first).unwrap();
     std::fs::create_dir_all(&second).unwrap();
     let mut files = FilesState::default();
-    files.set_workspace_root(first);
+    files.set_dir_root(first);
     files.refresh(vec![DirectoryEntry::file("first.txt")]);
 
-    files.set_workspace_root(second);
+    files.set_dir_root(second);
     files.refresh(vec![DirectoryEntry::file("second.txt")]);
 
     assert_eq!(files.tree_row(0).unwrap().entry().label(), "second.txt");
@@ -28,10 +28,10 @@ fn replacing_workspace_rebuilds_the_files_root() {
 
 #[test]
 fn refreshing_files_resets_pixel_scroll() {
-    let fixture = test_workspace("scroll");
+    let fixture = test_dir("scroll");
     std::fs::create_dir_all(&fixture).unwrap();
     let mut files = FilesState::default();
-    files.set_workspace_root(fixture.clone());
+    files.set_dir_root(fixture.clone());
     files.refresh(
         (0..20)
             .map(|index| DirectoryEntry::file(format!("file-{index:02}.txt")))
@@ -46,10 +46,10 @@ fn refreshing_files_resets_pixel_scroll() {
     std::fs::remove_dir_all(fixture).unwrap();
 }
 
-fn test_workspace(label: &str) -> std::path::PathBuf {
+fn test_dir(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
         "zeta-files-{label}-{}-{}",
         std::process::id(),
-        NEXT_WORKSPACE_ID.fetch_add(1, Ordering::Relaxed)
+        NEXT_DIR_ID.fetch_add(1, Ordering::Relaxed)
     ))
 }

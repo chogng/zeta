@@ -1,4 +1,4 @@
-import type { LanguageCodeActionDto, LanguageCodeActionsResult, LanguageCodeLensesResult, LanguageColorPresentationsResult, LanguageCompletionDetailsResult, LanguageCompletionsResult, LanguageDocumentColorsResult, LanguageDocumentDiagnosticsResult, LanguageDocumentLinksResult, LanguageDocumentSymbolsResult, LanguageFoldingRangesResult, LanguageFormattingResult, LanguageHierarchyResultDto, LanguageHoverResult, LanguageInlayHintsResult, LanguageLinkedEditingRangesResult, LanguageLocationsResult, LanguagePrepareRenameResult, LanguageSemanticTokensResult, LanguageSignatureHelpResult, LanguageWorkspaceDiagnosticsResult, LanguageWorkspaceEditDto, LanguageWorkspaceSymbolsResult } from "../../../../../generated/app-server/types.js";
+import type { LanguageCodeActionDto, LanguageCodeActionsResult, LanguageCodeLensesResult, LanguageColorPresentationsResult, LanguageCompletionDetailsResult, LanguageCompletionsResult, LanguageDirectoryDiagnosticsResult, LanguageDirectoryEditDto, LanguageDirectorySymbolsResult, LanguageDocumentColorsResult, LanguageDocumentDiagnosticsResult, LanguageDocumentLinksResult, LanguageDocumentSymbolsResult, LanguageFoldingRangesResult, LanguageFormattingResult, LanguageHierarchyResultDto, LanguageHoverResult, LanguageInlayHintsResult, LanguageLinkedEditingRangesResult, LanguageLocationsResult, LanguagePrepareRenameResult, LanguageSemanticTokensResult, LanguageSignatureHelpResult } from "../../../../../generated/app-server/types.js";
 import { CancellationError } from "../../../base/common/errors.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { ILanguageApi, LanguageRequestOptions } from "../common/languageApi.js";
@@ -49,7 +49,7 @@ export function createLanguageApi(): ILanguageApi {
 		resolveCompletion: (params, options) => invokeLanguageRequest<LanguageCompletionDetailsResult>("zeta:language:resolveCompletion", params, options),
 		executeCommand: params => invoke<void>("zeta:language:executeCommand", params),
 		documentDiagnostics: (params, options) => invokeLanguageRequest<LanguageDocumentDiagnosticsResult>("zeta:language:documentDiagnostics", params, options),
-		workspaceDiagnostics: (params, options) => invokeLanguageRequest<LanguageWorkspaceDiagnosticsResult>("zeta:language:workspaceDiagnostics", params, options),
+		directoryDiagnostics: (params, options) => invokeLanguageRequest<LanguageDirectoryDiagnosticsResult>("zeta:language:directoryDiagnostics", params, options),
 		formatDocument: (params, options) => invokeLanguageRequest<LanguageFormattingResult>("zeta:language:formatDocument", params, options),
 		formatRange: (params, options) => invokeLanguageRequest<LanguageFormattingResult>("zeta:language:formatRange", params, options),
 		signatureHelp: (params, options) => invokeLanguageRequest<LanguageSignatureHelpResult>("zeta:language:signatureHelp", params, options),
@@ -66,9 +66,9 @@ export function createLanguageApi(): ILanguageApi {
 		foldingRanges: (params, options) => invokeLanguageRequest<LanguageFoldingRangesResult>("zeta:language:foldingRanges", params, options),
 		locations: (params, options) => invokeLanguageRequest<LanguageLocationsResult>("zeta:language:locations", params, options),
 		hierarchy: (params, options) => invokeLanguageRequest<LanguageHierarchyResultDto>("zeta:language:hierarchy", params, options),
-		workspaceSymbols: (params, options) => invokeLanguageRequest<LanguageWorkspaceSymbolsResult>("zeta:language:workspaceSymbols", params, options),
+		directorySymbols: (params, options) => invokeLanguageRequest<LanguageDirectorySymbolsResult>("zeta:language:directorySymbols", params, options),
 		prepareRename: (params, options) => invokeLanguageRequest<LanguagePrepareRenameResult>("zeta:language:prepareRename", params, options),
-		rename: (params, options) => invokeLanguageRequest<LanguageWorkspaceEditDto>("zeta:language:rename", params, options),
+		rename: (params, options) => invokeLanguageRequest<LanguageDirectoryEditDto>("zeta:language:rename", params, options),
 		codeActions: (params, options) => invokeLanguageRequest<LanguageCodeActionsResult>("zeta:language:codeActions", params, options),
 		resolveCodeAction: (params, options) => invokeLanguageRequest<LanguageCodeActionDto>("zeta:language:resolveCodeAction", params, options),
 	};

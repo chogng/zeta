@@ -259,9 +259,9 @@ Server Host 前复验清单形状和二进制 digest，开发热重载不把可�
 和 required capability version gate 后才进入 Ready，并保存协商后的 server info/capabilities；schema
 hash 差异进入诊断，不单独阻止启动。
 
-`AppServerSession` 是 connection lifecycle。它不是 canonical 产品 `Session`，不得保存
-产品 Session membership、lineage 或权威业务状态；Renderer 只维护可丢弃并可 resync 的
-Session/Thread projection。
+`AppServerSession` 是 connection lifecycle。它不是产品 `Session`，不得保存产品 Session
+membership、lineage 或权威业务状态；Renderer 只维护可以丢弃并重新读取的 `ISession / IChat`
+前端对象。
 `AppServerSupervisor` 只接受绝对 executable、显式 child environment allowlist，并管理
 Stopped/Starting/Initializing/Ready/Stopping/Crashed/Restarting 状态、initialize deadline、
 有界指数退避和 crash budget。崩溃会拒绝旧 Session 的 pending request；新 Session 不自动
@@ -311,16 +311,15 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 配置给 App Server；Renderer 的 `BrowserFileService` 只把 workspace URI 映射成根相对路径，
 目录枚举、metadata、有界原子写入、filesystem invalidation 与最终边界授权由 Rust / App Server
 完成。Workspace 内容搜索通过独立的
-`workspace/search/start|read|cancel` contract 接入；其 ownership 与限制见
+`content/search/start|read|cancel` contract 接入；其 ownership 与限制见
 [`search.md`](search.md)。Desktop 的保存命令、dirty state、watcher 消费、多根 Workspace 与
 搜索结果打开仍未实现。
 
-Profile 级 Session catalog 可包含多个 Workspace。`WorkbenchSessionService` 只持有可重建的
-前端 projection；选中其他 Workspace 的 durable Session 时，它通过 native host 请求 Main 重连
-App Server authority，等待 Workspace context 提交后重新 list/subscribe，并恢复精确的
-Session/Thread。Local 路径重启 profile broker connection；SSH Remote 路径保留 host、凭据 owner
-和 runtime policy，只替换远端 Workspace root。切换失败会回滚原 authority，Renderer 不直接读写
-SQLite，也不能在旧 Workspace connection 上执行目标 Session。
+编辑器窗口的 Workspace 不归 Session catalog 所有。前端 `ISession.workspace` 只描述该 Session
+使用的 Environment、`cwd` 和目录；它可以帮助界面显示位置或请求切换运行环境，但不能改变窗口
+Workspace，也不能授予目录权限。选择另一个 Environment 中的 Session 时，由宿主建立对应
+App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLite，也不能在旧连接上执行
+目标 Session。
 
 当前限制：
 
@@ -361,7 +360,7 @@ interface ZetaElectronRendererApi extends IRendererHost {
 
 Workbench composition root 是聚合 `IRendererHost` 的唯一产品消费者：它把每个 transport
 capability 注入对应的领域 Service。Contribution 只能依赖 `IChatService`、`IGitService`、
-`IWorkspaceSearchService`、`ITerminalService` 等前端契约和前端自有领域类型，不能取得整个
+`IContentSearchService`、`ITerminalService` 等前端契约和前端自有领域类型，不能取得整个
 Renderer Host，也不能导入生成 DTO。所有产品代码禁止直接导入 sandbox globals，并禁止提供
 绕过领域 capability 的通用 App Server 调用：
 
@@ -409,8 +408,9 @@ button / menu / shortcut
   → domain RPC
 ```
 
-Renderer 不复制 Rust 状态机。遇到 durable `sequence` 或 `streamCursor` 空洞时，停止合并
-当前实体，并通过 `session/subscribe` 或带 Session scope 的 `session/thread/subscribe` 获取权威 snapshot + gap。
+Renderer 不复制 Rust 状态机。Session 没有 sequence；`session/changed` 到达后重新读取 Session。
+只有 Thread 拥有 durable `sequence` 与 `streamCursor`；出现空洞时停止合并该 Thread，并通过
+`session/thread/subscribe` 取得权威 snapshot + gap。
 
 ### 6.1 Editor 宿主
 
@@ -555,7 +555,7 @@ Open Chat / New Chat
   → Chat ViewContainer
   → ChatViewPane
 
-IWorkbenchSessionService
+ISessionsService
   → 当前 session / root thread
   → IChatService
   → ChatService
@@ -564,8 +564,9 @@ IWorkbenchSessionService
   → ChatViewPane
 ```
 
-`IWorkbenchSessionService` 负责恢复和切换当前 session/thread；`IChatService` 隔离 model、
-thread、turn 和 App Server lifecycle transport，并把生成 DTO 映射为前端领域类型；`ChatPaneModel` 负责单个活动
+`ISessionsService` 负责当前项、可见项、导航和焦点；`ISessionsManagementService` 负责 Session
+列表、草稿和操作；App Server provider 负责把生成 DTO 映射为前端 `ISession / IChat`。
+`IChatService` 隔离 thread、turn 和 App Server lifecycle transport；`ChatPaneModel` 负责单个活动
 thread 的可释放订阅、已提交 transcript 与临时 stream projection。活动 Turn 处于 running、
 waitingForApproval 或 waitingForUserInput 时，普通文本 Send 调用 `session/request::SteerTurn`，不会新建
 第二个 Turn；输入工具栏同时保留 Send 和 Stop，显式 Skill 只允许在新 Turn 接受边界选择。重新连接或 stream 序号
@@ -606,7 +607,7 @@ TerminalViewPane / xterm
 
 SCM 同样通过 `IGitService → GitService → IGitApi` 访问仓库，并由 Service 把 status notification
 和 reconnect lifecycle 投影成前端事件；Search 通过
-`IWorkspaceSearchService → BrowserWorkspaceSearchService → IWorkspaceSearchApi` 消费有界批次。
+`IContentSearchService → BrowserContentSearchService → IContentSearchApi` 消费有界批次。
 两者的 contrib 都不接触 App Server notification union 或生成 DTO。
 
 Terminal title actions 通过 `MenuId.TerminalTitle`、Context Key 与

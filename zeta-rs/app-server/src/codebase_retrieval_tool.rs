@@ -25,11 +25,11 @@ use zeta_codebase::SymbolIndex;
 use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolService;
+use zeta_file_access::Authorization;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
-use zeta_workspace::TrustedWorkspace;
 
 pub(crate) const CODE_RETRIEVAL_TOOL_NAME: &str = "search_code";
 
@@ -41,7 +41,7 @@ struct SearchCodeArguments {
 
 /// Agent-facing read-only tool backed by Zeta's canonical codebase-retrieval coordinator.
 pub(crate) struct CodebaseRetrievalTool {
-    workspace: TrustedWorkspace,
+    authorization: Authorization,
     index: Arc<Codebase>,
     symbol_index: Option<Arc<SymbolIndex>>,
     semantic: Option<Arc<CodebaseSemanticService>>,
@@ -52,14 +52,14 @@ pub(crate) struct CodebaseRetrievalTool {
 
 impl CodebaseRetrievalTool {
     pub(crate) fn new(
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
         index: Arc<Codebase>,
         symbol_index: Option<Arc<SymbolIndex>>,
         semantic: Option<Arc<CodebaseSemanticService>>,
         cloud: Option<Arc<CloudCodebaseController>>,
     ) -> Self {
         Self {
-            workspace,
+            authorization,
             index,
             symbol_index,
             semantic,
@@ -68,7 +68,7 @@ impl CodebaseRetrievalTool {
             definition: ToolDefinition {
                 name: ToolName::new(CODE_RETRIEVAL_TOOL_NAME)
                     .expect("static codebase-retrieval tool name is valid"),
-                description: "Search the indexed workspace for code relevant to a natural-language query. Returns bounded, current source excerpts and reports whether semantic retrieval degraded to local lexical search.".into(),
+                description: "Search the indexed codebase for code relevant to a natural-language query. Returns bounded, current source excerpts and reports whether semantic retrieval degraded to local lexical search.".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -97,7 +97,7 @@ impl CodebaseRetrievalTool {
     }
 
     fn query(&self, call: &ToolCall) -> Result<CodebaseRetrievalQuery, CoreError> {
-        self.workspace
+        self.authorization
             .ensure_active()
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name != self.definition.name {
@@ -165,12 +165,16 @@ impl ToolService for CodebaseRetrievalTool {
                 "retrieve bounded source excerpts from the active Codebase",
                 CapabilitySet::new([Capability::new(
                     CapabilityKind::FileRead,
-                    self.workspace.root().canonical_path().display().to_string(),
+                    self.authorization
+                        .dir()
+                        .canonical_path()
+                        .display()
+                        .to_string(),
                 )]),
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, CODE_RETRIEVAL_TOOL_NAME),
             SandboxCompatibility::NotApplicable {
-                reason: "code retrieval reads an authorized in-process workspace index".into(),
+                reason: "code retrieval reads an authorized in-process codebase index".into(),
             },
             self.action_policy_revision.clone(),
         ))
@@ -185,12 +189,12 @@ impl ToolService for CodebaseRetrievalTool {
         if !matches!(
             authorization,
             ToolAuthorization::UnsandboxedGrant { grant_id }
-                if grant_id.as_str() == "workspace-codebase-read-only"
+                if grant_id.as_str() == "codebase-read"
         ) && !matches!(
             authorization,
             ToolAuthorization::ExecPolicyGranted(grant)
                 if grant.policy_grant().source().rule_id().as_str()
-                    == "workspace-codebase-read-only"
+                    == "codebase-read"
         ) {
             return Err(CoreError::Policy(
                 "search_code requires the exact read-only codebase grant".into(),

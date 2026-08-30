@@ -19,8 +19,8 @@ fn thread(value: &str) -> ThreadId {
 fn pane_input_separates_kind_from_layout_instance() {
     let terminal = PaneInput::terminal(session("session-1"));
     let agent = PaneInput::agent(session("session-1"), thread("thread-1"));
-    let files = PaneInput::files(PathBuf::from("/workspace"));
-    let diff = PaneInput::diff(PathBuf::from("/workspace"));
+    let files = PaneInput::files(PathBuf::from("/dir"));
+    let diff = PaneInput::diff(PathBuf::from("/dir"));
     let settings = PaneInput::settings();
 
     assert_eq!(terminal.kind(), PaneInputKind::Terminal);
@@ -38,7 +38,7 @@ fn terminal_input_contains_only_the_session_description() {
     let terminal = PaneInput::Terminal(session_id.clone());
 
     assert_eq!(terminal.terminal_session_id(), Some(&session_id));
-    assert_eq!(terminal.workspace_root(), None);
+    assert_eq!(terminal.dir_root(), None);
     assert_eq!(terminal.agent_session_id(), None);
     assert_eq!(terminal.thread_id(), None);
 }

@@ -12,17 +12,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 use zeta_async_utils::CancellationSource;
+use zeta_file_access::Dir;
 use zeta_protocol::{ToolCallId, TurnId};
 use zeta_sandboxing::{
     PreparedCommand, SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy,
 };
 use zeta_tools::{
-    ProcessExitStatus, ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId,
-    ToolExecutionContext, ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId,
-    ToolOutputStatus, ToolPayload, ToolRegistryGeneration, ToolReplaySafety, ToolRuntimeAuthority,
-    ToolRuntimeKey,
+    EnvId, ProcessExitStatus, ToolBinding, ToolBindingId, ToolDefinition, ToolExecutionContext,
+    ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus,
+    ToolPayload, ToolRegistryGeneration, ToolReplaySafety, ToolRuntimeAuthority, ToolRuntimeKey,
 };
-use zeta_workspace::WorkspaceRoot;
 
 struct DenyAll;
 
@@ -51,7 +50,7 @@ impl SandboxBackend for MustNotPrepare {
         &self,
         _: &SandboxCommand,
         _: SandboxPolicy,
-        _: &WorkspaceRoot,
+        _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         panic!("denied commands must not reach sandbox preparation")
     }
@@ -72,7 +71,7 @@ impl SandboxBackend for UnavailableBackend {
         &self,
         _: &SandboxCommand,
         _: SandboxPolicy,
-        _: &WorkspaceRoot,
+        _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         Err(SandboxError::BackendUnavailable {
             backend: SandboxKind::MacosSeatbelt,
@@ -90,7 +89,7 @@ impl SandboxBackend for RecordingBackend {
         &self,
         command: &SandboxCommand,
         policy: SandboxPolicy,
-        _: &WorkspaceRoot,
+        _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         self.policies.lock().unwrap().push(policy);
         Ok(PreparedCommand::new(
@@ -104,10 +103,10 @@ impl SandboxBackend for RecordingBackend {
 
 #[test]
 fn denied_command_is_returned_as_a_model_visible_error() {
-    let workspace = TestWorkspace::new();
+    let dir = TestDir::new();
     let tool = ShellCommandTool::new(
         environment_id(),
-        workspace.root(),
+        dir.root(),
         MustNotPrepare,
         DenyAll,
         ShellCommandLimits {
@@ -132,10 +131,10 @@ fn denied_command_is_returned_as_a_model_visible_error() {
 
 #[test]
 fn empty_program_is_rejected_before_execution() {
-    let workspace = TestWorkspace::new();
+    let dir = TestDir::new();
     let tool = ShellCommandTool::new(
         environment_id(),
-        workspace.root(),
+        dir.root(),
         MustNotPrepare,
         DenyAll,
         ShellCommandLimits {
@@ -160,15 +159,15 @@ fn empty_program_is_rejected_before_execution() {
 
 #[test]
 fn each_invocation_authority_reaches_the_process_backend() {
-    let workspace = TestWorkspace::new();
+    let dir = TestDir::new();
     let policies = Arc::new(Mutex::new(Vec::new()));
     let sandbox = SandboxPolicy::new(
-        zeta_sandboxing::FileSystemAccess::WorkspaceWrite,
+        zeta_sandboxing::FileSystemAccess::DirectoryWrite,
         zeta_sandboxing::NetworkAccess::Denied,
     );
     let tool = ShellCommandTool::new(
         environment_id(),
-        workspace.root(),
+        dir.root(),
         RecordingBackend {
             policies: policies.clone(),
         },
@@ -215,10 +214,10 @@ fn each_invocation_authority_reaches_the_process_backend() {
 
 #[test]
 fn unavailable_sandbox_is_a_safe_to_retry_structured_denial() {
-    let workspace = TestWorkspace::new();
+    let dir = TestDir::new();
     let tool = ShellCommandTool::new(
         environment_id(),
-        workspace.root(),
+        dir.root(),
         UnavailableBackend,
         AllowAll,
         ShellCommandLimits {
@@ -249,21 +248,21 @@ fn unavailable_sandbox_is_a_safe_to_retry_structured_denial() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn sandboxed_tool_invocation_enforces_workspace_metadata_and_network_boundaries() {
+fn sandboxed_tool_invocation_enforces_dir_metadata_and_network_boundaries() {
     use zeta_sandboxing::MacosSeatbeltSandbox;
 
-    let workspace = TestWorkspace::new();
-    let protected = workspace.path.join(".git");
+    let dir = TestDir::new();
+    let protected = dir.path.join(".git");
     fs::create_dir_all(&protected).unwrap();
-    let outside = workspace.path.with_extension("outside");
+    let outside = dir.path.with_extension("outside");
     let _outside_cleanup = RemovePathOnDrop(outside.clone());
     let sandbox = SandboxPolicy::new(
-        zeta_sandboxing::FileSystemAccess::WorkspaceWrite,
+        zeta_sandboxing::FileSystemAccess::DirectoryWrite,
         zeta_sandboxing::NetworkAccess::Denied,
     );
     let tool = ShellCommandTool::new(
         environment_id(),
-        workspace.root(),
+        dir.root(),
         MacosSeatbeltSandbox::new(),
         AllowAll,
         ShellCommandLimits {
@@ -288,7 +287,7 @@ fn sandboxed_tool_invocation_enforces_workspace_metadata_and_network_boundaries(
     }
     let allowed = completed_output(allowed_outcome);
     assert_eq!(allowed["result"]["exit_code"], json!(0));
-    assert!(workspace.path.join("ordinary.txt").exists());
+    assert!(dir.path.join("ordinary.txt").exists());
 
     let outside_write = execute_sandboxed_command(
         &tool,
@@ -378,15 +377,15 @@ fn assert_sandbox_denial(outcome: ToolExecutionOutcome) {
     assert!(!denial.output().stderr().is_empty());
 }
 
-static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
-struct TestWorkspace {
+struct TestDir {
     path: PathBuf,
 }
 
-impl TestWorkspace {
+impl TestDir {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-shell-command-tests-{}-{sequence}",
             std::process::id()
@@ -395,12 +394,12 @@ impl TestWorkspace {
         Self { path }
     }
 
-    fn root(&self) -> WorkspaceRoot {
-        WorkspaceRoot::open(&self.path).unwrap()
+    fn root(&self) -> Dir {
+        Dir::open_local(&self.path).unwrap()
     }
 }
 
-impl Drop for TestWorkspace {
+impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
@@ -420,8 +419,8 @@ impl Drop for RemovePathOnDrop {
     }
 }
 
-fn environment_id() -> ToolEnvironmentId {
-    ToolEnvironmentId::new("test-environment").unwrap()
+fn environment_id() -> EnvId {
+    EnvId::new("test-environment").unwrap()
 }
 
 fn invocation(definition: &ToolDefinition, arguments: serde_json::Value) -> ToolInvocation {

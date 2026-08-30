@@ -18,6 +18,7 @@ sha2 = { workspace = true }
 ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 zeroize = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-file-access = { workspace = true }
 zeta-collaboration = { workspace = true }
 zeta-thread-transcript = { workspace = true }
 

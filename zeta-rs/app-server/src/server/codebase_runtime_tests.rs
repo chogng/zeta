@@ -3,19 +3,19 @@ use std::fs;
 use tempfile::TempDir;
 use zeta_state::StateRuntime;
 
-fn workspace() -> TempDir {
-    let directory = tempfile::tempdir().expect("workspace");
+fn dir_fixture() -> TempDir {
+    let directory = tempfile::tempdir().expect("directory");
     fs::create_dir(directory.path().join(".git")).expect("git marker");
     directory
 }
 
 #[test]
 fn search_revalidates_content_and_marks_a_lagging_projection_stale() {
-    let directory = workspace();
+    let directory = dir_fixture();
     let source_path = directory.path().join("lib.rs");
     fs::write(&source_path, "pub fn before_watcher() {}\n").expect("source");
     let runtime = CodebaseRuntime::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         Arc::new(CodebaseStore::memory()),
     )
     .expect("runtime");
@@ -34,15 +34,15 @@ fn search_revalidates_content_and_marks_a_lagging_projection_stale() {
 }
 
 #[test]
-fn reopened_projection_remains_stale_until_the_workspace_is_reconciled() {
-    let directory = workspace();
+fn reopened_index_remains_stale_until_the_dir_is_reconciled() {
+    let directory = dir_fixture();
     fs::write(directory.path().join("lib.rs"), "pub fn persisted() {}\n").expect("source");
     let state = tempfile::tempdir().expect("state");
     let state = StateRuntime::open(state.path()).expect("state runtime");
-    let root = WorkspaceRoot::open(directory.path()).expect("root");
+    let root = Dir::open_local(directory.path()).expect("root");
     let runtime = CodebaseRuntime::open(
         root.clone(),
-        Arc::new(CodebaseStore::open(&state, &root.trust_id()).expect("store")),
+        Arc::new(CodebaseStore::open(&state, &root.id()).expect("store")),
     )
     .expect("runtime");
     runtime.rebuild().expect("rebuild");
@@ -50,7 +50,7 @@ fn reopened_projection_remains_stale_until_the_workspace_is_reconciled() {
 
     let reopened = CodebaseRuntime::open(
         root.clone(),
-        Arc::new(CodebaseStore::open(&state, &root.trust_id()).expect("reopen store")),
+        Arc::new(CodebaseStore::open(&state, &root.id()).expect("reopen store")),
     )
     .expect("reopen");
     assert!(matches!(reopened.state(), CodebaseRuntimeState::Stale(_)));
@@ -60,13 +60,13 @@ fn reopened_projection_remains_stale_until_the_workspace_is_reconciled() {
 
 #[test]
 fn irrelevant_watcher_hint_returns_runtime_to_ready_without_a_generation_change() {
-    let directory = workspace();
+    let directory = dir_fixture();
     fs::write(directory.path().join("lib.rs"), "pub fn current() {}\n").expect("source");
     fs::create_dir(directory.path().join(".zeta")).expect("runtime directory");
     let runtime_path = directory.path().join(".zeta/runtime.json");
     fs::write(&runtime_path, "{}\n").expect("runtime source");
     let runtime = CodebaseRuntime::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         Arc::new(CodebaseStore::memory()),
     )
     .expect("runtime");
@@ -84,17 +84,17 @@ fn irrelevant_watcher_hint_returns_runtime_to_ready_without_a_generation_change(
 
 #[test]
 fn irrelevant_watcher_hint_does_not_clear_a_stale_projection() {
-    let directory = workspace();
+    let directory = dir_fixture();
     fs::write(directory.path().join("lib.rs"), "pub fn persisted() {}\n").expect("source");
     fs::create_dir(directory.path().join(".zeta")).expect("runtime directory");
     let runtime_path = directory.path().join(".zeta/runtime.json");
     fs::write(&runtime_path, "{}\n").expect("runtime source");
     let state = tempfile::tempdir().expect("state");
     let state = StateRuntime::open(state.path()).expect("state runtime");
-    let root = WorkspaceRoot::open(directory.path()).expect("root");
+    let root = Dir::open_local(directory.path()).expect("root");
     let runtime = CodebaseRuntime::open(
         root.clone(),
-        Arc::new(CodebaseStore::open(&state, &root.trust_id()).expect("store")),
+        Arc::new(CodebaseStore::open(&state, &root.id()).expect("store")),
     )
     .expect("runtime");
     runtime.rebuild().expect("rebuild");
@@ -102,7 +102,7 @@ fn irrelevant_watcher_hint_does_not_clear_a_stale_projection() {
 
     let reopened = CodebaseRuntime::open(
         root.clone(),
-        Arc::new(CodebaseStore::open(&state, &root.trust_id()).expect("reopen store")),
+        Arc::new(CodebaseStore::open(&state, &root.id()).expect("reopen store")),
     )
     .expect("reopen");
     reopened.apply_watcher_event(&FileWatcherEvent::PathsChanged {

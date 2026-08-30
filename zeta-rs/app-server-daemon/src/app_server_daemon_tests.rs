@@ -1,29 +1,29 @@
 #[cfg(any(unix, windows))]
 use super::ConnectionOptions;
+#[cfg(any(unix, windows))]
+use super::GrantSource;
 use super::LifecycleOutput;
 use super::LifecycleStatus;
-#[cfg(any(unix, windows))]
-use super::WorkspaceTrustSource;
 #[cfg(any(unix, windows))]
 use super::endpoint::endpoint_identity;
 
 #[test]
 #[cfg(any(unix, windows))]
-fn endpoint_identity_is_shared_across_workspaces() {
+fn endpoint_identity_is_shared_across_dirs() {
     let profile = tempfile::tempdir().unwrap();
-    let first_workspace = tempfile::tempdir().unwrap();
-    let second_workspace = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
     let first = ConnectionOptions::new(
         profile.path(),
-        Some(first_workspace.path().to_path_buf()),
-        WorkspaceTrustSource::HostConfiguration,
+        Some(first_dir.path().to_path_buf()),
+        GrantSource::HostConfiguration,
         None,
     );
     let same = first.clone();
     let second = ConnectionOptions::new(
         profile.path(),
-        Some(second_workspace.path().to_path_buf()),
-        WorkspaceTrustSource::HostConfiguration,
+        Some(second_dir.path().to_path_buf()),
+        GrantSource::HostConfiguration,
         None,
     );
 
@@ -37,19 +37,19 @@ fn endpoint_identity_is_shared_across_workspaces() {
 
 #[test]
 #[cfg(any(unix, windows))]
-fn endpoint_identity_is_shared_across_workspace_trust_policies() {
+fn endpoint_identity_is_shared_across_dir_grant_sources() {
     let profile = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let host = ConnectionOptions::new(
         profile.path(),
-        Some(workspace.path().to_path_buf()),
-        WorkspaceTrustSource::HostConfiguration,
+        Some(dir.path().to_path_buf()),
+        GrantSource::HostConfiguration,
         None,
     );
     let user = ConnectionOptions::new(
         profile.path(),
-        Some(workspace.path().to_path_buf()),
-        WorkspaceTrustSource::UserConfig,
+        Some(dir.path().to_path_buf()),
+        GrantSource::UserConfig,
         None,
     );
 
@@ -63,20 +63,20 @@ fn endpoint_identity_is_shared_across_workspace_trust_policies() {
 #[cfg(any(unix, windows))]
 fn endpoint_identity_is_shared_across_product_service_adapters() {
     let profile = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let first_install = tempfile::tempdir().unwrap();
     let first_manifest = first_install.path().join("product-services.json");
     std::fs::write(&first_manifest, r#"{"schemaVersion":1}"#).unwrap();
     let first = ConnectionOptions::new(
         profile.path(),
-        Some(workspace.path().to_path_buf()),
-        WorkspaceTrustSource::UserConfig,
+        Some(dir.path().to_path_buf()),
+        GrantSource::UserConfig,
         Some(first_manifest),
     );
     let second = ConnectionOptions::new(
         profile.path(),
-        Some(workspace.path().to_path_buf()),
-        WorkspaceTrustSource::UserConfig,
+        Some(dir.path().to_path_buf()),
+        GrantSource::UserConfig,
         None,
     );
 

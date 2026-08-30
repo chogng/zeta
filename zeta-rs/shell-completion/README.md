@@ -21,7 +21,7 @@ manifest、现有路径和宿主提供的 alias，为每个精确 token 生成�
 | `ShellAlias` | 表达宿主已解析的一个 alias | 本 crate 只做最多三层展开；不自行读取 dotfile 或 PTY |
 
 `ShellValueHint::Opaque` 只声明 argument slot，不会把任意字符串当作已识别 token。只有静态 choice、
-合法 integer、已注册 command、现有 path、精确 workspace target 等可验证值才产生描述。这一约束防止
+合法 integer、已注册 command、现有 path、精确 directory target 等可验证值才产生描述。这一约束防止
 `git status 是做什么的` 中的自然语言因为“命令接受参数”而被错误计为 Shell evidence。
 
 ## 执行路径与内部 owner
@@ -32,7 +32,7 @@ ShellCompletionEngine::analyze
   → engine::ShellCompletionEngine::describe_word
       environment assignment / alias / wrapper
       command registry / subcommand / exact option
-      option value / workspace candidate / existing path
+      option value / directory candidate / existing path
   → types::ShellTokenSnapshot
 
 ShellCompletionEngine::complete
@@ -50,14 +50,13 @@ ShellCompletionEngine::complete
   executable 出现在 PATH 快照时才参与顶层证据和补全。
 - `environment::ExecutableCatalog` 在明确的 PATH 快照中冻结 executable identity；PATH 更新必须通过
   `set_path_entries` 重新建立快照。
-- `workspace::WorkspaceCatalog` 只读 package scripts、Just recipes 和 Make targets；工作区内容变化后
-  调用 `refresh_workspace`。
+- `dir::DirCatalog` 只读 package scripts、Just recipes 和 Make targets；目录内容变化后调用 `refresh_dir_catalog`。
 - `engine::completions` 只投影候选，不拥有 ghost text/popup、selection、Tab 行为或 editor mutation。
 
 ## 失败和安全边界
 
 - 无法读取 PATH 目录、manifest 或普通目录时跳过该来源，不启动子进程；PATH 快照最多读取 256 个
-  目录并保留 16,384 个 executable，单个 workspace source 最多读取 1 MiB、保留 4,096 个候选；
+  目录并保留 16,384 个 executable，单个 directory source 最多读取 1 MiB、保留 4,096 个候选；
 - alias 名称非法或 replacement 为空时在进入 engine 前拒绝；循环或超过三层的 alias 不产生证据；
 - command registry 中没有的 option、无法验证的 value 和不存在的严格 file/directory 不产生描述；
 - parser 接受未完成输入并返回已有 token，不把解析失败升级为产品错误；

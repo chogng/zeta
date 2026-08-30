@@ -129,8 +129,8 @@ function turnErrorPresentation(turnId: string, error: TurnError): { readonly lab
 				detail: "The model provider's usage limit was reached. Choose another model or try again later.",
 				action: { type: "chooseModel", label: "Choose another model" },
 			};
-		case "workspaceCaptureFailed":
-			return retryPresentation(turnId, "Workspace capture failed", "The Turn could not create its immutable workspace baseline, so write tools were not allowed.");
+		case "worktreeCaptureFailed":
+			return retryPresentation(turnId, "Worktree capture failed", "The Turn could not create its immutable worktree baseline, so write tools were not allowed.");
 	}
 }
 

@@ -73,7 +73,7 @@ pub struct SettingsSectionPane<'a> {
     bounds: Rect,
     section: SettingsPageSection,
     style: SettingsSectionStyle,
-    workspace_label: &'a str,
+    directory_label: &'a str,
     connection_label: &'a str,
     surface_label: &'a str,
     keybinding_rows: &'a [SettingsKeybindingRow],
@@ -92,7 +92,7 @@ impl<'a> SettingsSectionPane<'a> {
         bounds: Rect,
         section: SettingsPageSection,
         style: SettingsSectionStyle,
-        workspace_label: &'a str,
+        directory_label: &'a str,
         connection_label: &'a str,
         surface_label: &'a str,
         keybinding_rows: &'a [SettingsKeybindingRow],
@@ -108,7 +108,7 @@ impl<'a> SettingsSectionPane<'a> {
             bounds,
             section,
             style,
-            workspace_label,
+            directory_label,
             connection_label,
             surface_label,
             keybinding_rows,
@@ -139,10 +139,10 @@ impl<'a> SettingsSectionPane<'a> {
         self.paint_header(
             scene,
             "General",
-            "Workspace and session defaults for this app window.",
+            "Environment and session defaults for this app window.",
         );
         let rows = [
-            ("Workspace", self.workspace_label.to_owned()),
+            ("Directory", self.directory_label.to_owned()),
             ("Connection", self.connection_label.to_owned()),
             ("Surface", self.surface_label.to_owned()),
         ];
@@ -150,7 +150,7 @@ impl<'a> SettingsSectionPane<'a> {
         self.paint_note(
             scene,
             92.0 + card_height(rows.len()),
-            "General preferences are projected from the active workspace. Persistent controls will be added here as their configuration authority is defined.",
+            "General preferences come from the active environment. Persistent controls will be added here as their configuration authority is defined.",
         );
     }
 
@@ -167,7 +167,7 @@ impl<'a> SettingsSectionPane<'a> {
         };
         let rows = [
             ("Theme", theme),
-            ("Accent", "Current workspace accent".to_owned()),
+            ("Accent", "Current window accent".to_owned()),
         ];
         self.paint_value_card(scene, 92.0, &rows);
         let swatch_y = self.content_bounds().origin.y + 92.0 + card_height(rows.len()) + 24.0;

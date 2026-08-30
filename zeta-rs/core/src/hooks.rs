@@ -12,7 +12,7 @@ pub struct HookExecutionEvent {
     pub thread_id: ThreadId,
     pub turn_id: TurnId,
     pub hook_id: String,
-    pub workspace: std::path::PathBuf,
+    pub dir: std::path::PathBuf,
 }
 
 /// Host observer for assigning Hook process writes to the matching Turn.

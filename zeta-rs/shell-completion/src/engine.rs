@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::dir::DirCatalog;
 use crate::environment::ExecutableCatalog;
 use crate::environment::executable_file;
 use crate::parser::ParsedShellCommand;
@@ -21,20 +22,19 @@ use crate::types::ShellTokenDescription;
 use crate::types::ShellTokenKind;
 use crate::types::ShellTokenPosition;
 use crate::types::ShellTokenSnapshot;
-use crate::workspace::WorkspaceCatalog;
 
 const MAX_ALIAS_EXPANSION_DEPTH: usize = 3;
 const COMMAND_WRAPPERS: &[&str] = &["command", "env", "exec", "nohup", "sudo", "time", "xargs"];
 
 mod completions;
 
-/// Stateful owner of Shell parsing, command signatures, PATH and workspace completion evidence.
+/// Stateful owner of Shell parsing, command signatures, PATH and directory completion evidence.
 #[derive(Clone, Debug)]
 pub struct ShellCompletionEngine {
     working_directory: PathBuf,
     registry: ShellCommandRegistry,
     executables: ExecutableCatalog,
-    workspace: WorkspaceCatalog,
+    dir_catalog: DirCatalog,
     aliases: BTreeMap<String, String>,
 }
 
@@ -44,7 +44,7 @@ impl ShellCompletionEngine {
         Self {
             registry: ShellCommandRegistry::with_zeta_defaults(),
             executables: ExecutableCatalog::from_process_path(),
-            workspace: WorkspaceCatalog::discover(&working_directory),
+            dir_catalog: DirCatalog::discover(&working_directory),
             aliases: BTreeMap::new(),
             working_directory,
         }
@@ -58,7 +58,7 @@ impl ShellCompletionEngine {
         Self {
             registry,
             executables: ExecutableCatalog::from_process_path(),
-            workspace: WorkspaceCatalog::discover(&working_directory),
+            dir_catalog: DirCatalog::discover(&working_directory),
             aliases: BTreeMap::new(),
             working_directory,
         }
@@ -66,7 +66,7 @@ impl ShellCompletionEngine {
 
     pub fn set_working_directory(&mut self, working_directory: &Path) {
         self.working_directory = working_directory.to_path_buf();
-        self.workspace = WorkspaceCatalog::discover(working_directory);
+        self.dir_catalog = DirCatalog::discover(working_directory);
     }
 
     pub fn set_path_entries(&mut self, entries: impl IntoIterator<Item = PathBuf>) {
@@ -77,8 +77,8 @@ impl ShellCompletionEngine {
         self.aliases = aliases.into_iter().map(ShellAlias::into_parts).collect();
     }
 
-    pub fn refresh_workspace(&mut self) {
-        self.workspace = WorkspaceCatalog::discover(&self.working_directory);
+    pub fn refresh_dir_catalog(&mut self) {
+        self.dir_catalog = DirCatalog::discover(&self.working_directory);
     }
 
     pub fn analyze(&self, input: &str) -> ShellTokenSnapshot {
@@ -197,7 +197,10 @@ impl ShellCompletionEngine {
                 detail,
             ));
         }
-        if let Some(description) = self.workspace.description(&state.command_path, &normalized) {
+        if let Some(description) = self
+            .dir_catalog
+            .description(&state.command_path, &normalized)
+        {
             state.advance_argument(command.arguments());
             return Some(ShellTokenDescription::new(
                 ShellTokenKind::Argument,

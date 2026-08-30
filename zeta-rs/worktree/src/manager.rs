@@ -44,11 +44,11 @@ pub enum WorktreeOwner {
     Invalid,
 }
 
-/// One Git worktree and the workspace directory corresponding to the caller's source directory.
+/// One Git worktree and the selected directory corresponding to the caller's source directory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Worktree {
     checkout_root: PathBuf,
-    workspace_directory: PathBuf,
+    dir: PathBuf,
     head: String,
     branch: Option<String>,
     kind: WorktreeKind,
@@ -62,13 +62,13 @@ pub struct Worktree {
 pub struct ThreadWorktreeProvisionRequest {
     pub source: ThreadWorktreeSource,
     pub target: ThreadWorktreeTarget,
-    pub source_workspace_id: String,
+    pub source_dir_id: String,
     pub thread_id: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ThreadWorktreeSource {
-    WorkspaceSnapshot {
+    DirSnapshot {
         source_directory: PathBuf,
     },
     ImmutableTree {
@@ -81,7 +81,7 @@ pub enum ThreadWorktreeSource {
 impl ThreadWorktreeSource {
     fn source_directory(&self) -> &Path {
         match self {
-            Self::WorkspaceSnapshot { source_directory }
+            Self::DirSnapshot { source_directory }
             | Self::ImmutableTree {
                 source_directory, ..
             } => source_directory,
@@ -106,7 +106,7 @@ pub enum ThreadWorktreeTarget {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ThreadWorkspaceKind {
+pub enum ThreadWorktreeKind {
     Git,
     Directory,
 }
@@ -116,20 +116,20 @@ pub enum ThreadWorkspaceKind {
 pub struct ThreadWorktreeBinding {
     managed_worktree_id: String,
     checkout_root: PathBuf,
-    workspace_directory: PathBuf,
-    source_workspace_id: String,
+    dir: PathBuf,
+    source_dir_id: String,
     source_repository_root: PathBuf,
     target_branch: Option<String>,
     target_head: String,
     target_unborn: bool,
     baseline_tree: String,
     baseline_ref: String,
-    kind: ThreadWorkspaceKind,
+    kind: ThreadWorktreeKind,
     snapshot_store: Option<PathBuf>,
     repositories: Vec<ThreadRepositoryBinding>,
 }
 
-/// One repository mapped into a Thread workspace.
+/// One repository mapped into a Thread dir.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadRepositoryBinding {
     repository_id: String,
@@ -152,12 +152,12 @@ impl ThreadWorktreeBinding {
         &self.checkout_root
     }
 
-    pub fn workspace_directory(&self) -> &Path {
-        &self.workspace_directory
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
-    pub fn source_workspace_id(&self) -> &str {
-        &self.source_workspace_id
+    pub fn source_dir_id(&self) -> &str {
+        &self.source_dir_id
     }
 
     pub fn source_repository_root(&self) -> &Path {
@@ -184,7 +184,7 @@ impl ThreadWorktreeBinding {
         &self.baseline_ref
     }
 
-    pub const fn kind(&self) -> ThreadWorkspaceKind {
+    pub const fn kind(&self) -> ThreadWorktreeKind {
         self.kind
     }
 
@@ -238,8 +238,8 @@ impl Worktree {
         &self.checkout_root
     }
 
-    pub fn workspace_directory(&self) -> &Path {
-        &self.workspace_directory
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     pub fn head(&self) -> &str {
@@ -327,7 +327,7 @@ impl WorktreeManager {
                 WorktreeOwner::Unbound
             };
             worktrees.push(Worktree {
-                workspace_directory: entry.checkout_root().join(relative_directory),
+                dir: entry.checkout_root().join(relative_directory),
                 checkout_root: entry.checkout_root().to_path_buf(),
                 head: entry.head().to_string(),
                 branch: entry.branch().map(ToOwned::to_owned),
@@ -395,10 +395,10 @@ impl WorktreeManager {
                 worktree.checkout_root().display()
             );
         }
-        if !worktree.workspace_directory().is_dir() {
+        if !worktree.dir().is_dir() {
             bail!(
-                "worktree workspace directory does not exist: {}",
-                worktree.workspace_directory().display()
+                "worktree directory does not exist: {}",
+                worktree.dir().display()
             );
         }
         Ok(worktree)
@@ -419,7 +419,7 @@ impl WorktreeManager {
         &self,
         request: &ThreadWorktreeProvisionRequest,
     ) -> Result<ThreadWorktreeBinding> {
-        if request.thread_id.trim().is_empty() || request.source_workspace_id.trim().is_empty() {
+        if request.thread_id.trim().is_empty() || request.source_dir_id.trim().is_empty() {
             bail!("Thread worktree identity cannot be empty");
         }
         let source_directory = dunce::canonicalize(request.source.source_directory())
@@ -436,12 +436,12 @@ impl WorktreeManager {
             }
             Err(error) => return Err(error.into()),
         };
-        let relative_workspace_directory = source_directory
+        let relative_dir = source_directory
             .strip_prefix(source_repository.worktree_root())
             .context("source directory is outside its repository root")?
             .to_path_buf();
         let baseline_tree = match &request.source {
-            ThreadWorktreeSource::WorkspaceSnapshot { .. } => {
+            ThreadWorktreeSource::DirSnapshot { .. } => {
                 self.git.capture_worktree_tree(&source_repository).await?
             }
             ThreadWorktreeSource::ImmutableTree { tree_id, .. } => {
@@ -523,9 +523,9 @@ impl WorktreeManager {
                 &binding::BindingRecord::new(
                     digest.clone(),
                     request.thread_id.clone(),
-                    request.source_workspace_id.clone(),
+                    request.source_dir_id.clone(),
                     source_repository.worktree_root().to_path_buf(),
-                    relative_workspace_directory.clone(),
+                    relative_dir.clone(),
                     target_branch.clone(),
                     target_head.clone(),
                     target_unborn,
@@ -571,13 +571,13 @@ impl WorktreeManager {
             baseline_tree: baseline_tree.as_str().to_string(),
             baseline_ref: baseline_ref.as_str().to_string(),
         };
-        let workspace_directory = checkout_root.join(&relative_workspace_directory);
+        let dir = checkout_root.join(&relative_dir);
         let nested = match self
             .provision_nested_repositories(
                 request,
                 &source_directory,
                 source_repository.worktree_root(),
-                &workspace_directory,
+                &dir,
                 &digest,
             )
             .await
@@ -615,15 +615,15 @@ impl WorktreeManager {
         Ok(ThreadWorktreeBinding {
             managed_worktree_id: digest,
             checkout_root: checkout_root.clone(),
-            workspace_directory,
-            source_workspace_id: request.source_workspace_id.clone(),
+            dir,
+            source_dir_id: request.source_dir_id.clone(),
             source_repository_root: source_repository.worktree_root().to_path_buf(),
             target_branch,
             target_head,
             target_unborn,
             baseline_tree: baseline_tree.as_str().to_string(),
             baseline_ref: baseline_ref.as_str().to_string(),
-            kind: ThreadWorkspaceKind::Git,
+            kind: ThreadWorktreeKind::Git,
             snapshot_store: None,
             repositories,
         })
@@ -634,7 +634,7 @@ impl WorktreeManager {
         request: &ThreadWorktreeProvisionRequest,
         source_directory: &Path,
         primary_repository_root: &Path,
-        workspace_directory: &Path,
+        dir: &Path,
         digest: &str,
     ) -> Result<Vec<ThreadRepositoryBinding>> {
         let roots = discover_nested_repository_roots(source_directory, primary_repository_root);
@@ -642,11 +642,11 @@ impl WorktreeManager {
         for source_root in roots {
             let relative_path = source_root
                 .strip_prefix(source_directory)
-                .context("nested repository is outside the source workspace")?
+                .context("nested repository is outside the source dir")?
                 .to_path_buf();
             let source_repository = self.git.open_repository(&source_root).await?;
             let baseline_tree = match &request.source {
-                ThreadWorktreeSource::WorkspaceSnapshot { .. } => {
+                ThreadWorktreeSource::DirSnapshot { .. } => {
                     self.git.capture_worktree_tree(&source_repository).await?
                 }
                 ThreadWorktreeSource::ImmutableTree {
@@ -691,7 +691,7 @@ impl WorktreeManager {
             self.git
                 .pin_private_ref(&source_repository, &baseline_ref, &baseline_tree)
                 .await?;
-            let destination = workspace_directory.join(&relative_path);
+            let destination = dir.join(&relative_path);
             if destination.exists() {
                 if destination.is_dir() {
                     std::fs::remove_dir_all(&destination)?;
@@ -743,7 +743,7 @@ impl WorktreeManager {
                     &binding::BindingRecord::new(
                         digest.to_string(),
                         request.thread_id.clone(),
-                        request.source_workspace_id.clone(),
+                        request.source_dir_id.clone(),
                         source_root.clone(),
                         PathBuf::from("."),
                         target_branch,
@@ -817,8 +817,8 @@ impl WorktreeManager {
         request: &ThreadWorktreeProvisionRequest,
         source_directory: &Path,
     ) -> Result<ThreadWorktreeBinding> {
-        if request.thread_id.trim().is_empty() || request.source_workspace_id.trim().is_empty() {
-            bail!("Thread workspace identity cannot be empty");
+        if request.thread_id.trim().is_empty() || request.source_dir_id.trim().is_empty() {
+            bail!("Thread dir identity cannot be empty");
         }
         let digest = hex_digest(&request.thread_id);
         let checkout_root = self.settings.root.join(&digest[..4]).join(&digest);
@@ -827,34 +827,34 @@ impl WorktreeManager {
                 .recover_thread(&checkout_root, &request.thread_id)
                 .await;
         }
-        let workspace_directory = checkout_root.join("workspace");
+        let dir = checkout_root.join("dir");
         let snapshot_store = self
             .settings
             .root
             .join("directory-objects")
-            .join(hex_digest(&request.source_workspace_id));
+            .join(hex_digest(&request.source_dir_id));
         let snapshots = DirectorySnapshotStore::new(&snapshot_store);
         let baseline_tree = match &request.source {
-            ThreadWorktreeSource::WorkspaceSnapshot { .. } => snapshots
+            ThreadWorktreeSource::DirSnapshot { .. } => snapshots
                 .capture(source_directory)
                 .map_err(anyhow::Error::msg)?,
             ThreadWorktreeSource::ImmutableTree { tree_id, .. } => tree_id.clone(),
         };
-        std::fs::create_dir_all(&workspace_directory)?;
+        std::fs::create_dir_all(&dir)?;
         let checkout_root = dunce::canonicalize(&checkout_root)?;
-        let workspace_directory = checkout_root.join("workspace");
+        let dir = checkout_root.join("dir");
         let result = (|| {
             snapshots
-                .replace_directory(&workspace_directory, &baseline_tree)
+                .replace_directory(&dir, &baseline_tree)
                 .map_err(anyhow::Error::msg)?;
             binding::write(
                 &checkout_root,
                 &binding::BindingRecord::new(
                     digest.clone(),
                     request.thread_id.clone(),
-                    request.source_workspace_id.clone(),
+                    request.source_dir_id.clone(),
                     source_directory.to_path_buf(),
-                    PathBuf::from("workspace"),
+                    PathBuf::from("dir"),
                     None,
                     baseline_tree.clone(),
                     false,
@@ -872,7 +872,7 @@ impl WorktreeManager {
         let repository_binding = ThreadRepositoryBinding {
             repository_id: format!("{digest}:directory"),
             relative_path: PathBuf::from("."),
-            worktree_root: workspace_directory.clone(),
+            worktree_root: dir.clone(),
             source_repository_root: source_directory.to_path_buf(),
             target_branch: None,
             target_head: baseline_tree.clone(),
@@ -883,15 +883,15 @@ impl WorktreeManager {
         Ok(ThreadWorktreeBinding {
             managed_worktree_id: digest,
             checkout_root,
-            workspace_directory,
-            source_workspace_id: request.source_workspace_id.clone(),
+            dir,
+            source_dir_id: request.source_dir_id.clone(),
             source_repository_root: source_directory.to_path_buf(),
             target_branch: None,
             target_head: baseline_tree.clone(),
             target_unborn: false,
             baseline_tree,
             baseline_ref: String::new(),
-            kind: ThreadWorkspaceKind::Directory,
+            kind: ThreadWorktreeKind::Directory,
             snapshot_store: Some(snapshot_store),
             repositories: vec![repository_binding],
         })
@@ -905,10 +905,10 @@ impl WorktreeManager {
     ) -> Result<ThreadWorktreeBinding> {
         if let Some(record) = binding::try_read(checkout_root)? {
             if record.kind != binding::BindingKind::Directory {
-                bail!("managed directory binding has an invalid workspace kind");
+                bail!("managed directory binding has an invalid dir kind");
             }
             if record.owner_thread_id != thread_id {
-                bail!("Thread workspace binding owner does not match directory owner");
+                bail!("Thread directory binding owner does not match directory owner");
             }
             let checkout_root = dunce::canonicalize(checkout_root)?;
             let managed_root = dunce::canonicalize(&self.settings.root)?;
@@ -918,21 +918,20 @@ impl WorktreeManager {
                     checkout_root.display()
                 );
             }
-            let workspace_directory = checkout_root.join(&record.relative_workspace_directory);
-            let repositories =
-                repositories_from_record(&record, &workspace_directory, &workspace_directory, true);
+            let dir = checkout_root.join(&record.relative_dir);
+            let repositories = repositories_from_record(&record, &dir, &dir, true);
             return Ok(ThreadWorktreeBinding {
                 managed_worktree_id: record.managed_worktree_id,
-                workspace_directory,
+                dir,
                 checkout_root,
-                source_workspace_id: record.source_workspace_id,
+                source_dir_id: record.source_dir_id,
                 source_repository_root: record.source_repository_root,
                 target_branch: None,
                 target_head: record.target_head,
                 target_unborn: record.target_unborn,
                 baseline_tree: record.baseline_tree,
                 baseline_ref: record.baseline_ref,
-                kind: ThreadWorkspaceKind::Directory,
+                kind: ThreadWorktreeKind::Directory,
                 snapshot_store: record.snapshot_store,
                 repositories,
             });
@@ -943,22 +942,16 @@ impl WorktreeManager {
         }
         let record = binding::read(repository.git_dir())?;
         if record.owner_thread_id != thread_id {
-            bail!("Thread workspace binding owner does not match worktree owner");
+            bail!("Thread directory binding owner does not match worktree owner");
         }
-        let workspace_directory = repository
-            .worktree_root()
-            .join(&record.relative_workspace_directory);
-        let repositories = repositories_from_record(
-            &record,
-            &workspace_directory,
-            repository.worktree_root(),
-            false,
-        );
+        let dir = repository.worktree_root().join(&record.relative_dir);
+        let repositories =
+            repositories_from_record(&record, &dir, repository.worktree_root(), false);
         Ok(ThreadWorktreeBinding {
             managed_worktree_id: record.managed_worktree_id,
             checkout_root: repository.worktree_root().to_path_buf(),
-            workspace_directory,
-            source_workspace_id: record.source_workspace_id,
+            dir,
+            source_dir_id: record.source_dir_id,
             source_repository_root: record.source_repository_root,
             target_branch: record.target_branch,
             target_head: record.target_head,
@@ -966,8 +959,8 @@ impl WorktreeManager {
             baseline_tree: record.baseline_tree,
             baseline_ref: record.baseline_ref,
             kind: match record.kind {
-                binding::BindingKind::Git => ThreadWorkspaceKind::Git,
-                binding::BindingKind::Directory => ThreadWorkspaceKind::Directory,
+                binding::BindingKind::Git => ThreadWorktreeKind::Git,
+                binding::BindingKind::Directory => ThreadWorktreeKind::Directory,
             },
             snapshot_store: record.snapshot_store,
             repositories,
@@ -978,9 +971,9 @@ impl WorktreeManager {
     pub async fn recover_threads(
         &self,
         source_directory: &Path,
-        source_workspace_id: &str,
+        source_dir_id: &str,
     ) -> Result<Vec<(String, ThreadWorktreeBinding)>> {
-        let mut bindings = self.recover_directory_threads(source_workspace_id).await?;
+        let mut bindings = self.recover_directory_threads(source_dir_id).await?;
         if matches!(
             self.git.open_repository(source_directory).await,
             Err(zeta_git::GitError::NotAWorkingTree { .. })
@@ -1006,7 +999,7 @@ impl WorktreeManager {
 
     async fn recover_directory_threads(
         &self,
-        source_workspace_id: &str,
+        source_dir_id: &str,
     ) -> Result<Vec<(String, ThreadWorktreeBinding)>> {
         let mut recovered = Vec::new();
         let Ok(buckets) = std::fs::read_dir(&self.settings.root) else {
@@ -1031,7 +1024,7 @@ impl WorktreeManager {
                     continue;
                 };
                 if record.kind != binding::BindingKind::Directory
-                    || record.source_workspace_id != source_workspace_id
+                    || record.source_dir_id != source_dir_id
                 {
                     continue;
                 }
@@ -1051,7 +1044,7 @@ impl WorktreeManager {
         binding: &ThreadWorktreeBinding,
         _eligibility: ThreadWorktreeCleanupEligibility,
     ) -> Result<()> {
-        if binding.kind == ThreadWorkspaceKind::Directory {
+        if binding.kind == ThreadWorktreeKind::Directory {
             let managed_root = dunce::canonicalize(&self.settings.root)?;
             let checkout_root = dunce::canonicalize(&binding.checkout_root)?;
             if !has_managed_layout(&managed_root, &checkout_root) {
@@ -1170,7 +1163,7 @@ fn repository_record(repository: &ThreadRepositoryBinding) -> binding::Repositor
 
 fn repositories_from_record(
     record: &binding::BindingRecord,
-    workspace_directory: &Path,
+    dir: &Path,
     primary_worktree_root: &Path,
     directory: bool,
 ) -> Vec<ThreadRepositoryBinding> {
@@ -1200,7 +1193,7 @@ fn repositories_from_record(
             worktree_root: if repository.relative_path == Path::new(".") {
                 primary_worktree_root.to_path_buf()
             } else {
-                workspace_directory.join(&repository.relative_path)
+                dir.join(&repository.relative_path)
             },
             source_repository_root: repository.source_repository_root.clone(),
             target_branch: repository.target_branch.clone(),

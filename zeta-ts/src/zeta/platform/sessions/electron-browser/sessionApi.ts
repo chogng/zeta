@@ -1,4 +1,4 @@
-import type { ModelListResult, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeResult, ThreadGoalClearResponse, ThreadGoalGetResponse, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../generated/app-server/types.js";
+import type { ModelListResult, ModelRef, SessionListResult, SessionResult, SessionSubscribeResult, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeResult, ThreadGoalClearResponse, ThreadGoalGetResponse, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../generated/app-server/types.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";
 
@@ -11,16 +11,17 @@ export function createSessionApi(): ISessionApi {
 		unsubscribe: (params) => invoke<void>("zeta:session:unsubscribe", params),
 		createThread: (params) => invoke<SessionThreadResult>("zeta:session:thread:create", params),
 		forkThread: (params) => invoke<SessionThreadResult>("zeta:session:thread:fork", params),
-		complete: (params) => invoke<SessionResult>("zeta:session:complete", params),
 		archive: (params) => invoke<SessionResult>("zeta:session:archive", params),
 		stop: (params) => invoke<SessionResult>("zeta:session:stop", params),
-		setModel: (params) => invoke<SessionResult>("zeta:session:model:set", params),
-		setNextApprovalMode: (params) => invoke<SessionResult>("zeta:session:approval-mode:set-next", params),
 	};
 }
 
 export function createModelApi(): IModelApi {
-	return { list: () => invoke<ModelListResult>("zeta:model:list") };
+	return {
+		list: () => invoke<ModelListResult>("zeta:model:list"),
+		readPreferred: () => invoke<ModelRef | null>("zeta:model:preferred:read"),
+		setPreferred: (params) => invoke<void>("zeta:model:preferred:set", params),
+	};
 }
 
 export function createThreadApi(): IThreadApi {

@@ -4,7 +4,7 @@ use serde::Serialize;
 use ts_rs::TS;
 use zeta_protocol::StreamInstanceId;
 
-/// Selects one repository discovered inside the active workspace.
+/// Selects one repository discovered inside the active directory.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryParams {
@@ -13,7 +13,7 @@ pub struct GitRepositoryParams {
     pub repository_id: Option<String>,
 }
 
-/// Stable, workspace-relative identity for one discovered Git repository projection.
+/// Stable, directory-relative identity for one discovered Git repository projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryDto {
@@ -22,7 +22,7 @@ pub struct GitRepositoryDto {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -101,7 +101,7 @@ pub struct GitStatusResult {
     pub stream_instance_id: StreamInstanceId,
     #[ts(type = "number")]
     pub revision: u64,
-    pub workspace_path: String,
+    pub path: String,
     pub head: GitHeadDto,
     pub changes: Vec<GitRepositoryChangeDto>,
 }
@@ -112,7 +112,7 @@ pub struct GitStatusChanged {
     pub status: GitStatusResult,
 }
 
-/// One local branch returned by the workspace Git runtime.
+/// One local branch returned by the directory Git runtime.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchDto {
@@ -149,7 +149,7 @@ pub struct GitCommitSummaryDto {
     pub subject: String,
 }
 
-/// Bounded recent commit history for the active workspace repository.
+/// Bounded recent commit history for the active directory repository.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHistoryResult {
@@ -208,7 +208,7 @@ pub struct GitReferenceDto {
     pub current: bool,
 }
 
-/// Starts or continues one bounded traversal of the active workspace repository graph.
+/// Starts or continues one bounded traversal of the active directory repository graph.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -342,7 +342,7 @@ pub struct GitBranchSwitchParams {
     pub name: String,
 }
 
-/// One bounded UTF-8 text change from `HEAD` to the workspace working tree.
+/// One bounded UTF-8 text change from `HEAD` to the directory working tree.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitTextDiffDto {
@@ -361,7 +361,7 @@ pub struct GitDiffStatisticsDto {
     pub deletions: usize,
 }
 
-/// One authoritative status snapshot plus its bounded workspace text-diff projection.
+/// One authoritative status snapshot plus its bounded directory text-diff projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitTextDiffResult {

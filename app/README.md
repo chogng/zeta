@@ -54,7 +54,7 @@ workbench/platform/             键盘、IME 和窗口事件适配
 | Settings 与 Remote UI | [`zeta-settings`](settings/README.md) |
 | Files Pane、目录树与文件搜索 | [`zeta-files`](files/README.md) |
 | Changes Pane 与多文件 Diff | [`zeta-scm`](scm/README.md) |
-| Terminal runtime 与视图状态 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md)；产品 Pane 映射由 Workbench 私有拥有 |
+| Terminal runtime 与视图状态 | [`zeta-terminal-runtime`](terminal-runtime/README.md)、[`TERMINAL.md`](TERMINAL.md)；产品 Pane 映射由 Workbench 私有拥有 |
 | Workbench | [`zeta-workbench`](workbench/README.md) |
 | 命令与快捷键 | [`zeta-commands`](commands/README.md)、[`zeta-keybindings-host`](keybindings/README.md)；快捷键设置页面由 [`zeta-settings`](settings/README.md) 管 |
 

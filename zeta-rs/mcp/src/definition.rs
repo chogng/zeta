@@ -10,7 +10,7 @@ pub enum McpServerTransport {
 
 /// Runtime-ready declaration for one logical MCP server.
 ///
-/// Configuration parsing, enablement, trust, executable resolution, and credential lookup must
+/// Configuration parsing, enablement, source verification, executable resolution, and credential lookup must
 /// happen before constructing this value. In particular, this type never carries a credential
 /// reference that the runtime could resolve by scanning ambient state.
 #[derive(Debug)]

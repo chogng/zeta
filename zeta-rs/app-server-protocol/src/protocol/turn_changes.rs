@@ -88,19 +88,19 @@ pub struct TurnChangeFileStatisticsDto {
     pub deletions: u64,
 }
 
-/// Public binding for a Thread workspace. Managed filesystem paths stay private to App Server.
+/// Public binding for a Thread directory. Managed filesystem paths stay private to App Server.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct ThreadWorkspaceBinding {
+pub struct ThreadDirBinding {
     pub managed_worktree_id: String,
-    pub source_workspace_id: String,
-    pub repositories: Vec<ThreadWorkspaceRepositoryBindingDto>,
+    pub source_dir_id: String,
+    pub repositories: Vec<ThreadWorktreeRepositoryBindingDto>,
     pub baseline_summary: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct ThreadWorkspaceRepositoryBindingDto {
+pub struct ThreadWorktreeRepositoryBindingDto {
     pub repository_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -155,7 +155,7 @@ pub struct TurnChangesListParams {
 pub struct TurnChangesListResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace: Option<ThreadWorkspaceBinding>,
+    pub dir: Option<ThreadDirBinding>,
     pub change_sets: Vec<TurnChangeSetSummary>,
 }
 

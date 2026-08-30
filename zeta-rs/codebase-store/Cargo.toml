@@ -16,12 +16,12 @@ zeta-codebase = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-state = { workspace = true }
 zeta-syntax = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 zeta-api = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [lints]
 workspace = true

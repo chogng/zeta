@@ -12,13 +12,13 @@ use zeta_turn_changes::{
     MessageState, RepositoryCaptureTarget, SnapshotBackend, TerminalTurnState, ToolChangeScope,
     TurnChangeBeginRequest, TurnChangeSealRequest,
 };
-use zeta_worktree::{ThreadWorkspaceKind, ThreadWorktreeBinding};
+use zeta_worktree::{ThreadWorktreeBinding, ThreadWorktreeKind};
 
 impl TurnExecutionObserver for TurnChangesRuntime {
     fn will_execute(&self, event: &TurnExecutionStarted) -> Result<(), CoreError> {
         let binding = self.binding(&event.thread_id).ok_or_else(|| {
             CoreError::Journal(format!(
-                "Thread {} has no durable workspace binding",
+                "Thread {} has no durable dir binding",
                 event.thread_id
             ))
         })?;
@@ -37,8 +37,8 @@ impl TurnExecutionObserver for TurnChangesRuntime {
                         base_object_id: (!repository.target_unborn())
                             .then(|| repository.target_head().to_string()),
                         snapshot_backend: match binding.kind() {
-                            ThreadWorkspaceKind::Git => SnapshotBackend::Git,
-                            ThreadWorkspaceKind::Directory => SnapshotBackend::Directory {
+                            ThreadWorktreeKind::Git => SnapshotBackend::Git,
+                            ThreadWorktreeKind::Directory => SnapshotBackend::Directory {
                                 object_store: binding
                                     .snapshot_store()
                                     .expect("directory binding has a snapshot store")
@@ -55,7 +55,7 @@ impl TurnExecutionObserver for TurnChangesRuntime {
         }) {
             Ok(records) => records,
             Err(error) if !matches!(event.kind, TurnExecutionKind::Shell) => {
-                let warning = "workspace baseline capture failed; write Tools were disabled";
+                let warning = "dir baseline capture failed; write Tools were disabled";
                 self.capture_failures
                     .write()
                     .map_err(|_| CoreError::Journal("capture failure lock poisoned".into()))?
@@ -69,7 +69,7 @@ impl TurnExecutionObserver for TurnChangesRuntime {
                     self.publish(&records);
                 }
                 log::error!(
-                    "Turn {} workspace baseline capture failed; write Tools are disabled: {error}",
+                    "Turn {} dir baseline capture failed; write Tools are disabled: {error}",
                     event.turn_id
                 );
                 return Ok(());
@@ -107,10 +107,10 @@ impl TurnExecutionObserver for TurnChangesRuntime {
                     if record.message_state == MessageState::Queued && !record.files.is_empty() {
                         spawn_message_job(
                             Arc::clone(&self.store),
-                            Arc::clone(&self.sessions),
+                            Arc::clone(&self.threads),
                             Arc::clone(&self.model),
                             Arc::clone(&self.config),
-                            self.workspace_id.clone(),
+                            self.dir_id.clone(),
                             Arc::clone(&self.updates),
                             record.change_set_id,
                         );
@@ -118,8 +118,7 @@ impl TurnExecutionObserver for TurnChangesRuntime {
                 }
             }
             Err(error) => {
-                let warning =
-                    "workspace checkpoint sealing failed; this ChangeSet cannot be committed";
+                let warning = "dir checkpoint sealing failed; this ChangeSet cannot be committed";
                 match self.ledger.mark_turn_incomplete(
                     event.session_id.clone(),
                     event.thread_id.clone(),
@@ -133,7 +132,7 @@ impl TurnExecutionObserver for TurnChangesRuntime {
                     ),
                 }
                 log::error!(
-                    "failed to seal Turn {} workspace checkpoint: {error}",
+                    "failed to seal Turn {} dir checkpoint: {error}",
                     event.turn_id
                 );
             }
@@ -154,7 +153,7 @@ impl TurnExecutionObserver for TurnChangesRuntime {
             && event.write_capable
         {
             return Err(CoreError::Execution(format!(
-                "workspace baseline capture failed; this Turn cannot run a write-capable Tool: {error}"
+                "dir baseline capture failed; this Turn cannot run a write-capable Tool: {error}"
             )));
         }
         self.tool_write_capabilities
@@ -182,7 +181,7 @@ impl TurnExecutionObserver for TurnChangesRuntime {
                 self.end_write_lifecycle(&event.thread_id, &event.turn_id);
             }
             log::error!(
-                "Tool {} ran without a Thread workspace binding",
+                "Tool {} ran without a Thread dir binding",
                 event.tool_call_id
             );
             return;
@@ -253,7 +252,7 @@ impl HookExecutionObserver for TurnChangesRuntime {
         let Some(binding) = self.binding(&event.thread_id) else {
             return Ok(());
         };
-        if event.workspace != binding.workspace_directory() {
+        if event.dir != binding.dir() {
             return Ok(());
         }
         if self
@@ -263,8 +262,7 @@ impl HookExecutionObserver for TurnChangesRuntime {
             .contains_key(&event.turn_id)
         {
             return Err(CoreError::Execution(
-                "workspace baseline capture failed; this Turn cannot run a write-capable Hook"
-                    .into(),
+                "dir baseline capture failed; this Turn cannot run a write-capable Hook".into(),
             ));
         }
         self.begin_write_lifecycle(&event.thread_id, &event.turn_id)?;
@@ -276,7 +274,7 @@ impl HookExecutionObserver for TurnChangesRuntime {
             self.end_write_lifecycle(&event.thread_id, &event.turn_id);
             return;
         };
-        if event.workspace != binding.workspace_directory() {
+        if event.dir != binding.dir() {
             self.end_write_lifecycle(&event.thread_id, &event.turn_id);
             return;
         }
@@ -385,8 +383,8 @@ impl TurnChangesRuntime {
         let requested = Path::new(raw);
         let relative = if requested.is_absolute() {
             requested
-                .strip_prefix(binding.workspace_directory())
-                .or_else(|_| requested.strip_prefix(&self.workspace_root))
+                .strip_prefix(binding.dir())
+                .or_else(|_| requested.strip_prefix(&self.dir_root))
                 .ok()?
                 .to_path_buf()
         } else {
@@ -428,7 +426,7 @@ impl TurnChangesRuntime {
                 .flat_map(|file| [Some(&file.path), file.previous_path.as_ref()])
                 .flatten()
             {
-                write_paths.insert(workspace_path(prefix, path));
+                write_paths.insert(prefixed_path(prefix, path));
             }
         }
         self.ledger
@@ -460,7 +458,7 @@ fn repository_paths(
         .collect()
 }
 
-fn workspace_path(prefix: &Path, path: &Path) -> PathBuf {
+fn prefixed_path(prefix: &Path, path: &Path) -> PathBuf {
     if prefix == Path::new(".") {
         path.to_path_buf()
     } else {

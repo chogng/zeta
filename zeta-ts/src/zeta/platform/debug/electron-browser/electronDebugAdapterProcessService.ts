@@ -12,9 +12,9 @@ export class ElectronDebugAdapterProcessService implements IDebugAdapterProcessS
 	constructor(private readonly appServer: IAppServerApi) {}
 
 	async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
-		const params: DebugAdapterStartParams = { ...workspaceFolder(options.workspaceFolderId), program: options.program, arguments: [...options.arguments] };
+		const params: DebugAdapterStartParams = { ...workspaceFolder(options.dirId), program: options.program, arguments: [...options.arguments] };
 		const sessionId = (await invoke<DebugAdapterStartResult>("zeta:debug-adapter:start", params)).sessionId;
-		this.workspaceFolders.set(sessionId, options.workspaceFolderId);
+		this.workspaceFolders.set(sessionId, options.dirId);
 		return sessionId;
 	}
 
@@ -40,8 +40,8 @@ export class ElectronDebugAdapterProcessService implements IDebugAdapterProcessS
 	}
 }
 
-function workspaceFolder(workspaceFolderId: string | undefined): { readonly workspaceFolderId?: string } {
-	return workspaceFolderId === undefined ? {} : { workspaceFolderId };
+function workspaceFolder(dirId: string | undefined): { readonly dirId?: string } {
+	return dirId === undefined ? {} : { dirId };
 }
 
 /** Code product contribution for the Electron renderer host. */

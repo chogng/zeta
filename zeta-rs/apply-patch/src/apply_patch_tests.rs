@@ -7,23 +7,19 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll, Waker};
 use zeta_async_utils::CancellationSource;
+use zeta_file_access::Dir;
 use zeta_protocol::{ToolCallId, TurnId};
 use zeta_tools::{
-    ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolExecutionContext,
-    ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolInvocationKind, ToolOperationId,
-    ToolOutputStatus, ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
+    EnvId, ToolBinding, ToolBindingId, ToolDefinition, ToolExecutionContext, ToolExecutionOutcome,
+    ToolExecutor, ToolInvocation, ToolInvocationKind, ToolOperationId, ToolOutputStatus,
+    ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
-use zeta_workspace::WorkspaceRoot;
 
 #[test]
 fn exposes_the_canonical_apply_patch_schema() {
-    let workspace = TestWorkspace::new();
-    let tool = ApplyPatchTool::new(
-        environment_id(),
-        workspace.root(),
-        ApplyPatchLimits::default(),
-    )
-    .unwrap();
+    let dir = TestDir::new();
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
     let definition = tool.definition();
 
     assert_eq!(definition.name().as_str(), "apply_patch");
@@ -49,14 +45,10 @@ fn exposes_the_canonical_apply_patch_schema() {
 
 #[test]
 fn applies_an_update_and_an_add_after_preparing_the_whole_patch() {
-    let workspace = TestWorkspace::new();
-    workspace.write("src/lib.rs", "pub fn old() {}\n");
-    let tool = ApplyPatchTool::new(
-        environment_id(),
-        workspace.root(),
-        ApplyPatchLimits::default(),
-    )
-    .unwrap();
+    let dir = TestDir::new();
+    dir.write("src/lib.rs", "pub fn old() {}\n");
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
     let definition = tool.definition();
     let patch = "*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-pub fn old() {}\n+pub fn new() {}\n*** Add File: src/new.rs\n+pub fn added() {}\n*** End Patch\n";
 
@@ -67,19 +59,18 @@ fn applies_an_update_and_an_add_after_preparing_the_whole_patch() {
     };
     assert_eq!(output.status(), ToolOutputStatus::Success);
     assert_eq!(
-        fs::read_to_string(workspace.path().join("src/lib.rs")).unwrap(),
+        fs::read_to_string(dir.path().join("src/lib.rs")).unwrap(),
         "pub fn new() {}\n"
     );
     assert_eq!(
-        fs::read_to_string(workspace.path().join("src/new.rs")).unwrap(),
+        fs::read_to_string(dir.path().join("src/new.rs")).unwrap(),
         "pub fn added() {}\n"
     );
 }
 
 #[test]
-fn applies_a_host_selected_workspace_root() {
-    let primary = TestWorkspace::new();
-    let selected = TestWorkspace::new();
+fn applies_only_to_its_bound_dir() {
+    let primary = TestDir::new();
     let tool = ApplyPatchTool::new(
         environment_id(),
         primary.root(),
@@ -89,32 +80,24 @@ fn applies_a_host_selected_workspace_root() {
     let definition = tool.definition();
     let patch = "*** Begin Patch\n*** Add File: selected.txt\n+selected\n*** End Patch\n";
 
-    let outcome = resolve(tool.execute(invocation(
-        &definition,
-        json!({"patch": patch, "workspace_root": selected.path()}),
-    )));
+    let outcome = resolve(tool.execute(invocation(&definition, json!({"patch": patch}))));
 
     let ToolExecutionOutcome::Returned(output) = outcome else {
         panic!("patch should return a tool output");
     };
     assert_eq!(output.status(), ToolOutputStatus::Success);
-    assert!(!primary.path().join("selected.txt").exists());
     assert_eq!(
-        fs::read_to_string(selected.path().join("selected.txt")).unwrap(),
+        fs::read_to_string(primary.path().join("selected.txt")).unwrap(),
         "selected\n"
     );
 }
 
 #[test]
 fn failed_later_operation_does_not_commit_an_earlier_add() {
-    let workspace = TestWorkspace::new();
-    workspace.write("src/lib.rs", "actual\n");
-    let tool = ApplyPatchTool::new(
-        environment_id(),
-        workspace.root(),
-        ApplyPatchLimits::default(),
-    )
-    .unwrap();
+    let dir = TestDir::new();
+    dir.write("src/lib.rs", "actual\n");
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
     let definition = tool.definition();
     let patch = "*** Begin Patch\n*** Add File: src/new.rs\n+new\n*** Update File: src/lib.rs\n@@\n-expected\n+replacement\n*** End Patch\n";
 
@@ -124,23 +107,19 @@ fn failed_later_operation_does_not_commit_an_earlier_add() {
         panic!("invalid hunk should return a tool error");
     };
     assert_eq!(output.status(), ToolOutputStatus::Error);
-    assert!(!workspace.path().join("src/new.rs").exists());
+    assert!(!dir.path().join("src/new.rs").exists());
     assert_eq!(
-        fs::read_to_string(workspace.path().join("src/lib.rs")).unwrap(),
+        fs::read_to_string(dir.path().join("src/lib.rs")).unwrap(),
         "actual\n"
     );
 }
 
 #[test]
-fn deletes_an_existing_workspace_file() {
-    let workspace = TestWorkspace::new();
-    workspace.write("src/obsolete.rs", "obsolete\n");
-    let tool = ApplyPatchTool::new(
-        environment_id(),
-        workspace.root(),
-        ApplyPatchLimits::default(),
-    )
-    .unwrap();
+fn deletes_an_existing_dir_file() {
+    let dir = TestDir::new();
+    dir.write("src/obsolete.rs", "obsolete\n");
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
     let definition = tool.definition();
     let patch = "*** Begin Patch\n*** Delete File: src/obsolete.rs\n*** End Patch\n";
 
@@ -150,19 +129,15 @@ fn deletes_an_existing_workspace_file() {
         panic!("delete should return a tool output");
     };
     assert_eq!(output.status(), ToolOutputStatus::Success);
-    assert!(!workspace.path().join("src/obsolete.rs").exists());
+    assert!(!dir.path().join("src/obsolete.rs").exists());
     assert!(format!("{:?}", output.content()).contains("src/obsolete.rs"));
 }
 
 #[test]
 fn rejects_parent_directory_paths() {
-    let workspace = TestWorkspace::new();
-    let tool = ApplyPatchTool::new(
-        environment_id(),
-        workspace.root(),
-        ApplyPatchLimits::default(),
-    )
-    .unwrap();
+    let dir = TestDir::new();
+    let tool =
+        ApplyPatchTool::new(environment_id(), dir.root(), ApplyPatchLimits::default()).unwrap();
     let definition = tool.definition();
     let patch = "*** Begin Patch\n*** Add File: ../outside.txt\n+no\n*** End Patch\n";
 
@@ -175,15 +150,15 @@ fn rejects_parent_directory_paths() {
     assert!(format!("{:?}", output.content()).contains("must be relative"));
 }
 
-static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
-struct TestWorkspace {
+struct TestDir {
     path: PathBuf,
 }
 
-impl TestWorkspace {
+impl TestDir {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-apply-patch-tests-{}-{sequence}",
             std::process::id()
@@ -196,8 +171,8 @@ impl TestWorkspace {
         &self.path
     }
 
-    fn root(&self) -> WorkspaceRoot {
-        WorkspaceRoot::open(&self.path).unwrap()
+    fn root(&self) -> Dir {
+        Dir::open_local(&self.path).unwrap()
     }
 
     fn write(&self, relative: impl AsRef<Path>, content: &str) {
@@ -207,14 +182,14 @@ impl TestWorkspace {
     }
 }
 
-impl Drop for TestWorkspace {
+impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
 
-fn environment_id() -> ToolEnvironmentId {
-    ToolEnvironmentId::new("test-environment").unwrap()
+fn environment_id() -> EnvId {
+    EnvId::new("test-environment").unwrap()
 }
 
 fn invocation(definition: &ToolDefinition, arguments: serde_json::Value) -> ToolInvocation {

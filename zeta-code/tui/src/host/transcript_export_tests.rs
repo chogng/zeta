@@ -33,7 +33,7 @@ fn requested_exports_are_bounded_and_refuse_overwrite() {
 
 #[cfg(unix)]
 #[test]
-fn requested_exports_do_not_follow_a_directory_symlink_outside_the_workspace() {
+fn requested_exports_do_not_follow_a_directory_symlink_outside_the_dir() {
     let root = std::env::temp_dir().join(format!("zeta-tui-export-symlink-{}", std::process::id()));
     let outside =
         std::env::temp_dir().join(format!("zeta-tui-export-outside-{}", std::process::id()));

@@ -116,8 +116,8 @@ impl SessionPaneState {
         })
     }
 
-    pub fn refresh_shell_workspace(&mut self) {
-        self.update_chat_input(ChatInput::refresh_shell_workspace);
+    pub fn refresh_dir_catalog(&mut self) {
+        self.update_chat_input(ChatInput::refresh_dir_catalog);
     }
 
     pub fn apply_composer_command(&mut self, command: CodeEditorCommand) {

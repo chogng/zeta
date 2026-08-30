@@ -31,6 +31,7 @@ use zui::ui::TextInputCommand;
 use zui::ui::TextInputCompositionEvent;
 use zui::ui::TextStyle;
 
+mod directory_picker;
 #[path = "files/file_icon.rs"]
 mod file_icon;
 #[path = "files/file_tree.rs"]
@@ -43,8 +44,11 @@ mod pane;
 mod toolbar;
 #[path = "files/tree_view.rs"]
 mod tree_view;
-mod workspace_picker;
 
+pub use directory_picker::{
+    DIRECTORY_SEARCH_INPUT, DirectoryPicker, DirectoryPickerActivation, DirectoryPickerState,
+    PICKER_ITEM_HEIGHT, path_item_id,
+};
 pub use file_tree::FilesEntry;
 use file_tree::FilesTree;
 pub use file_tree::FilesTreeRow;
@@ -52,10 +56,6 @@ pub use layout::FilesLayout;
 pub use pane::FilesPane;
 pub use pane::FilesPaneStyle;
 pub use toolbar::FilesToolbar;
-pub use workspace_picker::{
-    PICKER_ITEM_HEIGHT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPicker,
-    WorkspacePathPickerActivation, WorkspacePathPickerState, workspace_path_item_id,
-};
 
 pub fn display_working_directory(working_directory: &Path, home: Option<&Path>) -> String {
     if let Some(home) = home {
@@ -229,7 +229,7 @@ impl Default for FilesState {
 }
 
 impl FilesState {
-    pub fn set_workspace_root(&mut self, root: PathBuf) {
+    pub fn set_dir_root(&mut self, root: PathBuf) {
         self.root = Some(root);
         self.tree.clear();
         self.scroll_state = ScrollState::default();

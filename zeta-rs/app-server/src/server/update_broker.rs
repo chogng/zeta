@@ -28,16 +28,14 @@ use zeta_app_server_protocol::protocol::language::LanguageServerStateNotificatio
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
+use zeta_app_server_protocol::protocol::session::SessionChanged;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
 use zeta_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
 use zeta_config::ConfigChange;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::RequestId;
-use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
-use zeta_protocol::SessionUpdate;
-use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdate;
@@ -79,7 +77,7 @@ struct Subscriber {
     scope_id: u64,
     agent_interactions: Option<AgentInteractionCapability>,
     collaboration_rooms: BTreeSet<String>,
-    sessions: BTreeMap<SessionId, u64>,
+    sessions: BTreeSet<SessionId>,
     threads: BTreeMap<ThreadId, ThreadSubscription>,
 }
 
@@ -141,7 +139,7 @@ impl UpdateBroker {
                     scope_id: self.scope_id,
                     agent_interactions: None,
                     collaboration_rooms: BTreeSet::new(),
-                    sessions: BTreeMap::new(),
+                    sessions: BTreeSet::new(),
                     threads: BTreeMap::new(),
                 },
             );
@@ -234,16 +232,11 @@ impl UpdateBroker {
         }
     }
 
-    pub(super) fn subscribe_session(
-        &self,
-        connection_id: u64,
-        session_id: SessionId,
-        sequence: u64,
-    ) {
+    pub(super) fn subscribe_session(&self, connection_id: u64, session_id: SessionId) {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
-            subscriber.sessions.insert(session_id, sequence);
+            subscriber.sessions.insert(session_id);
             reconcile_interaction_assignments(&mut state);
         }
     }
@@ -253,6 +246,26 @@ impl UpdateBroker {
             state.session_scopes.insert(session_id, self.scope_id);
             reconcile_interaction_assignments(&mut state);
         }
+    }
+
+    pub(super) fn publish_session_changed(&self, session_id: &SessionId) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber.sessions.contains(session_id) {
+                queue.push(notification(
+                    ServerNotificationMethod::SessionChanged,
+                    &SessionChanged {
+                        session_id: session_id.clone(),
+                    },
+                ));
+            }
+            true
+        });
     }
 
     pub(super) fn unsubscribe_session(
@@ -369,57 +382,6 @@ impl UpdateBroker {
             return lost;
         }
         Vec::new()
-    }
-
-    pub(super) fn publish_session(
-        &self,
-        session_id: &SessionId,
-        updates: &[SessionUpdateEnvelope],
-    ) {
-        let Ok(mut state) = self.state.lock() else {
-            return;
-        };
-        state.subscribers.retain(|_, subscriber| {
-            let Some(queue) = subscriber.queue.upgrade() else {
-                return false;
-            };
-            for update in updates {
-                let SessionUpdate::Committed { event } = &update.update;
-                match event {
-                    SessionEvent::ThreadCreationPlanned { thread, .. } => {
-                        subscribe_session_thread_locked(
-                            subscriber,
-                            session_id,
-                            thread.thread_id.clone(),
-                            0,
-                        );
-                    }
-                    SessionEvent::ThreadAttached { thread_id, .. } => {
-                        subscribe_session_thread_locked(
-                            subscriber,
-                            session_id,
-                            thread_id.clone(),
-                            0,
-                        );
-                    }
-                    _ => {}
-                }
-            }
-            let Some(cursor) = subscriber.sessions.get_mut(session_id) else {
-                return true;
-            };
-            let pending = updates
-                .iter()
-                .filter(|update| update.durable_sequence > *cursor)
-                .map(|update| notification(ServerNotificationMethod::SessionUpdate, update))
-                .collect::<Vec<_>>();
-            if let Some(last) = updates.last() {
-                *cursor = (*cursor).max(last.durable_sequence);
-            }
-            queue.extend(pending);
-            true
-        });
-        reconcile_interaction_assignments(&mut state);
     }
 
     pub(super) fn publish_thread(&self, thread_id: &ThreadId, updates: &[ThreadUpdateEnvelope]) {
@@ -775,7 +737,7 @@ impl UpdateBroker {
         diagnostics: LanguageDiagnosticsNotification,
     ) {
         self.publish_language_notification(
-            ServerNotificationMethod::LanguageDiagnostics,
+            ServerNotificationMethod::LanguageDirectoryDiagnostics,
             &diagnostics,
         );
     }
@@ -992,20 +954,6 @@ fn interaction_owner_matches(
             .threads
             .get(&request.thread_id)
             .is_some_and(|subscription| subscription.session_owners.contains(&request.session_id))
-}
-
-fn subscribe_session_thread_locked(
-    subscriber: &mut Subscriber,
-    session_id: &SessionId,
-    thread_id: ThreadId,
-    sequence: u64,
-) {
-    if !subscriber.sessions.contains_key(session_id) {
-        return;
-    }
-    let subscription = subscriber.threads.entry(thread_id).or_default();
-    subscription.sequence = subscription.sequence.max(sequence);
-    subscription.session_owners.insert(session_id.clone());
 }
 
 fn notification<T: Serialize>(method: ServerNotificationMethod, params: &T) -> Value {

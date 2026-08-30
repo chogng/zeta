@@ -28,7 +28,7 @@ fn subject<'a>(
         "shell-command",
         [
             ExecPolicyCapability::new("network", "api.example.com:443"),
-            ExecPolicyCapability::new("file_read", "/workspace"),
+            ExecPolicyCapability::new("file_read", "/dir"),
         ],
         command,
         network,
@@ -242,9 +242,9 @@ fn amendment_is_revision_bound_and_user_layer_only() {
 }
 
 #[test]
-fn workspace_layer_cannot_grant_unsandboxed_execution() {
+fn dir_layer_cannot_grant_unsandboxed_execution() {
     let rule = ExecPolicyRule::new(
-        ExecPolicyRuleId::new("workspace-allow"),
+        ExecPolicyRuleId::new("dir-allow"),
         ExecPolicySelector::Any,
         ExecPolicyEffect::AllowUnsandboxed,
     );
@@ -252,8 +252,8 @@ fn workspace_layer_cannot_grant_unsandboxed_execution() {
     assert!(matches!(
         ExecPolicySnapshot::new(
             ExecPolicyDefault::Continue,
-            vec![layer(ExecPolicyLayerKind::Workspace, vec![rule])],
+            vec![layer(ExecPolicyLayerKind::Directory, vec![rule])],
         ),
-        Err(ExecPolicyError::WorkspaceRuleMayNotAllow(_))
+        Err(ExecPolicyError::DirectoryRuleMayNotAllow(_))
     ));
 }

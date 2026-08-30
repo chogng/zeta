@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use serde_json::json;
 use zeta_app_server_daemon::ConnectionOptions;
+use zeta_app_server_daemon::GrantSource;
 use zeta_app_server_daemon::LifecycleCommand;
 use zeta_app_server_daemon::LifecycleStatus;
-use zeta_app_server_daemon::WorkspaceTrustSource;
 use zeta_app_server_daemon::daemon_endpoint_path;
 use zeta_app_server_daemon::run_lifecycle;
 use zeta_uds::UnixStream;
@@ -34,15 +34,10 @@ impl Drop for StopOnDrop<'_> {
 fn lifecycle_commands_are_idempotent_and_probe_initialize() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     std::fs::create_dir(&profile).unwrap();
-    std::fs::create_dir(&workspace).unwrap();
-    let options = ConnectionOptions::new(
-        &profile,
-        Some(workspace),
-        WorkspaceTrustSource::HostConfiguration,
-        None,
-    );
+    std::fs::create_dir(&dir).unwrap();
+    let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
     let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
     let cleanup = StopOnDrop {
         options: options.clone(),
@@ -92,15 +87,10 @@ fn lifecycle_commands_are_idempotent_and_probe_initialize() {
 fn start_replaces_a_daemon_from_a_different_executable_identity() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     std::fs::create_dir(&profile).unwrap();
-    std::fs::create_dir(&workspace).unwrap();
-    let options = ConnectionOptions::new(
-        &profile,
-        Some(workspace),
-        WorkspaceTrustSource::HostConfiguration,
-        None,
-    );
+    std::fs::create_dir(&dir).unwrap();
+    let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
     let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
     let first_executable = root.path().join("daemon-first");
     let second_executable = root.path().join("daemon-second");
@@ -124,15 +114,10 @@ fn start_replaces_a_daemon_from_a_different_executable_identity() {
 fn concurrent_starts_publish_one_process_generation() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     std::fs::create_dir(&profile).unwrap();
-    std::fs::create_dir(&workspace).unwrap();
-    let options = ConnectionOptions::new(
-        &profile,
-        Some(workspace),
-        WorkspaceTrustSource::HostConfiguration,
-        None,
-    );
+    std::fs::create_dir(&dir).unwrap();
+    let options = ConnectionOptions::new(&profile, Some(dir), GrantSource::HostConfiguration, None);
     let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
     let cleanup = StopOnDrop {
         options: options.clone(),
@@ -172,13 +157,13 @@ fn concurrent_starts_publish_one_process_generation() {
 fn stop_closes_active_connections_after_its_bounded_grace_window() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     std::fs::create_dir(&profile).unwrap();
-    std::fs::create_dir(&workspace).unwrap();
+    std::fs::create_dir(&dir).unwrap();
     let options = ConnectionOptions::new(
         &profile,
-        Some(workspace.clone()),
-        WorkspaceTrustSource::HostConfiguration,
+        Some(dir.clone()),
+        GrantSource::HostConfiguration,
         None,
     );
     let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
@@ -196,8 +181,8 @@ fn stop_closes_active_connections_after_its_bounded_grace_window() {
         "{}",
         json!({
             "version": 1,
-            "workspaceRoot": workspace,
-            "workspaceTrustSource": "hostConfiguration",
+            "dirRoot": dir,
+            "dirGrantSource": "hostConfiguration",
             "productServices": null,
         })
     )

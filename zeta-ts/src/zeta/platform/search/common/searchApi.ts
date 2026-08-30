@@ -1,7 +1,7 @@
-import type { WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult } from "../../../../../generated/app-server/types.js";
+import type { ContentSearchCancelParams, ContentSearchReadParams, ContentSearchReadResult, ContentSearchStartParams, ContentSearchStartResult } from "../../../../../generated/app-server/types.js";
 
-export interface IWorkspaceSearchApi {
-	start(params: WorkspaceSearchStartParams): Promise<WorkspaceSearchStartResult>;
-	read(params: WorkspaceSearchReadParams): Promise<WorkspaceSearchReadResult>;
-	cancel(params: WorkspaceSearchCancelParams): Promise<void>;
+export interface IContentSearchApi {
+	start(params: ContentSearchStartParams): Promise<ContentSearchStartResult>;
+	read(params: ContentSearchReadParams): Promise<ContentSearchReadResult>;
+	cancel(params: ContentSearchCancelParams): Promise<void>;
 }

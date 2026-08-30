@@ -156,7 +156,10 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
         session_id: SessionId::new("session").unwrap(),
         thread_id: thread_id.clone(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "test".into(),
+        status: zeta_protocol::ThreadStatus::Active,
         turn_execution_binding: None,
         sequence: 1,
         usage: zeta_protocol::ModelUsageSummary::default(),

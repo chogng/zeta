@@ -13,7 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 sha2 = { workspace = true }
 tempfile = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [lints]
 workspace = true

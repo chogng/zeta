@@ -7,6 +7,9 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use serde_json::json;
+use zeta_app_server_protocol::protocol::initialize::{
+    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
+};
 use zeta_app_server_protocol::schema_hash;
 
 #[test]
@@ -66,7 +69,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "activate",
             "--host",
             "build-linux",
-            "--workspace",
+            "--dir",
             "/srv/project",
             "--runtime",
             "/srv/zeta/runtime/one/bin/zeta-server",
@@ -91,7 +94,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "activate",
             "--host",
             "build-linux",
-            "--workspace",
+            "--dir",
             "/srv/project",
             "--runtime",
             "/srv/zeta/runtime/two/bin/zeta-server",
@@ -108,7 +111,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "get",
             "--host",
             "build-linux",
-            "--workspace",
+            "--dir",
             "/srv/project",
         ])
         .env("ZETA_PROFILE_ROOT", &root)
@@ -138,7 +141,7 @@ fn zeta_code_cli_owns_shared_remote_profile_persistence() {
             "rollback",
             "--host",
             "build-linux",
-            "--workspace",
+            "--dir",
             "/srv/project",
             "--ssh",
         ])
@@ -180,7 +183,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
             "Build",
             "--host",
             "build-linux",
-            "--workspace",
+            "--dir",
             "/srv/project",
         ])
         .env("ZETA_PROFILE_ROOT", &root)
@@ -193,7 +196,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
     );
     assert_eq!(
         String::from_utf8(save.stdout).unwrap(),
-        "{\"name\":\"build\",\"host\":\"build-linux\",\"workspace\":\"/srv/project\"}\n"
+        "{\"name\":\"build\",\"host\":\"build-linux\",\"dir\":\"/srv/project\"}\n"
     );
 
     let update = Command::new(env!("CARGO_BIN_EXE_zeta"))
@@ -207,7 +210,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
             "production",
             "--host",
             "production-linux",
-            "--workspace",
+            "--dir",
             "/srv/production",
         ])
         .env("ZETA_PROFILE_ROOT", &root)
@@ -220,7 +223,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
     );
     assert_eq!(
         String::from_utf8(update.stdout).unwrap(),
-        "{\"name\":\"production\",\"host\":\"production-linux\",\"workspace\":\"/srv/production\"}\n"
+        "{\"name\":\"production\",\"host\":\"production-linux\",\"dir\":\"/srv/production\"}\n"
     );
 
     let list = Command::new(env!("CARGO_BIN_EXE_zeta"))
@@ -231,7 +234,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
     assert!(list.status.success());
     assert_eq!(
         String::from_utf8(list.stdout).unwrap(),
-        "[{\"name\":\"production\",\"host\":\"production-linux\",\"workspace\":\"/srv/production\"}]\n"
+        "[{\"name\":\"production\",\"host\":\"production-linux\",\"dir\":\"/srv/production\"}]\n"
     );
     assert!(root.join("remote/targets.json").is_file());
 
@@ -243,7 +246,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
     assert!(get.status.success());
     assert_eq!(
         String::from_utf8(get.stdout).unwrap(),
-        "{\"name\":\"production\",\"host\":\"production-linux\",\"workspace\":\"/srv/production\"}\n"
+        "{\"name\":\"production\",\"host\":\"production-linux\",\"dir\":\"/srv/production\"}\n"
     );
 
     let remove = Command::new(env!("CARGO_BIN_EXE_zeta"))
@@ -254,7 +257,7 @@ fn zeta_code_cli_owns_shared_named_remote_connections() {
     assert!(remove.status.success());
     assert_eq!(
         String::from_utf8(remove.stdout).unwrap(),
-        "{\"name\":\"production\",\"host\":\"production-linux\",\"workspace\":\"/srv/production\"}\n"
+        "{\"name\":\"production\",\"host\":\"production-linux\",\"dir\":\"/srv/production\"}\n"
     );
 
     let missing = Command::new(env!("CARGO_BIN_EXE_zeta"))
@@ -273,18 +276,22 @@ fn initialize_response(server_schema_hash: &str) -> String {
         "id": 1,
         "result": {
             "serverInfo": { "name": "fake-remote", "version": "1" },
+            "protocolVersion": {
+                "major": APP_SERVER_PROTOCOL_MAJOR,
+                "revision": APP_SERVER_PROTOCOL_REVISION
+            },
             "schemaHash": server_schema_hash,
             "capabilities": {
                 "agentInteractions": false,
                 "documentCollaboration": false,
-                "sessions": false,
-                "threads": false,
-                "turns": false,
+                "sessions": true,
+                "threads": true,
+                "turns": true,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,
                 "git": false,
-                "workspaceSearch": false,
+                "contentSearch": false,
                 "codebase": false,
                 "cloudCodebase": false,
                 "terminal": false,
@@ -297,7 +304,12 @@ fn initialize_response(server_schema_hash: &str) -> String {
                 "plugins": false,
                 "marketplace": false,
                 "mcp": false,
-                "mcpOAuth": false
+                "mcpOAuth": false,
+                "contracts": {
+                    "sessions": { "version": APP_SERVER_CAPABILITY_VERSION },
+                    "threads": { "version": APP_SERVER_CAPABILITY_VERSION },
+                    "turns": { "version": APP_SERVER_CAPABILITY_VERSION }
+                }
             },
             "slashCommands": []
         }

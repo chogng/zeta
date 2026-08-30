@@ -7,7 +7,8 @@ import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languag
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
-import { type IWorkspaceTrustService, type WorkspaceTrustSetting } from "../../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
+import type { PermissionDto } from "../../../../../../../generated/app-server/types.js";
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
@@ -74,8 +75,8 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 	using acquisition = service.acquire(resource, "rust", model);
 	await tick();
 
-	assert.equal(api.synchronized[0]!.document.workspaceFolderId, "two");
-	events.fire({ method: "language/diagnostics", params: { workspaceFolderId: "two", path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 9 } }, severity: "warning", message: "second root", code: null, source: "fixture" }] } });
+	assert.equal(api.synchronized[0]!.document.dirId, "two");
+	events.fire({ method: "language/diagnostics", params: { dirId: "two", path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 9 } }, severity: "warning", message: "second root", code: null, source: "fixture" }] } });
 	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "second root");
 });
 
@@ -98,8 +99,8 @@ class FakeLanguageApi implements ILanguageApi {
 	readonly diagnosticPulls: Parameters<ILanguageApi["documentDiagnostics"]>[0][] = [];
 	documentDiagnosticsError: Error | undefined;
 	workspaceDiagnosticPulls = 0;
-	workspaceDiagnosticsError: Error | undefined;
-	workspaceReport: Awaited<ReturnType<ILanguageApi["workspaceDiagnostics"]>> = { supported: false, snapshots: [] };
+	directoryDiagnosticsError: Error | undefined;
+	workspaceReport: Awaited<ReturnType<ILanguageApi["directoryDiagnostics"]>> = { supported: false, snapshots: [] };
 	async synchronize(params: Parameters<ILanguageApi["synchronize"]>[0]): Promise<void> { this.synchronized.push(params); }
 	async close(params: Parameters<ILanguageApi["close"]>[0]): Promise<void> { this.closed.push(params); }
 	hover(): ReturnType<ILanguageApi["hover"]> { throw new Error("unused"); }
@@ -107,7 +108,7 @@ class FakeLanguageApi implements ILanguageApi {
 	resolveCompletion(): ReturnType<ILanguageApi["resolveCompletion"]> { throw new Error("unused"); }
 	executeCommand(): ReturnType<ILanguageApi["executeCommand"]> { throw new Error("unused"); }
 	async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
-	async workspaceDiagnostics(): ReturnType<ILanguageApi["workspaceDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.workspaceDiagnosticsError) throw this.workspaceDiagnosticsError; return this.workspaceReport; }
+	async directoryDiagnostics(): ReturnType<ILanguageApi["directoryDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.directoryDiagnosticsError) throw this.directoryDiagnosticsError; return this.workspaceReport; }
 	formatDocument(): ReturnType<ILanguageApi["formatDocument"]> { throw new Error("unused"); }
 	formatRange(): ReturnType<ILanguageApi["formatRange"]> { throw new Error("unused"); }
 	signatureHelp(): ReturnType<ILanguageApi["signatureHelp"]> { throw new Error("unused"); }
@@ -124,7 +125,7 @@ class FakeLanguageApi implements ILanguageApi {
 	foldingRanges(): ReturnType<ILanguageApi["foldingRanges"]> { throw new Error("unused"); }
 	locations(): ReturnType<ILanguageApi["locations"]> { throw new Error("unused"); }
 	hierarchy(): ReturnType<ILanguageApi["hierarchy"]> { throw new Error("unused"); }
-	workspaceSymbols(): ReturnType<ILanguageApi["workspaceSymbols"]> { throw new Error("unused"); }
+	directorySymbols(): ReturnType<ILanguageApi["directorySymbols"]> { throw new Error("unused"); }
 	prepareRename(): ReturnType<ILanguageApi["prepareRename"]> { throw new Error("unused"); }
 	rename(): ReturnType<ILanguageApi["rename"]> { throw new Error("unused"); }
 	codeActions(): ReturnType<ILanguageApi["codeActions"]> { throw new Error("unused"); }
@@ -156,7 +157,7 @@ test("App Server diagnostics service treats typed unavailable pulls as unsupport
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	api.documentDiagnosticsError = new Error("LanguageRequestFailed");
-	api.workspaceDiagnosticsError = new Error("LanguageServiceUnavailable");
+	api.directoryDiagnosticsError = new Error("LanguageServiceUnavailable");
 	const reported: unknown[][] = [];
 	const originalConsoleError = console.error;
 	console.error = (...arguments_: unknown[]) => reported.push(arguments_);
@@ -191,12 +192,12 @@ test("App Server diagnostics service waits for a workspace folder before pulling
 	assert.ok(api.workspaceDiagnosticPulls > 0);
 });
 
-test("App Server diagnostics service gates Editor synchronization on Workspace Trust and replays open models after trust", async () => {
+test("App Server diagnostics service gates Editor synchronization on directory permissions and replays open models after access is allowed", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	const trust = new FakeWorkspaceTrustService("workspace", "restricted");
+	const permissions = new FakeDirPermissionsService("workspace", []);
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
-	using service = new AppServerLanguageDiagnosticsService(api, events, workspace, undefined, trust);
+	using service = new AppServerLanguageDiagnosticsService(api, events, workspace, undefined, permissions);
 	using model = new TextModel("fn main() {}\n");
 	using acquisition = service.acquire(URI.file("C:\\project\\main.rs"), "rust", model);
 
@@ -205,7 +206,7 @@ test("App Server diagnostics service gates Editor synchronization on Workspace T
 	assert.equal(api.synchronized.length, 0);
 	assert.equal(api.workspaceDiagnosticPulls, 0);
 
-	trust.setting = "trusted";
+	permissions.value = ["executeCommands", "useLanguageServices"];
 	events.fire({ method: "config/changed", params: { revision: 2, generation: 2 } });
 	await tick();
 	await tick();
@@ -213,7 +214,7 @@ test("App Server diagnostics service gates Editor synchronization on Workspace T
 	assert.equal(api.synchronized[0]!.document.path, "main.rs");
 	assert.ok(api.workspaceDiagnosticPulls > 0);
 
-	trust.setting = "restricted";
+	permissions.value = [];
 	events.fire({ method: "config/changed", params: { revision: 3, generation: 3 } });
 	await tick();
 	await tick();
@@ -223,10 +224,10 @@ test("App Server diagnostics service gates Editor synchronization on Workspace T
 	assert.equal(api.synchronized.length, synchronizedBeforeEdit);
 });
 
-class FakeWorkspaceTrustService implements IWorkspaceTrustService {
-	constructor(private readonly workspace: string, public setting: WorkspaceTrustSetting) {}
-	async list() { return { revision: 1, entries: this.setting === "trusted" ? [{ workspace: this.workspace, root: "C:\\project" }] : [] }; }
-	async read(): ReturnType<IWorkspaceTrustService["read"]> { return this.setting; }
-	async set(): ReturnType<IWorkspaceTrustService["set"]> { throw new Error("unused"); }
-	async forget(): ReturnType<IWorkspaceTrustService["forget"]> { throw new Error("unused"); }
+class FakeDirPermissionsService implements IDirPermissionsService {
+	constructor(private readonly dir: string, public value: readonly PermissionDto[]) {}
+	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
+	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }
+	async set(): ReturnType<IDirPermissionsService["set"]> { throw new Error("unused"); }
+	async forget(): ReturnType<IDirPermissionsService["forget"]> { throw new Error("unused"); }
 }

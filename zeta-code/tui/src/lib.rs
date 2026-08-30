@@ -20,7 +20,7 @@ use zeta_app_server_client::ShutdownError;
 use zeta_app_server_client::TakeEventsError;
 use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
-use zeta_app_server_protocol::protocol::common::WorkspaceTrustHostCapability;
+use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
 use zeta_protocol::AgentInteractionKind;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
@@ -29,7 +29,7 @@ use zeta_protocol::ThreadId;
 ///
 /// The CLI host passes this value during `initialize` so App Server can select this connection as
 /// the ephemeral owner for approval and structured user-input requests on subscribed Threads, and
-/// accept explicit `/add-dir` consent as a session-scoped Workspace trust decision.
+/// accept explicit `/add-dir` consent as a session-scoped directory capability decision.
 pub fn client_capabilities() -> ClientCapabilities {
     ClientCapabilities {
         notifications: Some(true),
@@ -42,7 +42,7 @@ pub fn client_capabilities() -> ClientCapabilities {
             dynamic_tools: None,
         }),
         browser: None,
-        workspace_trust_host: Some(WorkspaceTrustHostCapability { version: 1 }),
+        dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
     }
 }
 
@@ -50,8 +50,8 @@ pub fn client_capabilities() -> ClientCapabilities {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TuiOptions {
     thread_title: String,
-    display_workspace_root: PathBuf,
-    host_workspace_root: PathBuf,
+    display_dir_root: PathBuf,
+    host_dir_root: PathBuf,
     host_file_search_root: Option<PathBuf>,
     keybindings_path: Option<PathBuf>,
     status_line_path: Option<PathBuf>,
@@ -61,12 +61,12 @@ pub struct TuiOptions {
 
 impl TuiOptions {
     pub fn new(thread_title: impl Into<String>) -> Self {
-        let workspace_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let dir_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self {
             thread_title: thread_title.into(),
-            display_workspace_root: workspace_root.clone(),
-            host_workspace_root: workspace_root.clone(),
-            host_file_search_root: Some(workspace_root),
+            display_dir_root: dir_root.clone(),
+            host_dir_root: dir_root.clone(),
+            host_file_search_root: Some(dir_root),
             keybindings_path: None,
             status_line_path: None,
             terminal_settings_path: None,
@@ -74,22 +74,22 @@ impl TuiOptions {
         }
     }
 
-    /// Uses `workspace_root` for display and bounded local host file operations.
-    pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
-        let workspace_root = workspace_root.into();
-        self.display_workspace_root = workspace_root.clone();
-        self.host_workspace_root = workspace_root.clone();
-        self.host_file_search_root = Some(workspace_root);
+    /// Uses `dir_root` for display and bounded local host file operations.
+    pub fn with_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
+        let dir_root = dir_root.into();
+        self.display_dir_root = dir_root.clone();
+        self.host_dir_root = dir_root.clone();
+        self.host_file_search_root = Some(dir_root);
         self
     }
 
-    /// Displays a Remote workspace without scanning it through the local host filesystem.
+    /// Displays a Remote directory without scanning it through the local host filesystem.
     ///
-    /// Host-only output such as transcript export remains bounded to the local workspace root
+    /// Host-only output such as transcript export remains bounded to the local directory root
     /// configured before this method is called. Remote path completion can be added later through
     /// an App Server-owned path-search contract.
-    pub fn with_remote_workspace(mut self, remote_workspace_root: impl Into<PathBuf>) -> Self {
-        self.display_workspace_root = remote_workspace_root.into();
+    pub fn with_remote_dir(mut self, remote_dir_root: impl Into<PathBuf>) -> Self {
+        self.display_dir_root = remote_dir_root.into();
         self.host_file_search_root = None;
         self
     }
@@ -122,37 +122,6 @@ impl TuiOptions {
 pub struct TuiRecoveryState {
     session_id: SessionId,
     thread_id: ThreadId,
-}
-
-/// Host-owned Workspace reconnect requested by selecting a Session from another authority.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TuiWorkspaceReconnect {
-    workspace_root: PathBuf,
-    recovery: TuiRecoveryState,
-}
-
-impl TuiWorkspaceReconnect {
-    pub(crate) fn new(workspace_root: PathBuf, recovery: TuiRecoveryState) -> Self {
-        Self {
-            workspace_root,
-            recovery,
-        }
-    }
-
-    /// Returns the canonical Workspace root recorded by the selected Session.
-    pub fn workspace_root(&self) -> &std::path::Path {
-        &self.workspace_root
-    }
-
-    /// Returns the Session and Thread identity to restore after reconnecting.
-    pub fn recovery(&self) -> &TuiRecoveryState {
-        &self.recovery
-    }
-
-    /// Splits the host reconnect target into its Workspace and durable recovery identity.
-    pub fn into_parts(self) -> (PathBuf, TuiRecoveryState) {
-        (self.workspace_root, self.recovery)
-    }
 }
 
 /// Classifies why an initialized TUI connection reached its terminal boundary.
@@ -199,8 +168,6 @@ pub enum TuiExit {
     UserRequested,
     /// The host process received an operating-system termination request.
     TerminationRequested,
-    /// The selected Session belongs to another Workspace and the product host must reconnect.
-    WorkspaceReconnectRequested(TuiWorkspaceReconnect),
     /// The initialized App Server connection ended while the durable conversation remained.
     ConnectionLost {
         kind: TuiConnectionLossKind,
@@ -213,7 +180,7 @@ pub enum TuiExit {
 #[derive(Debug)]
 pub enum TuiError {
     Client(ClientError),
-    SessionEvents(TakeEventsError),
+    EventStream(TakeEventsError),
     Shutdown(ShutdownError),
     Terminal(std::io::Error),
 }
@@ -222,7 +189,7 @@ impl fmt::Display for TuiError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Client(error) => write!(formatter, "{error}"),
-            Self::SessionEvents(error) => write!(formatter, "{error}"),
+            Self::EventStream(error) => write!(formatter, "{error}"),
             Self::Shutdown(error) => write!(formatter, "{error}"),
             Self::Terminal(error) => write!(formatter, "terminal error: {error}"),
         }
@@ -245,7 +212,7 @@ impl From<std::io::Error> for TuiError {
 
 impl From<TakeEventsError> for TuiError {
     fn from(error: TakeEventsError) -> Self {
-        Self::SessionEvents(error)
+        Self::EventStream(error)
     }
 }
 

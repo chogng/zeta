@@ -203,17 +203,14 @@ mod tests {
             "--access".into(),
             READ_ONLY_ACCESS.into(),
             WORKING_DIRECTORY_FLAG.into(),
-            "C:\\workspace".into(),
+            "C:\\dir".into(),
             COMMAND_SEPARATOR.into(),
             "tool.exe".into(),
             "argument with spaces".into(),
         ])
         .unwrap();
         assert_eq!(request.access, OsString::from(READ_ONLY_ACCESS));
-        assert_eq!(
-            request.working_directory,
-            std::path::Path::new("C:\\workspace")
-        );
+        assert_eq!(request.working_directory, std::path::Path::new("C:\\dir"));
         assert_eq!(
             request.command,
             [
@@ -239,7 +236,7 @@ mod tests {
 
     #[test]
     fn appcontainer_profile_identity_is_stable_and_authority_specific() {
-        let directory = std::path::Path::new("C:\\workspace");
+        let directory = std::path::Path::new("C:\\dir");
         let read_only = profile_name(directory, READ_ONLY_ACCESS);
         assert_eq!(read_only, profile_name(directory, READ_ONLY_ACCESS));
         assert_ne!(

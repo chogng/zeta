@@ -16,7 +16,7 @@ API。
 | 能力 | 本 crate 的职责 | 上层或平台职责 |
 | --- | --- | --- |
 | Package binding | 接收并绑定 `package_id`、digest、entrypoint 与 activation generation | source adapter 选择 immutable package/executable 并解析绝对路径 |
-| Activation authority | 每次激活和调用前获取 `ActivationLease` | Adapter 同时复核 source artifact/admission lease 与 Workspace trust |
+| Activation authority | 每次激活和调用前获取 `ActivationLease` | Adapter 同时复核 source artifact/admission lease 与 directory capability |
 | Process supervision | 每扩展一个进程、incarnation fencing、停用、关闭和有界重启 | 平台 launcher 安装 sandbox、hard limits 和 killable process tree |
 | Host RPC v1 | 版本、请求相关性、严格 shape、注册 ceiling 和 byte limits | 扩展程序实现协议；App Server 把注册投影到领域 owner |
 | Provider invocation | 路由到精确 registration、deadline、并发取消和结果校验 | Command、Language、Debug、Tasks、Testing 定义 payload 与消费结果 |
@@ -121,7 +121,7 @@ Linked Editing。
 ## 5. 授权、隔离与生命周期
 
 `ExtensionActivationSpec` 把可序列化 activation params 与不可序列化 `ActivationAuthority` 绑定。启动、
-crash recovery 和每次 `begin_invoke` 都重新取得 lease。disable、update、uninstall 或 Workspace trust
+crash recovery 和每次 `begin_invoke` 都重新取得 lease。disable、update、uninstall 或 directory capability
 撤销后，adapter 的 `authorizes/acquire` 必须立即拒绝新工作，并让既有 invocation drain 或被 host
 composition 主动取消；进程中自报的 package identity 不是授权依据。
 
@@ -153,7 +153,7 @@ retained history则丢弃最旧事件以保持固定上界。App Server 对客�
 App Server 或其他 composition root 必须：
 
 1. 从 source adapter 已规范化的 exact immutable package、digest、executable 与 live authority 构造
-   `ExtensionActivationSpec`，并把 Workspace trust 加入同一 live gate；
+   `ExtensionActivationSpec`，并把 directory capability 加入同一 live gate；
 2. 只把经过 exact process permission 和 regular-file validation 的绝对 executable 交给 launcher；
 3. 注入能够实施 `RequirePlatformEnforcement` 的平台 launcher，若不存在则将生产能力标记为不可用；
 4. 定期调用 `reconcile()`，把 snapshot 变化原子投影到 provider owners；

@@ -343,16 +343,15 @@ impl AppServer {
         ),
         RpcError,
     > {
-        let workspace = self.language_workspace_root_for(
-            document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            document.dir_id.as_deref(),
             document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(document.revision);
-        let runtime =
-            self.prepare_document_runtime(&workspace, &source_path, document, cancellation)?;
+        let runtime = self.prepare_document_runtime(&dir, &source_path, document, cancellation)?;
         Ok((source_path, revision, runtime))
     }
 }

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SandboxError {
-    OutsideWorkspace(PathBuf),
+    OutsideDir(PathBuf),
     InvalidRelativePath(PathBuf),
     BackendUnavailable {
         backend: SandboxKind,
@@ -16,8 +16,8 @@ pub enum SandboxError {
 impl fmt::Display for SandboxError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::OutsideWorkspace(path) => {
-                write!(formatter, "path is outside workspace: {}", path.display())
+            Self::OutsideDir(path) => {
+                write!(formatter, "path is outside directory: {}", path.display())
             }
             Self::InvalidRelativePath(path) => {
                 write!(
@@ -36,13 +36,11 @@ impl fmt::Display for SandboxError {
 
 impl std::error::Error for SandboxError {}
 
-impl From<zeta_workspace::WorkspacePathError> for SandboxError {
-    fn from(error: zeta_workspace::WorkspacePathError) -> Self {
+impl From<zeta_file_access::DirPathError> for SandboxError {
+    fn from(error: zeta_file_access::DirPathError) -> Self {
         match error {
-            zeta_workspace::WorkspacePathError::OutsideWorkspace(path) => {
-                Self::OutsideWorkspace(path)
-            }
-            zeta_workspace::WorkspacePathError::InvalidRelativePath(path) => {
+            zeta_file_access::DirPathError::OutsideDir(path) => Self::OutsideDir(path),
+            zeta_file_access::DirPathError::InvalidRelativePath(path) => {
                 Self::InvalidRelativePath(path)
             }
             error => Self::Io(error.to_string()),

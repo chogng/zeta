@@ -27,7 +27,7 @@ pub enum AppServerTarget {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmbeddedAppServerOptions {
     profile_root: PathBuf,
-    workspace_root: Option<PathBuf>,
+    dir_root: Option<PathBuf>,
     client_info: ClientInfo,
 }
 
@@ -35,14 +35,14 @@ impl EmbeddedAppServerOptions {
     pub fn new(profile_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
         Self {
             profile_root: profile_root.into(),
-            workspace_root: None,
+            dir_root: None,
             client_info,
         }
     }
 
-    /// Enables Workspace-scoped tools for this embedded run.
-    pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
-        self.workspace_root = Some(workspace_root.into());
+    /// Enables directory-scoped tools for this embedded run.
+    pub fn with_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
+        self.dir_root = Some(dir_root.into());
         self
     }
 
@@ -50,8 +50,8 @@ impl EmbeddedAppServerOptions {
         &self.profile_root
     }
 
-    pub fn workspace_root(&self) -> Option<&Path> {
-        self.workspace_root.as_deref()
+    pub fn dir_root(&self) -> Option<&Path> {
+        self.dir_root.as_deref()
     }
 
     pub fn client_info(&self) -> &ClientInfo {

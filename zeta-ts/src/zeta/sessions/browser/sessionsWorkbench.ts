@@ -5,7 +5,6 @@ import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/com
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
-import type { IWorkspaceContextApi } from "../../platform/workspace/common/workspaceIpc.js";
 import { IStorageService } from "../../platform/storage/common/storage.js";
 import type { WorkbenchContextMenuServiceFactory } from "../../workbench/browser/workbenchInteractionServices.js";
 import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
@@ -21,7 +20,6 @@ export interface SessionsWorkbenchOptions {
 	readonly profile: SessionsProfile;
 	readonly api: IRendererHost;
 	readonly sessionsWindowApi?: ISessionsWindowApi;
-	readonly workspaceApi?: IWorkspaceContextApi;
 	readonly configurationApi?: IConfigurationApi;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
 	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
@@ -44,8 +42,6 @@ export class SessionsWorkbench extends Disposable {
 		this._register(bindSessionsTheme(container));
 		const configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi }));
 		const runtime = this._register(new SessionsRuntime(options.api, {
-			...(options.sessionsWindowApi ? { sessionsWindowApi: options.sessionsWindowApi } : {}),
-			...(options.workspaceApi ? { workspaceApi: options.workspaceApi } : {}),
 			configurationService,
 		}));
 		const storage = this._register(new BrowserStorageService({

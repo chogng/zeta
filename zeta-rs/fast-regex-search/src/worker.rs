@@ -29,9 +29,9 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
+use zeta_file_access::Dir;
 use zeta_uds::UnixListener;
 use zeta_uds::UnixStream;
-use zeta_workspace::WorkspaceRoot;
 
 const PROTOCOL_VERSION: u16 = 1;
 const MAX_REQUEST_BYTES: u64 = 2 * 1024 * 1024;
@@ -78,7 +78,7 @@ pub struct FastRegexWorkerClient {
 impl FastRegexWorkerClient {
     pub fn open(
         command: FastRegexWorkerCommand,
-        root: &WorkspaceRoot,
+        root: &Dir,
         storage: impl Into<PathBuf>,
         limits: FastRegexSearchLimits,
     ) -> Result<Self, FastRegexError> {
@@ -143,12 +143,12 @@ impl FastRegexWorkerClient {
         }
     }
 
-    pub fn reconcile_workspace(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
+    pub fn reconcile_dir(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
         let _mutation = self
             .mutation
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        match self.request(WorkerRequest::ReconcileWorkspace)? {
+        match self.request(WorkerRequest::ReconcileDir)? {
             WorkerValue::Update(outcome) => {
                 if matches!(outcome, FastRegexUpdateOutcome::Rebuilt(_)) {
                     self.restart_worker()?;
@@ -345,7 +345,7 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
         .and_then(|value| {
             serde_json::from_str(&value).map_err(|error| protocol_error(error.to_string()))
         })?;
-    let root = WorkspaceRoot::open(root).map_err(|error| protocol_error(error.to_string()))?;
+    let root = Dir::open_local(root).map_err(|error| protocol_error(error.to_string()))?;
     let search = Arc::new(FastRegexSearch::open(
         root,
         FastRegexSearchStorage::Persistent(storage),
@@ -386,7 +386,7 @@ fn handle_connection(mut stream: UnixStream, search: &FastRegexSearch, stopping:
         WorkerRequest::RefreshObservedPaths { paths } => search
             .refresh_observed_paths(&paths)
             .map(WorkerValue::Update),
-        WorkerRequest::ReconcileWorkspace => search.reconcile_workspace().map(WorkerValue::Update),
+        WorkerRequest::ReconcileDir => search.reconcile_dir().map(WorkerValue::Update),
         WorkerRequest::Search { query } => search.search(&query).map(WorkerValue::Search),
         WorkerRequest::Shutdown => {
             stopping.store(true, Ordering::Release);
@@ -449,7 +449,7 @@ enum WorkerRequest {
         #[serde(with = "serde_paths")]
         paths: Vec<PathBuf>,
     },
-    ReconcileWorkspace,
+    ReconcileDir,
     Search {
         query: FastRegexQuery,
     },
@@ -772,19 +772,18 @@ mod tests {
 
     #[test]
     fn worker_owns_rebuild_refresh_and_search() {
-        let workspace = tempfile::tempdir().expect("workspace");
+        let dir = tempfile::tempdir().expect("dir");
         let storage = tempfile::tempdir().expect("storage");
-        fs::write(workspace.path().join("alpha.txt"), "worker needle\n").expect("source");
+        fs::write(dir.path().join("alpha.txt"), "worker needle\n").expect("source");
         #[cfg(target_os = "linux")]
         let non_utf8_path = {
             use std::os::unix::ffi::OsStringExt;
 
             let path = PathBuf::from(OsString::from_vec(b"non-utf8-\xff.txt".to_vec()));
-            fs::write(workspace.path().join(&path), "encoded path marker\n")
-                .expect("non-UTF-8 source");
+            fs::write(dir.path().join(&path), "encoded path marker\n").expect("non-UTF-8 source");
             path
         };
-        let root = WorkspaceRoot::open(workspace.path()).expect("root");
+        let root = Dir::open_local(dir.path()).expect("root");
         let command = FastRegexWorkerCommand::new(
             std::env::current_exe().expect("test executable"),
             [
@@ -857,9 +856,9 @@ mod tests {
             assert_eq!(encoded.matches[0].path, non_utf8_path);
         }
 
-        fs::write(workspace.path().join("alpha.txt"), "changed value\n").expect("change");
+        fs::write(dir.path().join("alpha.txt"), "changed value\n").expect("change");
         let outcome = client
-            .refresh_observed_paths(&[workspace.path().join("alpha.txt")])
+            .refresh_observed_paths(&[dir.path().join("alpha.txt")])
             .expect("refresh");
         assert!(matches!(outcome, FastRegexUpdateOutcome::Published(_)));
     }

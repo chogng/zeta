@@ -19,8 +19,8 @@ use zeta_core::CoreError;
 use zeta_core::JoinAgentsRequest;
 use zeta_core::MultiAgentCoordinator;
 use zeta_core::SendAgentMessageRequest;
-use zeta_core::SessionCoordinator;
 use zeta_core::SpawnAgentRequest;
+use zeta_core::ThreadController;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
@@ -57,22 +57,22 @@ const MAX_WAIT: Duration = Duration::from_secs(30);
 
 pub(super) struct MultiAgentToolService {
     coordinator: Arc<MultiAgentCoordinator>,
-    sessions: Arc<SessionCoordinator>,
+    threads: Arc<ThreadController>,
     turn_backend: Arc<dyn TurnExecutionBackend>,
     definitions: Vec<ToolDefinition>,
     action_policy_revision: ActionPolicyRevision,
-    customizations: Option<Arc<super::workspace_customizations::WorkspaceCustomizations>>,
+    customizations: Option<Arc<super::dir_contributions::DirContributions>>,
 }
 
 impl MultiAgentToolService {
     pub(super) fn new(
         coordinator: Arc<MultiAgentCoordinator>,
-        sessions: Arc<SessionCoordinator>,
+        threads: Arc<ThreadController>,
         turn_backend: Arc<dyn TurnExecutionBackend>,
     ) -> Self {
         Self {
             coordinator,
-            sessions,
+            threads,
             turn_backend,
             definitions: vec![spawn_definition(), send_definition(), wait_definition()],
             action_policy_revision: local_policy_revision(),
@@ -85,9 +85,9 @@ impl MultiAgentToolService {
         self
     }
 
-    pub(super) fn with_workspace_customizations(
+    pub(super) fn with_dir_contributions(
         mut self,
-        customizations: Arc<super::workspace_customizations::WorkspaceCustomizations>,
+        customizations: Arc<super::dir_contributions::DirContributions>,
     ) -> Self {
         self.customizations = Some(customizations);
         self
@@ -142,7 +142,7 @@ impl MultiAgentToolService {
                 let delegation_id = DelegationId::new(arguments.delegation_id)
                     .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
                 let child_thread_id =
-                    child_thread_for(&self.sessions, identity.thread_id(), &delegation_id)?;
+                    child_thread_for(&self.threads, identity.thread_id(), &delegation_id)?;
                 let delivered = self.coordinator.send_message(SendAgentMessageRequest {
                     message_id: AgentMessageId::new(format!("tool:{}", call.id))
                         .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
@@ -258,7 +258,7 @@ impl MultiAgentToolService {
         parent_thread_id: &ThreadId,
         selected: Option<&[DelegationId]>,
     ) -> Result<(), CoreError> {
-        let parent = self.sessions.threads().read_thread(parent_thread_id)?;
+        let parent = self.threads.read_thread(parent_thread_id)?;
         let delegation_ids = selected
             .map(<[DelegationId]>::to_vec)
             .unwrap_or_else(|| parent.delegations.keys().cloned().collect());
@@ -270,7 +270,7 @@ impl MultiAgentToolService {
                 continue;
             }
             let child_thread_id =
-                child_thread_for(&self.sessions, parent_thread_id, &delegation_id)?;
+                child_thread_for(&self.threads, parent_thread_id, &delegation_id)?;
             self.coordinator
                 .reconcile_terminal_delegation(&child_thread_id)?;
         }
@@ -579,12 +579,11 @@ fn wait_join_policy(
 }
 
 fn child_thread_for(
-    sessions: &SessionCoordinator,
+    threads: &ThreadController,
     parent_thread_id: &ThreadId,
     delegation_id: &DelegationId,
 ) -> Result<ThreadId, CoreError> {
-    sessions
-        .threads()
+    threads
         .read_thread(parent_thread_id)?
         .delegations
         .get(delegation_id)
@@ -629,7 +628,7 @@ fn spawn_definition() -> ToolDefinition {
                 },
                 "agent": {
                     "type": ["string", "null"],
-                    "description": "An optional exact Workspace Agent definition name. null lets the host select one unique metadata match or use the general fallback."
+                    "description": "An optional exact Agent definition name. null lets the host select one unique metadata match or use the general fallback."
                 },
                 "context": {
                     "type": ["object", "null"],

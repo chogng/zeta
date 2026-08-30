@@ -14,7 +14,7 @@ use zeta_action_policy::ResolvedAction;
 use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
 use zeta_core::CoreError;
-use zeta_core::SessionCoordinator;
+use zeta_core::ThreadController;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
@@ -31,15 +31,15 @@ use zeta_protocol::ToolName;
 pub(crate) const UPDATE_PLAN_TOOL_NAME: &str = "update_plan";
 
 pub(super) struct UpdatePlanToolService {
-    sessions: Arc<SessionCoordinator>,
+    threads: Arc<ThreadController>,
     definition: ToolDefinition,
     action_policy_revision: ActionPolicyRevision,
 }
 
 impl UpdatePlanToolService {
-    pub(super) fn new(sessions: Arc<SessionCoordinator>) -> Self {
+    pub(super) fn new(threads: Arc<ThreadController>) -> Self {
         Self {
-            sessions,
+            threads,
             definition: definition(),
             action_policy_revision: local_policy_revision(),
         }
@@ -75,11 +75,9 @@ impl UpdatePlanToolService {
                 })
                 .collect(),
         };
-        let result = self.sessions.threads().update_plan(
-            identity.thread_id(),
-            identity.turn_id(),
-            plan.clone(),
-        )?;
+        let result =
+            self.threads
+                .update_plan(identity.thread_id(), identity.turn_id(), plan.clone())?;
         success(json!({
             "updated": result.disposition == UpdatePlanDisposition::Changed,
             "sequence": result.sequence,

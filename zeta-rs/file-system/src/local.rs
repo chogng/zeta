@@ -3,11 +3,11 @@ use crate::ExistingTargetBehavior;
 use crate::FileContent;
 use crate::FileDeleteMode;
 use crate::FileMetadata;
+use crate::FileSystem;
 use crate::FileSystemError;
 use crate::FileType;
 use crate::FileWriteCondition;
 use crate::MissingTargetBehavior;
-use crate::WorkspaceFileSystem;
 use crate::file_revision;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -15,26 +15,26 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 use tempfile::NamedTempFile;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
-/// Local implementation that confines all operations to one canonical workspace root.
+/// Local implementation that confines all operations to one canonical directory.
 pub struct LocalFileSystem {
-    workspace: WorkspaceRoot,
+    dir: Dir,
     write_lock: Mutex<()>,
 }
 
 impl LocalFileSystem {
-    pub fn new(workspace: WorkspaceRoot) -> Self {
+    pub fn new(dir: Dir) -> Self {
         Self {
-            workspace,
+            dir,
             write_lock: Mutex::new(()),
         }
     }
 
     fn resolve_existing(&self, path: &Path) -> Result<PathBuf, FileSystemError> {
-        match self.workspace.resolve_existing(path) {
+        match self.dir.resolve_existing(path) {
             Ok(resolved) => Ok(resolved),
-            Err(_) => match self.workspace.resolve_for_write(path) {
+            Err(_) => match self.dir.resolve_for_write(path) {
                 Ok(candidate) if candidate.try_exists().map_err(io_error)? => {
                     Err(FileSystemError::InvalidPath(path.to_path_buf()))
                 }
@@ -45,7 +45,7 @@ impl LocalFileSystem {
     }
 
     fn resolve_for_write(&self, path: &Path) -> Result<PathBuf, FileSystemError> {
-        self.workspace
+        self.dir
             .resolve_for_write(path)
             .map_err(|_| FileSystemError::InvalidPath(path.to_path_buf()))
     }
@@ -94,7 +94,7 @@ impl LocalFileSystem {
     }
 }
 
-impl WorkspaceFileSystem for LocalFileSystem {
+impl FileSystem for LocalFileSystem {
     fn read_file(&self, path: &Path, maximum_bytes: usize) -> Result<Vec<u8>, FileSystemError> {
         if maximum_bytes == 0 {
             return Err(FileSystemError::ReadLimitExceeded { maximum_bytes });
@@ -121,7 +121,7 @@ impl WorkspaceFileSystem for LocalFileSystem {
         let _guard = self
             .write_lock
             .lock()
-            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+            .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
         self.write_file_inner(path, content, maximum_bytes)
     }
 
@@ -147,7 +147,7 @@ impl WorkspaceFileSystem for LocalFileSystem {
         let _guard = self
             .write_lock
             .lock()
-            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+            .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
         if let FileWriteCondition::ExpectedRevision(expected) = condition {
             let current = self.read_file(path, maximum_bytes)?;
             if file_revision(&current) != *expected {
@@ -190,7 +190,7 @@ impl WorkspaceFileSystem for LocalFileSystem {
         let _guard = self
             .write_lock
             .lock()
-            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+            .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
         let resolved = self.resolve_for_write(path)?;
         if resolved.exists() {
             return match existing {
@@ -213,7 +213,7 @@ impl WorkspaceFileSystem for LocalFileSystem {
         let _guard = self
             .write_lock
             .lock()
-            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+            .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
         let source_path = self.resolve_existing(source)?;
         let target_path = self.resolve_for_write(target)?;
         if source_path == target_path {
@@ -257,7 +257,7 @@ impl WorkspaceFileSystem for LocalFileSystem {
         let _guard = self
             .write_lock
             .lock()
-            .map_err(|_| FileSystemError::Io("workspace write lock is poisoned".into()))?;
+            .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
         let candidate = self.resolve_for_write(path)?;
         if !candidate.exists() {
             return match missing {
@@ -284,7 +284,7 @@ fn rename_backup_path(target: &Path) -> Result<PathBuf, FileSystemError> {
         }
     }
     Err(FileSystemError::Io(
-        "could not allocate a workspace rename backup path".into(),
+        "could not allocate a directory rename backup path".into(),
     ))
 }
 

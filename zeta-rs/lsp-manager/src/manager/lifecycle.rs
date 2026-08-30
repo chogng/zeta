@@ -39,7 +39,7 @@ impl Supervisor {
         });
         let mut options = LanguageServerOptions::new("zeta-lsp-manager", env!("CARGO_PKG_VERSION"))
             .with_host(bridge);
-        if let Ok(root_uri) = file_uri(&self.configuration.workspace_root) {
+        if let Ok(root_uri) = file_uri(&self.configuration.dir_root) {
             options = options.with_root_uri(root_uri);
         }
         if let Some(initialization_options) = initialization_options {

@@ -4,9 +4,9 @@ use crate::appcontainer::{
 };
 use crate::profile_name;
 use crate::protocol::{
-    ACCESS_FLAG, COMMAND_SEPARATOR, CWD_FLAG, ENFORCEMENT_FAILURE_EXIT_CODE, ERROR_PREFIX,
-    PROBE_FLAG, PROGRAM_FLAG, READ_ONLY_ACCESS, RUNNER_PROBE, SETUP_HELPER_FLAG, WORKSPACE_FLAG,
-    WORKSPACE_WRITE_ACCESS, remap_inner_exit_code,
+    ACCESS_FLAG, COMMAND_SEPARATOR, CWD_FLAG, DIR_FLAG, DIR_WRITE_ACCESS,
+    ENFORCEMENT_FAILURE_EXIT_CODE, ERROR_PREFIX, PROBE_FLAG, PROGRAM_FLAG, READ_ONLY_ACCESS,
+    RUNNER_PROBE, SETUP_HELPER_FLAG, remap_inner_exit_code,
 };
 use std::ffi::{OsStr, OsString, c_void};
 use std::path::PathBuf;
@@ -51,19 +51,19 @@ fn run(arguments: Vec<OsString>) -> Result<i32, String> {
     }
     let request = RunnerRequest::parse(arguments)?;
     let setup_helper = canonical_file(&request.setup_helper, "sandbox setup helper")?;
-    let workspace = canonical_directory(&request.workspace, "workspace")?;
+    let dir = canonical_directory(&request.dir, "dir")?;
     let cwd = canonical_directory(&request.cwd, "working directory")?;
-    if !cwd.starts_with(&workspace) {
-        return Err("working directory resolves outside workspace".to_owned());
+    if !cwd.starts_with(&dir) {
+        return Err("working directory resolves outside dir".to_owned());
     }
     let access = request
         .access
         .to_str()
         .ok_or("filesystem access mode is not valid Unicode")?;
-    if !matches!(access, READ_ONLY_ACCESS | WORKSPACE_WRITE_ACCESS) {
+    if !matches!(access, READ_ONLY_ACCESS | DIR_WRITE_ACCESS) {
         return Err("unsupported filesystem access mode".to_owned());
     }
-    let profile = profile_name(&workspace, access);
+    let profile = profile_name(&dir, access);
     let source_program = canonical_file(
         PathBuf::from(&request.command[0]).as_path(),
         "sandboxed program",
@@ -74,8 +74,8 @@ fn run(arguments: Vec<OsString>) -> Result<i32, String> {
     let setup_output = Command::new(setup_helper)
         .arg(ACCESS_FLAG)
         .arg(&request.access)
-        .arg(WORKSPACE_FLAG)
-        .arg(&workspace)
+        .arg(DIR_FLAG)
+        .arg(&dir)
         .arg(PROGRAM_FLAG)
         .arg(program)
         .output()
@@ -152,7 +152,7 @@ impl Drop for StagedProgram {
 struct RunnerRequest {
     setup_helper: PathBuf,
     access: OsString,
-    workspace: PathBuf,
+    dir: PathBuf,
     cwd: PathBuf,
     command: Vec<OsString>,
 }
@@ -161,7 +161,7 @@ impl RunnerRequest {
     fn parse(arguments: Vec<OsString>) -> Result<Self, String> {
         let mut setup_helper = None;
         let mut access = None;
-        let mut workspace = None;
+        let mut dir = None;
         let mut cwd = None;
         let mut command = None;
         let mut arguments = arguments.into_iter();
@@ -176,7 +176,7 @@ impl RunnerRequest {
             match flag.to_str() {
                 Some(SETUP_HELPER_FLAG) => setup_helper = Some(PathBuf::from(value)),
                 Some(ACCESS_FLAG) => access = Some(value),
-                Some(WORKSPACE_FLAG) => workspace = Some(PathBuf::from(value)),
+                Some(DIR_FLAG) => dir = Some(PathBuf::from(value)),
                 Some(CWD_FLAG) => cwd = Some(PathBuf::from(value)),
                 _ => return Err(format!("unexpected argument {}", flag.to_string_lossy())),
             }
@@ -188,7 +188,7 @@ impl RunnerRequest {
         Ok(Self {
             setup_helper: setup_helper.ok_or("missing setup helper")?,
             access: access.ok_or("missing access mode")?,
-            workspace: workspace.ok_or("missing workspace")?,
+            dir: dir.ok_or("missing dir")?,
             cwd: cwd.ok_or("missing working directory")?,
             command,
         })

@@ -3,9 +3,7 @@ use crate::local::ProviderModelService;
 use std::fs;
 use std::sync::Arc;
 use tempfile::tempdir;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_model_provider::EchoModel;
 use zeta_plugins::LocalPluginPackage;
@@ -44,12 +42,8 @@ fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     let server = AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_plugin_authority(authority);

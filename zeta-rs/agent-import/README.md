@@ -33,7 +33,7 @@ Zeta 配置，也不导入认证、会话、日志或历史记录。
 - `.zeta/{instructions,skills,agents}` 的原生发现、加载或 runtime activation。
 
 生产代码依赖 [`zeta-utils-path`](../utils/path-utils/README.md) 的 host canonical containment
-primitive，测试使用 workspace `tempfile`。它不得反向依赖
+primitive，测试使用 directory `tempfile`。它不得反向依赖
 `zeta-config`、`zeta-skills`、App Server、Core 或 Desktop。后续内容 parser 可以依赖窄格式
 crate，但不能为了落库或 UI 方便引入上述高层领域。
 
@@ -42,7 +42,7 @@ crate，但不能为了落库或 UI 方便引入上述高层领域。
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
 | `ExternalAgent` | 区分 `Codex` 与 `Claude` 布局 | 动态 provider registry |
-| `ImportScope` | 区分 `User` 与 `Project` 来源 | workspace trust 或配置优先级 |
+| `ImportScope` | 区分 `User` 与 `Project` 来源 | directory capability 或配置优先级 |
 | `AgentImportLocation::{codex_user,codex_project,claude_user,claude_project}` | 将来源、作用范围和调用方选择的根目录绑定为一个发现输入 | 环境变量解析、文件访问授权 |
 | `inspect_agent_paths` | 校验所有输入根并检查已知相对位置 | 读取正文、转换内容或应用配置 |
 | `AgentImportCandidate` | 返回来源、作用范围、条目类型、审查类别、相对路径和 canonical host path | 表示内容已受信任、已批准或可执行 |
@@ -208,9 +208,9 @@ authority 可以 prepare/publish 前，它们必须保持 unsupported，不能�
 当前 Config 只有逐 command mutation；atomic import batch、跨 authority prepare/publish、import
 receipt、provenance 与 remove/rollback contract 尚未实现。
 
-`zeta-workspace-access` 与 Import workflow 是两条不同的 host path。前者授予附加目录的持续文件访问，并可能按 directory origin 临时投影 allowlisted Skills、Agent definitions 或 Plugin declaration；后者让用户预览、选择并迁移外部 Agent 配置，不授予持续文件访问。未来两条路径可以复用本 crate 的 source-specific inspection/parser，但不能复用 authority、lifecycle 或 apply decision。持久 `additionalDirectories` 是 file-access-only，不能仅因目录可访问就调用本 crate 自动发现配置。本 crate 不依赖 `zeta-workspace-access`；App Server adapter 负责把 allowlisted inspection projection 映射到对应的 contribution policy。
+`zeta-file-access` 与 Import workflow 是两条不同路径。前者保存目录 Grant，并按明确的来源能力开放 Skills、Agent definitions 或 Plugin declaration；后者让用户预览、选择并迁移外部 Agent 配置，不授予持续文件访问。两条路径可以复用来源检查和解析，但不能复用授权生命周期或应用决定；本 crate 不依赖 `zeta-file-access`，由 App Server 根据 Authorization 调用。
 
-原生加载是第四条独立路径：Workspace `.zeta/{instructions,skills,agents}`、Zeta user root、
+原生加载是第四条独立路径：directory `.zeta/{instructions,skills,agents}`、Zeta user root、
 built-in resources 和 Plugin contribution 由各目标 authority 直接发现，不经过本 crate。若
 Instruction/Skill/Agent loader 开始扫描 `.codex`、`.agents` 或 `.claude`，或者本 crate 开始加载
 `.zeta` 并构造 runtime snapshot，都表示 compatibility boundary 已经漂移。

@@ -5,17 +5,17 @@ mod session_input;
 mod session_search;
 mod style;
 mod tab_context_menu;
+mod tab_dirs_preview;
 mod tab_mount;
-mod tab_workspace_preview;
 mod tabs;
 mod tabs_state;
 mod titlebar;
 mod toolbar;
 
 pub use identity::{
-    ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_ACTION, FIRST_TAB_CONTAINER_SESSION_CLOSE,
-    FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_TOGGLE, WINDOW,
-    WORKSPACE_PANE_TOGGLE,
+    ADD_SESSION, FILES_PANE_TOGGLE, FIRST_TAB_CONTAINER_SESSION_ACTION,
+    FIRST_TAB_CONTAINER_SESSION_CLOSE, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT,
+    TAB_CONTAINER_TOGGLE, WINDOW,
 };
 pub use session_input::session_tab_input;
 pub use session_search::SessionSearchState;

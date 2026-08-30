@@ -7,8 +7,8 @@
 
 ## 快速理解
 
-Desktop Renderer、Native 和 TUI 不启动 Git 进程，也不解析 Git 输出。Workspace-scoped App
-Server 接收 typed Git intent，调用 `zeta-git`，再把 client-safe DTO 返回产品入口。SCM 是
+Desktop Renderer 和 TUI 不启动 Git 进程，也不解析 Git 输出。App Server 在明确的 `Dir` 内
+接收 typed Git intent，调用 `zeta-git`，再把 client-safe DTO 返回产品入口。SCM 是
 Workbench 的通用展示与 provider 编排层；Git 是当前注册到 SCM 的版本控制 provider 和后端领域。
 
 ```text
@@ -21,20 +21,20 @@ Desktop SCM View（当前直接消费 IGitService；目标改由 SCM contract �
   → system Git
 ```
 
-这条依赖方向让 workspace path authority、Git executable identity、process limits 和 output
+这条依赖方向让目录边界、Git executable identity、process limits 和 output
 parsing 留在 Rust host。Renderer 只拥有展示状态和用户 intent。
 
-Workspace trust 只限制 Git 的副作用，不隐藏本地只读状态：
+Git 查询和修改使用不同 capability：
 
-| Git 能力 | Restricted | Trusted |
+| Git 能力 | `InspectRepository` | `MutateRepository` |
 | --- | --- | --- |
 | 当前分支、HEAD、改动状态、变更路径 | ✅ | ✅ |
 | 本地分支、分页 history/graph、已 fetch 的 remote-tracking refs、受限文本 diff | ✅ | ✅ |
 | 暂存、取消暂存、丢弃、提交、切分支 | ❌ | ✅ |
 | fetch、pull、push | ❌ | ✅ |
 
-`InspectRepository` 是可在 Restricted 下签发的只读 capability；`MutateRepository` 仍要求
-Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互和有界进程的 query profile
+只读入口要求 `Authorization<InspectRepository>`，修改入口要求 `Authorization<MutateRepository>`。Git query
+继续由 `zeta-git` 以禁用 hooks、非交互和有界进程的 query profile
 执行，不能借此启用 workspace code 或远程操作。
 
 | 用户操作 | 当前行为 | 关键限制 |

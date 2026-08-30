@@ -40,7 +40,7 @@ fn session_context_elements_resolve_to_their_stable_commands() {
             AppCommandId::PickWorkingDirectory,
         ),
         (ContextAction::GitBranch, AppCommandId::PickGitBranch),
-        (ContextAction::Diff, AppCommandId::ShowWorkspaceDiff),
+        (ContextAction::Diff, AppCommandId::ShowGitDiff),
     ];
 
     for (action, command) in expected {

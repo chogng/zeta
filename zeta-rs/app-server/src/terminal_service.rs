@@ -25,12 +25,12 @@ use zeta_app_server_protocol::protocol::terminal::TerminalReadResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalReconnectLease;
 use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
+use zeta_file_access::Authorization;
+use zeta_file_access::Permission;
 use zeta_utils_pty::ProcessHandle;
 use zeta_utils_pty::SpawnedProcess;
 use zeta_utils_pty::TerminalSize;
 use zeta_utils_pty::spawn_pty_process;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceCapability;
 
 const MAX_ACTIVE_TERMINALS: usize = 16;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
@@ -40,9 +40,10 @@ const RECONNECT_GRACE_PERIOD_MILLIS: u64 = 30_000;
 const RECONNECT_SWEEP_INTERVAL: Duration = Duration::from_secs(1);
 const RECONNECT_TOKEN_BYTES: usize = 32;
 
-/// Owns connection-scoped and briefly reconnectable PTY processes in one trusted workspace.
+/// Owns connection-scoped and briefly reconnectable PTY processes under one
+/// `ExecuteCommands` authorization.
 pub(crate) struct TerminalService {
-    workspace: RwLock<TrustedWorkspace>,
+    authorization: RwLock<Authorization>,
     next_terminal_id: AtomicU64,
     sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
     runtime: Runtime,
@@ -50,8 +51,8 @@ pub(crate) struct TerminalService {
 }
 
 impl TerminalService {
-    pub(crate) fn new(workspace: TrustedWorkspace) -> Result<Self, TerminalError> {
-        validate_workspace_capability(&workspace)?;
+    pub(crate) fn new(authorization: Authorization) -> Result<Self, TerminalError> {
+        validate_authorization(&authorization)?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -61,7 +62,7 @@ impl TerminalService {
         let sessions = Arc::new(Mutex::new(HashMap::new()));
         spawn_reconnect_sweeper(&runtime, Arc::clone(&sessions));
         Ok(Self {
-            workspace: RwLock::new(workspace),
+            authorization: RwLock::new(authorization),
             next_terminal_id: AtomicU64::new(1),
             sessions,
             runtime,
@@ -69,15 +70,12 @@ impl TerminalService {
         })
     }
 
-    pub(crate) fn switch_workspace(
-        &self,
-        workspace: TrustedWorkspace,
-    ) -> Result<(), TerminalError> {
-        validate_workspace_capability(&workspace)?;
+    pub(crate) fn set_dir(&self, authorization: Authorization) -> Result<(), TerminalError> {
+        validate_authorization(&authorization)?;
         *self
-            .workspace
+            .authorization
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = workspace;
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = authorization;
         Ok(())
     }
 
@@ -90,22 +88,22 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalCreateParams,
     ) -> Result<TerminalCreateResult, TerminalError> {
-        self.ensure_trusted()?;
-        let workspace = self
-            .workspace
+        self.ensure_active()?;
+        let authorization = self
+            .authorization
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
-        self.create_in_workspace(owner_connection_id, params, workspace)
+        self.create_in_dir(owner_connection_id, params, authorization)
     }
 
-    pub(crate) fn create_in_workspace(
+    pub(crate) fn create_in_dir(
         &self,
         owner_connection_id: u64,
         params: TerminalCreateParams,
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
     ) -> Result<TerminalCreateResult, TerminalError> {
-        validate_workspace_capability(&workspace)?;
+        validate_authorization(&authorization)?;
         validate_size(params.rows, params.cols)?;
         let reconnect = match params.lifecycle {
             TerminalLifecycle::ConnectionOwned => None,
@@ -119,13 +117,13 @@ impl TerminalService {
         if sessions.len() >= MAX_ACTIVE_TERMINALS {
             return Err(TerminalError::Busy);
         }
-        let workspace_root = workspace.root().canonical_path().to_path_buf();
+        let dir_root = authorization.dir().canonical_path().to_path_buf();
         let spawned = self
             .runtime
             .block_on(spawn_pty_process(
                 &profile.program,
                 &profile.launch_args(),
-                &workspace_root,
+                &dir_root,
                 self.profiles.environment(),
                 &None,
                 TerminalSize {
@@ -152,7 +150,7 @@ impl TerminalService {
                     .map(|lease| lease.reconnect_token.clone()),
                 process,
                 state,
-                workspace,
+                authorization,
             },
         );
         Ok(TerminalCreateResult {
@@ -167,7 +165,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalAttachParams,
     ) -> Result<TerminalAttachResult, TerminalError> {
-        self.ensure_trusted()?;
+        self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
         let reconnect = new_reconnect_lease()?;
         let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
@@ -206,7 +204,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalWriteParams,
     ) -> Result<(), TerminalError> {
-        self.ensure_trusted()?;
+        self.ensure_active()?;
         if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
             return Err(TerminalError::InvalidInput);
         }
@@ -234,7 +232,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalResizeParams,
     ) -> Result<(), TerminalError> {
-        self.ensure_trusted()?;
+        self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
         let sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
         sessions
@@ -253,7 +251,7 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalReadParams,
     ) -> Result<TerminalReadResult, TerminalError> {
-        self.ensure_trusted()?;
+        self.ensure_active()?;
         if params.max_chunks == 0 || params.max_chunks > 128 {
             return Err(TerminalError::InvalidInput);
         }
@@ -333,12 +331,12 @@ impl TerminalService {
         }
     }
 
-    pub(crate) fn terminate_revoked_workspaces(&self) {
+    pub(crate) fn terminate_revoked_dirs(&self) {
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
         sessions.retain(|_, session| {
-            if session.workspace.ensure_active().is_ok() {
+            if session.authorization.ensure_active().is_ok() {
                 true
             } else {
                 session.process.request_terminate();
@@ -347,8 +345,8 @@ impl TerminalService {
         });
     }
 
-    fn ensure_trusted(&self) -> Result<(), TerminalError> {
-        self.workspace
+    fn ensure_active(&self) -> Result<(), TerminalError> {
+        self.authorization
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .ensure_active()
@@ -365,16 +363,16 @@ impl TerminalService {
         if session.owner != TerminalOwner::Attached(owner_connection_id) {
             return Err(TerminalError::NotOwner);
         }
-        if session.workspace.ensure_active().is_err() {
+        if session.authorization.ensure_active().is_err() {
             return Err(TerminalError::OperationFailed);
         }
         Ok(sessions)
     }
 }
 
-fn validate_workspace_capability(workspace: &TrustedWorkspace) -> Result<(), TerminalError> {
-    if workspace.capability() == WorkspaceCapability::ExecuteProcess
-        && workspace.ensure_active().is_ok()
+fn validate_authorization(authorization: &Authorization) -> Result<(), TerminalError> {
+    if authorization.permission() == Permission::ExecuteCommands
+        && authorization.ensure_active().is_ok()
     {
         Ok(())
     } else {
@@ -387,7 +385,7 @@ struct TerminalSession {
     reconnect_token: Option<String>,
     process: Arc<ProcessHandle>,
     state: Arc<Mutex<TerminalState>>,
-    workspace: TrustedWorkspace,
+    authorization: Authorization,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

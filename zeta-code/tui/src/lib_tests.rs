@@ -37,22 +37,22 @@ use zeta_protocol::TurnStatus;
 fn tui_declares_the_host_authority_required_by_add_dir() {
     assert_eq!(
         crate::client_capabilities()
-            .workspace_trust_host
+            .dir_permissions_host
             .map(|capability| capability.version),
         Some(1)
     );
 }
 
 #[test]
-fn remote_workspace_is_displayed_without_enabling_local_path_search() {
+fn remote_dir_is_displayed_without_enabling_local_path_search() {
     let local_root = PathBuf::from("/local/export-root");
     let remote_root = PathBuf::from("/srv/project");
     let options = crate::TuiOptions::new("Remote")
-        .with_workspace_root(local_root.clone())
-        .with_remote_workspace(remote_root.clone());
+        .with_dir_root(local_root.clone())
+        .with_remote_dir(remote_root.clone());
 
-    assert_eq!(options.display_workspace_root, remote_root);
-    assert_eq!(options.host_workspace_root, local_root);
+    assert_eq!(options.display_dir_root, remote_root);
+    assert_eq!(options.host_dir_root, local_root);
     assert_eq!(options.host_file_search_root, None);
 }
 
@@ -110,6 +110,8 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let thread = Thread {
         session_id: SessionId::new("session_1").unwrap(),
         thread_id: ThreadId::new("thread_1").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 3,
@@ -303,7 +305,7 @@ fn server_slash_commands_become_the_tui_runtime_registry() {
     let registry = chat_input_catalog_snapshot(
         &[SlashCommandDefinition {
             name: "diagnose".into(),
-            description: "inspect the current workspace".into(),
+            description: "inspect the current dir".into(),
             argument_mode: SlashCommandArgumentModeDto::Optional,
         }],
         &empty_skill_catalog(),

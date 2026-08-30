@@ -153,7 +153,7 @@ impl fmt::Display for InvalidSkillName {
 
 impl std::error::Error for InvalidSkillName {}
 
-/// Stable identity for one configured, built-in, Workspace, or Plugin Skill source.
+/// Stable identity for one configured, built-in, directory, or Plugin Skill source.
 #[derive(Clone, Debug, Eq, Hash, schemars::JsonSchema, Ord, PartialEq, PartialOrd, ts_rs::TS)]
 pub struct SkillSourceId(String);
 

@@ -301,6 +301,8 @@ fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
     Thread {
         session_id: SessionId::new(session_id).unwrap(),
         thread_id: ThreadId::new(thread_id).unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence,

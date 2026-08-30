@@ -1,4 +1,4 @@
-//! Editor-independent lifecycle state for UTF-8 workspace files.
+//! Editor-independent lifecycle state for UTF-8 directory files.
 
 mod lifecycle;
 

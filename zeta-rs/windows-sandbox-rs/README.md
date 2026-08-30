@@ -7,7 +7,7 @@
 > 真实 Windows 验收步骤与 golden expectations 见
 > [`Windows Sandbox 手工验收 Runbook`](../../docs/windows-sandbox-acceptance-runbook.md)。
 
-当前 backend 支持 `ReadOnly + NetworkDenied` 和 `WorkspaceWrite + NetworkDenied`。其他受限
+当前 backend 支持 `ReadOnly + NetworkDenied` 和 `DirectoryWrite + NetworkDenied`。其他受限
 policy 返回 `BackendUnavailable`，不会降级为普通进程。`FullAccess + NetworkAllowed` 仍按共享
 contract 直接执行，不进入 helper。
 
@@ -22,8 +22,8 @@ WindowsSandbox::prepare
    ↓
 zeta-command-runner.exe
 ├─ zeta-windows-sandbox-setup.exe
-│  ├─ create/derive workspace-and-access-scoped profile SID
-│  └─ install workspace/program ACLs
+│  ├─ create/derive dir-and-access-scoped profile SID
+│  └─ install dir/program ACLs
 └─ CreateProcessW
    ├─ PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES
    ├─ zero capabilities (network denied)
@@ -36,13 +36,13 @@ canonicalize 后冻结路径。显式环境 override
 `ZETA_WINDOWS_COMMAND_RUNNER_PATH` / `ZETA_WINDOWS_SANDBOX_SETUP_PATH` 无效时直接失败；普通
 package/PATH candidate 可以逐个尝试。
 
-backend 以 canonical Workspace path 和 `ro`/`rw` access mode 的 SHA-256 前缀派生 profile 名；
-不同 Workspace 不复用 AppContainer identity，写模式也不会向只读模式累积 authority。
+backend 以 canonical Directory path 和 `ro`/`rw` access mode 的 SHA-256 前缀派生 profile 名；
+不同 Directory 不复用 AppContainer identity，写模式也不会向只读模式累积 authority。
 `setup::run` 创建或复用该 AppContainer profile，并把 profile SID 的 read/execute 权限授予
-对应 Workspace。runner 先把冻结的 inner program 复制到本次调用独有的用户 temp directory；
+对应 Directory。runner 先把冻结的 inner program 复制到本次调用独有的用户 temp directory；
 setup 只给该目录与 staged program 授予 read/execute，child 结束后 runner 清理它。因此安装在
-`Program Files` 时也不要求修改随包 `rg.exe` 的 DACL。WorkspaceWrite 额外授予 Workspace 写入权限，同时对
-`.git` 等 `PROTECTED_WORKSPACE_METADATA_NAMES` 显式递归安装 write/delete deny ACE；递归不跟随
+`Program Files` 时也不要求修改随包 `rg.exe` 的 DACL。DirectoryWrite 额外授予 Directory 写入权限，同时对
+`.git` 等 `PROTECTED_DIR_METADATA_NAMES` 显式递归安装 write/delete deny ACE；递归不跟随
 reparse point，任一 ACL 操作失败都会阻止 child 启动。ACL 是持久的 Windows filesystem metadata，
 不是进程退出后自动撤销的临时 mount。
 
@@ -59,7 +59,7 @@ spawn 任一步失败，runner 都输出私有 diagnostic marker 并返回保留
 - 目前只为 built-in、固定 executable 的无网络 local process（当前是 `rg`）接线；不支持任意
   shell、PTY、网络代理或动态 capability。
 - AppContainer profiles 与 ACL 是持久状态；目前没有 installer/uninstaller cleanup，长期使用过
-  的 Workspace 会保留只授予其 scoped profile SID 的 ACE。
+  的 Directory 会保留只授予其 scoped profile SID 的 ACE。
 - Windows API 已通过 MSVC target 的 Rust 交叉检查，但仍需要 Windows CI 的真实
   AppContainer、ACL、网络和 cancellation/kill-tree integration tests，才能标记为
   production-enforced。

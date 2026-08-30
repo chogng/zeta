@@ -1,10 +1,10 @@
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
-import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch, WorkspaceSearchMatchRange } from "../../../../platform/search/common/search.js";
+import type { IContentSearchQuery, IContentSearchService, ContentSearchMatch, ContentSearchMatchRange } from "../../../../platform/search/common/search.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { WorkspaceSearchConfiguration } from "../common/searchConfiguration.js";
+import { ContentSearchConfiguration } from "../common/searchConfiguration.js";
 
 interface SearchFileGroup {
 	readonly matches: HTMLUListElement;
@@ -14,7 +14,7 @@ interface SearchFileGroup {
 
 /** Workspace content-search form and incrementally populated result tree. */
 export class SearchViewPane extends ViewPane {
-	private readonly searchService: IWorkspaceSearchService;
+	private readonly searchService: IContentSearchService;
 	private readonly queryInput: HTMLInputElement;
 	private readonly caseSensitiveInput: HTMLInputElement;
 	private readonly regexInput: HTMLInputElement;
@@ -30,7 +30,7 @@ export class SearchViewPane extends ViewPane {
 	constructor(
 		container: HTMLElement,
 		options: IViewPaneOptions,
-		searchService: IWorkspaceSearchService,
+		searchService: IContentSearchService,
 		private readonly configurationService?: IConfigurationService,
 	) {
 		super(container, options);
@@ -97,11 +97,11 @@ export class SearchViewPane extends ViewPane {
 		}));
 		if (configurationService) this._register(configurationService.onDidChangeConfiguration(event => {
 			if (
-				event.affectsConfiguration(WorkspaceSearchConfiguration.matchCase) ||
-				event.affectsConfiguration(WorkspaceSearchConfiguration.smartCase) ||
-				event.affectsConfiguration(WorkspaceSearchConfiguration.regularExpression) ||
-				event.affectsConfiguration(WorkspaceSearchConfiguration.includePatterns) ||
-				event.affectsConfiguration(WorkspaceSearchConfiguration.excludePatterns)
+				event.affectsConfiguration(ContentSearchConfiguration.matchCase) ||
+				event.affectsConfiguration(ContentSearchConfiguration.smartCase) ||
+				event.affectsConfiguration(ContentSearchConfiguration.regularExpression) ||
+				event.affectsConfiguration(ContentSearchConfiguration.includePatterns) ||
+				event.affectsConfiguration(ContentSearchConfiguration.excludePatterns)
 			) this.applyConfiguration();
 		}));
 		this._register(toDisposable(() => {
@@ -171,34 +171,34 @@ export class SearchViewPane extends ViewPane {
 		}
 	}
 
-	private query(text: string): IWorkspaceSearchQuery {
+	private query(text: string): IContentSearchQuery {
 		return {
 			text,
 			patternKind: this.regexInput.checked ? "regex" : "literal",
 			caseSensitivity: this.caseSensitiveInput.checked
 				? "sensitive"
-				: this.configurationValue(WorkspaceSearchConfiguration.smartCase) ? "smart" : "insensitive",
+				: this.configurationValue(ContentSearchConfiguration.smartCase) ? "smart" : "insensitive",
 			includePatterns: patterns(this.includeInput.value),
 			excludePatterns: patterns(this.excludeInput.value),
-			maxResults: this.configurationValue(WorkspaceSearchConfiguration.maxResults),
+			maxResults: this.configurationValue(ContentSearchConfiguration.maxResults),
 		};
 	}
 
 	private applyConfiguration(): void {
-		this.caseSensitiveInput.checked = this.configurationValue(WorkspaceSearchConfiguration.matchCase);
-		this.regexInput.checked = this.configurationValue(WorkspaceSearchConfiguration.regularExpression);
-		this.includeInput.value = this.configurationValue(WorkspaceSearchConfiguration.includePatterns);
-		this.excludeInput.value = this.configurationValue(WorkspaceSearchConfiguration.excludePatterns);
+		this.caseSensitiveInput.checked = this.configurationValue(ContentSearchConfiguration.matchCase);
+		this.regexInput.checked = this.configurationValue(ContentSearchConfiguration.regularExpression);
+		this.includeInput.value = this.configurationValue(ContentSearchConfiguration.includePatterns);
+		this.excludeInput.value = this.configurationValue(ContentSearchConfiguration.excludePatterns);
 	}
 
 	private configurationValue<T>(key: IConfigurationKey<T>): T {
 		return this.configurationService?.getValue(key) ?? key.defaultValue;
 	}
 
-	private appendMatches(matches: readonly WorkspaceSearchMatch[]): void {
+	private appendMatches(matches: readonly ContentSearchMatch[]): void {
 		const document = this.element.ownerDocument;
 		for (const match of matches) {
-			const groupId = `${match.workspaceFolderId ?? ""}\0${match.path}`;
+			const groupId = `${match.dirId ?? ""}\0${match.path}`;
 			let group = this.groups.get(groupId);
 			if (!group) {
 				const item = h(document, "li");
@@ -209,8 +209,8 @@ export class SearchViewPane extends ViewPane {
 				heading.className = "zeta-search-file-heading";
 				const path = h(document, "span");
 				path.className = "zeta-search-file-path";
-				path.textContent = match.workspaceFolderName
-					? `${match.workspaceFolderName} • ${match.path}`
+				path.textContent = match.dirName
+					? `${match.dirName} • ${match.path}`
 					: match.path;
 				const count = h(document, "span");
 				count.className = "zeta-search-file-count";
@@ -273,7 +273,7 @@ function patterns(value: string): readonly string[] {
 
 function renderMatch(
 	document: Document,
-	match: WorkspaceSearchMatch,
+	match: ContentSearchMatch,
 ): HTMLLIElement {
 	const item = h(document, "li");
 	item.className = "zeta-search-match";
@@ -297,7 +297,7 @@ function appendHighlightedPreview(
 	document: Document,
 	container: HTMLElement,
 	text: string,
-	ranges: readonly WorkspaceSearchMatchRange[],
+	ranges: readonly ContentSearchMatchRange[],
 ): void {
 	let offset = 0;
 	for (const range of normalizedRanges(ranges, text.length)) {
@@ -315,10 +315,10 @@ function appendHighlightedPreview(
 }
 
 function normalizedRanges(
-	ranges: readonly WorkspaceSearchMatchRange[],
+	ranges: readonly ContentSearchMatchRange[],
 	length: number,
-): readonly WorkspaceSearchMatchRange[] {
-	const normalized: WorkspaceSearchMatchRange[] = [];
+): readonly ContentSearchMatchRange[] {
+	const normalized: ContentSearchMatchRange[] = [];
 	for (const range of [...ranges].sort((left, right) =>
 		left.start - right.start || left.end - right.end
 	)) {

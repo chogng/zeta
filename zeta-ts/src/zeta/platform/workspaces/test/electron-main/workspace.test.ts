@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import test from "node:test";
+import type { DirGrantDto } from "../../../../../../generated/app-server/types.js";
 import { URI } from "../../../../base/common/uri.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import {
@@ -20,7 +21,7 @@ import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/
 import {
 	WorkspaceOpenTargetKind,
 } from "../../../../platform/workspaces/common/workspaces.js";
-import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus, WorkspaceTrustChoice } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from "../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { parseWorkspaceLaunchArguments, WorkspaceContextMainService, WorkspacesMainService, workspaceContextIpcRoutes } from "../../../../platform/workspaces/electron-main/workspacesMainService.js";
@@ -357,14 +358,14 @@ test("workspace transition commits only after the runtime accepts the folder", a
 		UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 	);
 	const runtimeSwitches: string[] = [];
-	const trustChoices: WorkspaceTrustChoice[] = [];
+	const grants: DirGrantDto[] = [];
 	const transitions = new WorkspaceTransitionMainService({
 		workspaces,
 		context,
 		runtime: {
-			async switchWorkspace({ workspace, trust }) {
+			async switchWorkspace({ workspace, grant }) {
 				runtimeSwitches.push(workspace.uri.fsPath);
-				trustChoices.push(trust);
+				grants.push(grant);
 				if (workspace.uri.fsPath.endsWith("rejected")) {
 					throw new Error("runtime rejected workspace");
 				}
@@ -373,13 +374,14 @@ test("workspace transition commits only after the runtime accepts the folder", a
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
 	});
 	const acceptedPath = resolve("project");
-	const accepted = await transitions.transitionToFolder(acceptedPath, WorkspaceTrustChoice.Trusted);
+	const acceptedGrant: DirGrantDto = { type: "host", permissions: ["readFiles"] };
+	const accepted = await transitions.transitionToFolder(acceptedPath, acceptedGrant);
 
 	assert.equal(accepted.status, WorkspaceTransitionStatus.Applied);
 	assert.ok(accepted.workspace);
 	assert.equal(context.getWorkspace().id, accepted.workspace.id);
 	assert.deepEqual(runtimeSwitches, [acceptedPath]);
-	assert.deepEqual(trustChoices, [WorkspaceTrustChoice.Trusted]);
+	assert.deepEqual(grants, [acceptedGrant]);
 
 	const unchanged = await transitions.transitionToFolder(acceptedPath);
 	assert.equal(unchanged.status, WorkspaceTransitionStatus.Unchanged);
@@ -548,11 +550,11 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 	const adapter = new AppServerWorkspaceTransitionAdapter(host);
 
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "WorkspaceSwitchBusy", null)),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "EnvCwdSetBusy", null)),
 		WorkspaceTransitionFailureKind.RuntimeBusy,
 	);
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "WorkspaceSwitchUnavailable", null)),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "EnvCwdSetUnavailable", null)),
 		WorkspaceTransitionFailureKind.RuntimeUnsupported,
 	);
 	state = "restarting";
@@ -585,7 +587,7 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 		previous: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 		workspace,
 		root: workspace.uri.fsPath,
-		trust: WorkspaceTrustChoice.UserConfig,
+		grant: { type: "config" },
 	});
 	assert.deepEqual(switchedRoots, [workspace.uri.fsPath]);
 });

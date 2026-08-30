@@ -15,7 +15,7 @@ pub enum LspManagerEnablement {
 /// Immutable product configuration consumed by one language-service supervisor.
 #[derive(Clone, Debug)]
 pub struct LspManagerConfiguration {
-    pub(crate) workspace_root: PathBuf,
+    pub(crate) dir_root: PathBuf,
     pub(crate) enablement: LspManagerEnablement,
     pub(crate) servers: Vec<LanguageServerDefinition>,
     pub(crate) restart_policy: LanguageServerRestartPolicy,
@@ -23,9 +23,9 @@ pub struct LspManagerConfiguration {
 }
 
 impl LspManagerConfiguration {
-    pub fn disabled(workspace_root: impl Into<PathBuf>) -> Self {
+    pub fn disabled(dir_root: impl Into<PathBuf>) -> Self {
         Self {
-            workspace_root: workspace_root.into(),
+            dir_root: dir_root.into(),
             enablement: LspManagerEnablement::Disabled,
             servers: Vec::new(),
             restart_policy: LanguageServerRestartPolicy::standard(),
@@ -33,12 +33,9 @@ impl LspManagerConfiguration {
         }
     }
 
-    pub fn enabled(
-        workspace_root: impl Into<PathBuf>,
-        servers: Vec<LanguageServerDefinition>,
-    ) -> Self {
+    pub fn enabled(dir_root: impl Into<PathBuf>, servers: Vec<LanguageServerDefinition>) -> Self {
         Self {
-            workspace_root: workspace_root.into(),
+            dir_root: dir_root.into(),
             enablement: LspManagerEnablement::Enabled,
             servers,
             restart_policy: LanguageServerRestartPolicy::standard(),
@@ -46,8 +43,8 @@ impl LspManagerConfiguration {
         }
     }
 
-    pub fn workspace_root(&self) -> &Path {
-        &self.workspace_root
+    pub fn dir_root(&self) -> &Path {
+        &self.dir_root
     }
 
     pub const fn enablement(&self) -> LspManagerEnablement {

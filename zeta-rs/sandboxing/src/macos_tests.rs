@@ -1,14 +1,14 @@
 use super::*;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 #[test]
-fn workspace_write_profile_denies_other_writes_and_network() {
-    let workspace = WorkspaceRoot::open(".").unwrap();
-    let command = SandboxCommand::new("echo", ["hello"], workspace.canonical_path());
-    let policy = SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied);
+fn dir_write_profile_denies_other_writes_and_network() {
+    let dir = Dir::open_local(".").unwrap();
+    let command = SandboxCommand::new("echo", ["hello"], dir.canonical_path());
+    let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
 
     let prepared = MacosSeatbeltSandbox::new()
-        .prepare(&command, policy, &workspace)
+        .prepare(&command, policy, &dir)
         .unwrap();
 
     assert_eq!(prepared.kind(), SandboxKind::MacosSeatbelt);
@@ -17,8 +17,8 @@ fn workspace_write_profile_denies_other_writes_and_network() {
     assert!(profile.contains("(deny file-write*)"));
     assert!(profile.contains("(allow file-write* (subpath"));
     assert!(profile.contains("(deny network*)"));
-    for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-        let path = workspace.canonical_path().join(name);
+    for name in PROTECTED_DIR_METADATA_NAMES {
+        let path = dir.canonical_path().join(name);
         assert!(
             profile.contains(&format!(
                 "(deny file-write* (literal \"{}\"))",

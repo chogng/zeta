@@ -2,9 +2,9 @@ use super::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_file_access::{Permission, Permissions};
 use zeta_model_provider_config::{ModelProviderConfig, ProviderConfigRegistry};
 use zeta_protocol::{CommandId, Patch, ProviderId};
-use zeta_workspace::{WorkspaceTrustDecision, WorkspaceTrustSource};
 
 fn config_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -17,9 +17,9 @@ fn config_path(label: &str) -> std::path::PathBuf {
     ))
 }
 
-fn workspace_config_path(label: &str) -> std::path::PathBuf {
+fn dir_config_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-workspace-config-{label}-{}-{}.toml",
+        "zeta-dir-config-{label}-{}-{}.toml",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -172,7 +172,7 @@ fn update_preferences(
     }
 }
 
-fn workspace_trust_id() -> WorkspaceTrustId {
+fn dir_permissions_id() -> DirId {
     format!("sha256:{}", "12".repeat(32)).parse().unwrap()
 }
 
@@ -226,8 +226,8 @@ fn codebase_config_persists_model_selection_without_runtime_state() {
 }
 
 #[test]
-fn commit_message_egress_grant_is_bound_to_workspace_model_and_endpoint() {
-    let workspace = workspace_trust_id();
+fn commit_message_egress_grant_is_bound_to_dir_model_and_endpoint() {
+    let dir = dir_permissions_id();
     let provider = provider_id("openai-compatible");
     let mut provider_config = ModelProviderConfig::new(provider.clone());
     provider_config.base_url = Some("https://models.example.test/v1".into());
@@ -237,35 +237,35 @@ fn commit_message_egress_grant_is_bound_to_workspace_model_and_endpoint() {
     let mut config = CommitMessageConfig::default();
 
     config
-        .authorize(workspace.clone(), Some(&first_model), &providers)
+        .authorize(dir.clone(), Some(&first_model), &providers)
         .unwrap();
     assert_eq!(
-        config.authorized_model(&workspace, Some(&first_model), &providers),
+        config.authorized_model(&dir, Some(&first_model), &providers),
         Some(&first_model)
     );
     assert_eq!(
-        config.authorized_model(&workspace, Some(&second_model), &providers),
+        config.authorized_model(&dir, Some(&second_model), &providers),
         None
     );
 
     providers.get_mut(&provider).unwrap().base_url =
         Some("https://different.example.test/v1".into());
     assert_eq!(
-        config.authorized_model(&workspace, Some(&first_model), &providers),
+        config.authorized_model(&dir, Some(&first_model), &providers),
         None
     );
 
     providers.insert(provider, provider_config);
     config
-        .authorize(workspace.clone(), Some(&second_model), &providers)
+        .authorize(dir.clone(), Some(&second_model), &providers)
         .unwrap();
     assert_eq!(
-        config.authorized_model(&workspace, Some(&second_model), &providers),
+        config.authorized_model(&dir, Some(&second_model), &providers),
         Some(&second_model)
     );
-    config.revoke(&workspace);
+    config.revoke(&dir);
     assert_eq!(
-        config.authorized_model(&workspace, Some(&second_model), &providers),
+        config.authorized_model(&dir, Some(&second_model), &providers),
         None
     );
 }
@@ -322,13 +322,17 @@ fn built_in_skill() -> SkillId {
     )
 }
 
-fn workspace_scope() -> WorkspaceConfigScope {
-    WorkspaceConfigScope::new(WorkspaceId::new("project").unwrap())
+fn dir_scope() -> DirConfigScope {
+    DirConfigScope::new(dir_permissions_id())
 }
 
-fn workspace_document(preferred_model: Option<ModelRef>) -> WorkspaceConfigDocument {
-    let mcp_server = WorkspaceMcpServerConfig {
-        id: McpServerId::new("workspace:project:mcp:github").unwrap(),
+fn dir_document(preferred_model: Option<ModelRef>) -> DirConfigDocument {
+    let namespace = format!("dir:{}", dir_permissions_id());
+    let mcp_id = format!("{namespace}:mcp:github");
+    let skill_id = format!("{namespace}:skill-source:review");
+    let hook_id = format!("{namespace}:hook:review");
+    let mcp_server = DirMcpServerConfig {
+        id: McpServerId::new(mcp_id).unwrap(),
         display_name: "Project GitHub".into(),
         transport: McpTransportConfig::Stdio {
             command: "github-mcp".into(),
@@ -337,36 +341,33 @@ fn workspace_document(preferred_model: Option<ModelRef>) -> WorkspaceConfigDocum
         enablement: McpServerEnablement::Enabled,
     };
     let skill_source = SkillSourceConfig {
-        id: SkillSourceId::new("workspace:project:skill-source:review").unwrap(),
-        root_reference: "workspace:skill-root:review".into(),
+        id: SkillSourceId::new(skill_id).unwrap(),
+        root_reference: "dir:skill-root:review".into(),
         enablement: SkillSourceEnablement::Enabled,
     };
     let plugin_id = PluginId::new("acme/code-review").unwrap();
-    WorkspaceConfigDocument {
-        agent: WorkspaceAgentConfig { preferred_model },
-        mcp: WorkspaceMcpConfig {
+    DirConfigDocument {
+        agent: DirAgentConfig { preferred_model },
+        mcp: DirMcpConfig {
             servers: BTreeMap::from([(mcp_server.id.clone(), mcp_server)]),
         },
-        plugin_requests: WorkspacePluginRequests {
+        plugin_requests: DirPluginRequests {
             requests: BTreeMap::from([(
                 plugin_id.clone(),
-                WorkspacePluginRequest {
+                DirPluginRequest {
                     plugin_id,
                     version: PluginVersion::new("1.2.3").unwrap(),
-                    requested_scope: WorkspacePluginRequestScope::Workspace,
+                    requested_scope: DirPluginRequestScope::Directory,
                 },
             )]),
         },
-        skills: WorkspaceSkillsConfig {
+        skills: DirSkillsConfig {
             sources: BTreeMap::from([(skill_source.id.clone(), skill_source)]),
         },
         hooks: HooksConfig {
-            hooks: BTreeMap::from([(
-                HookId::new("workspace:project:hook:review").unwrap(),
-                hook("workspace:project:hook:review"),
-            )]),
+            hooks: BTreeMap::from([(HookId::new(&hook_id).unwrap(), hook(&hook_id))]),
         },
-        exec_policy: WorkspaceExecPolicyConfig::default(),
+        exec_policy: DirExecPolicyConfig::default(),
     }
 }
 
@@ -558,19 +559,20 @@ fn preference_patches_preserve_missing_fields_and_clear_null_fields() {
 }
 
 #[test]
-fn workspace_trust_commands_persist_user_owned_decisions() {
-    let path = config_path("workspace-trust");
+fn dir_permissions_commands_persist_user_owned_decisions() {
+    let path = config_path("dir-permissions");
     let store = ConfigStore::open(&path).unwrap();
-    let workspace = workspace_trust_id();
-    let display_root = std::path::PathBuf::from("/tmp/zeta-workspace-trust");
-    let trusted = store
+    let dir = dir_permissions_id();
+    let display_path = std::path::PathBuf::from("/tmp/zeta-dir-permissions");
+    let permissions = Permissions::new([Capability::ReadFiles, Capability::SearchFiles]);
+    let configured = store
         .apply(ConfigCommandRequest {
-            command_id: CommandId::new("trust-workspace").unwrap(),
+            command_id: CommandId::new("set-dir-permissions").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetWorkspaceTrust {
-                workspace: workspace.clone(),
-                setting: WorkspaceTrustSetting::Trusted,
-                display_root: Some(display_root.clone()),
+            command: UserConfigCommand::SetDirPermissions {
+                dir: dir.clone(),
+                permissions: permissions.clone(),
+                display_path: Some(display_path.clone()),
             },
         })
         .unwrap();
@@ -580,28 +582,26 @@ fn workspace_trust_commands_persist_user_owned_decisions() {
             .read_snapshot()
             .unwrap()
             .values
-            .workspace_trust
-            .decision_for(&workspace),
-        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision)
+            .dir_permissions
+            .explicit_permissions_for(&dir),
+        Some(&permissions)
     );
     assert_eq!(
         store
             .read_snapshot()
             .unwrap()
             .values
-            .workspace_trust
-            .explicit_root_path_for(&workspace),
-        Some(display_root.as_path())
+            .dir_permissions
+            .path_for(&dir),
+        Some(display_path.as_path())
     );
-    assert!(persisted_config_document(&path).contains("[workspaceTrust.roots]"));
+    assert!(persisted_config_document(&path).contains("[dirPermissions.entries]"));
 
     store
         .apply(ConfigCommandRequest {
-            command_id: CommandId::new("forget-workspace").unwrap(),
-            expected_revision: trusted.revision,
-            command: UserConfigCommand::ForgetWorkspaceTrust {
-                workspace: workspace.clone(),
-            },
+            command_id: CommandId::new("forget-dir-permissions").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::ForgetDirPermissions { dir: dir.clone() },
         })
         .unwrap();
     assert_eq!(
@@ -609,101 +609,19 @@ fn workspace_trust_commands_persist_user_owned_decisions() {
             .read_snapshot()
             .unwrap()
             .values
-            .workspace_trust
-            .decision_for(&workspace),
-        WorkspaceTrustDecision::Restricted
+            .dir_permissions
+            .explicit_permissions_for(&dir),
+        None
     );
     assert_eq!(
         store
             .read_snapshot()
             .unwrap()
             .values
-            .workspace_trust
-            .explicit_root_path_for(&workspace),
+            .dir_permissions
+            .path_for(&dir),
         None
     );
-    remove_config_files(&path);
-}
-
-#[test]
-fn legacy_restricted_workspace_entries_are_removed_when_config_opens() {
-    let path = config_path("workspace-trust-legacy-restricted");
-    let workspace = workspace_trust_id();
-    std::fs::write(
-        path.with_extension("toml"),
-        format!(
-            "[workspaceTrust.roots]\n\"{workspace}\" = \"restricted\"\n\n[workspaceTrust.rootPaths]\n\"{workspace}\" = \"/tmp/legacy-workspace\"\n"
-        ),
-    )
-    .unwrap();
-
-    let store = ConfigStore::open(&path).unwrap();
-    let snapshot = store.read_snapshot().unwrap();
-    assert_eq!(
-        snapshot
-            .values
-            .workspace_trust
-            .explicit_setting_for(&workspace),
-        None
-    );
-    assert_eq!(
-        snapshot.values.workspace_trust.decision_for(&workspace),
-        WorkspaceTrustDecision::Restricted
-    );
-    let persisted = persisted_config_document(&path);
-    assert!(!persisted.contains("restricted"));
-    assert!(!persisted.contains("legacy-workspace"));
-    drop(store);
-    remove_config_files(&path);
-}
-
-#[test]
-fn setting_workspace_restricted_removes_the_allowlist_entry() {
-    let path = config_path("workspace-trust-revoke");
-    let store = ConfigStore::open(&path).unwrap();
-    let workspace = workspace_trust_id();
-    let trusted = store
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("trust-workspace-for-revoke").unwrap(),
-            expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::SetWorkspaceTrust {
-                workspace: workspace.clone(),
-                setting: WorkspaceTrustSetting::Trusted,
-                display_root: Some("/tmp/revoke-workspace".into()),
-            },
-        })
-        .unwrap();
-
-    let restricted = store
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("restrict-workspace-for-revoke").unwrap(),
-            expected_revision: trusted.revision,
-            command: UserConfigCommand::SetWorkspaceTrust {
-                workspace: workspace.clone(),
-                setting: WorkspaceTrustSetting::Restricted,
-                display_root: None,
-            },
-        })
-        .unwrap();
-
-    assert_eq!(restricted.revision.get(), 2);
-    let snapshot = store.read_snapshot().unwrap();
-    assert_eq!(
-        snapshot
-            .values
-            .workspace_trust
-            .explicit_setting_for(&workspace),
-        None
-    );
-    assert_eq!(
-        snapshot
-            .values
-            .workspace_trust
-            .explicit_root_path_for(&workspace),
-        None
-    );
-    assert!(!persisted_config_document(&path).contains("restricted"));
-    drop(store);
     remove_config_files(&path);
 }
 
@@ -1340,18 +1258,16 @@ fn mcp_and_skill_declarations_reject_invalid_identity_or_missing_target() {
 }
 
 #[test]
-fn workspace_document_is_namespaced_and_cannot_bind_credentials() {
-    let path = workspace_config_path("declared-intent");
+fn dir_document_is_namespaced_and_cannot_bind_credentials() {
+    let path = dir_config_path("declared-intent");
     std::fs::write(
         &path,
-        toml::to_string_pretty(&workspace_document(Some(model_ref("openai", "gpt-5.6")))).unwrap(),
+        toml::to_string_pretty(&dir_document(Some(model_ref("openai", "gpt-5.6")))).unwrap(),
     )
     .unwrap();
 
-    let scope = WorkspaceConfigScope::new(WorkspaceId::new("project").unwrap());
-    let document = WorkspaceConfigStore::open(&path, scope)
-        .read_document()
-        .unwrap();
+    let scope = dir_scope();
+    let document = DirConfigStore::open(&path, scope).read_document().unwrap();
     assert_eq!(document.mcp.servers.len(), 1);
     assert_eq!(document.skills.sources.len(), 1);
     assert_eq!(document.plugin_requests.requests.len(), 1);
@@ -1371,18 +1287,18 @@ fn workspace_document_is_namespaced_and_cannot_bind_credentials() {
 }
 
 #[test]
-fn workspace_document_rejects_foreign_namespace_and_unknown_fields() {
-    let path = workspace_config_path("invalid");
-    let scope = WorkspaceConfigScope::new(WorkspaceId::new("project").unwrap());
+fn dir_document_rejects_foreign_namespace_and_unknown_fields() {
+    let path = dir_config_path("invalid");
+    let scope = dir_scope();
     std::fs::write(
         &path,
         r#"
-[mcp.servers."workspace:other:mcp:github"]
-id = "workspace:other:mcp:github"
+[mcp.servers."dir:other:mcp:github"]
+id = "dir:other:mcp:github"
 displayName = "Other GitHub"
 enablement = "disabled"
 
-[mcp.servers."workspace:other:mcp:github".transport]
+[mcp.servers."dir:other:mcp:github".transport]
 type = "stdio"
 command = "github-mcp"
 args = []
@@ -1390,14 +1306,14 @@ args = []
     )
     .unwrap();
     assert!(
-        WorkspaceConfigStore::open(&path, scope.clone())
+        DirConfigStore::open(&path, scope.clone())
             .read_document()
             .is_err()
     );
 
     std::fs::write(&path, "unknown = true").unwrap();
     assert!(
-        WorkspaceConfigStore::open(&path, scope.clone())
+        DirConfigStore::open(&path, scope.clone())
             .read_document()
             .is_err()
     );
@@ -1406,12 +1322,12 @@ args = []
         &path,
         format!(
             "[workspaceTrust.roots]\n\"{}\" = \"trusted\"\n",
-            workspace_trust_id()
+            dir_permissions_id()
         ),
     )
     .unwrap();
     assert!(
-        WorkspaceConfigStore::open(&path, scope.clone())
+        DirConfigStore::open(&path, scope.clone())
             .read_document()
             .is_err()
     );
@@ -1419,15 +1335,15 @@ args = []
     std::fs::write(
         &path,
         r#"
-[hooks.hooks."workspace:project:hook:review"]
-id = "workspace:project:hook:review"
+[hooks.hooks."dir:other:hook:review"]
+id = "dir:other:hook:review"
 event = "beforeTool"
 enablement = "disabled"
 
-[hooks.hooks."workspace:project:hook:review".matcher]
+[hooks.hooks."dir:other:hook:review".matcher]
 toolNames = []
 
-[hooks.hooks."workspace:project:hook:review".action]
+[hooks.hooks."dir:other:hook:review".action]
 type = "process"
 program = "review-hook"
 args = []
@@ -1435,52 +1351,43 @@ shell = true
 "#,
     )
     .unwrap();
-    assert!(
-        WorkspaceConfigStore::open(&path, scope)
-            .read_document()
-            .is_err()
-    );
+    assert!(DirConfigStore::open(&path, scope).read_document().is_err());
     remove_config_files(&path);
 }
 
 #[test]
-fn workspace_resolution_overrides_only_a_user_configured_model_provider() {
-    let path = config_path("workspace-resolution");
+fn dir_resolution_overrides_only_a_user_configured_model_provider() {
+    let path = config_path("dir-resolution");
     let store = ConfigStore::open(&path).unwrap();
     configure_provider(&store, 0, "openai");
     let user = store.read_snapshot().unwrap();
-    let scope = workspace_scope();
-    let document = workspace_document(Some(model_ref("openai", "gpt-5.6")));
+    let scope = dir_scope();
+    let document = dir_document(Some(model_ref("openai", "gpt-5.6")));
 
     let resolved = resolve_scoped_config(
         &user,
-        Some(WorkspaceConfigInput::new(
+        Some(DirConfigInput::new(
             &scope,
-            WorkspaceConfigRevision::new(7),
+            DirConfigRevision::new(7),
             &document,
         )),
     )
     .unwrap();
 
     assert_eq!(resolved.user_revision, user.revision);
-    assert_eq!(
-        resolved.workspace_revision,
-        Some(WorkspaceConfigRevision::new(7))
-    );
+    assert_eq!(resolved.dir_revision, Some(DirConfigRevision::new(7)));
     assert_eq!(
         resolved.values.preferred_model,
         Some(model_ref("openai", "gpt-5.6"))
     );
     assert_eq!(
         resolved.provenance.preferred_model,
-        Some(ConfigValueSource::Workspace(
-            WorkspaceId::new("project").unwrap()
-        ))
+        Some(ConfigValueSource::Dir(dir_permissions_id()))
     );
     assert_eq!(
         resolved
             .values
-            .workspace
+            .dir_config
             .as_ref()
             .unwrap()
             .plugin_requests
@@ -1489,37 +1396,37 @@ fn workspace_resolution_overrides_only_a_user_configured_model_provider() {
         1
     );
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == ConfigDiagnosticCode::WorkspaceMcpPendingTrust
-            && diagnostic.subject == "workspace:project:mcp:github"
+        diagnostic.code == ConfigDiagnosticCode::DirMcpCapabilityRequired
+            && diagnostic.subject.ends_with(":mcp:github")
     }));
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == ConfigDiagnosticCode::WorkspacePluginPendingTrust
+        diagnostic.code == ConfigDiagnosticCode::DirPluginCapabilityRequired
             && diagnostic.subject == "acme/code-review"
     }));
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == ConfigDiagnosticCode::WorkspaceHookPendingTrust
-            && diagnostic.subject == "workspace:project:hook:review"
+        diagnostic.code == ConfigDiagnosticCode::DirHookCapabilityRequired
+            && diagnostic.subject.ends_with(":hook:review")
     }));
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == ConfigDiagnosticCode::WorkspaceSkillPendingTrust
-            && diagnostic.subject == "workspace:project:skill-source:review"
+        diagnostic.code == ConfigDiagnosticCode::DirSkillCapabilityRequired
+            && diagnostic.subject.ends_with(":skill-source:review")
     }));
     remove_config_files(&path);
 }
 
 #[test]
-fn workspace_resolution_keeps_user_model_when_the_workspace_provider_is_unconfigured() {
-    let path = config_path("workspace-model-rejected");
+fn dir_resolution_keeps_user_model_when_the_dir_provider_is_unconfigured() {
+    let path = config_path("dir-model-rejected");
     let store = ConfigStore::open(&path).unwrap();
     let user = store.read_snapshot().unwrap();
-    let scope = workspace_scope();
-    let document = workspace_document(Some(model_ref("anthropic", "claude")));
+    let scope = dir_scope();
+    let document = dir_document(Some(model_ref("anthropic", "claude")));
 
     let resolved = resolve_scoped_config(
         &user,
-        Some(WorkspaceConfigInput::new(
+        Some(DirConfigInput::new(
             &scope,
-            WorkspaceConfigRevision::INITIAL,
+            DirConfigRevision::INITIAL,
             &document,
         )),
     )
@@ -1527,7 +1434,7 @@ fn workspace_resolution_keeps_user_model_when_the_workspace_provider_is_unconfig
 
     assert_eq!(resolved.values.preferred_model, None);
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == ConfigDiagnosticCode::WorkspacePreferredModelProviderUnconfigured
+        diagnostic.code == ConfigDiagnosticCode::DirPreferredModelProviderUnconfigured
             && diagnostic.subject == "anthropic"
     }));
     remove_config_files(&path);

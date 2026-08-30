@@ -9,8 +9,8 @@ pub enum LspManagerError {
     DuplicateServer(String),
     #[error("language ID `{0}` is routed by more than one server")]
     DuplicateLanguage(String),
-    #[error("workspace root cannot be represented as a file URI: {0}")]
-    InvalidWorkspaceRoot(String),
+    #[error("directory root cannot be represented as a file URI: {0}")]
+    InvalidDir(String),
     #[error("document path cannot be represented as a file URI: {0}")]
     InvalidDocumentUri(String),
     #[error("language-service supervisor is closed")]

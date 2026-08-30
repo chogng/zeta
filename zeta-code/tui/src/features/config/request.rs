@@ -1,5 +1,5 @@
-use super::AdditionalDirectoryPermissionEdit;
 use super::ConfigPaneSpec;
+use super::PermissionEdit;
 use super::ProviderApiKeyEdit;
 use super::TerminalSettingsSnapshot;
 use super::config_pane_spec;
@@ -12,8 +12,8 @@ use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_client::ProviderApiKeySetRequest;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
+use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
+use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
 use zeta_protocol::Patch;
 use zeta_protocol::SessionId;
 
@@ -29,17 +29,16 @@ pub(crate) fn read_config_pane(
 ) -> Result<ConfigPaneSpec, ClientError> {
     let server_config = client.read_config()?;
     let providers = client.list_providers()?;
-    let additional_directories =
-        client.list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
-            session_id: session_id.clone(),
-        })?;
+    let dirs = client.list_session_dirs(SessionDirListParams {
+        session_id: session_id.clone(),
+    })?;
     Ok(config_pane_spec(
         &server_config,
         &providers,
         terminal.settings,
         terminal.revision,
         session_id,
-        &additional_directories,
+        &dirs,
     ))
 }
 
@@ -58,20 +57,20 @@ pub(crate) fn set_provider_api_key(
     })
 }
 
-pub(crate) fn set_additional_directory_permissions(
+pub(crate) fn set_permissions(
     client: &mut AppServerRequestHandle,
-    edit: AdditionalDirectoryPermissionEdit,
+    edit: PermissionEdit,
 ) -> Result<ConfigPaneSpec, ClientError> {
-    let result = client.set_workspace_additional_directory_permissions(edit.params.clone())?;
+    let result = client.set_session_dir_permissions(edit.params.clone())?;
     Ok(config_pane_spec(
         &edit.server_config,
         &edit.providers,
         edit.terminal,
         edit.terminal_revision,
         &edit.params.session_id,
-        &WorkspaceAdditionalDirectoryListResult {
+        &SessionDirListResult {
             revision: result.revision,
-            directories: result.directories,
+            dirs: result.dirs,
         },
     ))
 }

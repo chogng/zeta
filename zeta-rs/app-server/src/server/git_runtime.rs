@@ -39,6 +39,7 @@ use zeta_app_server_protocol::protocol::git::GitSubmoduleStateDto;
 use zeta_app_server_protocol::protocol::git::GitTextDiffDto;
 use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
 use zeta_app_server_protocol::protocol::git::GitUpstreamDto;
+use zeta_file_access::Authorization;
 use zeta_file_watcher::DebouncedWatchReceiver;
 use zeta_file_watcher::FileWatcher;
 use zeta_file_watcher::FileWatcherBackend;
@@ -55,7 +56,6 @@ use zeta_git::GitRepository;
 use zeta_git::GitRepositoryChange;
 use zeta_git::GitRepositorySnapshot;
 use zeta_protocol::StreamInstanceId;
-use zeta_workspace::TrustedWorkspace;
 
 const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(100);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -112,48 +112,45 @@ pub(crate) enum GitRuntimeError {
 #[allow(dead_code)]
 impl GitRuntime {
     pub(super) fn new(
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, GitRuntimeError> {
-        Self::new_workspace_folders(vec![(None, workspace)], HashMap::new(), updates)
+        Self::new_dirs(vec![(None, authorization)], HashMap::new(), updates)
     }
 
-    pub(super) fn new_for_workspace_folders(
-        workspaces: Vec<(String, TrustedWorkspace)>,
+    pub(super) fn new_for_dirs(
+        dirs: Vec<(String, Authorization)>,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, GitRuntimeError> {
-        let workspace_order = workspaces
+        let dir_order = dirs
             .iter()
             .enumerate()
             .map(|(index, (id, _))| (id.clone(), index))
             .collect();
-        let mut workspaces = workspaces
+        let mut dirs = dirs
             .into_iter()
-            .map(|(id, workspace)| (Some(id), workspace))
+            .map(|(id, authorization)| (Some(id), authorization))
             .collect::<Vec<_>>();
-        workspaces.sort_by_key(|(_, workspace)| {
-            std::cmp::Reverse(workspace.root().canonical_path().components().count())
+        dirs.sort_by_key(|(_, authorization)| {
+            std::cmp::Reverse(authorization.dir().canonical_path().components().count())
         });
-        Self::new_workspace_folders(workspaces, workspace_order, updates)
+        Self::new_dirs(dirs, dir_order, updates)
     }
 
-    fn new_workspace_folders(
-        workspaces: Vec<(Option<String>, TrustedWorkspace)>,
-        workspace_order: HashMap<String, usize>,
+    fn new_dirs(
+        dirs: Vec<(Option<String>, Authorization)>,
+        dir_order: HashMap<String, usize>,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, GitRuntimeError> {
         let mut repositories = Vec::new();
         let mut repositories_by_id = HashMap::new();
         let mut worktrees = Vec::<PathBuf>::new();
-        for (workspace_folder_id, workspace) in workspaces {
-            for projection_root in discover_repository_roots(&workspace) {
-                let descriptor = repository_descriptor(
-                    workspace_folder_id.clone(),
-                    &workspace,
-                    &projection_root,
-                )?;
+        for (dir_id, authorization) in dirs {
+            for projection_root in discover_repository_roots(&authorization) {
+                let descriptor =
+                    repository_descriptor(dir_id.clone(), &authorization, &projection_root)?;
                 let Some(runtime) = GitRepositoryRuntime::new(
-                    workspace.clone(),
+                    authorization.clone(),
                     projection_root,
                     descriptor,
                     Arc::clone(&updates),
@@ -179,16 +176,16 @@ impl GitRuntime {
         repositories.sort_by(|left, right| {
             let left_order = left
                 .descriptor
-                .workspace_folder_id
+                .dir_id
                 .as_ref()
-                .and_then(|id| workspace_order.get(id))
+                .and_then(|id| dir_order.get(id))
                 .copied()
                 .unwrap_or(usize::MAX);
             let right_order = right
                 .descriptor
-                .workspace_folder_id
+                .dir_id
                 .as_ref()
-                .and_then(|id| workspace_order.get(id))
+                .and_then(|id| dir_order.get(id))
                 .copied()
                 .unwrap_or(usize::MAX);
             left_order
@@ -465,13 +462,13 @@ impl GitRuntime {
 
 impl GitRepositoryRuntime {
     fn new(
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
         projection_root: PathBuf,
         descriptor: GitRepositoryDto,
         updates: Arc<UpdateBroker>,
     ) -> Result<Option<Self>, GitRuntimeError> {
         let service =
-            GitService::new(workspace, projection_root).map_err(GitRuntimeError::Service)?;
+            GitService::new(authorization, projection_root).map_err(GitRuntimeError::Service)?;
         let Ok((repository, _)) = service.snapshot() else {
             return Ok(None);
         };
@@ -618,9 +615,9 @@ impl GitRepositoryRuntime {
             .service
             .text_diff_snapshot()
             .map_err(GitRuntimeError::Service)?;
-        let workspace_prefix = self
+        let dir_prefix = self
             .service
-            .workspace_root()
+            .dir_root()
             .strip_prefix(repository.worktree_root())
             .map_err(|_| GitRuntimeError::Boundary)?;
         let diffs = snapshot
@@ -629,7 +626,7 @@ impl GitRepositoryRuntime {
             .map(|diff| {
                 let path = diff
                     .path()
-                    .strip_prefix(workspace_prefix)
+                    .strip_prefix(dir_prefix)
                     .map_err(|_| GitRuntimeError::Boundary)?;
                 let statistics = diff.statistics();
                 Ok(GitTextDiffDto {
@@ -667,15 +664,15 @@ impl GitRepositoryRuntime {
             .service
             .commit_changes(object_id)
             .map_err(GitRuntimeError::Service)?;
-        let workspace_prefix = self
+        let dir_prefix = self
             .service
-            .workspace_root()
+            .dir_root()
             .strip_prefix(projected.repository.worktree_root())
             .map_err(|_| GitRuntimeError::Boundary)?;
         let changes = projected
             .changes
             .iter()
-            .filter_map(|change| workspace_commit_change(change, workspace_prefix))
+            .filter_map(|change| dir_commit_change(change, dir_prefix))
             .collect::<Result<Vec<_>, GitRuntimeError>>()?;
         Ok(GitCommitChangesResult {
             parent_object_id: projected.parent_object_id,
@@ -828,7 +825,7 @@ impl GitRepositoryRuntime {
         let mut projected = project_status(
             self.descriptor.id.clone(),
             self.stream_instance_id.clone(),
-            self.service.workspace_root(),
+            self.service.dir_root(),
             &repository,
             snapshot,
         )?;
@@ -882,11 +879,11 @@ impl GitRepositoryRuntime {
     fn watched_paths(&self) -> Vec<WatchPath> {
         let mut paths = vec![
             WatchPath {
-                path: self.service.workspace().requested_path().to_path_buf(),
+                path: self.service.dir().requested_path().to_path_buf(),
                 recursive: true,
             },
             WatchPath {
-                path: self.service.workspace().canonical_path().to_path_buf(),
+                path: self.service.dir().canonical_path().to_path_buf(),
                 recursive: true,
             },
         ];
@@ -901,7 +898,7 @@ impl GitRepositoryRuntime {
                 path: repository.common_dir().to_path_buf(),
                 recursive: true,
             });
-            let mut ancestor = self.service.workspace_root().parent();
+            let mut ancestor = self.service.dir_root().parent();
             while let Some(directory) = ancestor {
                 if !directory.starts_with(repository.worktree_root()) {
                     break;
@@ -958,8 +955,8 @@ fn watch_git(
         let Some(git_runtime) = runtime.upgrade() else {
             return;
         };
-        let backend = if git_runtime.service.workspace().requested_path()
-            == git_runtime.service.workspace().canonical_path()
+        let backend = if git_runtime.service.dir().requested_path()
+            == git_runtime.service.dir().canonical_path()
         {
             FileWatcherBackend::Recommended
         } else {
@@ -1009,11 +1006,11 @@ fn watch_git(
     });
 }
 
-fn discover_repository_roots(workspace: &TrustedWorkspace) -> Vec<PathBuf> {
+fn discover_repository_roots(authorization: &Authorization) -> Vec<PathBuf> {
     const MAX_REPOSITORIES: usize = 128;
-    let workspace_root = workspace.root().canonical_path();
-    let mut roots = vec![workspace_root.to_path_buf()];
-    let mut builder = WalkBuilder::new(workspace_root);
+    let dir_root = authorization.dir().canonical_path();
+    let mut roots = vec![dir_root.to_path_buf()];
+    let mut builder = WalkBuilder::new(dir_root);
     builder
         .hidden(false)
         .follow_links(false)
@@ -1039,7 +1036,7 @@ fn discover_repository_roots(workspace: &TrustedWorkspace) -> Vec<PathBuf> {
         let Ok(parent) = dunce::canonicalize(entry.path()) else {
             continue;
         };
-        if parent.starts_with(workspace_root) && !roots.iter().any(|root| root == &parent) {
+        if parent.starts_with(dir_root) && !roots.iter().any(|root| root == &parent) {
             roots.push(parent);
             if roots.len() >= MAX_REPOSITORIES {
                 break;
@@ -1051,12 +1048,12 @@ fn discover_repository_roots(workspace: &TrustedWorkspace) -> Vec<PathBuf> {
 }
 
 fn repository_descriptor(
-    workspace_folder_id: Option<String>,
-    workspace: &TrustedWorkspace,
+    dir_id: Option<String>,
+    authorization: &Authorization,
     projection_root: &Path,
 ) -> Result<GitRepositoryDto, GitRuntimeError> {
     let relative = projection_root
-        .strip_prefix(workspace.root().canonical_path())
+        .strip_prefix(authorization.dir().canonical_path())
         .map_err(|_| GitRuntimeError::Boundary)?;
     let path = wire_path(relative)?;
     let label = projection_root
@@ -1065,8 +1062,8 @@ fn repository_descriptor(
         .filter(|name| !name.is_empty())
         .unwrap_or("Repository")
         .to_string();
-    let mut identity = workspace
-        .root()
+    let mut identity = authorization
+        .dir()
         .canonical_path()
         .as_os_str()
         .as_encoded_bytes()
@@ -1083,7 +1080,7 @@ fn repository_descriptor(
         id,
         label,
         path,
-        workspace_folder_id,
+        dir_id,
     })
 }
 
@@ -1139,23 +1136,23 @@ fn project_graph(graph: GitGraph, next_cursor: Option<String>) -> GitGraphResult
 fn project_status(
     repository_id: String,
     stream_instance_id: StreamInstanceId,
-    workspace_root: &Path,
+    dir_root: &Path,
     repository: &GitRepository,
     snapshot: GitRepositorySnapshot,
 ) -> Result<GitStatusResult, GitRuntimeError> {
-    let workspace_prefix = workspace_root
+    let dir_prefix = dir_root
         .strip_prefix(repository.worktree_root())
         .map_err(|_| GitRuntimeError::Boundary)?;
     Ok(GitStatusResult {
         repository_id,
         stream_instance_id,
         revision: 0,
-        workspace_path: wire_path(workspace_prefix)?,
+        path: wire_path(dir_prefix)?,
         head: head(snapshot.head()),
         changes: snapshot
             .changes()
             .iter()
-            .filter_map(|change| workspace_change(change, workspace_prefix))
+            .filter_map(|change| dir_change(change, dir_prefix))
             .collect::<Result<_, _>>()?,
     })
 }
@@ -1196,17 +1193,17 @@ fn head(head: &GitHead) -> GitHeadDto {
     }
 }
 
-fn workspace_change(
+fn dir_change(
     change: &GitRepositoryChange,
-    workspace_prefix: &Path,
+    dir_prefix: &Path,
 ) -> Option<Result<GitRepositoryChangeDto, GitRuntimeError>> {
-    let path = change.path().strip_prefix(workspace_prefix).ok()?;
+    let path = change.path().strip_prefix(dir_prefix).ok()?;
     Some((|| {
         Ok(GitRepositoryChangeDto {
             path: wire_path(path)?,
             original_path: change
                 .original_path()
-                .and_then(|path| path.strip_prefix(workspace_prefix).ok())
+                .and_then(|path| path.strip_prefix(dir_prefix).ok())
                 .map(wire_path)
                 .transpose()?,
             index_status: change_status(change.index_status()),
@@ -1217,17 +1214,17 @@ fn workspace_change(
     })())
 }
 
-fn workspace_commit_change(
+fn dir_commit_change(
     change: &GitCommitChange,
-    workspace_prefix: &Path,
+    dir_prefix: &Path,
 ) -> Option<Result<GitCommitChangeDto, GitRuntimeError>> {
-    let path = change.path().strip_prefix(workspace_prefix).ok()?;
+    let path = change.path().strip_prefix(dir_prefix).ok()?;
     Some((|| {
         Ok(GitCommitChangeDto {
             path: wire_path(path)?,
             original_path: change
                 .original_path()
-                .and_then(|path| path.strip_prefix(workspace_prefix).ok())
+                .and_then(|path| path.strip_prefix(dir_prefix).ok())
                 .map(wire_path)
                 .transpose()?,
             status: change_status(change.status()),

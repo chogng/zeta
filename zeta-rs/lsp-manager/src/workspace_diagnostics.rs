@@ -15,7 +15,7 @@ use crate::requests::file_path;
 
 /// One raw workspace diagnostic whose range retains the negotiated server encoding.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LanguageWorkspaceDiagnostic {
+pub struct LanguageDirectoryDiagnostic {
     pub path: PathBuf,
     pub range: LanguageLocationRange,
     pub encoding: LanguagePositionEncoding,
@@ -27,11 +27,11 @@ pub struct LanguageWorkspaceDiagnostic {
 
 /// Complete workspace diagnostic report returned by one ready language server.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LanguageWorkspaceDiagnostics {
+pub struct LanguageDirectoryDiagnostics {
     pub request_id: LanguageRequestId,
     pub language_id: String,
     pub supported: bool,
-    pub diagnostics: Vec<LanguageWorkspaceDiagnostic>,
+    pub diagnostics: Vec<LanguageDirectoryDiagnostic>,
 }
 
 pub(crate) fn project_workspace_diagnostics(
@@ -39,7 +39,7 @@ pub(crate) fn project_workspace_diagnostics(
     language_id: String,
     encoding: &PositionEncodingKind,
     response: WorkspaceDiagnosticReportResult,
-) -> Result<LanguageWorkspaceDiagnostics, String> {
+) -> Result<LanguageDirectoryDiagnostics, String> {
     let reports = match response {
         WorkspaceDiagnosticReportResult::Report(report) => report.items,
         WorkspaceDiagnosticReportResult::Partial(_) => {
@@ -64,7 +64,7 @@ pub(crate) fn project_workspace_diagnostics(
                 .full_document_diagnostic_report
                 .items
                 .into_iter()
-                .map(|diagnostic| LanguageWorkspaceDiagnostic {
+                .map(|diagnostic| LanguageDirectoryDiagnostic {
                     path: path.clone(),
                     range: LanguageLocationRange {
                         start: LanguageLocationPosition {
@@ -84,7 +84,7 @@ pub(crate) fn project_workspace_diagnostics(
                 }),
         );
     }
-    Ok(LanguageWorkspaceDiagnostics {
+    Ok(LanguageDirectoryDiagnostics {
         request_id,
         language_id,
         supported: true,

@@ -13,7 +13,7 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct McpServerOptions {
     profile_root: PathBuf,
-    workspace_root: PathBuf,
+    dir_root: PathBuf,
     default_turn_timeout: Duration,
     maximum_turn_timeout: Duration,
     poll_interval: Duration,
@@ -119,10 +119,10 @@ impl fmt::Debug for HttpServerOptions {
 }
 
 impl McpServerOptions {
-    pub fn new(profile_root: impl Into<PathBuf>, workspace_root: impl Into<PathBuf>) -> Self {
+    pub fn new(profile_root: impl Into<PathBuf>, dir_root: impl Into<PathBuf>) -> Self {
         Self {
             profile_root: profile_root.into(),
-            workspace_root: workspace_root.into(),
+            dir_root: dir_root.into(),
             default_turn_timeout: DEFAULT_TURN_TIMEOUT,
             maximum_turn_timeout: MAX_TURN_TIMEOUT,
             poll_interval: DEFAULT_POLL_INTERVAL,
@@ -148,8 +148,8 @@ impl McpServerOptions {
         &self.profile_root
     }
 
-    pub fn workspace_root(&self) -> &Path {
-        &self.workspace_root
+    pub fn dir_root(&self) -> &Path {
+        &self.dir_root
     }
 
     pub(crate) fn runtime_limits(&self) -> RuntimeLimits {

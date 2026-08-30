@@ -20,7 +20,6 @@ export function startElectronSessions(modeId: WorkbenchModeId, profile: Sessions
 		profile,
 		api,
 		sessionsWindowApi: createSessionsWindowApi(),
-		workspaceApi: api.workspace,
 		configurationApi: api.configuration,
 		keybindingsResourceApi: api.keybindings,
 		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),

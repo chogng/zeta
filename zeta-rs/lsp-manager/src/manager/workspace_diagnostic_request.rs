@@ -8,9 +8,9 @@ use super::InFlightLanguageRequest;
 use super::Supervisor;
 use super::SupervisorCommand;
 use super::request_runtime::supports_request;
+use crate::LanguageDirectoryDiagnostics;
 use crate::LanguageRequestId;
 use crate::LanguageRequestKind;
-use crate::LanguageWorkspaceDiagnostics;
 use crate::workspace_diagnostics::project_workspace_diagnostics;
 use crate::{LanguageRequestMetricOutcome, LspManagerNotification, LspManagerRequestResult};
 
@@ -60,7 +60,7 @@ impl Supervisor {
                 .and_then(|response| {
                     project_workspace_diagnostics(id, language_id, &encoding, response)
                 });
-            let _ = commands.send(SupervisorCommand::WorkspaceDiagnosticsCompleted {
+            let _ = commands.send(SupervisorCommand::DirectoryDiagnosticsCompleted {
                 id,
                 language_id: completion_language_id,
                 server: completion_server,
@@ -91,7 +91,7 @@ impl Supervisor {
         server: zeta_lsp::LanguageServerName,
         generation: u64,
         server_epoch: u64,
-        result: Result<LanguageWorkspaceDiagnostics, String>,
+        result: Result<LanguageDirectoryDiagnostics, String>,
     ) {
         let Some(tracking) = self.in_flight_requests.remove(&id) else {
             return;
@@ -115,7 +115,7 @@ impl Supervisor {
                     LanguageRequestMetricOutcome::Delivered,
                     result.diagnostics.len(),
                 );
-                self.emit_request_result(LspManagerRequestResult::WorkspaceDiagnostics(result));
+                self.emit_request_result(LspManagerRequestResult::DirectoryDiagnostics(result));
             }
             Err(message) => {
                 self.record_request_metric(tracking, LanguageRequestMetricOutcome::Failed, 0);
@@ -136,8 +136,8 @@ impl Supervisor {
         request_id: LanguageRequestId,
         language_id: String,
     ) {
-        self.emit_request_result(LspManagerRequestResult::WorkspaceDiagnostics(
-            LanguageWorkspaceDiagnostics {
+        self.emit_request_result(LspManagerRequestResult::DirectoryDiagnostics(
+            LanguageDirectoryDiagnostics {
                 request_id,
                 language_id,
                 supported: false,

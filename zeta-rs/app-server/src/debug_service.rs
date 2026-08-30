@@ -7,7 +7,7 @@ use zeta_debug_adapter::DebugAdapterError;
 use zeta_debug_adapter::DebugAdapterRead;
 use zeta_debug_adapter::DebugAdapterService as Runtime;
 use zeta_debug_adapter::DebugAdapterSessionId;
-use zeta_workspace::TrustedWorkspace;
+use zeta_file_access::Authorization;
 
 /// Adds App Server connection ownership to the backend-neutral DAP runtime.
 pub(crate) struct DebugAdapterService {
@@ -17,8 +17,8 @@ pub(crate) struct DebugAdapterService {
 
 impl DebugAdapterService {
     pub(crate) fn new(
-        executable_configuration: TrustedWorkspace,
-        process_execution: TrustedWorkspace,
+        executable_configuration: Authorization,
+        process_execution: Authorization,
         environment: HashMap<String, String>,
     ) -> Result<Self, DebugAdapterError> {
         Ok(Self {

@@ -24,7 +24,7 @@ impl SandboxBackend for ReplacingBackend {
         &self,
         command: &SandboxCommand,
         policy: SandboxPolicy,
-        _: &WorkspaceRoot,
+        _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         assert_eq!(
             policy,
@@ -52,7 +52,7 @@ impl SandboxBackend for PassThroughBackend {
         &self,
         command: &SandboxCommand,
         _: SandboxPolicy,
-        _: &WorkspaceRoot,
+        _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         Ok(PreparedCommand::unrestricted(command))
     }
@@ -67,7 +67,7 @@ impl SandboxBackend for MissingSandboxLauncher {
         &self,
         command: &SandboxCommand,
         _: SandboxPolicy,
-        _: &WorkspaceRoot,
+        _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         Ok(PreparedCommand::new(
             SandboxKind::MacosSeatbelt,
@@ -80,9 +80,8 @@ impl SandboxBackend for MissingSandboxLauncher {
 
 #[test]
 fn executor_spawns_only_the_command_prepared_by_the_sandbox_backend() {
-    let workspace = TestWorkspace::new();
-    let executor =
-        CommandExecutor::new(workspace.root(), ReplacingBackend, AllowAll, test_limits());
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), ReplacingBackend, AllowAll, test_limits());
 
     let outcome = executor
         .execute(
@@ -109,13 +108,9 @@ fn executor_spawns_only_the_command_prepared_by_the_sandbox_backend() {
 
 #[test]
 fn missing_sandbox_launcher_is_safe_to_retry_because_the_action_never_started() {
-    let workspace = TestWorkspace::new();
-    let executor = CommandExecutor::new(
-        workspace.root(),
-        MissingSandboxLauncher,
-        AllowAll,
-        test_limits(),
-    );
+    let dir = TestDir::new();
+    let executor =
+        CommandExecutor::new(dir.root(), MissingSandboxLauncher, AllowAll, test_limits());
 
     let outcome = executor
         .execute(
@@ -149,9 +144,9 @@ fn missing_sandbox_launcher_is_safe_to_retry_because_the_action_never_started() 
 #[cfg(unix)]
 #[test]
 fn executor_returns_bounded_output_with_explicit_truncation_markers() {
-    let workspace = TestWorkspace::new();
+    let dir = TestDir::new();
     let executor = CommandExecutor::new(
-        workspace.root(),
+        dir.root(),
         PassThroughBackend,
         AllowAll,
         ExecutionLimits {
@@ -185,13 +180,8 @@ fn executor_returns_bounded_output_with_explicit_truncation_markers() {
 #[cfg(unix)]
 #[test]
 fn executor_writes_explicit_bytes_to_child_stdin() {
-    let workspace = TestWorkspace::new();
-    let executor = CommandExecutor::new(
-        workspace.root(),
-        PassThroughBackend,
-        AllowAll,
-        test_limits(),
-    );
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
 
     let outcome = executor
         .execute(
@@ -216,13 +206,8 @@ fn executor_writes_explicit_bytes_to_child_stdin() {
 #[cfg(unix)]
 #[test]
 fn executor_terminates_a_running_process_when_cancelled() {
-    let workspace = TestWorkspace::new();
-    let executor = CommandExecutor::new(
-        workspace.root(),
-        PassThroughBackend,
-        AllowAll,
-        test_limits(),
-    );
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
     let cancellation = CancellationSource::new();
     let token = cancellation.token();
     let running = std::thread::spawn(move || {
@@ -254,15 +239,15 @@ fn test_limits() -> ExecutionLimits {
     }
 }
 
-static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
-struct TestWorkspace {
+struct TestDir {
     path: PathBuf,
 }
 
-impl TestWorkspace {
+impl TestDir {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-tool-executor-tests-{}-{sequence}",
             std::process::id()
@@ -271,12 +256,12 @@ impl TestWorkspace {
         Self { path }
     }
 
-    fn root(&self) -> WorkspaceRoot {
-        WorkspaceRoot::open(&self.path).unwrap()
+    fn root(&self) -> Dir {
+        Dir::open_local(&self.path).unwrap()
     }
 }
 
-impl Drop for TestWorkspace {
+impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }

@@ -36,8 +36,8 @@ const PROCESS_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 #[cfg(unix)]
 const PROCESS_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 const PROFILE_ROOT_ENV: &str = "ZETA_PROFILE_ROOT";
-const WORKSPACE_ROOT_ENV: &str = "ZETA_WORKSPACE_ROOT";
-const WORKSPACE_TRUST_SOURCE_ENV: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
+const DIR_ROOT_ENV: &str = "ZETA_WORKSPACE_ROOT";
+const DIR_GRANT_SOURCE_ENV: &str = "ZETA_DIR_GRANT_SOURCE";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -198,8 +198,8 @@ pub(crate) fn spawn_daemon(
     command
         .arg(DAEMON_PROCESS_ARGUMENT)
         .env(PROFILE_ROOT_ENV, options.profile_root())
-        .env_remove(WORKSPACE_ROOT_ENV)
-        .env_remove(WORKSPACE_TRUST_SOURCE_ENV)
+        .env_remove(DIR_ROOT_ENV)
+        .env_remove(DIR_GRANT_SOURCE_ENV)
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(error_log));

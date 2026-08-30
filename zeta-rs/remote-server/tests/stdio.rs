@@ -21,15 +21,15 @@ use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 #[test]
 fn remote_server_serves_a_schema_checked_stdio_session() {
     let root = tempdir().unwrap();
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     let profile = root.path().join("profile");
-    std::fs::create_dir(&workspace).unwrap();
+    std::fs::create_dir(&dir).unwrap();
 
     let command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta-remote-server"))
         .with_argument("app-server")
         .with_argument("--listen")
         .with_argument("stdio://")
-        .with_environment_variable("ZETA_WORKSPACE_ROOT", workspace.into_os_string())
+        .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.into_os_string())
         .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
     let mut session = AppServerSession::start_stdio(
         command,
@@ -55,15 +55,15 @@ fn remote_server_serves_a_schema_checked_stdio_session() {
 #[test]
 fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
     let root = tempdir().unwrap();
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     let profile = root.path().join("profile");
-    std::fs::create_dir(&workspace).unwrap();
+    std::fs::create_dir(&dir).unwrap();
 
     let command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta-remote-server"))
         .with_argument("app-server")
         .with_argument("--listen")
         .with_argument("stdio://")
-        .with_environment_variable("ZETA_WORKSPACE_ROOT", workspace.into_os_string())
+        .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.into_os_string())
         .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
     let mut session = AppServerSession::start_stdio(
         command,
@@ -78,6 +78,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
     let mut client = session.client();
     let created = client
         .terminal_create(TerminalCreateParams {
+            dir_id: None,
             rows: 24,
             cols: 80,
             profile: TerminalProfileSelection::Default,
@@ -90,6 +91,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
     let input = "printf 'zeta-remote-terminal-ready\\n'\nexit\n";
     client
         .terminal_write(TerminalWriteParams {
+            dir_id: None,
             terminal_id: created.terminal_id.clone(),
             data: input.into(),
         })
@@ -103,6 +105,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
     while Instant::now() < deadline {
         let read = client
             .terminal_read(TerminalReadParams {
+                dir_id: None,
                 terminal_id: created.terminal_id.clone(),
                 after_sequence,
                 after_command_sequence,
@@ -129,6 +132,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
     assert!(String::from_utf8_lossy(&output).contains("zeta-remote-terminal-ready"));
     client
         .terminal_close(TerminalCloseParams {
+            dir_id: None,
             terminal_id: created.terminal_id,
         })
         .unwrap();
@@ -144,15 +148,15 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
 #[test]
 fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let root = tempdir().unwrap();
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     let profile = root.path().join("profile");
-    std::fs::create_dir(&workspace).unwrap();
+    std::fs::create_dir(&dir).unwrap();
 
     let command = || {
         StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta-remote-server"))
             .with_argument("remote-server")
             .with_argument("connect")
-            .with_environment_variable("ZETA_WORKSPACE_ROOT", workspace.clone().into_os_string())
+            .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.clone().into_os_string())
             .with_environment_variable("ZETA_PROFILE_ROOT", profile.clone().into_os_string())
             .with_environment_variable("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "200")
     };
@@ -167,6 +171,7 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let mut first_client = first_session.client();
     let created = first_client
         .terminal_create(TerminalCreateParams {
+            dir_id: None,
             rows: 24,
             cols: 80,
             profile: TerminalProfileSelection::Default,
@@ -176,6 +181,7 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let lease = created.reconnect.unwrap();
     first_client
         .terminal_write(TerminalWriteParams {
+            dir_id: None,
             terminal_id: created.terminal_id.clone(),
             data: "printf 'zeta-reconnected-terminal\\n'\n".into(),
         })
@@ -190,6 +196,7 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let attach_deadline = Instant::now() + Duration::from_secs(2);
     let attached = loop {
         match second_client.terminal_attach(TerminalAttachParams {
+            dir_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: lease.reconnect_token.clone(),
             rows: 30,
@@ -212,6 +219,7 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
     while Instant::now() < read_deadline {
         let read = second_client
             .terminal_read(TerminalReadParams {
+                dir_id: None,
                 terminal_id: created.terminal_id.clone(),
                 after_sequence,
                 after_command_sequence,
@@ -236,6 +244,7 @@ fn broker_preserves_a_reconnectable_terminal_between_stdio_clients() {
 
     second_client
         .terminal_close(TerminalCloseParams {
+            dir_id: None,
             terminal_id: created.terminal_id,
         })
         .unwrap();

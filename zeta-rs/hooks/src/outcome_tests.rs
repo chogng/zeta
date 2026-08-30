@@ -27,10 +27,10 @@ fn denial_requires_a_non_empty_reason() {
     assert_eq!(
         parse_output(
             "user:hook:test",
-            output(r#"{"decision":"deny","reason":"blocked by workspace rule"}"#)
+            output(r#"{"decision":"deny","reason":"blocked by dir rule"}"#)
         ),
         Ok(HookDecision::Deny {
-            reason: "blocked by workspace rule".into(),
+            reason: "blocked by dir rule".into(),
         })
     );
     assert!(

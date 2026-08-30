@@ -19,7 +19,8 @@ import { RenameService } from '../../../../../editor/contrib/rename/common/langu
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
-import { type IWorkspaceTrustService, type WorkspaceTrustSetting } from "../../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
+import type { PermissionDto } from "../../../../../../../generated/app-server/types.js";
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { AppServerLanguageProviders } from "../../browser/appServerLanguageProviders.js";
 import { type ServerNotification } from "../../../../../../../generated/app-server/types.js";
@@ -71,7 +72,7 @@ test("App Server language providers route resources through their owning Workspa
 
 	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
 
-	assert.equal(api.locationRequests[0]!.document.workspaceFolderId, "backend");
+	assert.equal(api.locationRequests[0]!.document.dirId, "backend");
 	assert.equal(api.locationRequests[0]!.document.path, "main.ts");
 	assert.equal(locations[0]!.resource.toString(), "file:///C:/backend/src/with%20space.ts");
 });
@@ -180,13 +181,13 @@ test("App Server language providers do not send documents above their transport 
 	assert.equal(api.locationRequests.length, 0);
 });
 
-test("App Server language providers register only while the Workspace is trusted", async () => {
+test("App Server language providers register only while directory permissions allow execution", async () => {
 	using languages = new LanguageFeaturesService();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	const events = new FakeServerEvents();
-	const trust = new FakeWorkspaceTrustService("workspace", "restricted");
-	using providers = new AppServerLanguageProviders(languages, api, workspace, { workspaceTrust: trust, events });
+	const permissions = new FakeDirPermissionsService("workspace", []);
+	using providers = new AppServerLanguageProviders(languages, api, workspace, { dirPermissions: permissions, events });
 	using model = new TextModel("value");
 	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main.ts"));
 
@@ -194,13 +195,13 @@ test("App Server language providers register only while the Workspace is trusted
 	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1)), []);
 	assert.equal(api.locationRequests.length, 0);
 
-	trust.setting = "trusted";
+	permissions.value = ["executeCommands", "useLanguageServices"];
 	events.fire({ method: "config/changed", params: { revision: 2, generation: 2 } });
 	await tick();
 	assert.equal((await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1))).length, 1);
 	assert.equal(api.locationRequests.length, 1);
 
-	trust.setting = "restricted";
+	permissions.value = [];
 	events.fire({ method: "config/changed", params: { revision: 3, generation: 3 } });
 	await tick();
 	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1)), []);
@@ -213,12 +214,12 @@ class FakeServerEvents implements IServerEventApi {
 	fire(event: ServerNotification): void { this.listener?.(event); }
 }
 
-class FakeWorkspaceTrustService implements IWorkspaceTrustService {
-	constructor(private readonly workspace: string, public setting: WorkspaceTrustSetting) {}
-	async list() { return { revision: 1, entries: this.setting === "trusted" ? [{ workspace: this.workspace, root: "C:\\project" }] : [] }; }
-	async read(): ReturnType<IWorkspaceTrustService["read"]> { return this.setting; }
-	async set(): ReturnType<IWorkspaceTrustService["set"]> { throw new Error("unused"); }
-	async forget(): ReturnType<IWorkspaceTrustService["forget"]> { throw new Error("unused"); }
+class FakeDirPermissionsService implements IDirPermissionsService {
+	constructor(private readonly dir: string, public value: readonly PermissionDto[]) {}
+	async list() { return { revision: 1, entries: [{ dir: this.dir, path: "C:\\project", permissions: this.value }] }; }
+	async read(): ReturnType<IDirPermissionsService["read"]> { return this.value; }
+	async set(): ReturnType<IDirPermissionsService["set"]> { throw new Error("unused"); }
+	async forget(): ReturnType<IDirPermissionsService["forget"]> { throw new Error("unused"); }
 }
 
 async function tick(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
@@ -250,7 +251,7 @@ class FakeLanguageApi implements ILanguageApi {
 	async resolveCompletion(params: Parameters<ILanguageApi["resolveCompletion"]>[0]): ReturnType<ILanguageApi["resolveCompletion"]> { return { revision: params.document.revision, detail: "resolved macro", documentation: "Resolved completion docs" }; }
 	async executeCommand(params: Parameters<ILanguageApi["executeCommand"]>[0]): Promise<void> { this.executeCommandRequests.push(params); }
 	async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0]): ReturnType<ILanguageApi["documentDiagnostics"]> { return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
-	async workspaceDiagnostics(): ReturnType<ILanguageApi["workspaceDiagnostics"]> { return { supported: false, snapshots: [] }; }
+	async directoryDiagnostics(): ReturnType<ILanguageApi["directoryDiagnostics"]> { return { supported: false, snapshots: [] }; }
 
 	async formatDocument(params: Parameters<ILanguageApi["formatDocument"]>[0]): ReturnType<ILanguageApi["formatDocument"]> {
 		this.documentFormattingRequests.push(params);
@@ -294,7 +295,7 @@ class FakeLanguageApi implements ILanguageApi {
 		return { revision: params.document.revision, entries: [] };
 	}
 
-	async workspaceSymbols(params: Parameters<ILanguageApi["workspaceSymbols"]>[0]): ReturnType<ILanguageApi["workspaceSymbols"]> {
+	async directorySymbols(params: Parameters<ILanguageApi["directorySymbols"]>[0]): ReturnType<ILanguageApi["directorySymbols"]> {
 		this.workspaceSymbolLanguages.push(params.languageId);
 		return { symbols: [{ name: "answer", symbolKind: 12, containerName: "demo", path: "src/with space.ts", range: DTO_RANGE }] };
 	}

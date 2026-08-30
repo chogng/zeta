@@ -1,8 +1,8 @@
 //! Bounded discovery and immutable snapshots for Zeta Instruction artifacts.
 //!
-//! This crate owns the native Workspace layout below `.zeta/instructions`, frontmatter
+//! This crate owns the directory layout below `.zeta/instructions`, frontmatter
 //! validation, loading policy, deterministic diagnostics, and bounded content reads. It does not
-//! assemble model requests, watch files, interpret external Agent formats, or own Workspace trust.
+//! assemble model requests, watch files, interpret external Agent formats, or own directory access.
 
 mod catalog;
 mod model;

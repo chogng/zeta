@@ -5,7 +5,7 @@ use std::process::Command;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileSystemAccess {
     ReadOnly,
-    WorkspaceWrite,
+    DirectoryWrite,
     FullAccess,
 }
 
@@ -43,7 +43,7 @@ impl SandboxPolicy {
     }
 }
 
-/// A command whose working directory is relative to its selected workspace.
+/// A command whose working directory is relative to its selected directory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SandboxCommand {
     program: OsString,

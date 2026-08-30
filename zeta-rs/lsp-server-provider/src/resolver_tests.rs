@@ -152,7 +152,7 @@ fn execution_policy_blocks_resolution_before_inspecting_candidates() {
         .resolve(
             &candidates,
             LanguageServerExecutionPolicy::Disallowed,
-            Path::new("/workspace"),
+            Path::new("/dir"),
         )
         .expect("resolution");
 

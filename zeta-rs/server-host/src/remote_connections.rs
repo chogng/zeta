@@ -1,6 +1,6 @@
 use serde::Serialize;
 use zeta_app_server_client::local_profile_root;
-use zeta_remote::RemoteWorkspacePath;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionCatalog;
@@ -12,11 +12,11 @@ const LIST_USAGE: &str = "usage: zeta-server remote connections list";
 const GET_USAGE: &str = "usage: zeta-server remote connections get --name <name>";
 const SAVE_USAGE: &str = concat!(
     "usage: zeta-server remote connections save --name <name> --host <ssh-host> ",
-    "--workspace <absolute-remote-path> [--mode create|replace]"
+    "--dir <absolute-remote-path> [--mode create|replace]"
 );
 const UPDATE_USAGE: &str = concat!(
     "usage: zeta-server remote connections update --name <existing-name> ",
-    "--new-name <name> --host <ssh-host> --workspace <absolute-remote-path>"
+    "--new-name <name> --host <ssh-host> --dir <absolute-remote-path>"
 );
 const REMOVE_USAGE: &str = "usage: zeta-server remote connections remove --name <name>";
 
@@ -110,7 +110,7 @@ fn parse_get(arguments: &[String]) -> Result<RemoteConnectionsCommand, String> {
 fn parse_save(arguments: &[String]) -> Result<RemoteConnectionsCommand, String> {
     let mut name = None;
     let mut host = None;
-    let mut workspace = None;
+    let mut dir = None;
     let mut mode = None;
     super::parse_options(arguments, |option, value| match option {
         "--name" => super::assign_once(
@@ -123,9 +123,9 @@ fn parse_save(arguments: &[String]) -> Result<RemoteConnectionsCommand, String> 
             SshHost::parse(value).map_err(super::string_error)?,
             option,
         ),
-        "--workspace" => super::assign_once(
-            &mut workspace,
-            RemoteWorkspacePath::parse(value).map_err(super::string_error)?,
+        "--dir" => super::assign_once(
+            &mut dir,
+            RemoteDirPath::parse(value).map_err(super::string_error)?,
             option,
         ),
         "--mode" => super::assign_once(
@@ -143,7 +143,7 @@ fn parse_save(arguments: &[String]) -> Result<RemoteConnectionsCommand, String> 
     })?;
     let target = SshTarget::new(
         host.ok_or_else(|| required("--host", SAVE_USAGE))?,
-        workspace.ok_or_else(|| required("--workspace", SAVE_USAGE))?,
+        dir.ok_or_else(|| required("--dir", SAVE_USAGE))?,
     );
     Ok(RemoteConnectionsCommand::Save {
         entry: RemoteConnectionEntry::new(
@@ -158,7 +158,7 @@ fn parse_update(arguments: &[String]) -> Result<RemoteConnectionsCommand, String
     let mut original_name = None;
     let mut name = None;
     let mut host = None;
-    let mut workspace = None;
+    let mut dir = None;
     super::parse_options(arguments, |option, value| match option {
         "--name" => super::assign_once(
             &mut original_name,
@@ -175,9 +175,9 @@ fn parse_update(arguments: &[String]) -> Result<RemoteConnectionsCommand, String
             SshHost::parse(value).map_err(super::string_error)?,
             option,
         ),
-        "--workspace" => super::assign_once(
-            &mut workspace,
-            RemoteWorkspacePath::parse(value).map_err(super::string_error)?,
+        "--dir" => super::assign_once(
+            &mut dir,
+            RemoteDirPath::parse(value).map_err(super::string_error)?,
             option,
         ),
         _ => Err(format!(
@@ -186,7 +186,7 @@ fn parse_update(arguments: &[String]) -> Result<RemoteConnectionsCommand, String
     })?;
     let target = SshTarget::new(
         host.ok_or_else(|| required("--host", UPDATE_USAGE))?,
-        workspace.ok_or_else(|| required("--workspace", UPDATE_USAGE))?,
+        dir.ok_or_else(|| required("--dir", UPDATE_USAGE))?,
     );
     Ok(RemoteConnectionsCommand::Update {
         original_name: original_name.ok_or_else(|| required("--name", UPDATE_USAGE))?,
@@ -237,7 +237,7 @@ fn print_json(value: &impl Serialize) -> Result<(), String> {
 struct ConnectionOutput {
     name: String,
     host: String,
-    workspace: String,
+    dir: String,
 }
 
 impl From<&RemoteConnectionEntry> for ConnectionOutput {
@@ -245,7 +245,7 @@ impl From<&RemoteConnectionEntry> for ConnectionOutput {
         Self {
             name: entry.name().as_str().into(),
             host: entry.target().host().as_str().into(),
-            workspace: entry.target().workspace().as_str().into(),
+            dir: entry.target().dir().as_str().into(),
         }
     }
 }

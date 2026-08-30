@@ -14,9 +14,9 @@ export function createDisconnectedCodebaseSymbolsApi(unavailable: UnavailableOpe
 
 export function createViteDevCodebaseSymbolsApi(connection: ViteDevAppServerConnection): ICodebaseSymbolsApi {
 	return {
-		status: () => viteDevRequest(connection, "workspace/codebase/symbols/status", {}),
-		search: params => viteDevRequest(connection, "workspace/codebase/symbols/search", params),
-		synchronize: params => viteDevRequest(connection, "workspace/codeIntelligence/document/synchronize", params),
-		close: params => viteDevRequest(connection, "workspace/codeIntelligence/document/close", params),
+		status: () => viteDevRequest(connection, "codebase/symbols/status", {}),
+		search: params => viteDevRequest(connection, "codebase/symbols/search", params),
+		synchronize: params => viteDevRequest(connection, "codeIntelligence/document/synchronize", params),
+		close: params => viteDevRequest(connection, "codeIntelligence/document/close", params),
 	};
 }

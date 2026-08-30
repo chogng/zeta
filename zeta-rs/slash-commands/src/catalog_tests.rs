@@ -5,7 +5,7 @@ use crate::{
 fn command(name: &str) -> SlashCommandDefinition {
     SlashCommandDefinition {
         name: name.into(),
-        description: "inspect the workspace".into(),
+        description: "inspect the dir".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
     }
 }

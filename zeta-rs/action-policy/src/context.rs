@@ -22,7 +22,7 @@ pub enum ReviewEvidenceKind {
     PriorToolCall,
     PriorToolResult,
     PreparedAction,
-    WorkspaceFile,
+    DirectoryFile,
 }
 
 /// One bounded, host-labeled observation relevant to the proposed action.

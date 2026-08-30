@@ -37,6 +37,8 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
     let thread = Thread {
         session_id: SessionId::new("session-1").unwrap(),
         thread_id: ThreadId::new("thread-1").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Thread".to_owned(),
         status: ThreadStatus::Active,
         sequence: 1,
@@ -46,6 +48,8 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
             Turn {
                 turn_id: agent_turn_id.clone(),
                 status: TurnStatus::Completed,
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 model: None,
                 tool_profile: None,
                 tool_mode: Default::default(),
@@ -64,6 +68,8 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
             Turn {
                 turn_id: shell_turn_id.clone(),
                 status: TurnStatus::Completed,
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 model: None,
                 tool_profile: None,
                 tool_mode: Default::default(),

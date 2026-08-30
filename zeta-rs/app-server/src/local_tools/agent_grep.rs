@@ -27,13 +27,13 @@ use zeta_fast_regex_search::FastRegexSearchStorage;
 use zeta_fast_regex_search::FastRegexUpdateOutcome;
 use zeta_fast_regex_search::FastRegexWorkerClient;
 use zeta_fast_regex_search::FastRegexWorkerCommand;
+use zeta_file_access::Dir;
+use zeta_file_access::DirId;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_shell_command::RipgrepExecutable;
+use zeta_state::DirIndexKind;
+use zeta_state::DirIndexLease;
 use zeta_state::StateRuntime;
-use zeta_state::WorkspaceIndexKind;
-use zeta_state::WorkspaceIndexLease;
-use zeta_workspace::WorkspaceRoot;
-use zeta_workspace::WorkspaceTrustId;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_AGENT_MATCHES: usize = 100;
@@ -41,7 +41,7 @@ const MAX_RESULT_LINE_CHARS: usize = 500;
 
 /// Selects and owns the implementation used only by the Agent `grep` Tool.
 ///
-/// Workspace Search is implemented by `zeta-workspace-search`; this service has its own Agent grep
+/// Content Search is implemented by `zeta-content-search`; this service has its own Agent grep
 /// execution path and may select `zeta-fast-regex-search`.
 pub(crate) struct AgentGrepService {
     backend: AgentGrepBackend,
@@ -53,12 +53,12 @@ struct FastRegexIndexes {
     enabled: AtomicBool,
     storage: Option<Arc<StateRuntime>>,
     worker_command: Option<FastRegexWorkerCommand>,
-    indexes: Mutex<BTreeMap<WorkspaceTrustId, Arc<ManagedFastRegexSearch>>>,
+    indexes: Mutex<BTreeMap<DirId, Arc<ManagedFastRegexSearch>>>,
 }
 
 struct ManagedFastRegexSearch {
     search: FastRegexSearchHandle,
-    _lease: Option<WorkspaceIndexLease>,
+    _lease: Option<DirIndexLease>,
 }
 
 enum FastRegexSearchHandle {
@@ -141,7 +141,7 @@ impl AgentGrepService {
         }
     }
 
-    pub(crate) fn apply_watcher_event(&self, root: &WorkspaceRoot, event: &FileWatcherEvent) {
+    pub(crate) fn apply_watcher_event(&self, root: &Dir, event: &FileWatcherEvent) {
         if !self.indexes.enabled.load(Ordering::Acquire) {
             return;
         }
@@ -150,14 +150,14 @@ impl AgentGrepService {
             .indexes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(&root.trust_id())
+            .get(&root.id())
             .cloned();
         let Some(index) = index else {
             return;
         };
         let update = match event {
             FileWatcherEvent::PathsChanged { paths } => index.refresh_observed_paths(paths),
-            FileWatcherEvent::RescanRequired { .. } => index.reconcile_workspace(),
+            FileWatcherEvent::RescanRequired { .. } => index.reconcile_dir(),
         };
         if let Err(error) = update {
             log::warn!("fast regex index refresh failed: {error}");
@@ -171,21 +171,21 @@ impl AgentGrepService {
 
     pub(crate) fn fast_regex_snapshot(
         &self,
-        root: &WorkspaceRoot,
+        root: &Dir,
     ) -> Result<Option<FastRegexSearchSnapshot>, FastRegexError> {
         let index = self
             .indexes
             .indexes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(&root.trust_id())
+            .get(&root.id())
             .cloned();
         index.map(|index| index.snapshot()).transpose()
     }
 
     pub(crate) fn rebuild_fast_regex(
         &self,
-        root: &WorkspaceRoot,
+        root: &Dir,
     ) -> Result<FastRegexSearchSnapshot, FastRegexError> {
         if !self.watches_fast_regex() {
             return Err(FastRegexError::NotReady);
@@ -194,20 +194,20 @@ impl AgentGrepService {
     }
 
     #[cfg(test)]
-    pub(crate) fn has_active_index(&self, root: &WorkspaceRoot) -> bool {
+    pub(crate) fn has_active_index(&self, root: &Dir) -> bool {
         self.indexes
             .indexes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .contains_key(&root.trust_id())
+            .contains_key(&root.id())
     }
 
-    pub(crate) fn invalidate_index(&self, root: &WorkspaceRoot) {
+    pub(crate) fn invalidate_index(&self, root: &Dir) {
         self.indexes
             .indexes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(&root.trust_id());
+            .remove(&root.id());
     }
 
     fn execute_ripgrep(
@@ -316,17 +316,14 @@ impl AgentGrepService {
         Ok(ToolExecutionOutput::Success(output))
     }
 
-    fn index_for(
-        &self,
-        root: &WorkspaceRoot,
-    ) -> Result<Arc<ManagedFastRegexSearch>, FastRegexError> {
-        let trust_id = root.trust_id();
+    fn index_for(&self, root: &Dir) -> Result<Arc<ManagedFastRegexSearch>, FastRegexError> {
+        let dir_id = root.id();
         let mut indexes = self
             .indexes
             .indexes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(index) = indexes.get(&trust_id) {
+        if let Some(index) = indexes.get(&dir_id) {
             return Ok(Arc::clone(index));
         }
         let lease = self
@@ -335,9 +332,9 @@ impl AgentGrepService {
             .as_ref()
             .map(|storage| {
                 storage
-                    .acquire(&trust_id, WorkspaceIndexKind::AgentGrep)
+                    .acquire(&dir_id, DirIndexKind::AgentGrep)
                     .map_err(|source| FastRegexError::Io {
-                        path: storage.index_directory(&trust_id, WorkspaceIndexKind::AgentGrep),
+                        path: storage.index_directory(&dir_id, DirIndexKind::AgentGrep),
                         source,
                     })
             })
@@ -373,7 +370,7 @@ impl AgentGrepService {
         if index.snapshot()?.generation == 0 {
             index.rebuild()?;
         }
-        indexes.insert(trust_id, Arc::clone(&index));
+        indexes.insert(dir_id, Arc::clone(&index));
         Ok(index)
     }
 }
@@ -403,10 +400,10 @@ impl ManagedFastRegexSearch {
         }
     }
 
-    fn reconcile_workspace(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
+    fn reconcile_dir(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
         match &self.search {
-            FastRegexSearchHandle::InProcess(search) => search.reconcile_workspace(),
-            FastRegexSearchHandle::Worker(search) => search.reconcile_workspace(),
+            FastRegexSearchHandle::InProcess(search) => search.reconcile_dir(),
+            FastRegexSearchHandle::Worker(search) => search.reconcile_dir(),
         }
     }
 

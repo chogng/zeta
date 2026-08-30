@@ -3,18 +3,19 @@ use super::turn_changes_commit::spawn_commit_job;
 use super::turn_changes_message::spawn_message_job;
 use super::turn_changes_watcher::ThreadChangeWatcher;
 use super::update_broker::UpdateBroker;
-use crate::session_workspace_access::SessionWorkspaceAccess;
+use crate::dir_grants::DirGrants;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use zeta_app_server_protocol::protocol::turn_changes::{
-    ChangeSetId as ChangeSetIdDto, ThreadWorkspaceBinding, ThreadWorkspaceRepositoryBindingDto,
+    ChangeSetId as ChangeSetIdDto, ThreadDirBinding, ThreadWorktreeRepositoryBindingDto,
     TurnChangeCaptureStateDto, TurnChangeCommitStateDto, TurnChangeFileStatisticsDto,
     TurnChangeMessageStateDto, TurnChangeSetSummary, TurnChangeTerminalStateDto,
     TurnChangesChanged, TurnChangesMutationResult,
 };
 use zeta_config::ConfigStore;
-use zeta_core::{ModelService, SessionCoordinator};
+use zeta_core::{ModelService, ThreadController};
+use zeta_file_access::{Dir, DirId};
 use zeta_hooks::DeclarativeHookRuntime;
 use zeta_protocol::{CommandId, SessionId, ThreadId, ToolCallId, TurnId};
 use zeta_state::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
@@ -22,22 +23,21 @@ use zeta_turn_changes::{
     CaptureState, CommitState, MessageState, TerminalTurnState, TurnChangeLedger, TurnChangeSet,
     TurnChangeStore,
 };
-use zeta_workspace::{WorkspaceRoot, WorkspaceTrustId};
 use zeta_worktree::{ThreadWorktreeBinding, WorktreeManager, WorktreeSettings};
 
-/// App Server owner of Thread workspace bindings, Turn checkpoints, and ledger notifications.
+/// App Server owner of Thread dir bindings, Turn checkpoints, and ledger notifications.
 pub(super) struct TurnChangesRuntime {
-    pub(super) workspace_root: PathBuf,
-    pub(super) workspace_id: WorkspaceTrustId,
+    pub(super) dir_root: PathBuf,
+    pub(super) dir_id: DirId,
     pub(super) worktrees: WorktreeManager,
     pub(super) worktree_runtime: tokio::runtime::Runtime,
     pub(super) bindings: RwLock<BTreeMap<ThreadId, ThreadWorktreeBinding>>,
     pub(super) store: Arc<SqliteTurnChangeStore>,
     pub(super) ledger: TurnChangeLedger,
     pub(super) config: Arc<ConfigStore>,
-    pub(super) sessions: Arc<SessionCoordinator>,
+    pub(super) threads: Arc<ThreadController>,
     pub(super) model: Arc<dyn ModelService>,
-    pub(super) workspace_access: Arc<SessionWorkspaceAccess>,
+    pub(super) file_access: Arc<DirGrants>,
     pub(super) hooks: Arc<DeclarativeHookRuntime>,
     pub(super) updates: Arc<UpdateBroker>,
     pub(super) capture_failures: RwLock<BTreeMap<TurnId, String>>,
@@ -50,15 +50,15 @@ impl TurnChangesRuntime {
     pub(super) fn open(
         database_path: &Path,
         profile_root: &Path,
-        workspace_root: &Path,
+        dir_root: &Path,
         config: Arc<ConfigStore>,
-        sessions: Arc<SessionCoordinator>,
+        threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
-        workspace_access: Arc<SessionWorkspaceAccess>,
+        file_access: Arc<DirGrants>,
         hooks: Arc<DeclarativeHookRuntime>,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, String> {
-        let workspace = WorkspaceRoot::open(workspace_root).map_err(|error| error.to_string())?;
+        let dir = Dir::open_local(dir_root).map_err(|error| error.to_string())?;
         let store = Arc::new(
             SqliteTurnChangeStore::open(database_path)
                 .map_err(|error| format!("cannot open Turn change ledger: {error}"))?,
@@ -80,10 +80,7 @@ impl TurnChangesRuntime {
             .map_err(|error| format!("cannot resolve managed worktree settings: {error}"))?;
         let worktrees = WorktreeManager::new(worktree_settings);
         let recovered = worktree_runtime
-            .block_on(
-                worktrees
-                    .recover_threads(workspace.canonical_path(), workspace.trust_id().as_str()),
-            )
+            .block_on(worktrees.recover_threads(dir.canonical_path(), dir.id().as_str()))
             .map_err(|error| format!("cannot recover Thread worktrees: {error}"))?;
         let bindings = recovered
             .into_iter()
@@ -94,25 +91,24 @@ impl TurnChangesRuntime {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         for (thread_id, binding) in &bindings {
-            let root = WorkspaceRoot::open(binding.workspace_directory())
-                .map_err(|error| error.to_string())?;
+            let root = Dir::open_local(binding.dir()).map_err(|error| error.to_string())?;
             hooks
-                .bind_thread_workspace(thread_id.clone(), root.clone())
+                .bind_thread_dir(thread_id.clone(), root.clone())
                 .map_err(|error| error.to_string())?;
-            workspace_access.bind_thread_workspace(thread_id.clone(), root);
+            file_access.bind_thread_dir(thread_id.clone(), root);
         }
         let runtime = Arc::new(Self {
-            workspace_root: workspace.canonical_path().to_path_buf(),
-            workspace_id: workspace.trust_id(),
+            dir_root: dir.canonical_path().to_path_buf(),
+            dir_id: dir.id(),
             worktrees,
             worktree_runtime,
             bindings: RwLock::new(bindings),
             store,
             ledger,
             config,
-            sessions,
+            threads,
             model,
-            workspace_access,
+            file_access,
             hooks: Arc::clone(&hooks),
             updates,
             capture_failures: RwLock::new(BTreeMap::new()),
@@ -128,7 +124,7 @@ impl TurnChangesRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
         {
-            runtime.start_watcher(thread_id.clone(), binding.workspace_directory())?;
+            runtime.start_watcher(thread_id.clone(), binding.dir())?;
         }
         runtime.resume_pending_jobs()?;
         Ok(runtime)
@@ -173,10 +169,10 @@ impl TurnChangesRuntime {
                 {
                     spawn_message_job(
                         Arc::clone(&self.store),
-                        Arc::clone(&self.sessions),
+                        Arc::clone(&self.threads),
                         Arc::clone(&self.model),
                         Arc::clone(&self.config),
-                        self.workspace_id.clone(),
+                        self.dir_id.clone(),
                         Arc::clone(&self.updates),
                         record.change_set_id.clone(),
                     );
@@ -185,9 +181,9 @@ impl TurnChangesRuntime {
                     record.commit_state,
                     CommitState::Queued | CommitState::Committing
                 ) {
-                    let binding = self.binding(&record.thread_id).ok_or_else(|| {
-                        format!("Thread {} has no workspace binding", record.thread_id)
-                    })?;
+                    let binding = self
+                        .binding(&record.thread_id)
+                        .ok_or_else(|| format!("Thread {} has no dir binding", record.thread_id))?;
                     spawn_commit_job(
                         Arc::clone(&self.store),
                         Arc::clone(&self.updates),
@@ -200,26 +196,25 @@ impl TurnChangesRuntime {
         Ok(())
     }
 
-    pub(super) fn public_binding(&self, thread_id: &ThreadId) -> Option<ThreadWorkspaceBinding> {
-        self.binding(thread_id)
-            .map(|binding| ThreadWorkspaceBinding {
-                managed_worktree_id: binding.managed_worktree_id().to_string(),
-                source_workspace_id: binding.source_workspace_id().to_string(),
-                repositories: binding
-                    .repositories()
-                    .iter()
-                    .map(|repository| ThreadWorkspaceRepositoryBindingDto {
-                        repository_id: repository.repository_id().to_string(),
-                        target_branch: repository.target_branch().map(ToOwned::to_owned),
-                        baseline_object_id: (!repository.target_unborn())
-                            .then(|| repository.baseline_tree().to_string()),
-                    })
-                    .collect(),
-                baseline_summary: format!(
-                    "{} immutable repository checkpoint(s)",
-                    binding.repositories().len()
-                ),
-            })
+    pub(super) fn public_binding(&self, thread_id: &ThreadId) -> Option<ThreadDirBinding> {
+        self.binding(thread_id).map(|binding| ThreadDirBinding {
+            managed_worktree_id: binding.managed_worktree_id().to_string(),
+            source_dir_id: binding.source_dir_id().to_string(),
+            repositories: binding
+                .repositories()
+                .iter()
+                .map(|repository| ThreadWorktreeRepositoryBindingDto {
+                    repository_id: repository.repository_id().to_string(),
+                    target_branch: repository.target_branch().map(ToOwned::to_owned),
+                    baseline_object_id: (!repository.target_unborn())
+                        .then(|| repository.baseline_tree().to_string()),
+                })
+                .collect(),
+            baseline_summary: format!(
+                "{} immutable repository checkpoint(s)",
+                binding.repositories().len()
+            ),
+        })
     }
 
     pub(super) fn list(
@@ -271,10 +266,10 @@ impl TurnChangesRuntime {
         self.publish(&[record.clone()]);
         spawn_message_job(
             Arc::clone(&self.store),
-            Arc::clone(&self.sessions),
+            Arc::clone(&self.threads),
             Arc::clone(&self.model),
             Arc::clone(&self.config),
-            self.workspace_id.clone(),
+            self.dir_id.clone(),
             Arc::clone(&self.updates),
             record.change_set_id.clone(),
         );
@@ -314,7 +309,7 @@ impl TurnChangesRuntime {
         }
         let binding = self
             .binding(&record.thread_id)
-            .ok_or_else(|| format!("Thread {} has no workspace binding", record.thread_id))?;
+            .ok_or_else(|| format!("Thread {} has no dir binding", record.thread_id))?;
         self.resolve_external_dependencies(&binding, &mut record)?;
         record.queue_commit().map_err(|error| error.to_string())?;
         let response = mutation_result(&[record.clone()]);
@@ -344,7 +339,7 @@ impl TurnChangesRuntime {
             .iter()
             .find(|repository| repository.repository_id() == record.repository_id)
             .ok_or_else(|| format!("Thread binding omitted repository {}", record.repository_id))?;
-        if binding.kind() != zeta_worktree::ThreadWorkspaceKind::Git {
+        if binding.kind() != zeta_worktree::ThreadWorktreeKind::Git {
             return Ok(());
         }
         let resolved = self.worktree_runtime.block_on(async {
@@ -432,7 +427,7 @@ impl TurnChangesRuntime {
                 .values
                 .commit_messages
                 .authorized_model(
-                    &self.workspace_id,
+                    &self.dir_id,
                     snapshot.values.commit_message_model.as_ref(),
                     &snapshot.values.providers,
                 )

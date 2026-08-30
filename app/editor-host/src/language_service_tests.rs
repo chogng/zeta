@@ -3,8 +3,8 @@ use std::path::Path;
 
 use zeta_app_server_protocol::protocol::config::{
     AgentGrepBackendDto, ApprovalReviewModelSelectionDto, CodebaseAutomaticContextDto,
-    CodebaseConfigDto, CodebaseSemanticSelectionDto, ConfigReadResult, LanguageServerConfigDto,
-    LanguageServerModeDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
+    CodebaseConfigDto, ConfigReadResult, LanguageServerConfigDto, LanguageServerModeDto,
+    ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
 use zeta_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
@@ -13,7 +13,7 @@ use super::{catalog_from_configuration, editor_diagnostic, language_document, la
 use crate::FileEditorHost;
 
 #[test]
-fn desktop_adapter_maps_editor_language_revision_and_workspace_path_without_lsp_types() {
+fn desktop_adapter_maps_editor_language_revision_and_path_without_lsp_types() {
     let mut host = FileEditorHost::default();
     host.open(TextFileSnapshot::new(
         "src/main.rs".into(),
@@ -25,10 +25,10 @@ fn desktop_adapter_maps_editor_language_revision_and_workspace_path_without_lsp_
         ),
     ));
 
-    let document = language_document(Path::new("/workspace"), host.active().unwrap())
-        .expect("language document");
+    let document =
+        language_document(Path::new("/dir"), host.active().unwrap()).expect("language document");
 
-    assert_eq!(document.path(), Path::new("/workspace/src/main.rs"));
+    assert_eq!(document.path(), Path::new("/dir/src/main.rs"));
     assert_eq!(document.language_id(), "rust");
     assert_eq!(document.revision().value(), 1);
     assert_eq!(document.text(), "fn main() {}");
@@ -50,6 +50,8 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         generation: 7,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
+        commit_message_model: None,
+        commit_message_active_dir_authorized: false,
         tool_mode: Default::default(),
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         providers: BTreeMap::new(),
@@ -64,9 +66,8 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
             embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
         },
         codebase: CodebaseConfigDto {
-            selection: CodebaseSemanticSelectionDto::Disabled,
+            models: None,
             automatic_context: CodebaseAutomaticContextDto::Off,
-            active_workspace_authorized: false,
         },
         exec_policy_rules: Vec::new(),
     };
@@ -76,7 +77,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         .resolve(
             &zeta_install_context::InstallContext::current(),
             LanguageServerExecutionPolicy::Allowed,
-            Path::new("/workspace"),
+            Path::new("/dir"),
         )
         .expect("catalog");
 
@@ -94,6 +95,8 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
         generation: 1,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
+        commit_message_model: None,
+        commit_message_active_dir_authorized: false,
         tool_mode: Default::default(),
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         providers: BTreeMap::new(),
@@ -108,9 +111,8 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
             embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
         },
         codebase: CodebaseConfigDto {
-            selection: CodebaseSemanticSelectionDto::Disabled,
+            models: None,
             automatic_context: CodebaseAutomaticContextDto::Off,
-            active_workspace_authorized: false,
         },
         exec_policy_rules: Vec::new(),
     };
@@ -120,7 +122,7 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
         .resolve(
             &zeta_install_context::InstallContext::current(),
             LanguageServerExecutionPolicy::Allowed,
-            Path::new("/workspace"),
+            Path::new("/dir"),
         )
         .expect("catalog");
 

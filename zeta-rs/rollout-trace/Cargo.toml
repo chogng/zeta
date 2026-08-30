@@ -14,7 +14,6 @@ path = "src/lib.rs"
 serde = { workspace = true }
 zeta-history = { workspace = true }
 zeta-protocol = { workspace = true }
-zeta-session-store = { workspace = true }
 zeta-thread-store = { workspace = true }
 
 [dev-dependencies]

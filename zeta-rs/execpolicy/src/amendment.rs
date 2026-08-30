@@ -48,7 +48,7 @@ impl ExecPolicyAmendment {
     /// Produces the next semantic snapshot without reading or writing configuration files.
     ///
     /// Only a user layer can be amended through this API. Host and organization policy remain
-    /// controlled by their trusted adapters, while Workspace configuration cannot grant itself
+    /// controlled by their trusted adapters, while directory configuration cannot grant itself
     /// broader execution authority.
     pub fn apply(
         self,

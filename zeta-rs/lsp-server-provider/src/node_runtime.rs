@@ -96,14 +96,14 @@ impl ManagedNodeRuntime {
     pub(crate) fn command_for_script(
         &self,
         script: &Path,
-        workspace_root: &Path,
+        dir_root: &Path,
     ) -> Result<LanguageServerCommand, LanguageServerProviderError> {
         let script = canonical_regular_file(script, "language-server Node entrypoint")?;
         let mut command = LanguageServerCommand::new(self.executable.as_os_str())
             .with_clean_environment()
             .with_argument(script.into_os_string())
             .with_argument("--stdio")
-            .with_current_dir(workspace_root);
+            .with_current_dir(dir_root);
         for name in SAFE_NODE_ENVIRONMENT {
             if let Some(value) = env::var_os(name) {
                 command = command.with_environment(name, value);

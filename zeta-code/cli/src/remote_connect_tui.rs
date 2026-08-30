@@ -4,8 +4,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use zeta_remote::RemoteProfile;
-use zeta_remote::RemoteWorkspacePath;
-use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionFailureKind;
 
 use super::runtime;
@@ -19,13 +17,13 @@ pub(super) fn run(
     ready: ReadyRemoteRuntime,
     ssh_executable: Option<PathBuf>,
 ) -> Result<(), String> {
-    let mut profile = ready.profile;
+    let profile = ready.profile;
     let mut session = ready.session;
     let mut recovery = None;
     loop {
         let mut options =
             zeta_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
-                .with_remote_workspace(PathBuf::from(profile.target().workspace().as_str()))
+                .with_remote_dir(PathBuf::from(profile.target().dir().as_str()))
                 .with_profile_root(zeta_app_server_client::local_profile_root());
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
@@ -47,24 +45,6 @@ pub(super) fn run(
                 return Err(format!(
                     "Remote App Server recovery stopped after {kind:?}: {reason}"
                 ));
-            }
-            zeta_tui::TuiExit::WorkspaceReconnectRequested(request) => {
-                let (workspace_root, next_recovery) = request.into_parts();
-                let workspace = workspace_root.to_str().ok_or_else(|| {
-                    "Remote Session Workspace path is not valid UTF-8".to_string()
-                })?;
-                let target = SshTarget::new(
-                    profile.target().host().clone(),
-                    RemoteWorkspacePath::parse(workspace).map_err(|error| error.to_string())?,
-                );
-                profile = RemoteProfile::new(target, profile.runtime().clone());
-                recovery = Some(next_recovery);
-                session = reconnect(
-                    &profile,
-                    ssh_executable.as_deref(),
-                    "Session belongs to another Remote Workspace",
-                )?
-                .session;
             }
         }
     }

@@ -49,9 +49,9 @@ use zeta_action_policy::ExecutionDecision;
 use zeta_action_policy::ResolvedAction;
 use zeta_action_policy::SandboxCompatibility;
 use zeta_agent_environment::AgentEnvironmentSnapshot;
+use zeta_agent_environment::Dirs;
 use zeta_agent_environment::HostEnvironment;
 use zeta_agent_environment::RepositoryEnvironment;
-use zeta_agent_environment::WorkspaceRoots;
 use zeta_async_utils::CancellationSource;
 use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
@@ -2737,7 +2737,7 @@ impl HarnessContextProvider for MutableInstructions {
 }
 
 fn test_harness_context(content: &str, environment_marker: &str) -> HarnessContext {
-    let primary_root = std::env::current_dir().unwrap().join("workspace");
+    let primary_root = std::env::current_dir().unwrap().join("dir");
     let environment = AgentEnvironmentSnapshot::new(
         HostEnvironment::new(
             primary_root.clone(),
@@ -2748,7 +2748,7 @@ fn test_harness_context(content: &str, environment_marker: &str) -> HarnessConte
         )
         .unwrap(),
         RepositoryEnvironment::NotDetected,
-        WorkspaceRoots::new(primary_root, std::iter::empty()).unwrap(),
+        Dirs::new([primary_root]).unwrap(),
     );
     HarnessContext::new(HarnessInstructions::new("system", Some(content.into())))
         .with_environment(environment)

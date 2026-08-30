@@ -8,9 +8,9 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_utils_path::write_atomically;
@@ -28,7 +28,7 @@ impl Drop for ProfileLease {
     }
 }
 
-/// Durable, credential-free runtime history for one SSH host and Remote Workspace.
+/// Durable, credential-free runtime history for one SSH host and Remote Directory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RemoteConnectionProfileRecord {
     target: SshTarget,
@@ -37,7 +37,7 @@ pub struct RemoteConnectionProfileRecord {
 }
 
 impl RemoteConnectionProfileRecord {
-    /// Returns the SSH host and Workspace identity shared by both runtime generations.
+    /// Returns the SSH host and Directory identity shared by both runtime generations.
     pub const fn target(&self) -> &SshTarget {
         &self.target
     }
@@ -91,7 +91,7 @@ impl RemoteConnectionProfileStore {
         &self.path
     }
 
-    /// Loads the runtime history for exactly one SSH host and Workspace.
+    /// Loads the runtime history for exactly one SSH host and Directory.
     pub fn connection(
         &self,
         target: &SshTarget,
@@ -103,7 +103,7 @@ impl RemoteConnectionProfileStore {
             .find(|record| record.target == *target))
     }
 
-    /// Lists all validated records in stable host/Workspace order.
+    /// Lists all validated records in stable host/Directory order.
     pub fn connections(
         &self,
     ) -> Result<Vec<RemoteConnectionProfileRecord>, RemoteConnectionProfileStoreError> {
@@ -265,9 +265,9 @@ impl RemoteConnectionProfileStore {
                     "Remote connection profile has an invalid host: {error}"
                 ))
             })?;
-            let workspace = RemoteWorkspacePath::parse(value.workspace).map_err(|error| {
+            let dir = RemoteDirPath::parse(value.dir).map_err(|error| {
                 RemoteConnectionProfileStoreError::invalid(format!(
-                    "Remote connection profile has an invalid Workspace: {error}"
+                    "Remote connection profile has an invalid Directory: {error}"
                 ))
             })?;
             let active_runtime = RemoteRuntime::new(value.active_runtime).map_err(|error| {
@@ -290,7 +290,7 @@ impl RemoteConnectionProfileStore {
                 ));
             }
             let record = RemoteConnectionProfileRecord {
-                target: SshTarget::new(host, workspace),
+                target: SshTarget::new(host, dir),
                 active_runtime,
                 previous_runtime,
             };
@@ -299,7 +299,7 @@ impl RemoteConnectionProfileStore {
                 .any(|existing: &RemoteConnectionProfileRecord| existing.target == record.target)
             {
                 return Err(RemoteConnectionProfileStoreError::invalid(
-                    "Remote connection profile store repeats a host/Workspace target",
+                    "Remote connection profile store repeats a host/Directory target",
                 ));
             }
             records.push(record);
@@ -337,12 +337,7 @@ fn sort_records(records: &mut [RemoteConnectionProfileRecord]) {
             .host()
             .as_str()
             .cmp(right.target.host().as_str())
-            .then_with(|| {
-                left.target
-                    .workspace()
-                    .as_str()
-                    .cmp(right.target.workspace().as_str())
-            })
+            .then_with(|| left.target.dir().as_str().cmp(right.target.dir().as_str()))
     });
 }
 
@@ -357,7 +352,7 @@ struct ProfileDocument {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProfileRecord {
     host: String,
-    workspace: String,
+    dir: String,
     active_runtime: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     previous_runtime: Option<String>,
@@ -367,7 +362,7 @@ impl From<&RemoteConnectionProfileRecord> for ProfileRecord {
     fn from(record: &RemoteConnectionProfileRecord) -> Self {
         Self {
             host: record.target.host().as_str().into(),
-            workspace: record.target.workspace().as_str().into(),
+            dir: record.target.dir().as_str().into(),
             active_runtime: record.active_runtime.executable().into(),
             previous_runtime: record
                 .previous_runtime

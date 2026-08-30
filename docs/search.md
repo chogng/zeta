@@ -1,118 +1,69 @@
-# 搜索：Rust 权威执行与桌面端投影
+# 内容搜索
 
-> 本文是 workspace 内容搜索的跨进程 ownership、产品语义和演进边界的 canonical 文档。
-> 跨文件内容搜索的实现细节见
-> [`zeta-rs/workspace-search/README.md`](../zeta-rs/workspace-search/README.md)，App Server 的
-> RPC 适配见 [`zeta-rs/app-server/README.md`](../zeta-rs/app-server/README.md)，wire DTO 与生成流程见
-> [`zeta-rs/app-server-protocol/README.md`](../zeta-rs/app-server-protocol/README.md)。
+> 本文拥有跨文件内容搜索的产品边界。实现分别见
+> [`zeta-content-search`](../zeta-rs/content-search/README.md) 与
+> [`zeta-app-server`](../zeta-rs/app-server/README.md)。
 
-## 快速理解
+## 结论
 
-`zeta-workspace-search` 承担跨文件内容检索，默认作用域是当前主工作目录；App Server 只把 RPC 映射为
-它的领域请求与结果；
-Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影和可丢弃的视图状态。当前实现使用
-`workspace/search/start`、`workspace/search/read`、`workspace/search/cancel` 三个 pull RPC，
-而不是把 `rg` 进程、路径授权或无界结果流放进 Renderer。
+内容搜索针对一个明确的 `Dir` 执行。目录由 `DirId` 定位，调用入口必须具备
+`SearchFiles`；`cwd`、窗口中打开的项目和 Session 都不会自动扩大搜索范围。
 
-这套 RPC 是产品搜索能力，不是模型 Tool。Agent `grep` 属于另一条 Tool/Policy contract：默认直接执行同一份冻结 `rg`，也可以通过 `agent.grepBackend = "fastRegex"` 切换到仅供 Agent 使用的本地稀疏 n-gram 索引。这个配置不改变工作区 Search RPC。
+```text
+Search UI
+  → IContentSearchService
+  → zeta:content-search:*
+  → content/search/*
+  → DirId + Authorization<SearchFiles>
+  → zeta-content-search
+```
 
-| 用户操作 | 当前行为 | 当前限制 |
-| --- | --- | --- |
-| 搜索主工作目录文字 | 分批返回匹配项并持续显示进度 | 最多 5,000 条结果 |
-| 搜索 `/add-dir` 目录 | Agent 使用 `grep` / `glob` | 不进入 Workspace Search 面板 |
-| 修改查询 | 取消旧任务并启动新任务 | 旧任务结果不会混入新查询 |
-| 使用正则或文件过滤 | 在 Rust 边界重新校验输入 | 只能使用工作区相对 glob |
-| 点击结果打开文件 | 尚未接通编辑器 | 结果当前只用于查看 |
-| 让模型调用搜索 | 走独立工具与权限契约 | 不复用界面搜索权限 |
-| 为 Agent 开启快速正则 | 只替换 Agent `grep` 的执行方式 | Search 面板仍使用 `rg` |
+桌面端可以把多个窗口文件夹聚合成一次用户操作，但它必须逐个目录发起搜索并保留目录身份。
+核心搜索服务不创建“主目录”“附加目录”或 Workspace 身份。
 
 ## 所有权
 
-| 能力 | Owner | 当前状态 |
-| --- | --- | --- |
-| query、大小写、正则和 include/exclude 输入 | Renderer | ✅ |
-| 结果分组、高亮、状态和重新搜索取消 | Renderer | ✅ |
-| IPC sender、exact shape 与输入上限的快速校验 | Electron Main | ✅ |
-| workspace root 授权与 `rg` executable 冻结 | Rust / App Server composition | ✅ |
-| 查询校验、`rg` 进程、结果解析、分页与取消 | `zeta-workspace-search` | ✅ |
-| Agent `grep` 在 `ripgrep` / `fastRegex` 间选择 | App Server `AgentGrepService` | ✅ |
-| Agent 稀疏 n-gram 候选筛选与精确验证 | `zeta-fast-regex-search` | ✅ |
-| connection ID → `WorkspaceSearchOwner`、DTO 转换与稳定 RPC error | App Server | ✅ |
-| wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
-| 文件路径 fuzzy match | `zeta-file-search` | ✅，与内容搜索无依赖 |
-| 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
-| Workspace Codebase | `zeta-codebase` + App Server | ✅ 独立代码知识检索；不作为当前 SearchView backend |
-| replace 和 watcher 驱动的产品搜索失效 | 未确定 | 尚未完成 |
+| 内容 | 所有者 |
+| --- | --- |
+| 查询表单、结果分组、高亮和取消时机 | Renderer |
+| IPC 参数形状和输入上限 | Electron Main |
+| 目录选择、`SearchFiles` 检查和连接级任务路由 | App Server |
+| `rg` 执行、解析、分页和取消 | `zeta-content-search` |
+| 文件名模糊查找 | `zeta-file-search` |
+| Agent 的 `grep` 工具 | Agent Tool 与 Policy；不复用产品搜索任务 |
 
-## 端到端流程
+## 协议
 
-```text
-SearchViewPane
-  → IWorkspaceSearchService.search(query, signal, onProgress)
-  → trusted zeta:workspace-search:* IPC
-  → AppServerClient
-  → workspace/search/start
-  → App Server maps DTO + connection to WorkspaceSearchQuery + WorkspaceSearchOwner
-  → zeta-workspace-search::WorkspaceSearchService job
-  → frozen RipgrepExecutable under WorkspaceRoot
-  → workspace/search/read batches
-  → renderer groups and highlights matches
-  → workspace/search/cancel releases the job
-```
+协议提供三个有界 pull RPC：
 
-`start` 冻结查询参数并返回 opaque `searchId`。App Server 把 connection ID 映射成不含传输语义的
-`WorkspaceSearchOwner`；搜索 crate 只比较 owner，不依赖 JSON-RPC。`read` 使用 `afterMatch` cursor 读取最多 200 条；
-没有新结果且作业仍在运行时可以返回空 batch。Renderer 只在结果非空时推进 cursor。
-完成、取消或 Renderer 异常退出当前搜索流程时都会调用 `cancel`；完成作业也会在服务端延迟清理，
-因此 cleanup RPC 失败不改变已返回结果。
+- `content/search/start` 冻结目录、查询和上限，返回 `searchId`。
+- `content/search/read` 使用游标读取下一批匹配项。
+- `content/search/cancel` 终止并释放任务。
 
-## 当前语义与边界
+IPC 通道使用 `zeta:content-search:*`。公开接口使用完整的 `ContentSearch*`，因为它跨越
+Renderer、Electron Main 和 App Server；搜索模块内部的私有函数只使用 `start`、`read`、`cancel`
+等无歧义短词。
 
-- 查询不能为空，UTF-8 最多 16 KiB；单次搜索最多返回 5,000 条，Desktop 默认 2,000 条。
-- include/exclude 各最多 64 个 workspace-relative glob，每项最多 1 KiB；绝对路径、`..`、
-  前导 `!` 和 NUL 被拒绝。
-- `zeta-workspace-search` 使用 host discovery 后冻结的 `rg` executable，使用 argument vector 和
-  `shell: false` 等价的进程 API，不做 shell 拼接。
-- `rg` 未安装时 stdio App Server 仍可启动，但 `workspaceSearch` capability 为 `false`，
-  Search 调用返回 `SearchUnavailable`；Desktop 会把显式 `ZETA_RG_PATH` 透传给可信子进程。
-- 搜索 cwd 固定为受信 `WorkspaceRoot`；当前沿用 ripgrep 默认 ignore/hidden 行为。
-- preview 单行最多由 `--max-columns=1000 --max-columns-preview` 约束，单文件最大 16 MiB。
-- match range 在 Rust 中从 ripgrep byte offset 转换为 UTF-16 offset，Renderer 可直接用于
-  JavaScript 字符串切片。
-- job 绑定创建它的 App Server connection。其他 connection 的 read/cancel 返回
-  `SearchNotOwner`；未知或已释放 ID 返回 `SearchNotFound`。
-- 同一 server 最多保留 32 个 job；超限返回 `SearchBusy`。已完成 job 最长保留约 5 分钟。
-- 进程或解析失败通过 terminal `read.error` 返回稳定、已脱敏的说明；不会把任意 stderr 暴露给
-  Renderer。
+## 边界
 
-当前 SearchViewPane 只显示根相对路径、行号、preview 与高亮。它不尝试用现有目录枚举 API
-拼出文件内容，也不伪造 editor input；在 Files 具备受约束的 read-file contract、Editor
-具备稳定打开路径后，再把结果激活接到该 vertical。
+- query 最大 16 KiB；include/exclude 各最多 64 项；单项最大 1 KiB。
+- glob 必须相对所选目录，绝对路径、`..`、前导 `!` 和 NUL 会被拒绝。
+- 单次任务最多返回 5,000 条结果，读取批次最多 200 条。
+- 任务绑定创建它的 App Server connection，其他连接不能读取或取消。
+- `rg` 通过参数数组启动，不经过 shell；stderr 经过稳定错误映射后才返回前端。
+- 结果 range 在 Rust 中转换为 UTF-16 offset，前端不重新解释 byte offset。
 
-## 取舍
+## 与其他能力的关系
 
-| 方案 | 判断 | 原因 |
-| --- | --- | --- |
-| Renderer 直接运行 `rg` | ❌ | 绕过 sandbox、workspace authority 和跨客户端产品语义 |
-| 单个同步 RPC 返回全部结果 | ❌ | 受 1 MiB JSONL frame 限制，取消与首批结果延迟也更差 |
-| JSON-RPC notification 推送每条结果 | 暂不采用 | 当前 notification queue 无 backpressure，慢消费者可放大内存 |
-| connection-owned pull job | ✅ | bounded batch、显式取消，并复用现有同步 JSONL transport |
-| 复活旧模型 Search Tool 作为 UI backend | ❌ | 产品 UI 和模型 Tool 的调用者、权限及结果预算不同 |
+内容搜索不等于 Codebase 检索。前者要求逐行、正则和 glob 语义；后者返回经过当前源码复核和
+byte budget 的代码证据。Agent `grep` 也使用独立的工具授权和结果预算。
 
-## 演进
+Session 目录可以供 Agent 工具使用，但不会悄悄进入产品搜索面板。窗口切换、`cwd` 变化或新增
+Session 目录时，调用方必须重新明确选择要搜索的 `DirId`。
 
-近期只在现有 contract 内完善可用性：空结果/错误呈现、查询历史和搜索中再次提交。结果点击必须
-等待受信 file-content API 与 editor opening contract，不由 Search 绕过。
+## 不变量
 
-Workspace Search 不消费 Session 的 `WorkspaceAccessAuthority`。`/add-dir` 改变的是当前对话中 Agent 文件工具的访问范围，产品搜索面板继续绑定 Workspace root；切换 Session 不会悄悄改变面板搜索范围。将来若产品需要聚合多个 Workspace folder，应由 `workspace/folders/set` 与产品级 root identity 定义，不能复用 `/add-dir` 的 Session 生命周期。
-
-当前已经存在独立的 [`zeta-codebase`](../zeta-rs/codebase/README.md)，它在 workspace side
-完成 ignore-aware chunking、持久化 generation 与 FTS5 retrieval；跨系统边界见
-[`codebase.md`](codebase.md)。它服务 revision-bound chunk retrieval，不替换本页的逐行文字/
-正则产品搜索。是否把 SearchView 迁移到索引 backend 必须先证明 regex、glob、UTF-16 range、
-connection-owned cancel 和结果完整性语义等价；当前 `searchId` 不承诺 backend 类型。
-
-只有 transport 获得有界 backpressure 后，才考虑用 notification 替代 pull。
-
-长期不变项是：Renderer 不获得任意进程或磁盘权限；workspace 授权在 Rust 可信边界重复校验；
-结果传输有明确上限；job 不跨 connection 泄漏；产品搜索与模型 Tool 保持独立 contract。
+- 搜索范围由 `DirId` 与 `Authorization<SearchFiles>` 决定，不由裸路径或 `cwd` 推断。
+- 多目录搜索是上层聚合，不改变每个结果所属的目录。
+- Renderer 不获得任意进程或磁盘访问能力。
+- 产品搜索与 Agent Tool 保持独立权限、任务和结果契约。

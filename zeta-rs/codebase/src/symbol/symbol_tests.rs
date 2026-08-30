@@ -8,7 +8,7 @@ use crate::CodebaseLimits;
 use crate::CodebaseOverlayDocument;
 use tempfile::TempDir;
 use zeta_async_utils::CancellationSource;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 use crate::SymbolIndex;
 use crate::SymbolIndexError;
@@ -17,15 +17,15 @@ use crate::SymbolIndexQuery;
 use crate::SymbolIndexRefreshOutcome;
 use crate::SymbolKind;
 
-fn workspace() -> TempDir {
-    let directory = tempfile::tempdir().expect("workspace");
+fn dir() -> TempDir {
+    let directory = tempfile::tempdir().expect("dir");
     fs::create_dir(directory.path().join(".git")).expect("git marker");
     directory
 }
 
 fn codebase(directory: &TempDir) -> Arc<Codebase> {
     let index = Codebase::open_memory(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         CodebaseLimits::default(),
     )
     .expect("Codebase");
@@ -35,7 +35,7 @@ fn codebase(directory: &TempDir) -> Arc<Codebase> {
 
 #[test]
 fn reconciles_verified_sources_and_fuzzy_searches_symbols() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("auth.rs"),
         "pub struct UserAuthenticationService;\n\
@@ -63,7 +63,7 @@ fn reconciles_verified_sources_and_fuzzy_searches_symbols() {
 
 #[test]
 fn exact_name_match_outranks_fuzzy_candidates() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("symbols.rs"),
         "fn user() {}\nfn create_user() {}\nfn user_factory() {}\n",
@@ -82,7 +82,7 @@ fn exact_name_match_outranks_fuzzy_candidates() {
 
 #[test]
 fn reconcile_replaces_changed_and_deleted_source_symbols() {
-    let directory = workspace();
+    let directory = dir();
     let source = directory.path().join("service.rs");
     fs::write(&source, "fn before() {}\n").expect("source");
     let codebase = codebase(&directory);
@@ -123,7 +123,7 @@ fn reconcile_replaces_changed_and_deleted_source_symbols() {
 
 #[test]
 fn total_symbol_limit_is_explicit_and_rebuilds_on_the_next_generation() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("many.rs"),
         "fn first() {}\nfn second() {}\nfn third() {}\n",
@@ -143,7 +143,7 @@ fn total_symbol_limit_is_explicit_and_rebuilds_on_the_next_generation() {
 
 #[test]
 fn dirty_overlay_symbols_replace_persistent_symbols_for_the_same_path() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("service.rs"), "fn disk_name() {}\n").expect("source");
     let codebase = codebase(&directory);
     let index = SymbolIndex::open_memory(Arc::clone(&codebase), SymbolIndexLimits::default())
@@ -187,7 +187,7 @@ fn dirty_overlay_symbols_replace_persistent_symbols_for_the_same_path() {
 
 #[test]
 fn cancelled_query_does_not_publish_results() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("lib.rs"), "fn searchable() {}\n").expect("source");
     let index = SymbolIndex::open_memory(codebase(&directory), SymbolIndexLimits::default())
         .expect("symbol index");

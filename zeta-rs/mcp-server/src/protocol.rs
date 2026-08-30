@@ -154,7 +154,7 @@ pub(crate) fn tools_result() -> Value {
             {
                 "name": TOOL_START,
                 "title": "Zeta",
-                "description": "Start an independent Zeta Agent task in the server's authorized Workspace.",
+                "description": "Start an independent Zeta Agent task in the server's authorized directory.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

@@ -32,18 +32,18 @@ struct AgentFrontmatter {
     instructions: Vec<String>,
 }
 
-/// Refreshable catalog for one Workspace's native Agent definition directory.
+/// Refreshable catalog for one directory's native Agent definition directory.
 pub struct AgentDefinitionCatalog {
-    workspace_root: PathBuf,
+    dir_root: PathBuf,
     snapshot: Arc<AgentDefinitionCatalogSnapshot>,
 }
 
 impl AgentDefinitionCatalog {
-    pub fn discover(workspace_root: impl AsRef<Path>) -> Self {
-        let workspace_root = workspace_root.as_ref().to_path_buf();
-        let (entries, diagnostics) = scan(&workspace_root);
+    pub fn discover(dir_root: impl AsRef<Path>) -> Self {
+        let dir_root = dir_root.as_ref().to_path_buf();
+        let (entries, diagnostics) = scan(&dir_root);
         Self {
-            workspace_root,
+            dir_root,
             snapshot: Arc::new(AgentDefinitionCatalogSnapshot::new(1, entries, diagnostics)),
         }
     }
@@ -53,7 +53,7 @@ impl AgentDefinitionCatalog {
     }
 
     pub fn refresh(&mut self) -> Arc<AgentDefinitionCatalogSnapshot> {
-        let (entries, diagnostics) = scan(&self.workspace_root);
+        let (entries, diagnostics) = scan(&self.dir_root);
         if self.snapshot.entries() == entries && self.snapshot.diagnostics() == diagnostics {
             return Arc::clone(&self.snapshot);
         }
@@ -69,8 +69,8 @@ impl AgentDefinitionCatalog {
     }
 }
 
-fn scan(workspace_root: &Path) -> (Vec<AgentDefinition>, Vec<AgentDefinitionDiagnostic>) {
-    let source_root = workspace_root.join(AGENT_DIRECTORY);
+fn scan(dir_root: &Path) -> (Vec<AgentDefinition>, Vec<AgentDefinitionDiagnostic>) {
+    let source_root = dir_root.join(AGENT_DIRECTORY);
     let metadata = match fs::symlink_metadata(&source_root) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == ErrorKind::NotFound => return (Vec::new(), Vec::new()),
@@ -80,7 +80,7 @@ fn scan(workspace_root: &Path) -> (Vec<AgentDefinition>, Vec<AgentDefinitionDiag
                 vec![diagnostic(
                     None,
                     AgentDefinitionDiagnosticCode::SourceUnavailable,
-                    "Workspace Agent definition directory metadata is unavailable",
+                    "Directory Agent definition directory metadata is unavailable",
                 )],
             );
         }
@@ -91,7 +91,7 @@ fn scan(workspace_root: &Path) -> (Vec<AgentDefinition>, Vec<AgentDefinitionDiag
             vec![diagnostic(
                 None,
                 AgentDefinitionDiagnosticCode::SourceUnavailable,
-                "Workspace Agent definition path must be a real directory",
+                "Directory Agent definition path must be a real directory",
             )],
         );
     }
@@ -106,7 +106,7 @@ fn scan(workspace_root: &Path) -> (Vec<AgentDefinition>, Vec<AgentDefinitionDiag
                 vec![diagnostic(
                     None,
                     AgentDefinitionDiagnosticCode::SourceUnavailable,
-                    "Workspace Agent definition directory cannot be read",
+                    "Directory Agent definition directory cannot be read",
                 )],
             );
         }

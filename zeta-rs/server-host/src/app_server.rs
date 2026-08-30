@@ -13,7 +13,7 @@ use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_app_server_daemon::LifecycleCommand;
 use zeta_fast_regex_search::FastRegexWorkerCommand;
 
-const WORKSPACE_TRUST_SOURCE: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
+const DIR_GRANT_SOURCE: &str = "ZETA_DIR_GRANT_SOURCE";
 
 pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
     let (command, product_services) = parse_arguments(&arguments)?;
@@ -86,42 +86,42 @@ enum AppServerHostCommand {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct AppServerHostOptions {
     profile_root: PathBuf,
-    workspace_root: Option<PathBuf>,
-    workspace_trust_source: WorkspaceTrustSource,
+    dir_root: Option<PathBuf>,
+    dir_grant_source: GrantSource,
     product_services: Option<PathBuf>,
 }
 
 impl AppServerHostOptions {
     pub(super) fn new(
         profile_root: impl Into<PathBuf>,
-        workspace_root: Option<PathBuf>,
-        workspace_trust_source: WorkspaceTrustSource,
+        dir_root: Option<PathBuf>,
+        dir_grant_source: GrantSource,
         product_services: Option<PathBuf>,
     ) -> Self {
         Self {
             profile_root: profile_root.into(),
-            workspace_root,
-            workspace_trust_source,
+            dir_root,
+            dir_grant_source,
             product_services,
         }
     }
 
     fn from_environment(product_services: Option<PathBuf>) -> Result<Self, String> {
-        let workspace_trust_source = match env::var(WORKSPACE_TRUST_SOURCE).as_deref() {
-            Ok("userConfig") => WorkspaceTrustSource::UserConfig,
+        let dir_grant_source = match env::var(DIR_GRANT_SOURCE).as_deref() {
+            Ok("userConfig") => GrantSource::UserConfig,
             Ok("hostConfiguration") | Err(env::VarError::NotPresent) => {
-                WorkspaceTrustSource::HostConfiguration
+                GrantSource::HostConfiguration
             }
             Ok(_) | Err(env::VarError::NotUnicode(_)) => {
                 return Err(format!(
-                    "{WORKSPACE_TRUST_SOURCE} must be userConfig or hostConfiguration"
+                    "{DIR_GRANT_SOURCE} must be userConfig or hostConfiguration"
                 ));
             }
         };
         Ok(Self::new(
             local_profile_root(),
             env::var_os("ZETA_WORKSPACE_ROOT").map(PathBuf::from),
-            workspace_trust_source,
+            dir_grant_source,
             product_services,
         ))
     }
@@ -130,12 +130,12 @@ impl AppServerHostOptions {
         &self.profile_root
     }
 
-    pub(super) fn workspace_root(&self) -> Option<&Path> {
-        self.workspace_root.as_deref()
+    pub(super) fn dir_root(&self) -> Option<&Path> {
+        self.dir_root.as_deref()
     }
 
-    pub(super) fn workspace_trust_source(&self) -> WorkspaceTrustSource {
-        self.workspace_trust_source
+    pub(super) fn dir_grant_source(&self) -> GrantSource {
+        self.dir_grant_source
     }
 
     pub(super) fn product_services(&self) -> Option<&Path> {
@@ -145,14 +145,12 @@ impl AppServerHostOptions {
     fn daemon_connection_options(&self) -> ConnectionOptions {
         ConnectionOptions::new(
             self.profile_root(),
-            self.workspace_root().map(Path::to_path_buf),
-            match self.workspace_trust_source() {
-                WorkspaceTrustSource::HostConfiguration => {
-                    zeta_app_server_daemon::WorkspaceTrustSource::HostConfiguration
+            self.dir_root().map(Path::to_path_buf),
+            match self.dir_grant_source() {
+                GrantSource::HostConfiguration => {
+                    zeta_app_server_daemon::GrantSource::HostConfiguration
                 }
-                WorkspaceTrustSource::UserConfig => {
-                    zeta_app_server_daemon::WorkspaceTrustSource::UserConfig
-                }
+                GrantSource::UserConfig => zeta_app_server_daemon::GrantSource::UserConfig,
             },
             self.product_services().map(Path::to_path_buf),
         )
@@ -160,7 +158,7 @@ impl AppServerHostOptions {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum WorkspaceTrustSource {
+pub(super) enum GrantSource {
     HostConfiguration,
     UserConfig,
 }
@@ -171,12 +169,10 @@ pub(super) fn open_server(host: &AppServerHostOptions) -> Result<AppServer, Stri
             env::current_exe().map_err(|error| error.to_string())?,
             ["fast-regex-worker"],
         ));
-    if let Some(workspace_root) = host.workspace_root() {
-        options = match host.workspace_trust_source() {
-            WorkspaceTrustSource::UserConfig => {
-                options.with_user_config_workspace_root(workspace_root)
-            }
-            WorkspaceTrustSource::HostConfiguration => options.with_workspace_root(workspace_root),
+    if let Some(dir_root) = host.dir_root() {
+        options = match host.dir_grant_source() {
+            GrantSource::UserConfig => options.with_user_config_dir_root(dir_root),
+            GrantSource::HostConfiguration => options.with_dir_root(dir_root),
         };
     }
     if let Some(path) = host.product_services() {

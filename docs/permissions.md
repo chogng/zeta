@@ -15,14 +15,14 @@ Zeta 使用分层权限系统来平衡功能和安全性：能在明确沙箱边
 | 工具类型 | 示例 | 需要批准 | 批准后的行为 |
 | --- | --- | --- | --- |
 | 工作区只读 | 读取文件、搜索、`Grep` | 通常不需要；前提是路径在允许范围内并可使用只读沙箱 `ReadOnly` | 不适用 |
-| 工作区文件修改 | `Edit`、`Write`、创建或移动文件 | 在工作区可写沙箱 `WorkspaceWrite` 和允许写入范围内通常不需要；越过范围时需要重新判断 | 如果询问，只批准当前调用 |
+| 工作区文件修改 | `Edit`、`Write`、创建或移动文件 | 在工作区可写沙箱 `DirectoryWrite` 和允许写入范围内通常不需要；越过范围时需要重新判断 | 如果询问，只批准当前调用 |
 | 本地命令 | `cargo test`、`git status`、Shell 执行 | 可在匹配的沙箱策略中运行时不需要；必须在沙箱外执行且无法自动授权时需要 | 只批准当前工具调用 |
 | 网络访问 | 下载依赖、HTTP 请求、访问远端 API | 需要显式网络能力 `Network`；当前意图或目标作用范围不足以授权时需要 | 只批准当前动作和网络作用范围 |
 | 凭证与外部修改 | 使用令牌（token）、`git push`、创建 PR、修改云资源 | 根据用户意图和风险判断；极高风险直接阻止，不向用户请求放行 | 只批准当前动作、凭证用途和目标资源 |
 | 系统与界面控制 | 修改系统配置、控制浏览器或桌面 UI | 沙箱无法覆盖且没有足够执行授权时需要 | 只批准当前动作和能力集合 |
 
 批准交互当前仍只有一次性 `ApproveOnce`，不会因历史点击自动升级。长期规则是另一条显式配置
-路径：User Config 可以持久化 typed execution-policy rule；Workspace 配置只能增加拒绝、强制沙箱
+路径：User Config 可以持久化 typed execution-policy rule；Directory 配置只能增加拒绝、强制沙箱
 或强制审批等限制，不能给自己授予沙箱外执行权。当前还没有把规则编辑器包装成“此项目始终允许”
 的批准按钮。
 
@@ -35,6 +35,23 @@ Zeta 使用分层权限系统来平衡功能和安全性：能在明确沙箱边
 | 用户决定 | 一次性批准 `ApproveOnce`、拒绝 `Decline`，或通过配置保存精确 digest 规则 |
 | 一次性绑定 | 批准请求、工具调用、动作摘要、完整能力集合和策略版本 |
 | 安全原则 | 可以减少无效询问，但不能用模糊匹配、模型自信或历史点击替代精确授权 |
+
+### 四个不能混用的安全概念
+
+| 概念 | 回答的问题 | 生命周期 |
+| --- | --- | --- |
+| `Permission` | 哪一种目录动作可以被授予？ | 稳定的动作类别 |
+| `Grant` | 哪个主体在什么目录范围内获得了哪些 Permission？ | 可撤销，可来自用户、组织或主机配置 |
+| `ApprovalRequest` | 当前缺少授权时，需要向用户询问什么？ | 一次交互；批准后仍须建立精确 Grant 或一次性执行授权 |
+| `AuthorizationDecision` | 当前这个具体动作允许还是拒绝？ | 单次检查结果，不持久化 |
+
+`Permit` 不作为领域对象。目录检查在 Rust 中返回
+`Result<Authorization, PermissionDenied>`；允许值只是从检查入口传给当前操作的临时证明，撤销
+Grant 后立即失效。
+
+本文后续的 `Capability` 指动作策略使用的“类型 + 作用范围”，例如网络目标或进程启动参数；目录
+访问层的稳定动作种类使用 `Permission`。两者可以在动作解析时映射，但不能因为英文相近而共用
+一个含糊类型。
 
 ### 每个 Turn 的交互模式
 
@@ -77,7 +94,7 @@ durable 记录。
 | --- | --- | --- |
 | 动作解析 | 把工具参数、工作目录、解析后的路径、环境和来源变成精确动作 | 不批准执行 |
 | 能力模型 | 描述动作需要的最小能力与作用范围 | 不判断用户意图 |
-| 确定性规则 | `zeta-execpolicy` 组合 Host / Organization / User / Workspace layer 并返回纯 effect | 不签发 grant、不执行工具 |
+| 确定性规则 | `zeta-execpolicy` 组合 Host / Organization / User / Directory layer 并返回纯 effect | 不签发 grant、不执行工具 |
 | 最终 action policy | `zeta-action-policy` 把 rule effect、exact grants、sandbox 与 reviewer 结果合成最终决定 | 不解析或持久化规则、不执行工具 |
 | Auto Review | 根据标明信任来源的上下文给出风险建议 | 不能签发最终执行授权 |
 | 持久化批准与执行 | `ConfigStore` 保存精确用户规则；Core 保存一次性批准和副作用起点 | 不改变前面的安全判断 |
@@ -117,7 +134,7 @@ durable 记录。
 ```text
 Agent 提出工具调用
   → 主机解析精确动作、来源、能力集合和沙箱兼容性
-  → zeta-execpolicy：按 typed selector 求值 Host / Organization / User / Workspace rules
+  → zeta-execpolicy：按 typed selector 求值 Host / Organization / User / Directory rules
   → ActionPolicyEngine：映射 Deny / RequireSandbox / RequireApproval / AllowUnsandboxed
   → AllowUnsandboxed：签发绑定 rule、exec-policy revision、动作与能力的 RunExecPolicyGranted
   → 精确用户授权：匹配动作摘要、能力集合和策略版本
@@ -131,7 +148,7 @@ Agent 提出工具调用
 
 顺序本身就是安全契约：
 
-1. 更严格 effect 始终胜出；Workspace layer 不能产生 `AllowUnsandboxed`；
+1. 更严格 effect 始终胜出；Directory layer 不能产生 `AllowUnsandboxed`；
 2. historical exact grant 必须精确匹配，不能按工具名称、命令前缀或自然语言摘要复用；typed
    command-prefix rule 则是独立、显式、带 revision 的 policy 对象；
 3. 风险审查器不能构造自动审查授权 `AutoReviewGrant`；
@@ -161,7 +178,7 @@ Agent 提出工具调用
 ### 长期规则与一次性批准必须分开
 
 当前已实现 User rule 的 typed 持久化、command prefix/network/capability/source/action selector、
-Host/Organization/User/Workspace layer composition、semantic revision 和运行时重组。仍未实现：
+Host/Organization/User/Directory layer composition、semantic revision 和运行时重组。仍未实现：
 
 - “本次会话始终允许”；
 - “此项目始终允许”；
@@ -171,7 +188,7 @@ Host/Organization/User/Workspace layer composition、semantic revision 和运行
 - 由 Agent 自行把一次批准升级为长期规则。
 
 User rule 可以用 typed source、command prefix、network target 或 capability scope 授权；它不是历史
-approval 的模糊复用。Workspace rule 只允许收紧。任何规则变更都会产生新的 exec-policy revision，
+approval 的模糊复用。Directory rule 只允许收紧。任何规则变更都会产生新的 exec-policy revision，
 并进入新的 `ActionPolicyRevision`；旧 Turn 和旧 grant 不会静默获得更宽权限。
 
 这些能力未来即使加入，也必须拥有独立、可审计的作用范围和撤销语义，不能改变
@@ -202,7 +219,7 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 | 文件系统 | 含义 |
 | --- | --- |
 | 只读 `ReadOnly` | 可读取允许范围，不写入 |
-| 工作区可写 `WorkspaceWrite` | 只允许写入经过解析和验证的工作区根目录 |
+| 工作区可写 `DirectoryWrite` | 只允许写入经过解析和验证的工作区根目录 |
 | 完全访问 `FullAccess` | 不以工作区文件边界约束动作 |
 
 | 网络 | 含义 |
@@ -210,7 +227,7 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 | 禁止 `Denied` | 平台后端必须实际阻止网络访问 |
 | 允许 `Allowed` | 动作可使用网络；仍不自动获得凭证使用或外部修改授权 |
 
-工作区可写策略 `WorkspaceWrite` 只是约束描述，不能代替平台强制执行。对于要求受限执行的动作，
+工作区可写策略 `DirectoryWrite` 只是约束描述，不能代替平台强制执行。对于要求受限执行的动作，
 后端缺失、不支持相应策略或不能证明约束已生效时必须失败即关闭（fail closed）。
 
 平台后端、支持矩阵和当前限制见 [`sandboxing.md`](sandboxing.md)。
@@ -245,7 +262,7 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 | 主机与工具适配器 | 解析精确动作、来源、最小能力和沙箱兼容性 | 最终批准 |
 | `zeta-execpolicy` | typed selector、layer validation、effect precedence、semantic revision 与纯求值 | 最终 grant、Tool 执行、配置 I/O |
 | `zeta-action-policy` | effect 映射、exact grant、sandbox、风险门槛和最终类型化结果 | 规则解析/持久化、工具执行、UI |
-| `zeta-config` | User rule 的 typed TOML mutation/persistence；Workspace restriction 的 strict-read intent | 规则求值、最终执行授权 |
+| `zeta-config` | User rule 的 typed TOML mutation/persistence；Directory restriction 的 strict-read intent | 规则求值、最终执行授权 |
 | `zeta-auto-review` | 生成受 schema 约束的风险审查结论 | 覆盖策略、签发授权 |
 | Core 的 `ToolScheduler` | 持久化批准、一次性授权、执行生命周期和恢复语义 | 操作系统沙箱强制执行 |
 | `zeta-exec` 与工具执行器 | 消费明确执行授权并返回类型化结果 | 自行提权 |
@@ -259,9 +276,9 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 | 能力 | 状态 | 边界 |
 | --- | --- | --- |
 | 精确绑定动作、能力集合和策略版本 | 当前已实现 | 规范字节的完整性仍依赖主机动作解析器 |
-| Host/Organization/User/Workspace typed layer 与 semantic revision | 当前已实现 | Organization 的产品分发 adapter 尚未接入 |
+| Host/Organization/User/Directory typed layer 与 semantic revision | 当前已实现 | Organization 的产品分发 adapter 尚未接入 |
 | source、command prefix、network、capability、action selector | 当前已实现 | selector 只消费 host-materialized typed fields |
-| User rule 持久化与 Workspace 只收紧规则 | 当前已实现 | 统一规则编辑 UI、expiry 尚未实现 |
+| User rule 持久化与 Directory 只收紧规则 | 当前已实现 | 统一规则编辑 UI、expiry 尚未实现 |
 | exec-policy exact durable execution authority | 当前已实现 | 绑定 rule ID、exec-policy revision、action、capabilities 与 Tool Call |
 | Auto Review 类型化建议与风险门槛 | 当前已实现 | 当前是单次审查，没有分层审查或多审查器协作 |
 | 持久化批准请求与 `ApproveOnce` / `Decline` | 当前已实现 | 各客户端的呈现体验尚未完全统一 |
@@ -279,7 +296,7 @@ session/cache 的 `~/.claude.json` 也不会进入当前发现计划。Skill 中
 1. 批准界面用自然语言展示“动作、目标、能力、作用范围、来源、沙箱差异和风险理由”；
 2. 将“为什么这次询问”和“为什么不能在沙箱中完成”分开解释；
 3. 提供可查询的权限决定历史，但对密钥和敏感参数做结构化脱敏；
-4. 为已实现的 User/Workspace rules 提供可解释的管理 UI，并为 Organization 分发和 expiry 增加
+4. 为已实现的 User/Directory rules 提供可解释的管理 UI，并为 Organization 分发和 expiry 增加
    独立 adapter；
 5. 用真实沙箱拒绝、危险自动批准率和人工标签评估 Auto Review，而不是只统计减少了多少弹窗；
 6. 各客户端共享生成的协议和相同决定语义，不各自创造权限模式。

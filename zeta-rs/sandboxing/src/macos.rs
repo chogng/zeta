@@ -1,11 +1,11 @@
 use crate::{
-    FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
-    SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
+    FileSystemAccess, NetworkAccess, PROTECTED_DIR_METADATA_NAMES, PreparedCommand, SandboxBackend,
+    SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
     SandboxProcessExitStatus,
 };
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 
@@ -28,13 +28,13 @@ impl SandboxBackend for MacosSeatbeltSandbox {
         &self,
         command: &SandboxCommand,
         policy: SandboxPolicy,
-        workspace: &WorkspaceRoot,
+        dir: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         if !policy.requires_platform_sandbox() {
             return Ok(PreparedCommand::unrestricted(command));
         }
 
-        let profile = seatbelt_profile(policy, workspace);
+        let profile = seatbelt_profile(policy, dir);
         let mut arguments = vec![OsString::from("-p"), OsString::from(profile), "--".into()];
         arguments.push(command.program().to_owned());
         arguments.extend(command.arguments().iter().cloned());
@@ -72,18 +72,18 @@ impl SandboxBackend for MacosSeatbeltSandbox {
     }
 }
 
-fn seatbelt_profile(policy: SandboxPolicy, workspace: &WorkspaceRoot) -> String {
+fn seatbelt_profile(policy: SandboxPolicy, dir: &Dir) -> String {
     let mut profile = String::from("(version 1)\n(allow default)\n");
     match policy.file_system() {
         FileSystemAccess::ReadOnly => profile.push_str("(deny file-write*)\n"),
-        FileSystemAccess::WorkspaceWrite => {
+        FileSystemAccess::DirectoryWrite => {
             profile.push_str("(deny file-write*)\n");
             profile.push_str(&format!(
                 "(allow file-write* (subpath \"{}\"))\n",
-                escape_profile_literal(workspace.canonical_path().to_string_lossy().as_ref())
+                escape_profile_literal(dir.canonical_path().to_string_lossy().as_ref())
             ));
-            for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-                push_protected_metadata_policy(&mut profile, workspace.canonical_path(), name);
+            for name in PROTECTED_DIR_METADATA_NAMES {
+                push_protected_metadata_policy(&mut profile, dir.canonical_path(), name);
             }
         }
         FileSystemAccess::FullAccess => {}
@@ -94,8 +94,8 @@ fn seatbelt_profile(policy: SandboxPolicy, workspace: &WorkspaceRoot) -> String 
     profile
 }
 
-fn push_protected_metadata_policy(profile: &mut String, workspace: &Path, name: &str) {
-    let path = workspace.join(name);
+fn push_protected_metadata_policy(profile: &mut String, dir: &Path, name: &str) {
+    let path = dir.join(name);
     let path = escape_profile_literal(path.to_string_lossy().as_ref());
     profile.push_str(&format!(
         "(deny file-write* (literal \"{path}\"))\n\

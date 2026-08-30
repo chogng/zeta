@@ -71,43 +71,27 @@ fn interactive() -> Result<(), String> {
     let profile_root = local_profile_root();
     let executable = env::current_exe()
         .map_err(|error| format!("could not resolve zeta executable: {error}"))?;
-    let mut workspace_root = configured_workspace()?;
-    let mut recovery = None;
-    loop {
-        let command = StdioAppServerCommand::new(executable.clone())
-            .with_argument("app-server")
-            .with_argument("connect")
-            .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.clone().into_os_string())
-            .with_environment_variable(
-                "ZETA_WORKSPACE_ROOT",
-                workspace_root.clone().into_os_string(),
-            );
-        let session = AppServerSession::start_stdio(
-            command,
-            ClientInfo {
-                name: "zeta-cli".into(),
-                version: env!("CARGO_PKG_VERSION").into(),
-            },
-            zeta_tui::client_capabilities(),
-        )
-        .map_err(|error| error.to_string())?;
-        let mut options = zeta_tui::TuiOptions::new("TUI conversation")
-            .with_workspace_root(&workspace_root)
-            .with_profile_root(&profile_root);
-        if let Some(state) = recovery.take() {
-            options = options.with_recovery(state);
-        }
-        match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
-            zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => {
-                return Ok(());
-            }
-            zeta_tui::TuiExit::WorkspaceReconnectRequested(request) => {
-                let (next_workspace, next_recovery) = request.into_parts();
-                workspace_root = next_workspace;
-                recovery = Some(next_recovery);
-            }
-            zeta_tui::TuiExit::ConnectionLost { reason, .. } => return Err(reason),
-        }
+    let dir_root = configured_dir()?;
+    let command = StdioAppServerCommand::new(executable)
+        .with_argument("app-server")
+        .with_argument("connect")
+        .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.clone().into_os_string())
+        .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.clone().into_os_string());
+    let session = AppServerSession::start_stdio(
+        command,
+        ClientInfo {
+            name: "zeta-cli".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+        },
+        zeta_tui::client_capabilities(),
+    )
+    .map_err(|error| error.to_string())?;
+    let options = zeta_tui::TuiOptions::new("TUI conversation")
+        .with_dir_root(&dir_root)
+        .with_profile_root(&profile_root);
+    match zeta_tui::run(session, options).map_err(|error| error.to_string())? {
+        zeta_tui::TuiExit::UserRequested | zeta_tui::TuiExit::TerminationRequested => Ok(()),
+        zeta_tui::TuiExit::ConnectionLost { reason, .. } => Err(reason),
     }
 }
 
@@ -120,8 +104,7 @@ fn app_server_command(arguments: Vec<String>) -> Result<(), String> {
 }
 
 fn mcp_server_command(arguments: Vec<String>) -> Result<(), String> {
-    let options =
-        zeta_mcp_server::McpServerOptions::new(local_profile_root(), configured_workspace()?);
+    let options = zeta_mcp_server::McpServerOptions::new(local_profile_root(), configured_dir()?);
     match arguments.as_slice() {
         [] => zeta_mcp_server::run_stdio(options).map_err(|error| error.to_string()),
         [listen, address] if listen == "--listen" && address == "stdio://" => {
@@ -154,15 +137,15 @@ fn parse_mcp_http_address(address: &str) -> Result<(std::net::SocketAddr, String
     Ok((socket, format!("/{path}")))
 }
 
-fn current_workspace() -> Result<PathBuf, String> {
-    env::current_dir().map_err(|error| format!("could not resolve current workspace: {error}"))
+fn current_dir() -> Result<PathBuf, String> {
+    env::current_dir().map_err(|error| format!("could not resolve current directory: {error}"))
 }
 
-fn configured_workspace() -> Result<PathBuf, String> {
+fn configured_dir() -> Result<PathBuf, String> {
     env::var_os("ZETA_WORKSPACE_ROOT")
         .map(PathBuf::from)
         .map(Ok)
-        .unwrap_or_else(current_workspace)
+        .unwrap_or_else(current_dir)
 }
 
 fn execute(arguments: Vec<String>) -> Result<(), CliError> {
@@ -305,7 +288,7 @@ fn headless_runner() -> Result<ExecRunner, CliError> {
                 version: env!("CARGO_PKG_VERSION").into(),
             },
         )
-        .with_workspace_root(configured_workspace().map_err(CliError::failure)?),
+        .with_dir_root(configured_dir().map_err(CliError::failure)?),
     );
     Ok(ExecRunner::new(target))
 }

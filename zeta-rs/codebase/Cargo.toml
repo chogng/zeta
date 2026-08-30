@@ -18,7 +18,7 @@ thiserror = { workspace = true }
 zeta-async-utils = { workspace = true }
 zeta-model-provider = { workspace = true }
 zeta-syntax = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

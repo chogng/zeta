@@ -1,7 +1,7 @@
 use super::RemoteAddressError;
+use super::RemoteDirPath;
 use super::RemoteProfile;
 use super::RemoteRuntime;
-use super::RemoteWorkspacePath;
 use super::SshHost;
 use super::SshTarget;
 
@@ -10,13 +10,13 @@ fn remote_profile_keeps_credentials_out_of_the_ssh_target() {
     let profile = RemoteProfile::new(
         SshTarget::new(
             SshHost::parse("build-linux").unwrap(),
-            RemoteWorkspacePath::parse("/srv/zeta/project").unwrap(),
+            RemoteDirPath::parse("/srv/zeta/project").unwrap(),
         ),
         RemoteRuntime::new("/opt/zeta/bin/zeta-remote-server").unwrap(),
     );
 
     assert_eq!(profile.target().host().as_str(), "build-linux");
-    assert_eq!(profile.target().workspace().as_str(), "/srv/zeta/project");
+    assert_eq!(profile.target().dir().as_str(), "/srv/zeta/project");
     assert_eq!(
         profile.runtime().executable(),
         "/opt/zeta/bin/zeta-remote-server"
@@ -37,11 +37,11 @@ fn ssh_host_rejects_credentials_and_shell_syntax() {
 }
 
 #[test]
-fn workspace_path_requires_a_canonical_posix_path() {
-    assert!(RemoteWorkspacePath::parse("/srv/zeta/project").is_ok());
-    assert!(RemoteWorkspacePath::parse("relative/project").is_err());
-    assert!(RemoteWorkspacePath::parse("/srv/zeta/../project").is_err());
-    assert!(RemoteWorkspacePath::parse("/srv/zeta/").is_err());
+fn dir_path_requires_a_canonical_posix_path() {
+    assert!(RemoteDirPath::parse("/srv/zeta/project").is_ok());
+    assert!(RemoteDirPath::parse("relative/project").is_err());
+    assert!(RemoteDirPath::parse("/srv/zeta/../project").is_err());
+    assert!(RemoteDirPath::parse("/srv/zeta/").is_err());
 }
 
 #[test]

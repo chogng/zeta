@@ -3,7 +3,7 @@
 > 本 README 是 `AbsolutePathBuf` 实现契约的 canonical owner。当前 host 的 canonicalization、
 > containment 与原子写入由 [`zeta-utils-path`](../path-utils/README.md) 拥有；跨 host 可序列化的
 > 文件位置 identity 由 [`zeta-utils-path-uri`](../path-uri/README.md) 拥有；workspace 边界与
-> relative path 授权由 [`zeta-workspace`](../../workspace/README.md) 拥有。
+> relative path 授权由 [`zeta-file-access`](../../file-access/README.md) 拥有。
 
 `zeta-utils-absolute-path` 做三件事：
 
@@ -72,11 +72,11 @@ Deserialize
 
 `absolutize.rs` 的词法实现改编自 path-absolutize 3.1.1（MIT）。保留本地实现是为了让显式 base 的解析无失败路径，只有读取进程工作目录仍然可失败。
 
-如果这里开始做 containment 判定、跟随 symlink 决定 workspace 授权、或解析 `file:` URI，表示 ownership 已经漂移到 `zeta-utils-path`、`zeta-workspace-access` 或 `zeta-utils-path-uri`。
+如果这里开始做 containment 判定、跟随 symlink 决定目录授权、或解析 `file:` URI，表示 ownership 已经漂移到 `zeta-utils-path`、`zeta-file-access` 或 `zeta-utils-path-uri`。
 
 ## 集成与测试
 
-- [`zeta-workspace`](../../workspace/README.md) 用本类型保存宿主给出的根目录写法，[`zeta-agent-environment`](../../agent-environment/README.md) 用它保存 cwd 与 Workspace roots，[`zeta-utils-home-dir`](../home-dir/README.md) 用它返回统一 profile root。
+- [`zeta-file-access`](../../file-access/README.md) 用本类型保存宿主给出的目录写法，[`zeta-agent-environment`](../../agent-environment/README.md) 用它保存 cwd 与可访问目录，[`zeta-utils-home-dir`](../home-dir/README.md) 用它返回统一 profile root。
 - [`zeta-utils-path-uri`](../path-uri/README.md) 只在当前宿主的 `PathUri` 转换边界接收和返回本类型；跨宿主文件身份使用 `PathUri`，Workspace 内 RPC 继续使用由 Rust 权限边界约束的相对 `PathBuf`。
 - 持有 `AbsolutePathBuf` 不代表获得读写授权，调用方仍须验证 Workspace 或能力边界。
 
@@ -89,7 +89,7 @@ bazel test //zeta-rs/utils/absolute-path:absolute-path-unit-tests
 
 ## 当前限制与扩展点
 
-- Current：`zeta-workspace`、`zeta-agent-environment`、`zeta-utils-home-dir` 与 `zeta-utils-path-uri` 已在各自的绝对路径边界使用本类型。
+- Current：`zeta-file-access`、`zeta-agent-environment`、`zeta-utils-home-dir` 与 `zeta-utils-path-uri` 已在各自的绝对路径边界使用本类型。
 - Current：只表示当前 host 的路径写法；在 Linux 上不解析 Windows drive 写法，需要跨 host 时用 `PathUri`。
 - Current：`with_base_directory` 与 `with_home_directory` 是线程局部的，跨线程或跨 `.await` 的反序列化不继承作用域。
 - Current：比较大小写敏感；filesystem 的 case-folding 属于 consumer。

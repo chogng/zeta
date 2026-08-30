@@ -1,7 +1,7 @@
+use crate::protocol::environment::SessionDirSelector;
 use crate::protocol::fs::FsDeleteMode;
 use crate::protocol::fs::FsExistingTargetBehavior;
 use crate::protocol::fs::FsMissingTargetBehavior;
-use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -40,13 +40,13 @@ pub struct LanguageRangeDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageDocumentDto {
-    /// Workspace folder that owns this document in a multi-root workspace.
+    /// directory folder that owns this document in a multi-root directory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
     pub language_id: String,
     #[ts(type = "number")]
@@ -62,16 +62,16 @@ pub struct LanguageSynchronizeParams {
     pub document: LanguageDocumentDto,
 }
 
-/// Releases one workspace document from the language-server session.
+/// Releases one directory document from the language-server session.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageCloseParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
 }
 
@@ -229,33 +229,33 @@ pub struct LanguageDocumentDiagnosticsResult {
     pub diagnostics: Vec<LanguageCodeActionDiagnosticDto>,
 }
 
-/// Requests one complete workspace diagnostic report for a language-server route.
+/// Requests one complete directory diagnostic report for a language-server route.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageWorkspaceDiagnosticsParams {
+pub struct LanguageDirectoryDiagnosticsParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub language_id: String,
 }
 
-/// Diagnostics for one workspace-relative resource.
+/// Diagnostics for one directory-relative resource.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageWorkspaceDiagnosticSnapshotDto {
+pub struct LanguageDirectoryDiagnosticSnapshotDto {
     pub path: PathBuf,
     pub diagnostics: Vec<LanguageCodeActionDiagnosticDto>,
 }
 
-/// Complete workspace diagnostic report from one language server.
+/// Complete directory diagnostic report from one language server.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageWorkspaceDiagnosticsResult {
+pub struct LanguageDirectoryDiagnosticsResult {
     pub supported: bool,
-    pub snapshots: Vec<LanguageWorkspaceDiagnosticSnapshotDto>,
+    pub snapshots: Vec<LanguageDirectoryDiagnosticSnapshotDto>,
 }
 
 /// Cross-file request against exactly one submitted document revision.
@@ -269,7 +269,7 @@ pub struct LanguageLocationsParams {
     pub include_declaration: bool,
 }
 
-/// One workspace-relative target returned in editor-native UTF-16 coordinates.
+/// One directory-relative target returned in editor-native UTF-16 coordinates.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageLocationDto {
@@ -344,22 +344,22 @@ pub struct LanguageHierarchyResultDto {
 /// Project-wide symbol search for one language-server family.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageWorkspaceSymbolsParams {
+pub struct LanguageDirectorySymbolsParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub language_id: String,
     #[schemars(length(max = 1024))]
     pub query: String,
 }
 
-/// One project-wide symbol with an exact workspace location.
+/// One project-wide symbol with an exact directory location.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageWorkspaceSymbolDto {
+pub struct LanguageDirectorySymbolDto {
     pub name: String,
     pub symbol_kind: u32,
     pub container_name: Option<String>,
@@ -370,8 +370,8 @@ pub struct LanguageWorkspaceSymbolDto {
 /// Bounded project-wide symbol result.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageWorkspaceSymbolsResult {
-    pub symbols: Vec<LanguageWorkspaceSymbolDto>,
+pub struct LanguageDirectorySymbolsResult {
+    pub symbols: Vec<LanguageDirectorySymbolDto>,
 }
 
 /// Prepare-rename request against one exact source snapshot.
@@ -396,7 +396,7 @@ pub struct LanguagePrepareRenameResult {
     pub preparation: Option<LanguageRenamePreparationDto>,
 }
 
-/// Workspace rename request against one exact source snapshot.
+/// directory rename request against one exact source snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageRenameParams {
@@ -734,7 +734,7 @@ pub struct LanguageFoldingRangesResult {
     pub ranges: Vec<LanguageFoldingRangeDto>,
 }
 
-/// Text replacements for one exact workspace content baseline.
+/// Text replacements for one exact directory content baseline.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageTextDocumentEditDto {
@@ -747,7 +747,7 @@ pub struct LanguageTextDocumentEditDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 #[ts(tag = "kind")]
-pub enum LanguageWorkspaceEditEntryDto {
+pub enum LanguageDirectoryEditEntryDto {
     TextDocument {
         document: LanguageTextDocumentEditDto,
     },
@@ -767,11 +767,11 @@ pub enum LanguageWorkspaceEditEntryDto {
     },
 }
 
-/// Ordered workspace edit spanning text documents and workspace resources.
+/// Ordered directory edit spanning text documents and directory resources.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct LanguageWorkspaceEditDto {
-    pub entries: Vec<LanguageWorkspaceEditEntryDto>,
+pub struct LanguageDirectoryEditDto {
+    pub entries: Vec<LanguageDirectoryEditEntryDto>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -795,13 +795,13 @@ pub struct LanguageCodeActionDiagnosticDto {
     pub source: Option<String>,
 }
 
-/// Fresh language-server diagnostics for one exact workspace document revision.
+/// Fresh language-server diagnostics for one exact directory document revision.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageDiagnosticsNotification {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     pub path: PathBuf,
     #[ts(type = "number")]
     pub revision: u64,
@@ -833,7 +833,7 @@ pub enum LanguageServerMessageSourceDto {
 pub struct LanguageServerMessageNotification {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     pub server: String,
     pub severity: LanguageServerMessageSeverityDto,
     pub source: LanguageServerMessageSourceDto,
@@ -847,7 +847,7 @@ pub struct LanguageServerMessageNotification {
 pub struct LanguageServerProgressNotification {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     pub server: String,
     pub token: String,
     pub title: Option<String>,
@@ -885,7 +885,7 @@ pub enum LanguageServerStateDto {
 pub struct LanguageServerStateNotification {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     pub server: String,
     pub state: LanguageServerStateDto,
 }
@@ -908,7 +908,7 @@ pub struct LanguageCodeActionDto {
     pub kind: Option<String>,
     pub is_preferred: bool,
     pub disabled_reason: Option<String>,
-    pub edit: Option<LanguageWorkspaceEditDto>,
+    pub edit: Option<LanguageDirectoryEditDto>,
     #[ts(type = "unknown")]
     pub provider_data: Value,
 }

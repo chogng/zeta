@@ -5,8 +5,8 @@ use zeta_commands::CommandRequest;
 use zui::ui::ElementId;
 
 use crate::ADD_SESSION;
+use crate::FILES_PANE_TOGGLE;
 use crate::TAB_CONTAINER_TOGGLE;
-use crate::WORKSPACE_PANE_TOGGLE;
 
 /// Result of routing one command through Workbench.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,7 +21,7 @@ pub enum WorkbenchCommandDispatch {
 pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest> {
     let command = match element {
         TAB_CONTAINER_TOGGLE => AppCommandId::ToggleTabContainer,
-        WORKSPACE_PANE_TOGGLE => AppCommandId::ToggleWorkspacePane,
+        FILES_PANE_TOGGLE => AppCommandId::ToggleFilesPane,
         ADD_SESSION => AppCommandId::AddSession,
         _ => {
             return zeta_files::command_request_for_element(element)

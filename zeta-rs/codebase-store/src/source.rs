@@ -10,8 +10,8 @@ use zeta_state::{SqliteDurability, open_in_memory_database, open_sqlite_database
 
 use zeta_codebase::{
     CHUNKER_VERSION, ChunkContentHash, ChunkKey, ChunkReference, ChunkSpan, CodebaseError,
-    CodebaseIndexStore, CodebaseManifest, CodebaseSnapshot, FileUpdate, IndexRootId,
-    IndexedLanguage, PreparedFile, SearchHit, SourceRevision, StoredSource, WorkspaceScan,
+    CodebaseIndexStore, CodebaseManifest, CodebaseSnapshot, DirScan, FileUpdate, IndexRootId,
+    IndexedLanguage, PreparedFile, SearchHit, SourceRevision, StoredSource,
 };
 
 use crate::CodebaseStoreStorage;
@@ -79,10 +79,10 @@ impl SqliteCodebaseIndexStore {
         Ok(store)
     }
 
-    fn replace_workspace(
+    fn replace_sources(
         &self,
         root_id: &IndexRootId,
-        scan: WorkspaceScan,
+        scan: DirScan,
     ) -> SourceResult<CodebaseSnapshot> {
         let mut connection = self.connection.lock().expect("codebase store poisoned");
         let transaction = connection.transaction()?;
@@ -255,12 +255,12 @@ impl SqliteCodebaseIndexStore {
 }
 
 impl CodebaseIndexStore for SqliteCodebaseIndexStore {
-    fn replace_workspace(
+    fn replace_sources(
         &self,
         root_id: &IndexRootId,
-        scan: WorkspaceScan,
+        scan: DirScan,
     ) -> Result<CodebaseSnapshot, CodebaseError> {
-        SqliteCodebaseIndexStore::replace_workspace(self, root_id, scan).map_err(Into::into)
+        SqliteCodebaseIndexStore::replace_sources(self, root_id, scan).map_err(Into::into)
     }
 
     fn publish_updates(

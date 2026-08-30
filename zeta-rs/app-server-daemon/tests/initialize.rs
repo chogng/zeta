@@ -26,10 +26,10 @@ impl Drop for Daemon {
 }
 
 #[test]
-fn daemon_answers_initialize_for_the_repository_workspace() {
+fn daemon_answers_initialize_for_the_repository_dir() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("p");
-    let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(std::path::Path::parent)
         .unwrap()
@@ -51,8 +51,8 @@ fn daemon_answers_initialize_for_the_repository_workspace() {
         "{}",
         json!({
             "version": 1,
-            "workspaceRoot": workspace,
-            "workspaceTrustSource": "hostConfiguration",
+            "dirRoot": dir,
+            "dirGrantSource": "hostConfiguration",
             "productServices": product_services,
         })
     )

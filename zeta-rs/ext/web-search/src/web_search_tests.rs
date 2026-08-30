@@ -4,10 +4,10 @@ use zeta_async_utils::CancellationSource;
 use zeta_extension_api::ExtensionRegistryBuilder;
 use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::TurnId;
+use zeta_tools::EnvId;
 use zeta_tools::ToolBinding;
 use zeta_tools::ToolBindingId;
 use zeta_tools::ToolContent;
-use zeta_tools::ToolEnvironmentId;
 use zeta_tools::ToolExecutionContext;
 use zeta_tools::ToolExecutionOutcome;
 use zeta_tools::ToolInvocation;
@@ -87,7 +87,7 @@ fn install_contributes_capability_tool_and_executes_backend() {
             "response_length": "short"
         })),
         ToolExecutionContext::new(
-            ToolEnvironmentId::new("host-extension").unwrap(),
+            EnvId::new("host-extension").unwrap(),
             cancellation.token(),
             ToolRuntimeAuthority::Unrestricted,
         ),

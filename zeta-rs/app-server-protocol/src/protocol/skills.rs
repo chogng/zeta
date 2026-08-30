@@ -27,7 +27,7 @@ pub enum SkillEnablementDto {
 pub enum SkillSourceKindDto {
     BuiltIn,
     User,
-    Workspace,
+    Directory,
     Plugin,
     Marketplace,
 }

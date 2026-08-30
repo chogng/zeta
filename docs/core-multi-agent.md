@@ -124,7 +124,7 @@ ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 已经构成�
 - context seed 物化；
 - parent/child cancellation tree；
 - max depth、max children、并发和总资源预算；
-- 协调 SessionCoordinator 创建 child Thread；
+- 通过 ThreadController 创建 child Thread 并保留 `session_id`；
 - 协调 ThreadController 提交 parent/child durable facts；
 - 跨 Thread message/result 的 outbox/inbox delivery；
 - crash reconciliation。
@@ -139,8 +139,8 @@ ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 已经构成�
 - provider connection 或远端 Agent transport；
 - UI projection。
 
-MultiAgentCoordinator 可以协调多个 aggregate，但不能建立跨所有 Thread 的大锁。长 I/O、等待
-child 和等待 delivery receipt 都在 aggregate writer 之外。
+MultiAgentCoordinator 可以协调多个 Thread，但不能建立跨所有 Thread 的大锁。长 I/O、等待
+child 和等待 delivery receipt 都在 Thread writer 之外。
 
 ## 4. 创建（Create）、分叉（Fork）与生成（Spawn）
 
@@ -550,8 +550,7 @@ module。
 
 ```text
 MultiAgentCoordinator
-├─ uses SessionCoordinator for topology saga
-├─ uses ThreadController for durable parent/child mutations
+├─ uses ThreadController for topology and durable mutations
 ├─ creates immutable AgentContextSeed
 ├─ owns delegation/delivery/resource policy
 └─ never owns ContextManager

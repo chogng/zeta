@@ -1,0 +1,28 @@
+[package]
+name = "zeta-file-access"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_file_access"
+path = "src/lib.rs"
+
+[dependencies]
+dunce = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+ts-rs = { workspace = true }
+zeta-utils-absolute-path = { workspace = true }
+zeta-environment = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

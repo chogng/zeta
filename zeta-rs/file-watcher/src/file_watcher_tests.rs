@@ -109,8 +109,8 @@ async fn debounced_receiver_merges_a_burst() {
 
 #[test]
 fn registration_ref_counts_and_raii_drop_are_exact() {
-    let workspace = TestWorkspace::new();
-    let root = workspace.create_dir("skills");
+    let dir = TestDir::new();
+    let root = dir.create_dir("skills");
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, _rx) = watcher.add_subscriber();
     let first = subscriber
@@ -131,8 +131,8 @@ fn registration_ref_counts_and_raii_drop_are_exact() {
 
 #[test]
 fn dropping_subscriber_removes_all_its_counts() {
-    let workspace = TestWorkspace::new();
-    let root = workspace.create_dir("skills");
+    let dir = TestDir::new();
+    let root = dir.create_dir("skills");
     let watcher = Arc::new(FileWatcher::noop());
     let registration = {
         let (subscriber, _rx) = watcher.add_subscriber();
@@ -150,16 +150,16 @@ fn live_watcher_requires_a_current_tokio_runtime() {
 
 #[test]
 fn missing_target_uses_nearest_existing_directory_non_recursively() {
-    let workspace = TestWorkspace::new();
-    fs::write(workspace.path.join("not-a-dir"), "contents").unwrap();
-    let missing = workspace.path.join("not-a-dir/child/file");
+    let dir = TestDir::new();
+    fs::write(dir.path.join("not-a-dir"), "contents").unwrap();
+    let missing = dir.path.join("not-a-dir/child/file");
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, _rx) = watcher.add_subscriber();
     let _registration = subscriber
         .register_paths(vec![watch(missing, true)])
         .unwrap();
 
-    assert_eq!(watcher.watch_counts_for_test(&workspace.path), Some((1, 0)));
+    assert_eq!(watcher.watch_counts_for_test(&dir.path), Some((1, 0)));
 }
 
 #[tokio::test]
@@ -203,27 +203,25 @@ async fn non_recursive_watch_ignores_grandchildren() {
 
 #[tokio::test]
 async fn missing_directory_moves_watch_and_reports_requested_namespace() {
-    let workspace = TestWorkspace::new();
-    let skills = workspace.path.join("skills");
+    let dir = TestDir::new();
+    let skills = dir.path.join("skills");
     let skill_file = skills.join("SKILL.md");
     let watcher = Arc::new(FileWatcher::noop());
     let (subscriber, mut rx) = watcher.add_subscriber();
     let _registration = subscriber
         .register_paths(vec![watch(&skills, false)])
         .unwrap();
-    assert_eq!(watcher.watch_counts_for_test(&workspace.path), Some((1, 0)));
+    assert_eq!(watcher.watch_counts_for_test(&dir.path), Some((1, 0)));
 
     fs::create_dir(&skills).unwrap();
-    watcher
-        .send_paths_for_test(vec![workspace.path.clone()])
-        .await;
+    watcher.send_paths_for_test(vec![dir.path.clone()]).await;
     assert_eq!(
         rx.recv().await,
         Some(FileWatcherEvent::PathsChanged {
             paths: vec![skills.clone()],
         })
     );
-    assert_eq!(watcher.watch_counts_for_test(&workspace.path), None);
+    assert_eq!(watcher.watch_counts_for_test(&dir.path), None);
     assert_eq!(watcher.watch_counts_for_test(&skills), Some((1, 0)));
 
     fs::write(&skill_file, "name: rust\n").unwrap();
@@ -238,8 +236,8 @@ async fn missing_directory_moves_watch_and_reports_requested_namespace() {
 
 #[tokio::test]
 async fn live_backend_upgrades_and_downgrades_effective_scope() {
-    let workspace = TestWorkspace::new();
-    let root = workspace.create_dir("watched");
+    let dir = TestDir::new();
+    let root = dir.create_dir("watched");
     let watcher = Arc::new(FileWatcher::new().unwrap());
     let (subscriber, _rx) = watcher.add_subscriber();
     let non_recursive = subscriber
@@ -262,8 +260,8 @@ async fn live_backend_upgrades_and_downgrades_effective_scope() {
 
 #[tokio::test]
 async fn polling_backend_delivers_live_mutations_for_aliased_path_fallback() {
-    let workspace = TestWorkspace::new();
-    let root = workspace.create_dir("watched");
+    let dir = TestDir::new();
+    let root = dir.create_dir("watched");
     let watcher = Arc::new(
         FileWatcher::new_with_backend(FileWatcherBackend::Polling {
             interval: Duration::from_millis(20),
@@ -288,8 +286,8 @@ async fn polling_backend_delivers_live_mutations_for_aliased_path_fallback() {
 
 #[tokio::test]
 async fn polling_backend_delivers_existing_file_modifications() {
-    let workspace = TestWorkspace::new();
-    let root = workspace.create_dir("watched");
+    let dir = TestDir::new();
+    let root = dir.create_dir("watched");
     let changed = root.join("changed.txt");
     fs::write(&changed, "before").unwrap();
     let watcher = Arc::new(
@@ -390,15 +388,15 @@ async fn backend_rescan_flag_requires_scoped_rescan() {
     );
 }
 
-static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
-struct TestWorkspace {
+struct TestDir {
     path: std::path::PathBuf,
 }
 
-impl TestWorkspace {
+impl TestDir {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-file-watcher-tests-{}-{}-{sequence}",
             std::process::id(),
@@ -418,7 +416,7 @@ impl TestWorkspace {
     }
 }
 
-impl Drop for TestWorkspace {
+impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }

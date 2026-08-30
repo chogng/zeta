@@ -306,7 +306,7 @@ pub enum AppServerEvent {
 }
 ```
 
-当前 App Server API 包含 `session/update`、`session/thread/update`、owner-directed
+当前 App Server API 包含非持久的 `session/changed` 树刷新提示、`session/thread/update`、owner-directed
 `agent/request`、`connector/changed`、`skills/changed`、Git 与 filesystem notification，均由 `ServerNotification`
 typed enum 表达。approval/user-input 通过 `agent/request` + canonical
 `SessionRequest::ResolveInteraction` 完成，不在 client crate 建第二套 server-request envelope。
@@ -322,7 +322,7 @@ arm。
 事件 driver 负责：
 
 - 在没有新 request 时仍持续接收 notification；
-- 解码 `session/update` 与 `session/thread/update`；
+- 解码 `session/changed` 与 `session/thread/update`；
 - 保留 durable sequence 与 transient stream cursor；
 - 保证同一 request 的 response 先于它产生的 causal notification 交付；
 - 已知 notification 在 remote decode 或 typed validation 失败时关闭 connection 并报告
@@ -339,9 +339,9 @@ Event channel 不负责：
 - 将 notification 变成日志文本；
 - 合并不同 aggregate 的 sequence。
 
-这些属于 `zeta-exec` 的输出/终态协调或 TUI projection。
+这些属于 `zeta-exec` 的输出/终态协调或 TUI 展示状态。
 
-Consumer projection 的依赖方向是：
+各消费端的数据流向是：
 
 ```text
 protocol registry（method + payload + decoder）
@@ -349,12 +349,12 @@ protocol registry（method + payload + decoder）
                     ▼
 AppServerEvents::Notification(ServerNotification)
                     │
-                    ├─► TUI notification projection ─► ClientEvent
-                    ├─► app agent/session projection ─► AgentSessionEvent
-                    └─► headless completion projection
+                    ├─► TUI 通知状态 ─► ClientEvent
+                    ├─► 应用层 Agent/Session 视图 ─► AgentSessionEvent
+                    └─► 无界面运行的完成状态
 ```
 
-产品 projection 不得穷尽列出未拥有的 notification。TUI 当前拥有 Connector Pane，因此由
+产品消费端不得穷尽列出未拥有的 notification。TUI 当前拥有 Connector Pane，因此由
 Connector capability 消费 `ConnectorsChanged` 并触发 canonical list refresh；其他产品若不拥有
 Connector UI，则无需增加对应分支。Connector 状态不能塞进通用 connection lifecycle event。
 

@@ -16,7 +16,7 @@ export function createViteDevCodebaseApi(connection: ViteDevAppServerConnection)
 	return {
 		readConfig: () => viteDevRequest(connection, "config/read", {}),
 		configureProvider: params => viteDevRequest(connection, "provider/configure", params),
-		configure: params => viteDevRequest(connection, "workspace/codebase/configure", params),
-		status: () => viteDevRequest(connection, "workspace/codebase/status", {}),
+		configure: params => viteDevRequest(connection, "codebase/configure", params),
+		status: () => viteDevRequest(connection, "codebase/status", {}),
 	};
 }

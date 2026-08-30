@@ -27,7 +27,7 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     }
 }
 
-/// Runs the local App Server compatibility command without selecting a Workspace implicitly.
+/// Runs the local App Server compatibility command without selecting a directory implicitly.
 pub fn run_app_server(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     app_server::run(arguments.into_iter().collect())
 }

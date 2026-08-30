@@ -16,19 +16,19 @@ use zeta_config::HookAction;
 use zeta_config::HookConfig;
 use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
+use zeta_file_access::Dir;
 use zeta_sandboxing::FileSystemAccess;
 use zeta_sandboxing::NetworkAccess;
 use zeta_sandboxing::SandboxPolicy;
 use zeta_tool_executor::CommandExecutionAuthority;
-use zeta_workspace::WorkspaceRoot;
 
 pub(crate) fn execution_authority(
     hook: &HookConfig,
-    workspace: &WorkspaceRoot,
+    dir: &Dir,
     policy: &dyn ActionPolicyService,
     cancellation: &CancellationToken,
 ) -> Result<CommandExecutionAuthority, CoreError> {
-    let review = review_request(hook, workspace, policy.revision())?;
+    let review = review_request(hook, dir, policy.revision())?;
     let decision = policy.decide(&review, cancellation)?;
     match decision {
         ExecutionDecision::RunSandboxed(policy) => Ok(CommandExecutionAuthority::Sandboxed(policy)),
@@ -82,7 +82,7 @@ fn validate_grant(hook: &HookConfig, matches: bool, grant_kind: &str) -> Result<
 
 pub(crate) fn review_request(
     hook: &HookConfig,
-    workspace: &WorkspaceRoot,
+    dir: &Dir,
     policy_revision: String,
 ) -> Result<ActionReviewRequest, CoreError> {
     let HookAction::Process { program, args } = &hook.action;
@@ -90,17 +90,17 @@ pub(crate) fn review_request(
         "hook_id": hook.id.as_str(),
         "program": program,
         "arguments": args,
-        "working_directory": workspace.canonical_path(),
+        "working_directory": dir.canonical_path(),
     }))
     .map_err(|error| CoreError::Policy(format!("could not canonicalize Hook action: {error}")))?;
     let capabilities = CapabilitySet::new([
         Capability::new(
             CapabilityKind::FileRead,
-            workspace.canonical_path().display().to_string(),
+            dir.canonical_path().display().to_string(),
         ),
         Capability::new(
             CapabilityKind::FileWrite,
-            workspace.canonical_path().display().to_string(),
+            dir.canonical_path().display().to_string(),
         ),
         Capability::new(CapabilityKind::ProcessSpawn, program.clone()),
     ]);
@@ -113,7 +113,7 @@ pub(crate) fn review_request(
         ),
         ActionProvenance::new(ActionSource::User, hook.id.as_str()),
         SandboxCompatibility::Supported(SandboxPolicy::new(
-            FileSystemAccess::WorkspaceWrite,
+            FileSystemAccess::DirectoryWrite,
             NetworkAccess::Denied,
         )),
         ActionPolicyRevision::new(policy_revision),

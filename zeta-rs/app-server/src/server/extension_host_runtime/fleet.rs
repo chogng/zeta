@@ -5,7 +5,7 @@ use std::sync::Arc;
 use zeta_editor_extension_host::CancelReason;
 use zeta_editor_extension_host::ExtensionHostError;
 use zeta_editor_extension_host::ExtensionHostSupervisor;
-use zeta_workspace::TrustedWorkspace;
+use zeta_file_access::Authorization;
 
 use super::ExtensionHostRuntimeError;
 use super::FleetState;
@@ -28,16 +28,16 @@ impl RuntimeInner {
         &self,
         force: bool,
     ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
-        let workspace = self
+        let authorization = self
             .state
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .workspace
+            .authorization
             .clone();
-        let Some(workspace) = workspace else {
+        let Some(authorization) = authorization else {
             return Ok(self.snapshot());
         };
-        workspace
+        authorization
             .ensure_active()
             .map_err(|_| ExtensionHostRuntimeError::Host(ExtensionHostError::AuthorityDenied))?;
         let source_snapshot = source::combined_deployments(
@@ -72,7 +72,7 @@ impl RuntimeInner {
         self.retire_current(CancelReason::AuthorityRevoked)?;
         let mut entries = BTreeMap::new();
         for deployment in &source_snapshot.deployments {
-            let entry = self.build_entry(&workspace, deployment, generation);
+            let entry = self.build_entry(&authorization, deployment, generation);
             if entries.insert(entry.fallback.id.clone(), entry).is_some() {
                 return Err(ExtensionHostRuntimeError::Internal);
             }
@@ -93,7 +93,7 @@ impl RuntimeInner {
 
     fn build_entry(
         &self,
-        workspace: &TrustedWorkspace,
+        authorization: &Authorization,
         deployment: &EditorExtensionDeployment,
         generation: NonZeroU64,
     ) -> RuntimeEntry {
@@ -111,7 +111,7 @@ impl RuntimeInner {
             output_events: Vec::new(),
             registrations: Vec::new(),
         };
-        let prepared = prepare_extension(workspace, deployment, generation);
+        let prepared = prepare_extension(authorization, deployment, generation);
         let supervisor = prepared.and_then(|prepared| {
             ExtensionHostSupervisor::new(
                 Arc::clone(&self.launcher),

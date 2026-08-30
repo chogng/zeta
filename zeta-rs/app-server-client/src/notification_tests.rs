@@ -65,6 +65,7 @@ fn decodes_git_status_changed_notification() {
                     "streamInstanceId": "git_stream_1",
                     "workspacePath": "/workspace",
                     "revision": 7,
+                    "path": ".",
                     "head": {
                         "type": "branch",
                         "name": "main",
@@ -184,7 +185,7 @@ fn decodes_file_system_changed_notification() {
     assert_eq!(
         notification,
         ServerNotification::FsChanged(FsChanged::PathsChanged {
-            workspace_folder_id: None,
+            dir_id: None,
             paths: vec!["src/lib.rs".into(), "README.md".into()],
         })
     );
@@ -213,8 +214,8 @@ fn decodes_language_diagnostics_notification() {
 
     assert_eq!(
         notification,
-        ServerNotification::LanguageDiagnostics(LanguageDiagnosticsNotification {
-            workspace_folder_id: None,
+        ServerNotification::LanguageDirectoryDiagnostics(LanguageDiagnosticsNotification {
+            dir_id: None,
             path: "src/main.rs".into(),
             revision: 2,
             diagnostics: vec![LanguageCodeActionDiagnosticDto {

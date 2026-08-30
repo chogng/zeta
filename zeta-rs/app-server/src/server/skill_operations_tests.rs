@@ -2,9 +2,7 @@ use super::*;
 use crate::local::ProviderModelService;
 use base64::Engine;
 use std::sync::Arc;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_model_provider::EchoModel;
 
@@ -20,12 +18,8 @@ fn server(root: &std::path::Path) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_skill_runtime(

@@ -85,8 +85,7 @@ impl AppServer {
             return Err(invalid_attachment_params());
         }
         let attachment = self
-            .sessions
-            .threads()
+            .threads
             .image_attachments()
             .import_bytes(upload.bytes, upload.detail)
             .map_err(|_| invalid_attachment_params())?;
@@ -110,8 +109,7 @@ impl AppServer {
     pub(super) fn attachment_import_remote(&self, params: &Value) -> Result<Value, RpcError> {
         let params: AttachmentImportRemoteParams = decode(params)?;
         let attachment = self
-            .sessions
-            .threads()
+            .threads
             .image_attachments()
             .import_remote_url(&params.url, params.detail)
             .map_err(|_| invalid_attachment_params())?;

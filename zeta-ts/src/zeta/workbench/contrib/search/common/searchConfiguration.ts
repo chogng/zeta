@@ -1,7 +1,7 @@
 import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 
-/** Typed defaults owned by the Workbench workspace-search surface. */
-export const WorkspaceSearchConfiguration = Object.freeze({
+/** Typed defaults owned by the Workbench content-search surface. */
+export const ContentSearchConfiguration = Object.freeze({
 	matchCase: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "search.matchCase",
 		defaultValue: false,

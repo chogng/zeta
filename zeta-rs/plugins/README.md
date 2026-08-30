@@ -86,7 +86,7 @@ consumer，因此 manifest v1 会按 unknown event 拒绝；不能静默忽略�
 
 这里的 exact `process` permission 是“允许 supervisor 尝试启动这一条 package-relative path”的
 activation ceiling，不是每次 provider invocation 都直接执行 entrypoint，也不绕过 invocation lease、
-Workspace trust 或 broker policy。package ingestion 只证明 entrypoint 是包内 regular file；它不验证
+directory capability 或 broker policy。package ingestion 只证明 entrypoint 是包内 regular file；它不验证
 Unix executable bit、Windows PE/扩展名、CPU ABI、代码签名或跨平台可运行性。当前 schema 也没有
 per-platform artifact selector。supervisor 必须在目标平台 fail closed 地检查 launchability，失败时报告
 activation failure，不能把 regular-file validation 描述为可执行性保证。
@@ -208,4 +208,4 @@ enable/grant 控制面。声明式目录由 App Server 投影到 `zeta-extension
 Editor Extension deployment，Host 不再理解 Plugin package。正式 Marketplace 的 `packageType=plugin`
 只是 Manager 一次安装、多个 capability consumer 分解的 bundle，不进入本 store/authority。即使 legacy
 manifest 与 exact process permission 均有效，安装也不会启动 entrypoint；Host 仍须在 dispatch 时复核
-source lease 与 Workspace trust，并把 capability ceiling 投影为拒绝默认的 broker policy。
+source lease 与 directory capability，并把 capability ceiling 投影为拒绝默认的 broker policy。

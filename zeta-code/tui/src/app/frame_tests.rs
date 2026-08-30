@@ -9,8 +9,8 @@ use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
+use crate::features::file_search::FileSearchManager;
 use crate::features::thread::TurnActivity;
-use crate::features::workspace_files::FileSearchManager;
 use crate::ui::accent;
 use crate::ui::chat_input_chrome;
 use crate::ui::danger;
@@ -45,7 +45,7 @@ fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
 fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     let rendered = render(&App::new(), 80, 20);
 
-    assert!(!rendered.contains("workspace assistant"));
+    assert!(!rendered.contains("dir assistant"));
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("Welcome back!"));
     assert!(rendered.contains("Tips for getting started"));
@@ -198,8 +198,8 @@ fn footer_colors_current_and_next_modes_independently() {
 }
 
 #[test]
-fn workspace_path_is_only_visible_in_the_empty_welcome_banner() {
-    let mut app = App::for_workspace(Path::new("/work/zeta"));
+fn path_is_only_visible_in_the_empty_welcome_banner() {
+    let mut app = App::for_dir(Path::new("/work/zeta"));
 
     let empty = render(&app, 80, 20);
     assert!(empty.contains("/work/zeta"));
@@ -520,8 +520,8 @@ fn escape_dismisses_the_slash_popup_without_clearing_input() {
 }
 
 #[test]
-fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
-    let workspace = std::env::temp_dir().join(format!(
+fn mention_popup_renders_paths_and_exposes_the_same_click_rows() {
+    let dir = std::env::temp_dir().join(format!(
         "zeta-tui-render-mention-{}-{}",
         std::process::id(),
         SystemTime::now()
@@ -529,13 +529,13 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
             .unwrap()
             .as_nanos()
     ));
-    fs::create_dir_all(workspace.join("docs")).unwrap();
-    fs::create_dir_all(workspace.join("src")).unwrap();
-    fs::write(workspace.join("docs/src-notes.md"), "notes").unwrap();
-    fs::write(workspace.join("src/lib.rs"), "lib").unwrap();
-    let mut app = App::for_workspace(&workspace);
+    fs::create_dir_all(dir.join("docs")).unwrap();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("docs/src-notes.md"), "notes").unwrap();
+    fs::write(dir.join("src/lib.rs"), "lib").unwrap();
+    let mut app = App::for_dir(&dir);
     app.insert_text("@src");
-    wait_for_mention_results(&mut app, &workspace);
+    wait_for_mention_results(&mut app, &dir);
     let terminal_area = Rect::new(0, 0, 80, 20);
 
     let buffer = render_buffer(&app, 80, 20);
@@ -568,7 +568,7 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
     assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 14), Some(0));
     assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(1));
     assert_eq!(input_overlay_index_at(&app, terminal_area, 1, 15), None);
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(dir);
 }
 
 fn render(app: &App, width: u16, height: u16) -> String {
@@ -609,8 +609,8 @@ fn help_view() -> PaneSpec<ListSelectionModel> {
     )
 }
 
-fn wait_for_mention_results(app: &mut App, workspace: &Path) {
-    let mut file_search = FileSearchManager::new(workspace.to_path_buf());
+fn wait_for_mention_results(app: &mut App, dir: &Path) {
+    let mut file_search = FileSearchManager::new(dir.to_path_buf());
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         if let Some(query) = app.mention_query() {

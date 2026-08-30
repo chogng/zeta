@@ -15,7 +15,6 @@ use zeta_protocol::ThreadId;
 pub(crate) struct StatusRequestScope<'a> {
     pub(crate) session_id: &'a SessionId,
     pub(crate) thread_id: &'a ThreadId,
-    pub(crate) model: Option<&'a ModelRef>,
 }
 
 pub(crate) fn load_status_pane_spec<T>(
@@ -32,16 +31,15 @@ where
             history: None,
         })?
         .thread;
+    let model = thread.turns.last().and_then(|turn| turn.model.as_ref());
     let models = client.list_models()?;
-    let model_entry = scope
-        .model
-        .and_then(|model| models.models.iter().find(|entry| &entry.model == model));
+    let model_entry =
+        model.and_then(|model| models.models.iter().find(|entry| &entry.model == model));
     let available = model_entry
         .and_then(|entry| entry.available_context_window)
         .map(u64::from);
-    let remaining = remaining_context_window(available, scope.model, &thread);
-    let model = scope
-        .model
+    let remaining = remaining_context_window(available, model, &thread);
+    let model = model
         .map(|model| format!("{}/{}", model.provider, model.model))
         .unwrap_or_else(|| "not configured".into());
 

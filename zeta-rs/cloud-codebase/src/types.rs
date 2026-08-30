@@ -81,7 +81,7 @@ impl CloudCodebaseDestination {
     }
 }
 
-/// Workspace-relative source selection covered by one durable egress grant.
+/// Directory-relative source selection covered by one durable egress grant.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CloudCodebaseSelection {
     EntireIndex,

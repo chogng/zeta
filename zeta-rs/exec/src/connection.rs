@@ -68,19 +68,10 @@ pub(crate) trait ExecConnection {
 
     fn read_session(&mut self, session_id: SessionId) -> Result<Session, ConnectionError>;
 
-    fn create_thread(
-        &mut self,
-        command_id: CommandId,
-        session_id: SessionId,
-        expected_sequence: u64,
-        title: String,
-    ) -> Result<ThreadId, ConnectionError>;
-
     fn fork_thread(
         &mut self,
         command_id: CommandId,
         session_id: SessionId,
-        expected_sequence: u64,
         parent_thread_id: ThreadId,
         title: String,
     ) -> Result<ThreadId, ConnectionError>;
@@ -142,8 +133,8 @@ impl EmbeddedConnection {
                     notifications: Some(true),
                     ..ClientCapabilities::default()
                 });
-        if let Some(workspace_root) = options.workspace_root() {
-            client_options = client_options.with_workspace_root(workspace_root);
+        if let Some(dir_root) = options.dir_root() {
+            client_options = client_options.with_dir_root(dir_root);
         }
         let mut session = AppServerSession::start_embedded(client_options)
             .map_err(|error| ConnectionError::new(error.to_string()))?;
@@ -199,29 +190,10 @@ impl ExecConnection for EmbeddedConnection {
             .map_err(|error| ConnectionError::new(error.to_string()))
     }
 
-    fn create_thread(
-        &mut self,
-        command_id: CommandId,
-        session_id: SessionId,
-        expected_sequence: u64,
-        title: String,
-    ) -> Result<ThreadId, ConnectionError> {
-        self.request_thread(
-            SessionRequestParams {
-                command_id,
-                session_id,
-                expected_sequence,
-                request: SessionRequest::CreateThread { title },
-            },
-            "CreateThread",
-        )
-    }
-
     fn fork_thread(
         &mut self,
         command_id: CommandId,
         session_id: SessionId,
-        expected_sequence: u64,
         parent_thread_id: ThreadId,
         title: String,
     ) -> Result<ThreadId, ConnectionError> {
@@ -229,7 +201,6 @@ impl ExecConnection for EmbeddedConnection {
             SessionRequestParams {
                 command_id,
                 session_id,
-                expected_sequence,
                 request: SessionRequest::ForkThread {
                     parent_thread_id,
                     title,
@@ -296,34 +267,15 @@ impl ExecConnection for EmbeddedConnection {
         approval_mode: ApprovalMode,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, ConnectionError> {
-        let session = self.read_session(session_id.clone())?;
-        let approval_command_id = CommandId::new(format!("{command_id}:approval-mode"))
-            .map_err(|error| ConnectionError::new(error.to_string()))?;
-        match self
-            .client
-            .request_session(SessionRequestParams {
-                command_id: approval_command_id,
-                session_id: session_id.clone(),
-                expected_sequence: session.sequence,
-                request: SessionRequest::SetNextApprovalMode { approval_mode },
-            })
-            .map_err(|error| ConnectionError::new(error.to_string()))?
-        {
-            SessionRequestResult::Session(_) => {}
-            _ => {
-                return Err(ConnectionError::new(
-                    "App Server returned an unexpected result for SetNextApprovalMode",
-                ));
-            }
-        }
         match self
             .client
             .request_session(SessionRequestParams {
                 command_id,
                 session_id,
-                expected_sequence,
                 request: SessionRequest::StartTurn {
                     thread_id,
+                    expected_sequence,
+                    approval_mode,
                     tool_mode: None,
                     input,
                 },
@@ -350,8 +302,11 @@ impl ExecConnection for EmbeddedConnection {
             .request_session(SessionRequestParams {
                 command_id,
                 session_id,
-                expected_sequence,
-                request: SessionRequest::InterruptTurn { thread_id, turn_id },
+                request: SessionRequest::InterruptTurn {
+                    thread_id,
+                    expected_sequence,
+                    turn_id,
+                },
             })
             .map_err(|error| ConnectionError::new(error.to_string()))?
         {

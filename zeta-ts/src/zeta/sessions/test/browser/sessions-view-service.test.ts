@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../base/common/event.js";
-import type { ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../services/sessions/common/session.js";
+import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagementService.js";
-import { SessionsViewService } from "../../../sessions/services/view/browser/sessionsViewService.js";
-import type { SessionsViewSelection } from "../../../sessions/services/view/common/sessionsViewService.js";
+import { SessionsService } from "../../../sessions/services/view/browser/sessionsService.js";
+import type { SessionsViewSelection } from "../../../sessions/services/view/common/sessionsService.js";
 
 test("Sessions view service owns multi-session visibility and Back/Forward navigation", async () => {
 	using sessions = new FakeSessionService([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using view = new SessionsViewService(sessions);
+	using view = new SessionsService(sessions);
 
 	await view.initialize();
 	assert.deepEqual(view.visibleSelections.map(selectionId), ["session:session-1:thread-1"]);
@@ -37,7 +37,7 @@ test("Sessions view service owns multi-session visibility and Back/Forward navig
 
 test("Sessions view navigation skips references that are no longer available", async () => {
 	using sessions = new FakeSessionService([session("session-1", "thread-1"), session("session-2", "thread-2")]);
-	using view = new SessionsViewService(sessions);
+	using view = new SessionsService(sessions);
 	await view.initialize();
 	view.openSession("session-2", "thread-2");
 
@@ -50,7 +50,7 @@ test("Sessions view navigation skips references that are no longer available", a
 
 test("Sessions view records window-local untitled sessions without creating durable state", async () => {
 	using sessions = new FakeSessionService([]);
-	using view = new SessionsViewService(sessions);
+	using view = new SessionsService(sessions);
 	await view.initialize();
 
 	const draft = view.openNewSession("Draft task");
@@ -61,7 +61,7 @@ test("Sessions view records window-local untitled sessions without creating dura
 
 test("Sessions view replaces a visible draft when it materializes", async () => {
 	using sessions = new FakeSessionService([]);
-	using view = new SessionsViewService(sessions);
+	using view = new SessionsService(sessions);
 	await view.initialize();
 	const draft = view.openNewSession("Draft task");
 
@@ -74,7 +74,7 @@ test("Sessions view replaces a visible draft when it materializes", async () => 
 
 test("closing the last draft does not reopen a previously closed durable Session", async () => {
 	using sessions = new FakeSessionService([session("session-1", "thread-1")]);
-	using view = new SessionsViewService(sessions);
+	using view = new SessionsService(sessions);
 	await view.initialize();
 	const draft = view.openNewSession("Draft task");
 	view.closeVisibleSelection(view.visibleSelections.find(selection => selection.kind === "session")!);
@@ -88,7 +88,7 @@ test("closing the last draft does not reopen a previously closed durable Session
 
 class FakeSessionService implements ISessionsManagementService {
 	private readonly _onDidChange = new Emitter<void>();
-	private _sessions: readonly Session[];
+	private _sessions: readonly ISession[];
 	private _active: IActiveSessionThread | undefined;
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
 	private activeUntitledSessionId: string | undefined;
@@ -100,14 +100,14 @@ class FakeSessionService implements ISessionsManagementService {
 	readonly error = undefined;
 	startNewSessionCalls = 0;
 
-	constructor(sessions: readonly Session[]) {
+	constructor(sessions: readonly ISession[]) {
 		this._sessions = sessions;
 		const first = sessions[0];
-		const thread = first?.threads[0];
+		const thread = first?.chats[0];
 		this._active = first && thread ? { session: first, threadId: thread.threadId } : undefined;
 	}
 
-	get sessions(): readonly Session[] { return this._sessions; }
+	get sessions(): readonly ISession[] { return this._sessions; }
 	get active(): IActiveSessionThread | undefined { return this._active; }
 	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
 	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find(session => session.untitledSessionId === this.activeUntitledSessionId); }
@@ -116,7 +116,7 @@ class FakeSessionService implements ISessionsManagementService {
 
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
-		if (!session?.threads.some(thread => thread.threadId === threadId)) throw new Error("Thread unavailable");
+		if (!session?.chats.some(thread => thread.threadId === threadId)) throw new Error("Thread unavailable");
 		this._active = { session, threadId };
 		this.activeUntitledSessionId = undefined;
 		this._onDidChange.fire();
@@ -147,7 +147,7 @@ class FakeSessionService implements ISessionsManagementService {
 	async materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> {
 		const id = this.nextMaterializedId++;
 		const durable = session(`materialized-${id}`, `materialized-thread-${id}`);
-		return { session: durable, threadId: durable.threads[0]!.threadId };
+		return { session: durable, threadId: durable.chats[0]!.threadId };
 	}
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
 		this._untitledSessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
@@ -160,7 +160,7 @@ class FakeSessionService implements ISessionsManagementService {
 	async startNewSession(): Promise<IActiveSessionThread> { this.startNewSessionCalls++; throw new Error("Not implemented"); }
 	async stopSession(): Promise<void> {}
 	async archiveSession(): Promise<void> {}
-	async setModel(): Promise<void> {}
+	async setPreferredModel(): Promise<void> {}
 	async setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> {}
 
 	removeSession(sessionId: SessionId): void {
@@ -173,14 +173,13 @@ class FakeSessionService implements ISessionsManagementService {
 	[Symbol.dispose](): void { this.dispose(); }
 }
 
-function session(sessionId: SessionId, threadId: ThreadId): Session {
+function session(sessionId: SessionId, threadId: ThreadId): ISession {
 	return {
 		sessionId,
 		title: sessionId,
 		status: "active",
 		nextApprovalMode: "askPermissions",
-		sequence: 1,
-		threads: [{ threadId, origin: { type: "root" }, status: "active" }],
+		chats: [{ threadId, origin: { type: "root" }, status: "active" }],
 	};
 }
 

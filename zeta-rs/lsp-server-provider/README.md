@@ -9,15 +9,15 @@
 `zeta-lsp-server-provider` 拥有内置 server identity、用户启用意图、execution policy gate、
 冻结候选的校验与 canonicalization，以及已验证 package 到 resolved definition 的 provider
 绑定。它不启动进程、不读取 editor 文档、不执行 LSP、不下载 server，也不决定
-workspace trust。
+directory capability。
 
 ## 所有权与公共接口
 
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
-| `LspServerResolver` | 保存内置 server 与 preference，按 workspace 生成一次冻结 resolution | 持有 live client 或自动重启 |
+| `LspServerResolver` | 保存内置 server 与 preference，按 directory 生成一次冻结 resolution | 持有 live client 或自动重启 |
 | `LanguageServerPreference` / `LanguageServerMode` | 表达 Disabled、Automatic、Enabled 和 authoritative executable override | 用布尔值混合启用与发现语义 |
-| `LanguageServerExecutionPolicy` | 接收产品宿主已经作出的 process allow/disallow 决策 | 自行读取或持久化 workspace trust |
+| `LanguageServerExecutionPolicy` | 接收产品宿主已经作出的 process allow/disallow 决策 | 自行读取或持久化 directory capability |
 | `LanguageServerExecutableCandidates` | 注入有优先级的冻结候选；`InstallContext` 是当前实现 | 搜索时启动或 probe 进程 |
 | `LspServerResolution` | 同时返回 resolved definitions 与每个内置 server 的 availability | 表示 server 已经 initialize |
 | `LanguageServerDefinition` | 冻结唯一 route、canonical executable command 和 initialize options | 在 runtime 内重新查询 PATH |
@@ -39,7 +39,7 @@ PATH 中存在可执行文件时生成 definition；否则保持无 server。显
 ```text
 Product composition
 ├─ InstallContext::current → frozen host PATH
-├─ workspace process policy
+├─ directory process policy
 └─ LspServerResolver::resolve
    ├─ Disabled / disallowed → status only
    ├─ explicit path → validate exactly that path
@@ -75,7 +75,7 @@ verified Marketplace package composition
 如果本 crate 开始持有 `LanguageServerClient`、child process、document revision 或 diagnostics，表示 runtime ownership
 向 manager 漂移；如果 manager 开始读取 PATH、选择 executable 或解释用户 preference，表示
 发现策略向 runtime 漂移。增加内置 server 时必须同时定义稳定 name、language IDs、启动参数、候选
-来源和不可用状态测试，不能把任意 workspace command 直接视为受信 definition。
+来源和不可用状态测试，不能把任意 directory command 直接视为已验证 definition。
 
 失败语义：静态 definition/name 无效会返回 `LspServerResolverError`；candidate 缺失、不是普通
 文件、无法 canonicalize 或没有 Unix executable bit 都投影为 `ExecutableUnavailable`，不造成整个

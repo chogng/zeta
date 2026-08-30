@@ -12,9 +12,9 @@ is canonical for the renderer implementation and extension points.
 | Window host | `browser/sessionsWorkbench.ts` | validates the Code profile, binds theme tokens, and creates one Sessions runtime |
 | Product composition | `browser/code/codeSessionsWorkbench.ts` | composes the fixed titlebar/sidebar/sessions/auxiliarybar Part set |
 | Layout | `browser/layout/` and `services/layout/` | owns Sessions-only topology, geometry, optional auxiliary visibility, and persisted sizes |
-| Window view state | `services/view/` | projects the canonical Session model into active/visible selections and Back/Forward history |
-| Session domain | `services/sessions/common/session.ts` | owns frontend Session, Thread, model, lineage, and untitled identity types |
-| Session management | `services/sessions/common/sessionsManagementService.ts` and `browser/appServerSessionsManagementService.ts` | own the frontend contract, App Server DTO projection, mutations, subscriptions, active selection, and authoritative refresh |
+| Window Sessions state | `services/view/` | owns active/visible selections, focus, and Back/Forward history |
+| Frontend Session model | `services/sessions/common/session.ts` | owns `ISession`, `IChat`, workspace summary, and untitled identity types |
+| Provider and management | `services/sessions/` | provider adapts App Server DTOs; management owns catalog, drafts, and operations |
 | Main conversation | `browser/common/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatPane` Grid leaves |
 | Parts | `browser/parts/` | owns product chrome, list, primary surface, and typed active context |
 
@@ -27,8 +27,9 @@ not import Sessions product UI or add Sessions-specific layout branches.
 ## Execution path
 
 1. The Code browser or Electron entry calls `startSessionsWorkbench`.
-2. `SessionsRuntime` creates one `AppServerSessionsManagementService`,
-   `SessionsViewService`, and `ChatService`, and registers their frontend
+2. `SessionsRuntime` creates one App Server Session provider, one
+   `ISessionsManagementService`, one window `ISessionsService`, and one
+   `ChatService`, then registers their frontend
    contracts in a window-local `ServiceCollection`.
 3. `CodeSessionsWorkbench` creates `BrowserLayoutService` and the shared
    `WorkbenchInteractionServices`, so Chat uses the same commands, context
@@ -36,7 +37,7 @@ not import Sessions product UI or add Sessions-specific layout branches.
    mechanisms as the regular Workbench.
 4. `SessionsWorkbenchLayout` deserializes the fixed Part grid. Titlebar,
    sidebar, and sessions Parts are required; only the auxiliary Part may hide.
-5. `SessionsViewService.initialize` loads canonical Sessions. If none is
+5. The window Sessions service initializes the catalog. If none is
    active, the runtime opens a window-local untitled Session; it becomes
    durable only when the first message is sent.
 6. `SessionsChatView` reconciles every visible selection with a retained
@@ -46,18 +47,20 @@ not import Sessions product UI or add Sessions-specific layout branches.
    The product composition owns the single view-service subscription and
    pushes `(visible, active)` into the passive `SessionsPart`.
 
-App Server `session/update` notifications are sequence hints, not frontend
-state. `AppServerSessionsManagementService` subscribes to active Sessions,
-re-subscribes from its current sequence when a newer sequence is announced,
-applies the authoritative aggregate snapshot returned with the durable gap, updates active
-selection references, and unsubscribes when a Session is stopped or archived.
-A snapshot that cannot advance to the announced sequence fails explicitly
-instead of entering a refresh loop.
+App Server `session/changed` is an invalidation signal. The provider
+reads or subscribes the affected Session again; it never compares a Session
+sequence because no such sequence exists. Durable sequence and gap handling
+belong to the Thread-backed Chat runtime and
+`session/thread/update`.
 
-`session.ts` is the canonical frontend domain boundary. Transport DTO mapping
-stays private to `AppServerSessionsManagementService`; Workbench Chat and the
+`session.ts` is the frontend product boundary. Transport DTO mapping
+stays private to the App Server provider; Workbench Chat and the
 dedicated Sessions renderer consume `ISessionsManagementService` plus the
 frontend-owned domain types, never generated App Server DTOs.
+
+The Session workspace is a display summary derived from Environment, `cwd`,
+and dirs. It does not grant access and is not the editor window Workspace from
+`platform/workspace`.
 
 ## Failure and lifecycle semantics
 
@@ -65,8 +68,9 @@ frontend-owned domain types, never generated App Server DTOs.
   draft opens.
 - A catalog load failure still permits a window-local draft; the first send
   reports any backend failure when durable Session materialization is needed.
-- Session and Thread mutations remain App Server-owned; the view service owns
-  only window-local visibility and navigation history.
+- Session and Thread mutations remain App Server-owned; management routes
+  operations to the provider; the window Sessions service owns only local
+  visibility, active selection, focus, and navigation history.
 - Each runtime, Part, retained Chat pane, App Server event subscription, and
   interaction service is disposed with the Sessions window.
 - Returning to Workbench closes the Electron Sessions window or navigates the
@@ -83,14 +87,14 @@ frontend-owned domain types, never generated App Server DTOs.
 - `test/browser/sessions-part.test.ts` verifies the Sessions-owned primary Part
   passively renders multiple full Chat surfaces and reports focus/close intent.
 - `services/sessions/test/browser/sessionsManagementService.test.ts` protects
-  subscription, authoritative live refresh, active projection, and stale
-  snapshot failure behavior.
+  catalog refresh, provider invalidation, drafts, and operations without
+  inventing Session sequence state.
 - `test/smoke/areas/sessions/sessions-window.spec.ts` verifies the dedicated
   Electron window, all four Parts, multiple Grid leaves, close, and return flow.
 
 Changes to topology belong in `browser/layout/`; changes to window selection
-belong in `services/view/`; changes to canonical Session persistence or update
-semantics belong in `services/sessions/`. Adding a second layout or
+belong in `services/view/`; changes to provider adaptation and Session catalog
+operations belong in `services/sessions/`. Adding a second layout or
 Session model inside a Part would be architectural drift.
 
 ## Current limitations and staged evolution

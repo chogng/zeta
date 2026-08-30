@@ -1,317 +1,196 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AgentTreeNodeProjection, ServerNotification, Session as SessionDto } from "../../../../../../../generated/app-server/types.js";
+import type { AgentTreeNodeProjection, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../../../generated/app-server/types.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { AppServerSessionsManagementService } from "../../browser/appServerSessionsManagementService.js";
+import { AppServerSessionsProvider } from "../../browser/appServerSessionsProvider.js";
 
-test("AppServerSessionsManagementService resumes the canonical current Thread", async () => {
-	const current: SessionDto = {
-		...session(1),
-		currentThreadId: "thread-2",
-		threads: [
-			{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
-			{ threadId: "thread-2", origin: { type: "rewind", parentThreadId: "thread-1", parentSequence: 4, beforeTurnId: "turn-2" }, status: "active" },
-		],
-	};
-	const api: ISessionApi = {
-		async create() { return { session: current }; },
-		async read() { return { session: current }; },
-		async list() { return { sessions: [current] }; },
-		async subscribe() { return { session: current, updates: [], threadProjections: [], agentTree: { roots: [] } }; },
-		async unsubscribe() {},
-		async createThread() { throw new Error("Not used"); },
-		async forkThread() { throw new Error("Not used"); },
-		async complete() { throw new Error("Not used"); },
-		async archive() { throw new Error("Not used"); },
-		async stop() { throw new Error("Not used"); },
-		async setModel() { throw new Error("Not used"); },
-		async setNextApprovalMode() { throw new Error("Not used"); },
-	};
-	const events: IServerEventApi = { subscribe: () => ({ dispose() {} }) };
-	using service = new AppServerSessionsManagementService({ session: api, events });
+test("management initializes the catalog from provider-owned Session mapping", async () => {
+	const fake = sessionHost([session("session-1", "thread-1")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 
 	await service.initialize();
 
-	assert.equal(service.active?.threadId, "thread-2");
+	assert.equal(service.sessions.length, 1);
+	assert.equal(service.active?.session.sessionId, "session-1");
+	assert.equal(service.active?.threadId, "thread-1");
+	assert.equal(service.sessions[0]?.chats[0]?.origin.type, "root");
 });
 
-test("AppServerSessionsManagementService refreshes subscribed Sessions from canonical update snapshots", async () => {
-	let current = session(1);
-	const listeners = new Set<(event: ServerNotification) => void>();
-	const subscribed: string[] = [];
-	const unsubscribed: string[] = [];
-	const api: ISessionApi = {
-		async create() { return { session: current }; },
-		async read() { return { session: current }; },
-		async list() { return { sessions: [current] }; },
-		async subscribe(params) {
-			subscribed.push(params.sessionId);
-			return { session: current, updates: [], threadProjections: [], agentTree: { roots: [] } };
-		},
-		async unsubscribe(params) { unsubscribed.push(params.sessionId); },
-		async createThread() { throw new Error("Not used"); },
-		async forkThread() { throw new Error("Not used"); },
-		async complete() { throw new Error("Not used"); },
-		async archive() { throw new Error("Not used"); },
-		async stop() { throw new Error("Not used"); },
-		async setModel() { throw new Error("Not used"); },
-		async setNextApprovalMode() { throw new Error("Not used"); },
-	};
-	const events: IServerEventApi = {
-		subscribe(listener) {
-			listeners.add(listener);
-			return { dispose: () => { listeners.delete(listener); } };
-		},
-	};
-	using service = new AppServerSessionsManagementService({ session: api, events });
+test("session/changed invalidates the frontend Session without inventing a Session sequence", async () => {
+	const fake = sessionHost([session("session-1", "thread-1")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
+	const subscriptions = fake.subscribeCount;
 
-	assert.deepEqual(subscribed, ["session-1"]);
-	assert.equal(service.active?.session.sequence, 1);
+	fake.sessions[0] = { ...fake.sessions[0]!, title: "Renamed" };
+	fake.emit({ method: "session/changed", params: { sessionId: "session-1" } });
+	await waitFor(() => service.sessions[0]?.title === "Renamed");
 
-	current = { ...current, sequence: 2, model: { provider: "openai", model: "gpt-live" } };
-	emit(listeners, { method: "session/update", params: { sessionId: "session-1", durableSequence: 2, update: { type: "committed", event: { type: "sessionModelChanged", sessionId: "session-1", model: current.model! } } } });
-	await waitFor(() => service.sessions[0]?.sequence === 2);
-
-	assert.deepEqual(service.sessions[0]?.model, { provider: "openai", model: "gpt-live" });
-	assert.deepEqual(service.active?.session.model, { provider: "openai", model: "gpt-live" });
-
-	current = { ...current, sequence: 3, status: "archived" };
-	emit(listeners, { method: "session/update", params: { sessionId: "session-1", durableSequence: 3, update: { type: "committed", event: { type: "sessionArchived", sessionId: "session-1" } } } });
-	await waitFor(() => service.sessions[0]?.status === "archived");
-
-	assert.deepEqual(unsubscribed, ["session-1"]);
-	assert.equal(service.active, undefined);
+	assert.equal(fake.subscribeCount, subscriptions + 1);
+	assert.equal(service.sessions[0]?.title, "Renamed");
 });
 
-test("AppServerSessionsManagementService stops refreshing when the canonical snapshot cannot reach an announced sequence", async () => {
-	const current = session(1);
-	const listeners = new Set<(event: ServerNotification) => void>();
-	let subscriptions = 0;
-	const api: ISessionApi = {
-		async create() { return { session: current }; },
-		async read() { return { session: current }; },
-		async list() { return { sessions: [current] }; },
-		async subscribe() { subscriptions += 1; return { session: current, updates: [], threadProjections: [], agentTree: { roots: [] } }; },
-		async unsubscribe() {},
-		async createThread() { throw new Error("Not used"); },
-		async forkThread() { throw new Error("Not used"); },
-		async complete() { throw new Error("Not used"); },
-		async archive() { throw new Error("Not used"); },
-		async stop() { throw new Error("Not used"); },
-		async setModel() { throw new Error("Not used"); },
-		async setNextApprovalMode() { throw new Error("Not used"); },
-	};
-	const events: IServerEventApi = {
-		subscribe(listener) {
-			listeners.add(listener);
-			return { dispose: () => { listeners.delete(listener); } };
-		},
-	};
-	using service = new AppServerSessionsManagementService({ session: api, events });
+test("Thread updates refresh the owning Session while Thread sequence stays on the Chat", async () => {
+	const fake = sessionHost([session("session-1", "thread-1")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
+	const subscriptions = fake.subscribeCount;
 
-	emit(listeners, { method: "session/update", params: { sessionId: "session-1", durableSequence: 2, update: { type: "committed", event: { type: "sessionModelChanged", sessionId: "session-1", model: { provider: "openai", model: "gpt-live" } } } } });
-	await waitFor(() => service.state === "error");
-
-	assert.equal(subscriptions, 2);
-	assert.match(service.error ?? "", /did not advance/);
-});
-
-test("AppServerSessionsManagementService refreshes the canonical Agent tree after Thread updates", async () => {
-	const current = session(1);
-	const listeners = new Set<(event: ServerNotification) => void>();
-	let tree: AgentTreeNodeProjection = agentTreeNode();
-	let subscriptions = 0;
-	const api: ISessionApi = {
-		async create() { return { session: current }; },
-		async read() { return { session: current }; },
-		async list() { return { sessions: [current] }; },
-		async subscribe() {
-			subscriptions += 1;
-			return { session: current, updates: [], threadProjections: [], agentTree: { roots: [tree] } };
-		},
-		async unsubscribe() {},
-		async createThread() { throw new Error("Not used"); },
-		async forkThread() { throw new Error("Not used"); },
-		async complete() { throw new Error("Not used"); },
-		async archive() { throw new Error("Not used"); },
-		async stop() { throw new Error("Not used"); },
-		async setModel() { throw new Error("Not used"); },
-		async setNextApprovalMode() { throw new Error("Not used"); },
-	};
-	const events: IServerEventApi = {
-		subscribe(listener) {
-			listeners.add(listener);
-			return { dispose: () => { listeners.delete(listener); } };
-		},
-	};
-	using service = new AppServerSessionsManagementService({ session: api, events });
-	await service.initialize();
-
-	tree = { ...tree, threadSequence: 12, executionStatus: "completed" };
-	emit(listeners, {
+	fake.emit({
 		method: "session/thread/update",
 		params: {
 			sessionId: "session-1",
 			threadId: "thread-1",
-			durableSequence: 12,
-			update: { type: "committed", event: { type: "turnCompleted", threadId: "thread-1", turnId: "turn-7" } },
+			durableSequence: 3,
+			update: { type: "committed", event: { type: "threadArchived", threadId: "thread-1" } },
 		},
 	});
-	await waitFor(() => service.sessions[0]?.agentTree?.[0]?.threadSequence === 12);
+	await waitFor(() => fake.subscribeCount === subscriptions + 1);
 
-	assert.equal(service.sessions[0]?.agentTree?.[0]?.executionStatus, "completed");
-	assert.equal(service.sessions[0]?.sequence, 1);
-	assert.equal(subscriptions, 2);
-
-	// A replayed or delayed Thread notification must not trigger another projection fetch.
-	emit(listeners, {
-		method: "session/thread/update",
-		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
-			durableSequence: 12,
-			update: { type: "committed", event: { type: "turnCompleted", threadId: "thread-1", turnId: "turn-7" } },
-		},
-	});
-	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(subscriptions, 2);
+	assert.equal(service.sessions[0]?.sessionId, "session-1");
+	assert.equal(service.sessions[0]?.chats[0]?.threadId, "thread-1");
 });
 
-test("AppServerSessionsManagementService reopens a foreign Session Workspace before selecting its Thread", async () => {
-	const current = { ...session(1), workspace: { authorityId: "current", root: "/workspaces/current" } };
-	const foreign: SessionDto = {
-		...session(1),
-		sessionId: "session-foreign",
-		title: "Foreign",
-		workspace: { authorityId: "foreign", root: "/workspaces/foreign" },
-		threads: [{ threadId: "thread-foreign", origin: { type: "root" }, status: "active" }],
-	};
-	let currentWorkspaceRoot = current.workspace.root;
-	const reopened: string[] = [];
-	const api: ISessionApi = {
-		async create() { return { session: current }; },
-		async read(params) { return { session: params.sessionId === foreign.sessionId ? foreign : current }; },
-		async list() { return { sessions: [foreign, current] }; },
-		async subscribe(params) { const value = params.sessionId === foreign.sessionId ? foreign : current; return { session: value, updates: [], threadProjections: [], agentTree: { roots: [] } }; },
-		async unsubscribe() {},
-		async createThread() { throw new Error("Not used"); },
-		async forkThread() { throw new Error("Not used"); },
-		async complete() { throw new Error("Not used"); },
-		async archive() { throw new Error("Not used"); },
-		async stop() { throw new Error("Not used"); },
-		async setModel() { throw new Error("Not used"); },
-		async setNextApprovalMode() { throw new Error("Not used"); },
-	};
-	using service = new AppServerSessionsManagementService({
-		session: api,
-		workspaceRouter: {
-			currentWorkspaceRoot: () => currentWorkspaceRoot,
-			async reopenWorkspace(root) {
-				reopened.push(root);
-				currentWorkspaceRoot = root;
-			},
-		},
-	});
+test("archive sends only the Session grouping identity", async () => {
+	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
 	await service.initialize();
 
-	assert.equal(service.active?.session.sessionId, current.sessionId);
-	service.selectThread(foreign.sessionId, "thread-foreign");
-	await waitFor(() => service.active?.session.sessionId === foreign.sessionId);
+	await service.archiveSession("session-1");
 
-	assert.deepEqual(reopened, ["/workspaces/foreign"]);
-	assert.equal(service.active?.threadId, "thread-foreign");
+	assert.deepEqual(fake.archiveRequests, [{ commandId: fake.archiveRequests[0]?.commandId, sessionId: "session-1" }]);
+	assert.equal(service.sessions.find(candidate => candidate.sessionId === "session-1")?.status, "archived");
+	assert.equal(service.active?.session.sessionId, "session-2");
 });
 
-test("AppServerSessionsManagementService interrupts the exact canonical Agent Turn and sequence", async () => {
-	const current = session(3);
-	const interrupted: Parameters<ITurnApi["interrupt"]>[0][] = [];
+test("interrupt uses the selected Thread sequence from the provider snapshot", async () => {
+	const tree = agentNode();
+	const fake = sessionHost([session("session-1", "thread-1")], tree);
+	using service = new AppServerSessionsManagementService(new AppServerSessionsProvider(fake.host));
+	await service.initialize();
+
+	await service.interruptThread("session-1", "thread-1");
+
+	assert.deepEqual(fake.interruptRequests.map(({ sessionId, threadId, turnId, expectedSequence }) => ({ sessionId, threadId, turnId, expectedSequence })), [{
+		sessionId: "session-1",
+		threadId: "thread-1",
+		turnId: "turn-1",
+		expectedSequence: 7,
+	}]);
+});
+
+function session(sessionId: string, threadId: string): SessionDto {
+	return {
+		sessionId,
+		title: `Session ${sessionId}`,
+		status: "active",
+		threads: [{ threadId, status: "active" }],
+	};
+}
+
+function agentNode(): AgentTreeNodeProjection {
+	const total = { reported: 0, complete: true };
+	return {
+		threadId: "thread-1",
+		threadSequence: 7,
+		title: "Main",
+		executionStatus: "running",
+		currentTurnId: "turn-1",
+		usage: {
+			modelInvocations: 0,
+			inputTokens: total,
+			outputTokens: total,
+			cachedInputTokens: total,
+			reasoningTokens: total,
+		},
+		children: [],
+	};
+}
+
+function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
+	const listeners = new Set<(event: ServerNotification) => void>();
+	const sessions = [...initial];
+	const archiveRequests: Parameters<ISessionApi["archive"]>[0][] = [];
+	const interruptRequests: Parameters<ITurnApi["interrupt"]>[0][] = [];
+	let subscribeCount = 0;
 	const api: ISessionApi = {
-		async create() { return { session: current }; },
-		async read() { return { session: current }; },
-		async list() { return { sessions: [current] }; },
-		async subscribe() {
+		async create() { throw new Error("Not used"); },
+		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)! }; },
+		async list() { return { sessions }; },
+		async subscribe({ sessionId }) {
+			subscribeCount += 1;
+			const value = sessions.find(candidate => candidate.sessionId === sessionId)!;
 			return {
-				session: current,
-				updates: [],
-				threadProjections: [],
-				agentTree: { roots: [agentTreeNode()] },
+				session: value,
+				threadProjections: value.threads.map(thread => threadProjection(sessionId, thread.threadId)),
+				agentTree: { roots: tree ? [tree] : [] },
 			};
 		},
 		async unsubscribe() {},
 		async createThread() { throw new Error("Not used"); },
 		async forkThread() { throw new Error("Not used"); },
-		async complete() { throw new Error("Not used"); },
-		async archive() { throw new Error("Not used"); },
+		async archive(params) {
+			archiveRequests.push(params);
+			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
+			sessions[index] = { ...sessions[index]!, status: "archived" };
+			return { session: sessions[index]! };
+		},
 		async stop() { throw new Error("Not used"); },
-		async setModel() { throw new Error("Not used"); },
-		async setNextApprovalMode() { throw new Error("Not used"); },
 	};
 	const turn: ITurnApi = {
 		async start() { throw new Error("Not used"); },
 		async compact() { throw new Error("Not used"); },
 		async steer() { throw new Error("Not used"); },
-		async interrupt(params) { interrupted.push(params); return { sequence: 12 }; },
+		async interrupt(params) {
+			interruptRequests.push(params);
+			return { threadId: params.threadId, sequence: params.expectedSequence + 1, turnId: params.turnId };
+		},
 		async resolveInteraction() { throw new Error("Not used"); },
 	};
-	using service = new AppServerSessionsManagementService({ session: api, turn });
-	await service.initialize();
-
-	await service.interruptThread("session-1", "thread-1");
-
-	assert.equal(interrupted.length, 1);
-	assert.deepEqual(interrupted[0] && {
-		sessionId: interrupted[0].sessionId,
-		threadId: interrupted[0].threadId,
-		turnId: interrupted[0].turnId,
-		expectedSequence: interrupted[0].expectedSequence,
-	}, { sessionId: "session-1", threadId: "thread-1", turnId: "turn-7", expectedSequence: 11 });
-});
-
-function session(sequence: number): SessionDto {
-	return {
-		sessionId: "session-1",
-		title: "Session 1",
-		status: "active",
-		nextApprovalMode: "askPermissions",
-		currentThreadId: "thread-1",
-		sequence,
-		threads: [{ threadId: "thread-1", origin: { type: "root" }, status: "active" }],
-	};
-}
-
-function agentTreeNode() {
-	const usageTotal = { reported: 0, complete: true };
-	return {
-		threadId: "thread-1",
-		threadSequence: 11,
-		title: "Reviewer",
-		origin: { type: "root" as const },
-		membershipStatus: "active" as const,
-		executionStatus: "running" as const,
-		currentTurnId: "turn-7",
-		usage: {
-			modelInvocations: 0,
-			inputTokens: usageTotal,
-			outputTokens: usageTotal,
-			cachedInputTokens: usageTotal,
-			reasoningTokens: usageTotal,
+	const events: IServerEventApi = {
+		subscribe(listener) {
+			listeners.add(listener);
+			return { dispose: () => listeners.delete(listener) };
 		},
-		joins: [],
-		children: [],
+	};
+	return {
+		host: { session: api, turn, events },
+		sessions,
+		archiveRequests,
+		interruptRequests,
+		get subscribeCount() { return subscribeCount; },
+		emit(event: ServerNotification) { for (const listener of listeners) listener(event); },
 	};
 }
 
-function emit(listeners: ReadonlySet<(event: ServerNotification) => void>, event: ServerNotification): void {
-	for (const listener of listeners) listener(event);
+function threadProjection(sessionId: string, threadId: string): SessionThreadProjection {
+	return {
+		thread: {
+			sessionId,
+			threadId,
+			title: "Main",
+			status: "active",
+			sequence: 1,
+			usage: {
+				modelInvocations: 0,
+				inputTokens: { reported: 0, complete: true },
+				outputTokens: { reported: 0, complete: true },
+				cachedInputTokens: { reported: 0, complete: true },
+				reasoningTokens: { reported: 0, complete: true },
+			},
+			turns: [],
+		},
+		transcript: { sessionId, threadId, durableSequence: 1, entries: [] },
+		updates: [],
+	};
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
-	for (let attempt = 0; attempt < 30; attempt += 1) {
+	for (let index = 0; index < 50; index += 1) {
 		if (predicate()) return;
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
-	assert.fail("Timed out waiting for Session refresh");
+	throw new Error("Condition was not met");
 }

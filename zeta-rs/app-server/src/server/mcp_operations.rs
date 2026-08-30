@@ -137,7 +137,7 @@ impl AppServer {
         if !config.values.mcp.servers.contains_key(&server_id) {
             return Err(RpcError::new(-32011, AppServerErrorName::McpServerNotFound));
         }
-        if self.local_workspace_host.is_none() {
+        if self.local_env_host.is_none() {
             return Err(RpcError::new(
                 -32090,
                 AppServerErrorName::McpRuntimeUnavailable,

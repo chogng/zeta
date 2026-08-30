@@ -1,20 +1,20 @@
 import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
 import { viteDevRequest, voidResult } from "../../app-server/browser/viteDevRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { IWorkspaceSearchApi } from "../common/searchApi.js";
+import type { IContentSearchApi } from "../common/searchApi.js";
 
-export function createDisconnectedWorkspaceSearchApi(unavailable: UnavailableOperation): IWorkspaceSearchApi {
+export function createDisconnectedContentSearchApi(unavailable: UnavailableOperation): IContentSearchApi {
 	return {
-		start: () => unavailable("workspaceSearch.start"),
-		read: () => unavailable("workspaceSearch.read"),
-		cancel: () => unavailable("workspaceSearch.cancel"),
+		start: () => unavailable("contentSearch.start"),
+		read: () => unavailable("contentSearch.read"),
+		cancel: () => unavailable("contentSearch.cancel"),
 	};
 }
 
-export function createViteDevWorkspaceSearchApi(connection: ViteDevAppServerConnection): IWorkspaceSearchApi {
+export function createViteDevContentSearchApi(connection: ViteDevAppServerConnection): IContentSearchApi {
 	return {
-		start: (params) => viteDevRequest(connection, "workspace/search/start", params),
-		read: (params) => viteDevRequest(connection, "workspace/search/read", params),
-		cancel: (params) => voidResult(viteDevRequest(connection, "workspace/search/cancel", params)),
+		start: (params) => viteDevRequest(connection, "content/search/start", params),
+		read: (params) => viteDevRequest(connection, "content/search/read", params),
+		cancel: (params) => voidResult(viteDevRequest(connection, "content/search/cancel", params)),
 	};
 }

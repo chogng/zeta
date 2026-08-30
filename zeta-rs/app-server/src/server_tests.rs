@@ -34,16 +34,19 @@ use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
 use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ModelService;
 use zeta_core::RequestTurnInteraction;
-use zeta_core::SessionCoordinator;
 use zeta_core::StartTurnRequest;
 use zeta_core::ThreadController;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolOutputSink;
 use zeta_core::ToolService;
+use zeta_file_access::Authorization;
+use zeta_file_access::Dir;
+use zeta_file_access::GrantSource;
+use zeta_file_access::Permission as DirPermission;
+use zeta_file_access::Permissions;
 use zeta_file_system::LocalFileSystem;
 use zeta_login::AccountRef;
 use zeta_login::AccountSnapshot;
@@ -87,21 +90,12 @@ use zeta_sandboxing::NetworkAccess;
 use zeta_sandboxing::SandboxPolicy;
 use zeta_secrets::MemorySecretStore;
 use zeta_uds::UnixStream;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceCapability;
-use zeta_workspace::WorkspaceRoot;
-use zeta_workspace::WorkspaceTrustDecision;
-use zeta_workspace::WorkspaceTrustSource;
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
-    AppServer::new(sessions, model).with_ephemeral_workspace_state()
+    AppServer::new(threads, model).with_ephemeral_env_state()
 }
 
 fn server() -> AppServer {
@@ -214,14 +208,6 @@ impl crate::model_catalog::ModelCatalog for FixedModelCatalog {
 
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError> {
         Ok(Some(self.default.clone()))
-    }
-
-    fn validate(&self, model: &ModelRef) -> Result<(), CoreError> {
-        self.models
-            .iter()
-            .any(|entry| &entry.model == model)
-            .then_some(())
-            .ok_or_else(|| CoreError::Model("model is not in the catalog".into()))
     }
 }
 
@@ -526,7 +512,7 @@ fn create_thread(
     request_id: u64,
     command_id: &str,
     session_id: &str,
-    expected_sequence: u64,
+    _expected_sequence: u64,
 ) -> serde_json::Value {
     call(
         server,
@@ -538,7 +524,6 @@ fn create_thread(
             "params":{
                 "commandId":command_id,
                 "sessionId":session_id,
-                "expectedSequence":expected_sequence,
                 "request":{"type":"createThread","title":"root"}
             }
         }),
@@ -549,7 +534,7 @@ fn wait_for_latest_turn(server: &AppServer, thread_id: &str, expected: TurnStatu
     let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
+        let snapshot = server.threads().read_thread(&thread_id).unwrap();
         if snapshot
             .turns
             .last()
@@ -732,7 +717,7 @@ fn dynamic_interaction_capability_requires_exact_hosted_tool_names() {
 }
 
 #[test]
-fn workspace_search_requires_an_installed_backend() {
+fn content_search_requires_an_installed_backend() {
     let server = server();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -743,7 +728,7 @@ fn workspace_search_requires_an_installed_backend() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":2,
-            "method":"workspace/search/start",
+            "method":"content/search/start",
             "params":{
                 "query":"needle",
                 "patternKind":"literal",
@@ -790,10 +775,7 @@ fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
     ));
     std::fs::create_dir_all(&root).unwrap();
     let server = server()
-        .with_terminal_root(trusted_workspace(
-            &root,
-            WorkspaceCapability::ExecuteProcess,
-        ))
+        .with_terminal_root(dir_authorization(&root, DirPermission::ExecuteCommands))
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -863,7 +845,7 @@ fn terminal_profiles_are_server_owned_and_reject_unknown_ids() {
 }
 
 #[test]
-fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
+fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-terminal-{}-{}",
         std::process::id(),
@@ -874,10 +856,7 @@ fn terminal_rpc_drives_a_workspace_rooted_pty_to_exit() {
     ));
     std::fs::create_dir_all(&root).unwrap();
     let server = server()
-        .with_terminal_root(trusted_workspace(
-            &root,
-            WorkspaceCapability::ExecuteProcess,
-        ))
+        .with_terminal_root(dir_authorization(&root, DirPermission::ExecuteCommands))
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -984,10 +963,7 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
     ));
     std::fs::create_dir_all(&root).unwrap();
     let server = server()
-        .with_terminal_root(trusted_workspace(
-            &root,
-            WorkspaceCapability::ExecuteProcess,
-        ))
+        .with_terminal_root(dir_authorization(&root, DirPermission::ExecuteCommands))
         .unwrap();
     let mut owner = server.connection();
     let mut other = server.connection();
@@ -1066,10 +1042,7 @@ fn reconnectable_terminal_detaches_rotates_its_token_and_rejects_replay() {
     ));
     std::fs::create_dir_all(&root).unwrap();
     let server = server()
-        .with_terminal_root(trusted_workspace(
-            &root,
-            WorkspaceCapability::ExecuteProcess,
-        ))
+        .with_terminal_root(dir_authorization(&root, DirPermission::ExecuteCommands))
         .unwrap();
     let mut owner = server.connection();
     initialize(&server, &mut owner);
@@ -1180,8 +1153,8 @@ fn debug_adapter_rpc_enforces_connection_ownership_and_connection_cleanup() {
     std::fs::create_dir_all(&root).unwrap();
     let server = server()
         .with_debug_adapter_root(
-            trusted_workspace(&root, WorkspaceCapability::LoadExecutableConfiguration),
-            trusted_workspace(&root, WorkspaceCapability::ExecuteProcess),
+            dir_authorization(&root, DirPermission::LoadConfig),
+            dir_authorization(&root, DirPermission::ExecuteCommands),
         )
         .unwrap();
     let mut owner = server.connection();
@@ -1240,7 +1213,7 @@ fn debug_adapter_rpc_enforces_connection_ownership_and_connection_cleanup() {
 fn initialize_advertises_the_server_slash_command_snapshot() {
     let catalog = SlashCommandCatalog::new([SlashCommandDefinition {
         name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
+        description: "inspect the current dir".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
     }])
     .unwrap();
@@ -1262,7 +1235,7 @@ fn initialize_advertises_the_server_slash_command_snapshot() {
         response["result"]["slashCommands"],
         serde_json::json!([{
             "name": "diagnose",
-            "description": "inspect the current workspace",
+            "description": "inspect the current dir",
             "argumentMode": "optional"
         }])
     );
@@ -1296,9 +1269,9 @@ fn session_request_starts_and_replays_manual_context_compaction() {
             "params":{
                 "commandId":"manual-compact",
                 "sessionId":session_id,
-                "expectedSequence":1,
                 "request":{
                     "type":"compactContext",
+                    "expectedSequence":1,
                     "threadId":thread_id,
                     "retentionPrompt":"preserve the deployment decision"
                 }
@@ -1309,11 +1282,7 @@ fn session_request_starts_and_replays_manual_context_compaction() {
     let started = call(&server, &mut connection, request(4));
     let replayed = call(&server, &mut connection, request(5));
     let protocol_thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
-    let snapshot = server
-        .sessions()
-        .threads()
-        .read_thread(&protocol_thread_id)
-        .unwrap();
+    let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
 
     assert_eq!(started["result"]["type"], "turn");
     assert_eq!(replayed["result"], started["result"]);
@@ -1329,13 +1298,13 @@ fn session_request_starts_and_replays_manual_context_compaction() {
 }
 
 #[test]
-fn session_first_flow_exposes_canonical_session_and_thread_models() {
+fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
     let server = server();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let session = create_session(&server, &mut connection, 2, "create-session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
-    assert_eq!(session["result"]["session"]["sequence"], 1);
+    assert!(session["result"]["session"].get("sequence").is_none());
     let thread = create_thread(&server, &mut connection, 3, "create-thread", session_id, 1);
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
 
@@ -1343,9 +1312,10 @@ fn session_first_flow_exposes_canonical_session_and_thread_models() {
         thread["result"]["value"]["session"]["threads"][0]["status"],
         "active"
     );
-    assert_eq!(
-        thread["result"]["value"]["session"]["currentThreadId"],
-        thread_id
+    assert!(
+        thread["result"]["value"]["session"]
+            .get("currentThreadId")
+            .is_none()
     );
     let read = call(
         &server,
@@ -1381,7 +1351,6 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
             "params":{
                 "commandId":"stop-session",
                 "sessionId":session_id,
-                "expectedSequence":3,
                 "request":{"type":"stop"}
             }
         }),
@@ -1398,8 +1367,7 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
             "params":{
                 "commandId":"turn-after-stop",
                 "sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"after stop"}]}
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"text","text":"after stop"}]}
             }
         }),
     );
@@ -1407,7 +1375,7 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
 }
 
 #[test]
-fn model_selection_is_catalog_backed_and_session_scoped() {
+fn model_catalog_is_global_and_session_views_do_not_own_model_selection() {
     let default = model_ref("gpt-default");
     let alternate = model_ref("gpt-alternate");
     let mut default_info = zeta_protocol::ModelInfo::new(default.model.clone(), "Default");
@@ -1439,46 +1407,8 @@ fn model_selection_is_catalog_backed_and_session_scoped() {
         serde_json::json!({"jsonrpc":"2.0","id":2,"method":"model/list","params":{}}),
     );
     assert_eq!(listed["result"]["models"].as_array().unwrap().len(), 2);
-    let first = create_session(&server, &mut connection, 3, "first-session");
-    let second = create_session(&server, &mut connection, 4, "second-session");
-    let first_id = first["result"]["session"]["sessionId"].as_str().unwrap();
-    let second_id = second["result"]["session"]["sessionId"].as_str().unwrap();
-    assert_eq!(first["result"]["session"]["model"]["model"], "gpt-default");
-    assert_eq!(second["result"]["session"]["model"]["model"], "gpt-default");
-
-    let changed = call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0",
-            "id":5,
-            "method":"session/request",
-            "params":{
-                "commandId":"set-first-model",
-                "sessionId":first_id,
-                "expectedSequence":1,
-                "request":{"type":"setModel","model":{"provider":"openai","model":"gpt-alternate"}}
-            }
-        }),
-    );
-    assert_eq!(
-        changed["result"]["value"]["session"]["model"]["model"],
-        "gpt-alternate"
-    );
-    let unchanged = call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0",
-            "id":6,
-            "method":"session/read",
-            "params":{"sessionId":second_id}
-        }),
-    );
-    assert_eq!(
-        unchanged["result"]["session"]["model"]["model"],
-        "gpt-default"
-    );
+    let session = create_session(&server, &mut connection, 3, "session");
+    assert!(session["result"]["session"].get("model").is_none());
 }
 
 #[test]
@@ -1521,8 +1451,8 @@ fn fork_preserves_parent_context_without_calling_the_model() {
         serde_json::json!({
             "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
-                "commandId":"parent-turn","sessionId":session_id,"expectedSequence":1,
-                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"parent prompt"}]}
+                "commandId":"parent-turn","sessionId":session_id,
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":root_id,"input":[{"type":"text","text":"parent prompt"}]}
             }
         }),
     );
@@ -1539,27 +1469,21 @@ fn fork_preserves_parent_context_without_calling_the_model() {
             "params":{
                 "commandId":"fork",
                 "sessionId":session_id,
-                "expectedSequence":3,
                 "request":{"type":"forkThread","parentThreadId":root_id,"title":"branch"}
             }
         }),
     );
     assert_eq!(model.requests().len(), 1);
 
-    assert_eq!(
-        fork["result"]["value"]["session"]["threads"][1]["origin"]["type"],
-        "fork"
-    );
-    assert_eq!(
-        fork["result"]["value"]["session"]["threads"][1]["origin"]["parentSequence"],
-        server
-            .sessions()
-            .threads()
-            .read_thread(&zeta_protocol::ThreadId::new(root_id).unwrap())
-            .unwrap()
-            .sequence
-    );
     let child_id = fork["result"]["value"]["threadId"].as_str().unwrap();
+    let child_view = fork["result"]["value"]["session"]["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|thread| thread["threadId"] == child_id)
+        .unwrap();
+    assert!(child_view.get("parentThreadId").is_none());
+    assert_eq!(child_view["forkedFromId"], root_id);
     let child = call(
         &server,
         &mut connection,
@@ -1579,8 +1503,7 @@ fn fork_preserves_parent_context_without_calling_the_model() {
             "jsonrpc":"2.0","id":7,"method":"session/request",
             "params":{
                 "commandId":"child-turn","sessionId":session_id,
-                "expectedSequence":child["result"]["thread"]["sequence"],
-                "request":{"type":"startTurn","threadId":child_id,"input":[{"type":"text","text":"child prompt"}]}
+                "request":{"type":"startTurn","expectedSequence":child["result"]["thread"]["sequence"],"threadId":child_id,"input":[{"type":"text","text":"child prompt"}]}
             }
         }),
     );
@@ -1622,8 +1545,7 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
             "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
                 "commandId":"turn-first","sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"first"}]}
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":root_id,"input":[{"type":"text","text":"first"}]}
             }
         }),
     );
@@ -1642,8 +1564,7 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
             "jsonrpc":"2.0","id":6,"method":"session/request",
             "params":{
                 "commandId":"turn-second","sessionId":session_id,
-                "expectedSequence":after_first["result"]["thread"]["sequence"],
-                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"second"}]}
+                "request":{"type":"startTurn","expectedSequence":after_first["result"]["thread"]["sequence"],"threadId":root_id,"input":[{"type":"text","text":"second"}]}
             }
         }),
     );
@@ -1654,7 +1575,7 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
         serde_json::json!({
             "jsonrpc":"2.0","id":7,"method":"session/request",
             "params":{
-                "commandId":"rewind","sessionId":session_id,"expectedSequence":3,
+                "commandId":"rewind","sessionId":session_id,
                 "request":{"type":"rewindThread","parentThreadId":root_id,"beforeTurnId":second["result"]["value"]["turnId"],"title":"rewound"}
             }
         }),
@@ -1676,14 +1597,14 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
         child["result"]["thread"]["turns"][0]["turnId"],
         first["result"]["value"]["turnId"]
     );
-    assert_eq!(
-        rewound["result"]["value"]["session"]["threads"][1]["origin"]["type"],
-        "rewind"
-    );
-    assert_eq!(
-        rewound["result"]["value"]["session"]["currentThreadId"],
-        child_id
-    );
+    let child_view = rewound["result"]["value"]["session"]["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|thread| thread["threadId"] == child_id)
+        .unwrap();
+    assert!(child_view.get("parentThreadId").is_none());
+    assert_eq!(child_view["forkedFromId"], root_id);
 }
 
 #[test]
@@ -1703,8 +1624,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
             "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
                 "commandId":"turn-first","sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"first"}]}
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":root_id,"input":[{"type":"text","text":"first"}]}
             }
         }),
     );
@@ -1724,8 +1644,7 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
             "jsonrpc":"2.0","id":6,"method":"session/request",
             "params":{
                 "commandId":"turn-second","sessionId":session_id,
-                "expectedSequence":root_snapshot["result"]["thread"]["sequence"],
-                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"second"}]}
+                "request":{"type":"startTurn","expectedSequence":root_snapshot["result"]["thread"]["sequence"],"threadId":root_id,"input":[{"type":"text","text":"second"}]}
             }
         }),
     );
@@ -1734,8 +1653,8 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
     let rewrite_request = serde_json::json!({
         "jsonrpc":"2.0","id":7,"method":"session/request",
         "params":{
-            "commandId":"rewrite-operation","sessionId":session_id,"expectedSequence":3,
-            "request":{
+            "commandId":"rewrite-operation","sessionId":session_id,
+                "request":{
                 "type":"rewriteThread",
                 "parentThreadId":root_id,
                 "beforeTurnId":second["result"]["value"]["turnId"],
@@ -1762,19 +1681,14 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
         replacement_turn_id
     );
     assert_eq!(
-        replayed["result"]["value"]["session"]["currentThreadId"],
-        child_id
-    );
-    assert_eq!(
         replayed["result"]["value"]["session"]["threads"]
             .as_array()
             .unwrap()
             .len(),
-        2
+        3
     );
 
     let child = server
-        .sessions()
         .threads()
         .read_thread(&zeta_protocol::ThreadId::new(child_id).unwrap())
         .unwrap();
@@ -1794,21 +1708,13 @@ fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
             .count(),
         1
     );
-    let session = server
-        .sessions()
-        .read_session(&zeta_protocol::SessionId::new(session_id).unwrap())
-        .unwrap();
-    assert!(session.commands.iter().any(|command| {
-        command.receipt.command_id.as_str() == "session-rewrite/rewind/rewrite-operation"
-    }));
-
     let conflict = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":9,"method":"session/request",
             "params":{
-                "commandId":"rewrite-operation","sessionId":session_id,"expectedSequence":3,
+                "commandId":"rewrite-operation","sessionId":session_id,
                 "request":{
                     "type":"rewriteThread",
                     "parentThreadId":root_id,
@@ -1838,8 +1744,8 @@ fn thread_read_returns_a_bounded_latest_history_window() {
         serde_json::json!({
             "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
-                "commandId":"turn-first","sessionId":session_id,"expectedSequence":1,
-                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"first"}]}
+                "commandId":"turn-first","sessionId":session_id,
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"text","text":"first"}]}
             }
         }),
     );
@@ -1859,8 +1765,7 @@ fn thread_read_returns_a_bounded_latest_history_window() {
             "jsonrpc":"2.0","id":6,"method":"session/request",
             "params":{
                 "commandId":"turn-second","sessionId":session_id,
-                "expectedSequence":full_after_first["result"]["thread"]["sequence"],
-                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"second"}]}
+                "request":{"type":"startTurn","expectedSequence":full_after_first["result"]["thread"]["sequence"],"threadId":thread_id,"input":[{"type":"text","text":"second"}]}
             }
         }),
     );
@@ -2152,7 +2057,7 @@ impl ActionPolicyService for ShellTestPolicy {
 }
 
 fn shell_test_sandbox() -> SandboxPolicy {
-    SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied)
+    SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
 }
 
 #[test]
@@ -2187,8 +2092,7 @@ fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
             "params":{
                 "commandId":"shell-turn",
                 "sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startShellTurn","threadId":thread_id,"command":"printf shell output","workingDirectory":"."}
+                "request":{"type":"startShellTurn","expectedSequence":1,"threadId":thread_id,"command":"printf shell output","workingDirectory":"."}
             }
         }),
     );
@@ -2197,7 +2101,6 @@ fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     assert_eq!(model.calls.load(Ordering::Relaxed), 0);
     let snapshot = server
-        .sessions()
         .threads()
         .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
         .unwrap();
@@ -2299,9 +2202,9 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
             "params":{
                 "commandId":"turn",
                 "sessionId":session_id,
-                "expectedSequence":1,
                 "request":{
                     "type":"startTurn",
+                    "expectedSequence":1,
                     "threadId":thread_id,
                     "input":[{"type":"text","text":"hello"}]
                 }
@@ -2388,9 +2291,9 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
         serde_json::json!({
             "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
-                "commandId":"review-turn","sessionId":session_id,"expectedSequence":1,
+                "commandId":"review-turn","sessionId":session_id,
                 "request":{
-                    "type":"startReview","threadId":thread_id,
+                    "type":"startReview","expectedSequence":1,"threadId":thread_id,
                     "target":{"type":"baseBranch","branch":"main"}
                 }
             }
@@ -2412,7 +2315,6 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
         "Review the changes against base branch `main`. Determine the merge base with HEAD, then inspect the diff from that merge base."
     ));
     let snapshot = server
-        .sessions()
         .threads()
         .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
         .unwrap();
@@ -2460,9 +2362,9 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
         serde_json::json!({
             "jsonrpc":"2.0","id":4,"method":"session/request",
             "params":{
-                "commandId":"skill-turn","sessionId":session_id,"expectedSequence":1,
+                "commandId":"skill-turn","sessionId":session_id,
                 "request":{
-                    "type":"startTurn","threadId":thread_id,
+                    "type":"startTurn","expectedSequence":1,"threadId":thread_id,
                     "input":[
                         {"type":"skill","skill":{
                             "id":{"source":"builtin:skill-source:zeta-release","name":"skill-creator"},
@@ -2478,7 +2380,6 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
     assert!(started["result"]["value"]["turnId"].is_string());
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     let snapshot = server
-        .sessions()
         .threads()
         .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
         .unwrap();
@@ -2526,7 +2427,7 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
 }
 
 #[test]
-fn session_request_routes_typed_mutations_through_the_session_boundary() {
+fn session_request_routes_thread_mutations_and_freezes_turn_approval_mode() {
     let server = server();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -2543,37 +2444,12 @@ fn session_request_routes_typed_mutations_through_the_session_boundary() {
             "params":{
                 "commandId":"create-thread",
                 "sessionId":session_id,
-                "expectedSequence":1,
                 "request":{"type":"createThread","title":"thread"}
             }
         }),
     );
     assert_eq!(thread["result"]["type"], "thread");
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
-    let session_sequence = thread["result"]["value"]["session"]["sequence"]
-        .as_u64()
-        .unwrap();
-
-    let approval_mode = call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0",
-            "id":4,
-            "method":"session/request",
-            "params":{
-                "commandId":"set-next-approval-mode",
-                "sessionId":session_id,
-                "expectedSequence":session_sequence,
-                "request":{"type":"setNextApprovalMode","approvalMode":"autoReview"}
-            }
-        }),
-    );
-    assert_eq!(
-        approval_mode["result"]["value"]["session"]["nextApprovalMode"],
-        "autoReview"
-    );
-
     let turn = call(
         &server,
         &mut connection,
@@ -2584,10 +2460,11 @@ fn session_request_routes_typed_mutations_through_the_session_boundary() {
             "params":{
                 "commandId":"start-turn",
                 "sessionId":session_id,
-                "expectedSequence":1,
                 "request":{
                     "type":"startTurn",
                     "threadId":thread_id,
+                    "expectedSequence":1,
+                    "approvalMode":"autoReview",
                     "input":[{"type":"text","text":"hello"}]
                 }
             }
@@ -2597,7 +2474,6 @@ fn session_request_routes_typed_mutations_through_the_session_boundary() {
     assert!(turn["result"]["value"]["turnId"].is_string());
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     let snapshot = server
-        .sessions()
         .threads()
         .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
         .unwrap();
@@ -2626,8 +2502,7 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
             "params":{
                 "commandId":"start-steered-turn",
                 "sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"initial"}]}
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"text","text":"initial"}]}
             }
         }),
     );
@@ -2641,9 +2516,9 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
             "params":{
                 "commandId":"steer-running-turn",
                 "sessionId":session_id,
-                "expectedSequence":start_sequence,
                 "request":{
                     "type":"steerTurn",
+                    "expectedSequence":start_sequence,
                     "threadId":thread_id,
                     "turnId":turn_id,
                     "input":[{"type":"text","text":"focus on the failing test"}]
@@ -2669,9 +2544,9 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
             "params":{
                 "commandId":"steer-running-turn",
                 "sessionId":session_id,
-                "expectedSequence":start_sequence,
                 "request":{
                     "type":"steerTurn",
+                    "expectedSequence":start_sequence,
                     "threadId":thread_id,
                     "turnId":turn_id,
                     "input":[{"type":"text","text":"different payload"}]
@@ -2682,11 +2557,7 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
     assert_eq!(conflict["error"]["message"], "CommandConflict");
 
     let protocol_thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
-    let snapshot = server
-        .sessions()
-        .threads()
-        .read_thread(&protocol_thread_id)
-        .unwrap();
+    let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
     assert_eq!(
         snapshot
             .items
@@ -2709,11 +2580,7 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
             |part| matches!(part, ContentPart::Text(text) if text == "focus on the failing test")
         ))
     }));
-    let snapshot = server
-        .sessions()
-        .threads()
-        .read_thread(&protocol_thread_id)
-        .unwrap();
+    let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
     assert!(snapshot.items.iter().any(|item| matches!(
         item,
         zeta_protocol::ThreadItem::AgentMessage { text, .. } if text == "response-1"
@@ -2749,8 +2616,7 @@ fn failed_backend_steer_is_not_replayed_across_rpc_retry() {
             "params":{
                 "commandId":"start-failed-steer-turn",
                 "sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"initial"}]}
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"text","text":"initial"}]}
             }
         }),
     );
@@ -2762,9 +2628,9 @@ fn failed_backend_steer_is_not_replayed_across_rpc_retry() {
             "params":{
                 "commandId":"failed-backend-steer",
                 "sessionId":session_id,
-                "expectedSequence":sequence,
                 "request":{
                     "type":"steerTurn",
+                    "expectedSequence":sequence,
                     "threadId":thread_id,
                     "turnId":turn_id,
                     "input":[{"type":"text","text":"updated direction"}]
@@ -2780,7 +2646,6 @@ fn failed_backend_steer_is_not_replayed_across_rpc_retry() {
     assert_eq!(replayed["error"]["message"], "CoreOperationFailed");
     assert_eq!(backend.steers.load(Ordering::Relaxed), 1);
     let snapshot = server
-        .sessions()
         .threads()
         .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
         .unwrap();
@@ -2828,7 +2693,6 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
             "params":{
                 "commandId":"fork",
                 "sessionId":session_id,
-                "expectedSequence":3,
                 "request":{"type":"forkThread","parentThreadId":thread_id,"title":"branch"}
             }
         }),
@@ -2841,8 +2705,7 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
             "params":{
                 "commandId":"turn",
                 "sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"hello"}]}
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"text","text":"hello"}]}
             }
         }),
     );
@@ -2852,7 +2715,7 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
     assert!(
         notifications
             .iter()
-            .any(|value| value.contains("\"method\":\"session/update\""))
+            .any(|value| value.contains("\"method\":\"session/changed\""))
     );
     assert!(notifications.iter().any(|value| {
         value.contains("\"method\":\"session/thread/update\"") && value.contains("\"agentMessage\"")
@@ -3309,7 +3172,7 @@ fn mcp_runtime_intent_rpc_does_not_mutate_config_revision() {
     ));
     let server = server()
         .with_config_store(Arc::new(ConfigStore::open(&path).unwrap()))
-        .with_local_workspace_host(None, crate::server::WorkspaceSwitchTrustPolicy::Restricted)
+        .with_local_env_host(None, crate::server::DirGrantPolicy::InspectOnly)
         .unwrap();
     let mut connection = server.connection();
     let initialized = call(
@@ -3497,7 +3360,6 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
     let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
     let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
     let started = server
-        .sessions()
         .threads()
         .start_turn(
             &thread_id,
@@ -3519,7 +3381,6 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
         )
         .unwrap();
     server
-        .sessions()
         .threads()
         .request_turn_interaction(
             &thread_id,
@@ -3565,8 +3426,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
             "params":{
                 "commandId":"resolve-input-1",
                 "sessionId":session_id,
-                "expectedSequence":5,
-                "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":started.turn_id,"requestId":"input-1","response":{"type":"userInput", "response":{"answers":{}}}}
+                "request":{"type":"resolveInteraction","expectedSequence":5,"threadId":thread_id,"turnId":started.turn_id,"requestId":"input-1","response":{"type":"userInput", "response":{"answers":{}}}}
             }
         }),
     );
@@ -3574,7 +3434,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
     assert_eq!(resolved["result"]["value"]["sequence"], 6);
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
+        let snapshot = server.threads().read_thread(&thread_id).unwrap();
         assert!(snapshot.turns[0].pending_interaction.is_none());
         if snapshot.turns[0].status == zeta_core::TurnStatus::Completed {
             assert!(snapshot.items.iter().any(|item| {
@@ -3780,8 +3640,7 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
             "params":{
                 "commandId":"interactive-turn",
                 "sessionId":session_id,
-                "expectedSequence":1,
-                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"ask"}]}
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"text","text":"ask"}]}
             }
         }),
     );
@@ -3792,11 +3651,7 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
     let protocol_thread_id = zeta_protocol::ThreadId::new(&thread_id).unwrap();
     let deadline = Instant::now() + Duration::from_secs(2);
     let (sequence, request_id) = loop {
-        let snapshot = server
-            .sessions()
-            .threads()
-            .read_thread(&protocol_thread_id)
-            .unwrap();
+        let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
         if let Some(interaction) = snapshot.turns[0].pending_interaction.as_ref() {
             break (snapshot.sequence, interaction.request_id.to_string());
         }
@@ -3823,9 +3678,9 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
             "params":{
                 "commandId":"resolve-live-tool-input",
                 "sessionId":session_id,
-                "expectedSequence":sequence,
                 "request":{
                     "type":"resolveInteraction",
+                    "expectedSequence":sequence,
                     "threadId":thread_id,
                     "turnId":turn_id,
                     "requestId":request_id,
@@ -3838,11 +3693,7 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
     wait_for_latest_turn(&server, &thread_id, TurnStatus::Completed);
     assert_eq!(resumes.load(Ordering::Relaxed), 0);
     assert_eq!(model.calls.load(Ordering::Relaxed), 2);
-    let snapshot = server
-        .sessions()
-        .threads()
-        .read_thread(&protocol_thread_id)
-        .unwrap();
+    let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
     assert!(snapshot.items.iter().any(|item| matches!(
         item,
         zeta_protocol::ThreadItem::ToolResult { text, is_error: false, .. } if text == "Paris"
@@ -3867,7 +3718,6 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
     let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
     let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
     let started = server
-        .sessions()
         .threads()
         .start_turn(
             &thread_id,
@@ -3894,7 +3744,6 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
         .as_millis() as u64
         + 100;
     server
-        .sessions()
         .threads()
         .request_turn_interaction(
             &thread_id,
@@ -3925,7 +3774,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
 
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        let snapshot = server.sessions().threads().read_thread(&thread_id).unwrap();
+        let snapshot = server.threads().read_thread(&thread_id).unwrap();
         if snapshot.turns[0].status == TurnStatus::Failed {
             assert!(snapshot.turns[0].pending_interaction.is_none());
             assert_eq!(
@@ -3960,7 +3809,6 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
     let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
     let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
     let started = server
-        .sessions()
         .threads()
         .start_turn(
             &thread_id,
@@ -3982,7 +3830,6 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
         )
         .unwrap();
     server
-        .sessions()
         .threads()
         .request_turn_interaction(
             &thread_id,
@@ -4035,8 +3882,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
             "params":{
                 "commandId":"resolve-approval-1",
                 "sessionId":session_id,
-                "expectedSequence":5,
-                "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":started.turn_id,"requestId":"approval-1","response":{
+                "request":{"type":"resolveInteraction","expectedSequence":5,"threadId":thread_id,"turnId":started.turn_id,"requestId":"approval-1","response":{
                     "type":"approval",
                     "response":{"decision":"approveOnce"}
                 }}
@@ -4046,7 +3892,6 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
 
     assert_eq!(resolved["result"]["value"]["sequence"], 6);
     let events = server
-        .sessions()
         .threads()
         .thread_updates_after(&thread_id, 5)
         .unwrap();
@@ -4078,7 +3923,6 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
     let thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
     let session_id = zeta_protocol::SessionId::new(session_id).unwrap();
     let started = server
-        .sessions()
         .threads()
         .start_turn(
             &thread_id,
@@ -4100,7 +3944,6 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
         )
         .unwrap();
     server
-        .sessions()
         .threads()
         .request_turn_interaction(
             &thread_id,
@@ -4161,8 +4004,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
             "params":{
                 "commandId":"resolve-approval-from-other",
                 "sessionId":session_id,
-                "expectedSequence":5,
-                "request":{"type":"resolveInteraction","threadId":thread_id,"turnId":started.turn_id,"requestId":"approval-owner-check","response":{
+                "request":{"type":"resolveInteraction","expectedSequence":5,"threadId":thread_id,"turnId":started.turn_id,"requestId":"approval-owner-check","response":{
                     "type":"approval",
                     "response":{"decision":"approveOnce"}
                 }}
@@ -4172,12 +4014,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
 
     assert_eq!(rejected["error"]["message"], "AgentInteractionNotOwner");
     assert!(
-        server
-            .sessions()
-            .threads()
-            .read_thread(&thread_id)
-            .unwrap()
-            .turns[0]
+        server.threads().read_thread(&thread_id).unwrap().turns[0]
             .pending_interaction
             .is_some()
     );
@@ -4221,7 +4058,7 @@ fn jsonl_transport_writes_notifications_without_another_request() {
     wait_for_captured(&output, "\"id\":1");
     server.publish_fs_changed_for_test(
         zeta_app_server_protocol::protocol::fs::FsChanged::PathsChanged {
-            workspace_folder_id: None,
+            dir_id: None,
             paths: vec![std::path::PathBuf::from("src/lib.rs")],
         },
     );
@@ -4328,7 +4165,7 @@ fn account_rpc_projects_login_completion_without_credentials() {
 }
 
 #[test]
-fn filesystem_rpc_lists_and_describes_workspace_paths() {
+fn filesystem_rpc_lists_and_describes_paths() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-files-{}-{}",
         std::process::id(),
@@ -4341,7 +4178,7 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
     std::fs::write(root.join("src/lib.rs"), "hello").unwrap();
     std::fs::write(root.join("paper.pdf"), b"%PDF-1.7\n").unwrap();
     let server = server().with_file_system(Arc::new(LocalFileSystem::new(
-        WorkspaceRoot::open(&root).unwrap(),
+        Dir::open_local(&root).unwrap(),
     )));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -4461,7 +4298,7 @@ fn filesystem_rpc_lists_and_describes_workspace_paths() {
 }
 
 #[test]
-fn filesystem_watcher_publishes_only_workspace_relative_paths() {
+fn filesystem_watcher_publishes_only_dir_relative_paths() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-files-watch-{}-{}",
         std::process::id(),
@@ -4471,10 +4308,10 @@ fn filesystem_watcher_publishes_only_workspace_relative_paths() {
             .as_nanos(),
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let workspace = WorkspaceRoot::open(&root).unwrap();
+    let dir = Dir::open_local(&root).unwrap();
     let server = server()
-        .with_file_system(Arc::new(LocalFileSystem::new(workspace.clone())))
-        .with_file_system_watcher(workspace)
+        .with_file_system(Arc::new(LocalFileSystem::new(dir.clone())))
+        .with_file_system_watcher(dir)
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -4509,7 +4346,7 @@ fn filesystem_watcher_publishes_only_workspace_relative_paths() {
 }
 
 #[test]
-fn git_status_rpc_projects_workspace_repository_state() {
+fn git_status_rpc_returns_dir_repository_state() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-git-{}-{}",
         std::process::id(),
@@ -4518,24 +4355,21 @@ fn git_status_rpc_projects_workspace_repository_state() {
             .unwrap()
             .as_nanos(),
     ));
-    let workspace = root.join("workspace");
-    std::fs::create_dir_all(&workspace).unwrap();
+    let dir = root.join("dir");
+    std::fs::create_dir_all(&dir).unwrap();
     run_git(&root, &["init"]);
     run_git(&root, &["config", "user.name", "Zeta Test"]);
     run_git(&root, &["config", "user.email", "zeta@example.test"]);
-    std::fs::write(workspace.join("tracked.txt"), "first\n").unwrap();
+    std::fs::write(dir.join("tracked.txt"), "first\n").unwrap();
     std::fs::write(root.join("outside.txt"), "outside\n").unwrap();
-    run_git(&root, &["add", "workspace/tracked.txt", "outside.txt"]);
+    run_git(&root, &["add", "dir/tracked.txt", "outside.txt"]);
     run_git(&root, &["commit", "-m", "initial"]);
-    std::fs::write(workspace.join("tracked.txt"), "changed\n").unwrap();
-    std::fs::write(workspace.join("new.txt"), "new\n").unwrap();
+    std::fs::write(dir.join("tracked.txt"), "changed\n").unwrap();
+    std::fs::write(dir.join("new.txt"), "new\n").unwrap();
     std::fs::write(root.join("outside.txt"), "outside changed\n").unwrap();
 
     let server = server()
-        .with_git_root(trusted_workspace(
-            &workspace,
-            WorkspaceCapability::MutateRepository,
-        ))
+        .with_git_root(dir_authorization(&dir, DirPermission::MutateRepository))
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -4654,7 +4488,7 @@ fn git_status_rpc_projects_workspace_repository_state() {
             "jsonrpc":"2.0",
             "id":8,
             "method":"git/commit",
-            "params":{"repositoryId":repository_id,"message":"add workspace file"}
+            "params":{"repositoryId":repository_id,"message":"add dir file"}
         }),
     );
     assert!(!committed["result"]["objectId"].as_str().unwrap().is_empty());
@@ -4679,7 +4513,7 @@ fn git_status_rpc_projects_workspace_repository_state() {
 }
 
 #[test]
-fn restricted_workspace_exposes_git_status_but_rejects_mutations() {
+fn restricted_dir_exposes_git_status_but_rejects_mutations() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-restricted-git-{}-{}",
         std::process::id(),
@@ -4698,10 +4532,10 @@ fn restricted_workspace_exposes_git_status_but_rejects_mutations() {
     std::fs::write(root.join("tracked.txt"), "changed\n").unwrap();
 
     let server = server()
-        .with_local_workspace_host(None, crate::server::WorkspaceSwitchTrustPolicy::Restricted)
+        .with_local_env_host(None, crate::server::DirGrantPolicy::InspectOnly)
         .unwrap();
     assert_eq!(
-        server.switch_local_workspace_root(root.clone()),
+        server.switch_local_dir_root(root.clone()),
         Ok(dunce::canonicalize(&root).unwrap())
     );
     let mut connection = server.connection();
@@ -4756,15 +4590,15 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
         &root,
         &["init", "--bare", "--initial-branch=main", "origin.git"],
     );
-    run_git(&root, &["clone", "origin.git", "workspace"]);
-    let workspace = root.join("workspace");
-    run_git(&workspace, &["config", "user.name", "Zeta Test"]);
-    run_git(&workspace, &["config", "user.email", "zeta@example.test"]);
-    run_git(&workspace, &["config", "core.autocrlf", "false"]);
-    std::fs::write(workspace.join("shared.txt"), "initial\n").unwrap();
-    run_git(&workspace, &["add", "shared.txt"]);
-    run_git(&workspace, &["commit", "-m", "initial"]);
-    run_git(&workspace, &["push", "--set-upstream", "origin", "main"]);
+    run_git(&root, &["clone", "origin.git", "dir"]);
+    let dir = root.join("dir");
+    run_git(&dir, &["config", "user.name", "Zeta Test"]);
+    run_git(&dir, &["config", "user.email", "zeta@example.test"]);
+    run_git(&dir, &["config", "core.autocrlf", "false"]);
+    std::fs::write(dir.join("shared.txt"), "initial\n").unwrap();
+    run_git(&dir, &["add", "shared.txt"]);
+    run_git(&dir, &["commit", "-m", "initial"]);
+    run_git(&dir, &["push", "--set-upstream", "origin", "main"]);
     run_git(&root, &["clone", "origin.git", "peer"]);
     let peer = root.join("peer");
     run_git(&peer, &["config", "user.name", "Zeta Test"]);
@@ -4772,10 +4606,7 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     run_git(&peer, &["config", "core.autocrlf", "false"]);
 
     let server = server()
-        .with_git_root(trusted_workspace(
-            &workspace,
-            WorkspaceCapability::MutateRepository,
-        ))
+        .with_git_root(dir_authorization(&dir, DirPermission::MutateRepository))
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -4797,11 +4628,11 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     );
     assert!(pulled.get("error").is_none(), "{pulled}");
     assert_eq!(
-        std::fs::read_to_string(workspace.join("shared.txt")).unwrap(),
+        std::fs::read_to_string(dir.join("shared.txt")).unwrap(),
         "from peer\n"
     );
 
-    std::fs::write(workspace.join("local.txt"), "from app server\n").unwrap();
+    std::fs::write(dir.join("local.txt"), "from app server\n").unwrap();
     let staged = call(
         &server,
         &mut connection,
@@ -4836,7 +4667,7 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
         "from app server\n"
     );
     run_git(
-        &workspace,
+        &dir,
         &[
             "remote",
             "set-url",
@@ -4952,10 +4783,7 @@ fn git_change_file_rpc_preserves_head_index_and_worktree_sides() {
     std::fs::write(root.join("tracked.txt"), "from working tree\n").unwrap();
 
     let server = server()
-        .with_git_root(trusted_workspace(
-            &root,
-            WorkspaceCapability::InspectRepository,
-        ))
+        .with_git_root(dir_authorization(&root, DirPermission::InspectRepository))
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -4995,7 +4823,7 @@ fn git_change_file_rpc_preserves_head_index_and_worktree_sides() {
 }
 
 #[test]
-fn git_watcher_publishes_external_workspace_changes() {
+fn git_watcher_publishes_external_repository_changes() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-git-watch-{}-{}",
         std::process::id(),
@@ -5012,10 +4840,7 @@ fn git_watcher_publishes_external_workspace_changes() {
     run_git(&root, &["add", "tracked.txt"]);
     run_git(&root, &["commit", "-m", "initial"]);
     let server = server()
-        .with_git_root(trusted_workspace(
-            &root,
-            WorkspaceCapability::MutateRepository,
-        ))
+        .with_git_root(dir_authorization(&root, DirPermission::MutateRepository))
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -5052,7 +4877,7 @@ fn git_watcher_publishes_external_workspace_changes() {
         }
     }
 
-    let observed = observed.expect("Git watcher should publish a changed workspace status");
+    let observed = observed.expect("Git watcher should publish a changed dir status");
     assert_eq!(
         observed["params"]["status"]["changes"][0]["path"],
         "tracked.txt"
@@ -5077,11 +4902,12 @@ fn run_git(root: &std::path::Path, args: &[&str]) {
     );
 }
 
-fn trusted_workspace(root: &std::path::Path, capability: WorkspaceCapability) -> TrustedWorkspace {
-    TrustedWorkspace::require(
-        WorkspaceRoot::open(root).unwrap(),
-        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
-        capability,
+fn dir_authorization(root: &std::path::Path, permission: DirPermission) -> Authorization {
+    zeta_file_access::Grant::for_environment(
+        Dir::open_local(root).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([permission]),
     )
+    .authorize(permission)
     .unwrap()
 }

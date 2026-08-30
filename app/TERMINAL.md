@@ -35,7 +35,7 @@ Terminal 是外部 AI CLI 和其他交互式进程的通用运行与显示容器
 | Zeta Agent、Thread、Tool、Approval | Zeta Core / App Server | 不读取 Terminal grid 推断状态，不拥有外部 CLI 进程 |
 | AI CLI 发现和启动适配 | 每个 AI CLI 的独立 adapter crate | 隔离 SDK/CLI 依赖，确定 executable、argv、cwd、environment 和恢复参数；不实现终端协议 |
 | CLI 认证、配置和历史 | 外部 CLI | 产品只使用 CLI 明确提供的入口，不读取或复制私有凭据和内部历史 |
-| Terminal session 与 Pane binding | Terminal host / `zeta-terminal-workspace` | 管理启动、退出、活动 Pane、resize 和 runtime binding；不解释 AI 语义 |
+| Terminal session 与 Pane binding | Terminal host / `zeta-terminal-runtime` | 管理启动、退出、活动 Pane、resize 和 runtime binding；不解释 AI 语义 |
 | PTY process 与字节传输 | `zeta-utils-pty` | 创建进程、读写字节和调整窗口尺寸；不拥有 Pane 或 CLI catalog |
 | ANSI/VT、screen、grid 和输入编码 | `zeta-terminal` | 维护终端状态和有界回滚；不识别 Codex、Claude、Gemini 或 Zeta |
 | Terminal Pane 绘制和输入路由 | `app` host + `zui` | 把 Terminal session 挂入当前 PaneGroup；不保存第二份终端状态 |

@@ -262,23 +262,23 @@ MCP adapter 的公开输入使用 `zeta-tools` 自己的纯 `McpToolProjection`�
 
 ### 4.1 当前本地工具来源运行时
 
-本地 Workspace 的 Agent 工具由 App Server composition root 统一注册；模型侧只看到 canonical
+本地 Directory 的 Agent 工具由 App Server composition root 统一注册；模型侧只看到 canonical
 direct 工具名，不看到基础库或 legacy operation enum：
 
 | Crate / tool name | 可做的事 | 明确不做的事 |
 | --- | --- | --- |
-| `zeta-shell-command` / `shell-command` | 在批准的相对 Workspace 工作目录执行显式 program/arguments；复用 `zeta-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
+| `zeta-shell-command` / `shell-command` | 在批准的相对 Directory 工作目录执行显式 program/arguments；复用 `zeta-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
 | App Server `LocalToolSuite` / `read_file`、`write_file`、`edit`、`grep`、`glob` | Thread-scoped 读后写入、conditional atomic 单文件写入和受控搜索 | 不暴露 operation enum；断线恢复后必须重读才能恢复内存中的文件 fingerprint |
-| `zeta-file-system` / 非 Agent 基础库 | 提供 workspace-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
+| `zeta-file-system` / 非 Agent 基础库 | 提供 directory-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
 | `zeta-apply-patch` / `apply_patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API；多文件提交不承诺事务性 |
 
-这些 owner 均在构造时固定 `ToolEnvironmentId + WorkspaceRoot`，要求它与
+这些 owner 均在构造时固定 `ToolEnvironmentId + DirectoryRoot`，要求它与
 `ToolExecutionContext.environment_id` 一致，且只接受与自身 `ToolDefinition` digest 相符的冻结
 binding。`apply_patch` 在所有 hunk 校验完成前不写入；
 若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
 
 `zeta-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径
-向上发现最近的项目 marker。它不是模型 Tool，不读取 marker 配置，也不施加 `WorkspaceRoot`
+向上发现最近的项目 marker。它不是模型 Tool，不读取 marker 配置，也不施加 `DirectoryRoot`
 containment；调用方仍拥有项目根语义和搜索边界。实现与错误策略由
 [`zeta-rs/file-system/README.md`](../zeta-rs/file-system/README.md) 维护。
 
@@ -287,13 +287,13 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 | Surface | 所有权 | 模型可见 |
 | --- | --- | --- |
 | App Server `LocalToolSuite::grep` | Agent 内容搜索；由 `agent.grepBackend` 在冻结 `rg` 与 `zeta-fast-regex-search` 间选择 | `grep` Tool |
-| `zeta-workspace-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
+| `zeta-content-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
 | `zeta-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
 | `zeta-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
 
 模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认执行冻结的 `rg`；选择 `fastRegex` 后只把 `grep` 切换到本地稀疏 n-gram 索引，`glob` 与编辑器 Search 继续执行 `rg`。交互式路径搜索契约由 [`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护；TUI 直接持有 `PathSearchHandle`，不启动 CLI，Core 也不把路径搜索注册成 Tool。
 
-`fastRegex` 必须先用覆盖 n-gram 和 posting 交集缩小候选，再读取当前文件做精确验证。产品 App Server 通过私有 UDS 调用按 Workspace 常驻的 Fast Regex 子进程，lookup 的 mmap、posting 读取和完整查询都留在子进程，主进程只接收有上限的最终结果。短查询、纯字符类和其他没有必需文字的正则仍会扫描全部已索引文件，但它们也进入与 `rg --line-number` 等价输出的性能底线；稀有、无命中和全量扫描用例任一不快于 `rg`，基准就失败。执行方式在 Tool generation 冻结后不会按单次查询暗中切换。基准入口和当前存储契约由 [`zeta-fast-regex-search`](../zeta-rs/fast-regex-search/README.md) 维护。
+`fastRegex` 必须先用覆盖 n-gram 和 posting 交集缩小候选，再读取当前文件做精确验证。产品 App Server 通过私有 UDS 调用按 Directory 常驻的 Fast Regex 子进程，lookup 的 mmap、posting 读取和完整查询都留在子进程，主进程只接收有上限的最终结果。短查询、纯字符类和其他没有必需文字的正则仍会扫描全部已索引文件，但它们也进入与 `rg --line-number` 等价输出的性能底线；稀有、无命中和全量扫描用例任一不快于 `rg`，基准就失败。执行方式在 Tool generation 冻结后不会按单次查询暗中切换。基准入口和当前存储契约由 [`zeta-fast-regex-search`](../zeta-rs/fast-regex-search/README.md) 维护。
 
 普通文件变化直接写 delta；`.gitignore`、`.ignore`、`.git/info/exclude` 变化或 watcher overflow 会重新核对
 当前可索引文件集合，只发布实际增删改。只有 delta 需要压缩、格式不兼容、索引损坏或无法可靠计算差异时
@@ -313,7 +313,7 @@ composition 直接失败。canonical release package 由
 [`third_party/ripgrep/runtime-lock.json`](../third_party/ripgrep/runtime-lock.json) 下载并校验
 target-specific ripgrep archive，把 executable 放到 `zeta-path/rg[.exe]`；源码开发启动仍可使用
 `ZETA_RG_PATH` 或 host `PATH`。
-filesystem 与 shell Tool 复用同一个启动时 canonicalized `WorkspaceRoot`，CLI 优先采用
+filesystem 与 shell Tool 复用同一个启动时 canonicalized `DirectoryRoot`，CLI 优先采用
 `ZETA_WORKSPACE_ROOT`，否则采用当前目录。模型只看到 `program = "rg"`，host 强制加入
 `--no-config`，拒绝 preprocessor、hostname command、archive search、symlink follow 和外部
 pattern/ignore file 参数，包括 `-f/path`、`-LH` 等紧凑短参数形式，并用只读、断网 sandbox
@@ -968,7 +968,7 @@ name/schema 后要求 host 执行。
 第一版 `ToolSearchLimit` 默认值为 8，并受 host-configured hard cap 限制。超出 hard cap 返回
 typed validation error，不以无限结果或静默全量 catalog 作为 fallback。
 
-当前 App Server 的 exposure policy 是：built-in Workspace 与 client-hosted dynamic port 直接暴露，
+当前 App Server 的 exposure policy 是：built-in Directory 与 client-hosted dynamic port 直接暴露，
 extension executor 使用自身声明的 exposure；聚合 MCP port 先对排序后的 canonical definitions 做
 稳定估算。工具数 ≤15 且 `ceil(canonical JSON bytes / 4)` ≤5000 时全部直接暴露；任一阈值超限时，
 整个 MCP port 不向 registry 添加实际定义，只直接暴露固定的 `search_tools` 与 `call_mcp_tool`。
@@ -1015,10 +1015,10 @@ generation 的内存中。后续真实 embedding 调用失败、返回数量/维
 `tool_search` 直接返回明确错误，不静默回落到 BM25。模型调用继续属于 `model-provider`；
 snapshot-local 目录、输入准备、召回融合、generation 校验、过滤与截断仍属于 Tool Search owner。
 
-Trusted local Workspace 还会注册 direct built-in `search_code`。它不属于 deferred Tool Search：Agent
+获得读取能力的本地目录还会注册 direct built-in `search_code`。它不属于 deferred Tool Search：Agent
 可以显式传入自然语言 query 与最多 20 条结果，App Server 使用 canonical CodebaseRetrieval 编排本地 FTS、
 已授权 semantic 和可选 cloud candidates，再返回 bounded、current-source-verified excerpts。Policy 只
-为 exact `workspace-codebase-read-only` grant 放行；伪造或复用其他 unsandboxed grant 会被拒绝。
+只接受绑定当前目录、授权版本和读取 Permission 的 Authorization；伪造或复用其他 Authorization 会被拒绝。
 
 `zeta-rs/tools/src/registry_search_eval_tests.rs` 保存一份跨 coding、GitHub、Slack、Calendar、
 Browser 和 Database 的离线查询集，比较当前 BM25 排序与 uniform token-overlap baseline，并以
@@ -1490,7 +1490,7 @@ mod tests;
 
 - ✅ 定义 `ToolBinding`、`ToolExecutor`、materialized invocation、cancellation context 与 outcome；
 - ✅ built-in process、direct filesystem suite 与 `apply_patch` tool 实现 executor contract；
-- ✅ App Server 构造 immutable registry snapshot，并在 Workspace replacement 时单调递增 generation；
+- ✅ App Server 构造 immutable registry snapshot，并在 Directory replacement 时单调递增 generation；
 - ✅ Core `ToolService` adapter 按 frozen binding/runtime key 路由，并把 durable Turn facts 投影为 `ToolInvocation`；
 - ✅ prepared call 在 hot reload 后继续使用原 Tool/Policy generation，sandbox retry 不切换 generation；
 - ✅ definitions 与 execution route 由同一个 immutable registry snapshot 产生，不按 live name 直接猜 service。
@@ -1571,7 +1571,7 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 
 ## 21. 验证门
 
-除 workspace 常规检查外，必须覆盖：
+除 directory 常规检查外，必须覆盖：
 
 - invalid/reserved/colliding ToolName；
 - schema depth/size/property/enum/ref bomb；

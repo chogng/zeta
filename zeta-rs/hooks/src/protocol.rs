@@ -64,7 +64,7 @@ impl HookInvocation<'_> {
 struct HookInput<'a> {
     protocol_version: u8,
     hook_id: &'a str,
-    workspace: &'a Path,
+    dir: &'a Path,
     event: HookInputEvent<'a>,
 }
 
@@ -104,7 +104,7 @@ enum HookInputOutcome {
 pub(crate) fn encode_input(
     hook: &HookConfig,
     invocation: &HookInvocation<'_>,
-    workspace: &Path,
+    dir: &Path,
 ) -> Result<Vec<u8>, CoreError> {
     let event = match invocation {
         HookInvocation::BeforeTool(request) => HookInputEvent::BeforeTool {
@@ -131,7 +131,7 @@ pub(crate) fn encode_input(
     let bytes = serde_json::to_vec(&HookInput {
         protocol_version: HOOK_PROTOCOL_VERSION,
         hook_id: hook.id.as_str(),
-        workspace,
+        dir,
         event,
     })
     .map_err(|error| CoreError::Execution(format!("could not encode Hook input: {error}")))?;

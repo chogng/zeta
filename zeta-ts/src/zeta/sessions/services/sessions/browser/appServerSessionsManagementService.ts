@@ -1,75 +1,38 @@
-import type { AgentTreeNodeProjection as AgentTreeNodeProjectionDto, ModelRef as ModelRefDto, Session as SessionDto, SessionThreadProjection as SessionThreadProjectionDto, TurnStatus as TurnStatusDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
-import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
-import type { ISessionApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
-import type { AgentThreadExecutionStatus, AgentTreeNode, ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../common/session.js";
+import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagementService.js";
+import type { ISessionsProvider } from "../common/sessionsProvider.js";
 
-export interface ISessionWorkspaceRouter {
-	currentWorkspaceRoot(): string | undefined;
-	reopenWorkspace(root: string): Promise<void>;
-}
-
-interface AppServerSessionsManagementServiceHost {
-	readonly session: ISessionApi;
-	readonly turn?: ITurnApi;
-	readonly events?: IServerEventApi;
-	readonly workspaceRouter?: ISessionWorkspaceRouter;
-}
-
-/** App Server-backed canonical Session manager for one renderer window. */
+/** Owns the frontend Session catalog and drafts; backend details remain in the provider. */
 export class AppServerSessionsManagementService extends Disposable implements ISessionsManagementService {
-	private readonly api: ISessionApi;
-	private readonly turnApi: ITurnApi | undefined;
-	private readonly workspaceRouter: ISessionWorkspaceRouter | undefined;
 	private readonly _onDidChange = this._register(new Emitter<void>());
-	private _sessions: readonly Session[] = [];
+	private _sessions: readonly ISession[] = [];
 	private _active: IActiveSessionThread | undefined;
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
 	private _activeUntitledSessionId: string | undefined;
 	private _state: SessionsManagementState = "loading";
 	private _error: string | undefined;
 	private initializePromise: Promise<void> | undefined;
-	private readonly subscribedSessionIds = new Set<SessionId>();
-	private readonly pendingSessionSequences = new Map<SessionId, number>();
-	private readonly pendingProjectionRefreshes = new Set<SessionId>();
+	private readonly pendingRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
 
-	constructor(api: ISessionApi | AppServerSessionsManagementServiceHost) {
+	constructor(private readonly provider: ISessionsProvider) {
 		super();
-		this.api = "session" in api ? api.session : api;
-		this.turnApi = "session" in api ? api.turn : undefined;
-		this.workspaceRouter = "session" in api ? api.workspaceRouter : undefined;
-		const events = "session" in api ? api.events : undefined;
-		if (events) {
-			const subscription = events.subscribe(event => {
-				if (event.method === "session/update") {
-					this.acceptSessionUpdate(event.params.sessionId, event.params.durableSequence);
-				} else if (event.method === "session/thread/update") {
-					this.acceptThreadUpdate(event.params.sessionId, event.params.threadId, event.params.durableSequence);
-				}
-			});
-			this._register(toDisposable(() => subscription.dispose()));
-		}
-		this._register(toDisposable(() => {
-			for (const sessionId of this.subscribedSessionIds) {
-				void this.api.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
-			}
-			this.subscribedSessionIds.clear();
-			this.pendingSessionSequences.clear();
-			this.pendingProjectionRefreshes.clear();
-			this.refreshes.clear();
+		this._register(provider);
+		this._register(provider.onDidChangeSession(sessionId => {
+			this.pendingRefreshes.add(sessionId);
+			this.scheduleRefresh(sessionId);
 		}));
 	}
 
-	get sessions(): readonly Session[] { return this._sessions; }
+	get sessions(): readonly ISession[] { return this._sessions; }
 	get active(): IActiveSessionThread | undefined { return this._active; }
 	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
-	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find((session) => session.untitledSessionId === this._activeUntitledSessionId); }
+	get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find(session => session.untitledSessionId === this._activeUntitledSessionId); }
 	get state(): SessionsManagementState { return this._state; }
 	get error(): string | undefined { return this._error; }
 
@@ -79,35 +42,8 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	}
 
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
-		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId);
-		const targetRoot = session?.workspace?.root;
-		const currentRoot = this.workspaceRouter?.currentWorkspaceRoot();
-		if (targetRoot && this.workspaceRouter && (!currentRoot || !sameWorkspacePath(targetRoot, currentRoot))) {
-			void this.reopenWorkspaceAndSelect(targetRoot, sessionId, threadId);
-			return;
-		}
-		this.selectAvailableThread(sessionId, threadId);
-	}
-
-	async interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		if (!this.turnApi) throw new Error("Turn interruption is unavailable in this renderer host.");
-		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
-		const node = findAgentNode(session?.agentTree ?? [], threadId);
-		if (!session || !node || !node.currentTurnId || !canInterrupt(node)) {
-			throw new Error(`Running Agent Thread is not available: ${threadId}`);
-		}
-		await this.turnApi.interrupt({
-			commandId: commandId("agent-interrupt"),
-			sessionId,
-			threadId,
-			turnId: node.currentTurnId,
-			expectedSequence: node.threadSequence,
-		});
-	}
-
-	private selectAvailableThread(sessionId: SessionId, threadId: ThreadId): void {
-		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId);
-		const thread = session?.threads.find((candidate) => candidate.threadId === threadId && candidate.status === "active");
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
+		const thread = session?.chats.find(candidate => candidate.threadId === threadId && candidate.status === "active");
 		if (!session || !thread || session.status !== "active") throw new Error(`Active Session Thread is not available: ${threadId}`);
 		if (this._active?.session.sessionId === sessionId && this._active.threadId === threadId && this._activeUntitledSessionId === undefined) return;
 		this._active = { session, threadId };
@@ -116,22 +52,15 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 		this._onDidChange.fire();
 	}
 
-	private async reopenWorkspaceAndSelect(targetRoot: string, sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		try {
-			await this.workspaceRouter!.reopenWorkspace(targetRoot);
-			this.subscribedSessionIds.clear();
-			this.pendingSessionSequences.clear();
-			this.pendingProjectionRefreshes.clear();
-			this.refreshes.clear();
-			await this.loadSessions();
-			this.selectAvailableThread(sessionId, threadId);
-		} catch (error) {
-			this.setError(error);
-		}
+	async interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+		await this.provider.interrupt(session, threadId);
 	}
 
 	createUntitledSession(title = "New Chat"): IUntitledChatSession {
-		const session = this.addUntitledSession(title);
+		const session = { untitledSessionId: createUuid(), title, model: undefined };
+		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
 		this._error = undefined;
 		this._onDidChange.fire();
@@ -139,7 +68,7 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	}
 
 	selectUntitledSession(untitledSessionId: string): void {
-		if (!this._untitledSessions.some((session) => session.untitledSessionId === untitledSessionId)) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+		if (!this._untitledSessions.some(session => session.untitledSessionId === untitledSessionId)) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		if (this._activeUntitledSessionId === untitledSessionId) return;
 		this._activeUntitledSessionId = untitledSessionId;
 		this._error = undefined;
@@ -147,33 +76,33 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	}
 
 	discardUntitledSession(untitledSessionId: string): void {
-		const sessions = this._untitledSessions.filter((session) => session.untitledSessionId !== untitledSessionId);
+		const sessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (sessions.length === this._untitledSessions.length) return;
 		this._untitledSessions = sessions;
 		if (this._activeUntitledSessionId === untitledSessionId) this._activeUntitledSessionId = sessions[0]?.untitledSessionId;
-		this.restoreAvailableSelection();
+		this.restoreSelection();
 		this._onDidChange.fire();
 	}
 
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef): void {
-		const current = this._untitledSessions.find((session) => session.untitledSessionId === untitledSessionId);
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		if (sameModel(current.model, model)) return;
-		this._untitledSessions = this._untitledSessions.map((session) => session.untitledSessionId === untitledSessionId ? { ...session, model } : session);
+		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, model } : session);
 		this._onDidChange.fire();
 	}
 
 	async materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread> {
-		const session = this._untitledSessions.find((candidate) => candidate.untitledSessionId === untitledSessionId);
+		const session = this._untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId);
 		if (!session) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		return this.createSession(session.title, session.model);
 	}
 
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
 		const wasActive = this._activeUntitledSessionId === untitledSessionId;
-		this._untitledSessions = this._untitledSessions.filter((session) => session.untitledSessionId !== untitledSessionId);
+		this._untitledSessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (wasActive) this._activeUntitledSessionId = undefined;
-		this._sessions = [active.session, ...this._sessions.filter((session) => session.sessionId !== active.session.sessionId)];
+		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		if (wasActive || !this._active) this._active = active;
 		this.setState("ready");
 	}
@@ -185,94 +114,49 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 
 	async startNewSession(title = "New Chat"): Promise<IActiveSessionThread> {
 		const active = await this.createSession(title);
-		this.activateSession(active);
+		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
+		this._active = active;
+		this._activeUntitledSessionId = undefined;
+		this.setState("ready");
 		return active;
 	}
 
-	async archiveSession(sessionId: SessionId): Promise<void> {
+	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "archiving"); }
+	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "stopping"); }
+
+	async setPreferredModel(model: ModelRef): Promise<void> {
 		await this.initialize();
-		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
-		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
-		this.setState("archiving");
-		try {
-			const result = await this.api.archive({ commandId: commandId("archive-session"), sessionId, expectedSequence: session.sequence });
-			this.replaceSession(toSession(result.session, [], session));
-			await this.unsubscribeSession(sessionId);
-			if (this._active?.session.sessionId === sessionId) this._active = this.firstActiveThread();
-			this.restoreAvailableSelection();
-			this.setState("ready");
-		} catch (error) {
-			this.setError(error);
-			throw error;
+		if (this._sessions.length > 0 && this._sessions.every(session => sameModel(session.model, model))) return;
+		await this.provider.setPreferredModel(model);
+		this._sessions = this._sessions.map(session => ({ ...session, model }));
+		if (this._active) {
+			const session = this._sessions.find(candidate => candidate.sessionId === this._active?.session.sessionId);
+			if (session) this._active = { session, threadId: this._active.threadId };
 		}
+		this._error = undefined;
+		this._onDidChange.fire();
 	}
 
-	async stopSession(sessionId: SessionId): Promise<void> {
-		await this.initialize();
-		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
-		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
-		this.setState("stopping");
-		try {
-			const result = await this.api.stop({ commandId: commandId("stop-session"), sessionId, expectedSequence: session.sequence });
-			this.replaceSession(toSession(result.session, [], session));
-			await this.unsubscribeSession(sessionId);
-			if (this._active?.session.sessionId === sessionId) this._active = this.firstActiveThread();
-			this.restoreAvailableSelection();
-			this.setState("ready");
-		} catch (error) {
-			this.setError(error);
-			throw error;
-		}
-	}
-
-	async setModel(sessionId: SessionId, model: ModelRef): Promise<void> {
-		await this.initialize();
-		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
-		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
-		try {
-			const result = await this.api.setModel({ commandId: commandId("session-model"), sessionId, expectedSequence: session.sequence, model });
-			const updated = toSession(result.session, [], session);
-			this.replaceSession(updated);
-			if (this._active?.session.sessionId === sessionId) this._active = { session: updated, threadId: this._active.threadId };
-			this._error = undefined;
-			this._onDidChange.fire();
-		} catch (error) {
-			this.setError(error);
-			throw error;
-		}
-	}
-
-	async setNextApprovalMode(sessionId: SessionId, approvalMode: ApprovalMode): Promise<void> {
-		await this.initialize();
-		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
-		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
-		try {
-			const result = await this.api.setNextApprovalMode({ commandId: commandId("session-approval-mode"), sessionId, expectedSequence: session.sequence, approvalMode });
-			const updated = toSession(result.session, [], session);
-			this.replaceSession(updated);
-			if (this._active?.session.sessionId === sessionId) this._active = { session: updated, threadId: this._active.threadId };
-			this._error = undefined;
-			this._onDidChange.fire();
-		} catch (error) {
-			this.setError(error);
-			throw error;
-		}
-	}
-
-	private async createSession(title: string, model: ModelRef | undefined = undefined): Promise<IActiveSessionThread> {
+	private async createSession(title: string, model?: ModelRef): Promise<IActiveSessionThread> {
 		this.setState("creating");
 		try {
-			const created = await this.api.create({ commandId: commandId("session"), title });
-			const thread = await this.api.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, expectedSequence: created.session.sequence, title: "Main" });
-			const result = model && !sameModel(thread.session.model, model)
-				? await this.api.setModel({ commandId: commandId("session-model"), sessionId: thread.session.sessionId, expectedSequence: thread.session.sequence, model })
-				: thread;
-			const session = toSession(result.session);
-			const subscribed = await this.subscribeSession(session);
-			if (!subscribed.threads.some(candidate => candidate.threadId === thread.threadId && candidate.status === "active")) {
-				throw new Error(`Created Thread is missing from subscribed Session snapshot: ${thread.threadId}`);
-			}
-			return { session: subscribed, threadId: thread.threadId };
+			return await this.provider.create(title, model);
+		} catch (error) {
+			this.setError(error);
+			throw error;
+		}
+	}
+
+	private async finishSession(sessionId: SessionId, state: "archiving" | "stopping"): Promise<void> {
+		await this.initialize();
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+		this.setState(state);
+		try {
+			this.replaceSession(state === "archiving" ? await this.provider.archive(session) : await this.provider.stop(session));
+			if (this._active?.session.sessionId === sessionId) this._active = this.firstActiveThread();
+			this.restoreSelection();
+			this.setState("ready");
 		} catch (error) {
 			this.setError(error);
 			throw error;
@@ -282,16 +166,50 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	private async loadSessions(): Promise<void> {
 		this.setState("loading");
 		try {
-			const result = await this.api.list();
-			const sessions = result.sessions.map(session => toSession(session));
-			this._sessions = await Promise.all(sessions.map(session => this.subscribeSession(session)));
+			this._sessions = await Promise.all((await this.provider.list()).map(session => this.provider.subscribe(session)));
 			this._active = this.firstActiveThread();
-			this.restoreAvailableSelection();
+			this.restoreSelection();
 			this.setState("ready");
 		} catch (error) {
 			this.setError(error);
 		}
 	}
+
+	private scheduleRefresh(sessionId: SessionId): void {
+		if (this.refreshes.has(sessionId)) return;
+		const refresh = this.refreshSession(sessionId).finally(() => this.refreshes.delete(sessionId));
+		this.refreshes.set(sessionId, refresh);
+	}
+
+	private async refreshSession(sessionId: SessionId): Promise<void> {
+		try {
+			while (this.pendingRefreshes.delete(sessionId)) {
+				const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
+				if (!current) return;
+				const refreshed = await this.provider.subscribe(current);
+				this.replaceSession(refreshed);
+				if (this._active?.session.sessionId === sessionId) {
+					this._active = refreshed.status === "active" ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
+				}
+				this.restoreSelection();
+				this._error = undefined;
+				this._onDidChange.fire();
+			}
+		} catch (error) {
+			this.setError(error);
+		}
+	}
+
+	private restoreSelection(): void {
+		if (this.activeUntitledSession || this._active) return;
+		this._activeUntitledSessionId = this._untitledSessions[0]?.untitledSessionId;
+	}
+
+	private replaceSession(session: ISession): void {
+		this._sessions = this._sessions.map(candidate => candidate.sessionId === session.sessionId ? session : candidate);
+	}
+
+	private firstActiveThread(): IActiveSessionThread | undefined { return firstActiveThread(this._sessions); }
 
 	private setState(state: SessionsManagementState): void {
 		this._state = state;
@@ -300,232 +218,26 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	}
 
 	private setError(error: unknown): void {
-		this.restoreAvailableSelection();
+		this.restoreSelection();
 		this._state = "error";
 		this._error = error instanceof Error ? error.message : "Unable to load sessions.";
 		this._onDidChange.fire();
 	}
-
-	private addUntitledSession(title: string): IUntitledChatSession {
-		const session = { untitledSessionId: createUuid(), title, model: undefined };
-		this._untitledSessions = [session, ...this._untitledSessions];
-		return session;
-	}
-
-	private restoreAvailableSelection(): void {
-		if (this.activeUntitledSession || this._active) return;
-		this._activeUntitledSessionId = this._untitledSessions[0]?.untitledSessionId;
-	}
-
-	private activateSession(active: IActiveSessionThread): void {
-		this._sessions = [active.session, ...this._sessions.filter((session) => session.sessionId !== active.session.sessionId)];
-		this._active = active;
-		this._activeUntitledSessionId = undefined;
-		this.setState("ready");
-	}
-
-	private async subscribeSession(session: Session): Promise<Session> {
-		if (session.status !== "active") return session;
-		const result = await this.api.subscribe({ sessionId: session.sessionId, afterSequence: session.sequence });
-		this.subscribedSessionIds.add(session.sessionId);
-		const subscribed = toSession(result.session, result.threadProjections, session, result.agentTree.roots);
-		if (subscribed.sessionId !== session.sessionId) {
-			await this.unsubscribeSession(session.sessionId);
-			throw new Error(`Session subscription returned '${subscribed.sessionId}' for '${session.sessionId}'`);
-		}
-		if (subscribed.status !== "active") await this.unsubscribeSession(session.sessionId);
-		return subscribed;
-	}
-
-	private async unsubscribeSession(sessionId: SessionId): Promise<void> {
-		if (!this.subscribedSessionIds.delete(sessionId)) return;
-		this.pendingSessionSequences.delete(sessionId);
-		this.pendingProjectionRefreshes.delete(sessionId);
-		await this.api.unsubscribe({ sessionId });
-	}
-
-	private acceptSessionUpdate(sessionId: SessionId, durableSequence: number): void {
-		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
-		if (!session || durableSequence <= session.sequence) return;
-		this.pendingSessionSequences.set(sessionId, Math.max(durableSequence, this.pendingSessionSequences.get(sessionId) ?? 0));
-		this.scheduleSessionRefresh(sessionId);
-	}
-
-	private acceptThreadUpdate(sessionId: SessionId, threadId: ThreadId, durableSequence: number): void {
-		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
-		const node = findAgentNode(session?.agentTree ?? [], threadId);
-		if (!session || (node && durableSequence <= node.threadSequence)) return;
-		this.pendingProjectionRefreshes.add(sessionId);
-		this.scheduleSessionRefresh(sessionId);
-	}
-
-	private scheduleSessionRefresh(sessionId: SessionId): void {
-		if (this.refreshes.has(sessionId)) return;
-		const refresh = this.refreshSessionUntilCurrent(sessionId).finally(() => this.refreshes.delete(sessionId));
-		this.refreshes.set(sessionId, refresh);
-	}
-
-	private async refreshSessionUntilCurrent(sessionId: SessionId): Promise<void> {
-		try {
-			while (true) {
-				const expectedSequence = this.pendingSessionSequences.get(sessionId);
-				const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
-				const refreshProjection = this.pendingProjectionRefreshes.delete(sessionId);
-				if (!current) {
-					this.pendingSessionSequences.delete(sessionId);
-					return;
-				}
-				const sessionBehind = expectedSequence !== undefined && current.sequence < expectedSequence;
-				if (!sessionBehind && !refreshProjection) {
-					if (expectedSequence !== undefined) this.pendingSessionSequences.delete(sessionId);
-					return;
-				}
-				const result = await this.api.subscribe({ sessionId, afterSequence: current.sequence });
-				this.subscribedSessionIds.add(sessionId);
-				const refreshed = toSession(result.session, result.threadProjections, current, result.agentTree.roots);
-				if (refreshed.sessionId !== sessionId) {
-					throw new Error(`Session refresh returned '${refreshed.sessionId}' for '${sessionId}'`);
-				}
-				if (sessionBehind && refreshed.sequence <= current.sequence && refreshed.sequence < expectedSequence) {
-					throw new Error(`Session subscription did not advance '${sessionId}' beyond sequence ${current.sequence}`);
-				}
-				this.replaceSession(refreshed);
-				if (this._active?.session.sessionId === sessionId) {
-					this._active = refreshed.status === "active"
-						? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread()
-						: this.firstActiveThread();
-				}
-				this.restoreAvailableSelection();
-				this._error = undefined;
-				this._onDidChange.fire();
-				if (refreshed.status !== "active") await this.unsubscribeSession(sessionId);
-			}
-		} catch (error) {
-			this.setError(error);
-		}
-	}
-
-	private replaceSession(session: Session): void {
-		this._sessions = this._sessions.map(candidate => candidate.sessionId === session.sessionId ? session : candidate);
-	}
-
-	private firstActiveThread(): IActiveSessionThread | undefined {
-		const currentRoot = this.workspaceRouter?.currentWorkspaceRoot();
-		return firstActiveThread(this._sessions, currentRoot);
-	}
 }
 
-function toSession(
-	session: SessionDto,
-	projections: readonly SessionThreadProjectionDto[] = [],
-	previous?: Session,
-	agentTree?: readonly AgentTreeNodeProjectionDto[],
-): Session {
-	const projectionByThread = new Map(projections.map(projection => [projection.thread.threadId, projection.thread]));
-	return {
-		sessionId: session.sessionId,
-		title: session.title,
-		status: session.status,
-		model: session.model ? toModelRef(session.model) : session.model,
-		workspace: session.workspace ? { ...session.workspace } : session.workspace,
-		nextApprovalMode: session.nextApprovalMode,
-		currentThreadId: session.currentThreadId,
-		sequence: session.sequence,
-		threads: session.threads.map((thread) => {
-			const projection = projectionByThread.get(thread.threadId);
-			const prior = previous?.threads.find(candidate => candidate.threadId === thread.threadId);
-			return {
-				...thread,
-				origin: { ...thread.origin },
-				title: projection?.title ?? prior?.title,
-				executionStatus: projection ? executionStatus(projection.turns.at(-1)?.status) : prior?.executionStatus ?? "idle",
-			};
-		}),
-		agentTree: agentTree?.map(toAgentTreeNode) ?? previous?.agentTree,
-	};
-}
-
-function toAgentTreeNode(node: AgentTreeNodeProjectionDto): AgentTreeNode {
-	return {
-		threadId: node.threadId,
-		threadSequence: node.threadSequence,
-		title: node.title,
-		origin: { ...node.origin },
-		membershipStatus: node.membershipStatus,
-		executionStatus: node.executionStatus,
-		...(node.currentTurnId ? { currentTurnId: node.currentTurnId } : {}),
-		...(node.waitingReason ? { waitingReason: node.waitingReason } : {}),
-		...(node.goal ? { goal: { ...node.goal } } : {}),
-		usage: {
-			inputTokens: node.usage.inputTokens.reported,
-			outputTokens: node.usage.outputTokens.reported,
-		},
-		...(node.role ? { role: { name: node.role.name, selectionReason: node.role.selectionReason } } : {}),
-		...(node.result ? { result: { status: node.result.status, summary: node.result.summary } } : {}),
-		joins: (node.joins ?? []).map(join => ({ status: join.status })),
-		children: (node.children ?? []).map(toAgentTreeNode),
-	};
-}
-
-function findAgentNode(nodes: readonly AgentTreeNode[], threadId: ThreadId): AgentTreeNode | undefined {
-	for (const node of nodes) {
-		if (node.threadId === threadId) return node;
-		const child = findAgentNode(node.children, threadId);
-		if (child) return child;
-	}
-	return undefined;
-}
-
-function canInterrupt(node: AgentTreeNode): boolean {
-	return node.membershipStatus === "active"
-		&& (node.executionStatus === "queued" || node.executionStatus === "running" || node.executionStatus === "waiting");
-}
-
-function executionStatus(status: TurnStatusDto | undefined): AgentThreadExecutionStatus {
-	switch (status) {
-		case "created": return "queued";
-		case "running":
-		case "cancelling": return "running";
-		case "waitingForApproval":
-		case "waitingForUserInput":
-		case "waitingForCapability": return "waiting";
-		case "completed": return "completed";
-		case "failed": return "failed";
-		case "interrupted": return "cancelled";
-		case undefined: return "idle";
-	}
-}
-
-function toModelRef(model: ModelRefDto): ModelRef { return { provider: model.provider, model: model.model }; }
-
-function firstActiveThread(sessions: readonly Session[], currentWorkspaceRoot?: string): IActiveSessionThread | undefined {
+function firstActiveThread(sessions: readonly ISession[]): IActiveSessionThread | undefined {
 	for (const session of sessions) {
 		if (session.status !== "active") continue;
-		if (currentWorkspaceRoot && session.workspace?.root && !sameWorkspacePath(session.workspace.root, currentWorkspaceRoot)) continue;
-		const thread = session.threads.find((candidate) => candidate.threadId === session.currentThreadId && candidate.status === "active" && candidate.origin.type !== "agentSpawn")
-			?? session.threads.find((candidate) => candidate.status === "active" && candidate.origin.type !== "agentSpawn");
+		const thread = session.chats.find(candidate => candidate.status === "active" && candidate.origin.type === "root") ?? session.chats.find(candidate => candidate.status === "active");
 		if (thread) return { session, threadId: thread.threadId };
 	}
 	return undefined;
 }
 
-function sameWorkspacePath(left: string, right: string): boolean {
-	const normalize = (value: string): string => value.replaceAll("\\", "/").replace(/\/+$/, "");
-	const normalizedLeft = normalize(left);
-	const normalizedRight = normalize(right);
-	return /^[a-z]:\//i.test(normalizedLeft) && /^[a-z]:\//i.test(normalizedRight)
-		? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
-		: normalizedLeft === normalizedRight;
+function activeThread(session: ISession, threadId: ThreadId): IActiveSessionThread | undefined {
+	return session.chats.some(thread => thread.threadId === threadId && thread.status === "active") ? { session, threadId } : undefined;
 }
 
-function activeThread(session: Session, threadId: ThreadId): IActiveSessionThread | undefined {
-	return session.threads.some(thread => thread.threadId === threadId && thread.status === "active")
-		? { session, threadId }
-		: undefined;
-}
-
-function commandId(kind: string): string { return `desktop-${kind}-${createUuid()}`; }
-
-function sameModel(left: ModelRef | ModelRefDto | null | undefined, right: ModelRef | ModelRefDto | null | undefined): boolean {
+function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {
 	return left?.provider === right?.provider && left?.model === right?.model;
 }

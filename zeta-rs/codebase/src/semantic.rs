@@ -1,8 +1,8 @@
-//! Local semantic indexing for Workspace-produced code chunks.
+//! Local semantic indexing for Directory-produced code chunks.
 //!
 //! The crate embeds exact chunks from `zeta-codebase`, persists vectors in a rebuildable local
 //! projection, owns vector recall and optional rerank ordering, and returns chunk references only.
-//! It never scans a Workspace or owns remote service deployment.
+//! It never scans a Directory or owns remote service deployment.
 
 mod error;
 mod memory_store;

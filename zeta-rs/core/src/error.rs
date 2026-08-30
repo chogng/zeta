@@ -1,5 +1,4 @@
 use std::fmt;
-use zeta_session_store::SessionStoreError;
 use zeta_thread_store::ThreadStoreError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -22,7 +21,6 @@ pub enum CoreError {
     PolicyCircuitBreaker(String),
     ToolRepetition(String),
     CommandConflict,
-    SessionStore(SessionStoreError),
     ThreadStore(ThreadStoreError),
 }
 
@@ -54,7 +52,6 @@ impl fmt::Display for CoreError {
             }
             Self::ToolRepetition(message) => write!(formatter, "tool repetition: {message}"),
             Self::CommandConflict => formatter.write_str("command ID conflict"),
-            Self::SessionStore(error) => error.fmt(formatter),
             Self::ThreadStore(error) => error.fmt(formatter),
         }
     }
@@ -65,11 +62,5 @@ impl std::error::Error for CoreError {}
 impl From<ThreadStoreError> for CoreError {
     fn from(error: ThreadStoreError) -> Self {
         Self::ThreadStore(error)
-    }
-}
-
-impl From<SessionStoreError> for CoreError {
-    fn from(error: SessionStoreError) -> Self {
-        Self::SessionStore(error)
     }
 }

@@ -65,7 +65,10 @@ mod approval;
 pub struct ThreadSnapshot {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
+    pub parent_thread_id: Option<ThreadId>,
+    pub forked_from_id: Option<ThreadId>,
     pub title: String,
+    pub status: ThreadStatus,
     pub turn_execution_binding: Option<TurnExecutionBinding>,
     pub sequence: u64,
     pub usage: ModelUsageSummary,
@@ -148,8 +151,10 @@ impl ThreadSnapshot {
         Thread {
             session_id: self.session_id.clone(),
             thread_id: self.thread_id.clone(),
+            parent_thread_id: self.parent_thread_id.clone(),
+            forked_from_id: self.forked_from_id.clone(),
             title: self.title.clone(),
-            status: ThreadStatus::Active,
+            status: self.status,
             sequence: self.sequence,
             usage: self.usage.clone(),
             goal: self.goal.clone(),
@@ -313,7 +318,10 @@ pub fn reduce_thread_event(
                 Ok(ThreadSnapshot {
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
+                    parent_thread_id: None,
+                    forked_from_id: None,
                     title: title.clone(),
+                    status: ThreadStatus::Active,
                     turn_execution_binding: None,
                     sequence: envelope.sequence,
                     usage: ModelUsageSummary::default(),
@@ -376,6 +384,25 @@ pub fn reduce_thread_event(
             return Err(CoreError::Journal(
                 "Thread cannot be created more than once".into(),
             ));
+        }
+        ThreadEvent::ThreadArchived { thread_id } => {
+            require_no_command(envelope)?;
+            if thread_id != &snapshot.thread_id {
+                return Err(CoreError::Journal(
+                    "archive event Thread identity does not match the rollout".into(),
+                ));
+            }
+            if snapshot.turns.iter().any(|turn| {
+                !matches!(
+                    turn.status,
+                    TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                )
+            }) {
+                return Err(CoreError::Journal(
+                    "cannot archive a Thread with an active Turn".into(),
+                ));
+            }
+            snapshot.status = ThreadStatus::Archived;
         }
         ThreadEvent::GoalCreated { thread_id, goal } => {
             require_no_command(envelope)?;
@@ -566,6 +593,7 @@ pub fn reduce_thread_event(
                 ));
             }
             validate_agent_context_seed(seed)?;
+            snapshot.parent_thread_id = Some(seed.parent_thread_id.clone());
             snapshot.agent_context_seed = Some(seed.as_ref().clone());
         }
         ThreadEvent::HistoryImported {
@@ -637,6 +665,7 @@ pub fn reduce_thread_event(
                     tool_calls: BTreeSet::new(),
                     tool_results: BTreeSet::new(),
                 });
+                snapshot.forked_from_id = Some(source_thread_id.clone());
             }
             let import = snapshot
                 .fork_import
@@ -701,6 +730,7 @@ pub fn reduce_thread_event(
                 )?;
                 snapshot.context_checkpoints.push(checkpoint.clone());
             }
+            snapshot.forked_from_id = Some(source_thread_id.clone());
             snapshot.fork_import = None;
         }
         ThreadEvent::ContextCheckpointCommitted { checkpoint, .. } => {
@@ -1908,6 +1938,8 @@ fn import_history(
             "fork history source sequence must be positive".into(),
         ));
     }
+
+    snapshot.forked_from_id = Some(source_thread_id.clone());
 
     let mut turn_ids = BTreeSet::new();
     let mut item_ids = BTreeSet::new();

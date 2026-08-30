@@ -1,17 +1,17 @@
 use super::*;
-use crate::workspace_files::take_source_read_count;
+use crate::dir_files::take_source_read_count;
 use std::fs;
 use tempfile::TempDir;
 
-fn workspace() -> TempDir {
-    let directory = tempfile::tempdir().expect("workspace");
+fn dir() -> TempDir {
+    let directory = tempfile::tempdir().expect("dir");
     fs::create_dir(directory.path().join(".git")).expect("git marker");
     directory
 }
 
 fn search(directory: &TempDir, storage: FastRegexSearchStorage) -> FastRegexSearch {
     FastRegexSearch::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         storage,
         FastRegexSearchLimits::default(),
     )
@@ -55,7 +55,7 @@ fn manifest_file(storage: &TempDir, generation: u64) -> PathBuf {
 
 #[test]
 fn sparse_candidates_are_verified_by_the_regex_engine() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("auth.rs"),
         "let authentication_value = token;\nlet authentication_value = other;\n",
@@ -87,7 +87,7 @@ fn sparse_candidates_are_verified_by_the_regex_engine() {
 
 #[test]
 fn alternation_and_short_patterns_never_drop_valid_files() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("first.txt"), "pikachu\n").expect("first");
     fs::write(directory.path().join("second.txt"), "raichu\n").expect("second");
     fs::write(directory.path().join("short.txt"), "a\n").expect("short");
@@ -112,7 +112,7 @@ fn alternation_and_short_patterns_never_drop_valid_files() {
 
 #[test]
 fn refresh_and_overlay_keep_exact_search_current() {
-    let directory = workspace();
+    let directory = dir();
     let path = directory.path().join("current.rs");
     fs::write(&path, "before_marker\n").expect("before");
     let index = search(&directory, FastRegexSearchStorage::Memory);
@@ -144,7 +144,7 @@ fn refresh_and_overlay_keep_exact_search_current() {
 
 #[test]
 fn persistent_storage_writes_compact_index_files() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("source.rs"),
         "persistent_marker\nPERSISTENT_MARKER\n",
@@ -173,7 +173,7 @@ fn persistent_storage_writes_compact_index_files() {
 
 #[test]
 fn replacing_the_lookup_generation_keeps_an_existing_reader_valid() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("first.rs"),
         "first_generation_marker\n",
@@ -226,7 +226,7 @@ fn replacing_the_lookup_generation_keeps_an_existing_reader_valid() {
 
 #[test]
 fn unchanged_reopen_reads_metadata_but_not_source_contents() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("source.rs"),
         "reopen_without_source_scan_marker\n",
@@ -247,7 +247,7 @@ fn unchanged_reopen_reads_metadata_but_not_source_contents() {
 
 #[test]
 fn posting_payload_corruption_is_detected_when_the_selected_span_is_read() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("source.rs"),
         "lazy_posting_corruption_marker\n",
@@ -273,7 +273,7 @@ fn posting_payload_corruption_is_detected_when_the_selected_span_is_read() {
 
 #[test]
 fn reopen_reconciles_added_deleted_and_newly_ignored_paths() {
-    let directory = workspace();
+    let directory = dir();
     let deleted = directory.path().join("deleted.rs");
     let ignored = directory.path().join("ignored.rs");
     fs::write(&deleted, "deleted_while_closed_marker\n").expect("deleted source");
@@ -319,7 +319,7 @@ fn reopen_reconciles_added_deleted_and_newly_ignored_paths() {
 
 #[test]
 fn reopening_reconciles_changed_files_into_the_delta_without_rebuilding_the_base() {
-    let directory = workspace();
+    let directory = dir();
     let source = directory.path().join("source.rs");
     fs::write(&source, "before_persisted_marker\n").expect("source");
     let storage = tempfile::tempdir().expect("storage");
@@ -357,7 +357,7 @@ fn reopening_reconciles_changed_files_into_the_delta_without_rebuilding_the_base
 
 #[test]
 fn persisted_change_layer_restores_updates_and_deletions_without_rewriting_the_base() {
-    let directory = workspace();
+    let directory = dir();
     let changed = directory.path().join("changed.rs");
     let deleted = directory.path().join("deleted.rs");
     let later_deleted = directory.path().join("later-deleted.rs");
@@ -455,7 +455,7 @@ fn persisted_change_layer_restores_updates_and_deletions_without_rewriting_the_b
 
 #[test]
 fn a_large_change_layer_is_compacted_into_a_new_base_generation() {
-    let directory = workspace();
+    let directory = dir();
     let paths = (0..DELTA_COMPACTION_MIN_PATHS)
         .map(|index| {
             let path = directory.path().join(format!("source-{index}.rs"));
@@ -496,7 +496,7 @@ fn a_large_change_layer_is_compacted_into_a_new_base_generation() {
 
 #[test]
 fn corrupt_completed_generation_is_rejected_instead_of_serving_partial_postings() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("source.rs"), "corrupt_marker\n").expect("source");
     let storage = tempfile::tempdir().expect("storage");
     let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
@@ -510,7 +510,7 @@ fn corrupt_completed_generation_is_rejected_instead_of_serving_partial_postings(
     .expect("corrupt lookup");
 
     let result = FastRegexSearch::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         storage_mode,
         FastRegexSearchLimits::default(),
     );
@@ -519,8 +519,8 @@ fn corrupt_completed_generation_is_rejected_instead_of_serving_partial_postings(
 }
 
 #[test]
-fn persisted_paths_that_escape_the_workspace_are_rejected() {
-    let directory = workspace();
+fn persisted_paths_that_escape_the_dir_are_rejected() {
+    let directory = dir();
     fs::write(directory.path().join("inside.rs"), "safe_path_marker\n").expect("source");
     let storage = tempfile::tempdir().expect("storage");
     let storage_mode = FastRegexSearchStorage::Persistent(storage.path().to_path_buf());
@@ -534,7 +534,7 @@ fn persisted_paths_that_escape_the_workspace_are_rejected() {
     fs::write(documents_path, documents).expect("corrupt stored path");
 
     let result = FastRegexSearch::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         storage_mode,
         FastRegexSearchLimits::default(),
     );
@@ -544,7 +544,7 @@ fn persisted_paths_that_escape_the_workspace_are_rejected() {
 
 #[test]
 fn delta_generation_must_match_the_published_manifest() {
-    let directory = workspace();
+    let directory = dir();
     let source = directory.path().join("source.rs");
     fs::write(&source, "first_delta_generation_marker\n").expect("source");
     let storage = tempfile::tempdir().expect("storage");
@@ -567,7 +567,7 @@ fn delta_generation_must_match_the_published_manifest() {
     fs::write(delta_path, delta).expect("corrupt delta generation");
 
     let result = FastRegexSearch::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         storage_mode,
         FastRegexSearchLimits::default(),
     );
@@ -577,7 +577,7 @@ fn delta_generation_must_match_the_published_manifest() {
 
 #[test]
 fn failed_base_publish_preserves_the_previous_generation() {
-    let directory = workspace();
+    let directory = dir();
     let source = directory.path().join("source.rs");
     fs::write(&source, "first_publish_marker\n").expect("source");
     let storage = tempfile::tempdir().expect("storage");
@@ -611,7 +611,7 @@ fn failed_base_publish_preserves_the_previous_generation() {
 
 #[test]
 fn frequency_table_digest_mismatch_makes_a_generation_ineligible() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("source.rs"),
         "frequency_digest_marker\n",
@@ -642,7 +642,7 @@ fn frequency_table_digest_mismatch_makes_a_generation_ineligible() {
 
 #[test]
 fn scope_and_filename_glob_are_applied_independently() {
-    let directory = workspace();
+    let directory = dir();
     fs::create_dir_all(directory.path().join("src/nested")).expect("source directories");
     fs::write(directory.path().join("src/root.rs"), "scoped_marker\n").expect("root source");
     fs::write(
@@ -676,7 +676,7 @@ fn scope_and_filename_glob_are_applied_independently() {
 
 #[test]
 fn prefix_and_suffix_postings_are_intersected_before_source_scans() {
-    let directory = workspace();
+    let directory = dir();
     for index in 0..100 {
         fs::write(
             directory.path().join(format!("prefix-{index}.txt")),
@@ -709,7 +709,7 @@ fn prefix_and_suffix_postings_are_intersected_before_source_scans() {
 
 #[test]
 fn case_modes_match_ripgrep_style_smart_case() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("cases.txt"),
         "lower_marker\nLOWER_MARKER\nMixed_Marker\n",
@@ -735,7 +735,7 @@ fn case_modes_match_ripgrep_style_smart_case() {
 
 #[test]
 fn literal_patterns_escape_regex_metacharacters() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("literal.txt"),
         "call(foo)\ncallXfooY\n",
@@ -754,7 +754,7 @@ fn literal_patterns_escape_regex_metacharacters() {
 
 #[test]
 fn line_results_keep_all_ranges_and_preserve_searchable_carriage_returns() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("lines.txt"),
         "hit hit\r\nmiss\r\nhit\r\n",
@@ -798,7 +798,7 @@ fn line_results_keep_all_ranges_and_preserve_searchable_carriage_returns() {
 
 #[test]
 fn line_terminators_match_ripgrep_without_a_phantom_trailing_line() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("lf.txt"), "value\n").expect("lf source");
     fs::write(directory.path().join("crlf.txt"), "value\r\n").expect("crlf source");
     let index = search(&directory, FastRegexSearchStorage::Memory);
@@ -823,7 +823,7 @@ fn line_terminators_match_ripgrep_without_a_phantom_trailing_line() {
 
 #[test]
 fn result_limit_reports_only_when_an_additional_matching_line_exists() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("many.txt"),
         "marker\nmarker\nmarker\n",
@@ -841,8 +841,8 @@ fn result_limit_reports_only_when_an_additional_matching_line_exists() {
 }
 
 #[test]
-fn workspace_scan_matches_default_hidden_and_gitignore_boundaries() {
-    let directory = workspace();
+fn dir_scan_matches_default_hidden_and_gitignore_boundaries() {
+    let directory = dir();
     fs::write(directory.path().join(".gitignore"), "ignored.txt\n").expect("ignore file");
     fs::write(directory.path().join("visible.txt"), "boundary_marker\n").expect("visible");
     fs::write(directory.path().join("ignored.txt"), "boundary_marker\n").expect("ignored");
@@ -859,7 +859,7 @@ fn workspace_scan_matches_default_hidden_and_gitignore_boundaries() {
 
 #[test]
 fn incremental_refresh_adds_and_removes_files_without_rebuilding() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("base.txt"), "base_marker\n").expect("base");
     let index = search(&directory, FastRegexSearchStorage::Memory);
     index.rebuild().expect("rebuild");
@@ -894,7 +894,7 @@ fn incremental_refresh_adds_and_removes_files_without_rebuilding() {
 
 #[test]
 fn incremental_refresh_does_not_publish_gitignored_new_files() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join(".gitignore"), "ignored-new.txt\n").expect("ignore file");
     fs::write(directory.path().join("base.txt"), "base_marker\n").expect("base");
     let index = search(&directory, FastRegexSearchStorage::Memory);
@@ -917,7 +917,7 @@ fn incremental_refresh_does_not_publish_gitignored_new_files() {
 
 #[test]
 fn changing_git_info_exclude_reconciles_the_ignore_matcher_and_index() {
-    let directory = workspace();
+    let directory = dir();
     fs::create_dir_all(directory.path().join(".git/info")).expect("git info directory");
     let exclude = directory.path().join(".git/info/exclude");
     fs::write(&exclude, "excluded-by-info.txt\n").expect("git exclude");
@@ -954,7 +954,7 @@ fn changing_git_info_exclude_reconciles_the_ignore_matcher_and_index() {
 
 #[test]
 fn nested_ignore_change_publishes_only_the_affected_file_delta() {
-    let directory = workspace();
+    let directory = dir();
     fs::create_dir_all(directory.path().join("nested")).unwrap();
     let source = directory.path().join("nested/source.rs");
     fs::write(&source, "nested_ignore_marker\n").unwrap();
@@ -980,12 +980,12 @@ fn nested_ignore_change_publishes_only_the_affected_file_delta() {
 
 #[test]
 fn full_reconciliation_does_not_publish_when_the_file_set_is_unchanged() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("source.rs"), "stable_marker\n").unwrap();
     let index = search(&directory, FastRegexSearchStorage::Memory);
     let before = index.rebuild().unwrap();
 
-    let outcome = index.reconcile_workspace().unwrap();
+    let outcome = index.reconcile_dir().unwrap();
 
     assert_eq!(outcome, FastRegexUpdateOutcome::NoChange);
     assert_eq!(index.snapshot().generation, before.generation);
@@ -993,7 +993,7 @@ fn full_reconciliation_does_not_publish_when_the_file_set_is_unchanged() {
 
 #[test]
 fn stale_candidate_source_is_rejected_until_the_watcher_refreshes_it() {
-    let directory = workspace();
+    let directory = dir();
     let source = directory.path().join("source.txt");
     fs::write(&source, "old_stale_marker\n").expect("old source");
     let index = search(&directory, FastRegexSearchStorage::Memory);
@@ -1007,8 +1007,8 @@ fn stale_candidate_source_is_rejected_until_the_watcher_refreshes_it() {
 
 #[test]
 fn invalid_queries_and_storage_limits_fail_at_the_public_boundary() {
-    let directory = workspace();
-    let root = WorkspaceRoot::open(directory.path()).expect("root");
+    let directory = dir();
+    let root = Dir::open_local(directory.path()).expect("root");
     let invalid_limits = FastRegexSearchLimits {
         max_files: 0,
         ..FastRegexSearchLimits::default()
@@ -1041,7 +1041,7 @@ fn invalid_queries_and_storage_limits_fail_at_the_public_boundary() {
 
 #[test]
 fn unsupported_text_files_are_skipped_without_aborting_the_generation() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("valid.txt"), "valid_marker\n").expect("valid");
     fs::write(directory.path().join("binary.bin"), b"binary\0marker").expect("binary");
     fs::write(directory.path().join("invalid.txt"), [0xff, 0xfe, 0xfd]).expect("invalid utf8");
@@ -1058,7 +1058,7 @@ fn unsupported_text_files_are_skipped_without_aborting_the_generation() {
 
 #[test]
 fn indexed_candidates_match_an_exhaustive_scan_across_regex_shapes() {
-    let directory = workspace();
+    let directory = dir();
     let documents = [
         (
             "one.rs",
@@ -1088,7 +1088,7 @@ fn indexed_candidates_match_an_exhaustive_scan_across_regex_shapes() {
         (r"[0-9]{3}", false),
         (r"认证_.*令牌", false),
         (r"authentication_.*token", true),
-        (r"missing_workspace_marker_.*suffix", false),
+        (r"missing_dir_marker_.*suffix", false),
     ];
 
     for (pattern, insensitive) in cases {

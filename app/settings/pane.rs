@@ -21,9 +21,9 @@ use crate::remote::RemoteConnectionManagerState;
 use crate::remote::RemoteUiStyle;
 use crate::section_layout::SettingsSectionLayout;
 
-/// Workspace facts rendered by the General section.
+/// Environment facts rendered by the General section.
 pub struct GeneralSettingsSnapshot<'a> {
-    pub workspace_label: &'a str,
+    pub directory_label: &'a str,
     pub connection_label: &'a str,
     pub surface_label: &'a str,
 }
@@ -139,7 +139,7 @@ pub fn draw_settings_pane(
             for field in [
                 RemoteConnectionManagerField::Name,
                 RemoteConnectionManagerField::Host,
-                RemoteConnectionManagerField::Workspace,
+                RemoteConnectionManagerField::Directory,
             ] {
                 if view.dispatch.is_focused(field.element_id()) {
                     result.ime_cursor_area = manager.caret_bounds(field);
@@ -152,7 +152,7 @@ pub fn draw_settings_pane(
             content,
             section,
             style.section,
-            view.features.general.workspace_label,
+            view.features.general.directory_label,
             view.features.general.connection_label,
             view.features.general.surface_label,
             view.features.keybindings.keybinding_rows,

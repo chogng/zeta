@@ -5,7 +5,7 @@ import { IQuickInputService, type IQuickPickItem } from "../../../platform/quick
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
-import { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
+import { ISessionsService } from "../../services/view/common/sessionsService.js";
 
 registerAction2(class NewSessionsChatAction extends Action2 {
 	constructor() {
@@ -13,7 +13,7 @@ registerAction2(class NewSessionsChatAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		accessor.get(ISessionsViewService).openNewSession("New code session");
+		accessor.get(ISessionsService).openNewSession("New code session");
 	}
 });
 
@@ -29,14 +29,14 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): void {
 		const sessions = accessor.get(ISessionsManagementService);
-		const view = accessor.get(ISessionsViewService);
+		const view = accessor.get(ISessionsService);
 		const quickPick = accessor.get(IQuickInputService).createQuickPick<SessionsHistoryQuickPickItem>();
 		const disposables = new DisposableStore();
 		disposables.add(quickPick);
 		quickPick.placeholder = "Select a session";
 		quickPick.items = sessions.sessions.flatMap(session => {
 			if (session.status !== "active") return [];
-			const threads = session.threads.filter(thread => thread.status === "active");
+			const threads = session.chats.filter(thread => thread.status === "active");
 			return threads.map((thread, index) => ({
 				sessionId: session.sessionId,
 				threadId: thread.threadId,

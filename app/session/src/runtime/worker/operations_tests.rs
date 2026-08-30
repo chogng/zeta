@@ -10,16 +10,13 @@ use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
-use zeta_protocol::SessionThreadStatus;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadOrigin;
 use zeta_protocol::ThreadStatus;
-use zeta_protocol::TurnId;
 
+use super::cwd_title;
 use super::publish_subscription;
 use super::selected_conversation_thread;
-use super::workspace_title;
 use crate::SessionRuntimeEvent;
 use crate::SessionRuntimeEventSink;
 
@@ -30,24 +27,21 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
     let subscription = SessionSubscribeResult {
         session: Session {
             session_id: session_id.clone(),
-            title: "Workspace".to_owned(),
+            title: "Project".to_owned(),
             status: SessionStatus::Active,
-            model: None,
-            workspace: None,
-            next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-            current_thread_id: Some(thread_id.clone()),
-            sequence: 3,
             threads: vec![SessionThread {
                 thread_id: thread_id.clone(),
-                origin: ThreadOrigin::Root,
-                status: SessionThreadStatus::Active,
+                parent_thread_id: None,
+                forked_from_id: None,
+                status: ThreadStatus::Active,
             }],
         },
-        updates: Vec::new(),
         thread_projections: vec![SessionThreadProjection {
             thread: Thread {
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
+                parent_thread_id: None,
+                forked_from_id: None,
                 title: "Agent".to_owned(),
                 status: ThreadStatus::Active,
                 sequence: 7,
@@ -89,38 +83,31 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
 }
 
 #[test]
-fn workspace_title_uses_the_last_component_and_root_fallback() {
-    assert_eq!(workspace_title(std::path::Path::new("/work/zeta")), "zeta");
-    assert_eq!(workspace_title(std::path::Path::new("/")), "Session");
+fn cwd_title_uses_the_last_component_and_root_fallback() {
+    assert_eq!(cwd_title(std::path::Path::new("/work/zeta")), "zeta");
+    assert_eq!(cwd_title(std::path::Path::new("/")), "Session");
 }
 
 #[test]
-fn canonical_current_thread_wins_over_the_latest_conversation_thread() {
+fn root_thread_wins_over_a_later_conversation_thread() {
     let root_id = ThreadId::new("thread-root").unwrap();
     let rewound_id = ThreadId::new("thread-rewound").unwrap();
     let session = Session {
         session_id: SessionId::new("session-1").unwrap(),
-        title: "Workspace".to_owned(),
+        title: "Project".to_owned(),
         status: SessionStatus::Active,
-        model: None,
-        workspace: None,
-        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        current_thread_id: Some(root_id.clone()),
-        sequence: 4,
         threads: vec![
             SessionThread {
                 thread_id: root_id.clone(),
-                origin: ThreadOrigin::Root,
-                status: SessionThreadStatus::Active,
+                parent_thread_id: None,
+                forked_from_id: None,
+                status: ThreadStatus::Active,
             },
             SessionThread {
                 thread_id: rewound_id.clone(),
-                origin: ThreadOrigin::Rewind {
-                    parent_thread_id: root_id.clone(),
-                    parent_sequence: 7,
-                    before_turn_id: TurnId::new("turn-2").unwrap(),
-                },
-                status: SessionThreadStatus::Active,
+                parent_thread_id: Some(root_id.clone()),
+                forked_from_id: Some(root_id.clone()),
+                status: ThreadStatus::Active,
             },
         ],
     };

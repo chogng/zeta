@@ -232,15 +232,15 @@ identity 不变会静默复用不兼容 projection，属于 correctness bug。
 6. 只接受当前 query revision 的更新。
 7. 接受结果时由当前文件内容验证 selection text；失配则触发 document-symbol reanchor 或刷新，而不盲跳旧 range。
 
-本地 fuzzy matcher 第一版直接使用已有 workspace dependency `nucleo`，但不把文件搜索 crate 扩成
+本地 fuzzy matcher 第一版直接使用已有 Cargo Workspace dependency `nucleo`，但不把文件搜索 crate 扩成
 泛化 symbol owner。共享抽象必须等第二个相同领域 consumer 出现后再提取。
 
 ## 6. 未保存 Buffer 浮层
 
-当前 Editor 与 LSP 已有打开文档 revision，App Server 同时持有 Workspace-scoped 临时 projection：
+当前 Editor 与 LSP 已有打开文档 revision，App Server 同时持有 `DirId` 范围内的临时文档浮层：
 
 ```text
-WorkspaceTrustId
+DirId
 + relative path
 + editor revision
 + language
@@ -257,7 +257,7 @@ WorkspaceTrustId
 - code retrieval 中 dirty path 的磁盘 lexical、semantic 和 cloud candidates 全部被抑制。
 - 第一版 dirty buffer 只建立内存 lexical/symbol projection；不在每次按键后发送 embedding。
 - 保存后保留 overlay，直到磁盘 Codebase 出现相同 content hash，再无缝交回持久化 generation。
-- close/discard、Workspace replacement 或 App Server host teardown 时清理对应 overlay。
+- close/discard、目录撤销或 App Server host teardown 时清理对应 overlay。
 
 AI consumer 读取正文时必须先查询 overlay，缺失时才读取磁盘。不能先取磁盘 candidate，再把其旧
 range 用到新 Buffer 上。
@@ -296,7 +296,7 @@ Unix persistent file 使用普通文件和 `0600`。路径、错误和日志不�
 - 实现 manifest reconcile、syntax extraction、SQLite publication、persistent reuse。
 - 实现内存 Nucleo matcher、exact/fuzzy Top K 和 query cancellation。
 - 在 App Server 中随 Codebase generation 调度 symbol reconcile。
-- 增加 `workspace/codebase/symbols/status` 与 `workspace/codebase/symbols/search`。
+- 增加 `codebase/symbols/status` 与 `codebase/symbols/search`。
 - Desktop 增加 `ICodebaseSymbolsService`、App Server implementation 和 workspace-symbol provider。
 - Workspace Symbol service 支持并发 provider 和阶段性结果。
 
@@ -313,7 +313,7 @@ generation 不会发布，接受结果前以 SHA-256 对当前文件进行复核
 - `zeta-codebase` 对 dirty paths 抑制全部持久化/remote candidates，并从 overlay 复核正文。
 - 实现 save handoff：content hash 相同的磁盘 generation ready 后才删除 overlay。
 
-完成状态：Editor snapshot 通过 `workspace/codeIntelligence/document/synchronize|close` 同步；Codebase
+完成状态：Editor snapshot 通过 `codeIntelligence/document/synchronize|close` 同步；Codebase
 拥有 canonical text overlay，SymbolIndex 投影其声明；retrieval 对 dirty path 抑制所有磁盘与远端候选，
 只物化当前 overlay。相同 content hash 的磁盘 generation 发布后才 handoff。
 

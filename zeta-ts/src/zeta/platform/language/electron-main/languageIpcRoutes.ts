@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCodeLensDto, type LanguageColorDto, type LanguageColorPresentationsParams, type LanguageCommandDto, type LanguageCompletionsParams, type LanguageDocumentDiagnosticsParams, type LanguageDocumentFeaturesParams, type LanguageDocumentFormattingParams, type LanguageDocumentLinkDto, type LanguageExecuteCommandParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageResolveCodeLensParams, type LanguageResolveCompletionParams, type LanguageResolveDocumentLinkParams, type LanguageSemanticTokensParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceDiagnosticsParams, type LanguageWorkspaceSymbolsParams, type MethodParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCodeLensDto, type LanguageColorDto, type LanguageColorPresentationsParams, type LanguageCommandDto, type LanguageCompletionsParams, type LanguageDirectoryDiagnosticsParams, type LanguageDirectorySymbolsParams, type LanguageDocumentDiagnosticsParams, type LanguageDocumentFeaturesParams, type LanguageDocumentFormattingParams, type LanguageDocumentLinkDto, type LanguageExecuteCommandParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageResolveCodeLensParams, type LanguageResolveCompletionParams, type LanguageResolveDocumentLinkParams, type LanguageSemanticTokensParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type MethodParams } from "../../../../../generated/app-server/types.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boolean, nonEmptyString, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
@@ -18,7 +18,7 @@ export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly Ipc
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:resolveCompletion", method: APP_SERVER_METHODS["language/resolveCompletion"], validate: languageResolveCompletionParams }),
 		route({ channel: "zeta:language:executeCommand", validate: languageExecuteCommandParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/executeCommand"], params) }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:documentDiagnostics", method: APP_SERVER_METHODS["language/documentDiagnostics"], validate: languageDocumentDiagnosticsParams }),
-		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:workspaceDiagnostics", method: APP_SERVER_METHODS["language/workspaceDiagnostics"], validate: languageWorkspaceDiagnosticsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:directoryDiagnostics", method: APP_SERVER_METHODS["language/directoryDiagnostics"], validate: languageDirectoryDiagnosticsParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:formatDocument", method: APP_SERVER_METHODS["language/formatDocument"], validate: languageDocumentFormattingParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:formatRange", method: APP_SERVER_METHODS["language/formatRange"], validate: languageRangeFormattingParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:signatureHelp", method: APP_SERVER_METHODS["language/signatureHelp"], validate: languageSignatureHelpParams }),
@@ -35,7 +35,7 @@ export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly Ipc
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:foldingRanges", method: APP_SERVER_METHODS["language/foldingRanges"], validate: languageDocumentFeaturesParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:locations", method: APP_SERVER_METHODS["language/locations"], validate: languageLocationsParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:hierarchy", method: APP_SERVER_METHODS["language/hierarchy"], validate: languageHierarchyParams }),
-		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:workspaceSymbols", method: APP_SERVER_METHODS["language/workspaceSymbols"], validate: languageWorkspaceSymbolsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:directorySymbols", method: APP_SERVER_METHODS["language/directorySymbols"], validate: languageDirectorySymbolsParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:prepareRename", method: APP_SERVER_METHODS["language/prepareRename"], validate: languagePrepareRenameParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:rename", method: APP_SERVER_METHODS["language/rename"], validate: languageRenameParams }),
 		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:codeActions", method: APP_SERVER_METHODS["language/codeActions"], validate: languageCodeActionsParams }),
@@ -85,8 +85,8 @@ function languageSynchronizeParams(value: unknown): LanguageSynchronizeParams {
 }
 
 function languageCloseParams(value: unknown): LanguageCloseParams {
-	const params = record(value, ["path"], ["workspaceFolderId"]);
-	return { path: string(params.path, "path"), workspaceFolderId: optionalWorkspaceFolderId(params.workspaceFolderId) };
+	const params = record(value, ["path"], ["dirId"]);
+	return { path: string(params.path, "path"), dirId: optionalDirId(params.dirId) };
 }
 
 function languageHoverParams(value: unknown): LanguageHoverParams {
@@ -162,9 +162,9 @@ function languageDocumentDiagnosticsParams(value: unknown): LanguageDocumentDiag
 	return { document: languageDocument(params.document) };
 }
 
-function languageWorkspaceDiagnosticsParams(value: unknown): LanguageWorkspaceDiagnosticsParams {
-	const params = record(value, ["languageId"], ["workspaceFolderId"]);
-	return { languageId: string(params.languageId, "languageId"), workspaceFolderId: optionalWorkspaceFolderId(params.workspaceFolderId) };
+function languageDirectoryDiagnosticsParams(value: unknown): LanguageDirectoryDiagnosticsParams {
+	const params = record(value, ["languageId"], ["dirId"]);
+	return { languageId: string(params.languageId, "languageId"), dirId: optionalDirId(params.dirId) };
 }
 
 function languageSemanticTokensParams(value: unknown): LanguageSemanticTokensParams {
@@ -250,11 +250,11 @@ function languageResolveCodeActionParams(value: unknown): LanguageResolveCodeAct
 	return { document: languageDocument(params.document), providerData: params.providerData };
 }
 
-function languageWorkspaceSymbolsParams(value: unknown): LanguageWorkspaceSymbolsParams {
-	const params = record(value, ["languageId", "query"], ["workspaceFolderId"]);
+function languageDirectorySymbolsParams(value: unknown): LanguageDirectorySymbolsParams {
+	const params = record(value, ["languageId", "query"], ["dirId"]);
 	const query = string(params.query, "query");
 	if (query.length > 1024) throw new Error("query must not exceed 1024 characters");
-	return { languageId: string(params.languageId, "languageId"), query, workspaceFolderId: optionalWorkspaceFolderId(params.workspaceFolderId) };
+	return { languageId: string(params.languageId, "languageId"), query, dirId: optionalDirId(params.dirId) };
 }
 
 function languageHierarchyParams(value: unknown): LanguageHierarchyParams {
@@ -287,14 +287,14 @@ function languageHierarchyItem(value: unknown): LanguageHierarchyItemDto {
 }
 
 function languageDocument(value: unknown): LanguageLocationsParams["document"] {
-	const document = record(value, ["path", "languageId", "revision", "text"], ["workspaceFolderId"]);
+	const document = record(value, ["path", "languageId", "revision", "text"], ["dirId"]);
 	const text = string(document.text, "document.text");
 	if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_INPUT_BYTES) throw new Error(`document.text must not exceed ${MAX_LANGUAGE_INPUT_BYTES} UTF-8 bytes`);
-	return { path: string(document.path, "document.path"), languageId: string(document.languageId, "document.languageId"), revision: nonNegativeInteger(document.revision, "document.revision"), text, workspaceFolderId: optionalWorkspaceFolderId(document.workspaceFolderId) };
+	return { path: string(document.path, "document.path"), languageId: string(document.languageId, "document.languageId"), revision: nonNegativeInteger(document.revision, "document.revision"), text, dirId: optionalDirId(document.dirId) };
 }
 
-function optionalWorkspaceFolderId(value: unknown): string | undefined {
-	return value === undefined ? undefined : nonEmptyString(value, "workspaceFolderId");
+function optionalDirId(value: unknown): string | undefined {
+	return value === undefined ? undefined : nonEmptyString(value, "dirId");
 }
 
 function languagePosition(value: unknown, field: string): LanguageLocationsParams["position"] {

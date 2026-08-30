@@ -3,8 +3,8 @@ use std::fs;
 
 #[test]
 fn discovers_a_typed_agent_definition() {
-    let workspace = tempfile::tempdir().unwrap();
-    let root = workspace.path().join(".zeta/agents");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".zeta/agents");
     fs::create_dir_all(&root).unwrap();
     fs::write(
         root.join("reviewer.md"),
@@ -12,7 +12,7 @@ fn discovers_a_typed_agent_definition() {
     )
     .unwrap();
 
-    let snapshot = AgentDefinitionCatalog::discover(workspace.path()).snapshot();
+    let snapshot = AgentDefinitionCatalog::discover(dir.path()).snapshot();
 
     assert!(snapshot.diagnostics().is_empty());
     assert_eq!(snapshot.entries().len(), 1);
@@ -27,8 +27,8 @@ fn discovers_a_typed_agent_definition() {
 
 #[test]
 fn filename_mismatch_is_isolated() {
-    let workspace = tempfile::tempdir().unwrap();
-    let root = workspace.path().join(".zeta/agents");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".zeta/agents");
     fs::create_dir_all(&root).unwrap();
     fs::write(
         root.join("reviewer.md"),
@@ -36,7 +36,7 @@ fn filename_mismatch_is_isolated() {
     )
     .unwrap();
 
-    let snapshot = AgentDefinitionCatalog::discover(workspace.path()).snapshot();
+    let snapshot = AgentDefinitionCatalog::discover(dir.path()).snapshot();
 
     assert!(snapshot.entries().is_empty());
     assert_eq!(snapshot.diagnostics().len(), 1);
@@ -48,8 +48,8 @@ fn filename_mismatch_is_isolated() {
 
 #[test]
 fn refresh_advances_generation_after_a_definition_changes() {
-    let workspace = tempfile::tempdir().unwrap();
-    let root = workspace.path().join(".zeta/agents");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".zeta/agents");
     fs::create_dir_all(&root).unwrap();
     let path = root.join("reviewer.md");
     fs::write(
@@ -57,7 +57,7 @@ fn refresh_advances_generation_after_a_definition_changes() {
         "---\nname: reviewer\ndescription: Reviews code.\n---\n\nReview.\n",
     )
     .unwrap();
-    let mut catalog = AgentDefinitionCatalog::discover(workspace.path());
+    let mut catalog = AgentDefinitionCatalog::discover(dir.path());
 
     fs::write(
         path,

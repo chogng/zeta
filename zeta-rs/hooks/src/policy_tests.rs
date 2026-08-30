@@ -17,19 +17,18 @@ fn hook(id: &str) -> HookConfig {
     }
 }
 
-fn test_workspace() -> WorkspaceRoot {
-    WorkspaceRoot::open(std::env::current_dir().expect("test working directory"))
-        .expect("workspace root")
+fn test_dir() -> Dir {
+    Dir::open_local(std::env::current_dir().expect("test working directory")).expect("dir root")
 }
 
 #[test]
 fn review_authority_is_bound_to_the_exact_hook_identity() {
-    let workspace = test_workspace();
+    let dir = test_dir();
     let first = hook("user:hook:first");
     let second = hook("user:hook:second");
 
-    let first_review = review_request(&first, &workspace, "hook-test-policy".into()).unwrap();
-    let second_review = review_request(&second, &workspace, "hook-test-policy".into()).unwrap();
+    let first_review = review_request(&first, &dir, "hook-test-policy".into()).unwrap();
+    let second_review = review_request(&second, &dir, "hook-test-policy".into()).unwrap();
     assert_eq!(first_review.provenance().source_id(), "user:hook:first");
     assert_ne!(
         first_review.action().digest(),

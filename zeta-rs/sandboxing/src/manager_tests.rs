@@ -1,7 +1,7 @@
 use super::*;
 use crate::{FileSystemAccess, NetworkAccess};
 use std::path::Path;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 struct RecordingBackend;
 
@@ -14,7 +14,7 @@ impl SandboxBackend for RecordingBackend {
         &self,
         command: &SandboxCommand,
         _policy: SandboxPolicy,
-        _workspace: &WorkspaceRoot,
+        _dir: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         assert!(command.working_directory().is_absolute());
         Ok(PreparedCommand::unrestricted(command))
@@ -23,8 +23,8 @@ impl SandboxBackend for RecordingBackend {
 
 #[test]
 fn manager_resolves_the_working_directory_before_backend_dispatch() {
-    let workspace = WorkspaceRoot::open(".").unwrap();
-    let manager = SandboxManager::new(workspace.clone(), RecordingBackend);
+    let dir = Dir::open_local(".").unwrap();
+    let manager = SandboxManager::new(dir.clone(), RecordingBackend);
     let command = SandboxCommand::new("echo", ["hello"], ".");
 
     let prepared = manager
@@ -34,7 +34,7 @@ fn manager_resolves_the_working_directory_before_backend_dispatch() {
         )
         .unwrap();
 
-    assert_eq!(prepared.working_directory(), workspace.canonical_path());
+    assert_eq!(prepared.working_directory(), dir.canonical_path());
     assert_eq!(prepared.program(), "echo");
     assert_eq!(prepared.arguments(), ["hello"]);
     assert_eq!(prepared.kind(), SandboxKind::Unrestricted);

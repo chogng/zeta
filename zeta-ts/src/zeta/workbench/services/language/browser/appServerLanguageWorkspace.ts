@@ -1,16 +1,19 @@
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { type IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 
-export interface AppServerLanguageWorkspaceTrust {
+export interface AppServerLanguageDirAccess {
 	readonly workspaceId: string;
-	readonly trusted: boolean;
+	readonly allowed: boolean;
 }
 
-/** Resolves whether every folder in the current Workspace may activate executable language services. */
-export async function resolveAppServerLanguageWorkspaceTrust(workspaceContext: IWorkspaceContextService, workspaceTrust?: IWorkspaceTrustService): Promise<AppServerLanguageWorkspaceTrust> {
+/** Resolves whether every folder may start executable language services. */
+export async function resolveAppServerLanguageDirAccess(workspaceContext: IWorkspaceContextService, dirPermissions?: IDirPermissionsService): Promise<AppServerLanguageDirAccess> {
 	const workspace = workspaceContext.getWorkspace();
-	if (workspace.folders.length === 0 || workspace.folders.some(folder => folder.uri.scheme !== "file")) return { workspaceId: workspace.id, trusted: false };
-	if (!workspaceTrust) return { workspaceId: workspace.id, trusted: true };
-	const states = await Promise.all(workspace.folders.map(folder => workspaceTrust.read(folder.uri.fsPath)));
-	return { workspaceId: workspace.id, trusted: states.every(state => state === "trusted") };
+	if (workspace.folders.length === 0 || workspace.folders.some(folder => folder.uri.scheme !== "file")) return { workspaceId: workspace.id, allowed: false };
+	if (!dirPermissions) return { workspaceId: workspace.id, allowed: true };
+	const permissions = await Promise.all(workspace.folders.map(folder => dirPermissions.read(folder.uri.fsPath)));
+	return {
+		workspaceId: workspace.id,
+		allowed: permissions.every(entry => entry?.includes("useLanguageServices") && entry.includes("executeCommands")),
+	};
 }

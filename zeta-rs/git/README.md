@@ -147,7 +147,7 @@ branch、remote URL 和 commit subject 当前要求 UTF-8。Snapshot 按 Git 输
 
 `snapshot` 使用 `GIT_OPTIONAL_LOCKS=0`。它是 observation，不获得阻止并发 Git mutation 的锁；
 调用方不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。App Server
-`GitRuntime` 当前使用 watcher invalidation 重新查询，并仅在 workspace projection 改变时推进
+`GitRuntime` 当前使用 watcher invalidation 重新查询，并仅在 directory projection 改变时推进
 revision；该 revision 仍不是 mutation CAS token。
 
 ## Graph 与 remote identity 契约
@@ -166,7 +166,7 @@ token 与 provider-specific PR/Checks 数据不属于 `zeta-git` 的 graph contr
 `GitClient::commit_changes` 将一个完整 object ID 相对第一父提交投影为 `GitCommitChange`；root
 commit 使用 empty-tree 语义，rename/copy 保留 original path。`GitClient::commit_file` 只读取调用方
 已解析的 commit、parent 与 changed path 的有界前后内容，`GitCommitFile` 用缺失的单侧表示
-added/deleted，不把 binary bytes 误称为 UTF-8。App Server 仍负责 workspace prefix 过滤、重新验证
+added/deleted，不把 binary bytes 误称为 UTF-8。App Server 仍负责 directory prefix 过滤、重新验证
 请求 path 确属该 commit，以及把 bytes 分类为 text/binary；Desktop 不拥有 Git revision 读取。
 
 ## 文本 Diff 与统计契约
@@ -177,7 +177,7 @@ added/deleted，不把 binary bytes 误称为 UTF-8。App Server 仍负责 works
 内容，并由 `zeta-diff` 生成 `DiffDocument`。`GitTextDiff` 同时保留构建该 document 的有界
 `original` / `modified` UTF-8 文本，供 App Server 投影跨进程 DTO；client 不直接依赖本 crate。
 `GitDiffStatistics` 将新增行计为 addition、删除行计为 deletion；一行 replacement 同时计入一次
-addition 和一次 deletion。调用方只能按 workspace prefix 请求、聚合和展示这些结果，不能自行读取
+addition 和一次 deletion。调用方只能按 directory prefix 请求、聚合和展示这些结果，不能自行读取
 Git revision 或复制统计规则。
 
 该读取序列不是 filesystem transaction：文件可能在 status 与内容读取之间变化。binary、
@@ -254,8 +254,8 @@ Current：
 ```text
 Desktop / Native / TUI
   ↔ App Server git/* + git/statusChanged
-  → workspace-scoped GitRuntime
-  → workspace-scoped GitService
+  → directory-scoped GitRuntime
+  → directory-scoped GitService
   → zeta-git
   → system git
 ```
@@ -266,7 +266,7 @@ Desktop / Native / TUI
 Product client
   ↕ app-server-protocol Git commands/snapshots/events
 App Server GitRuntime
-  ├─ single-workspace projection + revision
+  ├─ single-directory projection + revision
   ├─ zeta-file-watcher invalidation hints + debounce
   ├─ operation serialization
   ├─ status deduplication + notification
@@ -274,8 +274,8 @@ App Server GitRuntime
       └─ system git
 ```
 
-当前 `GitService` 冻结 workspace root 和 async runtime，每次 operation 重新打开仓库；成功
-mutation 随后读取并返回新 snapshot。`GitRuntime` 串行化 operation、维护当前 workspace
+当前 `GitService` 冻结 directory root 和 async runtime，每次 operation 重新打开仓库；成功
+mutation 随后读取并返回新 snapshot。`GitRuntime` 串行化 operation、维护当前 directory
 projection/revision，并把 `zeta-file-watcher` hint 转换为重新查询；protocol 拥有 wire DTO；
 Desktop 只展示状态和发送 intent；agent Git Tool 还必须经过
 policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
@@ -300,7 +300,7 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 测试仓库固定 `core.autocrlf=false` 与 LF，避免继承开发机全局配置；需要验证平台换行语义的测试
 必须显式覆盖 repository-local config。本地 remote 测试不访问网络或用户凭据。
 
-正常 workspace 状态下运行：
+正常 directory 状态下运行：
 
 ```bash
 cargo test --manifest-path Cargo.toml -p zeta-git
@@ -319,7 +319,7 @@ bazel test //zeta-rs/git:git-unit-tests
 当前限制：
 
 - local branch switch 和受管 linked worktree 创建/清理已实现；尚无普通用户 branch 新建/删除/重命名与 tag mutation；
-- App Server 已有单 workspace projection、watch、revision/event 和 operation serialization，
+- App Server 已有单 directory projection、watch、revision/event 和 operation serialization，
   但尚无 multi-repository registry、可观测 queue、progress 或 caller cancellation；
 - 不支持 bare repository，`open_repository` 要求 working tree；
 - repository discovery 依赖支持 `rev-parse --path-format=absolute` 的 Git；

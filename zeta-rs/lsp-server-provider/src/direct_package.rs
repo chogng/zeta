@@ -59,7 +59,7 @@ impl LanguageServerProvider for DirectPackageLanguageServerProvider {
 
     fn definition(
         &self,
-        workspace_root: &Path,
+        dir_root: &Path,
         launch: LspServerLaunch<'_>,
     ) -> Result<LanguageServerDefinition, LanguageServerProviderError> {
         let executable = match launch {
@@ -68,7 +68,7 @@ impl LanguageServerProvider for DirectPackageLanguageServerProvider {
                 canonical_executable(executable, "explicit language-server executable")?
             }
         };
-        let command = LanguageServerCommand::new(executable).with_current_dir(workspace_root);
+        let command = LanguageServerCommand::new(executable).with_current_dir(dir_root);
         LanguageServerDefinition::new(&self.id, self.languages.iter().cloned(), command)
             .map_err(Into::into)
     }

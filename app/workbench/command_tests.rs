@@ -3,8 +3,8 @@ use zeta_commands::AppCommandId;
 use super::WorkbenchCommandDispatch;
 use super::command_request_for_element;
 use crate::ADD_SESSION;
+use crate::FILES_PANE_TOGGLE;
 use crate::TAB_CONTAINER_TOGGLE;
-use crate::WORKSPACE_PANE_TOGGLE;
 use crate::WorkbenchHost;
 use zeta_files::FILES_REFRESH;
 use zeta_session::interaction::CONTEXT_DIFF;
@@ -16,8 +16,8 @@ fn workbench_elements_resolve_to_their_stable_commands() {
         Some(AppCommandId::ToggleTabContainer)
     );
     assert_eq!(
-        command_request_for_element(WORKSPACE_PANE_TOGGLE).map(|request| request.command_id()),
-        Some(AppCommandId::ToggleWorkspacePane)
+        command_request_for_element(FILES_PANE_TOGGLE).map(|request| request.command_id()),
+        Some(AppCommandId::ToggleFilesPane)
     );
     assert_eq!(
         command_request_for_element(ADD_SESSION).map(|request| request.command_id()),
@@ -29,7 +29,7 @@ fn workbench_elements_resolve_to_their_stable_commands() {
     );
     assert_eq!(
         command_request_for_element(CONTEXT_DIFF).map(|request| request.command_id()),
-        Some(AppCommandId::ShowWorkspaceDiff)
+        Some(AppCommandId::ShowGitDiff)
     );
 }
 

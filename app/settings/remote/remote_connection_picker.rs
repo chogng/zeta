@@ -219,7 +219,7 @@ impl RemoteConnectionPickerState {
                             .contains(&query)
                         || entry
                             .target()
-                            .workspace()
+                            .dir()
                             .as_str()
                             .to_ascii_lowercase()
                             .contains(&query)
@@ -229,7 +229,7 @@ impl RemoteConnectionPickerState {
                         "{} · {} · {}",
                         entry.name().as_str(),
                         entry.target().host().as_str(),
-                        entry.target().workspace().as_str()
+                        entry.target().dir().as_str()
                     ),
                     action: Some(RemoteConnectionPickerAction::Connect(entry.name().clone())),
                 }),
@@ -475,7 +475,7 @@ pub fn remote_connection_item_id(index: usize) -> ElementId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zeta_remote::RemoteWorkspacePath;
+    use zeta_remote::RemoteDirPath;
     use zeta_remote::SshHost;
     use zeta_remote::SshTarget;
     use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
@@ -583,12 +583,12 @@ mod tests {
         );
     }
 
-    fn connection(name: &str, host: &str, workspace: &str) -> RemoteConnectionEntry {
+    fn connection(name: &str, host: &str, dir: &str) -> RemoteConnectionEntry {
         RemoteConnectionEntry::new(
             RemoteConnectionName::parse(name).unwrap(),
             SshTarget::new(
                 SshHost::parse(host).unwrap(),
-                RemoteWorkspacePath::parse(workspace).unwrap(),
+                RemoteDirPath::parse(dir).unwrap(),
             ),
         )
     }

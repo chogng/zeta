@@ -1,7 +1,7 @@
 use super::{
     InputMethodContext, InputMethodTarget, encode_terminal_ime_event, text_input_composition_event,
 };
-use crate::WorkspaceSurfaceKind;
+use crate::MainSurfaceKind;
 use zeta_settings::RemoteConnectionManagerField;
 use zeta_terminal::{GridSize, TerminalCore};
 use zui::input::Ime;
@@ -11,7 +11,7 @@ use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     let composer = InputMethodContext {
         window_active: true,
-        workspace_surface: WorkspaceSurfaceKind::Agent,
+        main_surface: MainSurfaceKind::Agent,
         composer_focused: true,
         file_editor_focused: false,
         file_editor_find_focused: false,
@@ -20,7 +20,7 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         tab_rename_focused: false,
         file_search_focused: false,
         git_branch_search_focused: false,
-        workspace_path_search_focused: false,
+        path_search_focused: false,
         remote_connection_search_focused: false,
         remote_connection_manager_field: None,
         remote_tunnel_port_focused: false,
@@ -31,24 +31,24 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         ..composer
     };
     let terminal_grid = InputMethodContext {
-        workspace_surface: WorkspaceSurfaceKind::Terminal,
+        main_surface: MainSurfaceKind::Terminal,
         composer_focused: false,
         ..composer
     };
     let file_editor = InputMethodContext {
-        workspace_surface: WorkspaceSurfaceKind::Editor,
+        main_surface: MainSurfaceKind::Editor,
         file_editor_focused: true,
         composer_focused: false,
         ..composer
     };
     let file_editor_find = InputMethodContext {
-        workspace_surface: WorkspaceSurfaceKind::Editor,
+        main_surface: MainSurfaceKind::Editor,
         file_editor_find_focused: true,
         composer_focused: false,
         ..composer
     };
     let file_editor_replace = InputMethodContext {
-        workspace_surface: WorkspaceSurfaceKind::Editor,
+        main_surface: MainSurfaceKind::Editor,
         file_editor_replace_focused: true,
         composer_focused: false,
         ..composer
@@ -69,8 +69,8 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         git_branch_search_focused: true,
         ..terminal_grid
     };
-    let workspace_path_search = InputMethodContext {
-        workspace_path_search_focused: true,
+    let path_search = InputMethodContext {
+        path_search_focused: true,
         ..terminal_grid
     };
     let remote_connection_search = InputMethodContext {
@@ -81,8 +81,8 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         settings_search_focused: true,
         ..terminal_grid
     };
-    let remote_connection_workspace = InputMethodContext {
-        remote_connection_manager_field: Some(RemoteConnectionManagerField::Workspace),
+    let remote_connection_dir = InputMethodContext {
+        remote_connection_manager_field: Some(RemoteConnectionManagerField::Directory),
         ..terminal_grid
     };
     let remote_tunnel_port = InputMethodContext {
@@ -135,16 +135,16 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         InputMethodTarget::GitBranchSearch
     );
     assert_eq!(
-        InputMethodTarget::for_context(workspace_path_search),
-        InputMethodTarget::WorkspacePathSearch
+        InputMethodTarget::for_context(path_search),
+        InputMethodTarget::DirectoryPathSearch
     );
     assert_eq!(
         InputMethodTarget::for_context(remote_connection_search),
         InputMethodTarget::RemoteConnectionSearch
     );
     assert_eq!(
-        InputMethodTarget::for_context(remote_connection_workspace),
-        InputMethodTarget::RemoteConnectionWorkspace
+        InputMethodTarget::for_context(remote_connection_dir),
+        InputMethodTarget::RemoteConnectionDirectory
     );
     assert_eq!(
         InputMethodTarget::for_context(remote_tunnel_port),

@@ -1,14 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { APP_SERVER_METHODS, type WorkspaceFolderSetEntry, type WorkspaceSwitchTrust } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type PermissionDto, type DirGrantDto, type EnvDirSetEntry } from "../../../../../generated/app-server/types.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
-import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery, WorkspaceTrustChoice } from "./workspaceTransitionMainService.js";
+import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
+
+export const READ_DIR_PERMISSIONS: readonly PermissionDto[] = [
+	"readFiles", "watchFiles", "browseFiles", "searchFiles", "inspectRepository",
+];
+
+export const DEVELOPMENT_DIR_PERMISSIONS: readonly PermissionDto[] = [
+	...READ_DIR_PERMISSIONS,
+	"writeFiles", "executeCommands", "loadInstructions", "loadConfig", "discoverSkills",
+	"discoverMcp", "useLanguageServices", "discoverHooks", "discoverPlugins", "mutateRepository",
+];
 
 export interface IAppServerWorkspaceTransitionHost {
 	getState(): AppServerConnectionState;
-	switchWorkspace(root: string, trust: IWorkspaceTransitionContext["trust"]): Promise<void>;
+	switchWorkspace(root: string, grant: IWorkspaceTransitionContext["grant"]): Promise<void>;
 	onStateChange(listener: (state: AppServerConnectionState) => void): IDisposable;
 }
 
@@ -21,16 +31,16 @@ export interface IAppServerWorkspaceTransitionHost {
 export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter {
 	constructor(private readonly host: IAppServerWorkspaceTransitionHost) {}
 
-	switchWorkspace({ root, trust }: IWorkspaceTransitionContext): Promise<void> {
-		return this.host.switchWorkspace(root, trust);
+	switchWorkspace({ root, grant }: IWorkspaceTransitionContext): Promise<void> {
+		return this.host.switchWorkspace(root, grant);
 	}
 
 	classifyRuntimeError(error: unknown): WorkspaceTransitionFailureKind {
 		if (error instanceof AppServerRemoteError) {
 			switch (error.errorName) {
-				case "WorkspaceSwitchBusy":
+				case "EnvCwdSetBusy":
 					return WorkspaceTransitionFailureKind.RuntimeBusy;
-				case "WorkspaceSwitchUnavailable":
+				case "EnvCwdSetUnavailable":
 				case "MethodNotFound":
 					return WorkspaceTransitionFailureKind.RuntimeUnsupported;
 				default:
@@ -96,8 +106,8 @@ interface IWaitUntilReadyOptions {
 
 export function createAppServerWorkspaceTransitionAdapter(
 	supervisor: AppServerSupervisor,
-	switchWorkspace: (root: string, trust: WorkspaceTrustChoice) => Promise<void> = async (root, trust) => {
-		await switchAppServerWorkspace(supervisor, root, trust);
+	switchWorkspace: (root: string, grant: DirGrantDto) => Promise<void> = async (root, grant) => {
+		await switchAppServerWorkspace(supervisor, root, grant);
 	},
 ): AppServerWorkspaceTransitionAdapter {
 	return new AppServerWorkspaceTransitionAdapter({
@@ -107,50 +117,37 @@ export function createAppServerWorkspaceTransitionAdapter(
 	});
 }
 
-export async function readAppServerWorkspaceTrust(supervisor: AppServerSupervisor, root: string): Promise<WorkspaceTrustChoice | undefined> {
-	const result = await supervisor.request(APP_SERVER_METHODS["workspace/trust/read"], { root });
-	return result.setting === "trusted"
-		? WorkspaceTrustChoice.Trusted
-		: result.setting === "restricted" ? WorkspaceTrustChoice.Restricted : undefined;
+export async function readAppServerDirPermissions(supervisor: AppServerSupervisor, path: string): Promise<readonly PermissionDto[] | undefined> {
+	const result = await supervisor.request(APP_SERVER_METHODS["config/dirPermissions/read"], { path });
+	return result.permissions ?? undefined;
 }
 
-export async function switchAppServerWorkspace(supervisor: AppServerSupervisor, root: string, trust: WorkspaceTrustChoice): Promise<void> {
-	const authority = await workspaceSwitchTrust(supervisor, trust);
-	await supervisor.request(APP_SERVER_METHODS["workspace/switch"], { root, trust: authority });
+export async function createUserDirGrant(supervisor: AppServerSupervisor, permissions: readonly PermissionDto[]): Promise<DirGrantDto> {
+	const config = await supervisor.request(APP_SERVER_METHODS["config/read"], {});
+	return {
+		type: "user",
+		commandId: `desktop-dir-permissions-${randomUUID()}`,
+		expectedRevision: config.revision,
+		permissions: [...permissions],
+	};
+}
+
+export async function switchAppServerWorkspace(supervisor: AppServerSupervisor, path: string, grant: DirGrantDto): Promise<void> {
+	await supervisor.request(APP_SERVER_METHODS["env/cwd/set"], { cwd: path });
+	await supervisor.request(APP_SERVER_METHODS["env/dirs/set"], { dirs: [{ id: "root", path, grant }] });
 }
 
 export interface IAppServerWorkspaceFolder {
 	readonly id: string;
-	readonly root: string;
-	readonly trust: WorkspaceTrustChoice;
+	readonly path: string;
+	readonly grant: DirGrantDto;
 }
 
 /** Atomically replaces the App Server's ordered workspace-folder collection. */
 export async function setAppServerWorkspaceFolders(supervisor: AppServerSupervisor, folders: readonly IAppServerWorkspaceFolder[]): Promise<void> {
-	const entries: WorkspaceFolderSetEntry[] = [];
+	const entries: EnvDirSetEntry[] = [];
 	for (const folder of folders) {
-		entries.push({
-			id: folder.id,
-			root: folder.root,
-			trust: await workspaceSwitchTrust(supervisor, folder.trust),
-		});
+		entries.push({ id: folder.id, path: folder.path, grant: folder.grant });
 	}
-	await supervisor.request(APP_SERVER_METHODS["workspace/folders/set"], { folders: entries });
-}
-
-async function workspaceSwitchTrust(supervisor: AppServerSupervisor, trust: WorkspaceTrustChoice): Promise<WorkspaceSwitchTrust> {
-	switch (trust) {
-		case WorkspaceTrustChoice.UserConfig:
-			return { type: "userConfig" } as const;
-		case WorkspaceTrustChoice.Restricted:
-		case WorkspaceTrustChoice.Trusted: {
-			const config = await supervisor.request(APP_SERVER_METHODS["config/read"], {});
-			return {
-				type: "userDecision" as const,
-				commandId: `desktop-workspace-trust-${randomUUID()}`,
-				expectedRevision: config.revision,
-				setting: trust,
-			};
-		}
-	}
+	await supervisor.request(APP_SERVER_METHODS["env/dirs/set"], { dirs: entries });
 }

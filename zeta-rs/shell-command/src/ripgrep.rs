@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 ///
 /// This policy rejects ripgrep features that can spawn child processes, read auxiliary files, or
 /// follow symbolic links. It is an argument-validation layer, not a replacement for the platform
-/// sandbox that enforces the Workspace filesystem and network boundary.
+/// sandbox that enforces the directory filesystem and network boundary.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct BuiltInRipgrepPolicy;
 

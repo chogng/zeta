@@ -86,8 +86,7 @@
 
 | 组件 | 状态 | 代码证据 |
 | --- | --- | --- |
-| SessionCoordinator + create/fork/rewind saga | 已实现 | `core/src/session_coordinator.rs` |
-| ThreadController 单写者 / receipt / replay / conflict | 已实现 | `core/src/thread_controller.rs` |
+| ThreadController create/fork/rewind、单写者 / receipt / replay / conflict | 已实现 | `core/src/thread_controller.rs` |
 | per-Thread loaded projection + FIFO mutation gate + incarnation + idle eviction | 已实现 | `core/src/thread_controller/loaded_thread.rs` |
 | 有界执行邮箱（OS 线程 lane，容量 8，30s 空闲回收） | 已实现 | `core/src/thread_controller/mailbox.rs` |
 | TurnExecutor 顺序 model → tool → model 循环 | 已实现 | `core/src/turn/executor.rs` |
@@ -130,12 +129,8 @@ Versioned App Server
   connection gate / dispatcher / subscriptions / outbound queue
              │
              ▼
-SessionCoordinator (zeta-core)
-  membership / lineage / defaults / Session durable commit
-             │ ThreadHandle registry
-             ▼
 ThreadController (zeta-core, one logical writer per loaded Thread)
-  durable commit / recovery / incarnation / execution mailbox
+  session_id grouping / lineage / durable commit / recovery / execution mailbox
              │
              ▼
 TurnExecutor (zeta-core private module)
@@ -146,7 +141,6 @@ TurnExecutor (zeta-core private module)
        │                              │
 model-provider              shell-command / file-system / apply-patch / MCP adapters
 
-SessionCoordinator ── append ──► SessionStore
 ThreadController  ─── append ──► ThreadStore ──► rollout
       │ committed events and transient deltas
       └─────────────────────────► ThreadUpdateSink ──► subscription hub
@@ -161,8 +155,9 @@ ThreadController  ─── append ──► ThreadStore ──► rollout
   loaded state、mailbox、incarnation 永不进入 wire；
 - Tool adapter 不直接修改 Thread projection。
 
-Session 的三种语义必须区分（详见 [`protocol.md`](protocol.md)）：产品 `Session` 根 aggregate、
-`AppServerConnection`（一条 RPC 连接的资源 owner）、`BrowserSession` / `TerminalSession`
+Session 的不同语义必须区分（详见 [`protocol.md`](protocol.md)）：产品 `Session` 是按
+`session_id` 聚合的 Thread tree 视图；`AppServerConnection` 是一条 RPC 连接的资源 owner；
+`BrowserSession` / `TerminalSession` 是具体服务连接。
 （capability 生命周期）。三者不得混用命名或状态。
 
 提交顺序、安全点与取消语义由 [`core.md`](core.md) §7 权威定义，本文不重复。工具执行生命

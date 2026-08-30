@@ -40,13 +40,13 @@ impl AgentEnvironmentSnapshot {
         );
         push_element(&mut rendered, "git_status", status, 2);
         push_element(&mut rendered, "git_recent_commits", recent_commits, 2);
-        rendered.push_str("  <filesystem>\n    <workspace_roots>\n");
-        for root in self.workspace_roots().as_slice() {
-            push_element(&mut rendered, "root", &root.display().to_string(), 6);
+        rendered.push_str("  <filesystem>\n    <accessible_dirs>\n");
+        for dir in self.dirs().as_slice() {
+            push_element(&mut rendered, "dir", &dir.display().to_string(), 6);
         }
-        rendered.push_str("    </workspace_roots>\n  </filesystem>\n</environment_context>\n");
+        rendered.push_str("    </accessible_dirs>\n  </filesystem>\n</environment_context>\n");
         rendered.push_str(
-            "Environment values except workspace_roots were captured when the Workspace was activated and do not update. Run commands (for example `git status`) when you need current state. Relative paths still resolve from cwd.",
+            "Environment values except accessible_dirs were captured when the environment connection was created and do not update. Run commands (for example `git status`) when you need current state. Relative paths resolve from cwd.",
         );
         rendered
     }

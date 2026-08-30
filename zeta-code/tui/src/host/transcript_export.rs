@@ -1,4 +1,4 @@
-//! Workspace-bounded transcript file export.
+//! Directory-bounded transcript file export.
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -7,16 +7,16 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub(crate) fn write(
-    workspace_root: &Path,
+    dir_root: &Path,
     requested_path: Option<&Path>,
     contents: &str,
 ) -> Result<PathBuf, String> {
     let relative_path = match requested_path {
         Some(path) => validate_relative_path(path)?,
-        None => available_default_path(workspace_root),
+        None => available_default_path(dir_root),
     };
-    let path = workspace_root.join(relative_path);
-    let target = bounded_target(workspace_root, &path)?;
+    let path = dir_root.join(relative_path);
+    let target = bounded_target(dir_root, &path)?;
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -29,22 +29,22 @@ pub(crate) fn write(
     Ok(path)
 }
 
-fn bounded_target(workspace_root: &Path, path: &Path) -> Result<PathBuf, String> {
-    let canonical_root = workspace_root
+fn bounded_target(dir_root: &Path, path: &Path) -> Result<PathBuf, String> {
+    let canonical_root = dir_root
         .canonicalize()
-        .map_err(|error| format!("could not resolve workspace root: {error}"))?;
+        .map_err(|error| format!("could not resolve directory root: {error}"))?;
     let parent = path
         .parent()
-        .ok_or_else(|| "export path must name a file inside the active workspace".to_owned())?;
+        .ok_or_else(|| "export path must name a file inside the active directory".to_owned())?;
     let canonical_parent = parent
         .canonicalize()
         .map_err(|error| format!("could not resolve export directory: {error}"))?;
     if !canonical_parent.starts_with(&canonical_root) {
-        return Err("export path must stay inside the active workspace".into());
+        return Err("export path must stay inside the active directory".into());
     }
     let file_name = path
         .file_name()
-        .ok_or_else(|| "export path must name a file inside the active workspace".to_owned())?;
+        .ok_or_else(|| "export path must name a file inside the active directory".to_owned())?;
     Ok(canonical_parent.join(file_name))
 }
 
@@ -58,19 +58,19 @@ fn validate_relative_path(path: &Path) -> Result<PathBuf, String> {
             )
         })
     {
-        return Err("export path must stay inside the active workspace".into());
+        return Err("export path must stay inside the active directory".into());
     }
     Ok(path.to_path_buf())
 }
 
-fn available_default_path(workspace_root: &Path) -> PathBuf {
+fn available_default_path(dir_root: &Path) -> PathBuf {
     let first = PathBuf::from("zeta-transcript.md");
-    if !workspace_root.join(&first).exists() {
+    if !dir_root.join(&first).exists() {
         return first;
     }
     for suffix in 2..=10_000 {
         let candidate = PathBuf::from(format!("zeta-transcript-{suffix}.md"));
-        if !workspace_root.join(&candidate).exists() {
+        if !dir_root.join(&candidate).exists() {
             return candidate;
         }
     }

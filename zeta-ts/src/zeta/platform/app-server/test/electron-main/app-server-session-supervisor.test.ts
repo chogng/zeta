@@ -86,7 +86,7 @@ class ProtocolChildProcess extends EventEmitter {
 						attachments: true,
 						fileSystem: true,
 						git: true,
-						workspaceSearch: true,
+						contentSearch: true,
 						codebase: true,
 						cloudCodebase: false,
 						terminal: true,
@@ -104,9 +104,12 @@ class ProtocolChildProcess extends EventEmitter {
 					},
 					slashCommands: [{ name: "diagnose", description: "Inspect workspace", argumentMode: "optional" }],
 				});
-			} else if (request.method === "workspace/switch") {
-				const params = request.params as { readonly root: string };
-				this.respond(request.id, { root: params.root, trust: "restricted" });
+			} else if (request.method === "env/cwd/set") {
+				const params = request.params as { readonly cwd: string };
+				this.respond(request.id, { cwd: params.cwd });
+			} else if (request.method === "env/dirs/set") {
+				const params = request.params as { readonly dirs: readonly { readonly id: string; readonly path: string }[] };
+				this.respond(request.id, { dirs: params.dirs.map(dir => ({ ...dir, permissions: ["readFiles"] })) });
 			}
 		}
 	}
@@ -266,19 +269,20 @@ test("supervisor restarts a crashed process with bounded lifecycle states", asyn
 	assert.equal(supervisor.generation, 3);
 });
 
-test("workspace switching keeps the current App Server process and connection", async () => {
+test("environment directory updates keep the current App Server process and connection", async () => {
 	const children: ProtocolChildProcess[] = [];
 	const supervisor = new AppServerSupervisor(supervisorOptions(children));
 	const states: string[] = [];
 	supervisor.onStateChange((state) => states.push(state));
 	await supervisor.start();
 
-	const switched = await supervisor.request(APP_SERVER_METHODS["workspace/switch"], {
-		root: "/test/workspace",
-		trust: { type: "userConfig" },
+	const cwd = await supervisor.request(APP_SERVER_METHODS["env/cwd/set"], { cwd: "/test/project" });
+	const dirs = await supervisor.request(APP_SERVER_METHODS["env/dirs/set"], {
+		dirs: [{ id: "root", path: "/test/project", grant: { type: "config" } }],
 	});
 
-	assert.deepEqual(switched, { root: "/test/workspace", trust: "restricted" });
+	assert.deepEqual(cwd, { cwd: "/test/project" });
+	assert.deepEqual(dirs, { dirs: [{ id: "root", path: "/test/project", permissions: ["readFiles"] }] });
 	assert.equal(children.length, 1);
 	assert.equal(children[0].signalCode, null);
 	assert.equal(supervisor.state, "ready");
@@ -321,10 +325,11 @@ test("crash rejects an unknown-outcome side effect without replaying it", async 
 	const turn = supervisor.request(APP_SERVER_METHODS["session/request"], {
 		commandId: "one",
 		sessionId: "session_1",
-		expectedSequence: 1,
 		request: {
 			type: "startTurn",
 			threadId: "thread_1",
+			expectedSequence: 1,
+			approvalMode: "askPermissions",
 			input: [{ type: "text", text: "hello" }],
 		},
 	});
@@ -434,7 +439,7 @@ test("local launcher applies a validated authority environment to the next conne
 	launcher.replaceEnvironment({
 		ZETA_PROFILE_ROOT: "/profiles/zeta",
 		ZETA_WORKSPACE_ROOT: "/workspaces/two",
-		ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+		ZETA_DIR_GRANT_SOURCE: "userConfig",
 	});
 	launcher.launch();
 

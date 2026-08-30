@@ -115,11 +115,11 @@ export class BrowserFileService extends Disposable implements IFileService {
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
 		const sourceTarget = this.fileTarget(source);
 		const targetTarget = this.fileTarget(target);
-		if (sourceTarget.workspaceFolderId !== targetTarget.workspaceFolderId) {
+		if (sourceTarget.dirId !== targetTarget.dirId) {
 			throw new Error("Renaming across workspace folders is not supported");
 		}
 		return this.api.rename({
-			workspaceFolderId: sourceTarget.workspaceFolderId,
+			dirId: sourceTarget.dirId,
 			source: sourceTarget.path,
 			target: targetTarget.path,
 			existing,
@@ -130,21 +130,21 @@ export class BrowserFileService extends Disposable implements IFileService {
 		return this.api.delete({ ...this.fileTarget(resource), missing, mode });
 	}
 
-	private fileTarget(resource: URI): { readonly workspaceFolderId: string; readonly path: string } {
+	private fileTarget(resource: URI): { readonly dirId: string; readonly path: string } {
 		const folders = this.workspaceContextService.getWorkspace().folders;
-		let match: { readonly workspaceFolderId: string; readonly path: string; readonly rootLength: number } | undefined;
+		let match: { readonly dirId: string; readonly path: string; readonly rootLength: number } | undefined;
 		for (const folder of folders) {
 			try {
 				const path = workspaceRelativePath(folder.uri, resource);
 				if (!match || folder.uri.path.length > match.rootLength) {
-					match = { workspaceFolderId: folder.id, path, rootLength: folder.uri.path.length };
+					match = { dirId: folder.id, path, rootLength: folder.uri.path.length };
 				}
 			} catch {
 				// A resource may only belong to one of the workspace's independent roots.
 			}
 		}
 		if (!match) throw new Error("Resource must belong to a current workspace folder");
-		return { workspaceFolderId: match.workspaceFolderId, path: match.path };
+		return { dirId: match.dirId, path: match.path };
 	}
 
 	private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {
@@ -172,8 +172,8 @@ export class BrowserFileService extends Disposable implements IFileService {
 			return;
 		}
 		const folders = this.workspaceContextService.getWorkspace().folders;
-		const folder = change.workspaceFolderId
-			? folders.find(folder => folder.id === change.workspaceFolderId)
+		const folder = change.dirId
+			? folders.find(folder => folder.id === change.dirId)
 			: folders.length === 1 ? folders[0] : undefined;
 		if (!folder) {
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));

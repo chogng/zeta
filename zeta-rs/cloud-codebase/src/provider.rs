@@ -22,10 +22,10 @@ pub trait CloudCodebaseProvider: Send + Sync {
 
     fn capabilities(&self) -> CloudCodebaseCapabilities;
 
-    /// Publishes chunks produced and revision-verified inside the Workspace authority.
+    /// Publishes chunks produced and revision-verified inside the directory grant.
     ///
     /// Implementations are thin transport adapters to a remote Codebase service. They must not
-    /// read Workspace files, change chunk boundaries, or substitute complete source files.
+    /// read directory files, change chunk boundaries, or substitute complete source files.
     fn publish(
         &self,
         request: CloudCodebasePublicationRequest,

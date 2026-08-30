@@ -1,6 +1,6 @@
 use super::*;
 use crate::protocol::{
-    ACCESS_FLAG, COMMAND_SEPARATOR, CWD_FLAG, READ_ONLY_ACCESS, SETUP_HELPER_FLAG, WORKSPACE_FLAG,
+    ACCESS_FLAG, COMMAND_SEPARATOR, CWD_FLAG, DIR_FLAG, READ_ONLY_ACCESS, SETUP_HELPER_FLAG,
 };
 
 fn sandbox() -> WindowsSandbox {
@@ -8,24 +8,24 @@ fn sandbox() -> WindowsSandbox {
 }
 
 #[test]
-fn resolves_workspace_and_network_authority_for_the_native_launcher() {
-    let workspace = WorkspaceRoot::open(".").unwrap();
-    let policy = SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied);
+fn resolves_dir_and_network_authority_for_the_native_launcher() {
+    let dir = Dir::open_local(".").unwrap();
+    let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
 
-    let plan = sandbox().plan(policy, &workspace);
+    let plan = sandbox().plan(policy, &dir);
 
-    assert_eq!(plan.workspace(), workspace.canonical_path());
-    assert_eq!(plan.file_system(), FileSystemAccess::WorkspaceWrite);
+    assert_eq!(plan.dir(), dir.canonical_path());
+    assert_eq!(plan.file_system(), FileSystemAccess::DirectoryWrite);
     assert_eq!(plan.network(), NetworkAccess::Denied);
 }
 
 #[test]
 fn prepares_appcontainer_runner_with_frozen_setup_and_inner_command() {
-    let workspace = WorkspaceRoot::open(".").unwrap();
-    let command = SandboxCommand::new("rg.exe", ["--files"], workspace.canonical_path());
+    let dir = Dir::open_local(".").unwrap();
+    let command = SandboxCommand::new("rg.exe", ["--files"], dir.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
 
-    let prepared = sandbox().prepare(&command, policy, &workspace).unwrap();
+    let prepared = sandbox().prepare(&command, policy, &dir).unwrap();
 
     assert_eq!(prepared.kind(), SandboxKind::WindowsAppContainer);
     assert_eq!(prepared.program(), "zeta-command-runner.exe");
@@ -38,7 +38,7 @@ fn prepares_appcontainer_runner_with_frozen_setup_and_inner_command() {
     assert_eq!(arguments[1], "zeta-windows-sandbox-setup.exe");
     assert_eq!(arguments[2], ACCESS_FLAG);
     assert_eq!(arguments[3], READ_ONLY_ACCESS);
-    assert!(arguments.contains(&WORKSPACE_FLAG.to_owned()));
+    assert!(arguments.contains(&DIR_FLAG.to_owned()));
     assert!(arguments.contains(&CWD_FLAG.to_owned()));
     assert_eq!(
         &arguments[arguments
@@ -50,28 +50,25 @@ fn prepares_appcontainer_runner_with_frozen_setup_and_inner_command() {
 }
 
 #[test]
-fn profile_identity_separates_workspace_and_access_authority() {
-    let workspace = WorkspaceRoot::open(".").unwrap();
-    let read_only = profile_name(workspace.canonical_path(), READ_ONLY_ACCESS);
-    let workspace_write = profile_name(
-        workspace.canonical_path(),
-        crate::protocol::WORKSPACE_WRITE_ACCESS,
-    );
+fn profile_identity_separates_dir_and_access_authority() {
+    let dir = Dir::open_local(".").unwrap();
+    let read_only = profile_name(dir.canonical_path(), READ_ONLY_ACCESS);
+    let dir_write = profile_name(dir.canonical_path(), crate::protocol::DIR_WRITE_ACCESS);
 
-    assert_ne!(read_only, workspace_write);
+    assert_ne!(read_only, dir_write);
     assert!(read_only.starts_with("Zeta.Agent.v1.ro."));
-    assert!(workspace_write.starts_with("Zeta.Agent.v1.rw."));
+    assert!(dir_write.starts_with("Zeta.Agent.v1.rw."));
     assert!(read_only.len() <= 50);
-    assert!(workspace_write.len() <= 50);
+    assert!(dir_write.len() <= 50);
 }
 
 #[test]
 fn unsupported_windows_policy_fails_closed() {
-    let workspace = WorkspaceRoot::open(".").unwrap();
-    let command = SandboxCommand::new("rg.exe", ["--files"], workspace.canonical_path());
+    let dir = Dir::open_local(".").unwrap();
+    let command = SandboxCommand::new("rg.exe", ["--files"], dir.canonical_path());
     let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Allowed);
 
-    let error = sandbox().prepare(&command, policy, &workspace).unwrap_err();
+    let error = sandbox().prepare(&command, policy, &dir).unwrap_err();
 
     assert!(matches!(
         error,

@@ -3,9 +3,9 @@ use std::path::Path;
 use std::sync::RwLock;
 
 use crate::{
-    ChunkReference, CodebaseError, CodebaseIndexStore, CodebaseManifest, CodebaseSnapshot,
+    ChunkReference, CodebaseError, CodebaseIndexStore, CodebaseManifest, CodebaseSnapshot, DirScan,
     FileUpdate, IndexRootId, IndexedChunkReference, IndexedSourceReference, PreparedFile,
-    SearchHit, StoredSource, WorkspaceScan,
+    SearchHit, StoredSource,
 };
 
 #[derive(Default)]
@@ -23,10 +23,10 @@ struct State {
 }
 
 impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
-    fn replace_workspace(
+    fn replace_sources(
         &self,
         root_id: &IndexRootId,
-        scan: WorkspaceScan,
+        scan: DirScan,
     ) -> Result<CodebaseSnapshot, CodebaseError> {
         let mut state = self
             .state

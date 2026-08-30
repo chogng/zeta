@@ -508,7 +508,7 @@ pub enum TurnChangeError {
     NoChanges,
     #[error("change set has unresolved dependencies")]
     UnresolvedDependencies,
-    #[error("change set depends on initial workspace changes")]
+    #[error("change set depends on initial worktree changes")]
     UnresolvedExternalDependencies,
     #[error("commit message is missing")]
     MissingCommitMessage,

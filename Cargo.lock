@@ -10851,6 +10851,7 @@ dependencies = [
  "zeta-config",
  "zeta-connectors",
  "zeta-connectors-extension",
+ "zeta-content-search",
  "zeta-core",
  "zeta-debug-adapter",
  "zeta-diff",
@@ -10859,6 +10860,7 @@ dependencies = [
  "zeta-extension-api",
  "zeta-extensions",
  "zeta-fast-regex-search",
+ "zeta-file-access",
  "zeta-file-system",
  "zeta-file-watcher",
  "zeta-git",
@@ -10900,9 +10902,6 @@ dependencies = [
  "zeta-utils-pty",
  "zeta-web-search-extension",
  "zeta-windows-sandbox",
- "zeta-workspace",
- "zeta-workspace-access",
- "zeta-workspace-search",
  "zeta-worktree",
 ]
 
@@ -10920,9 +10919,9 @@ dependencies = [
  "zeta-async-utils",
  "zeta-client",
  "zeta-core",
+ "zeta-file-access",
  "zeta-install-context",
  "zeta-protocol",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -10956,6 +10955,7 @@ dependencies = [
  "ts-rs",
  "zeroize",
  "zeta-collaboration",
+ "zeta-file-access",
  "zeta-protocol",
  "zeta-thread-transcript",
 ]
@@ -10975,9 +10975,9 @@ dependencies = [
  "serde",
  "serde_json",
  "zeta-async-utils",
+ "zeta-file-access",
  "zeta-protocol",
  "zeta-tools",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11076,8 +11076,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "zeta-codebase",
+ "zeta-file-access",
  "zeta-state",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11131,9 +11131,9 @@ dependencies = [
  "thiserror 2.0.19",
  "zeta-api",
  "zeta-async-utils",
+ "zeta-file-access",
  "zeta-model-provider",
  "zeta-syntax",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11144,10 +11144,10 @@ dependencies = [
  "tempfile",
  "zeta-api",
  "zeta-codebase",
+ "zeta-file-access",
  "zeta-model-provider",
  "zeta-state",
  "zeta-syntax",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11189,10 +11189,10 @@ dependencies = [
  "sha2 0.10.9",
  "toml 0.9.12+spec-1.1.0",
  "zeta-execpolicy",
+ "zeta-file-access",
  "zeta-model-provider-config",
  "zeta-protocol",
  "zeta-state",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11224,6 +11224,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-content-search"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-file-access",
+ "zeta-shell-command",
+]
+
+[[package]]
 name = "zeta-context-engine"
 version = "0.1.0"
 
@@ -11248,7 +11258,6 @@ dependencies = [
  "zeta-prompts",
  "zeta-protocol",
  "zeta-sandboxing",
- "zeta-session-store",
  "zeta-thread-store",
  "zeta-utils-image",
  "zeta-utils-stream-parser",
@@ -11262,7 +11271,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
- "zeta-workspace",
+ "zeta-file-access",
 ]
 
 [[package]]
@@ -11323,6 +11332,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-environment"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
 name = "zeta-exec"
 version = "0.1.0"
 dependencies = [
@@ -11379,9 +11397,25 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
+ "zeta-file-access",
  "zeta-immutable-generation-store",
  "zeta-uds",
- "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-file-access"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "schemars",
+ "serde",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "ts-rs",
+ "zeta-environment",
+ "zeta-protocol",
+ "zeta-utils-absolute-path",
 ]
 
 [[package]]
@@ -11407,7 +11441,7 @@ version = "0.1.0"
 dependencies = [
  "sha2 0.10.9",
  "tempfile",
- "zeta-workspace",
+ "zeta-file-access",
 ]
 
 [[package]]
@@ -11417,10 +11451,10 @@ dependencies = [
  "serde",
  "serde_json",
  "zeta-async-utils",
+ "zeta-file-access",
  "zeta-file-system",
  "zeta-protocol",
  "zeta-tools",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11477,13 +11511,13 @@ dependencies = [
  "zeta-async-utils",
  "zeta-config",
  "zeta-core",
+ "zeta-file-access",
  "zeta-install-context",
  "zeta-linux-sandbox",
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-tool-executor",
  "zeta-windows-sandbox",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11594,9 +11628,9 @@ dependencies = [
 name = "zeta-linux-sandbox"
 version = "0.1.0"
 dependencies = [
+ "zeta-file-access",
  "zeta-install-context",
  "zeta-sandboxing",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11851,7 +11885,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "ts-rs",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -11915,7 +11948,6 @@ dependencies = [
  "zeta-attachments",
  "zeta-core",
  "zeta-protocol",
- "zeta-session-store",
  "zeta-state",
  "zeta-thread-store",
 ]
@@ -11928,7 +11960,6 @@ dependencies = [
  "zeta-history",
  "zeta-protocol",
  "zeta-rollout",
- "zeta-session-store",
  "zeta-state",
  "zeta-thread-store",
 ]
@@ -11937,7 +11968,7 @@ dependencies = [
 name = "zeta-sandboxing"
 version = "0.1.0"
 dependencies = [
- "zeta-workspace",
+ "zeta-file-access",
 ]
 
 [[package]]
@@ -12002,14 +12033,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-session-store"
-version = "0.1.0"
-dependencies = [
- "serde",
- "zeta-protocol",
-]
-
-[[package]]
 name = "zeta-settings"
 version = "0.1.0"
 dependencies = [
@@ -12032,11 +12055,11 @@ dependencies = [
  "serde",
  "serde_json",
  "zeta-async-utils",
+ "zeta-file-access",
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-tool-executor",
  "zeta-tools",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -12099,13 +12122,12 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "zeta-file-access",
  "zeta-history",
  "zeta-protocol",
- "zeta-session-store",
  "zeta-thread-store",
  "zeta-turn-changes",
  "zeta-utils-path",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -12139,7 +12161,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-terminal-workspace"
+name = "zeta-terminal-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -12194,9 +12216,9 @@ name = "zeta-tool-executor"
 version = "0.1.0"
 dependencies = [
  "zeta-async-utils",
+ "zeta-file-access",
  "zeta-protocol",
  "zeta-sandboxing",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -12208,6 +12230,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "zeta-async-utils",
+ "zeta-environment",
  "zeta-protocol",
  "zeta-sandboxing",
  "zeta-utils-output-truncation",
@@ -12456,9 +12479,9 @@ version = "0.1.0"
 dependencies = [
  "sha2 0.10.9",
  "windows-sys 0.59.0",
+ "zeta-file-access",
  "zeta-install-context",
  "zeta-sandboxing",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -12480,6 +12503,7 @@ dependencies = [
  "zeta-diff",
  "zeta-editor",
  "zeta-editor-host",
+ "zeta-file-access",
  "zeta-file-search",
  "zeta-files",
  "zeta-icons",
@@ -12497,46 +12521,13 @@ dependencies = [
  "zeta-settings",
  "zeta-slash-commands",
  "zeta-terminal",
- "zeta-terminal-workspace",
+ "zeta-terminal-runtime",
  "zeta-text-file",
  "zeta-theme",
  "zeta-ui-components",
  "zeta-ui-theme",
  "zeta-utils-path",
- "zeta-workspace",
  "zui",
-]
-
-[[package]]
-name = "zeta-workspace"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "schemars",
- "serde",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "ts-rs",
- "zeta-utils-absolute-path",
-]
-
-[[package]]
-name = "zeta-workspace-access"
-version = "0.1.0"
-dependencies = [
- "tempfile",
- "zeta-workspace",
-]
-
-[[package]]
-name = "zeta-workspace-search"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "zeta-async-utils",
- "zeta-shell-command",
- "zeta-workspace",
 ]
 
 [[package]]

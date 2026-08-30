@@ -3,12 +3,10 @@ use crate::CodebaseModels;
 use crate::SlashCommandCatalog;
 use crate::model_catalog::ModelCatalog;
 use crate::model_provider_error::map_model_provider_error;
-use crate::server::WorkspaceSwitchTrustPolicy;
-use crate::server::WorkspaceToolPorts;
+use crate::server::DirGrantPolicy;
+use crate::server::EnvToolPorts;
 use crate::server::update_broker::UpdateBroker;
 use crate::tool_composition::ToolPort;
-use sha2::Digest;
-use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
@@ -22,15 +20,15 @@ use zeta_chatgpt::ChatGptOAuth;
 use zeta_client::OperationClient;
 use zeta_cloud_codebase::CloudCodebaseProviderRegistry;
 use zeta_config::ConfigStore;
+use zeta_config::DirConfigDocument;
+use zeta_config::DirConfigInput;
+use zeta_config::DirConfigRevision;
+use zeta_config::DirConfigScope;
+use zeta_config::DirConfigStore;
+use zeta_config::DirId;
 use zeta_config::McpServerId;
 use zeta_config::ResolvedConfig;
 use zeta_config::ResolvedConfigSnapshot;
-use zeta_config::WorkspaceConfigDocument;
-use zeta_config::WorkspaceConfigInput;
-use zeta_config::WorkspaceConfigRevision;
-use zeta_config::WorkspaceConfigScope;
-use zeta_config::WorkspaceConfigStore;
-use zeta_config::WorkspaceId;
 use zeta_config::resolve_scoped_config;
 use zeta_core::ContextBudget;
 use zeta_core::ContextCompactionLimit;
@@ -38,7 +36,6 @@ use zeta_core::ContextTokenCount;
 use zeta_core::ContextTokenMeasurementCapability;
 use zeta_core::ContextTokenMeasurementOutcome;
 use zeta_core::CoreError;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ModelImageInputLimits;
 use zeta_core::ModelImageInputPolicy;
@@ -46,9 +43,10 @@ use zeta_core::ModelSelection;
 use zeta_core::ModelService;
 use zeta_core::ModelStreamSink as CoreModelStreamSink;
 use zeta_core::ResolvedContextBudget;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
+use zeta_file_access::Dir;
+use zeta_file_access::Permission as DirPermission;
 use zeta_install_context::InstallContext;
 use zeta_kimi::KimiOAuth;
 use zeta_login::InteractiveLoginDriver;
@@ -74,7 +72,6 @@ use zeta_model_provider::ModelProviderRuntime;
 use zeta_model_provider::ModelRuntimeRequest;
 use zeta_model_provider::TokenizerAssetCatalog;
 use zeta_model_provider::UnavailableModel;
-use zeta_model_provider_config::ModelCatalogPolicy;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_model_provider_config::StaticModelRuntime;
@@ -90,8 +87,6 @@ use zeta_secrets::FileSecretStore;
 use zeta_secrets::SecretStore;
 use zeta_skills_extension::BuiltInSkillSource;
 use zeta_skills_extension::SkillConfigSnapshotProvider;
-use zeta_workspace::WorkspaceRoot;
-use zeta_workspace::WorkspaceTrustDecision;
 
 const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
 const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
@@ -100,12 +95,12 @@ const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
 #[derive(Clone)]
 pub struct LocalAppServerOptions {
     pub profile_root: PathBuf,
-    pub workspace: Option<LocalWorkspaceConfigOptions>,
+    pub dir_config: Option<LocalDirConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
-    pub workspace_root: Option<PathBuf>,
+    pub dir_root: Option<PathBuf>,
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
-    initial_workspace_trust: InitialWorkspaceTrust,
+    initial_dir_permissions: InitialDirPermissions,
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     connector_runtime: Option<LocalConnectorRuntime>,
@@ -119,7 +114,7 @@ pub struct LocalAppServerOptions {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum InitialWorkspaceTrust {
+enum InitialDirPermissions {
     #[default]
     HostConfiguration,
     UserConfig,
@@ -129,12 +124,12 @@ impl LocalAppServerOptions {
     pub fn new(profile_root: impl Into<PathBuf>) -> Self {
         Self {
             profile_root: profile_root.into(),
-            workspace: None,
+            dir_config: None,
             slash_commands: SlashCommandCatalog::default(),
-            workspace_root: None,
+            dir_root: None,
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
-            initial_workspace_trust: InitialWorkspaceTrust::HostConfiguration,
+            initial_dir_permissions: InitialDirPermissions::HostConfiguration,
             model_operation_client: None,
             web_search_backend: None,
             connector_runtime: None,
@@ -148,8 +143,8 @@ impl LocalAppServerOptions {
         }
     }
 
-    pub fn with_workspace(mut self, workspace: LocalWorkspaceConfigOptions) -> Self {
-        self.workspace = Some(workspace);
+    pub fn with_dir_config(mut self, dir_config: LocalDirConfigOptions) -> Self {
+        self.dir_config = Some(dir_config);
         self
     }
 
@@ -158,17 +153,17 @@ impl LocalAppServerOptions {
         self
     }
 
-    /// Enables local filesystem and shell tools under one canonical Workspace root.
-    pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
-        self.workspace_root = Some(workspace_root.into());
-        self.initial_workspace_trust = InitialWorkspaceTrust::HostConfiguration;
+    /// Enables local filesystem and shell tools under one canonical Directory root.
+    pub fn with_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
+        self.dir_root = Some(dir_root.into());
+        self.initial_dir_permissions = InitialDirPermissions::HostConfiguration;
         self
     }
 
-    /// Resolves the initial root through durable UserConfig instead of granting host trust.
-    pub fn with_user_config_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
-        self.workspace_root = Some(workspace_root.into());
-        self.initial_workspace_trust = InitialWorkspaceTrust::UserConfig;
+    /// Resolves the initial directory through durable user configuration.
+    pub fn with_user_config_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
+        self.dir_root = Some(dir_root.into());
+        self.initial_dir_permissions = InitialDirPermissions::UserConfig;
         self
     }
 
@@ -188,7 +183,7 @@ impl LocalAppServerOptions {
         self
     }
 
-    /// Reuses one process-wide profile authority while composing a Workspace-scoped runtime.
+    /// Reuses one process-wide profile authority while composing a Directory-scoped runtime.
     pub fn with_profile_runtime(mut self, runtime: Arc<LocalProfileRuntime>) -> Self {
         self.profile_runtime = Some(runtime);
         self
@@ -314,10 +309,10 @@ impl fmt::Debug for LocalAppServerOptions {
         formatter
             .debug_struct("LocalAppServerOptions")
             .field("profile_root", &self.profile_root)
-            .field("workspace", &self.workspace)
+            .field("dir_config", &self.dir_config)
             .field("slash_commands", &self.slash_commands)
-            .field("workspace_root", &self.workspace_root)
-            .field("initial_workspace_trust", &self.initial_workspace_trust)
+            .field("dir_root", &self.dir_root)
+            .field("initial_dir_permissions", &self.initial_dir_permissions)
             .field("built_in_skills", &self.built_in_skills)
             .field("session_state_mode", &self.session_state_mode)
             .field(
@@ -360,10 +355,10 @@ impl fmt::Debug for LocalAppServerOptions {
 impl PartialEq for LocalAppServerOptions {
     fn eq(&self, other: &Self) -> bool {
         self.profile_root == other.profile_root
-            && self.workspace == other.workspace
+            && self.dir_config == other.dir_config
             && self.slash_commands == other.slash_commands
-            && self.workspace_root == other.workspace_root
-            && self.initial_workspace_trust == other.initial_workspace_trust
+            && self.dir_root == other.dir_root
+            && self.initial_dir_permissions == other.initial_dir_permissions
             && self.built_in_skills == other.built_in_skills
             && self.session_state_mode == other.session_state_mode
             && match (&self.model_operation_client, &other.model_operation_client) {
@@ -642,18 +637,18 @@ pub enum BuiltInSkillRoot {
     Unavailable,
 }
 
-/// Read-only Workspace configuration source used by one local App Server composition root.
+/// Read-only directory configuration source used by one local App Server composition root.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LocalWorkspaceConfigOptions {
+pub struct LocalDirConfigOptions {
     pub config_path: PathBuf,
-    pub workspace_id: WorkspaceId,
+    pub dir_id: DirId,
 }
 
-impl LocalWorkspaceConfigOptions {
-    pub fn new(config_path: impl Into<PathBuf>, workspace_id: WorkspaceId) -> Self {
+impl LocalDirConfigOptions {
+    pub fn new(config_path: impl Into<PathBuf>, dir_id: DirId) -> Self {
         Self {
             config_path: config_path.into(),
-            workspace_id,
+            dir_id,
         }
     }
 }
@@ -670,16 +665,16 @@ impl fmt::Display for OpenAppServerError {
 
 impl std::error::Error for OpenAppServerError {}
 
-/// Process-wide durable authority shared by all Workspace runtimes for one profile.
+/// Process-wide durable authority shared by all Directory runtimes for one profile.
 ///
 /// The profile runtime owns the single recovered Session projection, config store, secret store,
-/// Marketplace Manager/change watcher, and live profile notification graph. Workspace filesystem,
+/// Marketplace Manager/change watcher, and live profile notification graph. Directory filesystem,
 /// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
 /// instances.
 pub struct LocalProfileRuntime {
     profile_root: PathBuf,
     state: Arc<zeta_state::StateRuntime>,
-    sessions: Arc<SessionCoordinator>,
+    threads: Arc<ThreadController>,
     config: Arc<ConfigStore>,
     secrets: Arc<dyn SecretStore>,
     updates: Arc<UpdateBroker>,
@@ -695,20 +690,20 @@ struct ProfileMarketplaceAuthority {
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct ProfileUpdateScopeKey {
-    authority_id: Option<zeta_workspace::WorkspaceTrustId>,
-    root: Option<PathBuf>,
+    dir_id: Option<zeta_file_access::DirId>,
+    path: Option<PathBuf>,
 }
 
-impl From<Option<zeta_workspace::WorkspaceBinding>> for ProfileUpdateScopeKey {
-    fn from(workspace: Option<zeta_workspace::WorkspaceBinding>) -> Self {
-        match workspace {
-            Some(workspace) => Self {
-                authority_id: Some(workspace.authority_id),
-                root: Some(workspace.root),
+impl From<Option<zeta_file_access::DirBinding>> for ProfileUpdateScopeKey {
+    fn from(dir: Option<zeta_file_access::DirBinding>) -> Self {
+        match dir {
+            Some(dir) => Self {
+                dir_id: Some(dir.id),
+                path: Some(dir.path),
             },
             None => Self {
-                authority_id: None,
-                root: None,
+                dir_id: None,
+                path: None,
             },
         }
     }
@@ -724,8 +719,8 @@ impl LocalProfileRuntime {
         let image_attachments = open_image_attachments(state.profile_root())?;
         let repository = LocalStateRepository::open(&state).map_err(open_error)?;
         let database_path = state.database_path().to_path_buf();
-        let sessions = repository
-            .recover_coordinator_with_image_attachments(image_attachments)
+        let threads = repository
+            .recover_threads_with_image_attachments(image_attachments)
             .map_err(open_error)?;
         let config = Arc::new(
             ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
@@ -738,7 +733,7 @@ impl LocalProfileRuntime {
         Ok(Self {
             profile_root,
             state,
-            sessions,
+            threads,
             config,
             secrets,
             updates: Arc::new(UpdateBroker::default()),
@@ -747,7 +742,7 @@ impl LocalProfileRuntime {
         })
     }
 
-    /// Returns the one secret store used by every Workspace runtime in this profile authority.
+    /// Returns the one secret store used by every Directory runtime in this profile authority.
     pub fn secret_store(&self) -> Arc<dyn SecretStore> {
         Arc::clone(&self.secrets)
     }
@@ -756,24 +751,24 @@ impl LocalProfileRuntime {
         Arc::clone(&self.state)
     }
 
-    /// Explicitly clears all rebuildable local indexes for one inactive Workspace.
-    pub fn clear_workspace_indexes(
+    /// Explicitly clears all rebuildable local indexes for one inactive Directory.
+    pub fn clear_dir_indexes(
         &self,
-        workspace: &zeta_workspace::WorkspaceTrustId,
+        dir: &zeta_file_access::DirId,
     ) -> std::io::Result<zeta_state::ClearOutcome> {
-        self.state.clear_workspace(workspace)
+        self.state.clear_dir(dir)
     }
 
-    /// Explicitly clears every rebuildable local Workspace index in this profile.
-    pub fn clear_all_workspace_indexes(&self) -> std::io::Result<zeta_state::ClearOutcome> {
+    /// Explicitly clears every rebuildable local Directory index in this profile.
+    pub fn clear_all_dir_indexes(&self) -> std::io::Result<zeta_state::ClearOutcome> {
         self.state.clear_all()
     }
 
     fn scoped_updates(
         &self,
-        workspace: Option<zeta_workspace::WorkspaceBinding>,
+        dir: Option<zeta_file_access::DirBinding>,
     ) -> Result<Arc<UpdateBroker>, OpenAppServerError> {
-        let key = ProfileUpdateScopeKey::from(workspace);
+        let key = ProfileUpdateScopeKey::from(dir);
         let mut scopes = self
             .update_scopes
             .lock()
@@ -823,7 +818,7 @@ impl LocalProfileRuntime {
     }
 }
 
-/// Optional codebase adapters installed before the local Workspace runtime is activated.
+/// Optional codebase adapters installed before the local Directory runtime is activated.
 #[derive(Default)]
 pub struct LocalCodebaseProviders {
     models: Option<CodebaseModels>,
@@ -912,10 +907,10 @@ pub fn open_local_app_server_with_codebase_providers(
             Arc::new(zeta_state::StateRuntime::open(&options.profile_root).map_err(open_error)?)
         }
     };
-    let (database_path, sessions, config) = match (&profile_runtime, options.session_state_mode) {
+    let (database_path, threads, config) = match (&profile_runtime, options.session_state_mode) {
         (Some(runtime), SessionStateMode::Durable) => (
             runtime.state.database_path().to_path_buf(),
-            Arc::clone(&runtime.sessions),
+            Arc::clone(&runtime.threads),
             Arc::clone(&runtime.config),
         ),
         (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
@@ -923,8 +918,8 @@ pub fn open_local_app_server_with_codebase_providers(
             let image_attachments = open_image_attachments(&options.profile_root)?;
             let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
             let database_path = state_runtime.database_path().to_path_buf();
-            let sessions = repository
-                .recover_coordinator_with_image_attachments(image_attachments)
+            let threads = repository
+                .recover_threads_with_image_attachments(image_attachments)
                 .map_err(open_error)?;
             let config = Arc::new(
                 ConfigStore::open_with_paths(
@@ -933,17 +928,13 @@ pub fn open_local_app_server_with_codebase_providers(
                 )
                 .map_err(|error| OpenAppServerError(error.0))?,
             );
-            (database_path, sessions, config)
+            (database_path, threads, config)
         }
         (None, SessionStateMode::Ephemeral) => {
             let image_attachments = open_image_attachments(&options.profile_root)?;
             let threads = Arc::new(ThreadController::with_store_and_image_attachments(
                 Arc::new(InMemoryThreadStore::default()),
                 image_attachments,
-            ));
-            let sessions = Arc::new(SessionCoordinator::with_store(
-                Arc::new(InMemorySessionStore::default()),
-                threads,
             ));
             let database_path = state_runtime.database_path().to_path_buf();
             let config = Arc::new(
@@ -953,28 +944,28 @@ pub fn open_local_app_server_with_codebase_providers(
                 )
                 .map_err(|error| OpenAppServerError(error.0))?,
             );
-            (database_path, sessions, config)
+            (database_path, threads, config)
         }
     };
     let user_config = config
         .read_snapshot()
         .map_err(|error| OpenAppServerError(error.0))?;
-    if options.workspace.is_none()
-        && let Some(workspace_root) = &options.workspace_root
+    if options.dir_config.is_none()
+        && let Some(dir_root) = &options.dir_root
     {
-        let trusted = match options.initial_workspace_trust {
-            InitialWorkspaceTrust::HostConfiguration => true,
-            InitialWorkspaceTrust::UserConfig => {
-                let workspace = WorkspaceRoot::open(workspace_root).map_err(open_error)?;
+        let load_dir_config = match options.initial_dir_permissions {
+            InitialDirPermissions::HostConfiguration => true,
+            InitialDirPermissions::UserConfig => {
+                let dir = Dir::open_local(dir_root).map_err(open_error)?;
                 user_config
                     .values
-                    .workspace_trust
-                    .decision_for(&workspace.trust_id())
-                    != WorkspaceTrustDecision::Restricted
+                    .dir_permissions
+                    .permissions_for(&dir.id())
+                    .allows(DirPermission::LoadConfig)
             }
         };
-        if trusted {
-            options.workspace = Some(default_workspace_config(workspace_root)?);
+        if load_dir_config {
+            options.dir_config = Some(default_dir_config(dir_root)?);
         }
     }
     let profile_secrets = match (&profile_runtime, options.connector_runtime.as_ref()) {
@@ -1024,14 +1015,14 @@ pub fn open_local_app_server_with_codebase_providers(
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
         configure_product_connector_oauth(runtime, services.connector_oauth)?;
     }
-    let workspace = options.workspace.map(|workspace| {
-        Arc::new(WorkspaceConfigTracker::new(WorkspaceConfigStore::open(
-            workspace.config_path,
-            WorkspaceConfigScope::new(workspace.workspace_id),
+    let dir_config = options.dir_config.map(|dir_config| {
+        Arc::new(DirConfigTracker::new(DirConfigStore::open(
+            dir_config.config_path,
+            DirConfigScope::new(dir_config.dir_id),
         )))
     });
-    if let Some(workspace) = &workspace {
-        workspace
+    if let Some(dir_config) = &dir_config {
+        dir_config
             .read()
             .map_err(|error| OpenAppServerError(error.0))?;
     }
@@ -1080,7 +1071,7 @@ pub fn open_local_app_server_with_codebase_providers(
     let model_provider = Arc::new(model_provider);
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
-        workspace: workspace.clone(),
+        dir_config: dir_config.clone(),
         provider_configs: provider_configs.clone(),
         models_manager,
         resolver: Arc::new(ModelProviderSnapshotResolver {
@@ -1113,27 +1104,25 @@ pub fn open_local_app_server_with_codebase_providers(
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let direct_catalog: Arc<dyn ModelCatalog> = model.clone();
-    let update_workspace = if workspace.is_some() {
+    let update_dir = if dir_config.is_some() {
         options
-            .workspace_root
+            .dir_root
             .as_deref()
-            .map(WorkspaceRoot::open)
+            .map(Dir::open_local)
             .transpose()
             .map_err(open_error)?
             .as_ref()
-            .map(zeta_workspace::WorkspaceBinding::from_root)
+            .map(zeta_file_access::DirBinding::from_dir)
     } else {
         None
     };
     let cloud_codebase_root = state_runtime.cloud_codebase_root().to_path_buf();
     let state_runtime = Arc::clone(&state_runtime);
     let mut server = match &profile_runtime {
-        Some(runtime) => AppServer::new_with_updates(
-            sessions,
-            model.clone(),
-            runtime.scoped_updates(update_workspace)?,
-        ),
-        None => AppServer::new(sessions, model.clone()),
+        Some(runtime) => {
+            AppServer::new_with_updates(threads, model.clone(), runtime.scoped_updates(update_dir)?)
+        }
+        None => AppServer::new(threads, model.clone()),
     }
     .with_model_catalog(direct_catalog)
     .with_provider_credentials(Arc::new(
@@ -1229,30 +1218,28 @@ pub fn open_local_app_server_with_codebase_providers(
         .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
             &runtime_config,
         ))
-        .with_local_workspace_host(
-            mcp,
-            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
-        )
+        .with_local_env_host(mcp, DirGrantPolicy::UserConfig(Arc::clone(&config)))
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let turn_changes_workspace_root = options.workspace_root.clone();
-    if let Some(workspace_root) = options.workspace_root {
-        match options.initial_workspace_trust {
-            InitialWorkspaceTrust::HostConfiguration => server
-                .activate_host_configured_workspace_root(workspace_root)
+    let turn_changes_dir_root = options.dir_root.clone();
+    if let Some(dir_root) = options.dir_root {
+        server
+            .set_env_cwd(dir_root.clone())
+            .map_err(|error| OpenAppServerError(error.to_string()))?;
+        match options.initial_dir_permissions {
+            InitialDirPermissions::HostConfiguration => server
+                .activate_host_configured_dir_root(dir_root)
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
-            InitialWorkspaceTrust::UserConfig => server
-                .switch_local_workspace_root(workspace_root)
+            InitialDirPermissions::UserConfig => server
+                .switch_local_dir_root(dir_root)
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         };
     }
-    if let Some(workspace_root) = turn_changes_workspace_root {
+    if let Some(dir_root) = turn_changes_dir_root {
         server = server
-            .with_local_turn_changes(&database_path, &options.profile_root, &workspace_root)
+            .with_local_turn_changes(&database_path, &options.profile_root, &dir_root)
             .map_err(OpenAppServerError)?;
     }
-    server
-        .bind_active_workspace_session_extensions()
-        .map_err(open_error)?;
+    server.bind_session_extensions().map_err(open_error)?;
     server
         .resume_recovered_agent_coordinations()
         .map_err(open_error)?;
@@ -1262,17 +1249,17 @@ pub fn open_local_app_server_with_codebase_providers(
     server
         .resume_recovered_goal_continuations()
         .map_err(open_error)?;
-    let workspace_tools = server
-        .local_workspace_tool_ports()
-        .ok_or_else(|| OpenAppServerError("local Workspace tools are unavailable".into()))?;
-    let workspace_runtime = server
-        .workspace_runtime_control()
-        .ok_or_else(|| OpenAppServerError("local Workspace runtime is unavailable".into()))?;
+    let env_tools = server
+        .local_env_tool_ports()
+        .ok_or_else(|| OpenAppServerError("local Directory tools are unavailable".into()))?;
+    let env_runtime = server
+        .env_runtime_control()
+        .ok_or_else(|| OpenAppServerError("local Directory runtime is unavailable".into()))?;
     server = server.with_tool_config_watcher(ToolConfigWatcher::start(ToolConfigWatcherInputs {
         config,
-        workspace,
-        workspace_tools,
-        workspace_runtime,
+        dir_config,
+        env_tools,
+        env_runtime,
         connector_runtime,
         mcp_runtime_intents,
         mcp_updates,
@@ -1282,22 +1269,13 @@ pub fn open_local_app_server_with_codebase_providers(
     Ok(server)
 }
 
-fn default_workspace_config(
-    workspace_root: &std::path::Path,
-) -> Result<LocalWorkspaceConfigOptions, OpenAppServerError> {
-    let canonical = std::fs::canonicalize(workspace_root).map_err(open_error)?;
-    let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
-    let workspace_id = WorkspaceId::new(format!(
-        "local-{}",
-        digest[..16]
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    ))
-    .map_err(|error| OpenAppServerError(error.0))?;
-    Ok(LocalWorkspaceConfigOptions::new(
-        canonical.join(".zeta/config.toml"),
-        workspace_id,
+fn default_dir_config(
+    dir_root: &std::path::Path,
+) -> Result<LocalDirConfigOptions, OpenAppServerError> {
+    let dir = Dir::open_local(dir_root).map_err(open_error)?;
+    Ok(LocalDirConfigOptions::new(
+        dir.canonical_path().join(".zeta/config.toml"),
+        dir.id(),
     ))
 }
 
@@ -1322,9 +1300,9 @@ pub(crate) struct ToolConfigWatcher {
 
 struct ToolConfigWatcherInputs {
     config: Arc<ConfigStore>,
-    workspace: Option<Arc<WorkspaceConfigTracker>>,
-    workspace_tools: Arc<WorkspaceToolPorts>,
-    workspace_runtime: crate::server::WorkspaceRuntimeControl,
+    dir_config: Option<Arc<DirConfigTracker>>,
+    env_tools: Arc<EnvToolPorts>,
+    env_runtime: crate::server::EnvRuntimeControl,
     connector_runtime: Option<LocalConnectorRuntime>,
     mcp_runtime_intents: crate::mcp_runtime::McpRuntimeIntents,
     mcp_updates: McpCatalogUpdates,
@@ -1336,9 +1314,9 @@ impl ToolConfigWatcher {
     fn start(inputs: ToolConfigWatcherInputs) -> Self {
         let ToolConfigWatcherInputs {
             config,
-            workspace,
-            workspace_tools,
-            workspace_runtime,
+            dir_config,
+            env_tools,
+            env_runtime,
             mut connector_runtime,
             mcp_runtime_intents,
             mcp_updates,
@@ -1370,9 +1348,9 @@ impl ToolConfigWatcher {
             .name("zeta-tool-config".into())
             .spawn(move || {
                 let mut catalog_generation = 1_u64;
-                let mut workspace_revision = workspace
+                let mut dir_revision = dir_config
                     .as_ref()
-                    .and_then(|workspace| workspace.read().ok().map(|(_, revision)| revision));
+                    .and_then(|dir| dir.read().ok().map(|(_, revision)| revision));
                 let mut config_dirty = false;
                 let mut connector_dirty = false;
                 let mut mcp_dirty = false;
@@ -1391,15 +1369,15 @@ impl ToolConfigWatcher {
                         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
                         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                     };
-                    if let Some(workspace) = &workspace {
-                        match workspace.read() {
-                            Ok((_, revision)) if workspace_revision != Some(revision) => {
-                                workspace_revision = Some(revision);
+                    if let Some(dir_config) = &dir_config {
+                        match dir_config.read() {
+                            Ok((_, revision)) if dir_revision != Some(revision) => {
+                                dir_revision = Some(revision);
                                 config_dirty = true;
                             }
                             Ok(_) => {}
                             Err(error) => {
-                                workspace_tools.record_reconcile_failure(error.to_string());
+                                env_tools.record_reconcile_failure(error.to_string());
                                 continue;
                             }
                         }
@@ -1440,20 +1418,19 @@ impl ToolConfigWatcher {
                     let snapshot = match config.read_snapshot() {
                         Ok(snapshot) => snapshot,
                         Err(error) => {
-                            workspace_tools.record_reconcile_failure(error.to_string());
+                            env_tools.record_reconcile_failure(error.to_string());
                             continue;
                         }
                     };
                     if config_dirty {
-                        if let Err(error) = workspace_runtime.reconcile_user_trust(&snapshot.values)
+                        if let Err(error) =
+                            env_runtime.reconcile_user_dir_permissions(&snapshot.values)
                         {
-                            workspace_tools.record_reconcile_failure(error.to_string());
+                            env_tools.record_reconcile_failure(error.to_string());
                             continue;
                         }
-                        if let Err(error) =
-                            workspace_runtime.reconcile_hooks(&snapshot.values.hooks)
-                        {
-                            workspace_tools.record_reconcile_failure(error.to_string());
+                        if let Err(error) = env_runtime.reconcile_hooks(&snapshot.values.hooks) {
+                            env_tools.record_reconcile_failure(error.to_string());
                             continue;
                         }
                         let next_semantic_binding = (
@@ -1461,24 +1438,23 @@ impl ToolConfigWatcher {
                             snapshot.values.providers.clone(),
                         );
                         if semantic_binding.as_ref() != Some(&next_semantic_binding) {
-                            if let Err(error) = workspace_runtime.reconcile_codebase_runtime() {
-                                workspace_tools.record_reconcile_failure(error.to_string());
+                            if let Err(error) = env_runtime.reconcile_codebase_runtime() {
+                                env_tools.record_reconcile_failure(error.to_string());
                                 continue;
                             }
                             semantic_binding = Some(next_semantic_binding);
                         }
                         let runtime_config =
-                            match resolve_local_config(&snapshot, workspace.as_deref()) {
+                            match resolve_local_config(&snapshot, dir_config.as_deref()) {
                                 Ok(config) => config,
                                 Err(error) => {
-                                    workspace_tools.record_reconcile_failure(error.to_string());
+                                    env_tools.record_reconcile_failure(error.to_string());
                                     continue;
                                 }
                             };
-                        if let Err(error) =
-                            workspace_runtime.reconcile_local_tool_config(&runtime_config)
+                        if let Err(error) = env_runtime.reconcile_local_tool_config(&runtime_config)
                         {
-                            workspace_tools.record_reconcile_failure(error.to_string());
+                            env_tools.record_reconcile_failure(error.to_string());
                             continue;
                         }
                     }
@@ -1486,21 +1462,20 @@ impl ToolConfigWatcher {
                         && let Some(connectors) = connector_runtime.as_mut()
                         && let Err(error) = connectors.reconcile_plugin_activation()
                     {
-                        workspace_tools.record_reconcile_failure(error.to_string());
+                        env_tools.record_reconcile_failure(error.to_string());
                         continue;
                     }
                     if marketplace_dirty
                         && let Some(connectors) = connector_runtime.as_mut()
                         && let Err(error) = connectors.reconcile_marketplace()
                     {
-                        workspace_tools.record_reconcile_failure(error.to_string());
+                        env_tools.record_reconcile_failure(error.to_string());
                         continue;
                     }
                     catalog_generation = match catalog_generation.checked_add(1) {
                         Some(generation) => generation,
                         None => {
-                            workspace_tools
-                                .record_reconcile_failure("MCP catalog generation overflow");
+                            env_tools.record_reconcile_failure("MCP catalog generation overflow");
                             continue;
                         }
                     };
@@ -1534,20 +1509,20 @@ impl ToolConfigWatcher {
                         }
                         Ok(None) => (None, McpRuntimeStatusSnapshot::empty(catalog_generation)),
                         Err(error) => {
-                            workspace_tools.record_reconcile_failure(error.to_string());
+                            env_tools.record_reconcile_failure(error.to_string());
                             continue;
                         }
                     };
-                    if let Err(error) = workspace_tools.reconcile_user_config(
+                    if let Err(error) = env_tools.reconcile_user_config(
                         mcp,
                         &snapshot.values.tool_search,
                         &snapshot.values.providers,
                     ) {
                         log::error!("requested tool-search configuration is unavailable: {error}");
-                        workspace_tools.record_reconcile_failure(error.to_string());
+                        env_tools.record_reconcile_failure(error.to_string());
                         continue;
                     }
-                    workspace_runtime.replace_mcp_status(mcp_status);
+                    env_runtime.replace_mcp_status(mcp_status);
                     config_dirty = false;
                     connector_dirty = false;
                     mcp_dirty = false;
@@ -1665,7 +1640,7 @@ impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
 
 struct ConfigBackedModelService {
     config: Arc<ConfigStore>,
-    workspace: Option<Arc<WorkspaceConfigTracker>>,
+    dir_config: Option<Arc<DirConfigTracker>>,
     provider_configs: ProviderConfigRegistry,
     models_manager: ModelsManager,
     resolver: Arc<dyn ModelSnapshotResolver>,
@@ -1803,27 +1778,6 @@ impl ModelCatalog for ConfigBackedModelService {
     fn configured_default(&self) -> Result<Option<zeta_protocol::ModelRef>, CoreError> {
         Ok(self.resolved_config()?.preferred_model)
     }
-
-    fn validate(&self, model: &zeta_protocol::ModelRef) -> Result<(), CoreError> {
-        let definition = self.provider_configs.get(&model.provider).ok_or_else(|| {
-            CoreError::Model(format!(
-                "model provider '{}' is not registered",
-                model.provider
-            ))
-        })?;
-        if definition
-            .models
-            .iter()
-            .any(|entry| entry.id == model.model)
-            || definition.model_catalog_policy == ModelCatalogPolicy::AllowUnlisted
-        {
-            return Ok(());
-        }
-        Err(CoreError::Model(format!(
-            "model '{}/{}' is not registered in Zeta's static catalog",
-            model.provider, model.model
-        )))
-    }
 }
 
 impl ConfigBackedModelService {
@@ -1849,27 +1803,23 @@ impl ConfigBackedModelService {
     }
 
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
-        resolve_local_config(user, self.workspace.as_deref()).map_err(|error| {
-            CoreError::Model(format!("failed to resolve Workspace config: {}", error.0))
+        resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
+            CoreError::Model(format!("failed to resolve directory config: {}", error.0))
         })
     }
 }
 
 fn resolve_local_config(
     user: &ResolvedConfigSnapshot,
-    workspace: Option<&WorkspaceConfigTracker>,
+    dir_config: Option<&DirConfigTracker>,
 ) -> Result<ResolvedConfig, zeta_config::ConfigError> {
-    let Some(workspace) = workspace else {
+    let Some(dir_config) = dir_config else {
         return Ok(user.values.clone());
     };
-    let (document, revision) = workspace.read()?;
+    let (document, revision) = dir_config.read()?;
     resolve_scoped_config(
         user,
-        Some(WorkspaceConfigInput::new(
-            workspace.scope(),
-            revision,
-            &document,
-        )),
+        Some(DirConfigInput::new(dir_config.scope(), revision, &document)),
     )
     .map(|resolved| resolved.values)
 }
@@ -1991,30 +1941,28 @@ fn image_input_policy_for_config(
     }
 }
 
-struct WorkspaceConfigTracker {
-    store: WorkspaceConfigStore,
-    observed: Mutex<Option<WorkspaceConfigObservation>>,
+struct DirConfigTracker {
+    store: DirConfigStore,
+    observed: Mutex<Option<DirConfigObservation>>,
 }
 
-struct WorkspaceConfigObservation {
-    document: WorkspaceConfigDocument,
-    revision: WorkspaceConfigRevision,
+struct DirConfigObservation {
+    document: DirConfigDocument,
+    revision: DirConfigRevision,
 }
 
-impl WorkspaceConfigTracker {
-    fn new(store: WorkspaceConfigStore) -> Self {
+impl DirConfigTracker {
+    fn new(store: DirConfigStore) -> Self {
         Self {
             store,
             observed: Mutex::new(None),
         }
     }
 
-    fn read(
-        &self,
-    ) -> Result<(WorkspaceConfigDocument, WorkspaceConfigRevision), zeta_config::ConfigError> {
+    fn read(&self) -> Result<(DirConfigDocument, DirConfigRevision), zeta_config::ConfigError> {
         let document = self.store.read_document()?;
         let mut observed = self.observed.lock().map_err(|_| {
-            zeta_config::ConfigError("Workspace config tracker lock poisoned".into())
+            zeta_config::ConfigError("directory config tracker lock poisoned".into())
         })?;
         if let Some(previous) = observed.as_ref()
             && previous.document == document
@@ -2023,17 +1971,17 @@ impl WorkspaceConfigTracker {
         }
         let revision = observed
             .as_ref()
-            .map_or(WorkspaceConfigRevision::INITIAL, |previous| {
+            .map_or(DirConfigRevision::INITIAL, |previous| {
                 previous.revision.next()
             });
-        *observed = Some(WorkspaceConfigObservation {
+        *observed = Some(DirConfigObservation {
             document: document.clone(),
             revision,
         });
         Ok((document, revision))
     }
 
-    fn scope(&self) -> &WorkspaceConfigScope {
+    fn scope(&self) -> &DirConfigScope {
         self.store.scope()
     }
 }

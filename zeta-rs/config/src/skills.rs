@@ -24,7 +24,7 @@ pub enum SkillEnablement {
 /// A runtime-free, user-owned Skill source declaration.
 ///
 /// `root_reference` is an opaque host reference, not a trusted filesystem handle. A future Skill
-/// manager resolves it, checks containment and trust, then publishes a separate catalog snapshot.
+/// manager resolves it, checks containment and the required capability, then publishes a separate catalog snapshot.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SkillSourceConfig {

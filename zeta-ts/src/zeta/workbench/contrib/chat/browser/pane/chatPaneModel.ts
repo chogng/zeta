@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import type { AgentResponse, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
-import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { chatTranscriptListItem, type IChatListItem } from "../list/chatListItems.js";
 
@@ -96,7 +96,7 @@ export class ChatPaneModel extends Disposable {
 		return this.activeSession?.session.sessionId;
 	}
 
-	get session(): Session | undefined {
+	get session(): ISession | undefined {
 		return this.selection.kind === "session" ? this.selection.active.session : undefined;
 	}
 
@@ -210,7 +210,7 @@ export class ChatPaneModel extends Disposable {
 			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
 			return;
 		}
-		await this.sessionService.setModel(this.selection.active.session.sessionId, model);
+		await this.sessionService.setPreferredModel(model);
 	}
 
 	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {

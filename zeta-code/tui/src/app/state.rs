@@ -20,13 +20,13 @@ use crate::components::list_selection::ListSelectionState;
 use crate::components::pane::PaneId;
 use crate::components::pane::PaneSpec;
 use crate::components::welcome::WelcomeModel;
-use crate::features::additional_directories::AdditionalDirectoryPaneSpec;
-use crate::features::additional_directories::AdditionalDirectorySelectionAction;
 use crate::features::config::ConfigSelectionAction;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorPaneSpec;
 use crate::features::connectors::ConnectorSelectionAction;
+use crate::features::dirs::DirPaneSpec;
+use crate::features::dirs::DirSelectionAction;
 use crate::features::interactions::InteractionBinding;
 use crate::features::interactions::InteractionRequest;
 use crate::features::keymap::KeymapAction;
@@ -107,7 +107,7 @@ pub(crate) struct App {
 #[derive(Debug)]
 enum PaneActions {
     ReadOnly,
-    AdditionalDirectories(BTreeMap<ListSelectionItemId, AdditionalDirectorySelectionAction>),
+    Dirs(BTreeMap<ListSelectionItemId, DirSelectionAction>),
     Config(BTreeMap<ListSelectionItemId, ConfigSelectionAction>),
     ConfigTextPrompt { provider: String },
     Connectors(BTreeMap<ListSelectionItemId, ConnectorSelectionAction>),
@@ -130,7 +130,7 @@ impl App {
             app_keymap: AppKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: ChatHistoryScroll::default(),
-            welcome: WelcomeModel::for_workspace(Path::new(".")),
+            welcome: WelcomeModel::for_dir(Path::new(".")),
             pane_actions: BTreeMap::new(),
             interaction_bindings: BTreeMap::new(),
             root_escape_sequence: RootEscapeSequence::default(),
@@ -143,15 +143,15 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(crate) fn for_workspace(workspace_root: &Path) -> Self {
-        Self::for_workspace_with_slash_commands(
-            workspace_root,
+    pub(crate) fn for_dir(dir_root: &Path) -> Self {
+        Self::for_dir_with_slash_commands(
+            dir_root,
             crate::components::chat_input::default_slash_command_catalog(),
         )
     }
 
-    pub(crate) fn for_workspace_with_slash_commands(
-        workspace_root: &Path,
+    pub(crate) fn for_dir_with_slash_commands(
+        dir_root: &Path,
         slash_commands: SlashCommandCatalog,
     ) -> Self {
         Self {
@@ -159,7 +159,7 @@ impl App {
             app_keymap: AppKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: ChatHistoryScroll::default(),
-            welcome: WelcomeModel::for_workspace(workspace_root),
+            welcome: WelcomeModel::for_dir(dir_root),
             pane_actions: BTreeMap::new(),
             interaction_bindings: BTreeMap::new(),
             root_escape_sequence: RootEscapeSequence::default(),
@@ -326,9 +326,9 @@ impl App {
         }
         match self.pane_actions.get(&pane_id)? {
             PaneActions::ReadOnly => None,
-            PaneActions::AdditionalDirectories(actions) => match actions.get(item_id)? {
-                AdditionalDirectorySelectionAction::Remove { root } => {
-                    Some(AppCommand::RemoveAdditionalDirectory { root: root.clone() })
+            PaneActions::Dirs(actions) => match actions.get(item_id)? {
+                DirSelectionAction::Remove { path } => {
+                    Some(AppCommand::RemoveDir { path: path.clone() })
                 }
             },
             PaneActions::Config(actions) => match actions.get(item_id)?.clone() {
@@ -341,8 +341,8 @@ impl App {
                         FollowUpMode::Steer => *queue,
                     }),
                 ),
-                ConfigSelectionAction::SetAdditionalDirectoryPermissions(edit) => {
-                    Some(AppCommand::EditAdditionalDirectoryPermissions(edit))
+                ConfigSelectionAction::SetPermissions(edit) => {
+                    Some(AppCommand::EditPermissions(edit))
                 }
                 ConfigSelectionAction::OpenProviderApiKey {
                     provider,
@@ -600,18 +600,12 @@ impl App {
         self.pane_actions.insert(pane_id, PaneActions::ReadOnly);
     }
 
-    fn show_additional_directories_pane(&mut self, pane_spec: AdditionalDirectoryPaneSpec) {
-        self.push_list_selection_pane(
-            pane_spec.model,
-            PaneActions::AdditionalDirectories(pane_spec.actions),
-        );
+    fn show_dirs_pane(&mut self, pane_spec: DirPaneSpec) {
+        self.push_list_selection_pane(pane_spec.model, PaneActions::Dirs(pane_spec.actions));
     }
 
-    fn replace_additional_directories_pane(&mut self, pane_spec: AdditionalDirectoryPaneSpec) {
-        self.replace_list_selection_pane(
-            pane_spec.model,
-            PaneActions::AdditionalDirectories(pane_spec.actions),
-        );
+    fn replace_dirs_pane(&mut self, pane_spec: DirPaneSpec) {
+        self.replace_list_selection_pane(pane_spec.model, PaneActions::Dirs(pane_spec.actions));
     }
 
     fn show_interaction_request(&mut self, request: InteractionRequest) {
@@ -827,11 +821,19 @@ impl App {
         self.approval_mode_status
     }
 
-    #[cfg(test)]
     pub(crate) fn approval_mode(&self) -> ApprovalMode {
         self.approval_mode_status.next
     }
 
+    pub(crate) fn cycle_next_approval_mode(&mut self) {
+        self.approval_mode_status.next = match self.approval_mode_status.next {
+            ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
+            ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
+            ApprovalMode::BypassPermissions => ApprovalMode::AskPermissions,
+        };
+    }
+
+    #[cfg(test)]
     pub(crate) fn set_next_approval_mode(&mut self, approval_mode: ApprovalMode) {
         self.approval_mode_status.next = approval_mode;
     }
@@ -853,15 +855,13 @@ impl App {
 
     pub(crate) fn update(&mut self, event: AppEvent) {
         match event {
-            AppEvent::AdditionalDirectoriesPaneOpened(view) => {
-                self.show_additional_directories_pane(view)
-            }
-            AppEvent::AdditionalDirectoryRemoved { root, pane_spec } => {
-                self.replace_additional_directories_pane(pane_spec);
+            AppEvent::DirsPaneOpened(view) => self.show_dirs_pane(view),
+            AppEvent::DirRemoved { path, pane_spec } => {
+                self.replace_dirs_pane(pane_spec);
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
-                        "Removed additional directory {}",
-                        root.display()
+                        "Removed directory {}",
+                        path.display()
                     )));
                 self.status = Status::Ready;
                 self.turn_input_mode = TurnInputMode::Start;

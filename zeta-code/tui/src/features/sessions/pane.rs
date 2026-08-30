@@ -33,10 +33,8 @@ pub(crate) fn session_pane_spec(sessions: &[Session], active_session_id: &str) -
         })
         .collect::<Vec<_>>();
     let active = filtered_items(&all, sessions, SessionStatus::Active);
-    let completed = filtered_items(&all, sessions, SessionStatus::Completed);
     let archived = filtered_items(&all, sessions, SessionStatus::Archived);
     let active_count = active.len();
-    let completed_count = completed.len();
     let archived_count = archived.len();
 
     SessionPaneSpec {
@@ -46,7 +44,6 @@ pub(crate) fn session_pane_spec(sessions: &[Session], active_session_id: &str) -
                 vec![
                     ListSelectionGroup::new(format!("All ({})", all.len()), all),
                     ListSelectionGroup::new(format!("Active ({active_count})"), active),
-                    ListSelectionGroup::new(format!("Completed ({completed_count})"), completed),
                     ListSelectionGroup::new(format!("Archived ({archived_count})"), archived),
                 ],
             )
@@ -107,7 +104,6 @@ fn filtered_items(
 fn status_label(status: SessionStatus) -> &'static str {
     match status {
         SessionStatus::Active => "active",
-        SessionStatus::Completed => "completed",
         SessionStatus::Archived => "archived",
     }
 }

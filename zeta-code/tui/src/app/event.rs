@@ -4,10 +4,10 @@ use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::queue::QueueId;
 use crate::components::steer::SteerId;
-use crate::features::additional_directories::AdditionalDirectoryPaneSpec;
 use crate::features::config::ConfigPaneSpec;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorPaneSpec;
+use crate::features::dirs::DirPaneSpec;
 use crate::features::interactions::InteractionRequest;
 use crate::features::keymap::KeymapPaneSpec;
 use crate::features::mcp::McpPaneSpec;
@@ -30,10 +30,10 @@ use zeta_protocol::TurnId;
 
 /// A fact delivered to the single writer of TUI presentation state.
 pub(crate) enum AppEvent {
-    AdditionalDirectoriesPaneOpened(AdditionalDirectoryPaneSpec),
-    AdditionalDirectoryRemoved {
-        root: std::path::PathBuf,
-        pane_spec: AdditionalDirectoryPaneSpec,
+    DirsPaneOpened(DirPaneSpec),
+    DirRemoved {
+        path: std::path::PathBuf,
+        pane_spec: DirPaneSpec,
     },
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),

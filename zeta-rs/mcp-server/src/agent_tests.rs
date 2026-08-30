@@ -8,10 +8,7 @@ use zeta_app_server_client::InProcessTransport;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
 use zeta_async_utils::CancellationToken;
-use zeta_core::{
-    CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, SessionCoordinator,
-    ThreadController,
-};
+use zeta_core::{CoreError, InMemoryThreadStore, ModelService, ThreadController};
 use zeta_protocol::{
     ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem, StopReason,
 };
@@ -62,13 +59,7 @@ fn service_with_model(model: Arc<dyn ModelService>) -> AppServerAgentService<InP
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let app_server = AppServer::new(
-        Arc::new(SessionCoordinator::with_store(
-            Arc::new(InMemorySessionStore::default()),
-            threads,
-        )),
-        model,
-    );
+    let app_server = AppServer::new(threads, model);
     let mut client = AppServerClient::new(InProcessTransport::from_server(app_server));
     client
         .initialize(InitializeParams {

@@ -38,7 +38,7 @@ impl ScmPaneStyle {
     }
 }
 
-/// One changed-file snapshot supplied by the workspace host.
+/// One changed-file snapshot supplied by the repository host.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScmDiff {
     path: String,
@@ -64,7 +64,7 @@ impl ScmDiff {
 /// Retained source-control snapshot for the Changes pane.
 ///
 /// The host maps its repository service result to this model; pane code must not
-/// depend on a particular Git transport or workspace implementation.
+/// depend on a particular Git transport or directory implementation.
 pub struct ScmState {
     diffs: Vec<ScmDiff>,
     editor: EditorPaneState,

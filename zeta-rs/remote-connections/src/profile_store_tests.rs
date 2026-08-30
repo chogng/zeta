@@ -3,9 +3,9 @@ use std::fs::OpenOptions;
 
 use serde_json::json;
 use tempfile::TempDir;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 
@@ -212,7 +212,7 @@ fn store(directory: &TempDir) -> RemoteConnectionProfileStore {
 fn target() -> SshTarget {
     SshTarget::new(
         SshHost::parse("build.example").unwrap(),
-        RemoteWorkspacePath::parse("/srv/project").unwrap(),
+        RemoteDirPath::parse("/srv/project").unwrap(),
     )
 }
 
@@ -223,7 +223,7 @@ fn profile(target: SshTarget, runtime: &str) -> RemoteProfile {
 fn record(active_runtime: &str) -> serde_json::Value {
     json!({
         "host": "build.example",
-        "workspace": "/srv/project",
+        "dir": "/srv/project",
         "activeRuntime": active_runtime,
     })
 }

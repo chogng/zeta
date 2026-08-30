@@ -1,7 +1,7 @@
-//! Optional cloud semantic enhancement for one workspace Codebase.
+//! Optional cloud semantic enhancement for one directory Codebase.
 //!
 //! This crate owns egress grants, provider contracts, publication/deletion state, and the
-//! publication of Workspace-produced chunks. Scanning, ignore semantics, chunking, chunk identity,
+//! publication of directory-produced chunks. Scanning, ignore semantics, chunking, chunk identity,
 //! and current-source verification remain in `zeta-codebase`; remote services never receive
 //! authority to traverse or rechunk the codebase.
 

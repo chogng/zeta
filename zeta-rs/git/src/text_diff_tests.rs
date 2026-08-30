@@ -59,12 +59,12 @@ fn text_diff_limits_reject_zero_bytes() {
 }
 
 #[tokio::test]
-async fn path_scoped_snapshot_reads_only_changes_below_the_workspace_prefix() {
+async fn path_scoped_snapshot_reads_only_changes_below_the_dir_prefix() {
     let repository = TestRepository::init();
-    repository.write("workspace/tracked.txt", "before\n");
+    repository.write("dir/tracked.txt", "before\n");
     repository.write("outside.txt", "before\n");
     repository.commit_all("initial");
-    repository.write("workspace/tracked.txt", "after\n");
+    repository.write("dir/tracked.txt", "after\n");
     repository.write("outside.txt", "after\n");
 
     let client = GitClient::system();
@@ -72,7 +72,7 @@ async fn path_scoped_snapshot_reads_only_changes_below_the_workspace_prefix() {
     let snapshot = client
         .text_diff_snapshot_under(
             &opened,
-            Path::new("workspace"),
+            Path::new("dir"),
             GitTextDiffLimits::new(1_024).unwrap(),
         )
         .await
@@ -80,10 +80,7 @@ async fn path_scoped_snapshot_reads_only_changes_below_the_workspace_prefix() {
 
     assert_eq!(snapshot.repository().changes().len(), 2);
     assert_eq!(snapshot.diffs().len(), 1);
-    assert_eq!(
-        snapshot.diffs()[0].path(),
-        Path::new("workspace/tracked.txt")
-    );
+    assert_eq!(snapshot.diffs()[0].path(), Path::new("dir/tracked.txt"));
     assert_eq!(snapshot.statistics().additions(), 1);
     assert_eq!(snapshot.statistics().deletions(), 1);
 }

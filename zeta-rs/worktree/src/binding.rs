@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
-const BINDING_FILENAME: &str = "zeta-thread-workspace.json";
+const BINDING_FILENAME: &str = "zeta-thread-dir.json";
 const BINDING_VERSION: u8 = 4;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -36,9 +36,9 @@ pub(crate) struct BindingRecord {
     version: u8,
     pub managed_worktree_id: String,
     pub owner_thread_id: String,
-    pub source_workspace_id: String,
+    pub source_dir_id: String,
     pub source_repository_root: PathBuf,
-    pub relative_workspace_directory: PathBuf,
+    pub relative_dir: PathBuf,
     pub target_branch: Option<String>,
     pub target_head: String,
     #[serde(default)]
@@ -57,9 +57,9 @@ impl BindingRecord {
     pub(crate) fn new(
         managed_worktree_id: String,
         owner_thread_id: String,
-        source_workspace_id: String,
+        source_dir_id: String,
         source_repository_root: PathBuf,
-        relative_workspace_directory: PathBuf,
+        relative_dir: PathBuf,
         target_branch: Option<String>,
         target_head: String,
         target_unborn: bool,
@@ -72,9 +72,9 @@ impl BindingRecord {
             version: BINDING_VERSION,
             managed_worktree_id,
             owner_thread_id,
-            source_workspace_id,
+            source_dir_id,
             source_repository_root,
-            relative_workspace_directory,
+            relative_dir,
             target_branch,
             target_head,
             target_unborn,
@@ -97,7 +97,7 @@ pub(crate) fn read(git_dir: &Path) -> Result<BindingRecord> {
     let record = serde_json::from_slice::<BindingRecord>(
         &fs::read(&path).with_context(|| format!("cannot read {}", path.display()))?,
     )
-    .with_context(|| format!("invalid Thread workspace binding at {}", path.display()))?;
+    .with_context(|| format!("invalid Thread directory binding at {}", path.display()))?;
     if !(1..=BINDING_VERSION).contains(&record.version)
         || record.managed_worktree_id.is_empty()
         || record.owner_thread_id.is_empty()
@@ -106,7 +106,7 @@ pub(crate) fn read(git_dir: &Path) -> Result<BindingRecord> {
         || (record.kind == BindingKind::Git && record.baseline_ref.is_empty())
         || (record.kind == BindingKind::Directory && record.snapshot_store.is_none())
     {
-        bail!("invalid Thread workspace binding at {}", path.display());
+        bail!("invalid Thread directory binding at {}", path.display());
     }
     Ok(record)
 }
@@ -126,13 +126,13 @@ pub(crate) fn write(git_dir: &Path, record: &BindingRecord) -> Result<()> {
             return Ok(());
         }
         bail!(
-            "Thread workspace binding already exists at {}",
+            "Thread directory binding already exists at {}",
             path.display()
         );
     }
     let mut temporary = NamedTempFile::new_in(git_dir).with_context(|| {
         format!(
-            "cannot create Thread workspace binding in {}",
+            "cannot create Thread directory binding in {}",
             git_dir.display()
         )
     })?;
@@ -144,7 +144,7 @@ pub(crate) fn write(git_dir: &Path, record: &BindingRecord) -> Result<()> {
         .map_err(|error| error.error)
         .with_context(|| {
             format!(
-                "cannot write Thread workspace binding at {}",
+                "cannot write Thread directory binding at {}",
                 path.display()
             )
         })
@@ -155,7 +155,7 @@ pub(crate) fn replace(git_dir: &Path, record: &BindingRecord) -> Result<()> {
     if current.owner_thread_id != record.owner_thread_id
         || current.managed_worktree_id != record.managed_worktree_id
     {
-        bail!("Thread workspace binding owner changed during update");
+        bail!("Thread directory binding owner changed during update");
     }
     let path = git_dir.join(BINDING_FILENAME);
     let mut temporary = NamedTempFile::new_in(git_dir)?;

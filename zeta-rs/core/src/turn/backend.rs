@@ -7,7 +7,7 @@ use zeta_protocol::UserInput;
 /// Executes an already-created durable Turn without owning Thread persistence.
 ///
 /// [`crate::TurnExecutor`] owns the production model/tool loop. Product hosts may wrap it with a
-/// stable local handle while rebuilding workspace-scoped services, but model providers and OAuth
+/// stable local handle while rebuilding environment-scoped services, but model providers and OAuth
 /// drivers must not implement or replace this port. Core remains the authority for Thread state,
 /// interactions, cancellation, and terminal outcomes.
 pub trait TurnExecutionBackend: Send + Sync {

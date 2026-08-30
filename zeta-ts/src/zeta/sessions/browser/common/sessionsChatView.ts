@@ -14,7 +14,7 @@ import type { IChatContextPickService } from "../../../workbench/services/chat/c
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import type { SessionId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
-import type { SessionsViewSelection } from "../../services/view/common/sessionsViewService.js";
+import type { SessionsViewSelection } from "../../services/view/common/sessionsService.js";
 
 let sessionsChatPaneInstanceId = 0;
 

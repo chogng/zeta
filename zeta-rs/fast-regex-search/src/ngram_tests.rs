@@ -65,7 +65,7 @@ fn every_covering_gram_is_present_when_the_literal_is_embedded() {
 
 #[test]
 fn covering_grams_are_fewer_than_all_sparse_grams_for_long_literals() {
-    let literal = b"workspace_authentication_token_handler";
+    let literal = b"request_authentication_token_handler";
     let all = sparse_ngrams(literal);
     let covering = covering_ngrams(literal);
 
@@ -75,8 +75,7 @@ fn covering_grams_are_fewer_than_all_sparse_grams_for_long_literals() {
 
 #[test]
 fn covering_grams_never_create_false_negatives_for_any_embedded_slice() {
-    let document =
-        b"fn parse_workspace_authentication_token(input_42: &str) -> Result<()> { ok() }";
+    let document = b"fn parse_request_authentication_token(input_42: &str) -> Result<()> { ok() }";
     let indexed = sparse_ngrams(document);
 
     for start in 0..document.len() - 2 {

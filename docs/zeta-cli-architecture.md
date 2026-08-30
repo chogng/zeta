@@ -152,7 +152,7 @@ CLI 需要的能力必须先进入 App Server API 文档，再由 zeta-rs 实现
 - Session-owned Thread create/fork/archive
 - Thread read/subscribe/unsubscribe
 - Turn start/interrupt
-- SessionUpdate / ThreadUpdate
+- Session tree changed hint / ThreadUpdate
 - Tool Call proposed/running/completed
 - Approval request/response
 - 文件变更

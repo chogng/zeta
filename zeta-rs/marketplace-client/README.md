@@ -57,7 +57,7 @@ link is never treated as an executable or download URL.
 | `RemoteMarketplaceConfig` | product-pinned HTTPS metadata/target URLs, trusted root, cache root, publisher policy and bounded catalog refresh interval |
 | `MarketplaceRemoteClient` | concrete current remote distribution adapter |
 | `MarketplaceRegistryClient` | narrow remote discovery/download dependency injected into the local Manager |
-| `MarketplacePackagePayload` | opaque verified handoff; permits copy-to-staging, never path access |
+| `MarketplacePackagePayload` | opaque verified handoff; authorizations copy-to-staging, never path access |
 | `MarketplaceServiceClient` | complete product-facing service implemented by the local Manager |
 | `MarketplaceClientError` | stable business/unavailable/protocol error categories without private diagnostics |
 

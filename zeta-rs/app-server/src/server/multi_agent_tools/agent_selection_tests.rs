@@ -9,9 +9,9 @@ use super::resolve_agent_selection;
 
 #[test]
 fn automatic_selection_freezes_definition_and_resolves_capability_references() {
-    let workspace = tempfile::tempdir().unwrap();
-    let agent_root = workspace.path().join(".zeta/agents");
-    let instruction_root = workspace.path().join(".zeta/instructions");
+    let dir = tempfile::tempdir().unwrap();
+    let agent_root = dir.path().join(".zeta/agents");
+    let instruction_root = dir.path().join(".zeta/instructions");
     fs::create_dir_all(&agent_root).unwrap();
     fs::create_dir_all(&instruction_root).unwrap();
     fs::write(
@@ -24,8 +24,8 @@ fn automatic_selection_freezes_definition_and_resolves_capability_references() {
         "---\nload: on-demand\n---\n\nPrioritize correctness over style.\n",
     )
     .unwrap();
-    let agents = AgentDefinitionCatalog::discover(workspace.path()).snapshot();
-    let instructions = InstructionCatalog::discover(workspace.path()).snapshot();
+    let agents = AgentDefinitionCatalog::discover(dir.path()).snapshot();
+    let instructions = InstructionCatalog::discover(dir.path()).snapshot();
 
     let selected = resolve_agent_selection(
         None,
@@ -60,15 +60,15 @@ fn automatic_selection_freezes_definition_and_resolves_capability_references() {
 
 #[test]
 fn selected_definition_cannot_expand_the_parent_tool_ceiling() {
-    let workspace = tempfile::tempdir().unwrap();
-    let agent_root = workspace.path().join(".zeta/agents");
+    let dir = tempfile::tempdir().unwrap();
+    let agent_root = dir.path().join(".zeta/agents");
     fs::create_dir_all(&agent_root).unwrap();
     fs::write(
         agent_root.join("publisher.md"),
         "---\nname: publisher\ndescription: Publishes releases.\ntools:\n  - external_publish\n---\n\nPublish the release.\n",
     )
     .unwrap();
-    let agents = AgentDefinitionCatalog::discover(workspace.path()).snapshot();
+    let agents = AgentDefinitionCatalog::discover(dir.path()).snapshot();
 
     let error = resolve_agent_selection(
         Some("publisher"),

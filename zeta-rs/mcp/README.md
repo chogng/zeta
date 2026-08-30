@@ -109,7 +109,7 @@ App Server adapter 当前已负责 tools vertical slice 的：
 - 把 `catalog().model_definitions()` 与 frozen binding 接入 Core `ToolService`；
 - 执行 approval、durable Tool Call/Result、unknown-outcome recovery；
 
-App Server 尚未负责 Plugin/workspace trust、credential materialization、sandboxed stdio launcher、
+App Server 尚未负责 Plugin/directory capability、credential materialization、sandboxed stdio launcher、
 config/list-changed 后的自动 safe-point rebuild，以及 progress/elicitation/diagnostic delivery。
 
 ## 测试与修改影响

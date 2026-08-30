@@ -17,7 +17,7 @@ pub enum ImportScope {
 
 /// One caller-selected root in which a supported external agent may keep configuration.
 ///
-/// User roots are user home directories. Project roots are repository or workspace roots.
+/// User roots are user home directories. Project roots are repository or selected directories.
 #[derive(Clone, Eq, PartialEq)]
 pub struct AgentImportLocation {
     agent: ExternalAgent,

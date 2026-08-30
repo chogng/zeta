@@ -163,7 +163,7 @@ impl CodebaseVectorStore for SqliteCodebaseVectorStore {
             && stored_root != root_id.as_str()
         {
             return Err(CodebaseVectorStoreError::new(
-                "semantic index belongs to a different Workspace root",
+                "semantic index belongs to a different directory root",
             ));
         }
         let transaction = connection.transaction().map_err(store_error)?;
@@ -255,7 +255,7 @@ impl CodebaseVectorStore for SqliteCodebaseVectorStore {
             && stored_root != root_id.as_str()
         {
             return Err(CodebaseVectorStoreError::new(
-                "semantic index belongs to a different Workspace root",
+                "semantic index belongs to a different directory root",
             ));
         }
         reset_projection(&connection).map_err(store_error)?;

@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::identity::{
-    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, WINDOW, WORKSPACE_PANE_TOGGLE,
+    FILES_PANE_TOGGLE, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, WINDOW,
 };
 use super::tabs::TabContainer;
 use crate::PaneInputKind;
@@ -47,7 +47,7 @@ pub struct Titlebar<'a> {
     settings_action_index: Option<usize>,
     tab_container: Option<TabContainer<'a>>,
     tab_container_toggle_label: &'static str,
-    workspace_toggle_label: &'static str,
+    files_toggle_label: &'static str,
 }
 
 impl<'a> Titlebar<'a> {
@@ -94,11 +94,11 @@ impl<'a> Titlebar<'a> {
         } else {
             ButtonState::Resting
         };
-        let workspace_toggle_state = if dispatch.is_pressed(WORKSPACE_PANE_TOGGLE) {
+        let files_toggle_state = if dispatch.is_pressed(FILES_PANE_TOGGLE) {
             ButtonState::Pressed
-        } else if dispatch.is_focused(WORKSPACE_PANE_TOGGLE) {
+        } else if dispatch.is_focused(FILES_PANE_TOGGLE) {
             ButtonState::Focused
-        } else if dispatch.is_hovered(WORKSPACE_PANE_TOGGLE) {
+        } else if dispatch.is_hovered(FILES_PANE_TOGGLE) {
             ButtonState::Hovered
         } else {
             ButtonState::Resting
@@ -122,19 +122,19 @@ impl<'a> Titlebar<'a> {
         } else {
             style.tabs_collapsed_icon
         };
-        let workspace_pane_visible = matches!(
+        let files_pane_visible = matches!(
             active_pane_kind,
             Some(PaneInputKind::Files | PaneInputKind::Diff)
         );
-        let workspace_toggle_label = if workspace_pane_visible {
-            "Show agent workspace"
+        let files_toggle_label = if files_pane_visible {
+            "Show agent"
         } else {
-            "Show workspace files"
+            "Show files"
         };
-        let workspace_toggle_icon = if workspace_pane_visible {
-            style.workspace_visible_icon
+        let files_toggle_icon = if files_pane_visible {
+            style.files_visible_icon
         } else {
-            style.workspace_hidden_icon
+            style.files_hidden_icon
         };
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(style.colors.title_bar_background)
@@ -157,9 +157,9 @@ impl<'a> Titlebar<'a> {
             ActionBarStyle::new(button_style.clone(), Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
         );
         let mut right_actions = vec![ActionBarItem::Action(ActionViewItem::icon(
-            workspace_toggle_icon,
-            workspace_toggle_label,
-            workspace_toggle_state,
+            files_toggle_icon,
+            files_toggle_label,
+            files_toggle_state,
         ))];
         let settings_action_index = settings_action_visible.then(|| {
             let index = right_actions.len();
@@ -185,7 +185,7 @@ impl<'a> Titlebar<'a> {
             settings_action_index,
             tab_container: None,
             tab_container_toggle_label,
-            workspace_toggle_label,
+            files_toggle_label,
         }
     }
 
@@ -214,12 +214,12 @@ impl<'a> Titlebar<'a> {
             .with_action(NodeAction::Activate),
             InteractionRegion::new(
                 "WorkspacePaneToggle",
-                WORKSPACE_PANE_TOGGLE,
+                FILES_PANE_TOGGLE,
                 self.right_action_bar
                     .interactive_item_bounds(0)
-                    .expect("workspace pane toggle is enabled"),
+                    .expect("files pane toggle is enabled"),
                 AccessibilityRole::Button,
-                self.workspace_toggle_label,
+                self.files_toggle_label,
             )
             .with_cursor(CursorFeedback::Pointer)
             .with_focus(FocusBehavior::TabStop)

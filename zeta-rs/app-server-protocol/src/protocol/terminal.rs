@@ -15,14 +15,14 @@ pub struct TerminalProfile {
     pub is_default: bool,
 }
 
-/// Trusted terminal profiles discovered by the local App Server composition.
+/// Authorized terminal profiles discovered by the local App Server composition.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalProfileListResult {
     pub profiles: Vec<TerminalProfile>,
 }
 
-/// Selects either the server default or one previously listed trusted profile.
+/// Selects either the server default or one previously listed authorized profile.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type", deny_unknown_fields)]
 pub enum TerminalProfileSelection {
@@ -42,13 +42,13 @@ pub enum TerminalLifecycle {
     Reconnectable,
 }
 
-/// Starts one interactive terminal at the server's trusted workspace root.
+/// Starts one interactive terminal at the server's authorized directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[schemars(range(min = 1, max = 512))]
     pub rows: u16,
     #[schemars(range(min = 1, max = 512))]
@@ -57,12 +57,12 @@ pub struct TerminalCreateParams {
     pub lifecycle: TerminalLifecycle,
 }
 
-/// Starts one interactive terminal in a session-authorized additional directory.
+/// Starts one interactive terminal in a session-authorized directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateInSessionDirectoryParams {
     pub session_id: SessionId,
-    pub root: std::path::PathBuf,
+    pub path: std::path::PathBuf,
     #[schemars(range(min = 1, max = 512))]
     pub rows: u16,
     #[schemars(range(min = 1, max = 512))]
@@ -109,7 +109,7 @@ pub struct TerminalCreateResult {
 pub struct TerminalAttachParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[schemars(length(min = 64, max = 64))]
@@ -146,7 +146,7 @@ pub struct TerminalAttachResult {
 pub struct TerminalWriteParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[schemars(length(min = 1, max = 65536))]
@@ -159,7 +159,7 @@ pub struct TerminalWriteParams {
 pub struct TerminalResizeParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[schemars(range(min = 1, max = 512))]
@@ -174,7 +174,7 @@ pub struct TerminalResizeParams {
 pub struct TerminalReadParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[ts(type = "number")]
@@ -241,7 +241,7 @@ pub struct TerminalReadResult {
 pub struct TerminalCloseParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
 }

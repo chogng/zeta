@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use crate::Codebase;
 use crate::CodebaseLimits;
 use tempfile::TempDir;
+use zeta_file_access::Dir;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
@@ -15,7 +16,6 @@ use zeta_model_provider::ModelProviderError;
 use zeta_model_provider::RerankInvoker;
 use zeta_model_provider::RerankRequest;
 use zeta_model_provider::RerankResponse;
-use zeta_workspace::WorkspaceRoot;
 
 use super::*;
 
@@ -111,9 +111,9 @@ impl EmbeddingInvoker for CancellingBatchEmbedding {
 }
 
 #[test]
-fn local_vector_recall_returns_current_workspace_chunk_references() {
-    let workspace = workspace();
-    let index = index(&workspace);
+fn local_vector_recall_returns_current_dir_chunk_references() {
+    let dir = dir();
+    let index = index(&dir);
     let service = service(Arc::clone(&index), None, memory_store());
     let synced = service.sync().expect("sync");
 
@@ -133,8 +133,8 @@ fn local_vector_recall_returns_current_workspace_chunk_references() {
 
 #[test]
 fn local_semantic_service_interprets_rerank_scores_and_owns_final_order() {
-    let workspace = workspace();
-    let index = index(&workspace);
+    let dir = dir();
+    let index = index(&dir);
     let rerank: Arc<dyn RerankInvoker> = Arc::new(PreferAlphaRerank);
     let service = service(index, Some(rerank), memory_store());
     service.sync().expect("sync");
@@ -149,12 +149,12 @@ fn local_semantic_service_interprets_rerank_scores_and_owns_final_order() {
 
 #[test]
 fn stale_semantic_generation_is_rejected_after_lexical_refresh() {
-    let workspace = workspace();
-    let index = index(&workspace);
+    let dir = dir();
+    let index = index(&dir);
     let service = service(Arc::clone(&index), None, memory_store());
     service.sync().expect("sync");
     std::fs::write(
-        workspace.path().join("beta.rs"),
+        dir.path().join("beta.rs"),
         "pub fn changed_beta_feature() {}\n",
     )
     .expect("change source");
@@ -167,9 +167,9 @@ fn stale_semantic_generation_is_rejected_after_lexical_refresh() {
 }
 
 #[test]
-fn sync_rejects_model_output_that_does_not_match_workspace_chunks() {
-    let workspace = workspace();
-    let index = index(&workspace);
+fn sync_rejects_model_output_that_does_not_match_dir_chunks() {
+    let dir = dir();
+    let index = index(&dir);
     let embedding: Arc<dyn EmbeddingInvoker> = Arc::new(WrongCardinalityEmbedding);
     let service = CodebaseSemanticService::new(index, model_id(), embedding, memory_store());
 
@@ -183,16 +183,16 @@ fn sync_rejects_model_output_that_does_not_match_workspace_chunks() {
 
 #[test]
 fn cancelled_sync_reuses_completed_batches_on_retry() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    std::fs::create_dir(workspace.path().join(".git")).expect("git marker");
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::create_dir(dir.path().join(".git")).expect("git marker");
     for index in 0..140 {
         std::fs::write(
-            workspace.path().join(format!("file-{index}.rs")),
+            dir.path().join(format!("file-{index}.rs")),
             format!("pub fn item_{index}() {{}}\n"),
         )
         .expect("source");
     }
-    let index = index(&workspace);
+    let index = index(&dir);
     let source = zeta_async_utils::CancellationSource::new();
     let embedding = Arc::new(CancellingBatchEmbedding {
         calls: AtomicUsize::new(0),
@@ -215,8 +215,8 @@ fn cancelled_sync_reuses_completed_batches_on_retry() {
 
 #[test]
 fn transient_embedding_failure_is_retried_and_reported() {
-    let workspace = workspace();
-    let index = index(&workspace);
+    let dir = dir();
+    let index = index(&dir);
     let embedding = Arc::new(TransientOnceEmbedding {
         calls: AtomicUsize::new(0),
     });
@@ -260,10 +260,10 @@ fn query(text: &str) -> CodebaseSemanticQuery {
     CodebaseSemanticQuery::new(text, NonZeroUsize::new(10).expect("limit")).expect("query")
 }
 
-fn index(workspace: &TempDir) -> Arc<Codebase> {
+fn index(dir: &TempDir) -> Arc<Codebase> {
     let index = Arc::new(
         Codebase::open_memory(
-            WorkspaceRoot::open(workspace.path()).expect("root"),
+            Dir::open_local(dir.path()).expect("root"),
             CodebaseLimits::default(),
         )
         .expect("index"),
@@ -272,18 +272,11 @@ fn index(workspace: &TempDir) -> Arc<Codebase> {
     index
 }
 
-fn workspace() -> TempDir {
-    let workspace = tempfile::tempdir().expect("workspace");
-    std::fs::create_dir(workspace.path().join(".git")).expect("git marker");
-    std::fs::write(
-        workspace.path().join("alpha.rs"),
-        "pub fn alpha_feature() {}\n",
-    )
-    .expect("alpha source");
-    std::fs::write(
-        workspace.path().join("beta.rs"),
-        "pub fn beta_feature() {}\n",
-    )
-    .expect("beta source");
-    workspace
+fn dir() -> TempDir {
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::create_dir(dir.path().join(".git")).expect("git marker");
+    std::fs::write(dir.path().join("alpha.rs"), "pub fn alpha_feature() {}\n")
+        .expect("alpha source");
+    std::fs::write(dir.path().join("beta.rs"), "pub fn beta_feature() {}\n").expect("beta source");
+    dir
 }

@@ -93,13 +93,13 @@ export class DebugService extends Disposable implements IDebugService {
 				configurations.push(...document.configurations.map(configuration => Object.freeze({
 					...configuration,
 					id: multiRoot ? `${folder.id}:${configuration.id}` : configuration.id,
-					workspaceFolderId: folder.id,
+					dirId: folder.id,
 					workspaceFolderName: folder.name,
 				})));
 				compounds.push(...document.compounds.map(compound => Object.freeze({
 					...compound,
 					id: multiRoot ? `${folder.id}:${compound.id}` : compound.id,
-					workspaceFolderId: folder.id,
+					dirId: folder.id,
 					workspaceFolderName: folder.name,
 				})));
 			} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
@@ -112,12 +112,12 @@ export class DebugService extends Disposable implements IDebugService {
 		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
 		const current = this.currentConfigurations.find(candidate => candidate.id === configuration.id);
 		if (!current) throw new Error("Debug configuration is no longer present in launch.json");
-		const root = current.workspaceFolderId
-			? this.workspace.getWorkspace().folders.find(folder => folder.id === current.workspaceFolderId)?.uri
+		const root = current.dirId
+			? this.workspace.getWorkspace().folders.find(folder => folder.id === current.dirId)?.uri
 			: this.workspace.getWorkspace().folders[0]?.uri;
 		if (!root) throw new Error("Debugging requires an open workspace folder");
-		await this.runTask(current.preLaunchTask, "preLaunchTask", current.workspaceFolderId);
-		const session = await DebugAdapterSession.start({ configuration: current, processService: this.processes, breakpoints: () => this.currentBreakpoints, workspace: root, runInTerminal: value => runDebuggeeInTerminal(this.terminals, value, current.workspaceFolderId), updateBreakpoints: updates => this.acceptBreakpointUpdates(updates), exceptionBreakpoints: () => this.exceptionBreakpointsForType(current.type) });
+		await this.runTask(current.preLaunchTask, "preLaunchTask", current.dirId);
+		const session = await DebugAdapterSession.start({ configuration: current, processService: this.processes, breakpoints: () => this.currentBreakpoints, workspace: root, runInTerminal: value => runDebuggeeInTerminal(this.terminals, value, current.dirId), updateBreakpoints: updates => this.acceptBreakpointUpdates(updates), exceptionBreakpoints: () => this.exceptionBreakpointsForType(current.type) });
 		const listener = session.onDidChangeState(state => {
 			if (this.sessionRecords.has(session.id)) this.sessionEmitter.fire(this.session);
 			if (state === "terminated" || state === "error") queueMicrotask(() => { void this.finishSession(session); });
@@ -132,8 +132,8 @@ export class DebugService extends Disposable implements IDebugService {
 	async startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]> {
 		const current = this.currentCompounds.find(candidate => candidate.id === compound.id);
 		if (!current) throw new Error("Debug compound is no longer present in launch.json");
-		await this.runTask(current.preLaunchTask, "compound preLaunchTask", current.workspaceFolderId);
-		const configurations = current.configurations.map(reference => resolveCompoundConfiguration(reference, this.currentConfigurations, current.workspaceFolderId));
+		await this.runTask(current.preLaunchTask, "compound preLaunchTask", current.dirId);
+		const configurations = current.configurations.map(reference => resolveCompoundConfiguration(reference, this.currentConfigurations, current.dirId));
 		const started: IDebugSession[] = [];
 		try {
 			for (const configuration of configurations) started.push(await this.start(configuration));
@@ -252,16 +252,16 @@ export class DebugService extends Disposable implements IDebugService {
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
 		if (this.completedPostTasks.has(session.id)) return;
 		this.completedPostTasks.add(session.id);
-		try { await this.runTask(session.configuration.postDebugTask, "postDebugTask", session.configuration.workspaceFolderId); }
+		try { await this.runTask(session.configuration.postDebugTask, "postDebugTask", session.configuration.dirId); }
 		catch (error) { this.reportError(error); }
 	}
 
-	private async runTask(reference: string | undefined, role: string, workspaceFolderId?: string): Promise<void> {
+	private async runTask(reference: string | undefined, role: string, dirId?: string): Promise<void> {
 		if (!reference) return;
 		await this.tasks.refresh();
 		const matches = this.tasks.tasks.filter(task =>
 			(task.id === reference || task.label === reference)
-			&& (workspaceFolderId === undefined || task.workspaceFolderId === undefined || task.workspaceFolderId === workspaceFolderId),
+			&& (dirId === undefined || task.dirId === undefined || task.dirId === dirId),
 		);
 		if (matches.length === 0) throw new Error(`Debug ${role} '${reference}' was not found`);
 		if (matches.length > 1) throw new Error(`Debug ${role} '${reference}' is ambiguous`);
@@ -301,10 +301,10 @@ function normalizeExpression(expression: string): string {
 	return normalized;
 }
 
-function resolveCompoundConfiguration(reference: string, configurations: readonly IDebugConfiguration[], workspaceFolderId?: string): IDebugConfiguration {
+function resolveCompoundConfiguration(reference: string, configurations: readonly IDebugConfiguration[], dirId?: string): IDebugConfiguration {
 	const matches = configurations.filter(configuration =>
 		(configuration.id === reference || configuration.name === reference)
-		&& (workspaceFolderId === undefined || configuration.workspaceFolderId === workspaceFolderId),
+		&& (dirId === undefined || configuration.dirId === dirId),
 	);
 	if (matches.length === 0) throw new Error(`Debug compound configuration '${reference}' was not found`);
 	if (matches.length > 1) throw new Error(`Debug compound configuration '${reference}' is ambiguous`);

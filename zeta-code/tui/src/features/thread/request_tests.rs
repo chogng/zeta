@@ -66,9 +66,9 @@ fn steer_prompt_uses_the_active_turn_typed_request() {
         .expect("request is recorded");
     let request: serde_json::Value = serde_json::from_str(&request).unwrap();
     assert_eq!(request["method"], "session/request");
-    assert_eq!(request["params"]["expectedSequence"], 7);
     assert_eq!(request["params"]["request"]["type"], "steerTurn");
     assert_eq!(request["params"]["request"]["threadId"], "thread-1");
+    assert_eq!(request["params"]["request"]["expectedSequence"], 7);
     assert_eq!(request["params"]["request"]["turnId"], "turn-1");
     assert_eq!(
         request["params"]["request"]["input"][0]["text"],

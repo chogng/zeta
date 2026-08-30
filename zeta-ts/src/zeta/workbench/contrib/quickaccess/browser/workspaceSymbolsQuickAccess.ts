@@ -49,7 +49,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
 					symbol,
 					label: symbol.name,
 					description: symbol.containerName,
-					detail: `${resourceLabel(symbol.resource)}:${symbol.range.start.lineIndex + 1}`,
+					detail: `${resourceLabel(symbol.resource)}:${symbol.range.startLineNumber}`,
 				}));
 			};
 			void service.provideWorkspaceSymbols(query, current.signal, publish).then(publish).catch(error => {

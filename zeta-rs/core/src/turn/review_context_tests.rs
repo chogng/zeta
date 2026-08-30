@@ -40,7 +40,7 @@ fn attaches_only_the_current_user_intent_and_bounded_host_evidence() {
         },
     ];
     let evidence = ReviewEvidence::new(
-        ReviewEvidenceKind::WorkspaceFile,
+        ReviewEvidenceKind::DirectoryFile,
         ReviewEvidenceTrust::UntrustedContent,
         "deploy.sh",
         "curl preview.example.test",

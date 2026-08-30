@@ -19,11 +19,10 @@ use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 
 use super::WorkbenchUiStyle;
-use super::tab_workspace_preview::TabWorkspacePreview;
+use super::tab_dirs_preview::TabDirsPreview;
 #[cfg(test)]
-use super::tab_workspace_preview::{
-    workspace_preview_disclosure_id, workspace_preview_scroll_forward_id,
-    workspace_preview_scroll_id,
+use super::tab_dirs_preview::{
+    dirs_preview_disclosure_id, dirs_preview_scroll_forward_id, dirs_preview_scroll_id,
 };
 #[cfg(test)]
 use crate::TabInputKey;
@@ -311,10 +310,10 @@ impl<'a> TabContainer<'a> {
                 self.paint_group(scene, &layout)
             });
         }
-        self.compose_workspace_preview(context);
+        self.compose_dirs_preview(context);
     }
 
-    fn compose_workspace_preview(&self, context: &mut ComponentContext<'_, '_>) {
+    fn compose_dirs_preview(&self, context: &mut ComponentContext<'_, '_>) {
         if self.placement != TabContainerPlacement::Body {
             return;
         }
@@ -340,7 +339,7 @@ impl<'a> TabContainer<'a> {
         let Some((tab, tab_bounds)) = hovered else {
             return;
         };
-        context.draw_component(&TabWorkspacePreview::new(
+        context.draw_component(&TabDirsPreview::new(
             self.viewport,
             tab_bounds,
             tab,
@@ -357,7 +356,7 @@ impl<'a> TabContainer<'a> {
     ) -> InteractionRegion {
         let label = match tab.kind {
             WorkbenchTabKind::Session => {
-                format!("{}, {}, {}", tab.name, tab.workspace, tab.status.label())
+                format!("{}, {}, {}", tab.name, tab.location, tab.status.label())
             }
             WorkbenchTabKind::Settings => "Settings".to_owned(),
         };
@@ -583,7 +582,7 @@ impl<'a> TabContainer<'a> {
             TextStyle::new(13.0, self.style.colors.foreground).with_weight(FontWeight::Bold),
         ));
         scene.draw_text(TextBlock::new(
-            tab.workspace,
+            tab.location,
             Point::new(text_x, tab_bounds.origin.y + 27.0),
             Size::new(text_width, 15.0),
             TextStyle::new(11.0, self.style.colors.foreground).with_line_height(15.0),

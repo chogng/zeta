@@ -11,7 +11,7 @@ use serde::Serialize;
 use zeta_uds::UnixStream;
 
 use crate::ConnectionOptions;
-use crate::WorkspaceTrustSource;
+use crate::GrantSource;
 
 pub(crate) const CONNECTION_PRELUDE_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(5);
@@ -22,14 +22,14 @@ const PRELUDE_VERSION: u32 = 1;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConnectionPrelude {
     version: u32,
-    pub(crate) workspace_root: Option<PathBuf>,
-    pub(crate) workspace_trust_source: ConnectionWorkspaceTrustSource,
+    pub(crate) dir_root: Option<PathBuf>,
+    pub(crate) dir_grant_source: ConnectionGrantSource,
     pub(crate) product_services: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) enum ConnectionWorkspaceTrustSource {
+pub(crate) enum ConnectionGrantSource {
     HostConfiguration,
     UserConfig,
 }
@@ -38,12 +38,10 @@ impl ConnectionPrelude {
     pub(crate) fn from_options(options: &ConnectionOptions) -> Self {
         Self {
             version: PRELUDE_VERSION,
-            workspace_root: options.workspace_root().map(Path::to_path_buf),
-            workspace_trust_source: match options.workspace_trust_source() {
-                WorkspaceTrustSource::HostConfiguration => {
-                    ConnectionWorkspaceTrustSource::HostConfiguration
-                }
-                WorkspaceTrustSource::UserConfig => ConnectionWorkspaceTrustSource::UserConfig,
+            dir_root: options.dir_root().map(Path::to_path_buf),
+            dir_grant_source: match options.dir_grant_source() {
+                GrantSource::HostConfiguration => ConnectionGrantSource::HostConfiguration,
+                GrantSource::UserConfig => ConnectionGrantSource::UserConfig,
             },
             product_services: options.product_services().map(Path::to_path_buf),
         }
@@ -56,12 +54,10 @@ impl ConnectionPrelude {
         Ok(())
     }
 
-    pub(crate) fn trust_source(&self) -> WorkspaceTrustSource {
-        match self.workspace_trust_source {
-            ConnectionWorkspaceTrustSource::HostConfiguration => {
-                WorkspaceTrustSource::HostConfiguration
-            }
-            ConnectionWorkspaceTrustSource::UserConfig => WorkspaceTrustSource::UserConfig,
+    pub(crate) fn grant_source(&self) -> GrantSource {
+        match self.dir_grant_source {
+            ConnectionGrantSource::HostConfiguration => GrantSource::HostConfiguration,
+            ConnectionGrantSource::UserConfig => GrantSource::UserConfig,
         }
     }
 }

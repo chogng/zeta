@@ -26,12 +26,12 @@ const OUTPUT_LIMIT: usize = 256 * 1024;
 #[test]
 fn interactive_remote_tui_recovers_the_durable_session_after_transport_loss() {
     let root = test_root("interactive-reconnect");
-    let workspace = root.join("workspace");
+    let dir = root.join("dir");
     let profile_root = root.join("profile");
     let fake_ssh = root.join("fake-ssh");
     let connection_count = root.join("connection-count");
     let recovered_requests = root.join("recovered-requests.jsonl");
-    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(&dir).unwrap();
     write_reconnecting_fake_ssh(
         &fake_ssh,
         &profile_root,
@@ -74,14 +74,14 @@ fn interactive_remote_tui_recovers_the_durable_session_after_transport_loss() {
         "connect",
         "--host",
         "local-reconnect-double",
-        "--workspace",
-        workspace.to_str().unwrap(),
+        "--dir",
+        dir.to_str().unwrap(),
         "--runtime",
         env!("CARGO_BIN_EXE_zeta"),
         "--ssh",
         fake_ssh.to_str().unwrap(),
     ]);
-    command.cwd(&workspace);
+    command.cwd(&dir);
     command.env("TERM", "xterm-256color");
     command.env("ZETA_PROFILE_ROOT", &profile_root);
     command.env("ZETA_REMOTE_SERVER_IDLE_TIMEOUT_MILLIS", "5000");

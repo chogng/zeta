@@ -25,7 +25,7 @@ impl ProductApp {
         if self.route_remote_connection_picker_wheel(delta) {
             return;
         }
-        if self.route_workspace_path_picker_wheel(delta) {
+        if self.route_path_picker_wheel(delta) {
             return;
         }
         if self.workbench.tab_context_menu().is_open() {

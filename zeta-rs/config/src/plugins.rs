@@ -119,38 +119,38 @@ impl PluginsConfig {
     }
 }
 
-/// Scope requested by a Workspace Plugin request.
+/// Scope requested by a directory Plugin request.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum WorkspacePluginRequestScope {
+pub enum DirPluginRequestScope {
     #[default]
-    Workspace,
+    Directory,
 }
 
-/// A non-authoritative Workspace request for an exact Plugin package.
+/// A non-authoritative directory request for an exact Plugin package.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkspacePluginRequest {
+pub struct DirPluginRequest {
     pub plugin_id: PluginId,
     pub version: PluginVersion,
     #[serde(default)]
-    pub requested_scope: WorkspacePluginRequestScope,
+    pub requested_scope: DirPluginRequestScope,
 }
 
-/// Workspace Plugin requests keyed by stable package identity.
+/// Directory Plugin requests keyed by stable package identity.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkspacePluginRequests {
+pub struct DirPluginRequests {
     #[serde(default)]
-    pub requests: BTreeMap<PluginId, WorkspacePluginRequest>,
+    pub requests: BTreeMap<PluginId, DirPluginRequest>,
 }
 
-impl WorkspacePluginRequests {
+impl DirPluginRequests {
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
         for (plugin_id, request) in &self.requests {
             if &request.plugin_id != plugin_id {
                 return Err(ConfigError(format!(
-                    "Workspace Plugin request '{}' contains request for '{}'",
+                    "directory Plugin request '{}' contains request for '{}'",
                     plugin_id, request.plugin_id
                 )));
             }

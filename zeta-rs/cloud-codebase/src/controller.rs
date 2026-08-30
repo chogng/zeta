@@ -402,7 +402,7 @@ fn validate_query_result(
         }
         if reference.root_id.as_str() != grant.root_id {
             return Err(CloudCodebaseError::InvalidProviderResult(
-                "candidate belongs to another workspace root",
+                "candidate belongs to another directory root",
             ));
         }
         if reference.relative_path.is_absolute()
@@ -423,7 +423,7 @@ fn validate_query_result(
             .any(|chunk| chunk.reference == *reference)
         {
             return Err(CloudCodebaseError::InvalidProviderResult(
-                "candidate is not an exact chunk from the published Workspace generation",
+                "candidate is not an exact chunk from the published directory generation",
             ));
         }
     }

@@ -13,26 +13,26 @@ mod setup;
 #[cfg(any(target_os = "windows", test))]
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+use zeta_file_access::Dir;
 use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, PreparedCommand, SandboxBackend, SandboxCommand, SandboxError,
     SandboxKind, SandboxPolicy, SandboxProcessDenial, SandboxProcessExitStatus,
 };
-use zeta_workspace::WorkspaceRoot;
 
 pub use discovery::WindowsSandboxDiscoveryError;
 
 /// Materialized authority passed to the Windows AppContainer helpers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WindowsSandboxPlan {
-    workspace: PathBuf,
+    dir: PathBuf,
     file_system: FileSystemAccess,
     network: NetworkAccess,
 }
 
 impl WindowsSandboxPlan {
-    pub fn workspace(&self) -> &Path {
-        &self.workspace
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     pub fn file_system(&self) -> FileSystemAccess {
@@ -72,9 +72,9 @@ impl WindowsSandbox {
         &self.sandbox_setup
     }
 
-    pub fn plan(&self, policy: SandboxPolicy, workspace: &WorkspaceRoot) -> WindowsSandboxPlan {
+    pub fn plan(&self, policy: SandboxPolicy, dir: &Dir) -> WindowsSandboxPlan {
         WindowsSandboxPlan {
-            workspace: workspace.canonical_path().to_path_buf(),
+            dir: dir.canonical_path().to_path_buf(),
             file_system: policy.file_system(),
             network: policy.network(),
         }
@@ -90,7 +90,7 @@ impl SandboxBackend for WindowsSandbox {
         &self,
         command: &SandboxCommand,
         policy: SandboxPolicy,
-        workspace: &WorkspaceRoot,
+        dir: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         if !policy.requires_platform_sandbox() {
             return Ok(PreparedCommand::unrestricted(command));
@@ -98,18 +98,18 @@ impl SandboxBackend for WindowsSandbox {
         if policy.network() != NetworkAccess::Denied
             || !matches!(
                 policy.file_system(),
-                FileSystemAccess::ReadOnly | FileSystemAccess::WorkspaceWrite
+                FileSystemAccess::ReadOnly | FileSystemAccess::DirectoryWrite
             )
         {
             return Err(SandboxError::BackendUnavailable {
                 backend: SandboxKind::WindowsAppContainer,
-                message: "Windows AppContainer v1 supports only read-only or workspace-write filesystem access with denied network".to_owned(),
+                message: "Windows AppContainer v1 supports only read-only or dir-write filesystem access with denied network".to_owned(),
             });
         }
 
         let access = match policy.file_system() {
             FileSystemAccess::ReadOnly => protocol::READ_ONLY_ACCESS,
-            FileSystemAccess::WorkspaceWrite => protocol::WORKSPACE_WRITE_ACCESS,
+            FileSystemAccess::DirectoryWrite => protocol::DIR_WRITE_ACCESS,
             FileSystemAccess::FullAccess => unreachable!("full access was rejected above"),
         };
         let mut arguments = vec![
@@ -117,8 +117,8 @@ impl SandboxBackend for WindowsSandbox {
             self.sandbox_setup.clone().into_os_string(),
             protocol::ACCESS_FLAG.into(),
             access.into(),
-            protocol::WORKSPACE_FLAG.into(),
-            workspace.canonical_path().as_os_str().to_owned(),
+            protocol::DIR_FLAG.into(),
+            dir.canonical_path().as_os_str().to_owned(),
             protocol::CWD_FLAG.into(),
             command.working_directory().as_os_str().to_owned(),
             protocol::COMMAND_SEPARATOR.into(),
@@ -149,9 +149,9 @@ impl SandboxBackend for WindowsSandbox {
 }
 
 #[cfg(any(target_os = "windows", test))]
-fn profile_name(workspace: &Path, access: &str) -> String {
+fn profile_name(dir: &Path, access: &str) -> String {
     let mut digest = Sha256::new();
-    digest.update(profile_path_bytes(workspace));
+    digest.update(profile_path_bytes(dir));
     digest.update([0]);
     digest.update(access.as_bytes());
     let digest = digest.finalize();
@@ -168,19 +168,18 @@ fn profile_name(workspace: &Path, access: &str) -> String {
 }
 
 #[cfg(target_os = "windows")]
-fn profile_path_bytes(workspace: &Path) -> Vec<u8> {
+fn profile_path_bytes(dir: &Path) -> Vec<u8> {
     use std::os::windows::ffi::OsStrExt;
 
-    workspace
-        .as_os_str()
+    dir.as_os_str()
         .encode_wide()
         .flat_map(u16::to_le_bytes)
         .collect()
 }
 
 #[cfg(all(test, not(target_os = "windows")))]
-fn profile_path_bytes(workspace: &Path) -> Vec<u8> {
-    workspace.as_os_str().as_encoded_bytes().to_vec()
+fn profile_path_bytes(dir: &Path) -> Vec<u8> {
+    dir.as_os_str().as_encoded_bytes().to_vec()
 }
 
 /// Runs the packaged command-runner binary.

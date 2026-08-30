@@ -366,35 +366,26 @@ fn canonical_session_contains_thread_lineage_without_embedding_thread_history() 
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
         status: SessionStatus::Active,
-        model: None,
-        workspace: None,
-        next_approval_mode: ApprovalMode::AskPermissions,
-        current_thread_id: Some(ThreadId::new("thread_root").expect("test ID is non-empty")),
-        sequence: 2,
         threads: vec![
             SessionThread {
                 thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
-                origin: ThreadOrigin::Root,
-                status: SessionThreadStatus::Active,
+                parent_thread_id: None,
+                forked_from_id: None,
+                status: ThreadStatus::Active,
             },
             SessionThread {
                 thread_id: ThreadId::new("thread_child").expect("test ID is non-empty"),
-                origin: ThreadOrigin::Fork {
-                    parent_thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
-                    parent_sequence: 7,
-                },
-                status: SessionThreadStatus::Creating,
+                parent_thread_id: Some(ThreadId::new("thread_root").expect("test ID is non-empty")),
+                forked_from_id: Some(ThreadId::new("thread_root").expect("test ID is non-empty")),
+                status: ThreadStatus::Active,
             },
         ],
     };
 
     assert_eq!(session.threads.len(), 2);
     assert_eq!(
-        session.threads[1].origin,
-        ThreadOrigin::Fork {
-            parent_thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
-            parent_sequence: 7,
-        }
+        session.threads[1].forked_from_id,
+        Some(ThreadId::new("thread_root").expect("test ID is non-empty"))
     );
 }
 

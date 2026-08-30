@@ -22,7 +22,7 @@ fn source(id: &str, root: &Path) -> SkillSourceRoot {
 #[test]
 fn discovery_is_metadata_only_stable_and_source_qualified() {
     let user = TestDirectory::new();
-    let workspace = TestDirectory::new();
+    let dir = TestDirectory::new();
     create_skill(
         user.path(),
         "review",
@@ -30,14 +30,14 @@ fn discovery_is_metadata_only_stable_and_source_qualified() {
         "USER_BODY_SENTINEL",
     );
     create_skill(
-        workspace.path(),
+        dir.path(),
         "review",
-        "Reviews workspace code when requested.",
-        "WORKSPACE_BODY_SENTINEL",
+        "Reviews dir code when requested.",
+        "DIR_BODY_SENTINEL",
     );
 
     let catalog = SkillCatalog::discover(vec![
-        source("workspace:skill-source:project", workspace.path()),
+        source("dir:skill-source:project", dir.path()),
         source("user:skill-source:personal", user.path()),
     ])
     .unwrap();
@@ -47,19 +47,19 @@ fn discovery_is_metadata_only_stable_and_source_qualified() {
     assert_eq!(snapshot.list().len(), 2);
     assert_eq!(
         snapshot.list()[0].id().source.as_str(),
-        "user:skill-source:personal"
+        "dir:skill-source:project"
     );
     assert_eq!(
         snapshot.list()[1].id().source.as_str(),
-        "workspace:skill-source:project"
+        "user:skill-source:personal"
     );
     assert_eq!(
-        snapshot.list()[0].metadata().description(),
+        snapshot.list()[1].metadata().description(),
         "Reviews user code when requested."
     );
     let debug_projection = format!("{snapshot:?}");
     assert!(!debug_projection.contains("USER_BODY_SENTINEL"));
-    assert!(!debug_projection.contains("WORKSPACE_BODY_SENTINEL"));
+    assert!(!debug_projection.contains("DIR_BODY_SENTINEL"));
 }
 
 #[test]

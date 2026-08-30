@@ -15,7 +15,7 @@ fn container_owns_multiple_groups_and_each_group_owns_multiple_panes() {
         .open_input(root, PaneInput::settings());
     container
         .pane_part_mut()
-        .open_input(root, PaneInput::files("/workspace".into()));
+        .open_input(root, PaneInput::files("/dir".into()));
     let (second_group, _) = container.pane_part_mut().split_active_with_input(
         PaneSplitDirection::Horizontal,
         Some(PaneInput::terminal(

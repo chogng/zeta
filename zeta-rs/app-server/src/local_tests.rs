@@ -12,12 +12,12 @@ use std::time::UNIX_EPOCH;
 use zeta_async_utils::CancellationSource;
 use zeta_config::ConfigCommandRequest;
 use zeta_config::ConfigRevision;
+use zeta_config::DirConfigScope;
+use zeta_config::DirConfigStore;
 use zeta_config::PreferencesUpdate;
 use zeta_config::ResolvedConfig;
 use zeta_config::UserConfigCommand;
-use zeta_config::WorkspaceConfigScope;
-use zeta_config::WorkspaceConfigStore;
-use zeta_config::WorkspaceId;
+use zeta_file_access::Dir;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
@@ -63,9 +63,9 @@ fn config_path(label: &str) -> PathBuf {
     ))
 }
 
-fn workspace_config_path(label: &str) -> PathBuf {
+fn dir_config_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-app-server-workspace-{label}-{}-{}.toml",
+        "zeta-app-server-dir-{label}-{}-{}.toml",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -219,28 +219,22 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
 #[test]
 fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     let profile = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    run_local_git(dir.path(), &["init", "--quiet", "--initial-branch=main"]);
+    run_local_git(dir.path(), &["config", "user.name", "Zeta App Server Test"]);
     run_local_git(
-        workspace.path(),
-        &["init", "--quiet", "--initial-branch=main"],
-    );
-    run_local_git(
-        workspace.path(),
-        &["config", "user.name", "Zeta App Server Test"],
-    );
-    run_local_git(
-        workspace.path(),
+        dir.path(),
         &["config", "user.email", "zeta-app-server@example.invalid"],
     );
-    std::fs::write(workspace.path().join("README.md"), "initial\n").unwrap();
-    run_local_git(workspace.path(), &["add", "."]);
-    run_local_git(workspace.path(), &["commit", "--quiet", "-m", "initial"]);
-    let initial_head = run_local_git(workspace.path(), &["rev-parse", "HEAD"]);
+    std::fs::write(dir.path().join("README.md"), "initial\n").unwrap();
+    run_local_git(dir.path(), &["add", "."]);
+    run_local_git(dir.path(), &["commit", "--quiet", "-m", "initial"]);
+    let initial_head = run_local_git(dir.path(), &["rev-parse", "HEAD"]);
     let server = open_local_app_server(
         LocalAppServerOptions::new(profile.path())
             .without_built_in_skills()
             .with_session_state_mode(SessionStateMode::Ephemeral)
-            .with_workspace_root(workspace.path()),
+            .with_dir_root(dir.path()),
     )
     .unwrap();
     let mut connection = server.connection();
@@ -274,34 +268,16 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         }),
     );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
-    let session_sequence = thread["result"]["value"]["session"]["sequence"]
-        .as_u64()
-        .unwrap();
-    let approval = local_call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":4,"method":"session/request",
-            "params":{
-                "commandId":"bypass-test-permissions","sessionId":session_id,
-                "expectedSequence":session_sequence,
-                "request":{"type":"setNextApprovalMode","approvalMode":"bypassPermissions"}
-            }
-        }),
-    );
-    assert_eq!(
-        approval["result"]["value"]["session"]["nextApprovalMode"],
-        "bypassPermissions"
-    );
     let started = local_call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":5,"method":"session/request",
             "params":{
-                "commandId":"write-turn-file","sessionId":session_id,"expectedSequence":1,
+                "commandId":"write-turn-file","sessionId":session_id,
                 "request":{
                     "type":"startShellTurn","threadId":thread_id,
+                    "expectedSequence":1,"approvalMode":"bypassPermissions",
                     "command":"printf 'sealed turn contents\\n' > turn.txt","workingDirectory":"."
                 }
             }
@@ -311,7 +287,6 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     let thread_id_typed = zeta_protocol::ThreadId::new(thread_id).unwrap();
     for _ in 0..200 {
         let completed = server
-            .sessions()
             .threads()
             .read_thread(&thread_id_typed)
             .unwrap()
@@ -396,36 +371,36 @@ fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     }
 
     assert_ne!(
-        run_local_git(workspace.path(), &["rev-parse", "HEAD"]),
+        run_local_git(dir.path(), &["rev-parse", "HEAD"]),
         initial_head
     );
     assert_eq!(
-        std::fs::read_to_string(workspace.path().join("turn.txt")).unwrap(),
+        std::fs::read_to_string(dir.path().join("turn.txt")).unwrap(),
         "sealed turn contents\n"
     );
     assert_eq!(
-        run_local_git(workspace.path(), &["show", "-s", "--format=%s", "HEAD"]),
+        run_local_git(dir.path(), &["show", "-s", "--format=%s", "HEAD"]),
         "test(turn-changes): commit sealed shell turn"
     );
 }
 
 #[test]
-fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
+fn shared_profile_runtime_shares_sessions_across_env_hosts() {
     let profile = tempfile::tempdir().unwrap();
-    let first_workspace = tempfile::tempdir().unwrap();
-    let second_workspace = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
     let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
-    let open = |workspace: &Path| {
+    let open = |dir: &Path| {
         open_local_app_server(
             LocalAppServerOptions::new(profile.path())
                 .with_profile_runtime(Arc::clone(&runtime))
-                .with_workspace_root(workspace)
+                .with_dir_root(dir)
                 .without_built_in_skills(),
         )
         .unwrap()
     };
-    let first = open(first_workspace.path());
-    let second = open(second_workspace.path());
+    let first = open(first_dir.path());
+    let second = open(second_dir.path());
     let mut first_connection = first.connection();
     let mut second_connection = second.connection();
     for (server, connection) in [
@@ -445,17 +420,7 @@ fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
     ))
     .unwrap();
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
-    let projected_root = Path::new(
-        created["result"]["session"]["workspace"]["root"]
-            .as_str()
-            .unwrap(),
-    )
-    .canonicalize()
-    .unwrap();
-    assert_eq!(
-        projected_root,
-        first_workspace.path().canonicalize().unwrap()
-    );
+    assert!(created["result"]["session"].get("workspace").is_none());
 
     let listed: serde_json::Value = serde_json::from_str(&second.handle_json(
         &mut second_connection,
@@ -494,9 +459,9 @@ fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
     assert!(
         notifications
             .iter()
-            .any(|notification| notification.contains("session/update"))
+            .any(|notification| notification.contains("session/changed"))
     );
-    let rejected: serde_json::Value = serde_json::from_str(
+    let completed: serde_json::Value = serde_json::from_str(
         &second.handle_json(
             &mut second_connection,
             &serde_json::json!({
@@ -504,36 +469,38 @@ fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
                 "id": 4,
                 "method": "session/request",
                 "params": {
-                    "commandId": "wrong-workspace",
+                    "commandId": "archive-shared",
                     "sessionId": session_id,
-                    "expectedSequence": 3,
-                    "request": {"type": "complete"}
+                    "request": {"type": "archive"}
                 }
             })
             .to_string(),
         ),
     )
     .unwrap();
-    assert_eq!(rejected["error"]["message"], "WorkspaceAuthorityMismatch");
+    assert_eq!(
+        completed["result"]["value"]["session"]["status"],
+        "archived"
+    );
 }
 
 #[test]
-fn shared_profile_runtime_reuses_one_durable_secret_store_across_workspaces() {
+fn shared_profile_runtime_reuses_one_durable_secret_store_across_env_hosts() {
     let profile = tempfile::tempdir().unwrap();
-    let first_workspace = tempfile::tempdir().unwrap();
-    let second_workspace = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
     let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
-    let open = |workspace: &Path| {
+    let open = |dir: &Path| {
         open_local_app_server(
             LocalAppServerOptions::new(profile.path())
                 .with_profile_runtime(Arc::clone(&runtime))
-                .with_workspace_root(workspace)
+                .with_dir_root(dir)
                 .without_built_in_skills(),
         )
         .unwrap()
     };
-    let first = open(first_workspace.path());
-    let second = open(second_workspace.path());
+    let first = open(first_dir.path());
+    let second = open(second_dir.path());
     let mut first_connection = first.connection();
     let mut second_connection = second.connection();
     for (server, connection) in [
@@ -709,17 +676,17 @@ impl EmbeddingInvoker for LocalSemanticEmbedding {
 }
 
 #[test]
-fn local_composition_installs_models_before_workspace_activation() {
+fn local_composition_installs_models_before_dir_activation() {
     let profile = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
-    std::fs::create_dir(workspace.path().join(".git")).unwrap();
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn indexed() {}\n").unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn indexed() {}\n").unwrap();
     let models = CodebaseModels::new(
         zeta_codebase::EmbeddingIndexKey::new("local-test-v1").unwrap(),
         Arc::new(LocalSemanticEmbedding),
     );
     let options = LocalAppServerOptions::new(profile.path())
-        .with_workspace_root(workspace.path())
+        .with_dir_root(dir.path())
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral);
 
@@ -735,17 +702,17 @@ fn local_composition_installs_models_before_workspace_activation() {
 #[test]
 fn local_composition_restores_codebase_generation_after_reopen() {
     let profile = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
-    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
     std::fs::write(
-        workspace.path().join("lib.rs"),
+        dir.path().join("lib.rs"),
         "pub fn restored_after_reopen() -> bool { true }\n",
     )
     .unwrap();
     let open = || {
         open_local_app_server(
             LocalAppServerOptions::new(profile.path())
-                .with_workspace_root(workspace.path())
+                .with_dir_root(dir.path())
                 .without_built_in_skills()
                 .with_session_state_mode(SessionStateMode::Ephemeral),
         )
@@ -767,7 +734,7 @@ fn local_composition_restores_codebase_generation_after_reopen() {
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":2,"method":"workspace/codebase/rebuild","params":{}
+            "jsonrpc":"2.0","id":2,"method":"codebase/rebuild","params":{}
         }),
     );
     let generation = rebuilt["result"]["generation"].as_u64().unwrap();
@@ -777,12 +744,11 @@ fn local_composition_restores_codebase_generation_after_reopen() {
     drop(server);
 
     {
-        let workspace_root = zeta_workspace::WorkspaceRoot::open(workspace.path()).unwrap();
+        let dir_root = zeta_file_access::Dir::open_local(dir.path()).unwrap();
         let state = zeta_state::StateRuntime::open(profile.path()).unwrap();
-        let store =
-            zeta_codebase_store::CodebaseStore::open(&state, &workspace_root.trust_id()).unwrap();
+        let store = zeta_codebase_store::CodebaseStore::open(&state, &dir_root.id()).unwrap();
         let restored = store
-            .open_codebase(workspace_root, zeta_codebase::CodebaseLimits::default())
+            .open_codebase(dir_root, zeta_codebase::CodebaseLimits::default())
             .unwrap()
             .snapshot()
             .unwrap();
@@ -799,20 +765,30 @@ fn local_composition_restores_codebase_generation_after_reopen() {
             "params":{"clientInfo":{"name":"state-reopen-test","version":"1"},"capabilities":{}}
         }),
     );
-    let status = local_call(
-        &reopened,
-        &mut reopened_connection,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":2,"method":"workspace/codebase/status","params":{}
-        }),
-    );
+    let mut request_id = 2;
+    let status = loop {
+        let status = local_call(
+            &reopened,
+            &mut reopened_connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":request_id,"method":"codebase/status","params":{}
+            }),
+        );
+        if status["result"]["state"] == "ready" {
+            break status;
+        }
+        assert_eq!(status["result"]["state"], "indexing");
+        request_id += 1;
+        assert!(request_id < 102, "restored codebase did not become ready");
+        std::thread::sleep(Duration::from_millis(10));
+    };
     assert_eq!(status["result"]["state"], "ready");
     assert!(status["result"]["generation"].as_u64().unwrap() >= generation);
     let search = local_call(
         &reopened,
         &mut reopened_connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":3,"method":"workspace/codebase/search",
+            "jsonrpc":"2.0","id":request_id + 1,"method":"codebase/search",
             "params":{"query":"restored_after_reopen","maxResults":10}
         }),
     );
@@ -820,18 +796,18 @@ fn local_composition_restores_codebase_generation_after_reopen() {
 }
 
 #[test]
-fn user_config_initial_workspace_fails_closed_without_host_trust() {
+fn initial_dir_without_permissions_remains_restricted() {
     let profile = tempfile::tempdir().unwrap();
-    let workspace = tempfile::tempdir().unwrap();
-    std::fs::write(workspace.path().join("readable.txt"), "restricted\n").unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("readable.txt"), "restricted\n").unwrap();
     let options = LocalAppServerOptions::new(profile.path())
-        .with_user_config_workspace_root(workspace.path())
+        .with_user_config_dir_root(dir.path())
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral);
 
     let server = open_local_app_server(options).unwrap();
 
-    assert!(!server.active_workspace_is_trusted());
+    assert!(!server.selected_dir_allows(zeta_file_access::Permission::ExecuteCommands));
 }
 
 struct UnusedSearchBackend;
@@ -869,7 +845,7 @@ fn local_web_search_is_absent_by_default_and_registered_when_injected() {
     .unwrap();
     assert!(
         default_server
-            .local_workspace_tool_ports()
+            .local_env_tool_ports()
             .unwrap()
             .definitions()
             .iter()
@@ -886,7 +862,7 @@ fn local_web_search_is_absent_by_default_and_registered_when_injected() {
     .unwrap();
     assert!(
         injected_server
-            .local_workspace_tool_ports()
+            .local_env_tool_ports()
             .unwrap()
             .definitions()
             .iter()
@@ -1139,7 +1115,7 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
     let provider_configs = test_provider_registry();
     let model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
-        workspace: None,
+        dir_config: None,
         provider_configs: provider_configs.clone(),
         models_manager: ModelsManager::new(provider_configs),
         resolver: Arc::new(RecordingSnapshotResolver { gate: gate.clone() }),
@@ -1156,30 +1132,30 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
 }
 
 #[test]
-fn local_model_resolution_applies_workspace_model_at_the_next_safe_point() {
-    let config_path = config_path("workspace-model");
+fn local_model_resolution_applies_dir_model_at_the_next_safe_point() {
+    let config_path = config_path("dir-model");
     let config = Arc::new(ConfigStore::open(&config_path).unwrap());
     let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
     select_model(&config, "select-user", configured, "user-model");
 
-    let workspace_path = workspace_config_path("workspace-model");
+    let path = dir_config_path("dir-model");
     std::fs::write(
-        &workspace_path,
+        &path,
         r#"
 [agent.preferredModel]
 provider = "test"
-model = "workspace-model"
+model = "dir-model"
 "#,
     )
     .unwrap();
-    let workspace = Arc::new(WorkspaceConfigTracker::new(WorkspaceConfigStore::open(
-        &workspace_path,
-        WorkspaceConfigScope::new(WorkspaceId::new("project").unwrap()),
+    let dir = Arc::new(DirConfigTracker::new(DirConfigStore::open(
+        &path,
+        DirConfigScope::new(Dir::open_local(path.parent().unwrap()).unwrap().id()),
     )));
     let provider_configs = test_provider_registry();
     let model = ConfigBackedModelService {
         config: config.clone(),
-        workspace: Some(workspace.clone()),
+        dir_config: Some(dir.clone()),
         provider_configs: provider_configs.clone(),
         models_manager: ModelsManager::new(provider_configs),
         resolver: Arc::new(RecordingSnapshotResolver {
@@ -1196,15 +1172,15 @@ model = "workspace-model"
             .unwrap()
             .model
             .as_str(),
-        "workspace-model"
+        "dir-model"
     );
-    let (_, initial_revision) = workspace.read().unwrap();
-    std::fs::write(&workspace_path, "").unwrap();
-    let (_, changed_revision) = workspace.read().unwrap();
+    let (_, initial_revision) = dir.read().unwrap();
+    std::fs::write(&path, "").unwrap();
+    let (_, changed_revision) = dir.read().unwrap();
     assert_eq!(changed_revision.get(), initial_revision.get() + 1);
 
     remove_config_files(&config_path);
-    let _ = std::fs::remove_file(workspace_path);
+    let _ = std::fs::remove_file(path);
 }
 
 #[test]
@@ -1216,7 +1192,7 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
     let provider_configs = test_provider_registry();
     let model = ConfigBackedModelService {
         config,
-        workspace: None,
+        dir_config: None,
         provider_configs: provider_configs.clone(),
         models_manager: ModelsManager::new(provider_configs),
         resolver: Arc::new(RecordingSnapshotResolver {
@@ -1249,7 +1225,6 @@ fn local_catalog_projects_static_models_without_runtime_availability() {
         openai.capabilities.image_detail_original,
         zeta_protocol::CapabilitySupport::Supported
     );
-    model.validate(&openai.model).unwrap();
     remove_config_files(&path);
 }
 

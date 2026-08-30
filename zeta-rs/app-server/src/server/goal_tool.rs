@@ -14,8 +14,8 @@ use zeta_action_policy::ResolvedAction;
 use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
 use zeta_core::CoreError;
-use zeta_core::SessionCoordinator;
 use zeta_core::SetGoalRequest;
+use zeta_core::ThreadController;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
@@ -31,15 +31,15 @@ pub(crate) const CREATE_GOAL_TOOL_NAME: &str = "create_goal";
 pub(crate) const UPDATE_GOAL_TOOL_NAME: &str = "update_goal";
 
 pub(super) struct GoalToolService {
-    sessions: Arc<SessionCoordinator>,
+    threads: Arc<ThreadController>,
     definitions: Vec<ToolDefinition>,
     action_policy_revision: ActionPolicyRevision,
 }
 
 impl GoalToolService {
-    pub(super) fn new(sessions: Arc<SessionCoordinator>) -> Self {
+    pub(super) fn new(threads: Arc<ThreadController>) -> Self {
         Self {
-            sessions,
+            threads,
             definitions: vec![get_definition(), create_definition(), update_definition()],
             action_policy_revision: local_policy_revision(),
         }
@@ -64,7 +64,7 @@ impl GoalToolService {
         })?;
         match call.name.as_str() {
             GET_GOAL_TOOL_NAME => {
-                let goal = self.sessions.threads().get_goal(identity.thread_id())?;
+                let goal = self.threads.get_goal(identity.thread_id())?;
                 success(json!({
                     "goal": goal,
                     "remaining_tokens": goal.as_ref().and_then(|goal| goal.remaining_tokens()),
@@ -72,7 +72,7 @@ impl GoalToolService {
             }
             CREATE_GOAL_TOOL_NAME => {
                 let arguments: CreateGoalArguments = decode(&call.arguments)?;
-                let goal = self.sessions.threads().create_goal(
+                let goal = self.threads.create_goal(
                     identity.thread_id(),
                     arguments.objective,
                     arguments.token_budget,
@@ -86,8 +86,7 @@ impl GoalToolService {
                     UpdateGoalStatus::Blocked => ThreadGoalStatus::Blocked,
                 };
                 let goal = self
-                    .sessions
-                    .threads()
+                    .threads
                     .set_goal(
                         identity.thread_id(),
                         SetGoalRequest {

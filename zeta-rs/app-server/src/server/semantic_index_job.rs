@@ -97,7 +97,7 @@ impl CodebaseSemanticMetricsSink for AppServerSemanticIndexMetrics {
     }
 }
 
-/// Owns the background lifecycle of the active Workspace's semantic projection.
+/// Owns the background lifecycle of the active directory's semantic index.
 pub(super) struct SemanticIndexJobController {
     inner: Arc<SemanticIndexJobInner>,
     control: Mutex<()>,

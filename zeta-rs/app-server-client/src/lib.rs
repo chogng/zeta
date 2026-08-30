@@ -5,7 +5,6 @@ mod notification;
 mod product_services;
 mod profile;
 mod session;
-mod session_workspace;
 
 use serde::Serialize;
 use serde::Serializer;
@@ -48,6 +47,11 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthStartResult;
 use zeta_app_server_protocol::protocol::diff::DiffComputeParams;
 use zeta_app_server_protocol::protocol::diff::DiffComputeResult;
 use zeta_app_server_protocol::protocol::document::{TypstCompileParams, TypstCompileResult};
+use zeta_app_server_protocol::protocol::environment::{
+    EnvCwdSetParams, EnvCwdSetResult, EnvDirsSetParams, EnvDirsSetResult, SessionDirAddParams,
+    SessionDirListParams, SessionDirListResult, SessionDirMutationResult,
+    SessionDirPermissionsSetParams, SessionDirRemoveParams,
+};
 use zeta_app_server_protocol::protocol::fs::{
     FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult,
     FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult,
@@ -94,8 +98,8 @@ use zeta_app_server_protocol::protocol::resources::{
     ResourceReleaseParams,
 };
 use zeta_app_server_protocol::protocol::search::{
-    WorkspaceSearchCancelParams, WorkspaceSearchReadParams, WorkspaceSearchReadResult,
-    WorkspaceSearchStartParams, WorkspaceSearchStartResult,
+    ContentSearchCancelParams, ContentSearchReadParams, ContentSearchReadResult,
+    ContentSearchStartParams, ContentSearchStartResult,
 };
 use zeta_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionListResult, SessionReadParams, SessionRequestParams,
@@ -120,13 +124,6 @@ use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalReadResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
-use zeta_app_server_protocol::protocol::workspace::{
-    WorkspaceAdditionalDirectoryAddParams, WorkspaceAdditionalDirectoryListParams,
-    WorkspaceAdditionalDirectoryListResult, WorkspaceAdditionalDirectoryMutationResult,
-    WorkspaceAdditionalDirectoryPermissionsSetParams, WorkspaceAdditionalDirectoryRemoveParams,
-    WorkspaceFoldersSetParams, WorkspaceFoldersSetResult, WorkspaceSwitchParams,
-    WorkspaceSwitchResult,
-};
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
 pub use in_process::InProcessAppServer;
@@ -142,8 +139,6 @@ pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
     ConnectionCloseReason, ShutdownError, StdioAppServerCommand, TakeEventsError,
 };
-pub use session_workspace::SessionWorkspaceRoute;
-pub use session_workspace::route_session_workspace;
 pub use zeta_app_server::SessionStateMode;
 
 /// Exchanges one complete JSON-RPC request with a connected app-server transport.
@@ -356,49 +351,43 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         })
     }
 
-    pub fn switch_workspace(
-        &mut self,
-        params: WorkspaceSwitchParams,
-    ) -> Result<WorkspaceSwitchResult, ClientError> {
-        self.call(ClientMethod::WorkspaceSwitch, params)
+    pub fn set_env_cwd(&mut self, params: EnvCwdSetParams) -> Result<EnvCwdSetResult, ClientError> {
+        self.call(ClientMethod::EnvCwdSet, params)
     }
 
-    pub fn set_workspace_folders(
+    pub fn set_env_dirs(
         &mut self,
-        params: WorkspaceFoldersSetParams,
-    ) -> Result<WorkspaceFoldersSetResult, ClientError> {
-        self.call(ClientMethod::WorkspaceFoldersSet, params)
+        params: EnvDirsSetParams,
+    ) -> Result<EnvDirsSetResult, ClientError> {
+        self.call(ClientMethod::EnvDirsSet, params)
     }
 
-    pub fn list_workspace_additional_directories(
+    pub fn list_session_dirs(
         &mut self,
-        params: WorkspaceAdditionalDirectoryListParams,
-    ) -> Result<WorkspaceAdditionalDirectoryListResult, ClientError> {
-        self.call(ClientMethod::WorkspaceAdditionalDirectoryList, params)
+        params: SessionDirListParams,
+    ) -> Result<SessionDirListResult, ClientError> {
+        self.call(ClientMethod::SessionDirList, params)
     }
 
-    pub fn add_workspace_additional_directory(
+    pub fn add_session_dir(
         &mut self,
-        params: WorkspaceAdditionalDirectoryAddParams,
-    ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError> {
-        self.call(ClientMethod::WorkspaceAdditionalDirectoryAdd, params)
+        params: SessionDirAddParams,
+    ) -> Result<SessionDirMutationResult, ClientError> {
+        self.call(ClientMethod::SessionDirAdd, params)
     }
 
-    pub fn remove_workspace_additional_directory(
+    pub fn remove_session_dir(
         &mut self,
-        params: WorkspaceAdditionalDirectoryRemoveParams,
-    ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError> {
-        self.call(ClientMethod::WorkspaceAdditionalDirectoryRemove, params)
+        params: SessionDirRemoveParams,
+    ) -> Result<SessionDirMutationResult, ClientError> {
+        self.call(ClientMethod::SessionDirRemove, params)
     }
 
-    pub fn set_workspace_additional_directory_permissions(
+    pub fn set_session_dir_permissions(
         &mut self,
-        params: WorkspaceAdditionalDirectoryPermissionsSetParams,
-    ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError> {
-        self.call(
-            ClientMethod::WorkspaceAdditionalDirectoryPermissionsSet,
-            params,
-        )
+        params: SessionDirPermissionsSetParams,
+    ) -> Result<SessionDirMutationResult, ClientError> {
+        self.call(ClientMethod::SessionDirPermissionsSet, params)
     }
 
     /// Synchronizes one authoritative editor snapshot with the App Server language runtime.
@@ -478,7 +467,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::TerminalProfileList, EmptyParams {})
     }
 
-    /// Creates one App Server-owned interactive terminal at the current Workspace root.
+    /// Creates one App Server-owned interactive terminal at the current directory.
     pub fn terminal_create(
         &mut self,
         params: TerminalCreateParams,
@@ -486,7 +475,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::TerminalCreate, params)
     }
 
-    /// Creates an interactive terminal at one session-authorized additional directory.
+    /// Creates an interactive terminal at one session-authorized directory.
     pub fn terminal_create_in_session_directory(
         &mut self,
         params: TerminalCreateInSessionDirectoryParams,
@@ -986,25 +975,25 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::AttachmentImportRemote, params)
     }
 
-    pub fn start_workspace_search(
+    pub fn start_content_search(
         &mut self,
-        params: WorkspaceSearchStartParams,
-    ) -> Result<WorkspaceSearchStartResult, ClientError> {
-        self.call(ClientMethod::WorkspaceSearchStart, params)
+        params: ContentSearchStartParams,
+    ) -> Result<ContentSearchStartResult, ClientError> {
+        self.call(ClientMethod::ContentSearchStart, params)
     }
 
-    pub fn read_workspace_search(
+    pub fn read_content_search(
         &mut self,
-        params: WorkspaceSearchReadParams,
-    ) -> Result<WorkspaceSearchReadResult, ClientError> {
-        self.call(ClientMethod::WorkspaceSearchRead, params)
+        params: ContentSearchReadParams,
+    ) -> Result<ContentSearchReadResult, ClientError> {
+        self.call(ClientMethod::ContentSearchRead, params)
     }
 
-    pub fn cancel_workspace_search(
+    pub fn cancel_content_search(
         &mut self,
-        params: WorkspaceSearchCancelParams,
+        params: ContentSearchCancelParams,
     ) -> Result<(), ClientError> {
-        self.call(ClientMethod::WorkspaceSearchCancel, params)
+        self.call(ClientMethod::ContentSearchCancel, params)
     }
 
     pub fn drain_notifications(&mut self) -> Result<Vec<ServerNotification>, ClientError> {

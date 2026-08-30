@@ -18,12 +18,12 @@ use crate::IndexedLanguage;
 use crate::SymbolIndex;
 use crate::SymbolIndexLimits;
 use tempfile::TempDir;
+use zeta_file_access::Dir;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::ModelProviderError;
-use zeta_workspace::WorkspaceRoot;
 
 use crate::CodebaseRetrievalBudget;
 use crate::CodebaseRetrievalDegradation;
@@ -98,8 +98,8 @@ impl CodebaseEnhancement for QueryEnhancement {
 
 #[test]
 fn local_retrieval_returns_verified_source_excerpt() {
-    let workspace = workspace("pub fn local_recall_marker() {}\n");
-    let index = index(&workspace);
+    let dir = dir("pub fn local_recall_marker() {}\n");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let service = CodebaseRetrievalService::local(index);
 
@@ -118,8 +118,8 @@ fn local_retrieval_returns_verified_source_excerpt() {
 
 #[test]
 fn hybrid_retrieval_fuses_and_deduplicates_the_same_excerpt() {
-    let workspace = workspace("pub fn shared_recall_marker() {}\n");
-    let index = index(&workspace);
+    let dir = dir("pub fn shared_recall_marker() {}\n");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let enhancement = Arc::new(QueryEnhancement::new(&index));
     let service = CodebaseRetrievalService::enhanced(index, enhancement).expect("enhanced");
@@ -141,13 +141,10 @@ fn hybrid_retrieval_fuses_and_deduplicates_the_same_excerpt() {
 
 #[test]
 fn local_semantic_retrieval_adds_dense_candidates_without_cloud() {
-    let workspace = workspace("pub fn semantic_target() {}\n");
-    std::fs::write(
-        workspace.path().join("other.rs"),
-        "pub fn unrelated_code() {}\n",
-    )
-    .expect("other source");
-    let index = index(&workspace);
+    let dir = dir("pub fn semantic_target() {}\n");
+    std::fs::write(dir.path().join("other.rs"), "pub fn unrelated_code() {}\n")
+        .expect("other source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let semantic = semantic_service(Arc::clone(&index));
     semantic.sync().expect("semantic sync");
@@ -170,13 +167,13 @@ fn local_semantic_retrieval_adds_dense_candidates_without_cloud() {
 
 #[test]
 fn hybrid_retrieval_preserves_cloud_provider_ranking() {
-    let workspace = workspace("pub fn first_cloud_candidate() {}\n");
+    let dir = dir("pub fn first_cloud_candidate() {}\n");
     std::fs::write(
-        workspace.path().join("second.rs"),
+        dir.path().join("second.rs"),
         "pub fn second_cloud_candidate() {}\n",
     )
     .expect("second source");
-    let index = index(&workspace);
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let enhancement = Arc::new(QueryEnhancement::new(&index));
     enhancement
@@ -210,8 +207,8 @@ fn hybrid_retrieval_preserves_cloud_provider_ranking() {
 
 #[test]
 fn cloud_query_failure_falls_back_to_local_results() {
-    let workspace = workspace("pub fn fallback_marker() {}\n");
-    let index = index(&workspace);
+    let dir = dir("pub fn fallback_marker() {}\n");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let enhancement = Arc::new(QueryEnhancement::new(&index));
     enhancement.fail_query.store(true, Ordering::Relaxed);
@@ -230,8 +227,8 @@ fn cloud_query_failure_falls_back_to_local_results() {
 
 #[test]
 fn verification_and_content_budgets_discard_unusable_candidates() {
-    let workspace = workspace("pub fn budget_marker() {}\n");
-    let index = index(&workspace);
+    let dir = dir("pub fn budget_marker() {}\n");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let service = CodebaseRetrievalService::local(Arc::clone(&index)).with_budget(
         CodebaseRetrievalBudget::default()
@@ -246,8 +243,7 @@ fn verification_and_content_budgets_discard_unusable_candidates() {
         [CodebaseRetrievalDegradation::ContentBudgetExceeded { discarded: 1 }]
     );
 
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn changed() {}\n")
-        .expect("mutate source");
+    std::fs::write(dir.path().join("lib.rs"), "pub fn changed() {}\n").expect("mutate source");
     let stale = CodebaseRetrievalService::local(index)
         .retrieve(&query("budget_marker"))
         .expect("stale retrieve");
@@ -260,8 +256,8 @@ fn verification_and_content_budgets_discard_unusable_candidates() {
 
 #[test]
 fn dirty_overlay_suppresses_old_disk_content_and_materializes_current_text() {
-    let workspace = workspace("pub fn persisted_secret() {}\n");
-    let index = index(&workspace);
+    let dir = dir("pub fn persisted_secret() {}\n");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     index
         .synchronize_overlay(CodebaseOverlayDocument {
@@ -289,10 +285,10 @@ fn dirty_overlay_suppresses_old_disk_content_and_materializes_current_text() {
 
 #[test]
 fn symbol_retrieval_returns_the_exact_declaration_with_provenance() {
-    let workspace = workspace(
+    let dir = dir(
         "const PREFIX: &str = \"outside\";\n\npub fn precise_symbol() {\n    let local = 1;\n}\n",
     );
-    let index = index(&workspace);
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let symbols = Arc::new(
         SymbolIndex::open_memory(Arc::clone(&index), SymbolIndexLimits::default())
@@ -318,17 +314,17 @@ fn symbol_retrieval_returns_the_exact_declaration_with_provenance() {
     assert!(result.degradations.is_empty());
 }
 
-fn workspace(content: &str) -> TempDir {
-    let workspace = tempfile::tempdir().expect("workspace");
-    std::fs::create_dir(workspace.path().join(".git")).expect("git marker");
-    std::fs::write(workspace.path().join("lib.rs"), content).expect("source");
-    workspace
+fn dir(content: &str) -> TempDir {
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::create_dir(dir.path().join(".git")).expect("git marker");
+    std::fs::write(dir.path().join("lib.rs"), content).expect("source");
+    dir
 }
 
-fn index(workspace: &TempDir) -> Arc<Codebase> {
+fn index(dir: &TempDir) -> Arc<Codebase> {
     Arc::new(
         Codebase::open_memory(
-            WorkspaceRoot::open(workspace.path()).expect("root"),
+            Dir::open_local(dir.path()).expect("root"),
             CodebaseLimits::default(),
         )
         .expect("index"),

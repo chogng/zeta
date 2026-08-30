@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::scanner::{PreparedFile, WorkspaceScan};
+use crate::scanner::{DirScan, PreparedFile};
 use crate::{
     CodebaseError, CodebaseManifest, CodebaseSnapshot, IndexRootId, SearchHit, SourceRevision,
 };
@@ -19,10 +19,10 @@ pub struct StoredSource {
 
 /// Persistence port used by Codebase source construction and lexical retrieval.
 pub trait CodebaseIndexStore: Send + Sync {
-    fn replace_workspace(
+    fn replace_sources(
         &self,
         root_id: &IndexRootId,
-        scan: WorkspaceScan,
+        scan: DirScan,
     ) -> Result<CodebaseSnapshot, CodebaseError>;
 
     fn publish_updates(

@@ -24,7 +24,7 @@ use crate::symbol::memory_store::InMemorySymbolIndexStore;
 use crate::symbol::store::SourceSymbols;
 use crate::symbol::store::SymbolIndexStore;
 
-/// Workspace-side symbol projection backed by one canonical [`Codebase`] source authority.
+/// Directory-side symbol projection backed by one canonical [`Codebase`] source authority.
 pub struct SymbolIndex {
     codebase: Arc<Codebase>,
     limits: SymbolIndexLimits,

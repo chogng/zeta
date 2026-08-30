@@ -232,7 +232,7 @@ impl ToolPortKind {
             Self::Dynamic => "client-hosted dynamic tool",
             Self::Extension => "host-installed extension tool",
             Self::Host => "product-hosted capability",
-            Self::Local => "built-in workspace tool",
+            Self::Local => "built-in directory tool",
             Self::Mcp => "MCP external tool",
         }
     }
@@ -282,7 +282,7 @@ impl ToolPort {
 
     pub(crate) fn extension(
         executors: Vec<Arc<dyn zeta_tools::ToolExecutor>>,
-        environment_id: zeta_tools::ToolEnvironmentId,
+        environment_id: zeta_tools::EnvId,
         reviewer: Arc<dyn ToolExecutorReviewer>,
         policy: Arc<dyn ActionPolicyService>,
     ) -> Result<Self, ToolCompositionError> {
@@ -342,7 +342,7 @@ impl ToolPort {
     pub(crate) fn with_executor(
         mut self,
         executor: Arc<dyn zeta_tools::ToolExecutor>,
-        environment_id: zeta_tools::ToolEnvironmentId,
+        environment_id: zeta_tools::EnvId,
         reviewer: Arc<dyn ToolExecutorReviewer>,
     ) -> Result<Self, ToolCompositionError> {
         let host_definition = executor.definition();

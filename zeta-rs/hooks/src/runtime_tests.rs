@@ -37,14 +37,14 @@ impl zeta_core::ActionPolicyService for TestPolicy {
         _: &CancellationToken,
     ) -> Result<ExecutionDecision, CoreError> {
         Ok(ExecutionDecision::RunSandboxed(SandboxPolicy::new(
-            FileSystemAccess::WorkspaceWrite,
+            FileSystemAccess::DirectoryWrite,
             NetworkAccess::Denied,
         )))
     }
 }
 
 struct RecordingProcess {
-    workspace: WorkspaceRoot,
+    dir: Dir,
     executions: Mutex<Vec<String>>,
     calls: AtomicUsize,
     decision: Mutex<crate::outcome::HookDecision>,
@@ -74,8 +74,8 @@ impl HookExecutionObserver for RecordingObserver {
 }
 
 impl HookProcessExecutor for RecordingProcess {
-    fn workspace(&self) -> &WorkspaceRoot {
-        &self.workspace
+    fn dir(&self) -> &Dir {
+        &self.dir
     }
 
     fn execute(
@@ -121,9 +121,9 @@ fn hook(
 fn runtime(
     hooks: impl IntoIterator<Item = HookConfig>,
 ) -> (DeclarativeHookRuntime, Arc<RecordingProcess>) {
-    let workspace = test_workspace();
+    let dir = test_dir();
     let process = Arc::new(RecordingProcess {
-        workspace,
+        dir,
         executions: Mutex::new(Vec::new()),
         calls: AtomicUsize::new(0),
         decision: Mutex::new(crate::outcome::HookDecision::Continue),
@@ -140,9 +140,8 @@ fn runtime(
     )
 }
 
-fn test_workspace() -> WorkspaceRoot {
-    WorkspaceRoot::open(std::env::current_dir().expect("test working directory"))
-        .expect("workspace root")
+fn test_dir() -> Dir {
+    Dir::open_local(std::env::current_dir().expect("test working directory")).expect("dir root")
 }
 
 fn before_request(tool_name: &str) -> BeforeToolHookRequest {
@@ -225,7 +224,7 @@ fn managed_thread_hooks_use_the_thread_process_and_report_its_lifecycle() {
         HookEnablement::Enabled,
     )]);
     let thread_process = Arc::new(RecordingProcess {
-        workspace: test_workspace(),
+        dir: test_dir(),
         executions: Mutex::new(Vec::new()),
         calls: AtomicUsize::new(0),
         decision: Mutex::new(crate::outcome::HookDecision::Continue),

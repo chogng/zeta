@@ -1,8 +1,8 @@
 use crate::appcontainer::{AppContainerSid, canonical_directory, canonical_file, to_wide};
 use crate::profile_name;
 use crate::protocol::{
-    ACCESS_FLAG, ERROR_PREFIX, PROBE_FLAG, PROGRAM_FLAG, READ_ONLY_ACCESS, SETUP_PROBE,
-    WORKSPACE_FLAG, WORKSPACE_WRITE_ACCESS,
+    ACCESS_FLAG, DIR_FLAG, DIR_WRITE_ACCESS, ERROR_PREFIX, PROBE_FLAG, PROGRAM_FLAG,
+    READ_ONLY_ACCESS, SETUP_PROBE,
 };
 use std::ffi::{OsString, c_void};
 use std::os::windows::fs::MetadataExt;
@@ -36,7 +36,7 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
         return Ok(());
     }
     let request = SetupRequest::parse(arguments)?;
-    let workspace = canonical_directory(&request.workspace, "workspace")?;
+    let dir = canonical_directory(&request.dir, "dir")?;
     let program = canonical_file(&request.program, "sandboxed program")?;
     let program_directory = canonical_directory(
         program
@@ -48,19 +48,17 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
         .access
         .to_str()
         .ok_or("filesystem access mode is not valid Unicode")?;
-    let workspace_mask = match access {
+    let dir_mask = match access {
         READ_ONLY_ACCESS => FILE_GENERIC_READ | FILE_GENERIC_EXECUTE,
-        WORKSPACE_WRITE_ACCESS => {
-            FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE
-        }
+        DIR_WRITE_ACCESS => FILE_GENERIC_READ | FILE_GENERIC_WRITE | FILE_GENERIC_EXECUTE | DELETE,
         _ => return Err("unsupported filesystem access mode".to_owned()),
     };
-    let profile = profile_name(&workspace, access);
+    let profile = profile_name(&dir, access);
     let sid = AppContainerSid::ensure(std::ffi::OsStr::new(&profile))?;
     add_ace(
-        &workspace,
+        &dir,
         sid.as_ptr(),
-        workspace_mask,
+        dir_mask,
         GRANT_ACCESS,
         OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE,
     )?;
@@ -78,9 +76,9 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
         GRANT_ACCESS,
         0,
     )?;
-    if access == WORKSPACE_WRITE_ACCESS {
-        for name in zeta_sandboxing::PROTECTED_WORKSPACE_METADATA_NAMES {
-            let protected = workspace.join(name);
+    if access == DIR_WRITE_ACCESS {
+        for name in zeta_sandboxing::PROTECTED_DIR_METADATA_NAMES {
+            let protected = dir.join(name);
             if protected.exists() {
                 add_ace_tree(
                     &protected,
@@ -96,14 +94,14 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
 
 struct SetupRequest {
     access: OsString,
-    workspace: PathBuf,
+    dir: PathBuf,
     program: PathBuf,
 }
 
 impl SetupRequest {
     fn parse(arguments: Vec<OsString>) -> Result<Self, String> {
         let mut access = None;
-        let mut workspace = None;
+        let mut dir = None;
         let mut program = None;
         let mut arguments = arguments.into_iter();
         while let Some(flag) = arguments.next() {
@@ -112,14 +110,14 @@ impl SetupRequest {
                 .ok_or_else(|| format!("missing value for {}", flag.to_string_lossy()))?;
             match flag.to_str() {
                 Some(ACCESS_FLAG) => access = Some(value),
-                Some(WORKSPACE_FLAG) => workspace = Some(PathBuf::from(value)),
+                Some(DIR_FLAG) => dir = Some(PathBuf::from(value)),
                 Some(PROGRAM_FLAG) => program = Some(PathBuf::from(value)),
                 _ => return Err(format!("unexpected argument {}", flag.to_string_lossy())),
             }
         }
         Ok(Self {
             access: access.ok_or("missing access mode")?,
-            workspace: workspace.ok_or("missing workspace")?,
+            dir: dir.ok_or("missing dir")?,
             program: program.ok_or("missing program")?,
         })
     }

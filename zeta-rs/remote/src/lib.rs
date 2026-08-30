@@ -11,9 +11,9 @@ pub use platform::RemoteArchitecture;
 pub use platform::RemoteLinuxLibc;
 pub use platform::RemotePlatform;
 pub use target::RemoteAddressError;
+pub use target::RemoteDirPath;
 pub use target::RemoteProfile;
 pub use target::RemoteRuntime;
-pub use target::RemoteWorkspacePath;
 pub use target::SshHost;
 pub use target::SshTarget;
 

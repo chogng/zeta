@@ -5,12 +5,12 @@ import { ServiceContainer } from "../../../platform/instantiation/common/instant
 import { NEW_CHAT_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
 import "../../../sessions/browser/actions/sessionsChatActions.js";
-import { ISessionsViewService } from "../../../sessions/services/view/common/sessionsViewService.js";
+import { ISessionsService } from "../../../sessions/services/view/common/sessionsService.js";
 
 test("Sessions owns the local New Chat command without requiring regular Workbench Views", async () => {
 	const onDidChange = new Emitter<void>();
 	let created = 0;
-	const viewService: ISessionsViewService = {
+	const viewService: ISessionsService = {
 		onDidChange: onDidChange.event,
 		visibleSelections: [],
 		activeSelection: undefined,
@@ -29,7 +29,7 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 		navigateForward() {},
 	};
 	const services = new ServiceContainer();
-	services.registerInstance(ISessionsViewService, viewService);
+	services.registerInstance(ISessionsService, viewService);
 	using commands = new CommandService(services);
 
 	await commands.executeCommand(NEW_CHAT_COMMAND_ID);

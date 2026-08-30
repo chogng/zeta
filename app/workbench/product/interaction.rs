@@ -149,7 +149,7 @@ impl ProductApp {
         }
         if let Some(action) = self.files.activate(id) {
             match action {
-                FilesAction::OpenFile { path } => self.open_workspace_file(path),
+                FilesAction::OpenFile { path } => self.open_file(path),
                 FilesAction::LoadChildren { element, path } => {
                     self.load_file_tree_directory(element, path);
                 }
@@ -172,7 +172,7 @@ impl ProductApp {
         if self.activate_git_branch_context_menu_element(id) {
             return;
         }
-        if self.activate_workspace_path_picker_element(id) {
+        if self.activate_path_picker_element(id) {
             return;
         }
         if self.activate_tab_context_menu_element(id) {
@@ -251,7 +251,7 @@ impl ProductApp {
         if self.route_git_branch_context_menu_pointer_move(point) {
             return;
         }
-        if self.route_workspace_path_picker_pointer_move(point) {
+        if self.route_path_picker_pointer_move(point) {
             return;
         }
         if self.route_tab_context_menu_pointer_move(point) {
@@ -371,7 +371,7 @@ impl ProductApp {
         if self.route_git_branch_context_menu_button(state, button) {
             return;
         }
-        if self.route_workspace_path_picker_button(state, button) {
+        if self.route_path_picker_button(state, button) {
             return;
         }
         if self.route_tab_context_menu_button(state, button) {

@@ -8,10 +8,10 @@ use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchP
 use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchResult;
 use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsStateDto;
 use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsStatusResult;
+use zeta_app_server_protocol::protocol::codebase_symbols::DocumentOverlayCloseParams;
+use zeta_app_server_protocol::protocol::codebase_symbols::DocumentOverlayStatusResult;
+use zeta_app_server_protocol::protocol::codebase_symbols::DocumentOverlaySynchronizeParams;
 use zeta_app_server_protocol::protocol::codebase_symbols::SymbolKindDto;
-use zeta_app_server_protocol::protocol::codebase_symbols::WorkspaceDocumentOverlayCloseParams;
-use zeta_app_server_protocol::protocol::codebase_symbols::WorkspaceDocumentOverlayStatusResult;
-use zeta_app_server_protocol::protocol::codebase_symbols::WorkspaceDocumentOverlaySynchronizeParams;
 use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
@@ -60,11 +60,8 @@ impl AppServer {
         })
     }
 
-    pub(super) fn workspace_document_overlay_synchronize(
-        &self,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: WorkspaceDocumentOverlaySynchronizeParams = decode(params)?;
+    pub(super) fn document_overlay_synchronize(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: DocumentOverlaySynchronizeParams = decode(params)?;
         let codebase = self.codebase_service()?;
         let symbol_index = self.symbol_index_service()?;
         let snapshot = codebase
@@ -79,17 +76,14 @@ impl AppServer {
         symbol_index
             .reconcile_overlay()
             .map_err(symbol_index_error)?;
-        result(&WorkspaceDocumentOverlayStatusResult {
+        result(&DocumentOverlayStatusResult {
             generation: snapshot.generation,
             dirty_document_count: snapshot.documents.len(),
         })
     }
 
-    pub(super) fn workspace_document_overlay_close(
-        &self,
-        params: &Value,
-    ) -> Result<Value, RpcError> {
-        let params: WorkspaceDocumentOverlayCloseParams = decode(params)?;
+    pub(super) fn document_overlay_close(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: DocumentOverlayCloseParams = decode(params)?;
         let codebase = self.codebase_service()?;
         let symbol_index = self.symbol_index_service()?;
         let snapshot = codebase
@@ -99,7 +93,7 @@ impl AppServer {
         symbol_index
             .reconcile_overlay()
             .map_err(symbol_index_error)?;
-        result(&WorkspaceDocumentOverlayStatusResult {
+        result(&DocumentOverlayStatusResult {
             generation: snapshot.generation,
             dirty_document_count: snapshot.documents.len(),
         })

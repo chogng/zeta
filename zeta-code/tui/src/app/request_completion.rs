@@ -4,7 +4,6 @@ use super::AppEvent;
 use super::chat_input_catalog_snapshot;
 use super::dispatch::ProductCommandOutput;
 use crate::TuiExit;
-use crate::TuiWorkspaceReconnect;
 use crate::components::chat_input::ChatSubmission;
 use crate::components::chat_input::MentionPluginItem;
 use crate::components::chat_input::SkillSelectorItem;
@@ -40,13 +39,13 @@ use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::Thread;
 #[cfg(test)]
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 
 pub(super) enum RequestCompletion {
-    WorkspaceReconnect(TuiWorkspaceReconnect),
     ConversationChanged {
         command: String,
         result: Result<ConversationRequestCompletion, String>,
@@ -57,7 +56,6 @@ pub(super) enum RequestCompletion {
         command: String,
         result: Result<config::PreferredModelUpdate, String>,
     },
-    ApprovalModeChanged(Result<ActiveConversation, ClientError>),
     SkillsRefreshed(Result<SkillRequestCompletion, String>),
     InteractionResolved {
         interaction_id: ChatInputAreaInteractionId,
@@ -168,11 +166,12 @@ pub(super) fn start_turn_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
     submission: ChatSubmission,
+    approval_mode: ApprovalMode,
     history: ThreadSnapshotHistory,
 ) -> TurnStartReadCompletion {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
-    let start = match submit_prompt(&mut client, scope, submission) {
+    let start = match submit_prompt(&mut client, scope, submission, approval_mode) {
         Ok(start) => start,
         Err(error) => return TurnStartReadCompletion::Rejected(error),
     };
@@ -247,9 +246,6 @@ pub(super) fn apply_request_completion(
     app: &mut App,
 ) -> Option<TuiExit> {
     match completion {
-        RequestCompletion::WorkspaceReconnect(reconnect) => {
-            return Some(TuiExit::WorkspaceReconnectRequested(reconnect));
-        }
         RequestCompletion::ConversationChanged {
             command,
             result:
@@ -282,9 +278,6 @@ pub(super) fn apply_request_completion(
             mut output,
             switched,
         })) => {
-            if let Some(reconnect) = output.workspace_reconnect.take() {
-                return Some(TuiExit::WorkspaceReconnectRequested(reconnect));
-            }
             for event in output.events.drain(..) {
                 app.update(event);
             }
@@ -311,13 +304,6 @@ pub(super) fn apply_request_completion(
             }
         }
         RequestCompletion::Presentation(Ok(event)) => app.update(event),
-        RequestCompletion::ApprovalModeChanged(Ok(next_conversation)) => {
-            conversation.merge_session_from(next_conversation);
-            app.set_next_approval_mode(conversation.next_approval_mode());
-        }
-        RequestCompletion::ApprovalModeChanged(Err(error)) => {
-            app.update(AppEvent::FailureReported(error.to_string()));
-        }
         RequestCompletion::PreferredModelUpdated {
             command,
             result: Ok(update),
@@ -609,7 +595,6 @@ fn finish_conversation_change(
     presentation: ConversationCompletionPresentation,
 ) {
     app.clear_queued_submissions();
-    app.set_next_approval_mode(conversation.next_approval_mode());
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
         app.update(AppEvent::ListSelectionPaneClosed);
     }

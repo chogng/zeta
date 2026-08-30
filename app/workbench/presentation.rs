@@ -27,8 +27,8 @@ use zui::ui::{
 use crate::PaneBinding;
 use crate::SessionSearchState;
 use crate::{
-    FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TabContextMenu, TabContextMenuState,
-    WINDOW, WorkspaceSurfaceKind, paint_chord_hint,
+    FIRST_TAB_CONTAINER_SESSION_TAB, MainSurfaceKind, SESSION_SEARCH_INPUT, TabContextMenu,
+    TabContextMenuState, WINDOW, paint_chord_hint,
 };
 use crate::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
@@ -42,7 +42,7 @@ use zeta_files::FilesPane;
 use zeta_files::FilesState;
 use zeta_files::FilesToolbar;
 use zeta_files::{
-    FILE_SEARCH_INPUT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPicker, WorkspacePathPickerState,
+    DIRECTORY_SEARCH_INPUT, DirectoryPicker, DirectoryPickerState, FILE_SEARCH_INPUT,
 };
 use zeta_scm::EditorPane;
 use zeta_scm::ScmState;
@@ -52,7 +52,7 @@ use zeta_session::SessionPaneLayout;
 use zeta_session::SessionPaneState;
 use zeta_session::SessionPaneView;
 use zeta_session::draw_session_pane;
-use zeta_terminal_workspace::TerminalSelectionRange;
+use zeta_terminal_runtime::TerminalSelectionRange;
 use zeta_ui_theme::UiTheme;
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
@@ -109,7 +109,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct WorkspaceContextView<'a> {
+pub struct EnvironmentContextView<'a> {
     pub location: &'a str,
     pub working_directory: &'a str,
     pub git_branch: &'a str,
@@ -246,8 +246,8 @@ pub fn inspector_resize_snapshot_for_viewport(
 pub struct WorkbenchPresentation {
     pub frame: UiFrame<InteractionFrame>,
     pub ime_cursor_area: Option<Rect>,
-    pub workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
-    pub workspace_path_picker_item_viewport: Option<Rect>,
+    pub path_picker_scroll_metrics: Option<ScrollMetrics>,
+    pub path_picker_item_viewport: Option<Rect>,
     pub remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
     pub remote_connection_picker_item_viewport: Option<Rect>,
     pub remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
@@ -290,8 +290,8 @@ struct WorkbenchBaseCheckpoint {
 
 struct WorkbenchOverlayPresentation {
     ime_cursor_area: Option<Rect>,
-    workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
-    workspace_path_picker_item_viewport: Option<Rect>,
+    path_picker_scroll_metrics: Option<ScrollMetrics>,
+    path_picker_item_viewport: Option<Rect>,
     remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
     remote_connection_picker_item_viewport: Option<Rect>,
     remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
@@ -322,7 +322,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub terminal_scroll_offset: usize,
     pub terminal_scrollbar_presentation: ScrollbarPresentation,
     pub terminal_selection: Option<TerminalSelectionRange>,
-    pub workspace_surface: WorkspaceSurfaceKind,
+    pub main_surface: MainSurfaceKind,
     pub file_editor_host: &'a FileEditorHost,
     pub file_editor_prompt: FileEditorPrompt,
     pub file_editor_search: &'a FileEditorSearchState,
@@ -332,7 +332,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub completion_selection: usize,
     pub code_editor_style: &'a CodeEditorStyle,
     pub session_pane: &'a SessionPaneState,
-    pub workspace_context: WorkspaceContextView<'a>,
+    pub environment_context: EnvironmentContextView<'a>,
     pub session_search: &'a SessionSearchState,
     pub tab_part: &'a TabPart,
     pub active_tab_input: Option<&'a TabInputKey>,
@@ -344,7 +344,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub scm: &'a ScmState,
     pub tab_context_menu: TabContextMenuState,
     pub git_branch_context_menu: &'a GitBranchContextMenuState,
-    pub workspace_path_picker: &'a WorkspacePathPickerState,
+    pub path_picker: &'a DirectoryPickerState,
     pub remote_connection_picker: &'a RemoteConnectionPickerState,
     pub remote_connection_manager: &'a RemoteConnectionManagerState,
     pub remote_tunnel_manager: &'a RemoteTunnelManagerState,
@@ -360,7 +360,7 @@ pub struct WorkbenchPresentationModel<'a> {
 #[derive(Clone)]
 struct TabContainerView<'a> {
     title: &'a str,
-    context: WorkspaceContextView<'a>,
+    context: EnvironmentContextView<'a>,
     search: &'a SessionSearchState,
     tab_part: &'a TabPart,
     selected_id: ElementId,
@@ -391,7 +391,7 @@ struct MainPresentationView<'a> {
     pane_group: Option<&'a PanePart>,
     active_pane: Option<PaneViewMount<'a>>,
     terminal_pane_resize_split: Option<PaneSplitId>,
-    workspace_surface: WorkspaceSurfaceKind,
+    main_surface: MainSurfaceKind,
     active_tab_input: Option<&'a TabInputKey>,
     settings: &'a SettingsState,
     remote_connection_manager: &'a RemoteConnectionManagerState,
@@ -400,7 +400,7 @@ struct MainPresentationView<'a> {
     session_pane_context: &'a SessionPaneContext,
     files: &'a FilesState,
     scm: &'a ScmState,
-    workspace_context: WorkspaceContextView<'a>,
+    environment_context: EnvironmentContextView<'a>,
     keybindings: &'a dyn WorkbenchKeybindings,
     keybinding_diagnostics: &'a [String],
     theme_scheme: zeta_theme::ColorScheme,
@@ -479,8 +479,8 @@ fn build_workbench_presentation_with_bindings(
         return WorkbenchPresentation {
             frame,
             ime_cursor_area: None,
-            workspace_path_picker_scroll_metrics: None,
-            workspace_path_picker_item_viewport: None,
+            path_picker_scroll_metrics: None,
+            path_picker_item_viewport: None,
             remote_connection_picker_scroll_metrics: None,
             remote_connection_picker_item_viewport: None,
             remote_connection_manager_scroll_metrics: None,
@@ -491,7 +491,7 @@ fn build_workbench_presentation_with_bindings(
         };
     };
 
-    let title = if model.workspace_surface == WorkspaceSurfaceKind::Terminal {
+    let title = if model.main_surface == MainSurfaceKind::Terminal {
         model
             .terminal
             .and_then(TerminalCore::title)
@@ -509,10 +509,10 @@ fn build_workbench_presentation_with_bindings(
         .map(TabInput::title)
         .unwrap_or("New session");
     let session_pane_context = SessionPaneContext::new(
-        model.workspace_context.location,
-        model.workspace_context.working_directory,
-        model.workspace_context.git_branch,
-        &model.workspace_context.diff_summary,
+        model.environment_context.location,
+        model.environment_context.working_directory,
+        model.environment_context.git_branch,
+        &model.environment_context.diff_summary,
     );
     let selected_id = tab_input_element_id(
         model.tab_part,
@@ -546,7 +546,7 @@ fn build_workbench_presentation_with_bindings(
                 Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
                 TabContainerView {
                     title,
-                    context: model.workspace_context.clone(),
+                    context: model.environment_context.clone(),
                     search: model.session_search,
                     tab_part: model.tab_part,
                     selected_id,
@@ -562,7 +562,7 @@ fn build_workbench_presentation_with_bindings(
         None
     };
     let file_editor_caret = if let Some(bounds) = layout.inspector() {
-        if model.workspace_surface == WorkspaceSurfaceKind::Editor {
+        if model.main_surface == MainSurfaceKind::Editor {
             frame.with_context(|context| {
                 draw_file_editor_inspector(
                     context,
@@ -607,7 +607,7 @@ fn build_workbench_presentation_with_bindings(
                 pane_group: model.pane_group,
                 active_pane: model.active_pane,
                 terminal_pane_resize_split: model.terminal_pane_resize_split,
-                workspace_surface: model.workspace_surface,
+                main_surface: model.main_surface,
                 active_tab_input: model.active_tab_input,
                 settings: model.settings,
                 remote_connection_manager: model.remote_connection_manager,
@@ -616,7 +616,7 @@ fn build_workbench_presentation_with_bindings(
                 session_pane_context: &session_pane_context,
                 files: model.files,
                 scm: model.scm,
-                workspace_context: model.workspace_context.clone(),
+                environment_context: model.environment_context.clone(),
                 keybindings: model.keybindings,
                 keybinding_diagnostics: model.keybinding_diagnostics,
                 theme_scheme: model.theme_scheme,
@@ -686,8 +686,8 @@ fn build_workbench_presentation_with_bindings(
     WorkbenchPresentation {
         frame,
         ime_cursor_area: overlay.ime_cursor_area,
-        workspace_path_picker_scroll_metrics: overlay.workspace_path_picker_scroll_metrics,
-        workspace_path_picker_item_viewport: overlay.workspace_path_picker_item_viewport,
+        path_picker_scroll_metrics: overlay.path_picker_scroll_metrics,
+        path_picker_item_viewport: overlay.path_picker_item_viewport,
         remote_connection_picker_scroll_metrics: overlay.remote_connection_picker_scroll_metrics,
         remote_connection_picker_item_viewport: overlay.remote_connection_picker_item_viewport,
         remote_connection_manager_scroll_metrics: overlay
@@ -724,9 +724,8 @@ pub fn rebuild_workbench_overlays(
         base.ime_cursor_area,
     );
     presentation.ime_cursor_area = overlay.ime_cursor_area;
-    presentation.workspace_path_picker_scroll_metrics =
-        overlay.workspace_path_picker_scroll_metrics;
-    presentation.workspace_path_picker_item_viewport = overlay.workspace_path_picker_item_viewport;
+    presentation.path_picker_scroll_metrics = overlay.path_picker_scroll_metrics;
+    presentation.path_picker_item_viewport = overlay.path_picker_item_viewport;
     presentation.remote_connection_picker_scroll_metrics =
         overlay.remote_connection_picker_scroll_metrics;
     presentation.remote_connection_picker_item_viewport =
@@ -751,8 +750,8 @@ fn draw_workbench_overlays(
     mut ime_cursor_area: Option<Rect>,
 ) -> WorkbenchOverlayPresentation {
     let palette = model.palette;
-    let mut workspace_path_picker_scroll_metrics = None;
-    let mut workspace_path_picker_item_viewport = None;
+    let mut path_picker_scroll_metrics = None;
+    let mut path_picker_item_viewport = None;
     let mut remote_connection_picker_scroll_metrics = None;
     let mut remote_connection_picker_item_viewport = None;
     let mut remote_connection_manager_scroll_metrics = None;
@@ -771,17 +770,17 @@ fn draw_workbench_overlays(
     ) {
         frame.draw_component(&context_menu);
     }
-    if let Some(path_picker) = WorkspacePathPicker::new(
+    if let Some(path_picker) = DirectoryPicker::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
-        model.workspace_path_picker,
+        model.path_picker,
         model.caret_visibility,
         palette,
         text_layout,
         model.dispatch,
     ) {
-        workspace_path_picker_scroll_metrics = path_picker.scroll_metrics();
-        workspace_path_picker_item_viewport = Some(path_picker.item_viewport_bounds());
-        if model.dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT) {
+        path_picker_scroll_metrics = path_picker.scroll_metrics();
+        path_picker_item_viewport = Some(path_picker.item_viewport_bounds());
+        if model.dispatch.is_focused(DIRECTORY_SEARCH_INPUT) {
             ime_cursor_area = path_picker.search_caret_bounds();
         }
         frame.draw_component(&path_picker);
@@ -816,7 +815,7 @@ fn draw_workbench_overlays(
         for field in [
             RemoteConnectionManagerField::Name,
             RemoteConnectionManagerField::Host,
-            RemoteConnectionManagerField::Workspace,
+            RemoteConnectionManagerField::Directory,
         ] {
             if model.dispatch.is_focused(field.element_id()) {
                 ime_cursor_area = connection_manager.caret_bounds(field);
@@ -878,8 +877,8 @@ fn draw_workbench_overlays(
     );
     WorkbenchOverlayPresentation {
         ime_cursor_area,
-        workspace_path_picker_scroll_metrics,
-        workspace_path_picker_item_viewport,
+        path_picker_scroll_metrics,
+        path_picker_item_viewport,
         remote_connection_picker_scroll_metrics,
         remote_connection_picker_item_viewport,
         remote_connection_manager_scroll_metrics,
@@ -900,11 +899,11 @@ pub fn terminal_grid_size_for_viewport(
         return GridSize::default();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
-    zeta_terminal_workspace::grid_size(bounds)
+    zeta_terminal_runtime::grid_size(bounds)
 }
 
 pub fn terminal_grid_size_for_bounds(bounds: Rect) -> GridSize {
-    zeta_terminal_workspace::grid_size(bounds)
+    zeta_terminal_runtime::grid_size(bounds)
 }
 
 pub fn terminal_pane_bounds_for_viewport(
@@ -938,7 +937,7 @@ pub fn terminal_mouse_position_for_viewport(
     if !bounds.contains(point) {
         return None;
     }
-    zeta_terminal_workspace::mouse_position(bounds, point)
+    zeta_terminal_runtime::mouse_position(bounds, point)
 }
 
 pub fn terminal_pane_mouse_position_for_viewport(
@@ -960,14 +959,14 @@ pub fn terminal_pane_mouse_position_for_viewport(
         .iter()
         .find(|leaf| leaf.bounds().contains(point))?;
     let bounds = leaf.bounds();
-    zeta_terminal_workspace::mouse_position(bounds, point).map(|position| (leaf.id(), position))
+    zeta_terminal_runtime::mouse_position(bounds, point).map(|position| (leaf.id(), position))
 }
 
 fn draw_files_pane(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
     files: &FilesState,
-    workspace_context: &WorkspaceContextView<'_>,
+    environment_context: &EnvironmentContextView<'_>,
     parent: ElementId,
     caret_visibility: CaretVisibility,
     dispatch: &UiDispatch,
@@ -978,7 +977,7 @@ fn draw_files_pane(
     let files_toolbar = FilesToolbar::new(
         layout.toolbar(),
         files,
-        workspace_context.upstream_distance,
+        environment_context.upstream_distance,
         caret_visibility,
         zeta_files::FilesToolbarStyle::from_theme(palette),
         parent,
@@ -1023,7 +1022,7 @@ fn draw_file_editor_inspector(
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
 ) -> Option<Rect> {
-    draw_workspace_surface(context.scene_mut(), bounds, palette);
+    draw_main_surface(context.scene_mut(), bounds, palette);
     let pane = FileEditorPane::new(
         bounds,
         view.host,
@@ -1059,14 +1058,14 @@ fn draw_file_editor_inspector(
 }
 
 /// Paints a Desktop-owned Workbench surface before feature content.
-fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
+fn draw_main_surface(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
     scene.draw_rect(PaintRect::new(bounds, palette.side_bar_background));
 }
 
 /// Paints the Desktop-owned outer border of the Inspector Part after feature content.
 ///
-/// This boundary separates the right Inspector slot from the main
-/// workspace. Files and SCM components own only their internal geometry and
+/// This boundary separates the right Inspector slot from the main pane.
+/// Files and SCM components own only their internal geometry and
 /// must not redraw this edge.
 pub fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
     scene.draw_rect(
@@ -1185,9 +1184,9 @@ fn draw_main(
     palette: UiTheme,
     text_layout: &mut TextInputLayoutEngine,
 ) -> MainDrawResult {
-    let active_screen = match view.workspace_surface {
-        WorkspaceSurfaceKind::Terminal => ScreenBuffer::Alternate,
-        WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ScreenBuffer::Primary,
+    let active_screen = match view.main_surface {
+        MainSurfaceKind::Terminal => ScreenBuffer::Alternate,
+        MainSurfaceKind::Agent | MainSurfaceKind::Editor => ScreenBuffer::Primary,
     };
     let main_label = if view
         .active_tab_input
@@ -1195,10 +1194,10 @@ fn draw_main(
     {
         "Settings"
     } else {
-        match view.workspace_surface {
-            WorkspaceSurfaceKind::Agent => "Agent workspace",
-            WorkspaceSurfaceKind::Editor => "Agent session with file inspector",
-            WorkspaceSurfaceKind::Terminal => "Interactive terminal",
+        match view.main_surface {
+            MainSurfaceKind::Agent => "Agent",
+            MainSurfaceKind::Editor => "Agent session with file inspector",
+            MainSurfaceKind::Terminal => "Interactive terminal",
         }
     };
     let main_surface = InteractionRegion::new(
@@ -1227,10 +1226,10 @@ fn draw_main(
                     zeta_settings::settings_keybinding_rows(platform, |command| {
                         view.keybindings.binding_for_command(command)
                     });
-                let surface_label = match view.workspace_surface {
-                    WorkspaceSurfaceKind::Agent => "Agent workspace",
-                    WorkspaceSurfaceKind::Editor => "Editor",
-                    WorkspaceSurfaceKind::Terminal => "Terminal",
+                let surface_label = match view.main_surface {
+                    MainSurfaceKind::Agent => "Agent",
+                    MainSurfaceKind::Editor => "Editor",
+                    MainSurfaceKind::Terminal => "Terminal",
                 };
                 let theme_scheme =
                     match view.theme_scheme {
@@ -1248,8 +1247,8 @@ fn draw_main(
                         state: view.settings,
                         features: SettingsFeatureSnapshot {
                             general: GeneralSettingsSnapshot {
-                                workspace_label: view.workspace_context.working_directory,
-                                connection_label: view.workspace_context.location,
+                                directory_label: view.environment_context.working_directory,
+                                connection_label: view.environment_context.location,
                                 surface_label,
                             },
                             appearance: AppearanceSettingsSnapshot {
@@ -1278,11 +1277,11 @@ fn draw_main(
                 remote_connection_manager_scroll_metrics = draw.remote_connection_scroll_metrics;
                 remote_connection_manager_list_viewport = draw.remote_connection_list_viewport;
             } else {
-                let active_workspace_input = view.active_pane.filter(|pane| {
-                    !matches!(view.workspace_surface, WorkspaceSurfaceKind::Editor)
+                let active_file_input = view.active_pane.filter(|pane| {
+                    !matches!(view.main_surface, MainSurfaceKind::Editor)
                         && matches!(pane.kind(), PaneInputKind::Files | PaneInputKind::Diff)
                 });
-                if let Some(pane) = active_workspace_input {
+                if let Some(pane) = active_file_input {
                     let pane_group_id = pane_group_element_id(pane.pane_id());
                     let pane_group = InteractionRegion::new(
                         "PaneGroup",
@@ -1292,7 +1291,7 @@ fn draw_main(
                         match pane.kind() {
                             PaneInputKind::Files => "Files pane group",
                             PaneInputKind::Diff => "Changes pane group",
-                            _ => unreachable!("workspace input kind was checked above"),
+                            _ => unreachable!("file input kind was checked above"),
                         },
                     )
                     .with_parent(MAIN_SURFACE);
@@ -1302,7 +1301,7 @@ fn draw_main(
                                 context,
                                 layout.main(),
                                 view.files,
-                                &view.workspace_context,
+                                &view.environment_context,
                                 pane_group_id,
                                 view.caret_visibility,
                                 view.dispatch,
@@ -1319,11 +1318,11 @@ fn draw_main(
                                 );
                                 None
                             }
-                            _ => unreachable!("workspace input kind was checked above"),
+                            _ => unreachable!("file input kind was checked above"),
                         });
                 } else {
-                    match view.workspace_surface {
-                        WorkspaceSurfaceKind::Terminal => {
+                    match view.main_surface {
+                        MainSurfaceKind::Terminal => {
                             let terminal_bounds = terminal_content_bounds(layout, active_screen);
                             if view.terminal_panes.is_empty() {
                                 let terminal_region = InteractionRegion::new(
@@ -1388,7 +1387,7 @@ fn draw_main(
                                 ));
                             }
                         }
-                        WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
+                        MainSurfaceKind::Agent | MainSurfaceKind::Editor => {
                             ime_cursor_area = draw_session_pane(
                                 context,
                                 layout.session_pane_layout,
@@ -1413,8 +1412,8 @@ fn draw_main(
             {
                 ime_cursor_area
             } else {
-                match view.workspace_surface {
-                    WorkspaceSurfaceKind::Terminal if !view.terminal_panes.is_empty() => {
+                match view.main_surface {
+                    MainSurfaceKind::Terminal if !view.terminal_panes.is_empty() => {
                         let active_pane = view.pane_group.map(PanePart::active_pane);
                         let terminal_bounds = terminal_content_bounds(layout, active_screen);
                         view.terminal_panes
@@ -1434,10 +1433,10 @@ fn draw_main(
                                 })
                             })
                     }
-                    WorkspaceSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
+                    MainSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
                         terminal_cursor_area(layout, terminal, view.terminal.scroll_offset)
                     }),
-                    WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ime_cursor_area,
+                    MainSurfaceKind::Agent | MainSurfaceKind::Editor => ime_cursor_area,
                 }
             };
             MainDrawResult {
@@ -1455,7 +1454,7 @@ fn terminal_content_bounds(layout: WorkbenchSceneLayout, active_screen: ScreenBu
     } else {
         layout.output
     };
-    zeta_terminal_workspace::content_bounds(viewport)
+    zeta_terminal_runtime::content_bounds(viewport)
 }
 
 fn terminal_cursor_area(
@@ -1472,7 +1471,7 @@ fn terminal_cursor_area_for_bounds(
     terminal: &TerminalCore,
     scroll_offset: usize,
 ) -> Option<Rect> {
-    zeta_terminal_workspace::cursor_area(bounds, terminal, scroll_offset)
+    zeta_terminal_runtime::cursor_area(bounds, terminal, scroll_offset)
 }
 
 fn terminal_bounds_for_pane(
@@ -1534,10 +1533,10 @@ fn draw_terminal_in_bounds(
     active_screen: ScreenBuffer,
     palette: UiTheme,
 ) {
-    zeta_terminal_workspace::draw_terminal(
+    zeta_terminal_runtime::draw_terminal(
         scene,
         bounds,
-        zeta_terminal_workspace::TerminalPaneView::new(view.core).with_view_state(
+        zeta_terminal_runtime::TerminalPaneView::new(view.core).with_view_state(
             view.scroll_offset,
             view.scrollbar_presentation,
             view.selection,

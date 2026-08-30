@@ -1191,7 +1191,7 @@
       "type": "string"
     },
     "AgentTreeNodeProjection": {
-      "description": "One canonical, recursively nested Agent-tree node derived from durable Session and Thread facts.",
+      "description": "One canonical, recursively nested Agent-tree node derived from durable Thread facts.",
       "properties": {
         "children": {
           "items": {
@@ -1212,6 +1212,16 @@
         "executionStatus": {
           "$ref": "#/$defs/AgentTreeExecutionStatus"
         },
+        "forkedFromId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "goal": {
           "anyOf": [
             {
@@ -1228,11 +1238,15 @@
           },
           "type": "array"
         },
-        "membershipStatus": {
-          "$ref": "#/$defs/SessionThreadStatus"
-        },
-        "origin": {
-          "$ref": "#/$defs/ThreadOrigin"
+        "parentThreadId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "result": {
           "anyOf": [
@@ -1283,8 +1297,6 @@
         "threadId",
         "threadSequence",
         "title",
-        "origin",
-        "membershipStatus",
         "executionStatus",
         "usage"
       ],
@@ -1429,12 +1441,11 @@
         "SkillsUnavailable",
         "SkillOperationFailed",
         "SkillNotFound",
-        "WorkspaceSwitchUnavailable",
-        "WorkspaceSwitchBusy",
-        "WorkspaceSwitchFailed",
-        "WorkspaceAccessRevisionConflict",
-        "WorkspaceTrustRequired",
-        "WorkspaceAuthorityMismatch",
+        "EnvCwdSetUnavailable",
+        "EnvCwdSetBusy",
+        "EnvCwdSetFailed",
+        "RevisionConflict",
+        "PermissionRequired",
         "ExtensionsUnavailable",
         "ExtensionGenerationConflict",
         "ExtensionNotFound",
@@ -2007,23 +2018,23 @@
           ],
           "default": null
         },
-        "notifications": {
-          "default": null,
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "workspaceTrustHost": {
+        "dirPermissionsHost": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceTrustHostCapability"
+              "$ref": "#/$defs/DirPermissionsHostCapability"
             },
             {
               "type": "null"
             }
           ],
           "default": null
+        },
+        "notifications": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "type": "object"
@@ -2066,11 +2077,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/switch",
+              "const": "env/cwd/set",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceSwitchParams"
+              "$ref": "#/$defs/EnvCwdSetParams"
             }
           },
           "required": [
@@ -2082,11 +2093,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/folders/set",
+              "const": "env/dirs/set",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceFoldersSetParams"
+              "$ref": "#/$defs/EnvDirsSetParams"
             }
           },
           "required": [
@@ -2098,11 +2109,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/list",
+              "const": "session/dirs/list",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryListParams"
+              "$ref": "#/$defs/SessionDirListParams"
             }
           },
           "required": [
@@ -2114,11 +2125,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/add",
+              "const": "session/dirs/add",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryAddParams"
+              "$ref": "#/$defs/SessionDirAddParams"
             }
           },
           "required": [
@@ -2130,11 +2141,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/remove",
+              "const": "session/dirs/remove",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryRemoveParams"
+              "$ref": "#/$defs/SessionDirRemoveParams"
             }
           },
           "required": [
@@ -2146,11 +2157,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/permissions/set",
+              "const": "session/dirs/permissions/set",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionsSetParams"
+              "$ref": "#/$defs/SessionDirPermissionsSetParams"
             }
           },
           "required": [
@@ -2162,11 +2173,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/read",
+              "const": "config/dirPermissions/read",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceTrustReadParams"
+              "$ref": "#/$defs/DirPermissionsReadParams"
             }
           },
           "required": [
@@ -2178,7 +2189,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/list",
+              "const": "config/dirPermissions/list",
               "type": "string"
             },
             "params": {
@@ -2194,11 +2205,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/set",
+              "const": "config/dirPermissions/set",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceTrustSetParams"
+              "$ref": "#/$defs/DirPermissionsSetParams"
             }
           },
           "required": [
@@ -2210,11 +2221,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/forget",
+              "const": "config/dirPermissions/forget",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceTrustForgetParams"
+              "$ref": "#/$defs/DirPermissionsForgetParams"
             }
           },
           "required": [
@@ -3346,7 +3357,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/configure",
+              "const": "codebase/configure",
               "type": "string"
             },
             "params": {
@@ -3362,7 +3373,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/commitMessage/authorize",
+              "const": "commitMessage/authorize",
               "type": "string"
             },
             "params": {
@@ -3378,7 +3389,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/commitMessage/revoke",
+              "const": "commitMessage/revoke",
               "type": "string"
             },
             "params": {
@@ -4178,11 +4189,11 @@
         {
           "properties": {
             "method": {
-              "const": "language/workspaceDiagnostics",
+              "const": "language/directoryDiagnostics",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageWorkspaceDiagnosticsParams"
+              "$ref": "#/$defs/LanguageDirectoryDiagnosticsParams"
             }
           },
           "required": [
@@ -4226,11 +4237,11 @@
         {
           "properties": {
             "method": {
-              "const": "language/workspaceSymbols",
+              "const": "language/directorySymbols",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/LanguageWorkspaceSymbolsParams"
+              "$ref": "#/$defs/LanguageDirectorySymbolsParams"
             }
           },
           "required": [
@@ -4866,11 +4877,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/search/start",
+              "const": "content/search/start",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceSearchStartParams"
+              "$ref": "#/$defs/ContentSearchStartParams"
             }
           },
           "required": [
@@ -4882,11 +4893,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/search/read",
+              "const": "content/search/read",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceSearchReadParams"
+              "$ref": "#/$defs/ContentSearchReadParams"
             }
           },
           "required": [
@@ -4898,11 +4909,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/search/cancel",
+              "const": "content/search/cancel",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceSearchCancelParams"
+              "$ref": "#/$defs/ContentSearchCancelParams"
             }
           },
           "required": [
@@ -4914,7 +4925,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/status",
+              "const": "codebase/status",
               "type": "string"
             },
             "params": {
@@ -4930,7 +4941,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/search",
+              "const": "codebase/search",
               "type": "string"
             },
             "params": {
@@ -4946,7 +4957,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/symbols/status",
+              "const": "codebase/symbols/status",
               "type": "string"
             },
             "params": {
@@ -4962,7 +4973,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/symbols/search",
+              "const": "codebase/symbols/search",
               "type": "string"
             },
             "params": {
@@ -4978,11 +4989,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIntelligence/document/synchronize",
+              "const": "codeIntelligence/document/synchronize",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceDocumentOverlaySynchronizeParams"
+              "$ref": "#/$defs/DocumentOverlaySynchronizeParams"
             }
           },
           "required": [
@@ -4994,11 +5005,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIntelligence/document/close",
+              "const": "codeIntelligence/document/close",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/WorkspaceDocumentOverlayCloseParams"
+              "$ref": "#/$defs/DocumentOverlayCloseParams"
             }
           },
           "required": [
@@ -5010,7 +5021,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/retrieve",
+              "const": "codebase/retrieve",
               "type": "string"
             },
             "params": {
@@ -5026,7 +5037,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/rebuild",
+              "const": "codebase/rebuild",
               "type": "string"
             },
             "params": {
@@ -5042,7 +5053,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/agentGrep/fastRegex/status",
+              "const": "agentGrep/fastRegex/status",
               "type": "string"
             },
             "params": {
@@ -5058,7 +5069,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/agentGrep/fastRegex/rebuild",
+              "const": "agentGrep/fastRegex/rebuild",
               "type": "string"
             },
             "params": {
@@ -5074,7 +5085,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/agentGrep/fastRegex/disableAndDelete",
+              "const": "agentGrep/fastRegex/disableAndDelete",
               "type": "string"
             },
             "params": {
@@ -5090,7 +5101,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/status",
+              "const": "codebase/cloud/status",
               "type": "string"
             },
             "params": {
@@ -5106,7 +5117,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/preview",
+              "const": "codebase/cloud/preview",
               "type": "string"
             },
             "params": {
@@ -5122,7 +5133,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/authorize",
+              "const": "codebase/cloud/authorize",
               "type": "string"
             },
             "params": {
@@ -5138,7 +5149,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/sync",
+              "const": "codebase/cloud/sync",
               "type": "string"
             },
             "params": {
@@ -5154,7 +5165,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/revoke",
+              "const": "codebase/cloud/revoke",
               "type": "string"
             },
             "params": {
@@ -5382,11 +5393,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/switch",
+              "const": "env/cwd/set",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceSwitchResult"
+              "$ref": "#/$defs/EnvCwdSetResult"
             }
           },
           "required": [
@@ -5398,11 +5409,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/folders/set",
+              "const": "env/dirs/set",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceFoldersSetResult"
+              "$ref": "#/$defs/EnvDirsSetResult"
             }
           },
           "required": [
@@ -5414,11 +5425,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/list",
+              "const": "session/dirs/list",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryListResult"
+              "$ref": "#/$defs/SessionDirListResult"
             }
           },
           "required": [
@@ -5430,11 +5441,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/add",
+              "const": "session/dirs/add",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationResult"
+              "$ref": "#/$defs/SessionDirMutationResult"
             }
           },
           "required": [
@@ -5446,11 +5457,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/remove",
+              "const": "session/dirs/remove",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationResult"
+              "$ref": "#/$defs/SessionDirMutationResult"
             }
           },
           "required": [
@@ -5462,11 +5473,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/additionalDirectories/permissions/set",
+              "const": "session/dirs/permissions/set",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationResult"
+              "$ref": "#/$defs/SessionDirMutationResult"
             }
           },
           "required": [
@@ -5478,11 +5489,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/read",
+              "const": "config/dirPermissions/read",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceTrustReadResult"
+              "$ref": "#/$defs/DirPermissionsReadResult"
             }
           },
           "required": [
@@ -5494,11 +5505,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/list",
+              "const": "config/dirPermissions/list",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceTrustListResult"
+              "$ref": "#/$defs/DirPermissionsListResult"
             }
           },
           "required": [
@@ -5510,7 +5521,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/set",
+              "const": "config/dirPermissions/set",
               "type": "string"
             },
             "result": {
@@ -5526,7 +5537,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/trust/forget",
+              "const": "config/dirPermissions/forget",
               "type": "string"
             },
             "result": {
@@ -6662,7 +6673,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/configure",
+              "const": "codebase/configure",
               "type": "string"
             },
             "result": {
@@ -6678,7 +6689,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/commitMessage/authorize",
+              "const": "commitMessage/authorize",
               "type": "string"
             },
             "result": {
@@ -6694,7 +6705,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/commitMessage/revoke",
+              "const": "commitMessage/revoke",
               "type": "string"
             },
             "result": {
@@ -7494,11 +7505,11 @@
         {
           "properties": {
             "method": {
-              "const": "language/workspaceDiagnostics",
+              "const": "language/directoryDiagnostics",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/LanguageWorkspaceDiagnosticsResult"
+              "$ref": "#/$defs/LanguageDirectoryDiagnosticsResult"
             }
           },
           "required": [
@@ -7542,11 +7553,11 @@
         {
           "properties": {
             "method": {
-              "const": "language/workspaceSymbols",
+              "const": "language/directorySymbols",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/LanguageWorkspaceSymbolsResult"
+              "$ref": "#/$defs/LanguageDirectorySymbolsResult"
             }
           },
           "required": [
@@ -7578,7 +7589,7 @@
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/LanguageWorkspaceEditDto"
+              "$ref": "#/$defs/LanguageDirectoryEditDto"
             }
           },
           "required": [
@@ -8182,11 +8193,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/search/start",
+              "const": "content/search/start",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceSearchStartResult"
+              "$ref": "#/$defs/ContentSearchStartResult"
             }
           },
           "required": [
@@ -8198,11 +8209,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/search/read",
+              "const": "content/search/read",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceSearchReadResult"
+              "$ref": "#/$defs/ContentSearchReadResult"
             }
           },
           "required": [
@@ -8214,7 +8225,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/search/cancel",
+              "const": "content/search/cancel",
               "type": "string"
             },
             "result": {
@@ -8230,7 +8241,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/status",
+              "const": "codebase/status",
               "type": "string"
             },
             "result": {
@@ -8246,7 +8257,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/search",
+              "const": "codebase/search",
               "type": "string"
             },
             "result": {
@@ -8262,7 +8273,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/symbols/status",
+              "const": "codebase/symbols/status",
               "type": "string"
             },
             "result": {
@@ -8278,7 +8289,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/symbols/search",
+              "const": "codebase/symbols/search",
               "type": "string"
             },
             "result": {
@@ -8294,11 +8305,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIntelligence/document/synchronize",
+              "const": "codeIntelligence/document/synchronize",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceDocumentOverlayStatusResult"
+              "$ref": "#/$defs/DocumentOverlayStatusResult"
             }
           },
           "required": [
@@ -8310,11 +8321,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIntelligence/document/close",
+              "const": "codeIntelligence/document/close",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/WorkspaceDocumentOverlayStatusResult"
+              "$ref": "#/$defs/DocumentOverlayStatusResult"
             }
           },
           "required": [
@@ -8326,7 +8337,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/retrieve",
+              "const": "codebase/retrieve",
               "type": "string"
             },
             "result": {
@@ -8342,7 +8353,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/rebuild",
+              "const": "codebase/rebuild",
               "type": "string"
             },
             "result": {
@@ -8358,7 +8369,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/agentGrep/fastRegex/status",
+              "const": "agentGrep/fastRegex/status",
               "type": "string"
             },
             "result": {
@@ -8374,7 +8385,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/agentGrep/fastRegex/rebuild",
+              "const": "agentGrep/fastRegex/rebuild",
               "type": "string"
             },
             "result": {
@@ -8390,7 +8401,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/agentGrep/fastRegex/disableAndDelete",
+              "const": "agentGrep/fastRegex/disableAndDelete",
               "type": "string"
             },
             "result": {
@@ -8406,7 +8417,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/status",
+              "const": "codebase/cloud/status",
               "type": "string"
             },
             "result": {
@@ -8422,7 +8433,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/preview",
+              "const": "codebase/cloud/preview",
               "type": "string"
             },
             "result": {
@@ -8438,7 +8449,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/authorize",
+              "const": "codebase/cloud/authorize",
               "type": "string"
             },
             "result": {
@@ -8454,7 +8465,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/sync",
+              "const": "codebase/cloud/sync",
               "type": "string"
             },
             "result": {
@@ -8470,7 +8481,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codebase/cloud/revoke",
+              "const": "codebase/cloud/revoke",
               "type": "string"
             },
             "result": {
@@ -8762,7 +8773,7 @@
       "type": "object"
     },
     "CloudCodebasePreviewResult": {
-      "description": "Bounded local preview of the Workspace-produced chunks eligible for publication.",
+      "description": "Bounded local preview of the directory-produced chunks eligible for publication.",
       "properties": {
         "chunkCount": {
           "format": "uint",
@@ -8804,7 +8815,7 @@
       "type": "object"
     },
     "CloudCodebaseSelectionDto": {
-      "description": "Workspace-relative source selection covered by a preview or grant.",
+      "description": "directory-relative source selection covered by a preview or grant.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -8945,7 +8956,7 @@
       "type": "object"
     },
     "CodebaseConfigDto": {
-      "description": "Current authorization state for the active Workspace and configured semantic model pair.",
+      "description": "Current authorization state for the active directory and configured semantic model pair.",
       "properties": {
         "automaticContext": {
           "$ref": "#/$defs/CodebaseAutomaticContextDto"
@@ -9131,7 +9142,7 @@
       "type": "object"
     },
     "CodebaseRetrievalParams": {
-      "description": "Performs one bounded retrieval across every source enabled for the workspace.",
+      "description": "Performs one bounded retrieval across every source enabled for the directory.",
       "properties": {
         "maxResults": {
           "format": "uint",
@@ -9259,7 +9270,7 @@
       "type": "object"
     },
     "CodebaseStateDto": {
-      "description": "Lifecycle state of the workspace-side codebase projection.",
+      "description": "Lifecycle state of the directory-side codebase projection.",
       "enum": [
         "empty",
         "indexing",
@@ -9388,7 +9399,7 @@
       "type": "object"
     },
     "CodebaseSymbolsSearchParams": {
-      "description": "Performs one bounded local fuzzy lookup against workspace declarations.",
+      "description": "Performs one bounded local fuzzy lookup against directory declarations.",
       "properties": {
         "maxResults": {
           "format": "uint",
@@ -9434,7 +9445,7 @@
       "type": "object"
     },
     "CodebaseSymbolsStateDto": {
-      "description": "Lifecycle state of the workspace-side declaration projection.",
+      "description": "Lifecycle state of the directory-side declaration projection.",
       "enum": [
         "empty",
         "indexing",
@@ -9494,7 +9505,7 @@
       "type": "string"
     },
     "CommitMessageAuthorizeParams": {
-      "description": "Authorizes the active Workspace to send bounded context and diff to the exact summary model.",
+      "description": "Authorizes the active directory to send bounded context and diff to the exact summary model.",
       "properties": {
         "commandId": {
           "$ref": "#/$defs/CommandId"
@@ -9512,7 +9523,7 @@
       "type": "object"
     },
     "CommitMessageRevokeParams": {
-      "description": "Revokes automatic commit-message source egress for the active Workspace.",
+      "description": "Revokes automatic commit-message source egress for the active directory.",
       "properties": {
         "commandId": {
           "$ref": "#/$defs/CommandId"
@@ -9592,7 +9603,7 @@
         "codebase": {
           "$ref": "#/$defs/CodebaseConfigDto"
         },
-        "commitMessageActiveWorkspaceAuthorized": {
+        "commitMessageActiveDirAuthorized": {
           "type": "boolean"
         },
         "commitMessageModel": {
@@ -9678,7 +9689,7 @@
         "revision",
         "generation",
         "approvalReviewModel",
-        "commitMessageActiveWorkspaceAuthorized",
+        "commitMessageActiveDirAuthorized",
         "toolMode",
         "agentGrepBackend",
         "providers",
@@ -9818,7 +9829,7 @@
       "type": "object"
     },
     "ConnectorAvailableActionDto": {
-      "description": "Mutation the current Connector state permits a client to offer.",
+      "description": "Mutation the current Connector state authorizations a client to offer.",
       "enum": [
         "connectApiToken",
         "connectOAuth",
@@ -10365,6 +10376,255 @@
         }
       ]
     },
+    "ContentSearchCancelParams": {
+      "description": "Cancels and releases one connection-owned directory search.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "searchId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "searchId"
+      ],
+      "type": "object"
+    },
+    "ContentSearchCaseSensitivity": {
+      "description": "Selects the case-matching behavior used by one directory search.",
+      "enum": [
+        "smart",
+        "sensitive",
+        "insensitive"
+      ],
+      "type": "string"
+    },
+    "ContentSearchMatch": {
+      "description": "One line containing one or more matches in a directory-relative file.",
+      "properties": {
+        "lineNumber": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "ranges": {
+          "items": {
+            "$ref": "#/$defs/ContentSearchMatchRange"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "lineNumber",
+        "preview",
+        "ranges"
+      ],
+      "type": "object"
+    },
+    "ContentSearchMatchRange": {
+      "description": "UTF-16 range within one returned preview line.",
+      "properties": {
+        "end": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "ContentSearchPatternKind": {
+      "description": "Selects how the directory search query is interpreted by the backend.",
+      "enum": [
+        "literal",
+        "regex"
+      ],
+      "type": "string"
+    },
+    "ContentSearchReadParams": {
+      "description": "Reads a bounded result batch after an already observed match cursor.",
+      "properties": {
+        "afterMatch": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maxMatches": {
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "searchId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "searchId",
+        "afterMatch",
+        "maxMatches"
+      ],
+      "type": "object"
+    },
+    "ContentSearchReadResult": {
+      "description": "Bounded progress snapshot for a running or completed directory search.",
+      "properties": {
+        "completed": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limitHit": {
+          "type": "boolean"
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/ContentSearchMatch"
+          },
+          "type": "array"
+        },
+        "nextMatch": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "searchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "searchId",
+        "matches",
+        "nextMatch",
+        "completed",
+        "limitHit"
+      ],
+      "type": "object"
+    },
+    "ContentSearchStartParams": {
+      "description": "Starts one bounded, connection-owned directory content search.",
+      "properties": {
+        "caseSensitivity": {
+          "$ref": "#/$defs/ContentSearchCaseSensitivity"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "excludePatterns": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "includePatterns": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "type": "array"
+        },
+        "maxResults": {
+          "format": "uint",
+          "maximum": 5000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "patternKind": {
+          "$ref": "#/$defs/ContentSearchPatternKind"
+        },
+        "query": {
+          "maxLength": 16384,
+          "minLength": 1,
+          "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "query",
+        "patternKind",
+        "caseSensitivity",
+        "includePatterns",
+        "excludePatterns",
+        "maxResults"
+      ],
+      "type": "object"
+    },
+    "ContentSearchStartResult": {
+      "description": "Identity allocated for one running directory search.",
+      "properties": {
+        "searchId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "searchId"
+      ],
+      "type": "object"
+    },
     "ContextCheckpoint": {
       "description": "Verified durable summary of one exact prefix of Thread history.",
       "properties": {
@@ -10471,14 +10731,14 @@
       "additionalProperties": false,
       "description": "Terminates and releases one connection-owned adapter process.",
       "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "workspaceFolderId": {
+        "dirId": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "sessionId": {
+          "type": "string"
         }
       },
       "required": [
@@ -10511,6 +10771,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "maxMessages": {
           "format": "uint",
           "maximum": 128,
@@ -10519,12 +10785,6 @@
         },
         "sessionId": {
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -10584,15 +10844,15 @@
       "additionalProperties": false,
       "description": "Sends one complete DAP message to an owned adapter.",
       "properties": {
-        "message": true,
-        "sessionId": {
-          "type": "string"
-        },
-        "workspaceFolderId": {
+        "dirId": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "message": true,
+        "sessionId": {
+          "type": "string"
         }
       },
       "required": [
@@ -10612,16 +10872,16 @@
           "maxItems": 128,
           "type": "array"
         },
-        "program": {
-          "maxLength": 4096,
-          "minLength": 1,
-          "type": "string"
-        },
-        "workspaceFolderId": {
+        "dirId": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "program": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
@@ -10940,6 +11200,255 @@
       ],
       "type": "string"
     },
+    "DirContributionsDto": {
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hooks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mcpServers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "plugins": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "skills",
+        "mcpServers",
+        "hooks",
+        "plugins",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "DirGrantDto": {
+      "description": "Source of the grant attached while selecting an environment directory.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "config",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "permissions": {
+              "items": {
+                "$ref": "#/$defs/PermissionDto"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "host",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "permissions"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "commandId": {
+              "$ref": "#/$defs/CommandId"
+            },
+            "expectedRevision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "permissions": {
+              "items": {
+                "$ref": "#/$defs/PermissionDto"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "user",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "commandId",
+            "expectedRevision",
+            "permissions"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DirId": {
+      "description": "Opaque, durable lookup key for one canonical directory.\n\nHosts persist this value instead of the filesystem path itself. It intentionally identifies\nthe canonical path boundary rather than directory-controlled content, so aliases resolve to\nthe same key and moving the directory produces a new identity.",
+      "type": "string"
+    },
+    "DirPermissionsEntryDto": {
+      "properties": {
+        "dir": {
+          "$ref": "#/$defs/DirId"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "dir",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "DirPermissionsForgetParams": {
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "dir": {
+          "$ref": "#/$defs/DirId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "dir"
+      ],
+      "type": "object"
+    },
+    "DirPermissionsHostCapability": {
+      "description": "Declares that this connection may manage explicit directory permissions.\n\nThis is an authority boundary for host-only protocol operations. Renderer or extension\nRenderer or extension connections must not declare it merely because they can display an\napproval prompt.",
+      "properties": {
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "type": "object"
+    },
+    "DirPermissionsListResult": {
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/DirPermissionsEntryDto"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "DirPermissionsReadParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "DirPermissionsReadResult": {
+      "properties": {
+        "dir": {
+          "$ref": "#/$defs/DirId"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "dir"
+      ],
+      "type": "object"
+    },
+    "DirPermissionsSetParams": {
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "path",
+        "permissions"
+      ],
+      "type": "object"
+    },
     "DocumentCollaborationOpenParams": {
       "description": "Opens one shared structured-document room or joins an existing room.",
       "properties": {
@@ -11228,6 +11737,50 @@
       ],
       "type": "object"
     },
+    "DocumentOverlayCloseParams": {
+      "description": "Releases one editor document from the ephemeral code-intelligence overlay.",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "DocumentOverlayStatusResult": {
+      "description": "Content-free summary of the current in-memory editor overlay.",
+      "properties": {
+        "dirtyDocumentCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "generation",
+        "dirtyDocumentCount"
+      ],
+      "type": "object"
+    },
+    "DocumentOverlaySynchronizeParams": {
+      "description": "Publishes the latest immutable editor text for one directory-relative document.",
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/LanguageDocumentDto"
+        }
+      },
+      "required": [
+        "document"
+      ],
+      "type": "object"
+    },
     "DynamicToolCall": {
       "properties": {
         "arguments": true,
@@ -11310,6 +11863,98 @@
     },
     "EmptyParams": {
       "additionalProperties": false,
+      "type": "object"
+    },
+    "EnvCwdSetParams": {
+      "description": "Changes only the working directory used to resolve relative paths.",
+      "properties": {
+        "cwd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cwd"
+      ],
+      "type": "object"
+    },
+    "EnvCwdSetResult": {
+      "properties": {
+        "cwd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cwd"
+      ],
+      "type": "object"
+    },
+    "EnvDirDto": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "EnvDirSetEntry": {
+      "properties": {
+        "grant": {
+          "$ref": "#/$defs/DirGrantDto"
+        },
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "grant"
+      ],
+      "type": "object"
+    },
+    "EnvDirsSetParams": {
+      "properties": {
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/EnvDirSetEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "dirs"
+      ],
+      "type": "object"
+    },
+    "EnvDirsSetResult": {
+      "properties": {
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/EnvDirDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "dirs"
+      ],
       "type": "object"
     },
     "ExecPolicyActionKindDto": {
@@ -12834,11 +13479,17 @@
       "type": "object"
     },
     "FsChanged": {
-      "description": "Coarse workspace filesystem invalidation published by `fs/changed`.",
+      "description": "Coarse directory filesystem invalidation published by `fs/changed`.",
       "oneOf": [
         {
-          "description": "The backend observed changes near these sorted workspace-relative paths.",
+          "description": "The backend observed changes near these sorted directory-relative paths.",
           "properties": {
+            "dirId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "paths": {
               "items": {
                 "type": "string"
@@ -12848,12 +13499,6 @@
             "type": {
               "const": "pathsChanged",
               "type": "string"
-            },
-            "workspaceFolderId": {
-              "type": [
-                "string",
-                "null"
-              ]
             }
           },
           "required": [
@@ -12865,15 +13510,15 @@
         {
           "description": "The watcher may have lost events and consumers must rescan their visible scope.",
           "properties": {
-            "type": {
-              "const": "rescanRequired",
-              "type": "string"
-            },
-            "workspaceFolderId": {
+            "dirId": {
               "type": [
                 "string",
                 "null"
               ]
+            },
+            "type": {
+              "const": "rescanRequired",
+              "type": "string"
             }
           },
           "required": [
@@ -12884,8 +13529,14 @@
       ]
     },
     "FsCreateFileParams": {
-      "description": "Creates one empty workspace file.",
+      "description": "Creates one empty directory file.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "existing": {
           "$ref": "#/$defs/FsExistingTargetBehavior"
         },
@@ -12895,17 +13546,11 @@
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -12924,8 +13569,14 @@
       "type": "string"
     },
     "FsDeleteParams": {
-      "description": "Deletes one workspace file or directory.",
+      "description": "Deletes one directory file or directory.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "missing": {
           "$ref": "#/$defs/FsMissingTargetBehavior"
         },
@@ -12938,17 +13589,11 @@
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -12979,25 +13624,25 @@
       "type": "string"
     },
     "FsGetMetadataParams": {
-      "description": "Read metadata for one path relative to the configured workspace root.",
+      "description": "Read metadata for one path relative to the configured directory root.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
           "type": "string"
         },
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -13007,7 +13652,7 @@
       "type": "object"
     },
     "FsGetMetadataResult": {
-      "description": "Metadata returned for one existing workspace path.",
+      "description": "Metadata returned for one existing directory path.",
       "properties": {
         "fileType": {
           "$ref": "#/$defs/FsFileType"
@@ -13045,25 +13690,25 @@
       "type": "string"
     },
     "FsReadBinaryFileParams": {
-      "description": "Read one binary file relative to the configured workspace root.",
+      "description": "Read one binary file relative to the configured directory root.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
           "type": "string"
         },
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -13073,7 +13718,7 @@
       "type": "object"
     },
     "FsReadBinaryFileResult": {
-      "description": "Connection-owned binary resource opened from one workspace file.",
+      "description": "Connection-owned binary resource opened from one directory file.",
       "properties": {
         "resource": {
           "$ref": "#/$defs/ResourceMetadataResult"
@@ -13106,25 +13751,25 @@
       "type": "object"
     },
     "FsReadDirectoryParams": {
-      "description": "List direct children for one directory relative to the configured workspace root.",
+      "description": "List direct children for one directory relative to the configured directory root.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
           "type": "string"
         },
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -13149,25 +13794,25 @@
       "type": "object"
     },
     "FsReadFileParams": {
-      "description": "Read one UTF-8 file relative to the configured workspace root.",
+      "description": "Read one UTF-8 file relative to the configured directory root.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
           "type": "string"
         },
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -13194,15 +13839,21 @@
       "type": "object"
     },
     "FsRenameParams": {
-      "description": "Renames one workspace file or directory.",
+      "description": "Renames one directory file or directory.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "existing": {
           "$ref": "#/$defs/FsExistingTargetBehavior"
         },
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
@@ -13214,12 +13865,6 @@
         },
         "target": {
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -13230,10 +13875,16 @@
       "type": "object"
     },
     "FsWriteFileParams": {
-      "description": "Atomically write one UTF-8 file relative to the configured workspace root.",
+      "description": "Atomically write one UTF-8 file relative to the configured directory root.",
       "properties": {
         "content": {
           "type": "string"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "expectedRevision": {
           "description": "When supplied, rejects the write if the file no longer has this exact revision.",
@@ -13248,17 +13899,11 @@
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -13286,7 +13931,7 @@
       "type": "object"
     },
     "GitBranchDto": {
-      "description": "One local branch returned by the workspace Git runtime.",
+      "description": "One local branch returned by the directory Git runtime.",
       "properties": {
         "current": {
           "type": "boolean"
@@ -13645,7 +14290,7 @@
       "type": "object"
     },
     "GitGraphParams": {
-      "description": "Starts or continues one bounded traversal of the active workspace repository graph.",
+      "description": "Starts or continues one bounded traversal of the active directory repository graph.",
       "properties": {
         "cursor": {
           "type": [
@@ -13777,7 +14422,7 @@
       ]
     },
     "GitHistoryResult": {
-      "description": "Bounded recent commit history for the active workspace repository.",
+      "description": "Bounded recent commit history for the active directory repository.",
       "properties": {
         "commits": {
           "items": {
@@ -13942,8 +14587,14 @@
       "type": "object"
     },
     "GitRepositoryDto": {
-      "description": "Stable, workspace-relative identity for one discovered Git repository projection.",
+      "description": "Stable, directory-relative identity for one discovered Git repository projection.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "id": {
           "type": "string"
         },
@@ -13952,12 +14603,6 @@
         },
         "path": {
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -13992,7 +14637,7 @@
       "type": "object"
     },
     "GitRepositoryParams": {
-      "description": "Selects one repository discovered inside the active workspace.",
+      "description": "Selects one repository discovered inside the active directory.",
       "properties": {
         "repositoryId": {
           "type": [
@@ -14025,6 +14670,9 @@
         "head": {
           "$ref": "#/$defs/GitHeadDto"
         },
+        "path": {
+          "type": "string"
+        },
         "repositoryId": {
           "type": "string"
         },
@@ -14035,16 +14683,13 @@
         },
         "streamInstanceId": {
           "$ref": "#/$defs/StreamInstanceId"
-        },
-        "workspacePath": {
-          "type": "string"
         }
       },
       "required": [
         "repositoryId",
         "streamInstanceId",
         "revision",
-        "workspacePath",
+        "path",
         "head",
         "changes"
       ],
@@ -14074,7 +14719,7 @@
       "type": "object"
     },
     "GitTextDiffDto": {
-      "description": "One bounded UTF-8 text change from `HEAD` to the workspace working tree.",
+      "description": "One bounded UTF-8 text change from `HEAD` to the directory working tree.",
       "properties": {
         "additions": {
           "format": "uint",
@@ -14106,7 +14751,7 @@
       "type": "object"
     },
     "GitTextDiffResult": {
-      "description": "One authoritative status snapshot plus its bounded workspace text-diff projection.",
+      "description": "One authoritative status snapshot plus its bounded directory text-diff projection.",
       "properties": {
         "diffs": {
           "items": {
@@ -14508,8 +15153,8 @@
           "default": {
             "agentInteractions": null,
             "browser": null,
-            "notifications": null,
-            "workspaceTrustHost": null
+            "dirPermissionsHost": null,
+            "notifications": null
           }
         },
         "clientInfo": {
@@ -14797,7 +15442,7 @@
           "type": "null"
         }
       ],
-      "description": "A JSON-RPC request identifier.\n\nJSON-RPC permits string and number identifiers; `Null` is retained for parse and invalid\nrequest error responses. The App Server dispatcher applies its narrower positive-integer\nrequest-ID policy after decoding this wire representation."
+      "description": "A JSON-RPC request identifier.\n\nJSON-RPC authorizations string and number identifiers; `Null` is retained for parse and invalid\nrequest error responses. The App Server dispatcher applies its narrower positive-integer\nrequest-ID policy after decoding this wire representation."
     },
     "JsonRpcNotification": {
       "additionalProperties": false,
@@ -14942,25 +15587,25 @@
       "type": "string"
     },
     "LanguageCloseParams": {
-      "description": "Releases one workspace document from the language-server session.",
+      "description": "Releases one directory document from the language-server session.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "path": {
           "type": "string"
         },
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
           ]
         }
       },
@@ -15008,7 +15653,7 @@
         "edit": {
           "anyOf": [
             {
-              "$ref": "#/$defs/LanguageWorkspaceEditDto"
+              "$ref": "#/$defs/LanguageDirectoryEditDto"
             },
             {
               "type": "null"
@@ -15468,7 +16113,38 @@
       "type": "string"
     },
     "LanguageDiagnosticsNotification": {
-      "description": "Fresh language-server diagnostics for one exact workspace document revision.",
+      "description": "Fresh language-server diagnostics for one exact directory document revision.",
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/LanguageCodeActionDiagnosticDto"
+          },
+          "type": "array"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "revision",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "LanguageDirectoryDiagnosticSnapshotDto": {
+      "description": "Diagnostics for one directory-relative resource.",
       "properties": {
         "diagnostics": {
           "items": {
@@ -15478,23 +16154,242 @@
         },
         "path": {
           "type": "string"
-        },
-        "revision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
         "path",
-        "revision",
         "diagnostics"
+      ],
+      "type": "object"
+    },
+    "LanguageDirectoryDiagnosticsParams": {
+      "description": "Requests one complete directory diagnostic report for a language-server route.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "languageId": {
+          "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "languageId"
+      ],
+      "type": "object"
+    },
+    "LanguageDirectoryDiagnosticsResult": {
+      "description": "Complete directory diagnostic report from one language server.",
+      "properties": {
+        "snapshots": {
+          "items": {
+            "$ref": "#/$defs/LanguageDirectoryDiagnosticSnapshotDto"
+          },
+          "type": "array"
+        },
+        "supported": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "supported",
+        "snapshots"
+      ],
+      "type": "object"
+    },
+    "LanguageDirectoryEditDto": {
+      "description": "Ordered directory edit spanning text documents and directory resources.",
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/LanguageDirectoryEditEntryDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "type": "object"
+    },
+    "LanguageDirectoryEditEntryDto": {
+      "description": "One ordered text or resource operation returned by a language server.",
+      "oneOf": [
+        {
+          "properties": {
+            "document": {
+              "$ref": "#/$defs/LanguageTextDocumentEditDto"
+            },
+            "kind": {
+              "const": "textDocument",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "document"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "existing": {
+              "$ref": "#/$defs/FsExistingTargetBehavior"
+            },
+            "kind": {
+              "const": "create",
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "existing"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "existing": {
+              "$ref": "#/$defs/FsExistingTargetBehavior"
+            },
+            "kind": {
+              "const": "rename",
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "target",
+            "existing"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "delete",
+              "type": "string"
+            },
+            "missing": {
+              "$ref": "#/$defs/FsMissingTargetBehavior"
+            },
+            "mode": {
+              "$ref": "#/$defs/FsDeleteMode"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "missing",
+            "mode"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "LanguageDirectorySymbolDto": {
+      "description": "One project-wide symbol with an exact directory location.",
+      "properties": {
+        "containerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "symbolKind": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "symbolKind",
+        "path",
+        "range"
+      ],
+      "type": "object"
+    },
+    "LanguageDirectorySymbolsParams": {
+      "description": "Project-wide symbol search for one language-server family.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "languageId": {
+          "type": "string"
+        },
+        "query": {
+          "maxLength": 1024,
+          "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "languageId",
+        "query"
+      ],
+      "type": "object"
+    },
+    "LanguageDirectorySymbolsResult": {
+      "description": "Bounded project-wide symbol result.",
+      "properties": {
+        "symbols": {
+          "items": {
+            "$ref": "#/$defs/LanguageDirectorySymbolDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "symbols"
       ],
       "type": "object"
     },
@@ -15573,6 +16468,13 @@
     "LanguageDocumentDto": {
       "description": "Authoritative source snapshot submitted before one language request.",
       "properties": {
+        "dirId": {
+          "description": "directory folder that owns this document in a multi-root directory.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "languageId": {
           "type": "string"
         },
@@ -15587,7 +16489,7 @@
         "sessionDirectory": {
           "anyOf": [
             {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+              "$ref": "#/$defs/SessionDirSelector"
             },
             {
               "type": "null"
@@ -15597,13 +16499,6 @@
         "text": {
           "maxLength": 10485760,
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "description": "Workspace folder that owns this document in a multi-root workspace.",
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -16168,7 +17063,7 @@
       "type": "object"
     },
     "LanguageLocationDto": {
-      "description": "One workspace-relative target returned in editor-native UTF-16 coordinates.",
+      "description": "One directory-relative target returned in editor-native UTF-16 coordinates.",
       "properties": {
         "path": {
           "type": "string"
@@ -16349,7 +17244,7 @@
       "type": "object"
     },
     "LanguageRenameParams": {
-      "description": "Workspace rename request against one exact source snapshot.",
+      "description": "directory rename request against one exact source snapshot.",
       "properties": {
         "document": {
           "$ref": "#/$defs/LanguageDocumentDto"
@@ -16554,6 +17449,12 @@
     "LanguageServerMessageNotification": {
       "description": "One language-server log or user-visible message.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "message": {
           "type": "string"
         },
@@ -16568,12 +17469,6 @@
         },
         "source": {
           "$ref": "#/$defs/LanguageServerMessageSourceDto"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -16616,6 +17511,12 @@
     "LanguageServerProgressNotification": {
       "description": "Current work-done progress state for one server-owned token.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "done": {
           "type": "boolean"
         },
@@ -16644,12 +17545,6 @@
         },
         "token": {
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -16788,17 +17683,17 @@
     "LanguageServerStateNotification": {
       "description": "One authoritative language-server lifecycle transition.",
       "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "server": {
           "type": "string"
         },
         "state": {
           "$ref": "#/$defs/LanguageServerStateDto"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -16917,7 +17812,7 @@
       "type": "object"
     },
     "LanguageTextDocumentEditDto": {
-      "description": "Text replacements for one exact workspace content baseline.",
+      "description": "Text replacements for one exact directory content baseline.",
       "properties": {
         "edits": {
           "items": {
@@ -16952,256 +17847,6 @@
       "required": [
         "range",
         "newText"
-      ],
-      "type": "object"
-    },
-    "LanguageWorkspaceDiagnosticSnapshotDto": {
-      "description": "Diagnostics for one workspace-relative resource.",
-      "properties": {
-        "diagnostics": {
-          "items": {
-            "$ref": "#/$defs/LanguageCodeActionDiagnosticDto"
-          },
-          "type": "array"
-        },
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path",
-        "diagnostics"
-      ],
-      "type": "object"
-    },
-    "LanguageWorkspaceDiagnosticsParams": {
-      "description": "Requests one complete workspace diagnostic report for a language-server route.",
-      "properties": {
-        "languageId": {
-          "type": "string"
-        },
-        "sessionDirectory": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "languageId"
-      ],
-      "type": "object"
-    },
-    "LanguageWorkspaceDiagnosticsResult": {
-      "description": "Complete workspace diagnostic report from one language server.",
-      "properties": {
-        "snapshots": {
-          "items": {
-            "$ref": "#/$defs/LanguageWorkspaceDiagnosticSnapshotDto"
-          },
-          "type": "array"
-        },
-        "supported": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "supported",
-        "snapshots"
-      ],
-      "type": "object"
-    },
-    "LanguageWorkspaceEditDto": {
-      "description": "Ordered workspace edit spanning text documents and workspace resources.",
-      "properties": {
-        "entries": {
-          "items": {
-            "$ref": "#/$defs/LanguageWorkspaceEditEntryDto"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "entries"
-      ],
-      "type": "object"
-    },
-    "LanguageWorkspaceEditEntryDto": {
-      "description": "One ordered text or resource operation returned by a language server.",
-      "oneOf": [
-        {
-          "properties": {
-            "document": {
-              "$ref": "#/$defs/LanguageTextDocumentEditDto"
-            },
-            "kind": {
-              "const": "textDocument",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "document"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "existing": {
-              "$ref": "#/$defs/FsExistingTargetBehavior"
-            },
-            "kind": {
-              "const": "create",
-              "type": "string"
-            },
-            "path": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "path",
-            "existing"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "existing": {
-              "$ref": "#/$defs/FsExistingTargetBehavior"
-            },
-            "kind": {
-              "const": "rename",
-              "type": "string"
-            },
-            "source": {
-              "type": "string"
-            },
-            "target": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "source",
-            "target",
-            "existing"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "kind": {
-              "const": "delete",
-              "type": "string"
-            },
-            "missing": {
-              "$ref": "#/$defs/FsMissingTargetBehavior"
-            },
-            "mode": {
-              "$ref": "#/$defs/FsDeleteMode"
-            },
-            "path": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "path",
-            "missing",
-            "mode"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "LanguageWorkspaceSymbolDto": {
-      "description": "One project-wide symbol with an exact workspace location.",
-      "properties": {
-        "containerName": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "name": {
-          "type": "string"
-        },
-        "path": {
-          "type": "string"
-        },
-        "range": {
-          "$ref": "#/$defs/LanguageRangeDto"
-        },
-        "symbolKind": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "name",
-        "symbolKind",
-        "path",
-        "range"
-      ],
-      "type": "object"
-    },
-    "LanguageWorkspaceSymbolsParams": {
-      "description": "Project-wide symbol search for one language-server family.",
-      "properties": {
-        "languageId": {
-          "type": "string"
-        },
-        "query": {
-          "maxLength": 1024,
-          "type": "string"
-        },
-        "sessionDirectory": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "languageId",
-        "query"
-      ],
-      "type": "object"
-    },
-    "LanguageWorkspaceSymbolsResult": {
-      "description": "Bounded project-wide symbol result.",
-      "properties": {
-        "symbols": {
-          "items": {
-            "$ref": "#/$defs/LanguageWorkspaceSymbolDto"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "symbols"
       ],
       "type": "object"
     },
@@ -18830,6 +19475,27 @@
       ],
       "type": "object"
     },
+    "PermissionDto": {
+      "description": "Explicit directory permission transported by the App Server protocol.",
+      "enum": [
+        "readFiles",
+        "writeFiles",
+        "executeCommands",
+        "watchFiles",
+        "browseFiles",
+        "searchFiles",
+        "loadInstructions",
+        "loadConfig",
+        "discoverSkills",
+        "discoverMcp",
+        "useLanguageServices",
+        "discoverHooks",
+        "discoverPlugins",
+        "inspectRepository",
+        "mutateRepository"
+      ],
+      "type": "string"
+    },
     "Personality": {
       "enum": [
         "friendly",
@@ -19630,6 +20296,9 @@
         "connectors": {
           "type": "boolean"
         },
+        "contentSearch": {
+          "type": "boolean"
+        },
         "contracts": {
           "additionalProperties": {
             "$ref": "#/$defs/CapabilityContract"
@@ -19686,9 +20355,6 @@
         },
         "updateReplay": {
           "type": "boolean"
-        },
-        "workspaceSearch": {
-          "type": "boolean"
         }
       },
       "required": [
@@ -19701,7 +20367,7 @@
         "attachments",
         "fileSystem",
         "git",
-        "workspaceSearch",
+        "contentSearch",
         "codebase",
         "cloudCodebase",
         "terminal",
@@ -19787,6 +20453,22 @@
         {
           "properties": {
             "method": {
+              "const": "session/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "document/collaboration/update",
               "type": "string"
             },
@@ -19808,22 +20490,6 @@
             },
             "params": {
               "$ref": "#/$defs/DocumentCollaborationPresenceSnapshot"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "session/update",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/SessionUpdateEnvelope"
             }
           },
           "required": [
@@ -20107,38 +20773,8 @@
       ]
     },
     "Session": {
-      "description": "Canonical user-visible work container and its Thread topology.\n\nA Session owns Thread membership and lineage, but not the child Threads' Turn or Item history.\nEach Thread remains an independent ordering, persistence, and execution boundary.",
+      "description": "A read-only view of Threads grouped by their shared `session_id`.\n\nSession has no independent event stream, sequence, or mutable runtime state. Thread remains the\npersistence, ordering, and execution boundary.",
       "properties": {
-        "currentThreadId": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ThreadId"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Canonical conversation route resumed by every product client."
-        },
-        "model": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ModelRef"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "nextApprovalMode": {
-          "$ref": "#/$defs/ApprovalMode",
-          "default": "askPermissions"
-        },
-        "sequence": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         },
@@ -20153,24 +20789,25 @@
         },
         "title": {
           "type": "string"
-        },
-        "workspace": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceBinding"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "required": [
         "sessionId",
         "title",
         "status",
-        "sequence",
         "threads"
+      ],
+      "type": "object"
+    },
+    "SessionChanged": {
+      "description": "Non-durable invalidation for a Session tree derived from Thread state.",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
       ],
       "type": "object"
     },
@@ -20189,214 +20826,178 @@
       ],
       "type": "object"
     },
-    "SessionEvent": {
-      "description": "A durable structural fact in one product Session's event stream.",
-      "oneOf": [
-        {
-          "properties": {
-            "model": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ModelRef"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "title": {
-              "type": "string"
-            },
-            "type": {
-              "const": "sessionCreated",
-              "type": "string"
-            },
-            "workspace": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/WorkspaceBinding"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          },
-          "required": [
-            "type",
-            "sessionId",
-            "title"
-          ],
-          "type": "object"
+    "SessionDirAddParams": {
+      "properties": {
+        "path": {
+          "type": "string"
         },
-        {
-          "properties": {
-            "model": {
-              "$ref": "#/$defs/ModelRef"
-            },
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "type": {
-              "const": "sessionModelChanged",
-              "type": "string"
-            }
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
           },
-          "required": [
-            "type",
-            "sessionId",
-            "model"
-          ],
-          "type": "object"
+          "type": "array"
         },
-        {
-          "properties": {
-            "approvalMode": {
-              "$ref": "#/$defs/ApprovalMode"
-            },
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "type": {
-              "const": "sessionNextApprovalModeChanged",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId",
-            "approvalMode"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "threadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "sessionCurrentThreadChanged",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId",
-            "threadId"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "thread": {
-              "$ref": "#/$defs/SessionThread"
-            },
-            "title": {
-              "type": "string"
-            },
-            "type": {
-              "const": "threadCreationPlanned",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId",
-            "thread",
-            "title"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "contextSeed": {
-              "$ref": "#/$defs/AgentContextSeed"
-            },
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "thread": {
-              "$ref": "#/$defs/SessionThread"
-            },
-            "title": {
-              "type": "string"
-            },
-            "type": {
-              "const": "agentThreadCreationPlanned",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId",
-            "thread",
-            "title",
-            "contextSeed"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "threadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "threadAttached",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId",
-            "threadId"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "type": {
-              "const": "sessionCompleted",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
-            "type": {
-              "const": "sessionArchived",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId"
-          ],
-          "type": "object"
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
         }
-      ]
+      },
+      "required": [
+        "sessionId",
+        "path",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "SessionDirDto": {
+      "properties": {
+        "contributions": {
+          "$ref": "#/$defs/DirContributionsDto",
+          "default": {
+            "diagnostics": [],
+            "hooks": [],
+            "mcpServers": [],
+            "plugins": [],
+            "skills": []
+          }
+        },
+        "path": {
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "SessionDirListParams": {
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "SessionDirListResult": {
+      "properties": {
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/SessionDirDto"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "dirs"
+      ],
+      "type": "object"
+    },
+    "SessionDirMutationDto": {
+      "enum": [
+        "added",
+        "alreadyPresent",
+        "removed",
+        "updated",
+        "notPresent"
+      ],
+      "type": "string"
+    },
+    "SessionDirMutationResult": {
+      "properties": {
+        "dirs": {
+          "items": {
+            "$ref": "#/$defs/SessionDirDto"
+          },
+          "type": "array"
+        },
+        "mutation": {
+          "$ref": "#/$defs/SessionDirMutationDto"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mutation",
+        "revision",
+        "dirs"
+      ],
+      "type": "object"
+    },
+    "SessionDirPermissionsSetParams": {
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/PermissionDto"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "path",
+        "expectedRevision",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "SessionDirRemoveParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "path"
+      ],
+      "type": "object"
+    },
+    "SessionDirSelector": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "path"
+      ],
+      "type": "object"
     },
     "SessionId": {
       "description": "Stable identity for one product-level Agent session.",
@@ -20429,20 +21030,8 @@
       "type": "object"
     },
     "SessionRequest": {
-      "description": "A typed mutation submitted against one Session aggregate.\n\nChild Thread identifiers are selectors inside the Session boundary. Product hosts submit\nthese operations through `session/request`; App Server owns the internal Thread routing.",
+      "description": "A typed request routed through one `session_id` grouping boundary.",
       "oneOf": [
-        {
-          "properties": {
-            "type": {
-              "const": "complete",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
         {
           "properties": {
             "type": {
@@ -20464,54 +21053,6 @@
           },
           "required": [
             "type"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "model": {
-              "$ref": "#/$defs/ModelRef"
-            },
-            "type": {
-              "const": "setModel",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "model"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "approvalMode": {
-              "$ref": "#/$defs/ApprovalMode"
-            },
-            "type": {
-              "const": "setNextApprovalMode",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "approvalMode"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "threadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "setCurrentThread",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "threadId"
           ],
           "type": "object"
         },
@@ -20619,6 +21160,15 @@
         },
         {
           "properties": {
+            "approvalMode": {
+              "$ref": "#/$defs/ApprovalMode",
+              "default": "askPermissions"
+            },
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "input": {
               "items": {
                 "$ref": "#/$defs/InputItem"
@@ -20647,12 +21197,18 @@
           "required": [
             "type",
             "threadId",
+            "expectedSequence",
             "input"
           ],
           "type": "object"
         },
         {
           "properties": {
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "target": {
               "$ref": "#/$defs/ReviewTarget"
             },
@@ -20667,14 +21223,24 @@
           "required": [
             "type",
             "threadId",
+            "expectedSequence",
             "target"
           ],
           "type": "object"
         },
         {
           "properties": {
+            "approvalMode": {
+              "$ref": "#/$defs/ApprovalMode",
+              "default": "askPermissions"
+            },
             "command": {
               "type": "string"
+            },
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
             },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
@@ -20690,6 +21256,7 @@
           "required": [
             "type",
             "threadId",
+            "expectedSequence",
             "command",
             "workingDirectory"
           ],
@@ -20697,6 +21264,11 @@
         },
         {
           "properties": {
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "retentionPrompt": {
               "type": [
                 "string",
@@ -20713,12 +21285,18 @@
           },
           "required": [
             "type",
-            "threadId"
+            "threadId",
+            "expectedSequence"
           ],
           "type": "object"
         },
         {
           "properties": {
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "input": {
               "items": {
                 "$ref": "#/$defs/InputItem"
@@ -20740,6 +21318,7 @@
           "required": [
             "type",
             "threadId",
+            "expectedSequence",
             "turnId",
             "input"
           ],
@@ -20747,6 +21326,11 @@
         },
         {
           "properties": {
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
@@ -20761,12 +21345,18 @@
           "required": [
             "type",
             "threadId",
+            "expectedSequence",
             "turnId"
           ],
           "type": "object"
         },
         {
           "properties": {
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "requestId": {
               "$ref": "#/$defs/RequestId"
             },
@@ -20787,6 +21377,7 @@
           "required": [
             "type",
             "threadId",
+            "expectedSequence",
             "turnId",
             "requestId",
             "response"
@@ -20796,15 +21387,10 @@
       ]
     },
     "SessionRequestParams": {
-      "description": "The canonical Session aggregate mutation request.",
+      "description": "A request associated with one Session tree.",
       "properties": {
         "commandId": {
           "$ref": "#/$defs/CommandId"
-        },
-        "expectedSequence": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
         },
         "request": {
           "$ref": "#/$defs/SessionRequest"
@@ -20816,13 +21402,12 @@
       "required": [
         "commandId",
         "sessionId",
-        "expectedSequence",
         "request"
       ],
       "type": "object"
     },
     "SessionRequestResult": {
-      "description": "Typed result returned by the canonical Session aggregate mutation endpoint.",
+      "description": "Typed result returned by the Session request endpoint.",
       "oneOf": [
         {
           "properties": {
@@ -20969,32 +21554,26 @@
       "type": "object"
     },
     "SessionStatus": {
+      "description": "Lifecycle summarized from the Threads carrying one `session_id`.",
       "enum": [
         "active",
-        "completed",
         "archived"
       ],
       "type": "string"
     },
     "SessionSubscribeParams": {
       "properties": {
-        "afterSequence": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         }
       },
       "required": [
-        "sessionId",
-        "afterSequence"
+        "sessionId"
       ],
       "type": "object"
     },
     "SessionSubscribeResult": {
-      "description": "The aggregate Session port returned to product hosts.",
+      "description": "The Session tree view returned to product hosts.",
       "properties": {
         "agentTree": {
           "$ref": "#/$defs/AgentTreeProjection"
@@ -21007,30 +21586,40 @@
             "$ref": "#/$defs/SessionThreadProjection"
           },
           "type": "array"
-        },
-        "updates": {
-          "items": {
-            "$ref": "#/$defs/SessionUpdateEnvelope"
-          },
-          "type": "array"
         }
       },
       "required": [
         "session",
-        "updates",
         "threadProjections",
         "agentTree"
       ],
       "type": "object"
     },
     "SessionThread": {
-      "description": "A Session-owned reference to one Thread, its origin, and membership lifecycle.",
+      "description": "One Thread grouped into a Session tree by `session_id`.",
       "properties": {
-        "origin": {
-          "$ref": "#/$defs/ThreadOrigin"
+        "forkedFromId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parentThreadId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "status": {
-          "$ref": "#/$defs/SessionThreadStatus"
+          "$ref": "#/$defs/ThreadStatus"
         },
         "threadId": {
           "$ref": "#/$defs/ThreadId"
@@ -21038,7 +21627,6 @@
       },
       "required": [
         "threadId",
-        "origin",
         "status"
       ],
       "type": "object"
@@ -21132,14 +21720,6 @@
       ],
       "type": "object"
     },
-    "SessionThreadStatus": {
-      "description": "Session-owned lifecycle for one Thread membership.",
-      "enum": [
-        "creating",
-        "active"
-      ],
-      "type": "string"
-    },
     "SessionThreadSubscribeParams": {
       "properties": {
         "afterSequence": {
@@ -21226,47 +21806,6 @@
       },
       "required": [
         "sessionId"
-      ],
-      "type": "object"
-    },
-    "SessionUpdate": {
-      "oneOf": [
-        {
-          "properties": {
-            "event": {
-              "$ref": "#/$defs/SessionEvent"
-            },
-            "type": {
-              "const": "committed",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "event"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "SessionUpdateEnvelope": {
-      "properties": {
-        "durableSequence": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "update": {
-          "$ref": "#/$defs/SessionUpdate"
-        }
-      },
-      "required": [
-        "sessionId",
-        "durableSequence",
-        "update"
       ],
       "type": "object"
     },
@@ -21617,14 +22156,14 @@
       "type": "string"
     },
     "SkillSourceId": {
-      "description": "Stable identity for one configured, built-in, Workspace, or Plugin Skill source.",
+      "description": "Stable identity for one configured, built-in, directory, or Plugin Skill source.",
       "type": "string"
     },
     "SkillSourceKindDto": {
       "enum": [
         "builtIn",
         "user",
-        "workspace",
+        "directory",
         "plugin",
         "marketplace"
       ],
@@ -21784,7 +22323,7 @@
         "interactionDeadlineElapsed",
         "toolRepetition",
         "usageLimited",
-        "workspaceCaptureFailed"
+        "worktreeCaptureFailed"
       ],
       "type": "string"
     },
@@ -22138,6 +22677,12 @@
           "minimum": 1,
           "type": "integer"
         },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "reconnectToken": {
           "maxLength": 64,
           "minLength": 64,
@@ -22152,12 +22697,6 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -22188,15 +22727,15 @@
       "additionalProperties": false,
       "description": "Terminates and releases one terminal attached to the calling connection.",
       "properties": {
-        "terminalId": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "workspaceFolderId": {
+        "dirId": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "terminalId": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
@@ -22252,7 +22791,7 @@
     },
     "TerminalCreateInSessionDirectoryParams": {
       "additionalProperties": false,
-      "description": "Starts one interactive terminal in a session-authorized additional directory.",
+      "description": "Starts one interactive terminal in a session-authorized directory.",
       "properties": {
         "cols": {
           "format": "uint16",
@@ -22263,11 +22802,11 @@
         "lifecycle": {
           "$ref": "#/$defs/TerminalLifecycle"
         },
+        "path": {
+          "type": "string"
+        },
         "profile": {
           "$ref": "#/$defs/TerminalProfileSelection"
-        },
-        "root": {
-          "type": "string"
         },
         "rows": {
           "format": "uint16",
@@ -22281,7 +22820,7 @@
       },
       "required": [
         "sessionId",
-        "root",
+        "path",
         "rows",
         "cols",
         "profile",
@@ -22291,13 +22830,19 @@
     },
     "TerminalCreateParams": {
       "additionalProperties": false,
-      "description": "Starts one interactive terminal at the server's trusted workspace root.",
+      "description": "Starts one interactive terminal at the server's authorized directory.",
       "properties": {
         "cols": {
           "format": "uint16",
           "maximum": 512,
           "minimum": 1,
           "type": "integer"
+        },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "lifecycle": {
           "$ref": "#/$defs/TerminalLifecycle"
@@ -22310,12 +22855,6 @@
           "maximum": 512,
           "minimum": 1,
           "type": "integer"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -22422,7 +22961,7 @@
       "type": "object"
     },
     "TerminalProfileListResult": {
-      "description": "Trusted terminal profiles discovered by the local App Server composition.",
+      "description": "Authorized terminal profiles discovered by the local App Server composition.",
       "properties": {
         "profiles": {
           "items": {
@@ -22437,7 +22976,7 @@
       "type": "object"
     },
     "TerminalProfileSelection": {
-      "description": "Selects either the server default or one previously listed trusted profile.",
+      "description": "Selects either the server default or one previously listed authorized profile.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -22485,6 +23024,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "maxChunks": {
           "format": "uint",
           "maximum": 128,
@@ -22494,12 +23039,6 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -22598,6 +23137,12 @@
           "minimum": 1,
           "type": "integer"
         },
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "rows": {
           "format": "uint16",
           "maximum": 512,
@@ -22607,12 +23152,6 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -22631,15 +23170,15 @@
           "minLength": 1,
           "type": "string"
         },
-        "terminalId": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "workspaceFolderId": {
+        "dirId": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "terminalId": {
+          "minLength": 1,
+          "type": "string"
         }
       },
       "required": [
@@ -22651,10 +23190,30 @@
     "Thread": {
       "description": "Canonical readable state for one independently ordered Agent execution branch.",
       "properties": {
+        "forkedFromId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "goal": {
           "anyOf": [
             {
               "$ref": "#/$defs/ThreadGoal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parentThreadId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
             },
             {
               "type": "null"
@@ -22717,6 +23276,33 @@
       ],
       "type": "object"
     },
+    "ThreadDirBinding": {
+      "description": "Public binding for a Thread directory. Managed filesystem paths stay private to App Server.",
+      "properties": {
+        "baselineSummary": {
+          "type": "string"
+        },
+        "managedWorktreeId": {
+          "type": "string"
+        },
+        "repositories": {
+          "items": {
+            "$ref": "#/$defs/ThreadWorktreeRepositoryBindingDto"
+          },
+          "type": "array"
+        },
+        "sourceDirId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "managedWorktreeId",
+        "sourceDirId",
+        "repositories",
+        "baselineSummary"
+      ],
+      "type": "object"
+    },
     "ThreadEvent": {
       "description": "A durable fact in one Thread's authoritative event stream.\n\nThis enum deliberately excludes token deltas, delivery notifications, and client requests so\npersistence adapters cannot accidentally append transient runtime messages.",
       "oneOf": [
@@ -22741,6 +23327,22 @@
             "sessionId",
             "threadId",
             "title"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "threadArchived",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId"
           ],
           "type": "object"
         },
@@ -24214,97 +24816,6 @@
         }
       ]
     },
-    "ThreadOrigin": {
-      "description": "How a Thread entered a product Session.",
-      "oneOf": [
-        {
-          "properties": {
-            "type": {
-              "const": "root",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "parentSequence": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "parentThreadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "fork",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "parentThreadId",
-            "parentSequence"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "beforeTurnId": {
-              "$ref": "#/$defs/TurnId"
-            },
-            "parentSequence": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "parentThreadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "rewind",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "parentThreadId",
-            "parentSequence",
-            "beforeTurnId"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "delegationId": {
-              "$ref": "#/$defs/DelegationId"
-            },
-            "parentSequence": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "parentThreadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "agentSpawn",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "parentThreadId",
-            "parentSequence",
-            "delegationId"
-          ],
-          "type": "object"
-        }
-      ]
-    },
     "ThreadSequenceRange": {
       "description": "Inclusive durable child Thread sequence range supporting a delegation result.",
       "properties": {
@@ -24739,34 +25250,7 @@
       ],
       "type": "object"
     },
-    "ThreadWorkspaceBinding": {
-      "description": "Public binding for a Thread workspace. Managed filesystem paths stay private to App Server.",
-      "properties": {
-        "baselineSummary": {
-          "type": "string"
-        },
-        "managedWorktreeId": {
-          "type": "string"
-        },
-        "repositories": {
-          "items": {
-            "$ref": "#/$defs/ThreadWorkspaceRepositoryBindingDto"
-          },
-          "type": "array"
-        },
-        "sourceWorkspaceId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "managedWorktreeId",
-        "sourceWorkspaceId",
-        "repositories",
-        "baselineSummary"
-      ],
-      "type": "object"
-    },
-    "ThreadWorkspaceRepositoryBindingDto": {
+    "ThreadWorktreeRepositoryBindingDto": {
       "properties": {
         "baselineObjectId": {
           "type": [
@@ -25746,10 +26230,10 @@
           },
           "type": "array"
         },
-        "workspace": {
+        "dir": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ThreadWorkspaceBinding"
+              "$ref": "#/$defs/ThreadDirBinding"
             },
             {
               "type": "null"
@@ -25948,7 +26432,7 @@
           "type": "string"
         },
         "executionScope": {
-          "description": "Opaque authority scope in which the external thread was created.\n\nAdapters must compare this value before resuming the remote thread. It intentionally\nexcludes filesystem paths and credentials while preventing cross-workspace reuse.",
+          "description": "Opaque authority scope in which the external thread was created.\n\nAdapters must compare this value before resuming the remote thread. It intentionally\nexcludes filesystem paths and credentials while preventing cross-environment reuse.",
           "type": "string"
         },
         "remoteThreadId": {
@@ -26285,875 +26769,6 @@
         "question"
       ],
       "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryAddParams": {
-      "description": "Adds one App Server-hosted path for the lifetime of a product Session.",
-      "properties": {
-        "permissions": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionDto"
-          },
-          "type": "array"
-        },
-        "root": {
-          "type": "string"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "root",
-        "permissions"
-      ],
-      "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryContributionsDto": {
-      "description": "Inert declarations discovered from one authorized additional directory.",
-      "properties": {
-        "diagnostics": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "hooks": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "mcpServers": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "plugins": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "skills": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "skills",
-        "mcpServers",
-        "hooks",
-        "plugins",
-        "diagnostics"
-      ],
-      "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryDto": {
-      "description": "One session-scoped directory that extends file access without changing the primary Workspace.",
-      "properties": {
-        "contributions": {
-          "$ref": "#/$defs/WorkspaceAdditionalDirectoryContributionsDto",
-          "default": {
-            "diagnostics": [],
-            "hooks": [],
-            "mcpServers": [],
-            "plugins": [],
-            "skills": []
-          }
-        },
-        "permissions": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionDto"
-          },
-          "type": "array"
-        },
-        "root": {
-          "type": "string"
-        },
-        "trust": {
-          "$ref": "#/$defs/WorkspaceTrustStateDto"
-        }
-      },
-      "required": [
-        "root",
-        "trust",
-        "permissions"
-      ],
-      "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryListParams": {
-      "description": "Reads the additional directories retained by one product Session.",
-      "properties": {
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryListResult": {
-      "properties": {
-        "directories": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceAdditionalDirectoryDto"
-          },
-          "type": "array"
-        },
-        "revision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "revision",
-        "directories"
-      ],
-      "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryMutationDto": {
-      "description": "Observable result of an idempotent additional-directory mutation.",
-      "enum": [
-        "added",
-        "alreadyPresent",
-        "removed",
-        "updated",
-        "notPresent"
-      ],
-      "type": "string"
-    },
-    "WorkspaceAdditionalDirectoryMutationResult": {
-      "properties": {
-        "directories": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceAdditionalDirectoryDto"
-          },
-          "type": "array"
-        },
-        "mutation": {
-          "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationDto"
-        },
-        "revision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "mutation",
-        "revision",
-        "directories"
-      ],
-      "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryPermissionDto": {
-      "description": "User-visible capability granted to one session-scoped additional directory.",
-      "enum": [
-        "readFiles",
-        "writeFiles",
-        "executeCommands",
-        "watchFileChanges",
-        "useWorkspaceFiles",
-        "useWorkspaceSearch",
-        "loadInstructionsAndAgents",
-        "discoverSkills",
-        "discoverMcp",
-        "useLanguageServices",
-        "discoverHooks",
-        "discoverPlugins"
-      ],
-      "type": "string"
-    },
-    "WorkspaceAdditionalDirectoryPermissionsSetParams": {
-      "description": "Replaces one additional directory's complete permission set at an observed revision.",
-      "properties": {
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "permissions": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionDto"
-          },
-          "type": "array"
-        },
-        "root": {
-          "type": "string"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "root",
-        "expectedRevision",
-        "permissions"
-      ],
-      "type": "object"
-    },
-    "WorkspaceAdditionalDirectoryRemoveParams": {
-      "description": "Removes one session command source without revoking another source retaining the same root.",
-      "properties": {
-        "root": {
-          "type": "string"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "root"
-      ],
-      "type": "object"
-    },
-    "WorkspaceBinding": {
-      "description": "Durable Session binding to one canonical Workspace authority.\n\nProduct hosts use the root to reopen the Workspace and must recompute the authority ID before\nenabling execution. The ID is never a substitute for containment or a current trust decision.",
-      "properties": {
-        "authorityId": {
-          "$ref": "#/$defs/WorkspaceTrustId"
-        },
-        "root": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "authorityId",
-        "root"
-      ],
-      "type": "object"
-    },
-    "WorkspaceDocumentOverlayCloseParams": {
-      "description": "Releases one editor document from the ephemeral code-intelligence overlay.",
-      "properties": {
-        "path": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "type": "object"
-    },
-    "WorkspaceDocumentOverlayStatusResult": {
-      "description": "Content-free summary of the current in-memory editor overlay.",
-      "properties": {
-        "dirtyDocumentCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "generation": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "generation",
-        "dirtyDocumentCount"
-      ],
-      "type": "object"
-    },
-    "WorkspaceDocumentOverlaySynchronizeParams": {
-      "description": "Publishes the latest immutable editor text for one workspace-relative document.",
-      "properties": {
-        "document": {
-          "$ref": "#/$defs/LanguageDocumentDto"
-        }
-      },
-      "required": [
-        "document"
-      ],
-      "type": "object"
-    },
-    "WorkspaceFolderDto": {
-      "description": "One canonical folder accepted into the active Workspace.",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "root": {
-          "type": "string"
-        },
-        "trust": {
-          "$ref": "#/$defs/WorkspaceTrustStateDto"
-        }
-      },
-      "required": [
-        "id",
-        "root",
-        "trust"
-      ],
-      "type": "object"
-    },
-    "WorkspaceFolderSetEntry": {
-      "description": "One folder requested by a product-hosted multi-root Workspace.",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "root": {
-          "type": "string"
-        },
-        "trust": {
-          "$ref": "#/$defs/WorkspaceSwitchTrust"
-        }
-      },
-      "required": [
-        "id",
-        "root",
-        "trust"
-      ],
-      "type": "object"
-    },
-    "WorkspaceFoldersSetParams": {
-      "description": "Atomically replaces the ordered folders hosted by one App Server session.",
-      "properties": {
-        "folders": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceFolderSetEntry"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "folders"
-      ],
-      "type": "object"
-    },
-    "WorkspaceFoldersSetResult": {
-      "properties": {
-        "folders": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceFolderDto"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "folders"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSearchCancelParams": {
-      "description": "Cancels and releases one connection-owned workspace search.",
-      "properties": {
-        "searchId": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "sessionDirectory": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "searchId"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSearchCaseSensitivity": {
-      "description": "Selects the case-matching behavior used by one workspace search.",
-      "enum": [
-        "smart",
-        "sensitive",
-        "insensitive"
-      ],
-      "type": "string"
-    },
-    "WorkspaceSearchMatch": {
-      "description": "One line containing one or more matches in a workspace-relative file.",
-      "properties": {
-        "lineNumber": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "path": {
-          "type": "string"
-        },
-        "preview": {
-          "type": "string"
-        },
-        "ranges": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceSearchMatchRange"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "path",
-        "lineNumber",
-        "preview",
-        "ranges"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSearchMatchRange": {
-      "description": "UTF-16 range within one returned preview line.",
-      "properties": {
-        "end": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "start": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "start",
-        "end"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSearchPatternKind": {
-      "description": "Selects how the workspace search query is interpreted by the backend.",
-      "enum": [
-        "literal",
-        "regex"
-      ],
-      "type": "string"
-    },
-    "WorkspaceSearchReadParams": {
-      "description": "Reads a bounded result batch after an already observed match cursor.",
-      "properties": {
-        "afterMatch": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "maxMatches": {
-          "format": "uint",
-          "maximum": 200,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "searchId": {
-          "minLength": 1,
-          "type": "string"
-        },
-        "sessionDirectory": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "searchId",
-        "afterMatch",
-        "maxMatches"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSearchReadResult": {
-      "description": "Bounded progress snapshot for a running or completed workspace search.",
-      "properties": {
-        "completed": {
-          "type": "boolean"
-        },
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "limitHit": {
-          "type": "boolean"
-        },
-        "matches": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceSearchMatch"
-          },
-          "type": "array"
-        },
-        "nextMatch": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "searchId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "searchId",
-        "matches",
-        "nextMatch",
-        "completed",
-        "limitHit"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSearchStartParams": {
-      "description": "Starts one bounded, connection-owned workspace content search.",
-      "properties": {
-        "caseSensitivity": {
-          "$ref": "#/$defs/WorkspaceSearchCaseSensitivity"
-        },
-        "excludePatterns": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 64,
-          "type": "array"
-        },
-        "includePatterns": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 64,
-          "type": "array"
-        },
-        "maxResults": {
-          "format": "uint",
-          "maximum": 5000,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "patternKind": {
-          "$ref": "#/$defs/WorkspaceSearchPatternKind"
-        },
-        "query": {
-          "maxLength": 16384,
-          "minLength": 1,
-          "type": "string"
-        },
-        "sessionDirectory": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceFolderId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "query",
-        "patternKind",
-        "caseSensitivity",
-        "includePatterns",
-        "excludePatterns",
-        "maxResults"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSearchStartResult": {
-      "description": "Identity allocated for one running workspace search.",
-      "properties": {
-        "searchId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "searchId"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSessionDirectorySelector": {
-      "description": "Selects one Session-scoped additional directory for a Workspace capability request.",
-      "properties": {
-        "root": {
-          "type": "string"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "root"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSwitchParams": {
-      "description": "Replaces the active local Workspace hosted by one App Server.",
-      "properties": {
-        "root": {
-          "type": "string"
-        },
-        "trust": {
-          "$ref": "#/$defs/WorkspaceSwitchTrust"
-        }
-      },
-      "required": [
-        "root",
-        "trust"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSwitchResult": {
-      "description": "Confirms the canonical Workspace root accepted by the App Server.",
-      "properties": {
-        "root": {
-          "type": "string"
-        },
-        "trust": {
-          "$ref": "#/$defs/WorkspaceTrustStateDto"
-        }
-      },
-      "required": [
-        "root",
-        "trust"
-      ],
-      "type": "object"
-    },
-    "WorkspaceSwitchTrust": {
-      "description": "Authority used to resolve one client-requested Workspace switch.",
-      "oneOf": [
-        {
-          "description": "Resolves the canonical root against the durable UserConfig authority.",
-          "properties": {
-            "type": {
-              "const": "userConfig",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "description": "Grants only this App Server runtime a host-configured trust lease.",
-          "properties": {
-            "type": {
-              "const": "hostSession",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "description": "Persists the explicit choice before activating the canonical root.",
-          "properties": {
-            "commandId": {
-              "$ref": "#/$defs/CommandId"
-            },
-            "expectedRevision": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "setting": {
-              "$ref": "#/$defs/WorkspaceTrustSettingDto"
-            },
-            "type": {
-              "const": "userDecision",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "commandId",
-            "expectedRevision",
-            "setting"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "WorkspaceTrustEntryDto": {
-      "description": "One persisted trusted folder projected for the trust-management surface.\n\n`workspace` remains the authoritative identity. `root` is display metadata and may be absent\nfor decisions written by older clients. Restricted decisions are intentionally omitted from\nthis management projection; an absent entry is the normal Restricted-mode state.",
-      "properties": {
-        "root": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "workspace": {
-          "$ref": "#/$defs/WorkspaceTrustId"
-        }
-      },
-      "required": [
-        "workspace"
-      ],
-      "type": "object"
-    },
-    "WorkspaceTrustForgetParams": {
-      "description": "Removes one user trust decision by its opaque Workspace identity.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "workspace": {
-          "$ref": "#/$defs/WorkspaceTrustId"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision",
-        "workspace"
-      ],
-      "type": "object"
-    },
-    "WorkspaceTrustHostCapability": {
-      "description": "Declares that this connection is owned by a product host that can collect Workspace trust.\n\nThis is an authority boundary for host-only protocol operations. Renderer or extension\nconnections must not declare it merely because they can display a trust prompt.",
-      "properties": {
-        "version": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "version"
-      ],
-      "type": "object"
-    },
-    "WorkspaceTrustId": {
-      "description": "Opaque, durable lookup key for one canonical Workspace root.\n\nHosts persist this value instead of the filesystem path itself. It intentionally identifies\nthe canonical path boundary rather than Workspace-controlled content, so aliases resolve to\nthe same key and moving the directory requires a new trust decision.",
-      "type": "string"
-    },
-    "WorkspaceTrustListResult": {
-      "description": "Lists the trusted folders and workspace files in the active profile.",
-      "properties": {
-        "entries": {
-          "items": {
-            "$ref": "#/$defs/WorkspaceTrustEntryDto"
-          },
-          "type": "array"
-        },
-        "revision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "revision",
-        "entries"
-      ],
-      "type": "object"
-    },
-    "WorkspaceTrustReadParams": {
-      "description": "Reads the durable user decision and effective UserConfig state for one exact canonical Workspace.",
-      "properties": {
-        "root": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "root"
-      ],
-      "type": "object"
-    },
-    "WorkspaceTrustReadResult": {
-      "properties": {
-        "setting": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/WorkspaceTrustSettingDto"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The durable decision, when one exists. Restricted is represented by omission."
-        },
-        "state": {
-          "$ref": "#/$defs/WorkspaceTrustStateDto",
-          "description": "The effective state used by UserConfig-backed Workspace activation."
-        }
-      },
-      "required": [
-        "state"
-      ],
-      "type": "object"
-    },
-    "WorkspaceTrustSetParams": {
-      "description": "Updates one user's trusted-root decision without switching the active Workspace.\n\n`trusted` adds an entry. `restricted` is retained for compatibility and removes the entry.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "root": {
-          "type": "string"
-        },
-        "setting": {
-          "$ref": "#/$defs/WorkspaceTrustSettingDto"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision",
-        "root",
-        "setting"
-      ],
-      "type": "object"
-    },
-    "WorkspaceTrustSettingDto": {
-      "description": "Trust state collected by a product host.\n\n`Restricted` is a transient/runtime choice and is represented durably by removing the trusted\nroot; it must not create a Restricted entry in the user's allowlist.",
-      "enum": [
-        "restricted",
-        "trusted"
-      ],
-      "type": "string"
-    },
-    "WorkspaceTrustStateDto": {
-      "description": "Effective trust state committed by the App Server.",
-      "enum": [
-        "restricted",
-        "trusted"
-      ],
-      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

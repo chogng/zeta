@@ -1,4 +1,4 @@
-//! Workspace-scoped filesystem primitives shared by clients and tools.
+//! Directory-confined filesystem primitives shared by clients and tools.
 
 mod error;
 mod find_up;
@@ -9,7 +9,7 @@ mod types;
 pub use error::FileSystemError;
 pub use find_up::{FindUpErrorPolicy, find_nearest_ancestor_with_markers};
 pub use local::LocalFileSystem;
-pub use service::WorkspaceFileSystem;
+pub use service::FileSystem;
 pub use types::file_revision;
 pub use types::{
     DirectoryEntry, ExistingTargetBehavior, FileContent, FileDeleteMode, FileMetadata, FileType,

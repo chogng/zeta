@@ -6,11 +6,8 @@ use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitS
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
-use zeta_protocol::ApprovalMode;
-use zeta_protocol::SessionEvent;
+use zeta_app_server_protocol::protocol::session::SessionChanged;
 use zeta_protocol::SessionId;
-use zeta_protocol::SessionUpdate;
-use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::StreamInstanceId;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
@@ -83,34 +80,16 @@ fn thread_update_preserves_typed_scope_and_sequence() {
 }
 
 #[test]
-fn session_update_preserves_the_backend_owned_next_approval_mode() {
+fn session_change_preserves_the_invalidated_tree_identity() {
     let session_id = SessionId::new("session-1").unwrap();
-    let update = SessionUpdateEnvelope {
-        session_id: session_id.clone(),
-        durable_sequence: 2,
-        update: SessionUpdate::Committed {
-            event: SessionEvent::SessionNextApprovalModeChanged {
-                session_id,
-                approval_mode: ApprovalMode::AutoReview,
-            },
-        },
+    let Some(ClientEvent::SessionChanged(changed_session_id)) = map_event(
+        AppServerEvent::Notification(ServerNotification::SessionChanged(SessionChanged {
+            session_id: session_id.clone(),
+        })),
+    ) else {
+        panic!("Session invalidation should be preserved");
     };
-
-    let Some(ClientEvent::SessionUpdated(update)) = map_event(AppServerEvent::Notification(
-        ServerNotification::SessionUpdate(update),
-    )) else {
-        panic!("typed Session update should be preserved");
-    };
-    assert_eq!(update.durable_sequence, 2);
-    assert!(matches!(
-        update.update,
-        SessionUpdate::Committed {
-            event: SessionEvent::SessionNextApprovalModeChanged {
-                approval_mode: ApprovalMode::AutoReview,
-                ..
-            }
-        }
-    ));
+    assert_eq!(changed_session_id, session_id);
 }
 
 #[test]
@@ -120,7 +99,7 @@ fn git_status_change_updates_tui_owned_status_projection() {
             repository_id: "repository-1".into(),
             stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
             revision: 1,
-            workspace_path: String::new(),
+            path: String::new(),
             head: GitHeadDto::Unborn {
                 name: "main".into(),
             },

@@ -68,5 +68,5 @@ Generic Marketplace infrastructure and templates must not hardcode a repository 
 
 - Modify the exact repository or worktree the user named. Do not substitute a temporary clone, another worktree, or only a remote branch without explicit agreement.
 - In an owner-led pre-release repository, a PR is not the default integration requirement. Use PR review for external contributions, security-sensitive work, or real multi-person review needs.
-- Use the smallest typecheck, test, build, or documentation check that covers the changed surface. Rust package tests use `just test <crate> [args]`; see [`testing.instructions.md`](instructions/testing.instructions.md) for the package-selection rule. Do not report a command as passing unless it completed successfully.
+- Use the smallest typecheck, test, build, or documentation check that covers the changed surface. Rust package checks and tests use `just check <crate> [args]` and `just test <crate> [args]`; ask the user before any complete workspace Rust validation, and see [`testing.instructions.md`](instructions/testing.instructions.md) for the escalation rule. Do not report a command as passing unless it completed successfully.
 - Preserve unrelated working-tree changes. A historical violation is migration debt, not precedent for new code.

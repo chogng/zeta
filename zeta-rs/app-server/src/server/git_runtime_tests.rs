@@ -5,40 +5,41 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceCapability;
-use zeta_workspace::WorkspaceRoot;
-use zeta_workspace::WorkspaceTrustDecision;
-use zeta_workspace::WorkspaceTrustSource;
+use zeta_file_access::Authorization;
+use zeta_file_access::Dir;
+use zeta_file_access::Grant;
+use zeta_file_access::GrantSource;
+use zeta_file_access::Permission;
+use zeta_file_access::Permissions;
 
 #[test]
-fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
+fn runtime_revisions_and_notifies_only_for_changed_repository_state() {
     let repository = TestRepository::init();
-    repository.write("workspace/tracked.txt", "initial\n");
+    repository.write("repository/tracked.txt", "initial\n");
     repository.write("outside.txt", "initial\n");
     repository.git(&["add", "."]);
     repository.git(&["commit", "-m", "initial"]);
     let broker = Arc::new(UpdateBroker::default());
     let queue = NotificationQueue::default();
     broker.register(1, &queue);
-    let trusted = trusted_workspace(&repository.root().join("workspace"));
-    let workspace_root = trusted.root().canonical_path().to_path_buf();
-    let repository_root = WorkspaceRoot::open(repository.root())
+    let authorization = mutation_authorization(&repository.root().join("repository"));
+    let dir_root = authorization.dir().canonical_path().to_path_buf();
+    let repository_root = Dir::open_local(repository.root())
         .unwrap()
         .canonical_path()
         .to_path_buf();
-    let runtime = GitRuntime::new(trusted, broker).unwrap();
+    let runtime = GitRuntime::new(authorization, broker).unwrap();
 
     let initial = runtime.status().unwrap();
     assert_eq!(initial.revision, 1);
-    assert_eq!(initial.workspace_path, "workspace");
+    assert_eq!(initial.path, "repository");
     assert!(initial.changes.is_empty());
     assert_eq!(queue.drain().len(), 1);
     let watched_paths = runtime.watched_paths();
     assert!(
         watched_paths
             .iter()
-            .any(|watch| { watch.path == workspace_root && watch.recursive })
+            .any(|watch| { watch.path == dir_root && watch.recursive })
     );
     assert!(
         watched_paths
@@ -58,7 +59,7 @@ fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
     assert!(outside_only.changes.is_empty());
     assert!(queue.drain().is_empty());
 
-    repository.write("workspace/tracked.txt", "workspace change\n");
+    repository.write("repository/tracked.txt", "repository change\n");
     let changed = runtime.status().unwrap();
     assert_eq!(changed.stream_instance_id, initial.stream_instance_id);
     assert_eq!(changed.revision, 2);
@@ -85,7 +86,7 @@ fn restricted_runtime_exposes_read_only_git_and_rejects_mutations() {
     repository.git(&["commit", "-m", "initial"]);
     repository.write("tracked.txt", "changed\n");
     let runtime = GitRuntime::new(
-        inspection_workspace(repository.root()),
+        inspection_authorization(repository.root()),
         Arc::new(UpdateBroker::default()),
     )
     .unwrap();
@@ -98,7 +99,7 @@ fn restricted_runtime_exposes_read_only_git_and_rejects_mutations() {
     assert!(matches!(
         runtime.stage(vec![PathBuf::from("tracked.txt")]),
         Err(super::GitRuntimeError::Service(
-            crate::git_service::GitServiceError::Trust
+            crate::git_service::GitServiceError::Permission
         ))
     ));
     assert!(runtime.switch_branch("main").is_err());
@@ -108,13 +109,17 @@ fn restricted_runtime_exposes_read_only_git_and_rejects_mutations() {
 fn runtime_incarnations_use_distinct_revision_scopes() {
     let repository = TestRepository::init();
     let broker = Arc::new(UpdateBroker::default());
-    let first = GitRuntime::new(trusted_workspace(repository.root()), Arc::clone(&broker)).unwrap();
-    let second = GitRuntime::new(trusted_workspace(repository.root()), broker).unwrap();
+    let first = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::clone(&broker),
+    )
+    .unwrap();
+    let second = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
 
     let first_status = first.status().unwrap();
     let second_status = second.status().unwrap();
 
-    assert!(first_status.workspace_path.is_empty());
+    assert!(first_status.path.is_empty());
     assert_ne!(
         first_status.stream_instance_id,
         second_status.stream_instance_id
@@ -133,7 +138,7 @@ fn unchanged_watcher_refresh_keeps_graph_cursor_alive() {
     repository.git(&["add", "tracked.txt"]);
     repository.git(&["commit", "-m", "updated"]);
     let runtime = GitRuntime::new(
-        trusted_workspace(repository.root()),
+        mutation_authorization(repository.root()),
         Arc::new(UpdateBroker::default()),
     )
     .unwrap();
@@ -172,7 +177,7 @@ fn runtime_discovers_nested_repositories_and_routes_operations_by_repository_id(
     repository.write("root.txt", "root after\n");
     repository.write("nested/nested.txt", "nested after\n");
     let runtime = GitRuntime::new(
-        trusted_workspace(repository.root()),
+        mutation_authorization(repository.root()),
         Arc::new(UpdateBroker::default()),
     )
     .unwrap();
@@ -238,7 +243,7 @@ fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
     repository.git(&["update-ref", "refs/remotes/origin/main", &head]);
     repository.write("tracked.txt", "after\n");
     let runtime = GitRuntime::new(
-        trusted_workspace(repository.root()),
+        mutation_authorization(repository.root()),
         Arc::new(UpdateBroker::default()),
     )
     .unwrap();
@@ -377,20 +382,22 @@ fn unique_sequence() -> u64 {
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
-fn trusted_workspace(root: &Path) -> TrustedWorkspace {
-    TrustedWorkspace::require(
-        WorkspaceRoot::open(root).unwrap(),
-        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
-        WorkspaceCapability::MutateRepository,
+fn mutation_authorization(root: &Path) -> Authorization {
+    Grant::for_environment(
+        Dir::open_local(root).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::MutateRepository]),
     )
+    .authorize(Permission::MutateRepository)
     .unwrap()
 }
 
-fn inspection_workspace(root: &Path) -> TrustedWorkspace {
-    TrustedWorkspace::require(
-        WorkspaceRoot::open(root).unwrap(),
-        WorkspaceTrustDecision::Restricted,
-        WorkspaceCapability::InspectRepository,
+fn inspection_authorization(root: &Path) -> Authorization {
+    Grant::for_environment(
+        Dir::open_local(root).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::InspectRepository]),
     )
+    .authorize(Permission::InspectRepository)
     .unwrap()
 }

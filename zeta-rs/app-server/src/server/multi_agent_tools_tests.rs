@@ -2,14 +2,12 @@ use super::*;
 use zeta_async_utils::CancellationSource;
 use zeta_core::AgentTreeLimits;
 use zeta_core::CoreError;
-use zeta_core::CreateSessionRequest;
-use zeta_core::CreateSessionThreadRequest;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ModelSelection;
 use zeta_core::ModelService;
 use zeta_core::SequenceExpectation;
-use zeta_core::StartSessionTurnRequest;
+use zeta_core::StartThreadRequest;
+use zeta_core::StartTurnRequest;
 use zeta_core::ThreadController;
 use zeta_core::TurnExecutionBackend;
 use zeta_protocol::AgentRoleSnapshot;
@@ -156,41 +154,27 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     let coordinator = Arc::new(MultiAgentCoordinator::new(
-        Arc::clone(&sessions),
+        Arc::clone(&threads),
         AgentTreeLimits::default(),
     ));
-    let session = sessions
-        .create_session(CreateSessionRequest {
-            command_id: CommandId::new("timeout-session").unwrap(),
-            title: "timeout".into(),
-            model: None,
-            workspace: None,
-        })
-        .unwrap();
-    let parent = sessions
-        .create_thread(CreateSessionThreadRequest {
+    let parent = threads
+        .start_thread(StartThreadRequest {
             command_id: CommandId::new("timeout-parent").unwrap(),
-            session_id: session.session_id.clone(),
-            expected_sequence: SequenceExpectation::Exact(1),
             title: "parent".into(),
         })
         .unwrap();
-    let parent_turn = sessions
+    let parent_turn = threads
         .start_turn(
-            &session.session_id,
             &parent.thread_id,
-            StartSessionTurnRequest {
+            StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
                 instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("timeout-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -203,7 +187,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
     let spawned = coordinator
         .spawn(SpawnAgentRequest {
             delegation_id: DelegationId::new("timeout-child").unwrap(),
-            session_id: session.session_id,
+            session_id: parent.session_id.clone(),
             parent_thread_id: parent.thread_id.clone(),
             parent_turn_id: parent_turn.turn_id,
             task: DelegatedTask {
@@ -228,7 +212,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .unwrap();
     let service = MultiAgentToolService::new(
         Arc::clone(&coordinator),
-        Arc::clone(&sessions),
+        Arc::clone(&threads),
         Arc::new(NoopTurnBackend),
     );
 
@@ -248,7 +232,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
     };
     let output: Value = serde_json::from_str(&output).unwrap();
     assert_eq!(output["status"], "waiting");
-    let parent = sessions.threads().read_thread(&parent.thread_id).unwrap();
+    let parent = threads.read_thread(&parent.thread_id).unwrap();
     assert_eq!(parent.agent_joins.len(), 1);
     assert_eq!(
         parent.agent_joins.values().next().unwrap().status,
@@ -261,38 +245,24 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        Arc::clone(&threads),
-    ));
-    let server = crate::AppServer::new(Arc::clone(&sessions), Arc::new(TextModel));
-    let session = sessions
-        .create_session(CreateSessionRequest {
-            command_id: CommandId::new("create-session").unwrap(),
-            title: "agent recovery".into(),
-            model: None,
-            workspace: None,
-        })
-        .unwrap();
-    let parent = sessions
-        .create_thread(CreateSessionThreadRequest {
+    let server = crate::AppServer::new(Arc::clone(&threads), Arc::new(TextModel));
+    let parent = threads
+        .start_thread(StartThreadRequest {
             command_id: CommandId::new("create-parent").unwrap(),
-            session_id: session.session_id.clone(),
-            expected_sequence: SequenceExpectation::Exact(1),
             title: "parent".into(),
         })
         .unwrap();
-    let parent_turn = sessions
+    let parent_turn = threads
         .start_turn(
-            &session.session_id,
             &parent.thread_id,
-            StartSessionTurnRequest {
+            StartTurnRequest {
                 kind: zeta_protocol::TurnKind::Coding,
                 instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-parent").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -306,7 +276,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
         .multi_agent
         .spawn(SpawnAgentRequest {
             delegation_id: DelegationId::new("recover-child").unwrap(),
-            session_id: session.session_id,
+            session_id: parent.session_id.clone(),
             parent_thread_id: parent.thread_id,
             parent_turn_id: parent_turn.turn_id,
             task: DelegatedTask {
@@ -377,16 +347,12 @@ fn service() -> MultiAgentToolService {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     MultiAgentToolService::new(
         Arc::new(MultiAgentCoordinator::new(
-            Arc::clone(&sessions),
+            Arc::clone(&threads),
             AgentTreeLimits::default(),
         )),
-        sessions,
+        threads,
         Arc::new(NoopTurnBackend),
     )
 }

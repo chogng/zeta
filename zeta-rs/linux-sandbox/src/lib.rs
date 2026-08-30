@@ -6,13 +6,13 @@ mod discovery;
 use bwrap::BwrapCommandBuilder;
 use bwrap::MountAccess;
 use std::path::{Path, PathBuf};
+use zeta_file_access::Dir;
 use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
-    FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
-    SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
+    FileSystemAccess, NetworkAccess, PROTECTED_DIR_METADATA_NAMES, PreparedCommand, SandboxBackend,
+    SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
     SandboxProcessExitStatus,
 };
-use zeta_workspace::WorkspaceRoot;
 
 pub use discovery::LinuxSandboxDiscoveryError;
 
@@ -48,14 +48,14 @@ impl LinuxSandbox {
         &self,
         command: &SandboxCommand,
         policy: SandboxPolicy,
-        workspace: &WorkspaceRoot,
+        dir: &Dir,
     ) -> PreparedCommand {
         if !policy.requires_platform_sandbox() {
             return PreparedCommand::unrestricted(command);
         }
 
         let root_access = match policy.file_system() {
-            FileSystemAccess::ReadOnly | FileSystemAccess::WorkspaceWrite => MountAccess::ReadOnly,
+            FileSystemAccess::ReadOnly | FileSystemAccess::DirectoryWrite => MountAccess::ReadOnly,
             FileSystemAccess::FullAccess => MountAccess::ReadWrite,
         };
         let mut builder = BwrapCommandBuilder::new(
@@ -63,14 +63,14 @@ impl LinuxSandbox {
             command.program().to_owned(),
         )
         .mount(Path::new("/"), Path::new("/"), root_access);
-        if policy.file_system() == FileSystemAccess::WorkspaceWrite {
+        if policy.file_system() == FileSystemAccess::DirectoryWrite {
             builder = builder.mount(
-                workspace.canonical_path(),
-                workspace.canonical_path(),
+                dir.canonical_path(),
+                dir.canonical_path(),
                 MountAccess::ReadWrite,
             );
-            for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-                let path = workspace.canonical_path().join(name);
+            for name in PROTECTED_DIR_METADATA_NAMES {
+                let path = dir.canonical_path().join(name);
                 if path.exists() {
                     builder = builder.mount(&path, &path, MountAccess::ReadOnly);
                 }
@@ -103,15 +103,15 @@ impl SandboxBackend for LinuxSandbox {
         &self,
         command: &SandboxCommand,
         policy: SandboxPolicy,
-        workspace: &WorkspaceRoot,
+        dir: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         #[cfg(target_os = "linux")]
         {
-            Ok(self.prepare_command(command, policy, workspace))
+            Ok(self.prepare_command(command, policy, dir))
         }
         #[cfg(not(target_os = "linux"))]
         {
-            let _ = (command, policy, workspace);
+            let _ = (command, policy, dir);
             Err(SandboxError::BackendUnavailable {
                 backend: SandboxKind::LinuxBubblewrap,
                 message: "the Bubblewrap backend can only run on Linux".to_owned(),

@@ -14,7 +14,7 @@ use zeta_fast_regex_search::FastRegexSearchLimits;
 use zeta_fast_regex_search::FastRegexWorkerClient;
 use zeta_fast_regex_search::FastRegexWorkerCommand;
 use zeta_fast_regex_search::serve_worker_from_environment;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 const DEFAULT_FILE_COUNT: usize = 8_000;
 const DEFAULT_RUN_COUNT: usize = 15;
@@ -67,7 +67,7 @@ fn main() {
     let file_count = environment_usize("FAST_REGEX_BENCH_FILES", DEFAULT_FILE_COUNT);
     let run_count = environment_usize("FAST_REGEX_BENCH_RUNS", DEFAULT_RUN_COUNT);
     let rg = std::env::var_os("RG").unwrap_or_else(|| "rg".into());
-    let workspace = build_corpus(file_count);
+    let corpus = build_corpus(file_count);
     let storage = tempfile::tempdir().expect("benchmark index storage");
     let max_results = AGENT_RESULT_LIMIT;
     let limits = FastRegexSearchLimits {
@@ -76,7 +76,7 @@ fn main() {
         max_total_source_bytes: 2 * 1024 * 1024 * 1024,
         ..FastRegexSearchLimits::default()
     };
-    let root = WorkspaceRoot::open(workspace.path()).expect("benchmark workspace root");
+    let root = Dir::open_local(corpus.path()).expect("benchmark corpus root");
     let worker_command = FastRegexWorkerCommand::new(
         std::env::current_exe().expect("benchmark executable"),
         ["--fast-regex-worker"],
@@ -100,7 +100,7 @@ fn main() {
     let cases = [
         BenchmarkCase {
             name: "rare-prefix-suffix",
-            pattern: r"workspace_authentication_[0-9]+_token",
+            pattern: r"request_authentication_[0-9]+_token",
         },
         BenchmarkCase {
             name: "rare-alternation",
@@ -108,7 +108,7 @@ fn main() {
         },
         BenchmarkCase {
             name: "rare-no-match",
-            pattern: r"missing_workspace_dispatch_.*_completion",
+            pattern: r"missing_request_dispatch_.*_completion",
         },
         BenchmarkCase {
             name: "unselective-short",
@@ -120,7 +120,7 @@ fn main() {
         measurements.push(measure_case(
             "built",
             &index,
-            workspace.path(),
+            corpus.path(),
             &rg,
             max_results,
             run_count,
@@ -128,7 +128,7 @@ fn main() {
         ));
     }
 
-    let changed_path = workspace.path().join("src/batch-0/module-1.rs");
+    let changed_path = corpus.path().join("src/batch-0/module-1.rs");
     let mut changed_content = fs::read_to_string(&changed_path).expect("changed benchmark source");
     changed_content.push_str("fn incremental_refresh_marker() {}\n");
     fs::write(&changed_path, changed_content).expect("update benchmark source");
@@ -149,7 +149,7 @@ fn main() {
         measurements.push(measure_case(
             "reopened",
             &reopened,
-            workspace.path(),
+            corpus.path(),
             &rg,
             max_results,
             run_count,
@@ -329,17 +329,17 @@ fn build_corpus(file_count: usize) -> TempDir {
         for line_index in 0..24 {
             if line_index == 0 {
                 content.push_str(&format!(
-                    "fn common_workspace_function(value: usize) -> usize {{ value + {file_index} }}\n"
+                    "fn common_request_function(value: usize) -> usize {{ value + {file_index} }}\n"
                 ));
             } else {
                 content.push_str(&format!(
-                    "let common_workspace_value_{line_index}: usize = {file_index};\n"
+                    "let common_request_value_{line_index}: usize = {file_index};\n"
                 ));
             }
         }
         if file_index % 1_997 == 0 {
             content.push_str(&format!(
-                "let workspace_authentication_{file_index}_token = authorize();\n"
+                "let request_authentication_{file_index}_token = authorize();\n"
             ));
         }
         if file_index % 2_003 == 0 {

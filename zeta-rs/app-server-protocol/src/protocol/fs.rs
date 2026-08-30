@@ -1,5 +1,5 @@
+use crate::protocol::environment::SessionDirSelector;
 use crate::protocol::resources::ResourceMetadataResult;
-use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -16,20 +16,20 @@ pub enum FsFileType {
     Other,
 }
 
-/// Read metadata for one path relative to the configured workspace root.
+/// Read metadata for one path relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsGetMetadataParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
 }
 
-/// Metadata returned for one existing workspace path.
+/// Metadata returned for one existing directory path.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsGetMetadataResult {
@@ -41,16 +41,16 @@ pub struct FsGetMetadataResult {
     pub modified_at_millis: Option<u64>,
 }
 
-/// List direct children for one directory relative to the configured workspace root.
+/// List direct children for one directory relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadDirectoryParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
 }
 
@@ -69,16 +69,16 @@ pub struct FsReadDirectoryResult {
     pub entries: Vec<FsReadDirectoryEntry>,
 }
 
-/// Read one UTF-8 file relative to the configured workspace root.
+/// Read one UTF-8 file relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
 }
 
@@ -91,20 +91,20 @@ pub struct FsReadFileResult {
     pub revision: String,
 }
 
-/// Read one binary file relative to the configured workspace root.
+/// Read one binary file relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadBinaryFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
 }
 
-/// Connection-owned binary resource opened from one workspace file.
+/// Connection-owned binary resource opened from one directory file.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadBinaryFileResult {
@@ -113,16 +113,16 @@ pub struct FsReadBinaryFileResult {
     pub revision: String,
 }
 
-/// Atomically write one UTF-8 file relative to the configured workspace root.
+/// Atomically write one UTF-8 file relative to the configured directory root.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsWriteFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
     pub content: String,
     /// When supplied, rejects the write if the file no longer has this exact revision.
@@ -165,70 +165,70 @@ pub enum FsDeleteMode {
     Recursive,
 }
 
-/// Creates one empty workspace file.
+/// Creates one empty directory file.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsCreateFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
     pub existing: FsExistingTargetBehavior,
 }
 
-/// Renames one workspace file or directory.
+/// Renames one directory file or directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsRenameParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub source: PathBuf,
     pub target: PathBuf,
     pub existing: FsExistingTargetBehavior,
 }
 
-/// Deletes one workspace file or directory.
+/// Deletes one directory file or directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsDeleteParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     pub path: PathBuf,
     pub missing: FsMissingTargetBehavior,
     pub mode: FsDeleteMode,
 }
 
-/// Coarse workspace filesystem invalidation published by `fs/changed`.
+/// Coarse directory filesystem invalidation published by `fs/changed`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(tag = "type")]
 pub enum FsChanged {
-    /// The backend observed changes near these sorted workspace-relative paths.
+    /// The backend observed changes near these sorted directory-relative paths.
     PathsChanged {
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[serde(rename = "workspaceFolderId")]
+        #[serde(rename = "dirId")]
         #[ts(optional)]
-        #[ts(rename = "workspaceFolderId")]
-        workspace_folder_id: Option<String>,
+        #[ts(rename = "dirId")]
+        dir_id: Option<String>,
         paths: Vec<PathBuf>,
     },
     /// The watcher may have lost events and consumers must rescan their visible scope.
     RescanRequired {
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[serde(rename = "workspaceFolderId")]
+        #[serde(rename = "dirId")]
         #[ts(optional)]
-        #[ts(rename = "workspaceFolderId")]
-        workspace_folder_id: Option<String>,
+        #[ts(rename = "dirId")]
+        dir_id: Option<String>,
     },
 }

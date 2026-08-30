@@ -117,7 +117,7 @@ fn source_kind_label(kind: SkillSourceKindDto) -> &'static str {
     match kind {
         SkillSourceKindDto::BuiltIn => "built-in",
         SkillSourceKindDto::User => "user",
-        SkillSourceKindDto::Workspace => "workspace",
+        SkillSourceKindDto::Directory => "directory",
         SkillSourceKindDto::Plugin => "plugin",
         SkillSourceKindDto::Marketplace => "marketplace",
     }

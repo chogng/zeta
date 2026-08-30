@@ -56,7 +56,7 @@ class FakeHotContext implements ViteDevHotContext {
 					attachments: true,
 					fileSystem: true,
 					git: true,
-					workspaceSearch: true,
+					contentSearch: true,
 					codebase: true,
 					cloudCodebase: false,
 					terminal: true,

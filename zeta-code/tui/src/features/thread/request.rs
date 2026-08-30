@@ -24,6 +24,7 @@ use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::ImageDetail;
 use zeta_protocol::ImageMediaType;
@@ -66,6 +67,7 @@ pub(crate) fn submit_prompt<T>(
     client: &mut AppServerClient<T>,
     scope: ThreadRequestScope,
     submission: ChatSubmission,
+    approval_mode: ApprovalMode,
 ) -> Result<TurnStartResult, ClientError>
 where
     T: JsonRpcTransport,
@@ -74,9 +76,10 @@ where
     match client.request_session(SessionRequestParams {
         command_id: new_command_id("turn"),
         session_id: scope.session_id,
-        expected_sequence: scope.expected_sequence,
         request: SessionRequest::StartTurn {
             thread_id: scope.thread_id,
+            expected_sequence: scope.expected_sequence,
+            approval_mode,
             tool_mode: None,
             input,
         },
@@ -101,9 +104,9 @@ where
     match client.request_session(SessionRequestParams {
         command_id: new_command_id("steer"),
         session_id: scope.session_id,
-        expected_sequence: scope.expected_sequence,
         request: SessionRequest::SteerTurn {
             thread_id: scope.thread_id,
+            expected_sequence: scope.expected_sequence,
             turn_id,
             input,
         },
@@ -307,9 +310,9 @@ where
     match client.request_session(SessionRequestParams {
         command_id: new_command_id("interrupt"),
         session_id: scope.session_id,
-        expected_sequence: scope.expected_sequence,
         request: SessionRequest::InterruptTurn {
             thread_id: scope.thread_id,
+            expected_sequence: scope.expected_sequence,
             turn_id: turn_id.clone(),
         },
     })? {
@@ -333,9 +336,9 @@ where
     match client.request_session(SessionRequestParams {
         command_id: new_command_id("interaction"),
         session_id: scope.session_id,
-        expected_sequence: scope.expected_sequence,
         request: SessionRequest::ResolveInteraction {
             thread_id: scope.thread_id,
+            expected_sequence: scope.expected_sequence,
             turn_id,
             request_id,
             response,

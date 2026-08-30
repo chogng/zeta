@@ -35,6 +35,7 @@ members = [
     "zeta-rs/extensions",
     "zeta-rs/editor-extension-host",
     "zeta-rs/editor-core",
+    "zeta-rs/environment",
     "zeta-rs/ext/extension-api",
     "zeta-rs/ext/connectors",
     "zeta-rs/ext/mcp",
@@ -87,7 +88,6 @@ members = [
     "zeta-rs/rollout-trace",
     "zeta-rs/rmcp-client",
     "zeta-rs/sandboxing",
-    "zeta-rs/session-store",
     "zeta-rs/shell-command",
     "zeta-rs/shell-completion",
     "zeta-rs/slash-commands",
@@ -118,10 +118,9 @@ members = [
     "zeta-rs/utils/template",
     "zeta-rs/utils/typst",
     "zeta-rs/windows-sandbox-rs",
-    "zeta-rs/workspace",
-    "zeta-rs/workspace-access",
+    "zeta-rs/file-access",
     "zeta-rs/worktree",
-    "zeta-rs/workspace-search",
+    "zeta-rs/content-search",
     "zeta-rs/server-host",
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
@@ -137,7 +136,7 @@ members = [
     "app/keybindings",
     "app/session",
     "app/settings",
-    "app/terminal-workspace",
+    "app/terminal-runtime",
     "app/theme",
     "app/ui-components",
     "app/workbench",
@@ -317,6 +316,7 @@ zeta-debug-adapter = { path = "zeta-rs/debug-adapter" }
 zeta-editor = { path = "app/editor" }
 zeta-editor-host = { path = "app/editor-host" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
+zeta-environment = { path = "zeta-rs/environment" }
 zeta-extension-api = { path = "zeta-rs/ext/extension-api" }
 zeta-connectors-extension = { path = "zeta-rs/ext/connectors" }
 zeta-mcp-extension = { path = "zeta-rs/ext/mcp" }
@@ -375,10 +375,9 @@ zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
 zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
 zeta-sandboxing = { path = "zeta-rs/sandboxing" }
 zeta-scm = { path = "app/scm" }
-zeta-workspace-search = { path = "zeta-rs/workspace-search" }
+zeta-content-search = { path = "zeta-rs/content-search" }
 zeta-server-host = { path = "zeta-rs/server-host" }
 zeta-secrets = { path = "zeta-rs/secrets" }
-zeta-session-store = { path = "zeta-rs/session-store" }
 zeta-session = { path = "app/session" }
 zeta-settings = { path = "app/settings" }
 zeta-shell-command = { path = "zeta-rs/shell-command" }
@@ -389,7 +388,7 @@ zeta-skills = { path = "zeta-rs/skills" }
 zeta-state = { path = "zeta-rs/state" }
 zeta-syntax = { path = "zeta-rs/syntax" }
 zeta-terminal = { path = "zeta-rs/terminal" }
-zeta-terminal-workspace = { path = "app/terminal-workspace" }
+zeta-terminal-runtime = { path = "app/terminal-runtime" }
 zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }
 zeta-text-file = { path = "zeta-rs/text-file" }
 zeta-theme = { path = "zeta-rs/theme" }
@@ -416,8 +415,7 @@ zeta-pdf = { path = "zeta-rs/utils/pdf" }
 zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }
 zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
-zeta-workspace = { path = "zeta-rs/workspace" }
-zeta-workspace-access = { path = "zeta-rs/workspace-access" }
+zeta-file-access = { path = "zeta-rs/file-access" }
 zeta-worktree = { path = "zeta-rs/worktree" }
 zui = { path = "app/zui", default-features = false }
 

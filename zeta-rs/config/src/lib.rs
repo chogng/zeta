@@ -6,6 +6,8 @@
 mod codebase;
 mod command;
 mod commit_messages;
+mod dir_config;
+mod dir_permissions;
 mod document;
 mod exec_policy;
 mod hooks;
@@ -20,8 +22,6 @@ mod store_file;
 mod store_monitor;
 mod store_schema;
 mod tool_search;
-mod workspace;
-mod workspace_trust;
 
 pub use codebase::{CodebaseAutomaticContext, CodebaseConfig, CodebaseModelSelection};
 pub use command::{
@@ -29,11 +29,16 @@ pub use command::{
     PreferencesUpdate, UserConfigCommand,
 };
 pub use commit_messages::{CommitMessageConfig, CommitMessageEgressGrant};
+pub use dir_config::{
+    DirAgentConfig, DirConfigDocument, DirConfigIntent, DirConfigRevision, DirConfigScope,
+    DirConfigStore, DirMcpConfig, DirMcpServerConfig, DirSkillsConfig,
+};
+pub use dir_permissions::DirPermissionsConfig;
 pub use document::{
     AgentConfig, AgentGrepBackend, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision,
     ResolvedConfig, ResolvedConfigSnapshot, UserConfigDocument,
 };
-pub use exec_policy::{UserExecPolicyConfig, WorkspaceExecPolicyConfig, compose_exec_policy};
+pub use exec_policy::{DirExecPolicyConfig, UserExecPolicyConfig, compose_exec_policy};
 pub use hooks::{
     HookAction, HookConfig, HookEnablement, HookEvent, HookId, HookMatcher, HooksConfig,
 };
@@ -45,25 +50,19 @@ pub use mcp::{
     McpTransportConfig,
 };
 pub use plugins::{
-    PluginId, PluginRequest, PluginRequestEnablement, PluginVersion, PluginsConfig,
-    WorkspacePluginRequest, WorkspacePluginRequestScope, WorkspacePluginRequests,
+    DirPluginRequest, DirPluginRequestScope, DirPluginRequests, PluginId, PluginRequest,
+    PluginRequestEnablement, PluginVersion, PluginsConfig,
 };
 pub use resolution::{
-    ConfigDiagnostic, ConfigDiagnosticCode, ConfigProvenance, ConfigValueSource,
-    ScopedConfigSnapshot, WorkspaceConfigInput, resolve_scoped_config,
+    ConfigDiagnostic, ConfigDiagnosticCode, ConfigProvenance, ConfigValueSource, DirConfigInput,
+    ScopedConfigSnapshot, resolve_scoped_config,
 };
 pub use skills::{SkillEnablement, SkillSourceConfig, SkillSourceEnablement, SkillsConfig};
 pub use store::{ConfigChange, ConfigError, ConfigStore};
 pub use tool_search::ToolSearchConfig;
 pub use tool_search::ToolSearchModeConfig;
-pub use workspace::{
-    WorkspaceAgentConfig, WorkspaceConfigDocument, WorkspaceConfigIntent, WorkspaceConfigRevision,
-    WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId, WorkspaceMcpConfig,
-    WorkspaceMcpServerConfig, WorkspaceSkillsConfig,
-};
-pub use workspace_trust::{WorkspaceTrustConfig, WorkspaceTrustSetting};
+pub use zeta_file_access::DirId;
 pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, ToolMode};
-pub use zeta_workspace::WorkspaceTrustId;
 
 #[cfg(test)]
 #[path = "config_tests.rs"]

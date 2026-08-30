@@ -13,11 +13,8 @@ use serde::Serialize;
 use ts_rs::TS;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::AgentTreeProjection;
-use zeta_protocol::ApprovalMode;
-use zeta_protocol::ModelRef;
 use zeta_protocol::ReviewTarget;
 use zeta_protocol::Session;
-use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_protocol::ToolMode;
@@ -40,8 +37,6 @@ pub struct SessionReadParams {
 #[serde(rename_all = "camelCase")]
 pub struct SessionSubscribeParams {
     pub session_id: SessionId,
-    #[ts(type = "number")]
-    pub after_sequence: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -50,10 +45,14 @@ pub struct SessionUnsubscribeParams {
     pub session_id: SessionId,
 }
 
-/// A typed mutation submitted against one Session aggregate.
-///
-/// Child Thread identifiers are selectors inside the Session boundary. Product hosts submit
-/// these operations through `session/request`; App Server owns the internal Thread routing.
+/// Non-durable invalidation for a Session tree derived from Thread state.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionChanged {
+    pub session_id: SessionId,
+}
+
+/// A typed request routed through one `session_id` grouping boundary.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
     tag = "type",
@@ -61,18 +60,8 @@ pub struct SessionUnsubscribeParams {
     rename_all_fields = "camelCase"
 )]
 pub enum SessionRequest {
-    Complete,
     Archive,
     Stop,
-    SetModel {
-        model: ModelRef,
-    },
-    SetNextApprovalMode {
-        approval_mode: ApprovalMode,
-    },
-    SetCurrentThread {
-        thread_id: ThreadId,
-    },
     CreateThread {
         title: String,
     },
@@ -97,6 +86,10 @@ pub enum SessionRequest {
     },
     StartTurn {
         thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
+        #[serde(default)]
+        approval_mode: zeta_protocol::ApprovalMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_mode: Option<ToolMode>,
@@ -105,45 +98,57 @@ pub enum SessionRequest {
     },
     StartReview {
         thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
         target: ReviewTarget,
     },
     StartShellTurn {
         thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
+        #[serde(default)]
+        approval_mode: zeta_protocol::ApprovalMode,
         command: String,
         working_directory: String,
     },
     CompactContext {
         thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         retention_prompt: Option<String>,
     },
     SteerTurn {
         thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
         turn_id: TurnId,
         #[schemars(length(min = 1))]
         input: Vec<InputItem>,
     },
     InterruptTurn {
         thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
         turn_id: TurnId,
     },
     ResolveInteraction {
         thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
         turn_id: TurnId,
         request_id: RequestId,
         response: AgentResponse,
     },
 }
 
-/// The canonical Session aggregate mutation request.
+/// A request associated with one Session tree.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionRequestParams {
     pub command_id: CommandId,
     pub session_id: SessionId,
-    #[ts(type = "number")]
-    pub expected_sequence: u64,
     pub request: SessionRequest,
 }
 
@@ -233,10 +238,9 @@ pub struct SessionThreadProjection {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-/// The aggregate Session port returned to product hosts.
+/// The Session tree view returned to product hosts.
 pub struct SessionSubscribeResult {
     pub session: Session,
-    pub updates: Vec<SessionUpdateEnvelope>,
     pub thread_projections: Vec<SessionThreadProjection>,
     pub agent_tree: AgentTreeProjection,
 }
@@ -278,7 +282,7 @@ pub struct SessionThreadSubscribeResult {
     pub history: Option<ThreadHistoryBoundary>,
 }
 
-/// Typed result returned by the canonical Session aggregate mutation endpoint.
+/// Typed result returned by the Session request endpoint.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum SessionRequestResult {

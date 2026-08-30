@@ -352,10 +352,10 @@ fn gpu_backend_does_not_own_interaction_or_accessibility_frames() {
 
 #[test]
 fn every_component_declares_a_zui_element() {
-    let workspace_root = app_root();
+    let dir_root = app_root();
     let mut violations = Vec::new();
     let mut implementation_count = 0;
-    for crate_root in workspace_crate_roots(workspace_root) {
+    for crate_root in workspace_crate_roots(dir_root) {
         let source_root = crate_source_root(&crate_root);
         visit_rust_sources(&source_root, &mut |path, source| {
             let implementations = source
@@ -372,7 +372,7 @@ fn every_component_declares_a_zui_element() {
                 if implementation.contains("fn element(&self)") {
                     continue;
                 }
-                let relative = path.strip_prefix(workspace_root).unwrap_or(path);
+                let relative = path.strip_prefix(dir_root).unwrap_or(path);
                 violations.push(relative.display().to_string());
             }
         });
@@ -391,16 +391,16 @@ fn every_component_declares_a_zui_element() {
 
 #[test]
 fn production_components_do_not_reintroduce_manual_component_inspection() {
-    let workspace_root = app_root();
+    let dir_root = app_root();
     let mut violations = Vec::new();
-    for crate_root in workspace_crate_roots(workspace_root) {
+    for crate_root in workspace_crate_roots(dir_root) {
         visit_rust_sources(&crate_source_root(&crate_root), &mut |path, source| {
             if is_test_source(path) {
                 return;
             }
             if source.contains("ComponentInspection") {
                 violations.push(
-                    path.strip_prefix(workspace_root)
+                    path.strip_prefix(dir_root)
                         .unwrap_or(path)
                         .display()
                         .to_string(),
@@ -417,10 +417,10 @@ fn production_components_do_not_reintroduce_manual_component_inspection() {
 
 #[test]
 fn production_composition_does_not_register_inspection_nodes_directly() {
-    let workspace_root = app_root();
-    let registration_owner = workspace_root.join("zui/src/ui/presentation/scene.rs");
+    let dir_root = app_root();
+    let registration_owner = dir_root.join("zui/src/ui/presentation/scene.rs");
     let mut violations = Vec::new();
-    for crate_root in workspace_crate_roots(workspace_root) {
+    for crate_root in workspace_crate_roots(dir_root) {
         visit_rust_sources(&crate_source_root(&crate_root), &mut |path, source| {
             if is_test_source(path)
                 || path == registration_owner
@@ -429,7 +429,7 @@ fn production_composition_does_not_register_inspection_nodes_directly() {
                 return;
             }
             violations.push(
-                path.strip_prefix(workspace_root)
+                path.strip_prefix(dir_root)
                     .unwrap_or(path)
                     .display()
                     .to_string(),
@@ -445,10 +445,10 @@ fn production_composition_does_not_register_inspection_nodes_directly() {
 
 #[test]
 fn zui_consumers_use_capability_oriented_namespaces() {
-    let workspace_root = app_root();
-    let zui_root = workspace_root.join("zui");
+    let dir_root = app_root();
+    let zui_root = dir_root.join("zui");
     let mut violations = Vec::new();
-    for crate_root in workspace_crate_roots(workspace_root) {
+    for crate_root in workspace_crate_roots(dir_root) {
         if crate_root == zui_root {
             continue;
         }
@@ -460,7 +460,7 @@ fn zui_consumers_use_capability_oriented_namespaces() {
                 let capability = &source[offset + "zui::".len()..];
                 if capability.chars().next().is_some_and(char::is_uppercase) {
                     violations.push(
-                        path.strip_prefix(workspace_root)
+                        path.strip_prefix(dir_root)
                             .unwrap_or(path)
                             .display()
                             .to_string(),
@@ -500,8 +500,8 @@ fn visit_rust_sources(root: &Path, visitor: &mut impl FnMut(&Path, &str)) {
     }
 }
 
-fn workspace_crate_roots(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut roots = fs::read_dir(workspace_root)
+fn workspace_crate_roots(dir_root: &Path) -> Vec<PathBuf> {
+    let mut roots = fs::read_dir(dir_root)
         .expect("Rust workspace directory")
         .map(|entry| entry.expect("Rust workspace entry").path())
         .filter(|path| path.join("Cargo.toml").is_file())

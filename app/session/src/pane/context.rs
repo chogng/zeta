@@ -1,4 +1,4 @@
-//! Host-projected Workspace context shown by one Session Pane.
+//! Host-provided environment context shown by one Session Pane.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionPaneContext {

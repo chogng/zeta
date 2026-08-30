@@ -9,13 +9,13 @@ pub(crate) const INNER_RESERVED_EXIT_CODE_REMAP: i32 = 124;
 pub(crate) const PROBE_FLAG: &str = "--probe";
 pub(crate) const SETUP_HELPER_FLAG: &str = "--setup-helper";
 pub(crate) const ACCESS_FLAG: &str = "--access";
-pub(crate) const WORKSPACE_FLAG: &str = "--workspace";
+pub(crate) const DIR_FLAG: &str = "--dir";
 #[cfg(target_os = "windows")]
 pub(crate) const PROGRAM_FLAG: &str = "--program";
 pub(crate) const CWD_FLAG: &str = "--cwd";
 pub(crate) const COMMAND_SEPARATOR: &str = "--";
 pub(crate) const READ_ONLY_ACCESS: &str = "read-only";
-pub(crate) const WORKSPACE_WRITE_ACCESS: &str = "workspace-write";
+pub(crate) const DIR_WRITE_ACCESS: &str = "dir-write";
 
 #[cfg(any(target_os = "windows", test))]
 pub(crate) fn remap_inner_exit_code(exit_code: i32) -> i32 {

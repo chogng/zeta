@@ -4,17 +4,16 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
-fn workspace_write_is_a_read_only_root_with_a_writable_workspace_overlay() {
-    let fixture = TestWorkspace::new();
-    for name in PROTECTED_WORKSPACE_METADATA_NAMES {
+fn dir_write_is_a_read_only_root_with_a_writable_dir_overlay() {
+    let fixture = TestDirectory::new();
+    for name in PROTECTED_DIR_METADATA_NAMES {
         fs::create_dir_all(fixture.path.join(name)).unwrap();
     }
-    let workspace = fixture.root();
-    let command = SandboxCommand::new("echo", ["hello"], workspace.canonical_path());
-    let policy = SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied);
+    let dir = fixture.root();
+    let command = SandboxCommand::new("echo", ["hello"], dir.canonical_path());
+    let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
 
-    let prepared =
-        LinuxSandbox::new("/usr/bin/bwrap").prepare_command(&command, policy, &workspace);
+    let prepared = LinuxSandbox::new("/usr/bin/bwrap").prepare_command(&command, policy, &dir);
     let arguments: Vec<_> = prepared
         .arguments()
         .iter()
@@ -28,14 +27,14 @@ fn workspace_write_is_a_read_only_root_with_a_writable_workspace_overlay() {
             .windows(3)
             .any(|args| args == ["--ro-bind", "/", "/"])
     );
-    let workspace_path = workspace.canonical_path().to_string_lossy();
+    let dir_path = dir.canonical_path().to_string_lossy();
     assert!(
         arguments
             .windows(3)
-            .any(|args| args == ["--bind", workspace_path.as_ref(), workspace_path.as_ref()])
+            .any(|args| args == ["--bind", dir_path.as_ref(), dir_path.as_ref()])
     );
-    for name in PROTECTED_WORKSPACE_METADATA_NAMES {
-        let path = workspace.canonical_path().join(name);
+    for name in PROTECTED_DIR_METADATA_NAMES {
+        let path = dir.canonical_path().join(name);
         if !path.exists() {
             continue;
         }
@@ -84,15 +83,15 @@ fn bubblewrap_denial_classification_requires_a_platform_marker() {
     );
 }
 
-static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
-struct TestWorkspace {
+struct TestDirectory {
     path: PathBuf,
 }
 
-impl TestWorkspace {
+impl TestDirectory {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-linux-sandbox-tests-{}-{sequence}",
             std::process::id()
@@ -101,12 +100,12 @@ impl TestWorkspace {
         Self { path }
     }
 
-    fn root(&self) -> WorkspaceRoot {
-        WorkspaceRoot::open(&self.path).unwrap()
+    fn root(&self) -> Dir {
+        Dir::open_local(&self.path).unwrap()
     }
 }
 
-impl Drop for TestWorkspace {
+impl Drop for TestDirectory {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }

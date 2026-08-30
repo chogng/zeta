@@ -13,10 +13,10 @@ pub(crate) struct ProductApp {
     pub(super) language_service: FileEditorLanguageService,
     pub(super) session_search: SessionSearchState,
     pub(super) workbench: WorkbenchHost<PaneBinding>,
-    pub(super) terminal_workspace: TerminalWorkspace,
+    pub(super) terminal_runtime: TerminalRuntime,
     pub(super) terminal_pane_views: TerminalPaneViews<PaneKey, TerminalPaneViewState>,
     pub(super) git_branch_context_menu: GitBranchContextMenuState,
-    pub(super) workspace_path_picker: WorkspacePathPickerState,
+    pub(super) path_picker: DirectoryPickerState,
     pub(super) remote_connection_picker: RemoteConnectionPickerState,
     pub(super) remote_connection_manager: RemoteConnectionManagerState,
     pub(super) remote_connection_launch: Option<remote_connection_process::RemoteConnectionLaunch>,
@@ -27,8 +27,8 @@ pub(crate) struct ProductApp {
     pub(super) app_server_client: Option<AppServerRequestHandle>,
     pub(super) app_server_host: AppServerHost,
     pub(super) session_pane: SessionPaneState,
-    pub(super) workspace_surface: WorkspaceSurface,
-    pub(super) workspace_context: WorkspaceContext,
+    pub(super) main_surface: MainSurface,
+    pub(super) env: EnvironmentContext,
     pub(super) text_layout: TextInputLayoutEngine,
     pub(super) caret_blink: CaretBlinkController,
     pub(super) code_editor_style: CodeEditorStyle,
@@ -53,24 +53,23 @@ impl ProductApp {
     pub(super) fn new(application: ApplicationHandle<ProductEvent>, launch: AppLaunch) -> Self {
         let event_proxy = application.proxy();
         let clipboard = application.clipboard();
-        let local_workspace_context = WorkspaceContext::capture_current();
-        let app_server_host = launch.app_server_host(local_workspace_context.working_directory());
+        let local_env = EnvironmentContext::capture_current();
+        let app_server_host = launch.app_server_host(local_env.working_directory());
         let remote_tunnel_host = app_server_host
             .ssh_transport()
             .map(|(host, ssh_executable)| {
                 ProductRemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
             });
-        let workspace_context = if app_server_host.is_remote() {
-            WorkspaceContext::capture_remote(app_server_host.workspace_root().to_path_buf())
+        let env = if app_server_host.is_remote() {
+            EnvironmentContext::capture_remote(app_server_host.cwd().to_path_buf())
         } else {
-            local_workspace_context
+            local_env
         };
         let mut files = FilesState::default();
-        files.set_workspace_root(workspace_context.working_directory().to_path_buf());
+        files.set_dir_root(env.working_directory().to_path_buf());
         let mut scm = ScmState::default();
         scm.replace_diffs(
-            workspace_context
-                .diffs()
+            env.diffs()
                 .iter()
                 .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
         );
@@ -85,18 +84,14 @@ impl ProductApp {
         {
             eprintln!("{error}");
         }
-        let session_pane =
-            SessionPaneState::for_working_directory(workspace_context.working_directory());
+        let session_pane = SessionPaneState::for_working_directory(env.working_directory());
         let language_events = Arc::new(language_service_adapter::ProductLanguageEventSink::new(
             event_proxy.clone(),
         ));
         let language_service = if launch.is_remote() {
-            FileEditorLanguageService::remote(
-                workspace_context.working_directory(),
-                language_events,
-            )
+            FileEditorLanguageService::remote(env.working_directory(), language_events)
         } else {
-            FileEditorLanguageService::start(workspace_context.working_directory(), language_events)
+            FileEditorLanguageService::start(env.working_directory(), language_events)
         };
         Self {
             window: None,
@@ -111,17 +106,17 @@ impl ProductApp {
             file_editor_host: FileEditorHost::default(),
             session_search: SessionSearchState::default(),
             workbench: WorkbenchHost::new(),
-            terminal_workspace: {
+            terminal_runtime: {
                 let terminal_event_proxy = event_proxy.clone();
                 let terminal_target = app_server_host
                     .remote_connection()
                     .cloned()
-                    .map(zeta_terminal_workspace::TerminalRuntimeTarget::remote)
-                    .unwrap_or(zeta_terminal_workspace::TerminalRuntimeTarget::Local);
-                TerminalWorkspace::new(
+                    .map(zeta_terminal_runtime::TerminalRuntimeTarget::remote)
+                    .unwrap_or(zeta_terminal_runtime::TerminalRuntimeTarget::Local);
+                TerminalRuntime::new(
                     move |key, size| {
                         let event_proxy = terminal_event_proxy.clone();
-                        let event_sink: zeta_terminal_workspace::TerminalEventSink =
+                        let event_sink: zeta_terminal_runtime::TerminalEventSink =
                             Arc::new(move |event| event_proxy.send_event(event.into()).is_ok());
                         TerminalSession::spawn_async(
                             key,
@@ -136,7 +131,7 @@ impl ProductApp {
             },
             terminal_pane_views: TerminalPaneViews::default(),
             git_branch_context_menu: GitBranchContextMenuState::default(),
-            workspace_path_picker: WorkspacePathPickerState::default(),
+            path_picker: DirectoryPickerState::default(),
             remote_connection_picker: RemoteConnectionPickerState::default(),
             remote_connection_manager: RemoteConnectionManagerState::default(),
             remote_connection_launch: None,
@@ -147,8 +142,8 @@ impl ProductApp {
             app_server_client: None,
             app_server_host: app_server_host.clone(),
             session_pane,
-            workspace_surface: WorkspaceSurface::default(),
-            workspace_context,
+            main_surface: MainSurface::default(),
+            env,
             text_layout: TextInputLayoutEngine::new(),
             caret_blink: CaretBlinkController::default(),
             code_editor_style: CodeEditorStyle::light(),

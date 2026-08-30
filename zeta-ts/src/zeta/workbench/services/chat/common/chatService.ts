@@ -42,7 +42,7 @@ export type ThreadItem =
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
 export interface TurnError {
-	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "workspaceCaptureFailed";
+	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "worktreeCaptureFailed";
 	readonly message: string;
 	readonly retryable: boolean;
 }
@@ -137,6 +137,7 @@ export type ThreadCommittedEvent =
 	| { readonly type: "interactionRequested"; readonly interaction: TurnInteraction }
 	| { readonly type:
 		"threadCreated"
+		| "threadArchived"
 		| "goalCreated"
 		| "goalUpdated"
 		| "goalCleared"

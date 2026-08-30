@@ -79,9 +79,9 @@ pub const SETTINGS_SEARCH_INPUT: ElementId = ElementId::scoped(SETTINGS_SCOPE, 2
 pub const SETTINGS_CLOSE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 3);
 /// Returns from the active Settings page to the host surface.
 pub const SETTINGS_NAV_BACK: ElementId = ElementId::scoped(SETTINGS_SCOPE, 4);
-/// General application and workspace preferences.
+/// General application and environment preferences.
 pub const SETTINGS_NAV_GENERAL: ElementId = ElementId::scoped(SETTINGS_SCOPE, 5);
-/// Remote workspace, connection, and Tunnel overview.
+/// Remote directory, connection, and Tunnel overview.
 pub const SETTINGS_NAV_REMOTE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 6);
 /// Appearance and theme preferences.
 pub const SETTINGS_NAV_APPEARANCE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 7);
@@ -91,14 +91,14 @@ pub const SETTINGS_NAV_KEYBINDINGS: ElementId = ElementId::scoped(SETTINGS_SCOPE
 /// The section currently projected into the Settings content slot.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SettingsPageSection {
-    /// Application and workspace defaults.
+    /// Application and environment defaults.
     #[default]
     General,
     /// Theme and visual preferences.
     Appearance,
     /// Keyboard shortcut preferences.
     Keybindings,
-    /// Remote workspace, connection, and Tunnel overview.
+    /// Remote directory, connection, and Tunnel overview.
     Remote,
 }
 

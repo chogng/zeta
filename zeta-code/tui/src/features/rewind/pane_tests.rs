@@ -42,6 +42,8 @@ fn thread(messages: &[&str]) -> Thread {
     Thread {
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "thread".into(),
         status: ThreadStatus::Active,
         sequence: 1,

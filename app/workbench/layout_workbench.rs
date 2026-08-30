@@ -3,8 +3,8 @@ use zui::ui::SplitViewResizeSnapshot;
 
 use super::InspectorLayoutSpec;
 use super::LogicalViewport;
+use super::MainLayout;
 use super::TabContainerLayoutSpec;
-use super::WorkspaceLayout;
 
 const MINIMUM_VIEWPORT_WIDTH: f32 = 240.0;
 const MINIMUM_VIEWPORT_HEIGHT: f32 = 180.0;
@@ -67,16 +67,16 @@ impl WorkbenchLayoutSpec {
             (viewport.height - titlebar.size.height).max(0.0),
         );
         let tab_container = self.tab_container.for_bounds(body);
-        let workspace = WorkspaceLayout::for_bounds(tab_container.main_bounds(), self.inspector);
+        let main = MainLayout::for_bounds(tab_container.main_bounds(), self.inspector);
 
         Some(WorkbenchLayout {
             titlebar,
             tab_container: tab_container.tab_container_bounds(),
             tab_container_sash_track: tab_container.sash_track(),
-            main: workspace.active_pane_bounds(),
-            inspector: workspace.inspector_bounds(),
-            inspector_sash_track: workspace.inspector_sash_track(),
-            inspector_resize_snapshot: workspace.inspector_resize_snapshot(),
+            main: main.active_pane_bounds(),
+            inspector: main.inspector_bounds(),
+            inspector_sash_track: main.inspector_sash_track(),
+            inspector_resize_snapshot: main.inspector_resize_snapshot(),
         })
     }
 }

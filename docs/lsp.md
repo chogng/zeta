@@ -101,7 +101,7 @@ Git object identity 或 durable product sequence。
 | 当前 document text / editor revision | ❌ | ❌ | 借用 snapshot | ❌ | ✅ | 文件 I/O authority |
 | diagnostics freshness 与 position conversion | 提供协议事实 | ❌ | ✅ | ❌ | ✅ Editor 绘制，Desktop hover | 协议投影 |
 | mode/path durable preference | ❌ | 只消费 preference | ❌ | ❌ | Settings UI / adapter | ✅ authority |
-| workspace trust / executable policy | ❌ | 只消费结果 | 只消费 definition | ❌ | 协调 | authority |
+| directory capabilities / executable policy | ❌ | 只消费结果 | 只消费 definition | ❌ | 协调 | authority |
 
 `zeta-editor` 保持纯 presentation，不依赖 provider、`zeta-lsp` 或 manager。Desktop host 组合 provider、
 editor 和 `zeta-lsp-manager`，只在 adapter 中转换文档与事件；其他 editor runtime host 可以消费相同系统语义，
@@ -173,7 +173,7 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 
 ### 计划
 
-1. 把 workspace trust 的明确结果映射为 resolver execution policy。
+1. 把 `UseLanguageServices` 与 `ExecuteCommands` 的 Authorization 映射为 resolver execution policy。
 2. 增加 pull diagnostics 的 result-id cache、partial-result progress 与 `workspace/diagnostic/refresh`。
 3. 为更多 language-server family 增加领域初始化参数 adapter，并为未引用 artifact 增加独立
    garbage collection policy。

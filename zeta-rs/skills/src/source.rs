@@ -10,18 +10,9 @@ use std::path::{Path, PathBuf};
 pub enum SkillSourceKind {
     BuiltIn,
     User,
-    Workspace,
+    Directory,
     Plugin,
     Marketplace,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum SkillTrust {
-    BuiltInVerified,
-    UserManaged,
-    WorkspaceManaged,
-    PluginPackageVerified,
-    MarketplacePackageVerified,
 }
 
 /// Consumer-visible Skill source provenance without its private host root.
@@ -29,7 +20,6 @@ pub enum SkillTrust {
 pub struct SkillSourceView {
     id: SkillSourceId,
     kind: SkillSourceKind,
-    trust: SkillTrust,
 }
 
 impl SkillSourceView {
@@ -41,8 +31,8 @@ impl SkillSourceView {
         self.kind
     }
 
-    pub fn trust(&self) -> SkillTrust {
-        self.trust
+    pub fn allows_automatic_activation(&self) -> bool {
+        self.kind == SkillSourceKind::BuiltIn
     }
 }
 
@@ -66,30 +56,15 @@ enum SkillSourceLayout {
 
 impl SkillSourceRoot {
     pub fn built_in(id: SkillSourceId, root: impl AsRef<Path>) -> Result<Self, SkillError> {
-        Self::new(
-            id,
-            SkillSourceKind::BuiltIn,
-            SkillTrust::BuiltInVerified,
-            root.as_ref(),
-        )
+        Self::new(id, SkillSourceKind::BuiltIn, root.as_ref())
     }
 
     pub fn user(id: SkillSourceId, root: impl AsRef<Path>) -> Result<Self, SkillError> {
-        Self::new(
-            id,
-            SkillSourceKind::User,
-            SkillTrust::UserManaged,
-            root.as_ref(),
-        )
+        Self::new(id, SkillSourceKind::User, root.as_ref())
     }
 
-    pub fn workspace(id: SkillSourceId, root: impl AsRef<Path>) -> Result<Self, SkillError> {
-        Self::new(
-            id,
-            SkillSourceKind::Workspace,
-            SkillTrust::WorkspaceManaged,
-            root.as_ref(),
-        )
+    pub fn directory(id: SkillSourceId, root: impl AsRef<Path>) -> Result<Self, SkillError> {
+        Self::new(id, SkillSourceKind::Directory, root.as_ref())
     }
 
     /// Creates a source for one exact manifest-declared Skill directory in a verified Plugin.
@@ -98,13 +73,7 @@ impl SkillSourceRoot {
         name: SkillName,
         root: impl AsRef<Path>,
     ) -> Result<Self, SkillError> {
-        Self::new_exact(
-            id,
-            SkillSourceKind::Plugin,
-            SkillTrust::PluginPackageVerified,
-            name,
-            root.as_ref(),
-        )
+        Self::new_exact(id, SkillSourceKind::Plugin, name, root.as_ref())
     }
 
     /// Creates a source for one exact Skill capability in a Marketplace-verified package.
@@ -113,20 +82,14 @@ impl SkillSourceRoot {
         name: SkillName,
         root: impl AsRef<Path>,
     ) -> Result<Self, SkillError> {
-        Self::new_exact(
-            id,
-            SkillSourceKind::Marketplace,
-            SkillTrust::MarketplacePackageVerified,
-            name,
-            root.as_ref(),
-        )
+        Self::new_exact(id, SkillSourceKind::Marketplace, name, root.as_ref())
     }
 
     pub fn view(&self) -> &SkillSourceView {
         &self.view
     }
 
-    /// Returns the private host root for trusted runtime composition and file watching.
+    /// Returns the private host root for runtime composition and file watching.
     ///
     /// Consumer-facing projections must use [`Self::view`] and must not serialize this path.
     pub fn host_root(&self) -> &Path {
@@ -150,19 +113,14 @@ impl SkillSourceRoot {
         }
     }
 
-    fn new(
-        id: SkillSourceId,
-        kind: SkillSourceKind,
-        trust: SkillTrust,
-        root: &Path,
-    ) -> Result<Self, SkillError> {
+    fn new(id: SkillSourceId, kind: SkillSourceKind, root: &Path) -> Result<Self, SkillError> {
         let metadata = fs::symlink_metadata(root).map_err(|_| source_unavailable(&id))?;
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
             return Err(source_unavailable(&id));
         }
         let canonical_root = root.canonicalize().map_err(|_| source_unavailable(&id))?;
         Ok(Self {
-            view: SkillSourceView { id, kind, trust },
+            view: SkillSourceView { id, kind },
             canonical_root,
             layout: SkillSourceLayout::Collection,
         })
@@ -171,11 +129,10 @@ impl SkillSourceRoot {
     fn new_exact(
         id: SkillSourceId,
         kind: SkillSourceKind,
-        trust: SkillTrust,
         name: SkillName,
         root: &Path,
     ) -> Result<Self, SkillError> {
-        let mut source = Self::new(id, kind, trust, root)?;
+        let mut source = Self::new(id, kind, root)?;
         source.layout = SkillSourceLayout::ExactSkill(name);
         Ok(source)
     }

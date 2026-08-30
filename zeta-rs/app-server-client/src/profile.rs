@@ -4,7 +4,7 @@ use std::path::PathBuf;
 /// Resolves the host-wide profile root shared by local App Server clients.
 ///
 /// `ZETA_PROFILE_ROOT` is authoritative when present. Otherwise every local Zeta product uses
-/// `<home>/.zeta`, independent of the active workspace and operating system.
+/// `<home>/.zeta`, independent of the active directory and operating system.
 pub fn local_profile_root() -> PathBuf {
     resolve_profile_root(
         std::env::var_os("ZETA_PROFILE_ROOT"),

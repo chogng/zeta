@@ -6,14 +6,14 @@ use zeta_codebase::{
     CodebaseLimits, CodebaseQuery, EmbeddedCodeChunk, EmbeddingIndexKey, SymbolIndexLimits,
     SymbolIndexQuery, SymbolIndexRefreshOutcome,
 };
+use zeta_file_access::Dir;
 use zeta_model_provider::EmbeddingVector;
 use zeta_state::StateRuntime;
-use zeta_workspace::WorkspaceRoot;
 
 use crate::CodebaseStore;
 
-fn workspace() -> TempDir {
-    let directory = tempfile::tempdir().expect("workspace");
+fn dir() -> TempDir {
+    let directory = tempfile::tempdir().expect("dir");
     std::fs::create_dir(directory.path().join(".git")).expect("git marker");
     std::fs::write(
         directory.path().join("lib.rs"),
@@ -25,12 +25,12 @@ fn workspace() -> TempDir {
 
 #[test]
 fn one_database_reopens_source_symbol_and_vector_generations() {
-    let workspace = workspace();
+    let dir = dir();
     let profile = tempfile::tempdir().expect("profile");
     let state = StateRuntime::open(profile.path()).expect("state");
-    let root = WorkspaceRoot::open(workspace.path()).expect("root");
+    let root = Dir::open_local(dir.path()).expect("root");
 
-    let store = Arc::new(CodebaseStore::open(&state, &root.trust_id()).expect("store"));
+    let store = Arc::new(CodebaseStore::open(&state, &root.id()).expect("store"));
     let codebase = Arc::new(
         store
             .open_codebase(root.clone(), CodebaseLimits::default())
@@ -72,7 +72,7 @@ fn one_database_reopens_source_symbol_and_vector_generations() {
     drop(store);
 
     let reopened_store =
-        Arc::new(CodebaseStore::open(&state, &root.trust_id()).expect("reopened Codebase store"));
+        Arc::new(CodebaseStore::open(&state, &root.id()).expect("reopened Codebase store"));
     let reopened = Arc::new(
         reopened_store
             .open_codebase(root, CodebaseLimits::default())

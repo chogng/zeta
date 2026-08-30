@@ -38,13 +38,13 @@ use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CLOSE;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CONNECT;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_DELETE;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_DIRECTORY;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_HOST;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_LIST;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NAME;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NEW;
 use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_SAVE;
-use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_WORKSPACE;
 use crate::remote::remote_connection_manager::RemoteConnectionManagerField;
 use crate::remote::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote::remote_connection_manager::remote_connection_manager_item_id;
@@ -87,7 +87,7 @@ pub struct RemoteConnectionManager<'a> {
     list: ListView,
     name_input: InputBox,
     host_input: InputBox,
-    workspace_input: InputBox,
+    dir_input: InputBox,
 }
 
 impl<'a> RemoteConnectionManager<'a> {
@@ -193,16 +193,16 @@ impl<'a> RemoteConnectionManager<'a> {
             state.input(RemoteConnectionManagerField::Host),
             text_layout,
         );
-        let workspace_input = InputBox::new(
-            input_bounds(panel, RemoteConnectionManagerField::Workspace),
-            "/absolute/remote/workspace",
+        let dir_input = InputBox::new(
+            input_bounds(panel, RemoteConnectionManagerField::Directory),
+            "/absolute/remote/dir",
             input_state(
                 dispatch,
-                REMOTE_CONNECTION_MANAGER_WORKSPACE,
+                REMOTE_CONNECTION_MANAGER_DIRECTORY,
                 caret_visibility,
             ),
             input_style,
-            state.input(RemoteConnectionManagerField::Workspace),
+            state.input(RemoteConnectionManagerField::Directory),
             text_layout,
         );
         Self {
@@ -216,7 +216,7 @@ impl<'a> RemoteConnectionManager<'a> {
             list,
             name_input,
             host_input,
-            workspace_input,
+            dir_input,
         }
     }
 
@@ -224,7 +224,7 @@ impl<'a> RemoteConnectionManager<'a> {
         match field {
             RemoteConnectionManagerField::Name => self.name_input.caret_bounds(),
             RemoteConnectionManagerField::Host => self.host_input.caret_bounds(),
-            RemoteConnectionManagerField::Workspace => self.workspace_input.caret_bounds(),
+            RemoteConnectionManagerField::Directory => self.dir_input.caret_bounds(),
         }
     }
 
@@ -289,11 +289,11 @@ impl<'a> RemoteConnectionManager<'a> {
                 navigation,
             ),
             input_region(
-                REMOTE_CONNECTION_MANAGER_WORKSPACE,
-                self.workspace_input.bounds(),
-                "Absolute Remote Workspace path",
+                REMOTE_CONNECTION_MANAGER_DIRECTORY,
+                self.dir_input.bounds(),
+                "Absolute Remote Directory path",
                 self.state
-                    .input(RemoteConnectionManagerField::Workspace)
+                    .input(RemoteConnectionManagerField::Directory)
                     .text(),
                 navigation,
             ),
@@ -334,7 +334,7 @@ impl<'a> RemoteConnectionManager<'a> {
                         "{}, {}, {}",
                         entry.name().as_str(),
                         entry.target().host().as_str(),
-                        entry.target().workspace().as_str()
+                        entry.target().dir().as_str()
                     ),
                 )
                 .with_parent(REMOTE_CONNECTION_MANAGER_LIST)
@@ -439,7 +439,7 @@ impl<'a> RemoteConnectionManager<'a> {
         for (field, label) in [
             (RemoteConnectionManagerField::Name, "Name"),
             (RemoteConnectionManagerField::Host, "SSH host"),
-            (RemoteConnectionManagerField::Workspace, "Remote Workspace"),
+            (RemoteConnectionManagerField::Directory, "Remote Directory"),
         ] {
             let bounds = input_bounds(self.panel, field);
             draw_text(
@@ -456,7 +456,7 @@ impl<'a> RemoteConnectionManager<'a> {
         }
         scene.draw_component(&self.name_input);
         scene.draw_component(&self.host_input);
-        scene.draw_component(&self.workspace_input);
+        scene.draw_component(&self.dir_input);
         if let Some((status, error)) = self.state.status() {
             draw_text(
                 scene,
@@ -563,7 +563,7 @@ impl Component for RemoteConnectionManager<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zeta_remote::RemoteWorkspacePath;
+    use zeta_remote::RemoteDirPath;
     use zeta_remote::SshHost;
     use zeta_remote::SshTarget;
     use zeta_remote_connections::RemoteConnectionEntry;
@@ -579,7 +579,7 @@ mod tests {
                 RemoteConnectionName::parse("build").unwrap(),
                 SshTarget::new(
                     SshHost::parse("build.example").unwrap(),
-                    RemoteWorkspacePath::parse("/srv/project").unwrap(),
+                    RemoteDirPath::parse("/srv/project").unwrap(),
                 ),
             )],
             None,
@@ -620,7 +620,7 @@ mod tests {
             RemoteConnectionName::parse("build").unwrap(),
             SshTarget::new(
                 SshHost::parse("build.example").unwrap(),
-                RemoteWorkspacePath::parse("/srv/project").unwrap(),
+                RemoteDirPath::parse("/srv/project").unwrap(),
             ),
         )]);
         let dispatch = UiDispatch::default();
@@ -668,7 +668,7 @@ mod tests {
         assert!(
             frame
                 .interaction()
-                .node(REMOTE_CONNECTION_MANAGER_WORKSPACE)
+                .node(REMOTE_CONNECTION_MANAGER_DIRECTORY)
                 .is_some()
         );
         assert!(

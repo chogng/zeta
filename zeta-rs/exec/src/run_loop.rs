@@ -323,14 +323,8 @@ where
             let session = connection
                 .create_session(command_id(&request.run_id, "create-session"), title.clone())
                 .map_err(|error| app_server_error("create Session", error))?;
-            let thread_id = connection
-                .create_thread(
-                    command_id(&request.run_id, "create-thread"),
-                    session.session_id.clone(),
-                    session.sequence,
-                    title.clone(),
-                )
-                .map_err(|error| app_server_error("create Thread", error))?;
+            let thread_id = ThreadId::new(session.session_id.as_str().to_owned())
+                .map_err(|error| ExecError::InvalidRequest(error.to_string()))?;
             (session.session_id, thread_id)
         }
         ExecEntry::Resume {
@@ -349,14 +343,13 @@ where
             title,
             ..
         } => {
-            let session = connection
+            connection
                 .read_session(session_id.clone())
                 .map_err(|error| app_server_error("read Session", error))?;
             let thread_id = connection
                 .fork_thread(
                     command_id(&request.run_id, "fork-thread"),
                     session_id.clone(),
-                    session.sequence,
                     parent_thread_id.clone(),
                     title.clone(),
                 )

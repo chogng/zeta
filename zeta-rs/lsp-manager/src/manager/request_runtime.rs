@@ -503,7 +503,7 @@ pub(super) enum CompletedLanguageRequest {
     Locations(LanguageLocations),
     Hierarchy(LanguageHierarchyResult),
     RenamePreparation(LanguageRenamePreparation),
-    WorkspaceEdit(LanguageWorkspaceEditResult),
+    WorkspaceEdit(LanguageEditResult),
     CodeActions(LanguageCodeActions),
     FormattingEdits(LanguageFormattingEdits),
     SignatureHelp(LanguageSignatureHelp),
@@ -1822,24 +1822,20 @@ impl Supervisor {
     ) {
         let Some((server, server_epoch)) = self.server_for_language(&language_id) else {
             self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
-            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
-                LanguageWorkspaceSymbols {
-                    request_id: id,
-                    query,
-                    symbols: Vec::new(),
-                },
-            ));
+            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(LanguageSymbols {
+                request_id: id,
+                query,
+                symbols: Vec::new(),
+            }));
             return;
         };
         let Ok(client) = self.router.client_for_language(&language_id).cloned() else {
             self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
-            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
-                LanguageWorkspaceSymbols {
-                    request_id: id,
-                    query,
-                    symbols: Vec::new(),
-                },
-            ));
+            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(LanguageSymbols {
+                request_id: id,
+                query,
+                symbols: Vec::new(),
+            }));
             return;
         };
         if !matches!(
@@ -1850,13 +1846,11 @@ impl Supervisor {
             Some(OneOf::Left(true)) | Some(OneOf::Right(_))
         ) {
             self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
-            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
-                LanguageWorkspaceSymbols {
-                    request_id: id,
-                    query,
-                    symbols: Vec::new(),
-                },
-            ));
+            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(LanguageSymbols {
+                request_id: id,
+                query,
+                symbols: Vec::new(),
+            }));
             return;
         }
         let encoding = client.initialization().position_encoding.clone();
@@ -1913,7 +1907,7 @@ impl Supervisor {
         server: LanguageServerName,
         generation: u64,
         server_epoch: u64,
-        result: Result<LanguageWorkspaceSymbols, String>,
+        result: Result<LanguageSymbols, String>,
     ) {
         let Some(tracking) = self.in_flight_requests.remove(&id) else {
             return;
@@ -1950,7 +1944,7 @@ impl Supervisor {
                     message,
                 });
                 self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
-                    LanguageWorkspaceSymbols {
+                    LanguageSymbols {
                         request_id: id,
                         query,
                         symbols: Vec::new(),

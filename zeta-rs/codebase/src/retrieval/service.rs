@@ -34,7 +34,7 @@ enum RetrievalDeployment {
     Enhanced(Arc<dyn CodebaseEnhancement>),
 }
 
-/// Workspace-scoped local/cloud candidate coordinator.
+/// Directory-scoped local/cloud candidate coordinator.
 pub struct CodebaseRetrievalService {
     index: Arc<Codebase>,
     symbol_index: Option<Arc<SymbolIndex>>,
@@ -91,7 +91,7 @@ impl CodebaseRetrievalService {
         self
     }
 
-    /// Adds the Workspace-owned declaration projection as another local candidate source.
+    /// Adds the Directory-owned declaration projection as another local candidate source.
     pub fn with_symbol_index(
         mut self,
         symbol_index: Arc<SymbolIndex>,

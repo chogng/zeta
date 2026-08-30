@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 use zeta_git::{GitClient, GitPrivateRef, GitTreeChange, GitTreeChangeKind, GitTreeId};
 use zeta_protocol::{SessionId, ThreadId, TurnId};
 
-/// One repository inside the managed workspace assigned to a Thread.
+/// One repository inside the managed worktree assigned to a Thread.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RepositoryCaptureTarget {
     pub repository_id: String,
@@ -285,7 +285,7 @@ impl LedgerWorker {
     ) -> Result<Vec<TurnChangeSet>, TurnChangeLedgerError> {
         if request.repositories.is_empty() {
             return Err(TurnChangeLedgerError::InvalidRequest(
-                "Turn workspace has no repository capture targets".into(),
+                "Turn worktree has no repository capture targets".into(),
             ));
         }
         let mut records = Vec::new();

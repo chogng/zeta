@@ -118,10 +118,6 @@ pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
         StableTurnErrorCode::CompletionPersistenceFailed => {
             "Zeta generated a response but couldn't save it. Please try again.".into()
         }
-        StableTurnErrorCode::WorkspaceCaptureFailed => {
-            "Zeta couldn't capture the current workspace state. Check workspace access and try again."
-                .into()
-        }
         StableTurnErrorCode::InteractionDeadlineElapsed => {
             "The approval or input request expired before it received a response. Please try the \
              request again."
@@ -130,6 +126,10 @@ pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
         StableTurnErrorCode::ToolRepetition => {
             "Zeta stopped after the same tool call failed repeatedly. Review the tool output or \
              change the request before retrying."
+                .into()
+        }
+        StableTurnErrorCode::WorktreeCaptureFailed => {
+            "Zeta could not capture the worktree state needed to track this Turn's changes."
                 .into()
         }
         StableTurnErrorCode::UsageLimited => {

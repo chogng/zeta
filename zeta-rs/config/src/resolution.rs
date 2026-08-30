@@ -1,8 +1,7 @@
 use crate::{
-    ConfigError, ConfigGeneration, ConfigRevision, HookId, LanguageServerId, McpServerId, PluginId,
+    ConfigError, ConfigGeneration, ConfigRevision, DirConfigDocument, DirConfigIntent,
+    DirConfigRevision, DirConfigScope, DirId, HookId, LanguageServerId, McpServerId, PluginId,
     ResolvedConfig, ResolvedConfigSnapshot, SkillSourceId, UserConfigDocument,
-    WorkspaceConfigDocument, WorkspaceConfigIntent, WorkspaceConfigRevision, WorkspaceConfigScope,
-    WorkspaceId,
 };
 use std::collections::BTreeMap;
 use zeta_protocol::{ModelRef, ProviderId};
@@ -12,7 +11,7 @@ use zeta_protocol::{ModelRef, ProviderId};
 pub enum ConfigValueSource {
     #[default]
     User,
-    Workspace(WorkspaceId),
+    Dir(DirId),
 }
 
 /// Origin information for consumer-visible configuration values.
@@ -95,11 +94,11 @@ impl ConfigProvenance {
 /// Stable category for a configuration diagnostic that does not rewrite desired configuration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConfigDiagnosticCode {
-    WorkspacePreferredModelProviderUnconfigured,
-    WorkspaceMcpPendingTrust,
-    WorkspaceSkillPendingTrust,
-    WorkspacePluginPendingTrust,
-    WorkspaceHookPendingTrust,
+    DirPreferredModelProviderUnconfigured,
+    DirMcpCapabilityRequired,
+    DirSkillCapabilityRequired,
+    DirPluginCapabilityRequired,
+    DirHookCapabilityRequired,
 }
 
 /// Redacted explanation of why a requested configuration value is not immediately usable.
@@ -109,33 +108,33 @@ pub struct ConfigDiagnostic {
     pub subject: String,
 }
 
-/// Immutable result of resolving User configuration with an optional Workspace document.
+/// Immutable result of resolving User configuration with an optional directory document.
 ///
-/// Its generation remains the User authority generation because Workspace observation has its own
+/// Its generation remains the User authority generation because directory observation has its own
 /// revision. App Server composition will assign a new environment generation after it combines
 /// this result with Plugin, MCP, Skill, credential, and policy snapshots.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScopedConfigSnapshot {
     pub user_revision: ConfigRevision,
     pub user_generation: ConfigGeneration,
-    pub workspace_revision: Option<WorkspaceConfigRevision>,
+    pub dir_revision: Option<DirConfigRevision>,
     pub values: ResolvedConfig,
     pub provenance: ConfigProvenance,
     pub diagnostics: Vec<ConfigDiagnostic>,
 }
 
-/// Workspace input passed to one configuration resolution.
-pub struct WorkspaceConfigInput<'a> {
-    pub scope: &'a WorkspaceConfigScope,
-    pub revision: WorkspaceConfigRevision,
-    pub document: &'a WorkspaceConfigDocument,
+/// Directory input passed to one configuration resolution.
+pub struct DirConfigInput<'a> {
+    pub scope: &'a DirConfigScope,
+    pub revision: DirConfigRevision,
+    pub document: &'a DirConfigDocument,
 }
 
-impl<'a> WorkspaceConfigInput<'a> {
+impl<'a> DirConfigInput<'a> {
     pub fn new(
-        scope: &'a WorkspaceConfigScope,
-        revision: WorkspaceConfigRevision,
-        document: &'a WorkspaceConfigDocument,
+        scope: &'a DirConfigScope,
+        revision: DirConfigRevision,
+        document: &'a DirConfigDocument,
     ) -> Self {
         Self {
             scope,
@@ -145,39 +144,38 @@ impl<'a> WorkspaceConfigInput<'a> {
     }
 }
 
-/// Resolves ordinary User configuration with an optional, host-scoped Workspace document.
+/// Resolves ordinary User configuration with an optional, host-scoped directory document.
 ///
-/// The resolver never treats Workspace requests as installed Plugins, trusted MCP connections,
-/// selected credential bindings, or active Skill content. Only a workspace model preference may
+/// The resolver never treats directory requests as installed Plugins, connected MCP servers,
+/// selected credential bindings, or active Skill content. Only a directory model preference may
 /// override the User preference, and only when its provider is already configured by the User.
 pub fn resolve_scoped_config(
     user: &ResolvedConfigSnapshot,
-    workspace: Option<WorkspaceConfigInput<'_>>,
+    dir: Option<DirConfigInput<'_>>,
 ) -> Result<ScopedConfigSnapshot, ConfigError> {
     let mut values = user.values.clone();
     let mut provenance = user.provenance.clone();
     let mut diagnostics = user.diagnostics.clone();
-    let mut workspace_revision = None;
+    let mut dir_revision = None;
 
-    if let Some(workspace) = workspace {
-        workspace.document.validate(workspace.scope)?;
-        let workspace_id = workspace.scope.workspace_id.clone();
-        workspace_revision = Some(workspace.revision);
+    if let Some(dir) = dir {
+        dir.document.validate(dir.scope)?;
+        let dir_id = dir.scope.dir_id.clone();
+        dir_revision = Some(dir.revision);
 
-        if let Some(model) = &workspace.document.agent.preferred_model {
-            apply_workspace_model_preference(
+        if let Some(model) = &dir.document.agent.preferred_model {
+            apply_dir_model_preference(
                 &mut values,
                 &mut provenance,
                 &mut diagnostics,
-                &workspace_id,
+                &dir_id,
                 model,
             );
         }
 
-        let source = ConfigValueSource::Workspace(workspace_id.clone());
+        let source = ConfigValueSource::Dir(dir_id.clone());
         provenance.mcp_servers.extend(
-            workspace
-                .document
+            dir.document
                 .mcp
                 .servers
                 .keys()
@@ -185,8 +183,7 @@ pub fn resolve_scoped_config(
                 .map(|id| (id, source.clone())),
         );
         provenance.skill_sources.extend(
-            workspace
-                .document
+            dir.document
                 .skills
                 .sources
                 .keys()
@@ -194,8 +191,7 @@ pub fn resolve_scoped_config(
                 .map(|id| (id, source.clone())),
         );
         provenance.plugin_requests.extend(
-            workspace
-                .document
+            dir.document
                 .plugin_requests
                 .requests
                 .keys()
@@ -203,92 +199,71 @@ pub fn resolve_scoped_config(
                 .map(|id| (id, source.clone())),
         );
         provenance.hooks.extend(
-            workspace
-                .document
+            dir.document
                 .hooks
                 .hooks
                 .keys()
                 .cloned()
                 .map(|id| (id, source.clone())),
         );
+        diagnostics.extend(dir.document.mcp.servers.keys().map(|id| ConfigDiagnostic {
+            code: ConfigDiagnosticCode::DirMcpCapabilityRequired,
+            subject: id.to_string(),
+        }));
+        diagnostics.extend(dir.document.plugin_requests.requests.keys().map(|id| {
+            ConfigDiagnostic {
+                code: ConfigDiagnosticCode::DirPluginCapabilityRequired,
+                subject: id.to_string(),
+            }
+        }));
+        diagnostics.extend(dir.document.hooks.hooks.keys().map(|id| ConfigDiagnostic {
+            code: ConfigDiagnosticCode::DirHookCapabilityRequired,
+            subject: id.to_string(),
+        }));
         diagnostics.extend(
-            workspace
-                .document
-                .mcp
-                .servers
-                .keys()
-                .map(|id| ConfigDiagnostic {
-                    code: ConfigDiagnosticCode::WorkspaceMcpPendingTrust,
-                    subject: id.to_string(),
-                }),
-        );
-        diagnostics.extend(
-            workspace
-                .document
-                .plugin_requests
-                .requests
-                .keys()
-                .map(|id| ConfigDiagnostic {
-                    code: ConfigDiagnosticCode::WorkspacePluginPendingTrust,
-                    subject: id.to_string(),
-                }),
-        );
-        diagnostics.extend(
-            workspace
-                .document
-                .hooks
-                .hooks
-                .keys()
-                .map(|id| ConfigDiagnostic {
-                    code: ConfigDiagnosticCode::WorkspaceHookPendingTrust,
-                    subject: id.to_string(),
-                }),
-        );
-        diagnostics.extend(
-            workspace
-                .document
+            dir.document
                 .skills
                 .sources
                 .keys()
                 .map(|id| ConfigDiagnostic {
-                    code: ConfigDiagnosticCode::WorkspaceSkillPendingTrust,
+                    code: ConfigDiagnosticCode::DirSkillCapabilityRequired,
                     subject: id.to_string(),
                 }),
         );
-        values.workspace = Some(WorkspaceConfigIntent {
-            workspace_id,
-            mcp: workspace.document.mcp.clone(),
-            plugin_requests: workspace.document.plugin_requests.clone(),
-            skills: workspace.document.skills.clone(),
-            hooks: workspace.document.hooks.clone(),
-            exec_policy: workspace.document.exec_policy.clone(),
+        values.dir_config = Some(DirConfigIntent {
+            dir_id,
+            mcp: dir.document.mcp.clone(),
+            plugin_requests: dir.document.plugin_requests.clone(),
+            skills: dir.document.skills.clone(),
+            hooks: dir.document.hooks.clone(),
+            exec_policy: dir.document.exec_policy.clone(),
         });
     }
 
     Ok(ScopedConfigSnapshot {
         user_revision: user.revision,
         user_generation: user.generation,
-        workspace_revision,
+        dir_revision,
         values,
         provenance,
         diagnostics,
     })
 }
 
-fn apply_workspace_model_preference(
+fn apply_dir_model_preference(
     values: &mut ResolvedConfig,
     provenance: &mut ConfigProvenance,
     diagnostics: &mut Vec<ConfigDiagnostic>,
-    workspace_id: &WorkspaceId,
+    dir_id: &DirId,
     model: &ModelRef,
 ) {
     if values.providers.contains_key(&model.provider) {
         values.preferred_model = Some(model.clone());
-        provenance.preferred_model = Some(ConfigValueSource::Workspace(workspace_id.clone()));
+        provenance.preferred_model = Some(ConfigValueSource::Dir(dir_id.clone()));
         return;
     }
     diagnostics.push(ConfigDiagnostic {
-        code: ConfigDiagnosticCode::WorkspacePreferredModelProviderUnconfigured,
+        code: ConfigDiagnosticCode::DirPreferredModelProviderUnconfigured,
         subject: model.provider.to_string(),
     });
 }

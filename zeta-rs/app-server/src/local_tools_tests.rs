@@ -7,6 +7,10 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use zeta_async_utils::CancellationSource;
+use zeta_file_access::Grant;
+use zeta_file_access::GrantSource;
+use zeta_file_access::Permission;
+use zeta_file_access::Permissions;
 use zeta_protocol::SessionId;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolName;
@@ -14,11 +18,6 @@ use zeta_sandboxing::PreparedCommand;
 use zeta_sandboxing::SandboxCommand;
 use zeta_sandboxing::SandboxError;
 use zeta_sandboxing::SandboxKind;
-use zeta_workspace::WorkspaceAuthorization;
-use zeta_workspace::WorkspaceTrustDecision;
-use zeta_workspace::WorkspaceTrustSource;
-use zeta_workspace_access::AdditionalDirectoryPermission;
-use zeta_workspace_access::AdditionalDirectoryPermissions;
 
 struct PassThroughBackend;
 
@@ -31,7 +30,7 @@ impl SandboxBackend for PassThroughBackend {
         &self,
         command: &SandboxCommand,
         policy: SandboxPolicy,
-        _: &WorkspaceRoot,
+        _: &Dir,
     ) -> Result<PreparedCommand, SandboxError> {
         assert!(policy == read_only_sandbox() || policy == shell_sandbox());
         Ok(PreparedCommand::unrestricted(command))
@@ -40,10 +39,10 @@ impl SandboxBackend for PassThroughBackend {
 
 #[test]
 fn local_registry_exposes_shell_command_and_preserves_read_only_ripgrep() {
-    let workspace = TestWorkspace::new();
+    let dir = TestDir::new();
     let service = LocalShellToolService::new(
-        workspace.trusted(),
-        RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        dir.authorization(),
+        RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         PassThroughBackend,
     )
     .unwrap();
@@ -81,11 +80,11 @@ fn local_registry_exposes_shell_command_and_preserves_read_only_ripgrep() {
 }
 
 #[test]
-fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_arguments() {
-    let workspace = TestWorkspace::new();
+fn local_registry_accepts_shell_processes_but_rejects_ripgrep_dir_escape_arguments() {
+    let dir = TestDir::new();
     let service = LocalShellToolService::new(
-        workspace.trusted(),
-        RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        dir.authorization(),
+        RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         PassThroughBackend,
     )
     .unwrap();
@@ -121,7 +120,7 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_a
             })))
             .is_err()
     );
-    std::os::unix::fs::symlink("/etc", workspace.path().join("outside-link")).unwrap();
+    std::os::unix::fs::symlink("/etc", dir.path().join("outside-link")).unwrap();
     assert!(
         service
             .prepare(&tool_call(json!({
@@ -134,59 +133,55 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_a
 }
 
 #[test]
-fn shell_executor_runs_in_the_session_authorized_additional_directory() {
-    let primary = TestWorkspace::new();
-    let additional = TestWorkspace::new();
-    let access = Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default());
-    let session_id = SessionId::new("shell-additional-directory").unwrap();
+fn shell_executor_runs_in_a_session_dir() {
+    let cwd_dir = TestDir::new();
+    let session_dir = TestDir::new();
+    let access = Arc::new(crate::dir_grants::DirGrants::default());
+    let session_id = SessionId::new("shell-session-dir").unwrap();
     access
-        .add_directory(
+        .add_dir(
             session_id.clone(),
-            primary.root(),
-            WorkspaceAuthorization::new(
-                additional.root(),
-                WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+            Grant::for_session_tree(
+                session_id.clone(),
+                session_dir.root(),
+                GrantSource::ExplicitUser,
+                Permissions::new([Permission::ReadFiles, Permission::ExecuteCommands]),
             ),
-            AdditionalDirectoryPermissions::new([
-                AdditionalDirectoryPermission::ReadFiles,
-                AdditionalDirectoryPermission::ExecuteCommands,
-            ])
-            .unwrap(),
         )
         .unwrap();
     let reviewer = LocalExecutorReviewer {
-        workspace: primary.trusted(),
-        ripgrep: RipgrepExecutable::from_path(primary.ripgrep()).unwrap(),
+        authorization: cwd_dir.authorization(),
+        ripgrep: RipgrepExecutable::from_path(cwd_dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
-        session_workspace_access: Arc::clone(&access),
+        dir_grants: Arc::clone(&access),
     };
     let call = tool_call(json!({
         "program": "/bin/sh",
         "arguments": ["-lc", "pwd"],
-        "working_directory": additional.path(),
+        "working_directory": session_dir.path(),
     }));
-    let (_, request, frozen_workspace) = reviewer
+    let (_, request, authorization) = reviewer
         .prepare_shell(&call, Some(&session_id), None)
         .unwrap();
     assert_eq!(
-        frozen_workspace.root().canonical_path(),
-        additional.root().canonical_path()
+        authorization.dir().canonical_path(),
+        session_dir.root().canonical_path()
     );
     reviewer
         .prepare_shell(
             &tool_call(json!({
                 "program": "rg",
                 "arguments": ["needle", "."],
-                "working_directory": additional.path(),
+                "working_directory": session_dir.path(),
             })),
             Some(&session_id),
             None,
         )
-        .expect("ripgrep should use the selected additional directory boundary");
+        .expect("ripgrep should use the selected directory boundary");
 
     let executor = ShellCommandTool::new(
-        zeta_tools::ToolEnvironmentId::new("additional-directory-shell").unwrap(),
-        primary.root(),
+        zeta_tools::EnvId::new("session-dir-shell").unwrap(),
+        cwd_dir.root(),
         PassThroughBackend,
         CoreAuthorized,
         ShellCommandLimits {
@@ -203,28 +198,27 @@ fn shell_executor_runs_in_the_session_authorized_additional_directory() {
         )
         .unwrap();
     let CommandExecutionOutcome::Completed(output) = outcome else {
-        panic!("additional-directory shell command should complete");
+        panic!("session-dir shell command should complete");
     };
     assert_eq!(
         PathBuf::from(output.stdout.trim()).canonicalize().unwrap(),
-        additional.root().canonical_path()
+        session_dir.root().canonical_path()
     );
 
     access
         .set_permissions(
             &session_id,
-            additional.path(),
+            session_dir.path(),
             1,
-            AdditionalDirectoryPermissions::new([AdditionalDirectoryPermission::ReadFiles])
-                .unwrap(),
+            Permissions::new([Permission::ReadFiles]),
         )
         .unwrap();
-    assert!(frozen_workspace.ensure_active().is_err());
+    assert!(authorization.ensure_active().is_err());
 }
 
 #[test]
-fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
-    let workspace = TestWorkspace::new();
+fn durable_user_and_dir_exec_rules_drive_local_authorization() {
+    let dir = TestDir::new();
     let user_rule = ExecPolicyRule::new(
         ExecPolicyRuleId::new("user-safe-shell"),
         ExecPolicySelector::all([
@@ -241,7 +235,7 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
         user: UserExecPolicyConfig {
             rules: vec![user_rule],
         },
-        workspace: None,
+        dir_config: None,
         agent_grep_backend: zeta_config::AgentGrepBackend::Ripgrep,
     };
     let exec_policy = policy_config.snapshot().unwrap();
@@ -251,8 +245,8 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
         LOCAL_REVIEWER_POLICY_REVISION,
     );
     let service = LocalShellToolService::new_with_action_policy_revision(
-        workspace.trusted(),
-        RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        dir.authorization(),
+        RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         PassThroughBackend,
         action_policy_revision.clone(),
     )
@@ -277,11 +271,11 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
 
     let restrictive_config = LocalToolConfig {
         user: policy_config.user,
-        workspace: Some((
-            WorkspaceId::new("project").unwrap(),
-            WorkspaceExecPolicyConfig {
+        dir_config: Some((
+            dir.root().id(),
+            DirExecPolicyConfig {
                 rules: vec![ExecPolicyRule::new(
-                    ExecPolicyRuleId::new("workspace-block-shell"),
+                    ExecPolicyRuleId::new("dir-block-shell"),
                     ExecPolicySelector::source(
                         Some("built_in_tool".into()),
                         Some("shell-command".into()),
@@ -299,8 +293,8 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
         LOCAL_REVIEWER_POLICY_REVISION,
     );
     let restrictive_service = LocalShellToolService::new_with_action_policy_revision(
-        workspace.trusted(),
-        RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        dir.authorization(),
+        RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         PassThroughBackend,
         action_policy_revision.clone(),
     )
@@ -353,15 +347,13 @@ fn local_policy_runs_agent_coordination_without_an_external_approval() {
 }
 
 #[test]
-fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
-    let workspace = TestWorkspace::new();
+fn apply_patch_reviewer_materializes_paths_before_policy() {
+    let dir = TestDir::new();
     let reviewer = LocalExecutorReviewer {
-        workspace: workspace.trusted(),
-        ripgrep: RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
+        authorization: dir.authorization(),
+        ripgrep: RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
-        session_workspace_access: Arc::new(
-            crate::session_workspace_access::SessionWorkspaceAccess::default(),
-        ),
+        dir_grants: Arc::new(crate::dir_grants::DirGrants::default()),
     };
     let patch = ToolCall {
         id: ToolCallId::new("apply-patch").unwrap(),
@@ -389,35 +381,35 @@ fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
 }
 
 #[test]
-fn apply_patch_reviewer_selects_the_session_authorized_additional_directory() {
-    let primary = TestWorkspace::new();
-    let additional = TestWorkspace::new();
-    let access = Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default());
-    let session_id = SessionId::new("apply-patch-additional-directory").unwrap();
+fn apply_patch_reviewer_selects_the_session_dir() {
+    let cwd_dir = TestDir::new();
+    let session_dir = TestDir::new();
+    let access = Arc::new(crate::dir_grants::DirGrants::default());
+    let session_id = SessionId::new("apply-patch-session-dir").unwrap();
     access
-        .add_directory(
+        .add_dir(
             session_id.clone(),
-            primary.root(),
-            WorkspaceAuthorization::new(
-                additional.root(),
-                WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+            Grant::for_session_tree(
+                session_id.clone(),
+                session_dir.root(),
+                GrantSource::ExplicitUser,
+                Permissions::new([
+                    Permission::ReadFiles,
+                    Permission::WriteFiles,
+                    Permission::MutateRepository,
+                ]),
             ),
-            AdditionalDirectoryPermissions::new([
-                AdditionalDirectoryPermission::ReadFiles,
-                AdditionalDirectoryPermission::WriteFiles,
-            ])
-            .unwrap(),
         )
         .unwrap();
     let reviewer = LocalExecutorReviewer {
-        workspace: primary.trusted(),
-        ripgrep: RipgrepExecutable::from_path(primary.ripgrep()).unwrap(),
+        authorization: cwd_dir.authorization(),
+        ripgrep: RipgrepExecutable::from_path(cwd_dir.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
-        session_workspace_access: access,
+        dir_grants: access,
     };
-    let absolute = additional.path().join("added.txt");
+    let absolute = session_dir.path().join("added.txt");
     let call = ToolCall {
-        id: ToolCallId::new("apply-patch-additional").unwrap(),
+        id: ToolCallId::new("apply-patch-session-dir").unwrap(),
         name: ToolName::new("apply_patch").unwrap(),
         arguments: json!({
             "patch": format!(
@@ -427,31 +419,30 @@ fn apply_patch_reviewer_selects_the_session_authorized_additional_directory() {
         }),
     };
 
-    let (_, rewritten, workspace) = reviewer
+    let (_, rewritten, dir) = reviewer
         .prepare_apply_patch(&call, Some(&session_id), None)
         .unwrap();
 
-    assert_eq!(workspace.root(), &additional.root());
+    assert_eq!(dir.dir(), &session_dir.root());
     assert!(rewritten.contains("*** Add File: added.txt"));
     assert!(!rewritten.contains(&absolute.display().to_string()));
 }
 
 #[test]
 fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
-    let workspace = TestWorkspace::new();
-    let trusted = workspace.trusted();
-    let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
-    let environment_id = zeta_tools::ToolEnvironmentId::new("local-workspace").unwrap();
+    let dir = TestDir::new();
+    let authorization = dir.authorization();
+    let ripgrep = RipgrepExecutable::from_path(dir.ripgrep()).unwrap();
+    let environment_id = zeta_tools::EnvId::new("local-dir").unwrap();
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
-        workspace: trusted.clone(),
+        authorization: authorization.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: local_policy_revision(),
-        session_workspace_access: Arc::new(
-            crate::session_workspace_access::SessionWorkspaceAccess::default(),
-        ),
+        dir_grants: Arc::new(crate::dir_grants::DirGrants::default()),
     });
     let shell =
-        LocalShellToolService::new(trusted.clone(), ripgrep.clone(), PassThroughBackend).unwrap();
+        LocalShellToolService::new(authorization.clone(), ripgrep.clone(), PassThroughBackend)
+            .unwrap();
     let agent_grep = Arc::new(AgentGrepService::new(
         zeta_config::AgentGrepBackend::FastRegex,
         ripgrep.clone(),
@@ -462,7 +453,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
             shell,
             ripgrep.clone(),
             Arc::clone(&agent_grep),
-            Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default()),
+            Arc::new(crate::dir_grants::DirGrants::default()),
         )),
         policy: Arc::new(LocalShellPolicy::default()),
         ripgrep,
@@ -473,7 +464,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
                 executor: Arc::new(
                     ShellCommandTool::new(
                         environment_id.clone(),
-                        trusted.root().clone(),
+                        authorization.dir().clone(),
                         PassThroughBackend,
                         CoreAuthorized,
                         ShellCommandLimits {
@@ -490,7 +481,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
                 executor: Arc::new(
                     ApplyPatchTool::new(
                         environment_id.clone(),
-                        trusted.root().clone(),
+                        authorization.dir().clone(),
                         ApplyPatchLimits::default(),
                     )
                     .unwrap(),
@@ -529,13 +520,13 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
 
 #[test]
 fn agent_edit_refreshes_an_existing_fast_regex_generation_before_returning() {
-    let workspace = TestWorkspace::new();
-    fs::create_dir_all(workspace.path().join("src")).unwrap();
-    let path = workspace.path().join("src/current.rs");
+    let dir = TestDir::new();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    let path = dir.path().join("src/current.rs");
     fs::write(&path, "before_immediate_marker\n").unwrap();
-    let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
+    let ripgrep = RipgrepExecutable::from_path(dir.ripgrep()).unwrap();
     let shell =
-        LocalShellToolService::new(workspace.trusted(), ripgrep.clone(), PassThroughBackend)
+        LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
     let agent_grep = Arc::new(AgentGrepService::new(
         zeta_config::AgentGrepBackend::FastRegex,
@@ -546,7 +537,7 @@ fn agent_edit_refreshes_an_existing_fast_regex_generation_before_returning() {
         shell,
         ripgrep,
         agent_grep,
-        Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default()),
+        Arc::new(crate::dir_grants::DirGrants::default()),
     );
     let authorization = ToolAuthorization::Sandboxed(read_only_sandbox());
     let cancellation = CancellationSource::new().token();
@@ -605,10 +596,10 @@ fn agent_edit_refreshes_an_existing_fast_regex_generation_before_returning() {
 
 #[test]
 fn local_suite_reads_and_edits_with_spec_errors() {
-    let workspace = TestWorkspace::new();
-    let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
+    let dir = TestDir::new();
+    let ripgrep = RipgrepExecutable::from_path(dir.ripgrep()).unwrap();
     let shell =
-        LocalShellToolService::new(workspace.trusted(), ripgrep.clone(), PassThroughBackend)
+        LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
     let agent_grep = Arc::new(AgentGrepService::new(
         zeta_config::AgentGrepBackend::Ripgrep,
@@ -619,9 +610,9 @@ fn local_suite_reads_and_edits_with_spec_errors() {
         shell,
         ripgrep,
         agent_grep,
-        Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default()),
+        Arc::new(crate::dir_grants::DirGrants::default()),
     );
-    let path = workspace.path().join("src/main.rs");
+    let path = dir.path().join("src/main.rs");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(&path, "fn main() {\n    println!(\"old\");\n}\n").unwrap();
     let cancellation = CancellationSource::new().token();
@@ -710,15 +701,15 @@ fn tool_call(arguments: serde_json::Value) -> ToolCall {
     }
 }
 
-static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
-struct TestWorkspace {
+struct TestDir {
     path: PathBuf,
 }
 
-impl TestWorkspace {
+impl TestDir {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-local-tools-tests-{}-{sequence}",
             std::process::id()
@@ -727,16 +718,17 @@ impl TestWorkspace {
         Self { path }
     }
 
-    fn root(&self) -> WorkspaceRoot {
-        WorkspaceRoot::open(&self.path).unwrap()
+    fn root(&self) -> Dir {
+        Dir::open_local(&self.path).unwrap()
     }
 
-    fn trusted(&self) -> TrustedWorkspace {
-        TrustedWorkspace::require(
+    fn authorization(&self) -> Authorization {
+        Grant::for_environment(
             self.root(),
-            WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
-            WorkspaceCapability::ExecuteProcess,
+            GrantSource::HostConfiguration,
+            Permissions::new([Permission::ExecuteCommands]),
         )
+        .authorize(Permission::ExecuteCommands)
         .unwrap()
     }
 
@@ -755,7 +747,7 @@ impl TestWorkspace {
     }
 }
 
-impl Drop for TestWorkspace {
+impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(self.path());
     }

@@ -7,22 +7,22 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll, Waker};
 use zeta_async_utils::CancellationSource;
+use zeta_file_access::Dir;
 use zeta_file_system::LocalFileSystem;
 use zeta_protocol::{ToolCallId, TurnId};
 use zeta_tools::{
-    ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolExecutionContext,
-    ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus,
-    ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
+    EnvId, ToolBinding, ToolBindingId, ToolDefinition, ToolExecutionContext, ToolExecutionOutcome,
+    ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus, ToolPayload,
+    ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
-use zeta_workspace::WorkspaceRoot;
 
-static NEXT_WORKSPACE: AtomicU64 = AtomicU64::new(1);
+static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
 #[test]
-fn reads_lists_and_describes_workspace_paths() {
-    let workspace = TestWorkspace::new();
-    workspace.write("src/lib.rs", "hello");
-    let tool = tool(&workspace, FileSystemLimits::default());
+fn reads_lists_and_describes_dir_paths() {
+    let directory = TestWorkspace::new();
+    directory.write("src/lib.rs", "hello");
+    let tool = tool(&directory, FileSystemLimits::default());
     let definition = tool.definition();
 
     assert!(
@@ -49,11 +49,11 @@ fn reads_lists_and_describes_workspace_paths() {
 }
 
 #[test]
-fn preserves_tool_limits_and_workspace_confinement() {
-    let workspace = TestWorkspace::new();
-    workspace.write("one.txt", "12345");
-    workspace.write("two.txt", "2");
-    let tool = tool(&workspace, FileSystemLimits::new(4, 1).unwrap());
+fn preserves_tool_limits_and_dir_confinement() {
+    let directory = TestWorkspace::new();
+    directory.write("one.txt", "12345");
+    directory.write("two.txt", "2");
+    let tool = tool(&directory, FileSystemLimits::new(4, 1).unwrap());
     let definition = tool.definition();
 
     assert!(
@@ -75,25 +75,25 @@ fn preserves_tool_limits_and_workspace_confinement() {
         json!({"operation": "metadata", "path": "../outside"}),
     )));
     let ToolExecutionOutcome::Returned(escape) = escape else {
-        panic!("workspace escape should return a model-visible error");
+        panic!("directory escape should return a model-visible error");
     };
     assert_eq!(escape.status(), ToolOutputStatus::Error);
     assert!(format!("{:?}", escape.content()).contains("not available"));
 }
 
-fn tool(workspace: &TestWorkspace, limits: FileSystemLimits) -> FileSystemTool {
+fn tool(directory: &TestWorkspace, limits: FileSystemLimits) -> FileSystemTool {
     FileSystemTool::new(
         environment_id(),
         Arc::new(LocalFileSystem::new(
-            WorkspaceRoot::open(&workspace.path).unwrap(),
+            Dir::open_local(&directory.path).unwrap(),
         )),
         limits,
     )
     .unwrap()
 }
 
-fn environment_id() -> ToolEnvironmentId {
-    ToolEnvironmentId::new("local").unwrap()
+fn environment_id() -> EnvId {
+    EnvId::new("local").unwrap()
 }
 
 fn invocation(definition: &ToolDefinition, arguments: serde_json::Value) -> ToolInvocation {
@@ -143,7 +143,7 @@ struct TestWorkspace {
 
 impl TestWorkspace {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-file-system-tool-tests-{}-{sequence}",
             std::process::id(),

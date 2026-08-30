@@ -34,14 +34,14 @@ impl ExecPolicyRuleId {
     }
 }
 
-/// Trust and precedence category of one policy layer.
+/// Source and precedence category of one policy layer.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecPolicyLayerKind {
     Host,
     Organization,
     User,
-    Workspace,
+    Directory,
 }
 
 /// One argument position in a command-prefix selector.

@@ -13,7 +13,7 @@
 
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
-| `ExtensionRoot` / `ExtensionRootKind` | 表达 host 已选择的 built-in/user root | 从 Renderer 接收路径、Workspace trust |
+| `ExtensionRoot` / `ExtensionRootKind` | 表达 host 已选择的 built-in/user root | 从 Renderer 接收路径、directory capability |
 | `DynamicExtensionSourceProvider` / `DynamicExtensionSourceSnapshot` | 按 authority generation 提供 exact immutable package 目录 | Marketplace/Plugin install、enable/grant、下载或签名验证 |
 | `DynamicExtensionPackageSource::marketplace_with_manifest` | 为 product-independent portable family 提供 host-normalized 声明式 manifest，同时保留 exact package bytes/digest | 添加虚拟资源、绕过 package snapshot/path validation |
 | `ExtensionCatalog::list` | cached query 或 refresh scan，并发布单调 generation | 解析 editor `contributes` |

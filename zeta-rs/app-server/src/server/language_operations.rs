@@ -20,6 +20,14 @@ use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionsResult;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticReportKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
+use zeta_app_server_protocol::protocol::language::LanguageDirectoryDiagnosticSnapshotDto;
+use zeta_app_server_protocol::protocol::language::LanguageDirectoryDiagnosticsParams;
+use zeta_app_server_protocol::protocol::language::LanguageDirectoryDiagnosticsResult;
+use zeta_app_server_protocol::protocol::language::LanguageDirectoryEditDto;
+use zeta_app_server_protocol::protocol::language::LanguageDirectoryEditEntryDto;
+use zeta_app_server_protocol::protocol::language::LanguageDirectorySymbolDto;
+use zeta_app_server_protocol::protocol::language::LanguageDirectorySymbolsParams;
+use zeta_app_server_protocol::protocol::language::LanguageDirectorySymbolsResult;
 use zeta_app_server_protocol::protocol::language::LanguageDocumentDiagnosticsParams;
 use zeta_app_server_protocol::protocol::language::LanguageDocumentDiagnosticsResult;
 use zeta_app_server_protocol::protocol::language::LanguageDocumentFormattingParams;
@@ -63,14 +71,6 @@ use zeta_app_server_protocol::protocol::language::LanguageSignatureInformationDt
 use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
 use zeta_app_server_protocol::protocol::language::LanguageTextDocumentEditDto;
 use zeta_app_server_protocol::protocol::language::LanguageTextEditDto;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceDiagnosticSnapshotDto;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceDiagnosticsParams;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceDiagnosticsResult;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceEditDto;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceEditEntryDto;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolDto;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsParams;
-use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsResult;
 use zeta_async_utils::CancellationToken;
 use zeta_lsp_manager::LanguageCodeAction;
 use zeta_lsp_manager::LanguageCommand;
@@ -83,6 +83,8 @@ use zeta_lsp_manager::LanguageDiagnostic;
 use zeta_lsp_manager::LanguageDiagnosticSeverity;
 use zeta_lsp_manager::LanguageDocumentPosition;
 use zeta_lsp_manager::LanguageDocumentRevision;
+use zeta_lsp_manager::LanguageEdit;
+use zeta_lsp_manager::LanguageEditEntry;
 use zeta_lsp_manager::LanguageExistingTargetBehavior;
 use zeta_lsp_manager::LanguageFormattingOptions;
 use zeta_lsp_manager::LanguageHierarchyEntry;
@@ -96,8 +98,6 @@ use zeta_lsp_manager::LanguagePositionEncoding;
 use zeta_lsp_manager::LanguagePulledDiagnosticReport;
 use zeta_lsp_manager::LanguageSignatureHelpTrigger;
 use zeta_lsp_manager::LanguageTextRange;
-use zeta_lsp_manager::LanguageWorkspaceEdit;
-use zeta_lsp_manager::LanguageWorkspaceEditEntry;
 use zeta_lsp_manager::LspDocumentSnapshot;
 use zeta_lsp_manager::LspManagerRequestResult;
 
@@ -141,19 +141,15 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageSynchronizeParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let _runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let _runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         result(&())
     }
 
@@ -163,17 +159,15 @@ impl AppServer {
         _cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageCloseParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.workspace_folder_id.as_deref(),
-            params.session_directory.as_ref(),
-        )?;
-        let source_path = workspace
+        let dir = self
+            .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
+        let source_path = dir
             .resolve_for_write(&params.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         self.language
             .lock()
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?
-            .close_document(workspace.canonical_path(), &source_path)
+            .close_document(dir.canonical_path(), &source_path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         result(&())
     }
@@ -184,20 +178,16 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentDiagnosticsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let mut runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let request_id = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
@@ -230,16 +220,14 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_workspace_diagnostics(
+    pub(super) fn language_directory_diagnostics(
         &self,
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageWorkspaceDiagnosticsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.workspace_folder_id.as_deref(),
-            params.session_directory.as_ref(),
-        )?;
+        let params: LanguageDirectoryDiagnosticsParams = decode(params)?;
+        let dir = self
+            .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
         let snapshot = self
             .config
             .as_ref()
@@ -253,8 +241,8 @@ impl AppServer {
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
         let service = runtime
             .ensure(
-                workspace.canonical_path(),
-                params.workspace_folder_id.as_deref(),
+                dir.canonical_path(),
+                params.dir_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 language_id,
@@ -267,21 +255,21 @@ impl AppServer {
             .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
         {
-            LspManagerRequestResult::WorkspaceDiagnostics(response) => response,
+            LspManagerRequestResult::DirectoryDiagnostics(response) => response,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         if !response.supported {
-            return result(&LanguageWorkspaceDiagnosticsResult {
+            return result(&LanguageDirectoryDiagnosticsResult {
                 supported: false,
                 snapshots: Vec::new(),
             });
         }
-        let file_system = self.file_system_service_for(params.workspace_folder_id.as_deref())?;
+        let file_system = self.file_system_service_for(params.dir_id.as_deref())?;
         let mut grouped = std::collections::BTreeMap::new();
         for diagnostic in response.diagnostics {
             let Some(relative) = diagnostic
                 .path
-                .strip_prefix(workspace.canonical_path())
+                .strip_prefix(dir.canonical_path())
                 .ok()
                 .map(Path::to_path_buf)
             else {
@@ -306,12 +294,12 @@ impl AppServer {
                 },
             );
         }
-        result(&LanguageWorkspaceDiagnosticsResult {
+        result(&LanguageDirectoryDiagnosticsResult {
             supported: true,
             snapshots: grouped
                 .into_iter()
                 .map(
-                    |(path, diagnostics)| LanguageWorkspaceDiagnosticSnapshotDto {
+                    |(path, diagnostics)| LanguageDirectoryDiagnosticSnapshotDto {
                         path,
                         diagnostics,
                     },
@@ -327,7 +315,7 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<
         (
-            zeta_workspace::WorkspaceRoot,
+            zeta_file_access::Dir,
             std::path::PathBuf,
             LanguageDocumentRevision,
             LanguageDocumentPosition,
@@ -335,24 +323,23 @@ impl AppServer {
         ),
         RpcError,
     > {
-        let workspace = self.language_workspace_root_for(
-            document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            document.dir_id.as_deref(),
             document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(document.revision);
         let position = utf8_position(&document.text, position)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let runtime =
-            self.prepare_document_runtime(&workspace, &source_path, document, cancellation)?;
-        Ok((workspace, source_path, revision, position, runtime))
+        let runtime = self.prepare_document_runtime(&dir, &source_path, document, cancellation)?;
+        Ok((dir, source_path, revision, position, runtime))
     }
 
     pub(super) fn prepare_document_runtime(
         &self,
-        workspace: &zeta_workspace::WorkspaceRoot,
+        dir: &zeta_file_access::Dir,
         source_path: &Path,
         document: &zeta_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &CancellationToken,
@@ -383,8 +370,8 @@ impl AppServer {
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
         runtime
             .synchronize_document(
-                workspace.canonical_path(),
-                document.workspace_folder_id.as_deref(),
+                dir.canonical_path(),
+                document.dir_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 &document.path,
@@ -434,20 +421,16 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageResolveCompletionParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let mut runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let request_id = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
@@ -473,20 +456,16 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageExecuteCommandParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let mut runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let request_id = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
@@ -580,16 +559,16 @@ impl AppServer {
         options: LanguageFormattingOptionsDto,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let workspace = self.language_workspace_root_for(
-            document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            document.dir_id.as_deref(),
             document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(document.revision);
         let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, document, cancellation)?;
+            self.prepare_document_runtime(&dir, &source_path, document, cancellation)?;
         let service = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
@@ -699,23 +678,19 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageInlayHintsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
         let range = utf8_byte_range(&params.document.text, params.range)
             .map(LanguageTextRange::new)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let mut runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let mut runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let service = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
@@ -809,20 +784,16 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageSemanticTokensParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let mut runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let service = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
@@ -861,11 +832,11 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageLocationsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let position = utf8_position(&params.document.text, params.position)
@@ -890,8 +861,8 @@ impl AppServer {
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
         runtime
             .synchronize_document(
-                workspace.canonical_path(),
-                params.document.workspace_folder_id.as_deref(),
+                dir.canonical_path(),
+                params.document.dir_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 &params.document.path,
@@ -932,15 +903,14 @@ impl AppServer {
             }
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system =
-            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?;
+        let file_system = self.file_system_service_for(params.document.dir_id.as_deref())?;
         let projected = locations
             .targets
             .into_iter()
             .filter_map(|target| {
                 let relative = target
                     .path
-                    .strip_prefix(workspace.canonical_path())
+                    .strip_prefix(dir.canonical_path())
                     .ok()?
                     .to_path_buf();
                 let text = if target.path == source_path {
@@ -968,11 +938,11 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageHierarchyParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let position = params
@@ -998,7 +968,7 @@ impl AppServer {
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let item = params
             .item
-            .map(|item| hierarchy_item_from_dto(&workspace, item))
+            .map(|item| hierarchy_item_from_dto(&dir, item))
             .transpose()?;
         let mut runtime = self
             .language
@@ -1006,8 +976,8 @@ impl AppServer {
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
         runtime
             .synchronize_document(
-                workspace.canonical_path(),
-                params.document.workspace_folder_id.as_deref(),
+                dir.canonical_path(),
+                params.document.dir_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 &params.document.path,
@@ -1046,14 +1016,13 @@ impl AppServer {
             LspManagerRequestResult::Hierarchy(hierarchy) => hierarchy,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system =
-            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?;
+        let file_system = self.file_system_service_for(params.document.dir_id.as_deref())?;
         let entries = hierarchy
             .entries
             .into_iter()
             .filter_map(|entry| {
                 hierarchy_entry_to_dto(
-                    workspace.canonical_path(),
+                    dir.canonical_path(),
                     &source_path,
                     &params.document.text,
                     file_system.as_ref(),
@@ -1067,16 +1036,14 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_workspace_symbols(
+    pub(super) fn language_directory_symbols(
         &self,
         params: &Value,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let params: LanguageWorkspaceSymbolsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.workspace_folder_id.as_deref(),
-            params.session_directory.as_ref(),
-        )?;
+        let params: LanguageDirectorySymbolsParams = decode(params)?;
+        let dir = self
+            .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
         let snapshot = self
             .config
             .as_ref()
@@ -1090,8 +1057,8 @@ impl AppServer {
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
         let service = runtime
             .ensure(
-                workspace.canonical_path(),
-                params.workspace_folder_id.as_deref(),
+                dir.canonical_path(),
+                params.dir_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 language_id,
@@ -1107,14 +1074,14 @@ impl AppServer {
             LspManagerRequestResult::WorkspaceSymbols(response) => response,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system = self.file_system_service_for(params.workspace_folder_id.as_deref())?;
+        let file_system = self.file_system_service_for(params.dir_id.as_deref())?;
         let symbols = response
             .symbols
             .into_iter()
             .filter_map(|symbol| {
                 let relative = symbol
                     .path
-                    .strip_prefix(workspace.canonical_path())
+                    .strip_prefix(dir.canonical_path())
                     .ok()?
                     .to_path_buf();
                 let text = String::from_utf8(
@@ -1123,7 +1090,7 @@ impl AppServer {
                         .ok()?,
                 )
                 .ok()?;
-                Some(LanguageWorkspaceSymbolDto {
+                Some(LanguageDirectorySymbolDto {
                     name: symbol.name,
                     symbol_kind: symbol.symbol_kind,
                     container_name: symbol.container_name,
@@ -1132,7 +1099,7 @@ impl AppServer {
                 })
             })
             .collect();
-        result(&LanguageWorkspaceSymbolsResult { symbols })
+        result(&LanguageDirectorySymbolsResult { symbols })
     }
 
     pub(super) fn language_prepare_rename(
@@ -1141,7 +1108,7 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguagePrepareRenameParams = decode(params)?;
-        let (workspace, source_path, revision, position, mut runtime) =
+        let (dir, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
             .manager()
@@ -1168,7 +1135,7 @@ impl AppServer {
                 text_for_utf16_range(&params.document.text, range).unwrap_or_default()
             }),
         });
-        let _ = workspace;
+        let _ = dir;
         result(&LanguagePrepareRenameResult { preparation })
     }
 
@@ -1178,7 +1145,7 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageRenameParams = decode(params)?;
-        let (workspace, source_path, revision, position, mut runtime) =
+        let (dir, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
             .manager()
@@ -1193,11 +1160,11 @@ impl AppServer {
             LspManagerRequestResult::WorkspaceEdit(result) => result.edit,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        result(&workspace_edit_to_dto(
-            &workspace,
+        result(&directory_edit_to_dto(
+            &dir,
             &source_path,
             &params.document.text,
-            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?
+            self.file_system_service_for(params.document.dir_id.as_deref())?
                 .as_ref(),
             edit,
         )?)
@@ -1209,20 +1176,16 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageCodeActionsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let mut runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let diagnostics = params
             .diagnostics
             .into_iter()
@@ -1266,14 +1229,13 @@ impl AppServer {
             LspManagerRequestResult::CodeActions(actions) => actions.actions,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system =
-            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?;
+        let file_system = self.file_system_service_for(params.document.dir_id.as_deref())?;
         result(&LanguageCodeActionsResult {
             actions: actions
                 .into_iter()
                 .filter_map(|action| {
                     code_action_to_dto(
-                        &workspace,
+                        &dir,
                         &source_path,
                         &params.document.text,
                         file_system.as_ref(),
@@ -1291,20 +1253,16 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageResolveCodeActionParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(
-            params.document.workspace_folder_id.as_deref(),
+        let dir = self.language_dir_root_for(
+            params.document.dir_id.as_deref(),
             params.document.session_directory.as_ref(),
         )?;
-        let source_path = workspace
+        let source_path = dir
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime = self.prepare_document_runtime(
-            &workspace,
-            &source_path,
-            &params.document,
-            cancellation,
-        )?;
+        let mut runtime =
+            self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let service = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
@@ -1323,10 +1281,10 @@ impl AppServer {
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         result(&code_action_to_dto(
-            &workspace,
+            &dir,
             &source_path,
             &params.document.text,
-            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?
+            self.file_system_service_for(params.document.dir_id.as_deref())?
                 .as_ref(),
             action,
         )?)
@@ -1425,10 +1383,10 @@ fn completion_character(value: &str) -> bool {
 }
 
 fn hierarchy_item_from_dto(
-    workspace: &zeta_workspace::WorkspaceRoot,
+    dir: &zeta_file_access::Dir,
     item: LanguageHierarchyItemDto,
 ) -> Result<LanguageHierarchyItem, RpcError> {
-    let path = workspace
+    let path = dir
         .resolve_existing(&item.path)
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
     Ok(LanguageHierarchyItem {
@@ -1444,14 +1402,14 @@ fn hierarchy_item_from_dto(
 }
 
 fn hierarchy_entry_to_dto(
-    workspace: &Path,
+    dir: &Path,
     source_path: &Path,
     source_text: &str,
-    file_system: &dyn zeta_file_system::WorkspaceFileSystem,
+    file_system: &dyn zeta_file_system::FileSystem,
     entry: LanguageHierarchyEntry,
 ) -> Option<LanguageHierarchyEntryDto> {
-    let item_relative = entry.item.path.strip_prefix(workspace).ok()?.to_path_buf();
-    let item_text = workspace_text(
+    let item_relative = entry.item.path.strip_prefix(dir).ok()?.to_path_buf();
+    let item_text = dir_text(
         source_path,
         source_text,
         file_system,
@@ -1461,8 +1419,8 @@ fn hierarchy_entry_to_dto(
     let from_path = entry.from_path.as_ref();
     let (from_relative, from_text) = match from_path {
         Some(path) => {
-            let relative = path.strip_prefix(workspace).ok()?.to_path_buf();
-            let text = workspace_text(source_path, source_text, file_system, path, &relative)?;
+            let relative = path.strip_prefix(dir).ok()?.to_path_buf();
+            let text = dir_text(source_path, source_text, file_system, path, &relative)?;
             (Some(relative), Some(text))
         }
         None => (None, None),
@@ -1491,10 +1449,10 @@ fn hierarchy_entry_to_dto(
     })
 }
 
-fn workspace_text(
+fn dir_text(
     source_path: &Path,
     source_text: &str,
-    file_system: &dyn zeta_file_system::WorkspaceFileSystem,
+    file_system: &dyn zeta_file_system::FileSystem,
     absolute: &Path,
     relative: &Path,
 ) -> Option<String> {
@@ -1523,21 +1481,21 @@ fn service_range(range: LanguageRangeDto) -> LanguageLocationRange {
     }
 }
 
-fn workspace_edit_to_dto(
-    workspace: &zeta_workspace::WorkspaceRoot,
+fn directory_edit_to_dto(
+    dir: &zeta_file_access::Dir,
     source_path: &Path,
     source_text: &str,
-    file_system: &dyn zeta_file_system::WorkspaceFileSystem,
-    edit: LanguageWorkspaceEdit,
-) -> Result<LanguageWorkspaceEditDto, RpcError> {
+    file_system: &dyn zeta_file_system::FileSystem,
+    edit: LanguageEdit,
+) -> Result<LanguageDirectoryEditDto, RpcError> {
     let mut entries = Vec::with_capacity(edit.entries.len());
     let mut virtual_text = HashMap::<std::path::PathBuf, Option<String>>::new();
     virtual_text.insert(source_path.to_path_buf(), Some(source_text.to_owned()));
     for entry in edit.entries {
         let entry = match entry {
-            LanguageWorkspaceEditEntry::TextDocument(document) => {
-                let relative = relative_workspace_path(workspace, &document.path)?;
-                let text = virtual_workspace_text(
+            LanguageEditEntry::TextDocument(document) => {
+                let relative = relative_path(dir, &document.path)?;
+                let text = virtual_dir_text(
                     &mut virtual_text,
                     source_path,
                     source_text,
@@ -1561,7 +1519,7 @@ fn workspace_edit_to_dto(
                 let next_text = apply_utf16_text_edits(&text, &edits)
                     .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
                 virtual_text.insert(document.path.clone(), Some(next_text));
-                LanguageWorkspaceEditEntryDto::TextDocument {
+                LanguageDirectoryEditEntryDto::TextDocument {
                     document: LanguageTextDocumentEditDto {
                         path: relative,
                         expected_text: text,
@@ -1569,9 +1527,9 @@ fn workspace_edit_to_dto(
                     },
                 }
             }
-            LanguageWorkspaceEditEntry::Create { path, existing } => {
-                let relative = relative_workspace_path(workspace, &path)?;
-                let current = virtual_workspace_text(
+            LanguageEditEntry::Create { path, existing } => {
+                let relative = relative_path(dir, &path)?;
+                let current = virtual_dir_text(
                     &mut virtual_text,
                     source_path,
                     source_text,
@@ -1582,19 +1540,19 @@ fn workspace_edit_to_dto(
                 if existing != LanguageExistingTargetBehavior::Ignore || current.is_none() {
                     virtual_text.insert(path.clone(), Some(String::new()));
                 }
-                LanguageWorkspaceEditEntryDto::Create {
+                LanguageDirectoryEditEntryDto::Create {
                     path: relative,
                     existing: existing_target_behavior(existing),
                 }
             }
-            LanguageWorkspaceEditEntry::Rename {
+            LanguageEditEntry::Rename {
                 source,
                 target,
                 existing,
             } => {
-                let source_relative = relative_workspace_path(workspace, &source)?;
-                let target_relative = relative_workspace_path(workspace, &target)?;
-                let source_content = virtual_workspace_text(
+                let source_relative = relative_path(dir, &source)?;
+                let target_relative = relative_path(dir, &target)?;
+                let source_content = virtual_dir_text(
                     &mut virtual_text,
                     source_path,
                     source_text,
@@ -1602,7 +1560,7 @@ fn workspace_edit_to_dto(
                     &source,
                     &source_relative,
                 );
-                let target_content = virtual_workspace_text(
+                let target_content = virtual_dir_text(
                     &mut virtual_text,
                     source_path,
                     source_text,
@@ -1614,20 +1572,20 @@ fn workspace_edit_to_dto(
                     virtual_text.insert(source.clone(), None);
                     virtual_text.insert(target.clone(), source_content);
                 }
-                LanguageWorkspaceEditEntryDto::Rename {
+                LanguageDirectoryEditEntryDto::Rename {
                     source: source_relative,
                     target: target_relative,
                     existing: existing_target_behavior(existing),
                 }
             }
-            LanguageWorkspaceEditEntry::Delete {
+            LanguageEditEntry::Delete {
                 path,
                 missing,
                 mode,
             } => {
                 virtual_text.insert(path.clone(), None);
-                LanguageWorkspaceEditEntryDto::Delete {
-                    path: relative_workspace_path(workspace, &path)?,
+                LanguageDirectoryEditEntryDto::Delete {
+                    path: relative_path(dir, &path)?,
                     missing: match missing {
                         LanguageMissingTargetBehavior::Error => FsMissingTargetBehavior::Error,
                         LanguageMissingTargetBehavior::Ignore => FsMissingTargetBehavior::Ignore,
@@ -1643,21 +1601,21 @@ fn workspace_edit_to_dto(
         };
         entries.push(entry);
     }
-    Ok(LanguageWorkspaceEditDto { entries })
+    Ok(LanguageDirectoryEditDto { entries })
 }
 
-fn virtual_workspace_text(
+fn virtual_dir_text(
     states: &mut HashMap<std::path::PathBuf, Option<String>>,
     source_path: &Path,
     source_text: &str,
-    file_system: &dyn zeta_file_system::WorkspaceFileSystem,
+    file_system: &dyn zeta_file_system::FileSystem,
     absolute: &Path,
     relative: &Path,
 ) -> Option<String> {
     if let Some(state) = states.get(absolute) {
         return state.clone();
     }
-    let text = workspace_text(source_path, source_text, file_system, absolute, relative);
+    let text = dir_text(source_path, source_text, file_system, absolute, relative);
     states.insert(absolute.to_path_buf(), text.clone());
     text
 }
@@ -1686,11 +1644,8 @@ fn apply_utf16_text_edits(text: &str, edits: &[LanguageTextEditDto]) -> Option<S
     Some(result)
 }
 
-fn relative_workspace_path(
-    workspace: &zeta_workspace::WorkspaceRoot,
-    path: &Path,
-) -> Result<std::path::PathBuf, RpcError> {
-    path.strip_prefix(workspace.canonical_path())
+fn relative_path(dir: &zeta_file_access::Dir, path: &Path) -> Result<std::path::PathBuf, RpcError> {
+    path.strip_prefix(dir.canonical_path())
         .map(Path::to_path_buf)
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))
 }
@@ -1704,10 +1659,10 @@ fn existing_target_behavior(value: LanguageExistingTargetBehavior) -> FsExisting
 }
 
 fn code_action_to_dto(
-    workspace: &zeta_workspace::WorkspaceRoot,
+    dir: &zeta_file_access::Dir,
     source_path: &Path,
     source_text: &str,
-    file_system: &dyn zeta_file_system::WorkspaceFileSystem,
+    file_system: &dyn zeta_file_system::FileSystem,
     action: LanguageCodeAction,
 ) -> Result<LanguageCodeActionDto, RpcError> {
     Ok(LanguageCodeActionDto {
@@ -1717,9 +1672,7 @@ fn code_action_to_dto(
         disabled_reason: action.disabled_reason,
         edit: action
             .edit
-            .map(|edit| {
-                workspace_edit_to_dto(workspace, source_path, source_text, file_system, edit)
-            })
+            .map(|edit| directory_edit_to_dto(dir, source_path, source_text, file_system, edit))
             .transpose()?,
         provider_data: action.provider_data,
     })

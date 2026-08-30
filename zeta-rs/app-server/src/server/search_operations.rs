@@ -5,51 +5,47 @@ use super::decode;
 use super::result;
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchCancelParams;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchCaseSensitivity as WorkspaceSearchProtocolCaseSensitivity;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchMatch as WorkspaceSearchProtocolMatch;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchMatchRange as WorkspaceSearchProtocolMatchRange;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchPatternKind;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchReadParams;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchReadResult;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchStartParams;
-use zeta_app_server_protocol::protocol::search::WorkspaceSearchStartResult;
-use zeta_workspace_search::WorkspaceSearchCaseSensitivity;
-use zeta_workspace_search::WorkspaceSearchError;
-use zeta_workspace_search::WorkspaceSearchOwner;
-use zeta_workspace_search::WorkspaceSearchPage;
-use zeta_workspace_search::WorkspaceSearchPattern;
-use zeta_workspace_search::WorkspaceSearchQuery;
+use zeta_app_server_protocol::protocol::search::ContentSearchCancelParams;
+use zeta_app_server_protocol::protocol::search::ContentSearchCaseSensitivity as ContentSearchProtocolCaseSensitivity;
+use zeta_app_server_protocol::protocol::search::ContentSearchMatch as ContentSearchProtocolMatch;
+use zeta_app_server_protocol::protocol::search::ContentSearchMatchRange as ContentSearchProtocolMatchRange;
+use zeta_app_server_protocol::protocol::search::ContentSearchPatternKind;
+use zeta_app_server_protocol::protocol::search::ContentSearchReadParams;
+use zeta_app_server_protocol::protocol::search::ContentSearchReadResult;
+use zeta_app_server_protocol::protocol::search::ContentSearchStartParams;
+use zeta_app_server_protocol::protocol::search::ContentSearchStartResult;
+use zeta_content_search::ContentSearchCaseSensitivity;
+use zeta_content_search::ContentSearchError;
+use zeta_content_search::ContentSearchOwner;
+use zeta_content_search::ContentSearchPage;
+use zeta_content_search::ContentSearchPattern;
+use zeta_content_search::ContentSearchQuery;
 
 impl AppServer {
-    pub(super) fn workspace_search_start(
+    pub(super) fn content_search_start(
         &self,
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        let params: WorkspaceSearchStartParams = decode(params)?;
-        let workspace_folder_id = params.workspace_folder_id.clone();
-        let search = self.search_service_for_request(
-            workspace_folder_id.as_deref(),
-            params.session_directory.as_ref(),
-        )?;
+        let params: ContentSearchStartParams = decode(params)?;
+        let dir_id = params.dir_id.clone();
+        let search =
+            self.search_service_for_request(dir_id.as_deref(), params.session_directory.as_ref())?;
         let search_id = search
             .start(search_owner(connection), search_query(params))
             .map_err(search_error)?;
-        result(&WorkspaceSearchStartResult { search_id })
+        result(&ContentSearchStartResult { search_id })
     }
 
-    pub(super) fn workspace_search_read(
+    pub(super) fn content_search_read(
         &self,
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        let params: WorkspaceSearchReadParams = decode(params)?;
-        let workspace_folder_id = params.workspace_folder_id;
-        let search = self.search_service_for_request(
-            workspace_folder_id.as_deref(),
-            params.session_directory.as_ref(),
-        )?;
+        let params: ContentSearchReadParams = decode(params)?;
+        let dir_id = params.dir_id;
+        let search =
+            self.search_service_for_request(dir_id.as_deref(), params.session_directory.as_ref())?;
         let search_id = params.search_id;
         let page = search
             .read(
@@ -62,14 +58,14 @@ impl AppServer {
         result(&search_page(search_id, page))
     }
 
-    pub(super) fn workspace_search_cancel(
+    pub(super) fn content_search_cancel(
         &self,
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        let params: WorkspaceSearchCancelParams = decode(params)?;
+        let params: ContentSearchCancelParams = decode(params)?;
         self.search_service_for_request(
-            params.workspace_folder_id.as_deref(),
+            params.dir_id.as_deref(),
             params.session_directory.as_ref(),
         )?
         .cancel(search_owner(connection), &params.search_id)
@@ -79,37 +75,37 @@ impl AppServer {
 
     fn search_service_for_request(
         &self,
-        workspace_folder_id: Option<&str>,
+        dir_id: Option<&str>,
         session_directory: Option<
-            &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
+            &zeta_app_server_protocol::protocol::environment::SessionDirSelector,
         >,
-    ) -> Result<std::sync::Arc<zeta_workspace_search::WorkspaceSearchService>, RpcError> {
-        match (workspace_folder_id, session_directory) {
+    ) -> Result<std::sync::Arc<zeta_content_search::ContentSearchService>, RpcError> {
+        match (dir_id, session_directory) {
             (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
-            (_, Some(selector)) => self.workspace_search_service_for_session_directory(selector),
-            (_, None) => self.workspace_search_service_for(workspace_folder_id),
+            (_, Some(selector)) => self.content_search_service_for_session_directory(selector),
+            (_, None) => self.content_search_service_for(dir_id),
         }
     }
 }
 
-fn search_owner(connection: &ConnectionState) -> WorkspaceSearchOwner {
-    WorkspaceSearchOwner::new(connection.connection_id)
+fn search_owner(connection: &ConnectionState) -> ContentSearchOwner {
+    ContentSearchOwner::new(connection.connection_id)
 }
 
-fn search_query(params: WorkspaceSearchStartParams) -> WorkspaceSearchQuery {
-    WorkspaceSearchQuery {
+fn search_query(params: ContentSearchStartParams) -> ContentSearchQuery {
+    ContentSearchQuery {
         query: params.query,
         pattern: match params.pattern_kind {
-            WorkspaceSearchPatternKind::Literal => WorkspaceSearchPattern::Literal,
-            WorkspaceSearchPatternKind::Regex => WorkspaceSearchPattern::Regex,
+            ContentSearchPatternKind::Literal => ContentSearchPattern::Literal,
+            ContentSearchPatternKind::Regex => ContentSearchPattern::Regex,
         },
         case_sensitivity: match params.case_sensitivity {
-            WorkspaceSearchProtocolCaseSensitivity::Smart => WorkspaceSearchCaseSensitivity::Smart,
-            WorkspaceSearchProtocolCaseSensitivity::Sensitive => {
-                WorkspaceSearchCaseSensitivity::Sensitive
+            ContentSearchProtocolCaseSensitivity::Smart => ContentSearchCaseSensitivity::Smart,
+            ContentSearchProtocolCaseSensitivity::Sensitive => {
+                ContentSearchCaseSensitivity::Sensitive
             }
-            WorkspaceSearchProtocolCaseSensitivity::Insensitive => {
-                WorkspaceSearchCaseSensitivity::Insensitive
+            ContentSearchProtocolCaseSensitivity::Insensitive => {
+                ContentSearchCaseSensitivity::Insensitive
             }
         },
         include_patterns: params.include_patterns,
@@ -118,20 +114,20 @@ fn search_query(params: WorkspaceSearchStartParams) -> WorkspaceSearchQuery {
     }
 }
 
-fn search_page(search_id: String, page: WorkspaceSearchPage) -> WorkspaceSearchReadResult {
-    WorkspaceSearchReadResult {
+fn search_page(search_id: String, page: ContentSearchPage) -> ContentSearchReadResult {
+    ContentSearchReadResult {
         search_id,
         matches: page
             .matches
             .into_iter()
-            .map(|search_match| WorkspaceSearchProtocolMatch {
+            .map(|search_match| ContentSearchProtocolMatch {
                 path: search_match.path,
                 line_number: search_match.line_number,
                 preview: search_match.preview,
                 ranges: search_match
                     .ranges
                     .into_iter()
-                    .map(|range| WorkspaceSearchProtocolMatchRange {
+                    .map(|range| ContentSearchProtocolMatchRange {
                         start: range.start,
                         end: range.end,
                     })
@@ -145,15 +141,15 @@ fn search_page(search_id: String, page: WorkspaceSearchPage) -> WorkspaceSearchR
     }
 }
 
-fn search_error(error: WorkspaceSearchError) -> RpcError {
+fn search_error(error: ContentSearchError) -> RpcError {
     match error {
-        WorkspaceSearchError::InvalidInput => {
+        ContentSearchError::InvalidInput => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
-        WorkspaceSearchError::NotFound => RpcError::new(-32051, AppServerErrorName::SearchNotFound),
-        WorkspaceSearchError::NotOwner => RpcError::new(-32052, AppServerErrorName::SearchNotOwner),
-        WorkspaceSearchError::Busy => RpcError::new(-32053, AppServerErrorName::SearchBusy),
-        WorkspaceSearchError::Unavailable => {
+        ContentSearchError::NotFound => RpcError::new(-32051, AppServerErrorName::SearchNotFound),
+        ContentSearchError::NotOwner => RpcError::new(-32052, AppServerErrorName::SearchNotOwner),
+        ContentSearchError::Busy => RpcError::new(-32053, AppServerErrorName::SearchBusy),
+        ContentSearchError::Unavailable => {
             RpcError::new(-32050, AppServerErrorName::SearchUnavailable)
         }
     }

@@ -59,7 +59,7 @@ fn keybindings_section_composes_scroll_view_with_translated_visible_rows() {
         STYLE,
         "zeta",
         "Local",
-        "Agent workspace",
+        "Agent",
         &rows,
         false,
         &[],

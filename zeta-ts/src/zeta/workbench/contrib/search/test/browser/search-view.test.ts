@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { BrowserWorkspaceSearchService } from "../../../../../platform/search/browser/searchService.js";
-import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch } from "../../../../../platform/search/common/search.js";
-import type { IWorkspaceSearchApi } from "../../../../../platform/search/common/searchApi.js";
+import { BrowserContentSearchService } from "../../../../../platform/search/browser/searchService.js";
+import type { IContentSearchQuery, IContentSearchService, ContentSearchMatch } from "../../../../../platform/search/common/search.js";
+import type { IContentSearchApi } from "../../../../../platform/search/common/searchApi.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
-import { WorkspaceSearchConfiguration } from "../../common/searchConfiguration.js";
+import { ContentSearchConfiguration } from "../../common/searchConfiguration.js";
 
-const matches: readonly WorkspaceSearchMatch[] = [
+const matches: readonly ContentSearchMatch[] = [
 	{
 		path: "src/main.ts",
 		lineNumber: 4,
@@ -22,10 +22,10 @@ const matches: readonly WorkspaceSearchMatch[] = [
 	},
 ];
 
-test("BrowserWorkspaceSearchService pulls bounded batches and releases the job", async () => {
+test("BrowserContentSearchService pulls bounded batches and releases the job", async () => {
 	const readCursors: number[] = [];
 	let cancelCount = 0;
-	const api: IWorkspaceSearchApi = {
+	const api: IContentSearchApi = {
 		start: async (params) => {
 			assert.equal(params.query, "needle");
 			assert.equal(params.maxResults, 2_000);
@@ -56,8 +56,8 @@ test("BrowserWorkspaceSearchService pulls bounded batches and releases the job",
 			cancelCount += 1;
 		},
 	};
-	const service = new BrowserWorkspaceSearchService(api);
-	const progress: WorkspaceSearchMatch[] = [];
+	const service = new BrowserContentSearchService(api);
+	const progress: ContentSearchMatch[] = [];
 
 	const complete = await service.search(query(), {
 		onProgress: (batch) => progress.push(...batch),
@@ -76,8 +76,8 @@ test("BrowserWorkspaceSearchService pulls bounded batches and releases the job",
 test("SearchViewPane submits typed filters and groups highlighted matches", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	let submitted: IWorkspaceSearchQuery | undefined;
-	const service: IWorkspaceSearchService = {
+	let submitted: IContentSearchQuery | undefined;
+	const service: IContentSearchService = {
 		search: async (searchQuery, options) => {
 			submitted = searchQuery;
 			options?.onProgress?.(matches);
@@ -155,14 +155,14 @@ test("SearchViewPane applies configured query defaults and result limits", async
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	using configuration = new WorkbenchConfigurationService();
-	await configuration.updateValue(WorkspaceSearchConfiguration.matchCase, true);
-	await configuration.updateValue(WorkspaceSearchConfiguration.smartCase, false);
-	await configuration.updateValue(WorkspaceSearchConfiguration.regularExpression, true);
-	await configuration.updateValue(WorkspaceSearchConfiguration.includePatterns, "src/**, packages/**");
-	await configuration.updateValue(WorkspaceSearchConfiguration.excludePatterns, "**/*.test.ts");
-	await configuration.updateValue(WorkspaceSearchConfiguration.maxResults, 750);
-	let submitted: IWorkspaceSearchQuery | undefined;
-	const service: IWorkspaceSearchService = {
+	await configuration.updateValue(ContentSearchConfiguration.matchCase, true);
+	await configuration.updateValue(ContentSearchConfiguration.smartCase, false);
+	await configuration.updateValue(ContentSearchConfiguration.regularExpression, true);
+	await configuration.updateValue(ContentSearchConfiguration.includePatterns, "src/**, packages/**");
+	await configuration.updateValue(ContentSearchConfiguration.excludePatterns, "**/*.test.ts");
+	await configuration.updateValue(ContentSearchConfiguration.maxResults, 750);
+	let submitted: IContentSearchQuery | undefined;
+	const service: IContentSearchService = {
 		search: async searchQuery => {
 			submitted = searchQuery;
 			return { resultCount: 0, limitHit: false, error: undefined };
@@ -195,7 +195,7 @@ test("SearchViewPane applies configured query defaults and result limits", async
 	}
 });
 
-function query(): IWorkspaceSearchQuery {
+function query(): IContentSearchQuery {
 	return {
 		text: "needle",
 		patternKind: "literal",

@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
 
-/// Lifecycle state of the workspace-side declaration projection.
+/// Lifecycle state of the directory-side declaration projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CodebaseSymbolsStateDto {
@@ -32,7 +32,7 @@ pub struct CodebaseSymbolsStatusResult {
     pub symbol_limit_hit: bool,
 }
 
-/// Performs one bounded local fuzzy lookup against workspace declarations.
+/// Performs one bounded local fuzzy lookup against directory declarations.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CodebaseSymbolsSearchParams {
@@ -87,24 +87,24 @@ pub struct CodebaseSymbolsSearchResult {
     pub discarded_stale_hit_count: usize,
 }
 
-/// Publishes the latest immutable editor text for one workspace-relative document.
+/// Publishes the latest immutable editor text for one directory-relative document.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceDocumentOverlaySynchronizeParams {
+pub struct DocumentOverlaySynchronizeParams {
     pub document: LanguageDocumentDto,
 }
 
 /// Releases one editor document from the ephemeral code-intelligence overlay.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceDocumentOverlayCloseParams {
+pub struct DocumentOverlayCloseParams {
     pub path: PathBuf,
 }
 
 /// Content-free summary of the current in-memory editor overlay.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceDocumentOverlayStatusResult {
+pub struct DocumentOverlayStatusResult {
     #[ts(type = "number")]
     pub generation: u64,
     pub dirty_document_count: usize,

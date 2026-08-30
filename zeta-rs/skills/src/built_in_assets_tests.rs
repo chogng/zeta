@@ -1,4 +1,4 @@
-use crate::{SkillCatalog, SkillSourceId, SkillSourceKind, SkillSourceRoot, SkillTrust};
+use crate::{SkillCatalog, SkillSourceId, SkillSourceKind, SkillSourceRoot};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -37,7 +37,7 @@ fn repository_built_in_skills_form_a_valid_catalog() {
         snapshot
             .list()
             .iter()
-            .all(|entry| entry.source().trust() == SkillTrust::BuiltInVerified)
+            .all(|entry| entry.source().allows_automatic_activation())
     );
 }
 

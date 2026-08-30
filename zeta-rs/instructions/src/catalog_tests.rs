@@ -3,8 +3,8 @@ use std::fs;
 
 #[test]
 fn discovers_three_loading_modes_and_renders_only_global_content() {
-    let workspace = tempfile::tempdir().unwrap();
-    let root = workspace.path().join(".zeta/instructions");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".zeta/instructions");
     fs::create_dir_all(&root).unwrap();
     write_instruction(&root, "always", "global", &[], "Always follow this.");
     write_instruction(
@@ -16,7 +16,7 @@ fn discovers_three_loading_modes_and_renders_only_global_content() {
     );
     write_instruction(&root, "explain", "on-demand", &[], "Explain carefully.");
 
-    let catalog = InstructionCatalog::discover(workspace.path());
+    let catalog = InstructionCatalog::discover(dir.path());
     let snapshot = catalog.snapshot();
 
     assert_eq!(snapshot.entries().len(), 3);
@@ -29,11 +29,11 @@ fn discovers_three_loading_modes_and_renders_only_global_content() {
 
 #[test]
 fn refresh_advances_generation_only_for_visible_changes() {
-    let workspace = tempfile::tempdir().unwrap();
-    let root = workspace.path().join(".zeta/instructions");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".zeta/instructions");
     fs::create_dir_all(&root).unwrap();
     write_instruction(&root, "always", "global", &[], "First.");
-    let mut catalog = InstructionCatalog::discover(workspace.path());
+    let mut catalog = InstructionCatalog::discover(dir.path());
 
     assert_eq!(catalog.refresh().generation(), 1);
     write_instruction(&root, "always", "global", &[], "Second.");
@@ -45,13 +45,13 @@ fn refresh_advances_generation_only_for_visible_changes() {
 
 #[test]
 fn invalid_policy_is_isolated_as_a_diagnostic() {
-    let workspace = tempfile::tempdir().unwrap();
-    let root = workspace.path().join(".zeta/instructions");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".zeta/instructions");
     fs::create_dir_all(&root).unwrap();
     write_instruction(&root, "bad", "contextual", &[], "Body.");
     write_instruction(&root, "good", "global", &[], "Good.");
 
-    let snapshot = InstructionCatalog::discover(workspace.path()).snapshot();
+    let snapshot = InstructionCatalog::discover(dir.path()).snapshot();
 
     assert_eq!(snapshot.entries().len(), 1);
     assert_eq!(snapshot.diagnostics().len(), 1);
@@ -63,10 +63,10 @@ fn invalid_policy_is_isolated_as_a_diagnostic() {
 
 #[test]
 fn native_catalog_does_not_implicitly_scan_agents_md() {
-    let workspace = tempfile::tempdir().unwrap();
-    fs::write(workspace.path().join("AGENTS.md"), "External instructions.").unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("AGENTS.md"), "External instructions.").unwrap();
 
-    let snapshot = InstructionCatalog::discover(workspace.path()).snapshot();
+    let snapshot = InstructionCatalog::discover(dir.path()).snapshot();
 
     assert!(snapshot.entries().is_empty());
     assert!(snapshot.diagnostics().is_empty());

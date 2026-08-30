@@ -94,7 +94,7 @@ impl CodebaseModels {
     }
 }
 
-/// Bounded semantic query against the current local Workspace generation.
+/// Bounded semantic query against the current local Directory generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodebaseSemanticQuery {
     text: String,
@@ -200,7 +200,7 @@ pub trait CodebaseSemanticMetricsSink: Send + Sync {
     fn record(&self, metric: CodebaseSemanticMetric);
 }
 
-/// One Workspace-produced chunk plus its model embedding stored by the local projection.
+/// One Directory-produced chunk plus its model embedding stored by the local projection.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EmbeddedCodeChunk {
     pub reference: ChunkReference,

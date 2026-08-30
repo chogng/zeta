@@ -12,7 +12,7 @@ use zeta_codebase::SymbolIndexSnapshot;
 use zeta_codebase::SymbolSearchHit;
 use zeta_codebase_store::CodebaseStore;
 
-/// App Server-owned lifecycle projection for one workspace symbol index.
+/// App Server-owned lifecycle projection for one directory symbol index.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum SymbolIndexRuntimeState {
     Empty,

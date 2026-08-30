@@ -1,4 +1,4 @@
-//! Workspace-file mention query and chat_input completion state.
+//! Directory-file mention query and chat-input completion state.
 
 mod input;
 mod popup;

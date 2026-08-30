@@ -9,7 +9,7 @@ export type WorkspaceTaskGroup = "build" | "test" | "run" | "other";
 /** One explicitly selectable workspace command. Tasks are never executed during discovery. */
 export interface IWorkspaceTask {
 	readonly id: string;
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly label: string;
 	readonly command: string;
 	readonly source: WorkspaceTaskSource;

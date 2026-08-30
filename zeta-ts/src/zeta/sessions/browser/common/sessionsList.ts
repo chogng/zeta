@@ -2,7 +2,7 @@ import "./sessionsControls.css";
 import "./sessionsList.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
+import type { ISessionsService } from "../../services/view/common/sessionsService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
@@ -13,9 +13,9 @@ export class SessionsList extends Disposable {
 	private readonly list: HTMLDivElement;
 	private readonly itemListeners = this._register(new DisposableStore());
 	private readonly sessionService: ISessionsManagementService;
-	private readonly viewService: ISessionsViewService;
+	private readonly viewService: ISessionsService;
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService, title: string, newSessionLabel: string) {
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService, title: string, newSessionLabel: string) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.sessionService = sessionService;
@@ -58,8 +58,8 @@ export class SessionsList extends Disposable {
 		for (const session of this.sessionService.sessions) {
 			const current = activeSelection?.kind === "session" && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const thread = current
-				? session.threads.find(candidate => candidate.threadId === current.threadId && candidate.status === "active")
-				: session.threads.find(candidate => candidate.status === "active" && candidate.origin.type === "root") ?? session.threads.find(candidate => candidate.status === "active");
+				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === "active")
+				: session.chats.find(candidate => candidate.status === "active" && candidate.origin.type === "root") ?? session.chats.find(candidate => candidate.status === "active");
 			if (!thread || session.status !== "active") continue;
 			const button = sessionButton(ownerDocument, session.title || "Untitled Session", current !== undefined);
 			this.itemListeners.add(addDisposableListener(button, "click", () => this.viewService.openSession(session.sessionId, thread.threadId)));

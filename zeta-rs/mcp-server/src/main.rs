@@ -12,11 +12,11 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let profile_root = local_profile_root();
-    let workspace_root = env::var_os("ZETA_WORKSPACE_ROOT")
+    let dir_root = env::var_os("ZETA_WORKSPACE_ROOT")
         .map(PathBuf::from)
         .map(Ok)
         .unwrap_or_else(env::current_dir)?;
-    let options = McpServerOptions::new(profile_root, workspace_root);
+    let options = McpServerOptions::new(profile_root, dir_root);
     let arguments = env::args().skip(1).collect::<Vec<_>>();
     match arguments.as_slice() {
         [] => run_stdio(options)?,

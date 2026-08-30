@@ -209,5 +209,5 @@ fn toolbar_buttons_publish_accessible_labels_and_a_toolbar_parent() {
         .iter()
         .find(|node| node.id == ContextAction::Diff.element_id())
         .unwrap();
-    assert_eq!(changes.label, "Workspace Changes 7 • +7 -0");
+    assert_eq!(changes.label, "Git Changes 7 • +7 -0");
 }

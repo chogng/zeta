@@ -52,7 +52,7 @@ impl ChatInputToolbar {
             format!("Environment: {}", labels[0]),
             format!("Working directory: {}", labels[1]),
             format!("Git branch: {}", labels[2]),
-            format!("Workspace {}", labels[3]),
+            format!("Git {}", labels[3]),
         ];
         let natural_text_style =
             TextStyle::new(TOOLBAR_FONT_SIZE, style.accent).with_line_height(TOOLBAR_LINE_HEIGHT);

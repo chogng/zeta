@@ -1,6 +1,7 @@
-pub(crate) mod additional_directories;
 pub(crate) mod config;
 pub(crate) mod connectors;
+pub(crate) mod dirs;
+pub(crate) mod file_search;
 pub(crate) mod interactions;
 pub(crate) mod keymap;
 pub(crate) mod mcp;
@@ -12,4 +13,3 @@ pub(crate) mod status;
 pub(crate) mod status_line;
 pub(crate) mod theme;
 pub(crate) mod thread;
-pub(crate) mod workspace_files;

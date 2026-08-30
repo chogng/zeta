@@ -2,17 +2,17 @@ use super::turn_changes_runtime::publish_records;
 use super::update_broker::UpdateBroker;
 use std::sync::Arc;
 use zeta_config::ConfigStore;
-use zeta_core::{ModelSelection, ModelService, SessionCoordinator};
+use zeta_core::{ModelSelection, ModelService, ThreadController};
+use zeta_file_access::DirId;
 use zeta_state::SqliteTurnChangeStore;
 use zeta_turn_changes::{MessageState, SnapshotBackend, TurnChangeSet, TurnChangeStore};
-use zeta_workspace::WorkspaceTrustId;
 
 pub(super) fn spawn_message_job(
     store: Arc<SqliteTurnChangeStore>,
-    sessions: Arc<SessionCoordinator>,
+    threads: Arc<ThreadController>,
     model: Arc<dyn ModelService>,
     config: Arc<ConfigStore>,
-    workspace_id: WorkspaceTrustId,
+    dir_id: DirId,
     updates: Arc<UpdateBroker>,
     change_set_id: zeta_turn_changes::ChangeSetId,
 ) {
@@ -21,10 +21,10 @@ pub(super) fn spawn_message_job(
         .spawn(move || {
             if let Err(error) = generate_message(
                 &store,
-                &sessions,
+                &threads,
                 model.as_ref(),
                 &config,
-                &workspace_id,
+                &dir_id,
                 &updates,
                 &change_set_id,
             ) {
@@ -66,10 +66,10 @@ fn fail_pending_message(
 
 fn generate_message(
     store: &SqliteTurnChangeStore,
-    sessions: &SessionCoordinator,
+    threads: &ThreadController,
     model: &dyn ModelService,
     config: &ConfigStore,
-    workspace_id: &WorkspaceTrustId,
+    dir_id: &DirId,
     updates: &UpdateBroker,
     change_set_id: &zeta_turn_changes::ChangeSetId,
 ) -> Result<(), String> {
@@ -78,12 +78,12 @@ fn generate_message(
         .values
         .commit_messages
         .authorized_model(
-            workspace_id,
+            dir_id,
             snapshot.values.commit_message_model.as_ref(),
             &snapshot.values.providers,
         )
         .cloned()
-        .ok_or_else(|| "commit-message model is not authorized for this Workspace".to_string())?;
+        .ok_or_else(|| "commit-message model is not authorized for this Directory".to_string())?;
     let mut record = store
         .load(change_set_id)
         .map_err(|error| error.to_string())?;
@@ -101,7 +101,7 @@ fn generate_message(
     }
 
     let outcome = (|| {
-        let prompt = commit_message_prompt(sessions, &record)?;
+        let prompt = commit_message_prompt(threads, &record)?;
         let request = zeta_protocol::ModelRequest {
             instructions: Some(
                 "Write a Git commit message for exactly the supplied Turn. Output only a Conventional Commit subject and, only when useful, a blank line followed by a concise body. Do not mention later work, hidden reasoning, Thread IDs, or trailers."
@@ -156,13 +156,12 @@ fn generate_message(
 }
 
 fn commit_message_prompt(
-    sessions: &SessionCoordinator,
+    threads: &ThreadController,
     record: &TurnChangeSet,
 ) -> Result<String, String> {
     const MAX_TOOL_RESULT_CHARS: usize = 2_000;
     const MAX_DIFF_BYTES: usize = 512 * 1024;
-    let updates = sessions
-        .threads()
+    let updates = threads
         .thread_updates_after(&record.thread_id, 0)
         .map_err(|error| error.to_string())?;
     let mut context = Vec::new();

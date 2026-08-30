@@ -28,7 +28,7 @@ impl HarnessContext {
         self
     }
 
-    /// Returns the immutable system and Workspace instructions.
+    /// Returns the immutable system and directory instructions.
     pub fn instructions(&self) -> &HarnessInstructions {
         &self.instructions
     }

@@ -85,7 +85,7 @@ fn cyclic_aliases_do_not_create_false_command_evidence() {
 }
 
 #[test]
-fn workspace_scripts_and_recipes_are_exact_argument_evidence() {
+fn dir_scripts_and_recipes_are_exact_argument_evidence() {
     let root = tempfile::tempdir().unwrap();
     fs::write(
         root.path().join("package.json"),
@@ -163,7 +163,7 @@ fn default_signatures_do_not_claim_uninstalled_external_commands() {
 }
 
 #[test]
-fn completions_cover_commands_subcommands_options_workspace_values_and_paths() {
+fn completions_cover_commands_subcommands_options_dir_values_and_paths() {
     let root = tempfile::tempdir().unwrap();
     fs::write(
         root.path().join("package.json"),

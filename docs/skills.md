@@ -725,7 +725,7 @@ identity 原语可以下沉到已有基础 crate。Desktop 交互所有权与其
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
 TUI 的长期非职责见 [`tui.md`](tui.md#11-featureszeta-功能的垂直切片)。
 
-附加目录激活不是 Import。`zeta-workspace-access` 拥有 directory source 与 contribution policy 的纯领域 contract；由启动参数或会话命令加入的目录，可以在授权有效期内投影明确 allowlist 中的 Skills 与 Agent definitions；持久 `additionalDirectories` 只授予文件访问，不能发现或激活任何 Skill。该临时投影可以复用 `zeta-agent-import` 的安全路径 inspection，但不写入 Config、不产生 imported source，也不把附加目录提升为 Workspace。完整语义与 `/cd` 的区别见 [`workspace-security.md`](workspace-security.md#工作目录附加目录与-cd)。
+目录贡献不是 Import。`zeta-file-access` 拥有目录来源与能力契约；只有带 `DiscoverSkills` 的有效 Grant 才能发现 Skill。该发现可以复用 `zeta-agent-import` 的安全路径检查，但不写入 Config、不产生 imported source，也不改变 `cwd`。完整语义见 [`environment-access.md`](environment-access.md#5-来源能力取代目录级-trust)。
 
 ## 16. 错误与诊断
 
@@ -841,8 +841,8 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
   exact source/name + pinned Skill digest 和完整 package-relative path；
 - 模型选择不被伪装为 pre-Turn activation；受信任 automatic selector 是独立、可解释入口。
 
-完成条件：模型只看到目录元数据，正文必须经 exact read 才进入上下文；restricted Workspace 下仍
-可使用受控的进程内 Skill reader，且 App Server 不拥有 Skill 选择或文件加载逻辑。
+完成条件：模型只看到目录元数据，正文必须经 exact read 才进入上下文；只有具备
+`DiscoverSkills` 的目录才参与发现，且 App Server 不拥有 Skill 选择或文件加载逻辑。
 
 ### 阶段 S1.6：可信自动 selector（当前状态）
 

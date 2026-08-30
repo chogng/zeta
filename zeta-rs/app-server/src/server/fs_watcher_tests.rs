@@ -2,9 +2,9 @@ use super::*;
 use std::path::PathBuf;
 
 #[test]
-fn changed_paths_are_projected_to_sorted_workspace_relative_paths() {
+fn changed_paths_are_sorted_and_dir_relative() {
     let directory = tempfile::tempdir().unwrap();
-    let root = WorkspaceRoot::open(directory.path()).unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
     let projected = project_event(
         &root,
         None,
@@ -25,7 +25,7 @@ fn changed_paths_are_projected_to_sorted_workspace_relative_paths() {
     assert_eq!(
         projected,
         Some(FsChanged::PathsChanged {
-            workspace_folder_id: None,
+            dir_id: None,
             paths: vec![PathBuf::from("README.md"), PathBuf::from("src/main.rs")],
         }),
     );
@@ -34,7 +34,7 @@ fn changed_paths_are_projected_to_sorted_workspace_relative_paths() {
 #[test]
 fn watcher_overflow_becomes_a_root_scoped_rescan_hint() {
     let directory = tempfile::tempdir().unwrap();
-    let root = WorkspaceRoot::open(directory.path()).unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
     let projected = project_event(
         &root,
         None,
@@ -43,12 +43,7 @@ fn watcher_overflow_becomes_a_root_scoped_rescan_hint() {
         },
     );
 
-    assert_eq!(
-        projected,
-        Some(FsChanged::RescanRequired {
-            workspace_folder_id: None,
-        })
-    );
+    assert_eq!(projected, Some(FsChanged::RescanRequired { dir_id: None }));
 }
 
 #[test]
@@ -75,7 +70,7 @@ fn codebase_refresh_queue_coalesces_paths_and_rescan_dominates() {
         paths: vec![PathBuf::from("before.rs")],
     });
     pending.merge(FileWatcherEvent::RescanRequired {
-        watched_paths: vec![PathBuf::from("workspace")],
+        watched_paths: vec![PathBuf::from("dir")],
     });
     pending.merge(FileWatcherEvent::PathsChanged {
         paths: vec![PathBuf::from("after.rs")],

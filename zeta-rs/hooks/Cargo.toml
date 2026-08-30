@@ -20,7 +20,7 @@ zeta-core = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-tool-executor = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zeta-install-context = { workspace = true }

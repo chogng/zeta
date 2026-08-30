@@ -11,10 +11,10 @@ use zeta_codebase::CodebaseSnapshot;
 use zeta_codebase::RefreshOutcome;
 use zeta_codebase::SearchHit;
 use zeta_codebase_store::CodebaseStore;
+use zeta_file_access::Dir;
 use zeta_file_watcher::FileWatcherEvent;
-use zeta_workspace::WorkspaceRoot;
 
-/// App Server-owned lifecycle for one workspace Codebase.
+/// App Server-owned lifecycle for one directory Codebase.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum CodebaseRuntimeState {
     Empty,
@@ -34,11 +34,8 @@ pub(super) struct CodebaseRuntime {
 }
 
 impl CodebaseRuntime {
-    pub fn open(
-        workspace: WorkspaceRoot,
-        store: Arc<CodebaseStore>,
-    ) -> Result<Arc<Self>, CodebaseError> {
-        let index = store.open_codebase(workspace, CodebaseLimits::default())?;
+    pub fn open(dir: Dir, store: Arc<CodebaseStore>) -> Result<Arc<Self>, CodebaseError> {
+        let index = store.open_codebase(dir, CodebaseLimits::default())?;
         let index = Arc::new(index);
         let snapshot = index.snapshot()?;
         let state = if snapshot.generation == 0 {
@@ -58,7 +55,7 @@ impl CodebaseRuntime {
         Arc::clone(&self.store)
     }
 
-    pub fn root(&self) -> &WorkspaceRoot {
+    pub fn root(&self) -> &Dir {
         self.index.root()
     }
 

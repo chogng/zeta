@@ -22,9 +22,9 @@ use super::reconnect_delay_within_window;
 fn hover_params() -> LanguageHoverParams {
     LanguageHoverParams {
         document: LanguageDocumentDto {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
-            path: PathBuf::from("/workspace/src/main.rs"),
+            path: PathBuf::from("/dir/src/main.rs"),
             language_id: "rust".into(),
             revision: 4,
             text: "fn main() {}".into(),

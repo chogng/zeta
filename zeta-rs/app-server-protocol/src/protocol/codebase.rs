@@ -7,7 +7,7 @@ use zeta_protocol::CommandId;
 
 use crate::protocol::config::ConfigCommandResult;
 
-/// Lifecycle state of the workspace-side codebase projection.
+/// Lifecycle state of the directory-side codebase projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CodebaseStateDto {
@@ -116,7 +116,7 @@ pub struct CodebaseSearchResult {
     pub hits: Vec<CodebaseSearchHitDto>,
 }
 
-/// Performs one bounded retrieval across every source enabled for the workspace.
+/// Performs one bounded retrieval across every source enabled for the directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CodebaseRetrievalParams {
@@ -179,7 +179,7 @@ pub enum CloudCodebaseStateDto {
     Failed,
 }
 
-/// Workspace-relative source selection covered by a preview or grant.
+/// directory-relative source selection covered by a preview or grant.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(deny_unknown_fields)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -223,7 +223,7 @@ pub struct CloudCodebasePreviewParams {
     pub max_egress_bytes: u64,
 }
 
-/// Bounded local preview of the Workspace-produced chunks eligible for publication.
+/// Bounded local preview of the directory-produced chunks eligible for publication.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CloudCodebasePreviewResult {

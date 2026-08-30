@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 /// Stable, namespaced identity for one logical MCP server declaration.
 ///
 /// The containing configuration authority validates the namespace it owns. This keeps User,
-/// Workspace, and Plugin declarations from silently colliding on a display name.
+/// Directory, and Plugin declarations from silently colliding on a display name.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct McpServerId(String);

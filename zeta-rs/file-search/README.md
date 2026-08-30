@@ -1,12 +1,12 @@
 # `zeta-file-search`
 
-> 本 README 是 workspace 文件路径 fuzzy search 的实现契约。TUI `@file` 交互由
+> 本 README 是 directory 文件路径 fuzzy search 的实现契约。TUI `@file` 交互由
 > [`zeta-code/tui/README.md`](../../zeta-code/tui/README.md) 维护。模型侧的文件内容搜索通过
 > Agent 的文件内容搜索由 App Server 的 `grep` Tool 完成，编辑器工作区搜索见
-> [`zeta-rs/workspace-search/README.md`](../workspace-search/README.md)；可执行文件的
+> [`zeta-rs/content-search/README.md`](../content-search/README.md)；可执行文件的
 > discovery 与冻结边界见 [`zeta-rs/shell-command/README.md`](../shell-command/README.md)。
 
-`zeta-file-search` 只拥有 workspace-relative 文件路径的后台索引、增量 fuzzy matching 和独立
+`zeta-file-search` 只拥有 directory-relative 文件路径的后台索引、增量 fuzzy matching 和独立
 CLI。它不读取候选文件内容，不注册模型 Tool，也不拥有 TUI popup/token 状态。
 
 ## 文件与职责
@@ -27,7 +27,7 @@ src/
 
 ```text
 ignore::WalkBuilder worker
-  └─ workspace-relative file path → Nucleo injector
+  └─ directory-relative file path → Nucleo injector
 
 Nucleo matcher worker
   ├─ QueryChanged → incremental pattern reparse
@@ -63,7 +63,7 @@ cargo run --manifest-path Cargo.toml -p zeta-file-search -- \
 
 | 参数 | 语义 |
 | --- | --- |
-| `[PATTERN]` | fuzzy pattern；省略时列出 workspace 文件 |
+| `[PATTERN]` | fuzzy pattern；省略时列出 directory 文件 |
 | `-C, --cwd <DIR>` | 搜索 root；默认当前目录 |
 | `-l, --limit <N>` | 输出上限；默认 64 |
 | `--threads <N>` | walker 和 Nucleo worker 数；默认 2 |

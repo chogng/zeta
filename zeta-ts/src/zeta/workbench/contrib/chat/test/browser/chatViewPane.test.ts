@@ -8,7 +8,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
-import type { ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
@@ -63,7 +63,7 @@ class PendingSessionService implements ISessionsManagementService {
 	private _activeUntitledSessionId: string | undefined;
 
 	readonly onDidChange = this._onDidChange.event;
-	readonly sessions: readonly Session[] = [];
+	readonly sessions: readonly ISession[] = [];
 	readonly active: IActiveSessionThread | undefined = undefined;
 	readonly state: SessionsManagementState = "loading";
 	readonly error: string | undefined = undefined;
@@ -95,7 +95,7 @@ class PendingSessionService implements ISessionsManagementService {
 	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
 	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	archiveSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
-	setModel(_sessionId: SessionId, _model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	setPreferredModel(_model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 }
 

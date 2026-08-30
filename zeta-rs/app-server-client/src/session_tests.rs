@@ -9,10 +9,7 @@ use zeta_app_server_protocol::protocol::session::{
 };
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_async_utils::CancellationToken;
-use zeta_core::{
-    CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, SessionCoordinator,
-    ThreadController,
-};
+use zeta_core::{CoreError, InMemoryThreadStore, ModelService, ThreadController};
 use zeta_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
     StopReason, ThreadEvent, ThreadUpdate,
@@ -59,7 +56,6 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         .request_session(SessionRequestParams {
             command_id: command_id("thread"),
             session_id: created_session.session.session_id.clone(),
-            expected_sequence: created_session.session.sequence,
             request: SessionRequest::CreateThread {
                 title: "thread".into(),
             },
@@ -71,16 +67,16 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
     client
         .subscribe_session(SessionSubscribeParams {
             session_id: created_session.session.session_id.clone(),
-            after_sequence: 0,
         })
         .unwrap();
     client
         .request_session(SessionRequestParams {
             command_id: command_id("turn"),
             session_id: created_session.session.session_id,
-            expected_sequence: 1,
             request: SessionRequest::StartTurn {
                 thread_id: created_thread.thread_id,
+                expected_sequence: 1,
+                approval_mode: zeta_protocol::ApprovalMode::default(),
                 tool_mode: None,
                 input: vec![InputItem::Text {
                     text: "hello".into(),
@@ -172,13 +168,7 @@ fn app_server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    AppServer::new(
-        Arc::new(SessionCoordinator::with_store(
-            Arc::new(InMemorySessionStore::default()),
-            threads,
-        )),
-        Arc::new(TestModel),
-    )
+    AppServer::new(threads, Arc::new(TestModel))
 }
 
 struct TestModel;

@@ -79,7 +79,7 @@ Workbench 启动会保留初次 `AppServerExtensionService.start()` 的 Promise�
 ```mermaid
 flowchart TD
     manifest["legacy Plugin declaration / Marketplace optional Zeta sidecar"] --> validate["source adapter: package/digest/executable/capability ceiling"]
-    validate --> authority["source enable + grant + exact artifact lease + Workspace trust"]
+    validate --> authority["source enable + grant + exact artifact lease + directory execution Authorization"]
     authority --> launcher{"production enforcing launcher available?"}
     launcher -->|no| unavailable["capability=false / isolationUnavailable"]
     launcher -->|yes| process["one isolated process per extension"]
@@ -120,10 +120,10 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`z
 | 静态 DTO、connection resource 与错误映射 | App Server / `platform/extensions` adapter | Workbench 领域注册 |
 | 声明式 catalog 与生命周期 | `IExtensionService` / `AppServerExtensionService` | transport DTO、Plugin enable/grant |
 | Marketplace package artifact/install/update/uninstall 与 capability lease | `zeta-marketplace-manager` | Editor Extension enable/grant、启动进程 |
-| Marketplace Editor Extension enable/grant generation、通知与 lease | 产品注入的 `MarketplaceEditorExtensionAdmission` | package 安装、Workspace trust、进程隔离 |
+| Marketplace Editor Extension enable/grant generation、通知与 lease | 产品注入的 `MarketplaceEditorExtensionAdmission` | package 安装、目录权限、进程隔离 |
 | Legacy Plugin 本地 package 与 enable/grant generation | `zeta-plugins` compatibility authority | 远端 Marketplace 安装、启动进程 |
-| 可执行进程、Host RPC、incarnation、取消和 crash recovery | `zeta-editor-extension-host` | package discovery、Workspace trust decision、领域 payload |
-| source normalization + Workspace live authority adapter、Host fleet 与客户端 RPC | App Server composition | OS sandbox implementation、Workbench UI |
+| 可执行进程、Host RPC、incarnation、取消和 crash recovery | `zeta-editor-extension-host` | package discovery、目录权限决定、领域 payload |
+| source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC | App Server composition | OS sandbox implementation、Workbench UI |
 | 生产 sandbox、hard resources 与 killable process tree | 注入的 platform `ExtensionHostLauncher` | package enable/grant 或 provider semantics |
 | Host snapshot normalization 与 transport | `platform/extensionHost` adapter | 领域 provider ownership |
 | Host fleet 生命周期和原子 provider 编排 | `IExtensionHostService` implementation | generated DTO 作为 domain API |

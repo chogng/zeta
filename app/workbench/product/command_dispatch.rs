@@ -38,10 +38,7 @@ pub(crate) fn builtin_command_registry() -> ProductCommandRegistry {
         )
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::ToggleWorkspacePane,
-            execute_toggle_workspace_pane,
-        )
+        .register(AppCommandId::ToggleFilesPane, execute_toggle_files_pane)
         .expect("built-in command IDs must be unique");
     registry
         .register(AppCommandId::AddSession, execute_add_session)
@@ -92,7 +89,7 @@ pub(crate) fn builtin_command_registry() -> ProductCommandRegistry {
         .register(AppCommandId::PickGitBranch, execute_pick_git_branch)
         .expect("built-in command IDs must be unique");
     registry
-        .register(AppCommandId::ShowWorkspaceDiff, execute_show_workspace_diff)
+        .register(AppCommandId::ShowGitDiff, execute_show_git_diff)
         .expect("built-in command IDs must be unique");
     registry
         .register(
@@ -142,13 +139,13 @@ fn execute_paste(app: &mut ProductApp, _request: &CommandRequest) {
 }
 
 fn execute_save(app: &mut ProductApp, _request: &CommandRequest) {
-    app.save_active_workspace_file();
+    app.save_active_file();
 }
 
 fn execute_toggle_terminal_surface(app: &mut ProductApp, _request: &CommandRequest) {
-    let was_terminal = app.workspace_surface.is_terminal();
-    app.workspace_surface.toggle_terminal();
-    if app.workspace_surface.is_terminal() {
+    let was_terminal = app.main_surface.is_terminal();
+    app.main_surface.toggle_terminal();
+    if app.main_surface.is_terminal() {
         if let Some(session_id) = app
             .active_session_tab_key()
             .and_then(|key| key.session_id().cloned())
@@ -156,11 +153,11 @@ fn execute_toggle_terminal_surface(app: &mut ProductApp, _request: &CommandReque
             let _ = app.activate_terminal_for_session(&session_id);
         }
     } else if was_terminal {
-        app.restore_workspace_pane_after_terminal();
+        app.restore_main_pane_after_terminal();
     }
-    app.pending_focus = if app.workspace_surface.is_editor() {
+    app.pending_focus = if app.main_surface.is_editor() {
         Some(zeta_editor_host::FILE_EDITOR_DOCUMENT)
-    } else if app.workspace_surface.is_terminal() {
+    } else if app.main_surface.is_terminal() {
         None
     } else {
         Some(zeta_session::interaction::COMPOSER)
@@ -192,14 +189,14 @@ fn execute_manage_remote_tunnels(app: &mut ProductApp, _request: &CommandRequest
     app.keybindings.cancel_chord();
 }
 
-fn execute_toggle_workspace_pane(app: &mut ProductApp, _request: &CommandRequest) {
-    if app.workspace_surface.is_editor() {
+fn execute_toggle_files_pane(app: &mut ProductApp, _request: &CommandRequest) {
+    if app.main_surface.is_editor() {
         app.show_agent_pane();
         app.workbench.collapse_inspector();
         app.pending_focus = Some(zeta_session::interaction::COMPOSER);
         return;
     }
-    match app.active_workspace_pane_kind() {
+    match app.active_main_pane_kind() {
         Some(crate::PaneInputKind::Files) | Some(crate::PaneInputKind::Diff) => {
             app.show_agent_pane()
         }
@@ -291,14 +288,14 @@ fn execute_pick_execution_location(app: &mut ProductApp, _request: &CommandReque
 }
 
 fn execute_pick_working_directory(app: &mut ProductApp, _request: &CommandRequest) {
-    app.toggle_workspace_path_picker();
+    app.toggle_path_picker();
 }
 
 fn execute_pick_git_branch(app: &mut ProductApp, _request: &CommandRequest) {
     app.toggle_git_branch_context_menu();
 }
 
-fn execute_show_workspace_diff(app: &mut ProductApp, _request: &CommandRequest) {
+fn execute_show_git_diff(app: &mut ProductApp, _request: &CommandRequest) {
     if let Err(error) = app.refresh_git_from_app_server() {
         eprintln!("could not refresh Git snapshot: {error}");
     }

@@ -15,6 +15,6 @@ pub struct TurnExecutionBinding {
     /// Opaque authority scope in which the external thread was created.
     ///
     /// Adapters must compare this value before resuming the remote thread. It intentionally
-    /// excludes filesystem paths and credentials while preventing cross-workspace reuse.
+    /// excludes filesystem paths and credentials while preventing cross-environment reuse.
     pub execution_scope: String,
 }

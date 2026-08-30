@@ -173,28 +173,6 @@ impl LoadedThreads {
         Ok(false)
     }
 
-    pub(super) fn loaded_snapshots(&self) -> Result<Vec<ThreadSnapshot>, CoreError> {
-        let slots = self
-            .slots
-            .lock()
-            .map_err(|_| CoreError::Journal("loaded Thread registry lock poisoned".into()))?
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut snapshots = Vec::new();
-        for slot in slots {
-            if let Some(loaded) = slot
-                .loaded
-                .lock()
-                .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?
-                .as_ref()
-            {
-                snapshots.push(loaded.snapshot.clone());
-            }
-        }
-        Ok(snapshots)
-    }
-
     fn next_incarnation(&self) -> ThreadIncarnationId {
         ThreadIncarnationId(self.next_incarnation.fetch_add(1, Ordering::Relaxed))
     }

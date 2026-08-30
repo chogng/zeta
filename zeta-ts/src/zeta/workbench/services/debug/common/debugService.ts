@@ -5,7 +5,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 
 export interface IDebugConfiguration {
 	readonly id: string;
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly workspaceFolderName?: string;
 	readonly name: string;
 	readonly type: string;
@@ -18,7 +18,7 @@ export interface IDebugConfiguration {
 
 export interface IDebugCompound {
 	readonly id: string;
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly workspaceFolderName?: string;
 	readonly name: string;
 	readonly configurations: readonly string[];

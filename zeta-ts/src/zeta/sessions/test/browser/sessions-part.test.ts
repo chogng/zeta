@@ -8,7 +8,7 @@ import type { IContextMenuService } from "../../../platform/contextview/browser/
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
-import { SessionsViewService } from "../../../sessions/services/view/browser/sessionsViewService.js";
+import { SessionsService } from "../../../sessions/services/view/browser/sessionsService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -77,11 +77,8 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		async stopSession() {
 			throw new Error("Session stopping is unavailable");
 		},
-		async setModel() {
+		async setPreferredModel() {
 			throw new Error("Model selection is unavailable");
-		},
-		async setNextApprovalMode() {
-			throw new Error("Approval mode selection is unavailable");
 		},
 		async archiveSession() {
 			throw new Error("Session archiving is unavailable");
@@ -120,7 +117,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		async commitTurnChange() { return []; },
 		async discardThreadChanges() { return []; },
 	};
-	const viewService = new SessionsViewService(sessionService);
+	const viewService = new SessionsService(sessionService);
 	viewService.openNewSession("New code session");
 	viewService.openNewSession("New code session");
 	const contextMenuEvents = new Emitter<void>();

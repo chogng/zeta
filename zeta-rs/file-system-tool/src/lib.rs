@@ -6,7 +6,7 @@ use std::fmt;
 use std::future;
 use std::path::PathBuf;
 use std::sync::Arc;
-use zeta_file_system::{FileType, WorkspaceFileSystem};
+use zeta_file_system::{FileSystem, FileType};
 use zeta_tools::{
     ToolConcurrency, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome, ToolExecutor,
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
@@ -80,18 +80,18 @@ impl fmt::Display for FileSystemToolError {
 
 impl std::error::Error for FileSystemToolError {}
 
-/// Reads, lists, or describes an existing workspace path without modifying it.
+/// Reads, lists, or describes an existing directory path without modifying it.
 pub struct FileSystemTool {
-    environment_id: zeta_tools::ToolEnvironmentId,
-    file_system: Arc<dyn WorkspaceFileSystem>,
+    environment_id: zeta_tools::EnvId,
+    file_system: Arc<dyn FileSystem>,
     limits: FileSystemLimits,
     definition: ToolDefinition,
 }
 
 impl FileSystemTool {
     pub fn new(
-        environment_id: zeta_tools::ToolEnvironmentId,
-        file_system: Arc<dyn WorkspaceFileSystem>,
+        environment_id: zeta_tools::EnvId,
+        file_system: Arc<dyn FileSystem>,
         limits: FileSystemLimits,
     ) -> Result<Self, FileSystemToolError> {
         Ok(Self {
@@ -217,12 +217,12 @@ struct FileSystemInput {
 fn file_system_definition() -> Result<ToolDefinition, FileSystemToolError> {
     ToolDefinition::function(
         ToolName::new("file-system").map_err(definition_error)?,
-        "Read an existing workspace file, list one workspace directory, or inspect path metadata. This tool never modifies files.",
+        "Read an existing directory file, list one directory directory, or inspect path metadata. This tool never modifies files.",
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {
                 "operation": { "type": "string", "enum": ["read", "list", "metadata"] },
-                "path": { "type": "string", "description": "Relative path within the selected workspace." }
+                "path": { "type": "string", "description": "Relative path within the selected directory." }
             },
             "required": ["operation", "path"],
             "additionalProperties": false

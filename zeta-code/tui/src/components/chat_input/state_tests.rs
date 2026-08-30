@@ -118,7 +118,7 @@ fn deleting_an_atomic_command_clears_its_binding_and_allows_new_discovery() {
 fn dynamic_commands_share_popup_completion_and_submission() {
     let dynamic = SlashCommandDefinition {
         name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
+        description: "inspect the current dir".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
     };
     let registry = SlashCommandCatalog::with_local_and_server(
@@ -149,7 +149,7 @@ fn dynamic_commands_share_popup_completion_and_submission() {
 fn forwarded_dynamic_command_restores_command_text_before_structured_arguments() {
     let dynamic = SlashCommandDefinition {
         name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
+        description: "inspect the current dir".into(),
         argument_mode: SlashCommandArgumentMode::Optional,
     };
     let registry =

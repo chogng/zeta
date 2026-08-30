@@ -41,7 +41,7 @@ fn snapshot_keeps_direct_tools_visible_and_deferred_tools_loadable() {
     builder
         .register(registration(
             "read_file",
-            "Read a workspace file",
+            "Read a accessible file",
             ToolExposure::Direct,
         ))
         .unwrap();

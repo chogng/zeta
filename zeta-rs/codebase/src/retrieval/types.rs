@@ -13,7 +13,7 @@ const DEFAULT_MAX_TOTAL_BYTES: usize = 128 * 1024;
 /// One optional Codebase enhancement that contributes already ranked chunk references.
 ///
 /// Implementations may perform work outside this crate, but they can only return exact chunks
-/// created by the Workspace-owned Codebase.
+/// created by the Directory-owned Codebase.
 pub trait CodebaseEnhancement: Send + Sync {
     fn root_id(&self) -> &IndexRootId;
 

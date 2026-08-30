@@ -52,7 +52,7 @@ const { WorkbenchConfiguration } = await import('../../../../../workbench/common
 const { WorkbenchThemesRegistry } = await import('../../../../../workbench/common/theme.js');
 const { EditorSelectionConfiguration } = await import('../../../../../workbench/common/editorSelectionConfiguration.js');
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
-const { WorkspaceSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
+const { ContentSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
 const { EditorPaneRegistry } = await import('../../../../../workbench/browser/parts/editor/editorRegistry.js');
@@ -128,7 +128,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle.key), 'appearance');
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor.key), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily.key), 'editor');
-	assert.equal(findSettingCategory(layout, WorkspaceSearchConfiguration.maxResults.key), 'editor');
+	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults.key), 'editor');
 	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text'].includes(setting.valueType)), true);
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');

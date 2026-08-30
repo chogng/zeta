@@ -26,7 +26,7 @@ pub use identity::SkillCatalogGeneration;
 pub use resource::SkillResource;
 pub use resource::SkillResourceKind;
 pub use resource::SkillResourcePath;
-pub use source::{SkillSourceKind, SkillSourceRoot, SkillSourceView, SkillTrust};
+pub use source::{SkillSourceKind, SkillSourceRoot, SkillSourceView};
 pub use zeta_protocol::{
     ContentDigest, InvalidContentDigest, InvalidSkillName, InvalidSkillSourceId, SkillId,
     SkillName, SkillSourceId,

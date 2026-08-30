@@ -14,7 +14,7 @@ use tokio::process::Child;
 use tokio::process::ChildStdin;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
-use zeta_workspace::TrustedWorkspace;
+use zeta_file_access::Authorization;
 
 use crate::framing::MAX_MESSAGE_BYTES;
 use crate::framing::encode_message;
@@ -26,7 +26,7 @@ const MAX_ARGUMENT_BYTES: usize = 32 * 1024;
 const MAX_BUFFERED_MESSAGES: usize = 512;
 const MAX_BUFFERED_STDERR_BYTES: usize = 256 * 1024;
 
-/// Validated command used to start one workspace-bound debug adapter.
+/// Validated command used to start one directory-bound debug adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DebugAdapterCommand {
     program: String,
@@ -102,10 +102,10 @@ pub enum DebugAdapterError {
     Json(#[from] serde_json::Error),
 }
 
-/// Owns bounded DAP stdio processes under one trusted workspace capability.
+/// Owns bounded DAP stdio processes under explicit config and execution authorizations.
 pub struct DebugAdapterService {
-    executable_configuration: TrustedWorkspace,
-    process_execution: TrustedWorkspace,
+    executable_configuration: Authorization,
+    process_execution: Authorization,
     environment: HashMap<String, String>,
     runtime: Runtime,
     sessions: Mutex<HashMap<DebugAdapterSessionId, DebugAdapterSession>>,
@@ -114,14 +114,13 @@ pub struct DebugAdapterService {
 
 impl DebugAdapterService {
     pub fn new(
-        executable_configuration: TrustedWorkspace,
-        process_execution: TrustedWorkspace,
+        executable_configuration: Authorization,
+        process_execution: Authorization,
         environment: HashMap<String, String>,
     ) -> Result<Self, DebugAdapterError> {
-        if executable_configuration.capability()
-            != zeta_workspace::WorkspaceCapability::LoadExecutableConfiguration
-            || process_execution.capability() != zeta_workspace::WorkspaceCapability::ExecuteProcess
-            || executable_configuration.root() != process_execution.root()
+        if executable_configuration.permission() != zeta_file_access::Permission::LoadConfig
+            || process_execution.permission() != zeta_file_access::Permission::ExecuteCommands
+            || executable_configuration.dir() != process_execution.dir()
         {
             return Err(DebugAdapterError::OperationFailed);
         }
@@ -156,7 +155,7 @@ impl DebugAdapterService {
         if sessions.len() >= MAX_ACTIVE_SESSIONS {
             return Err(DebugAdapterError::Busy);
         }
-        let root = self.process_execution.root().canonical_path();
+        let root = self.process_execution.dir().canonical_path();
         let _runtime_guard = self.runtime.enter();
         let mut process = tokio::process::Command::new(&command.program);
         process

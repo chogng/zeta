@@ -12,9 +12,9 @@ fn mcp_http_listener_requires_an_ip_port_and_endpoint_path() {
 
 #[test]
 fn exec_arguments_default_to_a_safe_new_human_run() {
-    let options = parse_exec_arguments(vec!["inspect".into(), "the workspace".into()]).unwrap();
+    let options = parse_exec_arguments(vec!["inspect".into(), "the directory".into()]).unwrap();
     assert_eq!(options.entry, HeadlessEntry::New);
-    assert_eq!(options.prompt, "inspect the workspace");
+    assert_eq!(options.prompt, "inspect the directory");
     assert_eq!(options.output, ExecOutputMode::Human);
     assert_eq!(
         options.approval,

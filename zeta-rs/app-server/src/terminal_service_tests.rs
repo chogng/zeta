@@ -9,7 +9,7 @@ fn output_ring_reports_a_gap_after_eviction() {
 
     let result = read_state(
         &TerminalReadParams {
-            workspace_folder_id: None,
+            dir_id: None,
             terminal_id: "terminal-1".into(),
             after_sequence: 0,
             after_command_sequence: 0,
@@ -31,7 +31,7 @@ fn output_ring_advances_the_cursor_when_one_oversized_chunk_is_evicted() {
 
     let result = read_state(
         &TerminalReadParams {
-            workspace_folder_id: None,
+            dir_id: None,
             terminal_id: "terminal-1".into(),
             after_sequence: 0,
             after_command_sequence: 0,

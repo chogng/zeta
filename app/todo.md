@@ -6,6 +6,6 @@
 - zeta-files：Files Pane、目录树、搜索和文件交互
 - zeta-scm：Changes Pane、多文件 Diff、折叠和滚动
 - zeta-editor-host：编辑器 Tab、搜索、诊断、LSP 展示
-- zeta-terminal-workspace：终端 runtime、Pane binding、滚动、选择、指针和视图状态
+- zeta-terminal-runtime：终端 runtime、Pane binding、滚动、选择、指针和视图状态
 - zeta-settings：Settings、快捷键、连接管理、Picker、Tunnel 状态和 UI
 - 当进行重构、退场时，要实现将职责收进现有的或者新建文件，而不是在内部重新排版

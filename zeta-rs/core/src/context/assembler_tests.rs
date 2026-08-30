@@ -14,9 +14,9 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use zeta_agent_environment::AgentEnvironmentSnapshot;
+use zeta_agent_environment::Dirs;
 use zeta_agent_environment::HostEnvironment;
 use zeta_agent_environment::RepositoryEnvironment;
-use zeta_agent_environment::WorkspaceRoots;
 use zeta_protocol::ItemId;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
@@ -276,7 +276,7 @@ fn injects_instructions_before_history_and_environment_at_the_request_tail() {
     let additional_root = std::env::current_dir().unwrap().join("extra");
     let harness = HarnessContext::new(HarnessInstructions::new(
         "system body",
-        Some("follow the workspace rules".into()),
+        Some("follow the directory rules".into()),
     ))
     .with_environment(test_environment(additional_root.clone()));
 
@@ -286,24 +286,24 @@ fn injects_instructions_before_history_and_environment_at_the_request_tail() {
     assert_eq!(resolved, "system body");
     assert!(request.parallel_tool_calls);
     let InputItem::Message(message) = &request.input[0] else {
-        panic!("Workspace instructions must be the first input message");
+        panic!("Directory instructions must be the first input message");
     };
     assert!(matches!(message.role, MessageRole::User));
     assert!(
-        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Global Workspace Instructions from .zeta/instructions"))
+        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Directory Instructions from .zeta/instructions"))
     );
     assert!(
-        matches!(&message.content[0], ContentPart::Text(text) if text.ends_with("follow the workspace rules\n</workspace-instructions>"))
+        matches!(&message.content[0], ContentPart::Text(text) if text.ends_with("follow the directory rules\n</directory-instructions>"))
     );
     let InputItem::Message(message) = &request.input[1] else {
-        panic!("durable user input must follow Workspace instructions");
+        panic!("durable user input must follow Directory instructions");
     };
     assert!(matches!(&message.content[0], ContentPart::Text(text) if text == "hello"));
     let InputItem::Message(message) = &request.input[2] else {
         panic!("runtime environment must be the final input message");
     };
     assert!(
-        matches!(&message.content[0], ContentPart::Text(text) if text.contains(&format!("<root>{}</root>", additional_root.display())))
+        matches!(&message.content[0], ContentPart::Text(text) if text.contains(&format!("<dir>{}</dir>", additional_root.display())))
     );
 }
 
@@ -453,7 +453,7 @@ fn assemble(
 }
 
 fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
-    let primary_root = std::env::current_dir().unwrap().join("workspace");
+    let primary_root = std::env::current_dir().unwrap().join("directory");
     AgentEnvironmentSnapshot::new(
         HostEnvironment::new(
             primary_root.clone(),
@@ -464,7 +464,7 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
         )
         .unwrap(),
         RepositoryEnvironment::NotDetected,
-        WorkspaceRoots::new(primary_root, [additional_root]).unwrap(),
+        Dirs::new([primary_root, additional_root]).unwrap(),
     )
 }
 
@@ -472,7 +472,10 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "test".into(),
+        status: zeta_protocol::ThreadStatus::Active,
         turn_execution_binding: None,
         sequence: items.len() as u64 + 2,
         usage: zeta_protocol::ModelUsageSummary::default(),

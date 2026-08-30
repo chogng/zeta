@@ -109,7 +109,7 @@ impl ShellCompletionEngine {
                 ));
             }
         }
-        for (value, description) in self.workspace.candidates(&state.command_path) {
+        for (value, description) in self.dir_catalog.candidates(&state.command_path) {
             if value.starts_with(prefix) {
                 completions.push(ShellCompletion::new(
                     value,

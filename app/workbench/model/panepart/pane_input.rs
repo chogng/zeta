@@ -17,9 +17,9 @@ pub enum PaneInputKind {
     Terminal,
     /// An Agent conversation or thread surface.
     Agent,
-    /// A workspace file browser.
+    /// A directory file browser.
     Files,
-    /// A workspace change or diff surface.
+    /// A directory change or diff surface.
     Diff,
     /// The application settings surface.
     Settings,
@@ -39,10 +39,10 @@ pub enum PaneInput {
         session_id: SessionId,
         thread_id: ThreadId,
     },
-    /// A file browser rooted at one workspace directory.
-    Files { workspace_root: PathBuf },
-    /// A diff view rooted at one workspace directory.
-    Diff { workspace_root: PathBuf },
+    /// A file browser rooted at one directory.
+    Files { dir_root: PathBuf },
+    /// A diff view rooted at one directory.
+    Diff { dir_root: PathBuf },
     /// The singleton Settings surface. The selected section is view state, not input identity.
     Settings,
 }
@@ -61,14 +61,14 @@ impl PaneInput {
         }
     }
 
-    /// Creates a Files description rooted at one workspace directory.
-    pub fn files(workspace_root: PathBuf) -> Self {
-        Self::Files { workspace_root }
+    /// Creates a Files description rooted at one directory.
+    pub fn files(dir_root: PathBuf) -> Self {
+        Self::Files { dir_root }
     }
 
-    /// Creates a Diff description rooted at one workspace directory.
-    pub fn diff(workspace_root: PathBuf) -> Self {
-        Self::Diff { workspace_root }
+    /// Creates a Diff description rooted at one directory.
+    pub fn diff(dir_root: PathBuf) -> Self {
+        Self::Diff { dir_root }
     }
 
     /// Creates the singleton Settings description.
@@ -114,10 +114,10 @@ impl PaneInput {
     }
 
     #[cfg(test)]
-    /// Returns the workspace root described by a Files or Diff input.
-    pub fn workspace_root(&self) -> Option<&Path> {
+    /// Returns the directory root described by a Files or Diff input.
+    pub fn dir_root(&self) -> Option<&Path> {
         match self {
-            Self::Files { workspace_root } | Self::Diff { workspace_root } => Some(workspace_root),
+            Self::Files { dir_root } | Self::Diff { dir_root } => Some(dir_root),
             _ => None,
         }
     }

@@ -96,7 +96,7 @@ impl std::error::Error for EditorEventSinkUnavailable {}
 ///
 /// The dedicated connection prevents a slow language-server response from blocking Agent and
 /// filesystem requests. SSH credentials and reconnect policy remain in the desktop product host;
-/// the Remote App Server remains the only language and Workspace authority.
+/// the Remote App Server remains the only language and directory-access authority.
 pub(crate) struct RemoteLanguageSession {
     available: Arc<AtomicBool>,
     closing: Arc<AtomicBool>,
@@ -287,7 +287,7 @@ fn drive_connection(
             }
         }
         match server_events.recv_timeout(EVENT_POLL_INTERVAL) {
-            Ok(AppServerEvent::Notification(ServerNotification::LanguageDiagnostics(
+            Ok(AppServerEvent::Notification(ServerNotification::LanguageDirectoryDiagnostics(
                 diagnostics,
             ))) => send_event(events, RemoteLanguageEvent::Diagnostics(diagnostics))?,
             Ok(AppServerEvent::Notification(ServerNotification::LanguageServerMessage(
@@ -324,7 +324,7 @@ fn drive_command(
         }
         RemoteLanguageCommand::Close(path) => {
             match client.close_language_document(LanguageCloseParams {
-                workspace_folder_id: None,
+                dir_id: None,
                 session_directory: None,
                 path: path.clone(),
             }) {

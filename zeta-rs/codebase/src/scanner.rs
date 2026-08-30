@@ -14,7 +14,7 @@ use crate::chunker::language_for_path;
 use crate::chunker::source_revision;
 use crate::error::io_error;
 use crate::types::SourceRevision;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 #[derive(Clone, Debug)]
 pub struct PreparedFile {
@@ -27,17 +27,14 @@ pub struct PreparedFile {
 }
 
 #[derive(Debug)]
-pub struct WorkspaceScan {
+pub struct DirScan {
     pub files: Vec<PreparedFile>,
     pub skipped_file_count: usize,
     pub file_limit_hit: bool,
     pub source_bytes_limit_hit: bool,
 }
 
-pub(crate) fn scan_workspace(
-    root: &WorkspaceRoot,
-    limits: &CodebaseLimits,
-) -> Result<WorkspaceScan, CodebaseError> {
+pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, CodebaseError> {
     let mut builder = WalkBuilder::new(root.canonical_path());
     builder
         .hidden(true)
@@ -122,7 +119,7 @@ pub(crate) fn scan_workspace(
             Err(error) => return Err(error),
         }
     }
-    Ok(WorkspaceScan {
+    Ok(DirScan {
         files,
         skipped_file_count,
         file_limit_hit,
@@ -131,7 +128,7 @@ pub(crate) fn scan_workspace(
 }
 
 pub(crate) fn prepare_relative_file(
-    root: &WorkspaceRoot,
+    root: &Dir,
     relative_path: PathBuf,
     limits: &CodebaseLimits,
 ) -> Result<Option<PreparedFile>, CodebaseError> {

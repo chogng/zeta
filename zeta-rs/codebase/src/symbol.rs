@@ -1,4 +1,4 @@
-//! Rebuildable, workspace-side declaration indexing and fuzzy symbol search.
+//! Rebuildable, directory-side declaration indexing and fuzzy symbol search.
 //!
 //! The crate consumes source identities and verified source text from `zeta-codebase`; it does
 //! not scan the filesystem or claim Language Server semantic facts.

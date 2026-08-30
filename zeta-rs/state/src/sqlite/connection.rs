@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{SqliteDurability, open_sqlite_database};
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 3;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 4;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -65,27 +65,6 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  PRIMARY KEY (thread_id, sequence),
                  FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
              );
-             CREATE TABLE session_streams (
-                 session_id TEXT PRIMARY KEY,
-                 current_sequence INTEGER NOT NULL
-             );
-             CREATE TABLE session_batches (
-                 session_id TEXT NOT NULL,
-                 batch_id TEXT NOT NULL,
-                 expected_sequence INTEGER NOT NULL,
-                 event_count INTEGER NOT NULL,
-                 PRIMARY KEY (session_id, batch_id),
-                 FOREIGN KEY (session_id) REFERENCES session_streams(session_id)
-             );
-             CREATE TABLE session_events (
-                 session_id TEXT NOT NULL,
-                 sequence INTEGER NOT NULL,
-                 event_id TEXT NOT NULL UNIQUE,
-                 schema_version INTEGER NOT NULL,
-                 envelope_json TEXT NOT NULL,
-                 PRIMARY KEY (session_id, sequence),
-                 FOREIGN KEY (session_id) REFERENCES session_streams(session_id)
-             );
              CREATE TABLE turn_change_sets (
                  change_set_id TEXT PRIMARY KEY,
                  thread_id TEXT NOT NULL,
@@ -106,7 +85,15 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                      thread_id TEXT NOT NULL,
                      revision INTEGER NOT NULL,
                      record_json TEXT NOT NULL
-                 );",
+                 );
+                 CREATE TABLE turn_change_commands (
+                     command_id TEXT PRIMARY KEY,
+                     fingerprint TEXT NOT NULL,
+                     response_json TEXT NOT NULL
+                 );
+                 DROP TABLE IF EXISTS session_events;
+                 DROP TABLE IF EXISTS session_batches;
+                 DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
         Some(2) => transaction
@@ -115,7 +102,17 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                      command_id TEXT PRIMARY KEY,
                      fingerprint TEXT NOT NULL,
                      response_json TEXT NOT NULL
-                 );",
+                 );
+                 DROP TABLE IF EXISTS session_events;
+                 DROP TABLE IF EXISTS session_batches;
+                 DROP TABLE IF EXISTS session_streams;",
+            )
+            .map_err(sql_error)?,
+        Some(3) => transaction
+            .execute_batch(
+                "DROP TABLE IF EXISTS session_events;
+                 DROP TABLE IF EXISTS session_batches;
+                 DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
         Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}

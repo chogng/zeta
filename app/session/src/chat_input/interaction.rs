@@ -292,7 +292,7 @@ impl ChatInputInteractionState {
 fn model_command() -> SlashCommandDefinition {
     SlashCommandDefinition {
         name: "model".into(),
-        description: "choose the model for this session".into(),
+        description: "choose the preferred model for subsequent turns".into(),
         argument_mode: SlashCommandArgumentMode::None,
     }
 }

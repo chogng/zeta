@@ -30,7 +30,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: TerminalCreateParams = decode(params)?;
         let created = self
-            .terminal_service_for(params.workspace_folder_id.as_deref())?
+            .terminal_service_for(params.dir_id.as_deref())?
             .create(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&created)
@@ -42,23 +42,23 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalCreateInSessionDirectoryParams = decode(params)?;
-        let workspace = self.session_additional_directory_workspace(
+        let authorization = self.session_dir_authorization(
             &params.session_id,
-            &params.root,
-            zeta_workspace::WorkspaceCapability::ExecuteProcess,
+            &params.path,
+            zeta_file_access::Permission::ExecuteCommands,
         )?;
         let created = self
             .terminal_service()?
-            .create_in_workspace(
+            .create_in_dir(
                 connection.connection_id,
                 TerminalCreateParams {
-                    workspace_folder_id: None,
+                    dir_id: None,
                     rows: params.rows,
                     cols: params.cols,
                     profile: params.profile,
                     lifecycle: params.lifecycle,
                 },
-                workspace,
+                authorization,
             )
             .map_err(terminal_error)?;
         result(&created)
@@ -70,7 +70,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalWriteParams = decode(params)?;
-        self.terminal_service_for(params.workspace_folder_id.as_deref())?
+        self.terminal_service_for(params.dir_id.as_deref())?
             .write(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&())
@@ -83,7 +83,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: TerminalAttachParams = decode(params)?;
         let attached = self
-            .terminal_service_for(params.workspace_folder_id.as_deref())?
+            .terminal_service_for(params.dir_id.as_deref())?
             .attach(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&attached)
@@ -95,7 +95,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalResizeParams = decode(params)?;
-        self.terminal_service_for(params.workspace_folder_id.as_deref())?
+        self.terminal_service_for(params.dir_id.as_deref())?
             .resize(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&())
@@ -108,7 +108,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: TerminalReadParams = decode(params)?;
         let output = self
-            .terminal_service_for(params.workspace_folder_id.as_deref())?
+            .terminal_service_for(params.dir_id.as_deref())?
             .read(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&output)
@@ -120,7 +120,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalCloseParams = decode(params)?;
-        self.terminal_service_for(params.workspace_folder_id.as_deref())?
+        self.terminal_service_for(params.dir_id.as_deref())?
             .close(connection.connection_id, &params.terminal_id)
             .map_err(terminal_error)?;
         result(&())

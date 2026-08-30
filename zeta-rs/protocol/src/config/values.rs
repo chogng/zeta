@@ -32,7 +32,7 @@ pub enum ApprovalMode {
 #[serde(rename_all = "camelCase")]
 pub enum SandboxMode {
     ReadOnly,
-    WorkspaceWrite,
+    DirectoryWrite,
     FullAccess,
 }
 

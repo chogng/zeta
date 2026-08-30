@@ -22,21 +22,21 @@ pub const DAEMON_PROCESS_ARGUMENT: &str = "--zeta-app-server-daemon-process";
 /// Internal argument that selects the private Fast Regex worker role.
 pub const FAST_REGEX_WORKER_PROCESS_ARGUMENT: &str = "--zeta-fast-regex-worker-process";
 
-/// Workspace trust source attached to one daemon connection.
+/// directory grant source attached to one daemon connection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum WorkspaceTrustSource {
-    /// Trust was resolved by the product host and passed explicitly.
+pub enum GrantSource {
+    /// Grant was resolved by the product host and passed explicitly.
     HostConfiguration,
-    /// Trust is resolved from the shared user configuration.
+    /// Grant is resolved from the shared user configuration.
     UserConfig,
 }
 
-/// Profile, Workspace, trust, and product-service inputs for one daemon connection.
+/// Profile, directory grant, and product-service inputs for one daemon connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConnectionOptions {
     profile_root: PathBuf,
-    workspace_root: Option<PathBuf>,
-    workspace_trust_source: WorkspaceTrustSource,
+    dir_root: Option<PathBuf>,
+    dir_grant_source: GrantSource,
     product_services: Option<PathBuf>,
 }
 
@@ -44,14 +44,14 @@ impl ConnectionOptions {
     /// Creates the explicit inputs carried in a daemon connection prelude.
     pub fn new(
         profile_root: impl Into<PathBuf>,
-        workspace_root: Option<PathBuf>,
-        workspace_trust_source: WorkspaceTrustSource,
+        dir_root: Option<PathBuf>,
+        dir_grant_source: GrantSource,
         product_services: Option<PathBuf>,
     ) -> Self {
         Self {
             profile_root: profile_root.into(),
-            workspace_root,
-            workspace_trust_source,
+            dir_root,
+            dir_grant_source,
             product_services,
         }
     }
@@ -61,14 +61,14 @@ impl ConnectionOptions {
         &self.profile_root
     }
 
-    /// Returns the explicitly selected Workspace root, when present.
-    pub fn workspace_root(&self) -> Option<&Path> {
-        self.workspace_root.as_deref()
+    /// Returns the explicitly selected directory root, when present.
+    pub fn dir_root(&self) -> Option<&Path> {
+        self.dir_root.as_deref()
     }
 
-    /// Returns the trust source for the selected Workspace.
-    pub fn workspace_trust_source(&self) -> WorkspaceTrustSource {
-        self.workspace_trust_source
+    /// Returns the grant source for the selected directory.
+    pub fn dir_grant_source(&self) -> GrantSource {
+        self.dir_grant_source
     }
 
     /// Returns the optional product-services manifest for this connection.
@@ -156,7 +156,7 @@ pub fn serve(profile_root: impl Into<PathBuf>) -> Result<(), String> {
     daemon::serve(ConnectionOptions::new(
         profile_root,
         None,
-        WorkspaceTrustSource::HostConfiguration,
+        GrantSource::HostConfiguration,
         None,
     ))
 }

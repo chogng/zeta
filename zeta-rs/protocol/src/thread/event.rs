@@ -77,6 +77,9 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         title: String,
     },
+    ThreadArchived {
+        thread_id: ThreadId,
+    },
     GoalCreated {
         thread_id: ThreadId,
         goal: crate::ThreadGoal,
@@ -313,6 +316,7 @@ impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
+            Self::ThreadArchived { .. } => "thread.archived",
             Self::GoalCreated { .. } => "thread.goal_created",
             Self::GoalUpdated { .. } => "thread.goal_updated",
             Self::GoalCleared { .. } => "thread.goal_cleared",
@@ -359,6 +363,7 @@ impl ThreadEvent {
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
+            | Self::ThreadArchived { thread_id }
             | Self::GoalCreated { thread_id, .. }
             | Self::GoalUpdated { thread_id, .. }
             | Self::GoalCleared { thread_id, .. }

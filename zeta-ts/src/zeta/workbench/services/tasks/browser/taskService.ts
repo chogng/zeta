@@ -100,7 +100,7 @@ export class TaskService extends Disposable implements ITaskService {
 					return tasks.map(task => Object.freeze({
 						...task,
 						id: multiRoot ? `${folder.id}:${task.id}` : task.id,
-						workspaceFolderId: folder.id,
+						dirId: folder.id,
 					}));
 				})),
 				Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal))),
@@ -123,13 +123,13 @@ export class TaskService extends Disposable implements ITaskService {
 
 	async run(task: IWorkspaceTask): Promise<ITaskRun> {
 		const currentTask = resolveKnownTask(task, this.currentTasks);
-		const workspaceFolder = currentTask.workspaceFolderId
-			? this.workspace.getWorkspace().folders.find(folder => folder.id === currentTask.workspaceFolderId)
+		const workspaceFolder = currentTask.dirId
+			? this.workspace.getWorkspace().folders.find(folder => folder.id === currentTask.dirId)
 			: this.workspace.getWorkspace().folders[0];
 		if (!workspaceFolder) throw new Error(`Task '${currentTask.label}' has no available workspace folder`);
 		this.log("information", "execution", `Starting task '${currentTask.label}' (${currentTask.id}).`);
 		let terminal: ITerminalInstance;
-		try { terminal = await this.terminalService.createTerminal({ workspaceFolderId: workspaceFolder.id, dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` }); }
+		try { terminal = await this.terminalService.createTerminal({ dirId: workspaceFolder.id, dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` }); }
 		catch (error) { this.log("error", "execution", `Could not create a terminal for task '${currentTask.label}': ${errorMessage(error)}`); throw error; }
 		const run = this._register(new TaskRun(currentTask, terminal, current => {
 			const exit = current.exitCode === undefined ? "" : ` (exit code ${current.exitCode})`;

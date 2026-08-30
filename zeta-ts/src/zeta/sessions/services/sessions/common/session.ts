@@ -11,7 +11,7 @@ export type ThreadOrigin =
 	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number }
 	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string }
 	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string };
-export type SessionThreadStatus = "creating" | "active";
+export type ChatStatus = "active" | "archived";
 export type AgentThreadExecutionStatus = "idle" | "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled";
 export type AgentWaitingReason = "approval" | "userInput" | "capability";
 
@@ -20,7 +20,7 @@ export interface AgentTreeNode {
 	readonly threadSequence: number;
 	readonly title: string;
 	readonly origin: ThreadOrigin;
-	readonly membershipStatus: SessionThreadStatus;
+	readonly membershipStatus: ChatStatus;
 	readonly executionStatus: AgentThreadExecutionStatus;
 	readonly currentTurnId?: string;
 	readonly waitingReason?: AgentWaitingReason;
@@ -47,19 +47,19 @@ export interface AgentTreeNode {
 	readonly children: readonly AgentTreeNode[];
 }
 
-export interface SessionThread {
+export interface IChat {
 	readonly threadId: ThreadId;
 	readonly origin: ThreadOrigin;
-	readonly status: SessionThreadStatus;
+	readonly status: ChatStatus;
 	readonly title?: string;
 	readonly executionStatus?: AgentThreadExecutionStatus;
 }
 
-export type SessionStatus = "active" | "completed" | "archived";
+export type SessionStatus = "active" | "archived";
 export type ApprovalMode = "askPermissions" | "autoReview" | "bypassPermissions";
 
-/** Canonical frontend projection of one App Server Session aggregate. */
-export interface Session {
+/** Frontend product model for one App Server Session tree. */
+export interface ISession {
 	readonly sessionId: SessionId;
 	readonly title: string;
 	readonly status: SessionStatus;
@@ -69,16 +69,14 @@ export interface Session {
 		readonly root: string;
 	} | null;
 	readonly nextApprovalMode: ApprovalMode;
-	readonly currentThreadId?: ThreadId | null;
-	readonly sequence: number;
-	readonly threads: readonly SessionThread[];
+	readonly chats: readonly IChat[];
 	/** Server-owned projection; absent only before an active Session has been subscribed. */
 	readonly agentTree?: readonly AgentTreeNode[];
 }
 
 /** Selected Session and Thread shared by session navigation and features. */
 export interface IActiveSessionThread {
-	readonly session: Session;
+	readonly session: ISession;
 	readonly threadId: ThreadId;
 }
 

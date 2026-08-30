@@ -9,7 +9,7 @@ pub enum SymbolIndexError {
     InvalidLimits(&'static str),
     #[error("symbol-index query exceeds its byte limit")]
     QueryTooLarge,
-    #[error("symbol-index storage belongs to another workspace root")]
+    #[error("symbol-index storage belongs to another directory root")]
     StorageRootMismatch,
     #[error("symbol-index source projection does not match the current codebase root")]
     SourceRootMismatch,

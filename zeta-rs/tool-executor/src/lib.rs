@@ -7,12 +7,12 @@ use std::process::Stdio;
 use std::thread;
 use std::time::{Duration, Instant};
 use zeta_async_utils::CancellationToken;
+use zeta_file_access::Dir;
 use zeta_protocol::{ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput};
 use zeta_sandboxing::{
     FileSystemAccess, NetworkAccess, SandboxBackend, SandboxCommand, SandboxDenialTiming,
     SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus,
 };
-use zeta_workspace::WorkspaceRoot;
 
 /// Decides whether a fully materialized local process action can start.
 ///
@@ -116,14 +116,9 @@ pub struct CommandExecutor<P, B> {
 }
 
 impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
-    pub fn new(
-        workspace: WorkspaceRoot,
-        backend: B,
-        approval_policy: P,
-        limits: ExecutionLimits,
-    ) -> Self {
+    pub fn new(dir: Dir, backend: B, approval_policy: P, limits: ExecutionLimits) -> Self {
         Self {
-            sandbox: SandboxManager::new(workspace, backend),
+            sandbox: SandboxManager::new(dir, backend),
             approval_policy,
             limits,
         }
@@ -135,15 +130,15 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
-        self.execute_in_workspace(request, authority, cancellation, None)
+        self.execute_in_dir(request, authority, cancellation, None)
     }
 
-    pub fn execute_in_workspace(
+    pub fn execute_in_dir(
         &self,
         request: CommandRequest,
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
-        workspace: Option<&WorkspaceRoot>,
+        dir: Option<&Dir>,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
         check_cancellation_before_start(cancellation)?;
         let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
@@ -159,11 +154,11 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             input,
         } = request;
         let command = SandboxCommand::new(program, arguments, working_directory);
-        let prepared = match workspace.map_or_else(
+        let prepared = match dir.map_or_else(
             || self.sandbox.prepare(&command, authority.sandbox_policy()),
-            |workspace| {
+            |dir| {
                 self.sandbox
-                    .prepare_in_workspace(&command, authority.sandbox_policy(), workspace)
+                    .prepare_in_dir(&command, authority.sandbox_policy(), dir)
             },
         ) {
             Ok(prepared) => prepared,

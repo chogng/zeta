@@ -20,7 +20,7 @@ zeta-state = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [lints]
 workspace = true

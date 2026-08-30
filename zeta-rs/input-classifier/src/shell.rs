@@ -33,8 +33,8 @@ impl ShellContext {
         self.engine.replace_aliases(aliases);
     }
 
-    pub(super) fn refresh_workspace(&mut self) {
-        self.engine.refresh_workspace();
+    pub(super) fn refresh_dir_catalog(&mut self) {
+        self.engine.refresh_dir_catalog();
     }
 
     pub(super) fn complete(&self, input: &str, cursor: usize) -> Vec<ShellCompletion> {

@@ -69,7 +69,7 @@ impl ProductApp {
         if self.route_git_branch_context_menu_keyboard(&event) {
             return;
         }
-        if self.route_workspace_path_picker_keyboard(&event) {
+        if self.route_path_picker_keyboard(&event) {
             return;
         }
         if self.route_tab_context_menu_keyboard(&event) {
@@ -78,7 +78,7 @@ impl ProductApp {
         let direct_terminal = self.is_direct_terminal_input();
         let context = ProductKeybindingContext::from_facts(ProductKeybindingFacts {
             direct_terminal,
-            terminal_surface_visible: self.workspace_surface.is_terminal(),
+            terminal_surface_visible: self.main_surface.is_terminal(),
             tab_container_visible: self.workbench.tab_container_state().is_expanded(),
             inspector_visible: self.workbench.inspector_state().is_expanded(),
             file_search_visible: self.files.search_visible(),
@@ -364,7 +364,7 @@ impl ProductApp {
                     .unwrap_or_default();
                 self.apply_dispatch_outcome(outcome);
             }
-            FilesAction::OpenFile { path } => self.open_workspace_file(path),
+            FilesAction::OpenFile { path } => self.open_file(path),
             FilesAction::LoadChildren { element, path } => {
                 self.load_file_tree_directory(element, path);
                 self.rebuild_presentation();
@@ -432,7 +432,7 @@ impl ProductApp {
             }
             Some(ComposerInteractionActivation::Model(model)) => {
                 if let Some(session) = self.session_runtime.as_ref()
-                    && let Err(error) = session.select_model(model)
+                    && let Err(error) = session.set_preferred_model(model)
                 {
                     eprintln!("could not select Agent model: {error}");
                 }
@@ -670,7 +670,7 @@ impl ProductApp {
     }
 
     fn is_direct_terminal_input(&self) -> bool {
-        self.workspace_surface.is_terminal()
+        self.main_surface.is_terminal()
             && !self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(FILE_SEARCH_INPUT)

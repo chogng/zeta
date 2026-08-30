@@ -45,7 +45,7 @@ use zeta_core::CancelTurnInteractionRequest;
 use zeta_core::CoreError;
 use zeta_core::ModelService;
 use zeta_core::MultiAgentCoordinator;
-use zeta_core::SessionCoordinator;
+use zeta_core::ThreadController;
 use zeta_core::ThreadUpdateSink;
 use zeta_core::ToolService;
 use zeta_core::TurnExecutionBackend;
@@ -53,7 +53,7 @@ use zeta_core::TurnExecutor;
 use zeta_extension_api::ExtensionRegistry;
 use zeta_extensions::ExtensionCatalog;
 use zeta_extensions::ExtensionRoot;
-use zeta_file_system::WorkspaceFileSystem;
+use zeta_file_system::FileSystem;
 use zeta_model_provider::ProviderCredentialService;
 use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::ThreadUpdateEnvelope;
@@ -63,6 +63,7 @@ use zeta_skills_extension::SkillWatcher;
 use zeta_typst::TypstCompiler;
 
 mod account_operations;
+mod agent_environment_source;
 mod attachment_operations;
 mod cloud_codebase_operations;
 mod codebase_operations;
@@ -76,6 +77,9 @@ mod connector_operations;
 mod connector_runtime;
 mod debug_operations;
 mod diff_operations;
+mod dir_contributions;
+mod environment_operations;
+mod environment_runtime;
 mod extension_config_operations;
 mod extension_host_operations;
 pub(crate) mod extension_host_runtime;
@@ -126,34 +130,30 @@ mod turn_changes_observer;
 mod turn_changes_operations;
 mod turn_changes_runtime;
 mod turn_changes_watcher;
-mod turn_changes_workspace;
+mod turn_changes_worktree;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
-mod workspace_customizations;
-mod workspace_environment;
-mod workspace_operations;
-mod workspace_runtime;
 
 const OUTBOUND_MESSAGE_QUEUE_CAPACITY: usize = 256;
 const INBOUND_REQUEST_QUEUE_CAPACITY: usize = 64;
 const CONNECTION_REQUEST_WORKERS: usize = 4;
 
 use crate::mcp_runtime::McpRuntimeIntents;
+pub(crate) use environment_runtime::DirGrantPolicy;
+use environment_runtime::EnvRuntime;
+pub(crate) use environment_runtime::EnvRuntimeControl;
+pub(crate) use environment_runtime::EnvToolPorts;
+use environment_runtime::LocalEnvHost;
 use notification_queue::NotificationListener;
 use notification_queue::NotificationQueue;
 use request_serialization::RequestCancellationRegistry;
 use request_serialization::RequestScheduler;
 use update_broker::UpdateBroker;
-use workspace_runtime::LocalWorkspaceHost;
-use workspace_runtime::WorkspaceRuntime;
-pub(crate) use workspace_runtime::WorkspaceRuntimeControl;
-pub(crate) use workspace_runtime::WorkspaceSwitchTrustPolicy;
-pub(crate) use workspace_runtime::WorkspaceToolPorts;
 
 pub use zeta_codebase::CodebaseModels;
 
 pub struct AppServer {
-    pub(super) sessions: Arc<SessionCoordinator>,
+    pub(super) threads: Arc<ThreadController>,
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
@@ -188,15 +188,15 @@ pub struct AppServer {
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     approval_review_model: Option<ProviderReviewModel>,
     login: Option<Arc<zeta_login::LoginService>>,
-    pub(super) workspace_authority_gate: Arc<Mutex<()>>,
-    workspace_runtime: Arc<RwLock<WorkspaceRuntime>>,
+    pub(super) env_runtime_gate: Arc<Mutex<()>>,
+    env_runtime: Arc<RwLock<EnvRuntime>>,
     turn_backend: Arc<turn_backend_router::TurnBackendHandle>,
-    local_workspace_host: Option<LocalWorkspaceHost>,
+    local_env_host: Option<LocalEnvHost>,
     dynamic_tool_port: Option<crate::tool_composition::ToolPort>,
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
     browser_host: Arc<BrowserHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
-    workspace_state: WorkspaceStateMode,
+    env_state: EnvStateMode,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
     codebase_models: Option<CodebaseModels>,
     semantic_model_provider: Option<Arc<dyn zeta_model_provider::SemanticModelProvider>>,
@@ -218,14 +218,14 @@ pub struct AppServer {
 }
 
 #[derive(Clone, Default)]
-enum WorkspaceStateMode {
+enum EnvStateMode {
     #[default]
     Unconfigured,
     Ephemeral,
     Persistent(std::sync::Arc<zeta_state::StateRuntime>),
 }
 
-impl WorkspaceStateMode {
+impl EnvStateMode {
     fn runtime(&self) -> Option<std::sync::Arc<zeta_state::StateRuntime>> {
         match self {
             Self::Persistent(runtime) => Some(std::sync::Arc::clone(runtime)),
@@ -247,7 +247,7 @@ struct ConnectionMutableState {
     initialized: bool,
     request_ids: BTreeSet<u64>,
     marketplace_leases: BTreeSet<String>,
-    workspace_trust_host: bool,
+    dir_permissions_host: bool,
 }
 
 impl ConnectionState {
@@ -274,12 +274,12 @@ impl ConnectionState {
         connection_state(self).request_ids.insert(request_id)
     }
 
-    fn set_workspace_trust_host(&self, supported: bool) {
-        connection_state(self).workspace_trust_host = supported;
+    fn set_dir_permissions_host(&self, supported: bool) {
+        connection_state(self).dir_permissions_host = supported;
     }
 
-    pub(super) fn supports_workspace_trust_host(&self) -> bool {
-        connection_state(self).workspace_trust_host
+    pub(super) fn supports_dir_permissions_host(&self) -> bool {
+        connection_state(self).dir_permissions_host
     }
 
     fn marketplace_leases(&self) -> Vec<String> {
@@ -403,26 +403,25 @@ impl AppServer {
             .sum()
     }
 
-    pub fn new(sessions: Arc<SessionCoordinator>, model: Arc<dyn ModelService>) -> Self {
+    pub fn new(threads: Arc<ThreadController>, model: Arc<dyn ModelService>) -> Self {
         let updates = Arc::new(UpdateBroker::default());
-        Self::new_with_updates(sessions, model, updates)
+        Self::new_with_updates(threads, model, updates)
     }
 
     pub(crate) fn new_with_updates(
-        sessions: Arc<SessionCoordinator>,
+        threads: Arc<ThreadController>,
         model: Arc<dyn ModelService>,
         updates: Arc<UpdateBroker>,
     ) -> Self {
         let agent_extensions = Arc::new(ExtensionRegistry::default());
-        sessions
-            .threads()
+        threads
             .install_extensions(Arc::clone(&agent_extensions))
             .expect("a new Thread controller accepts its initial extension registry");
-        let workspace_authority_gate = Arc::new(Mutex::new(()));
+        let env_runtime_gate = Arc::new(Mutex::new(()));
         let interaction_deadline_watcher = interaction_runtime::InteractionDeadlineWatcher::start(
-            sessions.threads().clone(),
+            threads.clone(),
             updates.clone(),
-            workspace_authority_gate.clone(),
+            env_runtime_gate.clone(),
         );
         let resources = Arc::new(Mutex::new(ResourceStore::default()));
         let browser_host = Arc::new(BrowserHost::new(Arc::clone(&resources)));
@@ -430,22 +429,22 @@ impl AppServer {
             Arc::new(BrowserToolService::new(Arc::clone(&browser_host))),
             Arc::new(BrowserToolPolicy),
         );
-        let turn_executor = TurnExecutor::without_tools(sessions.threads().clone(), model.clone())
+        let turn_executor = TurnExecutor::without_tools(threads.clone(), model.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
-                sessions: Arc::clone(&sessions),
+                threads: Arc::clone(&threads),
                 updates: updates.clone(),
             }))
             .with_extensions(Arc::clone(&agent_extensions));
         let multi_agent = Arc::new(MultiAgentCoordinator::new(
-            Arc::clone(&sessions),
+            Arc::clone(&threads),
             AgentTreeLimits::default(),
         ));
         let turn_backend = Arc::new(turn_backend_router::TurnBackendHandle::new(
             turn_executor.clone(),
         ));
-        let workspace_runtime = Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor)));
+        let env_runtime = Arc::new(RwLock::new(EnvRuntime::empty(turn_executor)));
         Self {
-            sessions,
+            threads,
             multi_agent,
             model,
             model_catalog: unavailable_model_catalog(),
@@ -483,15 +482,15 @@ impl AppServer {
             )),
             approval_review_model: None,
             login: None,
-            workspace_authority_gate,
-            workspace_runtime,
+            env_runtime_gate,
+            env_runtime,
             turn_backend,
-            local_workspace_host: None,
+            local_env_host: None,
             dynamic_tool_port: None,
             extension_tool_port: None,
             browser_host,
             browser_tool_port,
-            workspace_state: WorkspaceStateMode::Unconfigured,
+            env_state: EnvStateMode::Unconfigured,
             fast_regex_worker_command: None,
             codebase_models: None,
             semantic_model_provider: None,
@@ -517,20 +516,20 @@ impl AppServer {
         mut self,
         runtime: Arc<turn_changes_runtime::TurnChangesRuntime>,
     ) -> Result<Self, String> {
-        let provisioner: Arc<dyn zeta_core::ThreadWorkspaceProvisioner> = runtime.clone();
-        self.sessions
-            .install_thread_workspace_provisioner(provisioner)
+        let provisioner: Arc<dyn zeta_core::ThreadWorktreeBinder> = runtime.clone();
+        self.threads
+            .install_thread_worktree_binder(provisioner)
             .map_err(|error| error.to_string())?;
         let observer: Arc<dyn zeta_core::TurnExecutionObserver> = runtime.clone();
         let executor = self
-            .workspace_runtime
+            .env_runtime
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .turn_executor
             .clone()
             .with_execution_observer(observer);
         self.turn_backend.install_executor(executor.clone());
-        self.workspace_runtime
+        self.env_runtime
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .turn_executor = executor;
@@ -542,19 +541,19 @@ impl AppServer {
         self,
         database_path: &std::path::Path,
         profile_root: &std::path::Path,
-        workspace_root: &std::path::Path,
+        dir_root: &std::path::Path,
     ) -> Result<Self, String> {
         let config = self
             .config
             .as_ref()
             .cloned()
             .ok_or_else(|| "Turn changes require the ConfigStore".to_string())?;
-        let workspace_access = Arc::clone(
+        let file_access = Arc::clone(
             &self
-                .workspace_runtime
+                .env_runtime
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .session_workspace_access,
+                .dir_grants,
         );
         let hooks = self
             .local_hook_runtime()
@@ -562,11 +561,11 @@ impl AppServer {
         let runtime = turn_changes_runtime::TurnChangesRuntime::open(
             database_path,
             profile_root,
-            workspace_root,
+            dir_root,
             config,
-            Arc::clone(&self.sessions),
+            Arc::clone(&self.threads),
             Arc::clone(&self.model),
-            workspace_access,
+            file_access,
             hooks,
             Arc::clone(&self.updates),
         )?;
@@ -702,7 +701,7 @@ impl AppServer {
         }
         self.browser_host.unregister(connection.connection_id);
         if let Err(error) = self.synchronize_browser_tool_availability()
-            && let Some(host) = &self.local_workspace_host
+            && let Some(host) = &self.local_env_host
         {
             host.record_tool_reconcile_failure(error);
         }
@@ -729,7 +728,7 @@ impl AppServer {
     }
 
     fn synchronize_browser_tool_availability(&self) -> Result<(), String> {
-        let Some(host) = &self.local_workspace_host else {
+        let Some(host) = &self.local_env_host else {
             return Ok(());
         };
         loop {
@@ -744,10 +743,10 @@ impl AppServer {
 
     fn cancel_lost_dynamic_tool_owners(&self, requests: Vec<zeta_protocol::AgentRequestEnvelope>) {
         for request in requests {
-            let Ok(_mutation) = self.workspace_authority_gate.lock() else {
+            let Ok(_mutation) = self.env_runtime_gate.lock() else {
                 return;
             };
-            let Ok(snapshot) = self.sessions.threads().read_thread(&request.thread_id) else {
+            let Ok(snapshot) = self.threads.read_thread(&request.thread_id) else {
                 continue;
             };
             let still_pending = snapshot
@@ -762,7 +761,7 @@ impl AppServer {
                 continue;
             }
             let before_sequence = snapshot.sequence;
-            let cancelled = if let Ok(cancelled) = self.sessions.threads().cancel_turn_interaction(
+            let cancelled = if let Ok(cancelled) = self.threads.cancel_turn_interaction(
                 &request.thread_id,
                 CancelTurnInteractionRequest {
                     turn_id: request.turn_id.clone(),
@@ -775,8 +774,7 @@ impl AppServer {
                 continue;
             };
             if let Ok(updates) = self
-                .sessions
-                .threads()
+                .threads
                 .thread_updates_after(&request.thread_id, before_sequence)
             {
                 self.updates.publish_thread(&request.thread_id, &updates);
@@ -954,10 +952,10 @@ impl AppServer {
             Arc::clone(&self.updates),
         )
         .map_err(|error| error.to_string())?;
-        if let Some(workspace) = self.trusted_extension_workspace() {
+        if let Some(authorization) = self.extension_dir_authorization() {
             runtime
-                .bind_workspace(workspace)
-                .map_err(|_| "failed to bind Extension Host workspace authority".to_string())?;
+                .bind_dir(authorization)
+                .map_err(|_| "failed to bind Extension Host directory authority".to_string())?;
         }
         self.extension_hosts = Some(runtime);
         Ok(self)
@@ -1012,7 +1010,7 @@ impl AppServer {
             self.combined_dynamic_skill_sources(),
         )?;
         let session_sources: Arc<dyn zeta_skills_extension::SessionSkillSourceProvider> =
-            Arc::clone(&self.workspace_runtime_mut().session_workspace_access)
+            Arc::clone(&self.env_runtime_mut().dir_grants)
                 as Arc<dyn zeta_skills_extension::SessionSkillSourceProvider>;
         runtime.bind_session_sources(session_sources)?;
         let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
@@ -1024,18 +1022,17 @@ impl AppServer {
         let extension_tool_port =
             crate::extension_tools::compose_extension_tools(agent_extensions.as_ref())
                 .map_err(|error| error.to_string())?;
-        self.sessions
-            .threads()
+        self.threads
             .install_extensions(Arc::clone(&agent_extensions))
             .map_err(|error| error.to_string())?;
         self._skill_watcher = Some(runtime.start_watching());
         let executor = self
-            .workspace_runtime_mut()
+            .env_runtime_mut()
             .turn_executor
             .clone()
             .with_extensions(Arc::clone(&agent_extensions));
         self.turn_backend.install_executor(executor.clone());
-        self.workspace_runtime_mut().turn_executor = executor;
+        self.env_runtime_mut().turn_executor = executor;
         self.agent_extensions = agent_extensions;
         self = self
             .with_extension_tool_port(extension_tool_port)
@@ -1044,8 +1041,8 @@ impl AppServer {
         Ok(self)
     }
 
-    pub fn with_file_system(mut self, file_system: Arc<dyn WorkspaceFileSystem>) -> Self {
-        self.workspace_runtime_mut().file_system = Some(file_system);
+    pub fn with_file_system(mut self, file_system: Arc<dyn FileSystem>) -> Self {
+        self.env_runtime_mut().selected_file_system = Some(file_system);
         self
     }
 
@@ -1062,13 +1059,13 @@ impl AppServer {
         mut self,
         storage: std::sync::Arc<zeta_state::StateRuntime>,
     ) -> Self {
-        self.workspace_state = WorkspaceStateMode::Persistent(storage);
+        self.env_state = EnvStateMode::Persistent(storage);
         self
     }
 
-    /// Selects process-local Workspace indexes for hosts that intentionally do not persist them.
-    pub fn with_ephemeral_workspace_state(mut self) -> Self {
-        self.workspace_state = WorkspaceStateMode::Ephemeral;
+    /// Selects process-local directory indexes for hosts that intentionally do not persist them.
+    pub fn with_ephemeral_env_state(mut self) -> Self {
+        self.env_state = EnvStateMode::Ephemeral;
         self
     }
 
@@ -1114,10 +1111,10 @@ impl AppServer {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_file_system_watcher(
         mut self,
-        workspace: zeta_workspace::WorkspaceRoot,
+        dir: zeta_file_access::Dir,
     ) -> Result<Self, fs_watcher::FileSystemWatcherError> {
-        let watcher = fs_watcher::FileSystemWatcher::start(workspace, Arc::clone(&self.updates))?;
-        self.workspace_runtime_mut()._file_system_watcher = Some(watcher);
+        let watcher = fs_watcher::FileSystemWatcher::start(dir, Arc::clone(&self.updates))?;
+        self.env_runtime_mut()._file_system_watcher = Some(watcher);
         Ok(self)
     }
 
@@ -1141,15 +1138,15 @@ impl AppServer {
         self
     }
 
-    pub(super) fn use_current_local_turn_backend(&self) {
+    pub(super) fn use_current_env_turn_backend(&self) {
         self.turn_backend
-            .install_current_workspace(&self.workspace_runtime);
+            .install_current_environment(&self.env_runtime);
     }
 
     #[cfg(test)]
     pub(crate) fn turn_executor_backend(&self) -> Arc<dyn TurnExecutionBackend> {
         Arc::new(
-            self.workspace_runtime
+            self.env_runtime
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .turn_executor
@@ -1157,56 +1154,56 @@ impl AppServer {
         )
     }
 
-    /// Enables workspace-scoped Git queries without exposing arbitrary host paths to clients.
+    /// Enables directory-scoped Git queries without exposing arbitrary host paths to clients.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_git_root(
         mut self,
-        workspace: zeta_workspace::TrustedWorkspace,
+        authorization: zeta_file_access::Authorization,
     ) -> Result<Self, git_runtime::GitRuntimeError> {
-        let runtime = git_runtime::GitRuntime::new(workspace, Arc::clone(&self.updates))?;
-        let state = self.workspace_runtime_mut();
+        let runtime = git_runtime::GitRuntime::new(authorization, Arc::clone(&self.updates))?;
+        let state = self.env_runtime_mut();
         state._git_watcher = Some(runtime.start_watching());
         state.git = Some(runtime);
         Ok(self)
     }
 
-    /// Enables connection-owned workspace content search using one frozen ripgrep executable.
-    pub fn with_workspace_search(
+    /// Enables connection-owned directory content search using one frozen ripgrep executable.
+    pub fn with_content_search(
         mut self,
-        workspace: zeta_workspace::WorkspaceRoot,
+        dir: zeta_file_access::Dir,
         ripgrep: zeta_shell_command::RipgrepExecutable,
     ) -> Self {
-        let search = Arc::new(zeta_workspace_search::WorkspaceSearchService::new(
-            workspace, ripgrep,
-        ));
-        self.workspace_runtime_mut().workspace_search = Some(search);
+        let search = Arc::new(zeta_content_search::ContentSearchService::new(dir, ripgrep));
+        self.env_runtime_mut().content_search = Some(search);
         self
     }
 
-    /// Enables connection-owned and leased interactive terminals at one trusted Workspace.
+    /// Enables connection-owned and leased interactive terminals under one execution authorization.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_terminal_root(
         mut self,
-        workspace: zeta_workspace::TrustedWorkspace,
+        authorization: zeta_file_access::Authorization,
     ) -> Result<Self, crate::terminal_service::TerminalError> {
-        let terminals = Arc::new(crate::terminal_service::TerminalService::new(workspace)?);
-        self.workspace_runtime_mut().terminals = Some(terminals);
+        let terminals = Arc::new(crate::terminal_service::TerminalService::new(
+            authorization,
+        )?);
+        self.env_runtime_mut().terminals = Some(terminals);
         Ok(self)
     }
 
-    /// Enables connection-owned debug adapters rooted at one trusted Workspace.
+    /// Enables connection-owned debug adapters under explicit config and execution authorizations.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_debug_adapter_root(
         mut self,
-        executable_configuration: zeta_workspace::TrustedWorkspace,
-        process_execution: zeta_workspace::TrustedWorkspace,
+        executable_configuration: zeta_file_access::Authorization,
+        process_execution: zeta_file_access::Authorization,
     ) -> Result<Self, zeta_debug_adapter::DebugAdapterError> {
         let service = Arc::new(crate::debug_service::DebugAdapterService::new(
             executable_configuration,
             process_execution,
             crate::terminal_environment::safe_process_environment(),
         )?);
-        self.workspace_runtime_mut().debug_adapters = Some(service);
+        self.env_runtime_mut().debug_adapters = Some(service);
         Ok(self)
     }
 
@@ -1220,19 +1217,15 @@ impl AppServer {
             policy,
             self.approval_review_model.clone(),
         ));
-        let mut executor = TurnExecutor::new(
-            self.sessions.threads().clone(),
-            self.model.clone(),
-            tools,
-            policy,
-        )
-        .with_thread_updates(Arc::new(AppServerThreadUpdates {
-            sessions: Arc::clone(&self.sessions),
-            updates: self.updates.clone(),
-        }));
+        let mut executor =
+            TurnExecutor::new(self.threads.clone(), self.model.clone(), tools, policy)
+                .with_thread_updates(Arc::new(AppServerThreadUpdates {
+                    threads: Arc::clone(&self.threads),
+                    updates: self.updates.clone(),
+                }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
         self.turn_backend.install_executor(executor.clone());
-        self.workspace_runtime_mut().turn_executor = executor;
+        self.env_runtime_mut().turn_executor = executor;
         self
     }
 
@@ -1244,27 +1237,22 @@ impl AppServer {
         self
     }
 
-    fn workspace_runtime_mut(&mut self) -> &mut WorkspaceRuntime {
-        Arc::get_mut(&mut self.workspace_runtime)
-            .expect("Workspace runtime cannot be mutated through a builder after it is shared")
+    fn env_runtime_mut(&mut self) -> &mut EnvRuntime {
+        Arc::get_mut(&mut self.env_runtime)
+            .expect("environment runtime cannot be mutated through a builder after it is shared")
             .get_mut()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    pub fn sessions(&self) -> &Arc<SessionCoordinator> {
-        &self.sessions
+    pub fn threads(&self) -> &Arc<ThreadController> {
+        &self.threads
     }
 
-    pub(crate) fn bind_active_workspace_session_extensions(&self) -> Result<(), CoreError> {
-        let workspace = self.active_workspace_binding();
-        for session in self.sessions.list_sessions()? {
-            if !session.workspace_binding_is_legacy && session.workspace == workspace {
-                self.updates.bind_session_scope(session.session_id.clone());
-                self.sessions.threads().install_session_extensions(
-                    session.session_id,
-                    Arc::clone(&self.agent_extensions),
-                )?;
-            }
+    pub(crate) fn bind_session_extensions(&self) -> Result<(), CoreError> {
+        for session_id in self.session_ids()? {
+            self.updates.bind_session_scope(session_id.clone());
+            self.threads
+                .install_session_extensions(session_id, Arc::clone(&self.agent_extensions))?;
         }
         Ok(())
     }
@@ -1273,16 +1261,9 @@ impl AppServer {
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
         let backend = Arc::clone(&self.turn_backend);
         let mut resumed = 0;
-        let workspace = self.active_workspace_binding();
-        for session in self.sessions.list_sessions()? {
-            if session.workspace_binding_is_legacy || session.workspace != workspace {
-                continue;
-            }
-            for spawned in self.multi_agent.recover_session(&session.session_id)? {
-                let child = self
-                    .sessions
-                    .threads()
-                    .read_thread(&spawned.child_thread_id)?;
+        for session_id in self.session_ids()? {
+            for spawned in self.multi_agent.recover_session(&session_id)? {
+                let child = self.threads.read_thread(&spawned.child_thread_id)?;
                 let should_start = child.turns.iter().any(|turn| {
                     turn.turn_id == spawned.child_turn_id
                         && turn.status == zeta_protocol::TurnStatus::Running
@@ -1299,34 +1280,25 @@ impl AppServer {
 
     /// Re-enqueues durable running Tool continuations after host services are installed.
     pub fn resume_recovered_tool_continuations(&self) -> Result<usize, CoreError> {
-        let workspace = self.active_workspace_binding();
-        let session_ids = self
-            .sessions
-            .list_sessions()?
-            .into_iter()
-            .filter(|session| {
-                !session.workspace_binding_is_legacy && session.workspace == workspace
-            })
-            .map(|session| session.session_id)
-            .collect::<BTreeSet<_>>();
+        let session_ids = self.session_ids()?;
         self.turn_executor_snapshot()
             .resume_recovered_tool_continuations_in_sessions(&session_ids)
     }
 
     /// Starts durable idle Goal continuations after the local runtime has been restored.
     pub fn resume_recovered_goal_continuations(&self) -> Result<usize, CoreError> {
-        let workspace = self.active_workspace_binding();
-        let session_ids = self
-            .sessions
-            .list_sessions()?
-            .into_iter()
-            .filter(|session| {
-                !session.workspace_binding_is_legacy && session.workspace == workspace
-            })
-            .map(|session| session.session_id)
-            .collect::<BTreeSet<_>>();
+        let session_ids = self.session_ids()?;
         self.turn_executor_snapshot()
             .resume_recovered_goal_continuations_in_sessions(&session_ids)
+    }
+
+    fn session_ids(&self) -> Result<BTreeSet<zeta_protocol::SessionId>, CoreError> {
+        Ok(self
+            .threads
+            .list_threads()?
+            .into_iter()
+            .map(|thread| thread.session_id)
+            .collect())
     }
 
     pub fn drain_notifications(&self, connection: &mut ConnectionState) -> Vec<String> {
@@ -1461,7 +1433,7 @@ impl AppServer {
                 scope,
                 &cancellation,
             ) {
-                Ok(permit) => Some(permit),
+                Ok(authorization) => Some(authorization),
                 Err(_) => {
                     self.request_cancellations
                         .finish(connection.connection_id, request_id);
@@ -1673,33 +1645,27 @@ impl AppServer {
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
-            Some(ClientMethod::WorkspaceSwitch) => {
-                self.workspace_switch(connection, &request.params)
+            Some(ClientMethod::EnvCwdSet) => self.env_cwd_set(connection, &request.params),
+            Some(ClientMethod::EnvDirsSet) => self.env_dirs_set(connection, &request.params),
+            Some(ClientMethod::SessionDirList) => {
+                self.session_dir_list(connection, &request.params)
             }
-            Some(ClientMethod::WorkspaceFoldersSet) => {
-                self.workspace_folders_set(connection, &request.params)
+            Some(ClientMethod::SessionDirAdd) => self.session_dir_add(connection, &request.params),
+            Some(ClientMethod::SessionDirRemove) => {
+                self.session_dir_remove(connection, &request.params)
             }
-            Some(ClientMethod::WorkspaceAdditionalDirectoryList) => {
-                self.workspace_additional_directory_list(connection, &request.params)
+            Some(ClientMethod::SessionDirPermissionsSet) => {
+                self.session_dir_permissions_set(connection, &request.params)
             }
-            Some(ClientMethod::WorkspaceAdditionalDirectoryAdd) => {
-                self.workspace_additional_directory_add(connection, &request.params)
+            Some(ClientMethod::DirPermissionsRead) => {
+                self.dir_permissions_read(connection, &request.params)
             }
-            Some(ClientMethod::WorkspaceAdditionalDirectoryRemove) => {
-                self.workspace_additional_directory_remove(connection, &request.params)
+            Some(ClientMethod::DirPermissionsList) => self.dir_permissions_list(connection),
+            Some(ClientMethod::DirPermissionsSet) => {
+                self.dir_permissions_set(connection, &request.params)
             }
-            Some(ClientMethod::WorkspaceAdditionalDirectoryPermissionsSet) => {
-                self.workspace_additional_directory_permissions_set(connection, &request.params)
-            }
-            Some(ClientMethod::WorkspaceTrustRead) => {
-                self.workspace_trust_read(connection, &request.params)
-            }
-            Some(ClientMethod::WorkspaceTrustList) => self.workspace_trust_list(connection),
-            Some(ClientMethod::WorkspaceTrustSet) => {
-                self.workspace_trust_set(connection, &request.params)
-            }
-            Some(ClientMethod::WorkspaceTrustForget) => {
-                self.workspace_trust_forget(connection, &request.params)
+            Some(ClientMethod::DirPermissionsForget) => {
+                self.dir_permissions_forget(connection, &request.params)
             }
             Some(ClientMethod::DocumentCollaborationOpen) => {
                 self.document_collaboration_open(connection, &request.params)
@@ -1931,8 +1897,8 @@ impl AppServer {
             Some(ClientMethod::LanguageDocumentDiagnostics) => {
                 self.language_document_diagnostics(&request.params, cancellation)
             }
-            Some(ClientMethod::LanguageWorkspaceDiagnostics) => {
-                self.language_workspace_diagnostics(&request.params, cancellation)
+            Some(ClientMethod::LanguageDirectoryDiagnostics) => {
+                self.language_directory_diagnostics(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageDocumentFormatting) => {
                 self.language_document_formatting(&request.params, cancellation)
@@ -1982,8 +1948,8 @@ impl AppServer {
             Some(ClientMethod::LanguageHierarchy) => {
                 self.language_hierarchy(&request.params, cancellation)
             }
-            Some(ClientMethod::LanguageWorkspaceSymbols) => {
-                self.language_workspace_symbols(&request.params, cancellation)
+            Some(ClientMethod::LanguageDirectorySymbols) => {
+                self.language_directory_symbols(&request.params, cancellation)
             }
             Some(ClientMethod::LanguagePrepareRename) => {
                 self.language_prepare_rename(&request.params, cancellation)
@@ -2020,24 +1986,24 @@ impl AppServer {
             Some(ClientMethod::GitFetch) => self.git_fetch(&request.params),
             Some(ClientMethod::GitPull) => self.git_pull(&request.params),
             Some(ClientMethod::GitPush) => self.git_push(&request.params),
-            Some(ClientMethod::WorkspaceSearchStart) => {
-                self.workspace_search_start(connection, &request.params)
+            Some(ClientMethod::ContentSearchStart) => {
+                self.content_search_start(connection, &request.params)
             }
-            Some(ClientMethod::WorkspaceSearchRead) => {
-                self.workspace_search_read(connection, &request.params)
+            Some(ClientMethod::ContentSearchRead) => {
+                self.content_search_read(connection, &request.params)
             }
-            Some(ClientMethod::WorkspaceSearchCancel) => {
-                self.workspace_search_cancel(connection, &request.params)
+            Some(ClientMethod::ContentSearchCancel) => {
+                self.content_search_cancel(connection, &request.params)
             }
             Some(ClientMethod::CodebaseStatus) => self.codebase_status(&request.params),
             Some(ClientMethod::CodebaseSearch) => self.codebase_search(&request.params),
             Some(ClientMethod::CodebaseSymbolsStatus) => self.symbol_index_status(&request.params),
             Some(ClientMethod::CodebaseSymbolsSearch) => self.symbol_index_search(&request.params),
-            Some(ClientMethod::WorkspaceDocumentOverlaySynchronize) => {
-                self.workspace_document_overlay_synchronize(&request.params)
+            Some(ClientMethod::DocumentOverlaySynchronize) => {
+                self.document_overlay_synchronize(&request.params)
             }
-            Some(ClientMethod::WorkspaceDocumentOverlayClose) => {
-                self.workspace_document_overlay_close(&request.params)
+            Some(ClientMethod::DocumentOverlayClose) => {
+                self.document_overlay_close(&request.params)
             }
             Some(ClientMethod::CodebaseRetrieve) => self.code_retrieve(&request.params),
             Some(ClientMethod::CodebaseRebuild) => self.codebase_rebuild(&request.params),
@@ -2087,7 +2053,7 @@ impl AppServer {
 }
 
 struct AppServerThreadUpdates {
-    sessions: Arc<SessionCoordinator>,
+    threads: Arc<ThreadController>,
     updates: Arc<UpdateBroker>,
 }
 
@@ -2119,8 +2085,7 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
                 ),
                 zeta_protocol::ThreadEvent::ModelUsageRecorded { turn_id, .. }
                 | zeta_protocol::ThreadEvent::TurnFailed { turn_id, .. } => self
-                    .sessions
-                    .threads()
+                    .threads
                     .get_goal(&update.thread_id)
                     .ok()
                     .flatten()

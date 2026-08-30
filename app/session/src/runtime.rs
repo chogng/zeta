@@ -28,28 +28,28 @@ mod contract;
 mod worker;
 
 pub use contract::CommandResult;
+pub use contract::EnvCwdSetResult;
 pub(crate) use contract::RECONNECT_WINDOW;
 pub use contract::SESSION_UNAVAILABLE_COMMAND_ERROR;
 pub(crate) use contract::SessionRuntimeCommand;
 pub use contract::SessionRuntimeEvent;
-pub use contract::WorkspaceSwitchResult;
 use contract::command_channel;
 pub(crate) use contract::reconnect_delay_within_window;
 pub(crate) use contract::reject_disconnected_command;
 
 /// Connection authority supplied by the product host.
 ///
-/// Implementations preserve their Local or Remote transport identity when retargeted to another
-/// Workspace. The runtime uses this contract without importing product composition types.
+/// Implementations preserve their Local or Remote transport identity when selecting another cwd.
+/// The runtime uses this contract without importing product composition types.
 pub trait SessionRuntimeTarget: Send + Sync {
     /// Returns whether transport loss should use the bounded reconnect policy.
     fn is_remote(&self) -> bool;
 
-    /// Returns the Workspace root represented by this target.
-    fn workspace_root(&self) -> &Path;
+    /// Returns the cwd represented by this target.
+    fn cwd(&self) -> &Path;
 
-    /// Creates the same connection authority retargeted to another Workspace.
-    fn retarget(&self, root: &Path) -> CommandResult<Box<dyn SessionRuntimeTarget>>;
+    /// Creates the same connection authority with another cwd.
+    fn with_cwd(&self, cwd: &Path) -> CommandResult<Box<dyn SessionRuntimeTarget>>;
 
     /// Opens and initializes one App Server protocol session.
     fn start(&self) -> CommandResult<zeta_app_server_client::AppServerSession>;
@@ -128,7 +128,7 @@ impl SessionRuntime {
         )
     }
 
-    /// Creates and activates a Session in the current Workspace.
+    /// Creates and activates a Session.
     pub fn create_session(&self) -> Result<()> {
         self.try_send(
             SessionRuntimeCommand::CreateSession,
@@ -152,11 +152,8 @@ impl SessionRuntime {
             .map_err(anyhow::Error::msg)
     }
 
-    /// Subscribes to a Session and reports a Workspace replacement prepared by the worker.
-    pub fn subscribe_session(
-        &self,
-        session_id: SessionId,
-    ) -> Result<Option<WorkspaceSwitchResult>> {
+    /// Subscribes to a Session.
+    pub fn subscribe_session(&self, session_id: SessionId) -> Result<()> {
         let (response, result) = mpsc::sync_channel(1);
         self.try_send(
             SessionRuntimeCommand::SubscribeSession {
@@ -179,11 +176,11 @@ impl SessionRuntime {
         )
     }
 
-    /// Selects the model used by the active Session.
-    pub fn select_model(&self, model: ModelRef) -> Result<()> {
+    /// Sets the preferred model used by subsequent Turns.
+    pub fn set_preferred_model(&self, model: ModelRef) -> Result<()> {
         self.try_send(
-            SessionRuntimeCommand::SelectModel(model),
-            "Session model selection queue is unavailable",
+            SessionRuntimeCommand::SetPreferredModel(model),
+            "Preferred model selection queue is unavailable",
         )
     }
 
@@ -203,16 +200,16 @@ impl SessionRuntime {
         )
     }
 
-    /// Prepares and switches the worker to another Workspace.
-    pub fn switch_workspace(&self, root: PathBuf) -> Result<WorkspaceSwitchResult> {
+    /// Prepares and switches the worker to another cwd.
+    pub fn set_env_cwd(&self, cwd: PathBuf) -> Result<EnvCwdSetResult> {
         let (response, result) = mpsc::sync_channel(1);
         self.try_send(
-            SessionRuntimeCommand::SwitchWorkspace { root, response },
-            "Workspace switch queue is unavailable",
+            SessionRuntimeCommand::SetEnvCwd { cwd, response },
+            "cwd change queue is unavailable",
         )?;
         result
             .recv()
-            .context("Workspace switch worker stopped")?
+            .context("cwd change worker stopped")?
             .map_err(anyhow::Error::msg)
     }
 

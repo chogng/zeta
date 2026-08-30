@@ -23,19 +23,18 @@ use zeta_app_server_client::{
 };
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConfigureParams};
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
 use zeta_app_server_protocol::protocol::session::SessionReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
 use zeta_client::ClientError;
 use zeta_client::ClientRequest;
 use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
 use zeta_protocol::CommandId;
 use zeta_protocol::SessionStatus;
-use zeta_protocol::SessionThreadStatus;
-use zeta_protocol::ThreadOrigin;
+use zeta_protocol::ThreadStatus;
 
 #[test]
 fn help_lists_only_builtins_with_execution_paths() {
@@ -67,7 +66,6 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
     let mut conversation = ActiveConversation::start(&mut client, "original".into()).unwrap();
     let original_session = conversation.session_id().clone();
     let original_thread = conversation.thread_id().clone();
-    let original_thread_sequence = conversation.thread_sequence();
     let mut app = App::new();
 
     conversation.execute(
@@ -92,13 +90,11 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
         .iter()
         .find(|thread| thread.thread_id == forked_thread_id)
         .unwrap();
-    assert_eq!(forked_membership.status, SessionThreadStatus::Active);
+    assert_eq!(forked_membership.status, ThreadStatus::Active);
+    assert_eq!(forked_membership.parent_thread_id, None);
     assert_eq!(
-        forked_membership.origin,
-        ThreadOrigin::Fork {
-            parent_thread_id: original_thread,
-            parent_sequence: original_thread_sequence,
-        }
+        forked_membership.forked_from_id.as_ref(),
+        Some(&original_thread)
     );
     let persisted_thread = client
         .read_session_thread(SessionThreadReadParams {
@@ -422,9 +418,9 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
             .unwrap()
             .as_nanos()
     ));
-    let workspace = state_root.join("workspace");
+    let dir = state_root.join("dir");
     let additional = state_root.join("additional");
-    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(&dir).unwrap();
     fs::create_dir_all(&additional).unwrap();
     let mut client = start_in_process_client(
         InProcessClientOptions::new(
@@ -435,7 +431,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
             },
         )
         .with_capabilities(crate::client_capabilities())
-        .with_workspace_root(&workspace)
+        .with_dir_root(&dir)
         .with_model_operation_client(Arc::new(OfflineOperationClient::default())),
     )
     .unwrap();
@@ -449,10 +445,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
             TuiSlashCommandAction::AddDir,
             &additional.display().to_string(),
         ),
-        vec![
-            WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-            WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands,
-        ],
+        vec![PermissionDto::ReadFiles, PermissionDto::ExecuteCommands],
     )
     .unwrap();
     conversation = output.conversation;
@@ -461,35 +454,26 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     }
 
     let listed = client
-        .list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
+        .list_session_dirs(SessionDirListParams {
             session_id: conversation.session_id().clone(),
         })
         .unwrap();
-    assert_eq!(listed.directories.len(), 1);
+    assert_eq!(listed.dirs.len(), 1);
+    assert_eq!(listed.dirs[0].path, additional.canonicalize().unwrap());
     assert_eq!(
-        listed.directories[0].root,
-        additional.canonicalize().unwrap()
-    );
-    assert_eq!(
-        listed.directories[0].permissions,
-        vec![
-            WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-            WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands,
-        ]
+        listed.dirs[0].permissions,
+        vec![PermissionDto::ReadFiles, PermissionDto::ExecuteCommands,]
     );
     conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::AddDir, ""),
         &mut app,
     );
-    assert_eq!(
-        app.list_selection().unwrap().title(),
-        "Additional directories"
-    );
+    assert_eq!(app.list_selection().unwrap().title(), "Directories");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::RemoveAdditionalDirectory {
-            root: additional.canonicalize().unwrap(),
+        Some(AppCommand::RemoveDir {
+            path: additional.canonicalize().unwrap(),
         })
     );
 

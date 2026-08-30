@@ -141,7 +141,7 @@ fn watch_thread(
             Ok(registration) => registration,
             Err(error) => {
                 let _ = startup.send(Err(format!(
-                    "failed to register managed Thread workspace watcher: {error}"
+                    "failed to register managed Thread worktree watcher: {error}"
                 )));
                 return;
             }

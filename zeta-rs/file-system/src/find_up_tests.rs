@@ -5,11 +5,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
 fn returns_the_nearest_ancestor_with_any_marker() {
-    let workspace = TestDirectory::new();
-    let project = workspace.path.join("project");
+    let dir = TestDirectory::new();
+    let project = dir.path.join("project");
     let nested = project.join("src/bin");
     fs::create_dir_all(&nested).unwrap();
-    fs::write(workspace.path.join(".git"), "").unwrap();
+    fs::write(dir.path.join(".git"), "").unwrap();
     fs::write(project.join(".zeta"), "").unwrap();
 
     let found = find_nearest_ancestor_with_markers(
@@ -24,10 +24,10 @@ fn returns_the_nearest_ancestor_with_any_marker() {
 
 #[test]
 fn accepts_a_nested_relative_marker_path() {
-    let workspace = TestDirectory::new();
-    let nested = workspace.path.join("src/bin");
+    let dir = TestDirectory::new();
+    let nested = dir.path.join("src/bin");
     fs::create_dir_all(&nested).unwrap();
-    fs::create_dir_all(workspace.path.join(".config/zeta")).unwrap();
+    fs::create_dir_all(dir.path.join(".config/zeta")).unwrap();
 
     let found = find_nearest_ancestor_with_markers(
         &nested,
@@ -36,13 +36,13 @@ fn accepts_a_nested_relative_marker_path() {
     )
     .unwrap();
 
-    assert_eq!(found, Some(workspace.path.clone()));
+    assert_eq!(found, Some(dir.path.clone()));
 }
 
 #[test]
 fn returns_none_when_no_marker_exists_or_none_are_requested() {
-    let workspace = TestDirectory::new();
-    let nested = workspace.path.join("src");
+    let dir = TestDirectory::new();
+    let nested = dir.path.join("src");
     fs::create_dir_all(&nested).unwrap();
 
     assert_eq!(
@@ -59,22 +59,19 @@ fn returns_none_when_no_marker_exists_or_none_are_requested() {
 
 #[test]
 fn rejects_markers_that_can_escape_an_ancestor() {
-    let workspace = TestDirectory::new();
+    let dir = TestDirectory::new();
 
-    let parent_error = find_nearest_ancestor_with_markers(
-        &workspace.path,
-        &["../.git"],
-        FindUpErrorPolicy::Ignore,
-    )
-    .unwrap_err();
+    let parent_error =
+        find_nearest_ancestor_with_markers(&dir.path, &["../.git"], FindUpErrorPolicy::Ignore)
+            .unwrap_err();
     let absolute_error = find_nearest_ancestor_with_markers(
-        &workspace.path,
-        &[workspace.path.as_path()],
+        &dir.path,
+        &[dir.path.as_path()],
         FindUpErrorPolicy::Ignore,
     )
     .unwrap_err();
     let empty_error =
-        find_nearest_ancestor_with_markers(&workspace.path, &[""], FindUpErrorPolicy::Ignore)
+        find_nearest_ancestor_with_markers(&dir.path, &[""], FindUpErrorPolicy::Ignore)
             .unwrap_err();
 
     assert_eq!(parent_error.kind(), io::ErrorKind::InvalidInput);
@@ -96,8 +93,8 @@ fn rejects_a_relative_start_path() {
 
 #[test]
 fn propagates_the_first_non_not_found_error_in_search_order() {
-    let workspace = TestDirectory::new();
-    let nested = workspace.path.join("project/src");
+    let dir = TestDirectory::new();
+    let nested = dir.path.join("project/src");
     let denied = nested.join(".git");
 
     let error = find_nearest_ancestor_with_probe(
@@ -119,8 +116,8 @@ fn propagates_the_first_non_not_found_error_in_search_order() {
 
 #[test]
 fn ignore_policy_continues_after_metadata_errors() {
-    let workspace = TestDirectory::new();
-    let project = workspace.path.join("project");
+    let dir = TestDirectory::new();
+    let project = dir.path.join("project");
     let nested = project.join("src");
     let denied = nested.join(".git");
     let match_path = project.join(".git");

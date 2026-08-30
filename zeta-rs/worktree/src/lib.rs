@@ -1,4 +1,4 @@
-//! Managed Git worktrees and durable Thread workspace bindings.
+//! Managed Git worktrees and durable Thread directory bindings.
 //!
 //! The crate discovers existing checkouts, provisions isolated Thread worktrees from immutable
 //! baselines, and cleans them only after the change ledger proves every ChangeSet settled.
@@ -9,9 +9,9 @@ mod metadata;
 mod settings;
 
 pub use manager::ThreadRepositoryBinding;
-pub use manager::ThreadWorkspaceKind;
 pub use manager::ThreadWorktreeBinding;
 pub use manager::ThreadWorktreeCleanupEligibility;
+pub use manager::ThreadWorktreeKind;
 pub use manager::ThreadWorktreeProvisionRequest;
 pub use manager::ThreadWorktreeSource;
 pub use manager::ThreadWorktreeTarget;

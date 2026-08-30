@@ -16,11 +16,11 @@ use crate::launch_progress::prepare_remote_launch_with_outputs;
 #[cfg(unix)]
 use crate::launch_test_support::make_executable;
 #[cfg(unix)]
+use zeta_remote::RemoteDirPath;
+#[cfg(unix)]
 use zeta_remote::RemoteProfile;
 #[cfg(unix)]
 use zeta_remote::RemoteRuntime;
-#[cfg(unix)]
-use zeta_remote::RemoteWorkspacePath;
 #[cfg(unix)]
 use zeta_remote::SshHost;
 #[cfg(unix)]
@@ -347,7 +347,7 @@ fn high_level_launch_stream_reports_preflight_failure_without_installing() {
         profile: RemoteProfile::new(
             SshTarget::new(
                 SshHost::parse("build").unwrap(),
-                RemoteWorkspacePath::parse("/srv/project").unwrap(),
+                RemoteDirPath::parse("/srv/project").unwrap(),
             ),
             RemoteRuntime::new("/opt/zeta/bin/zeta-server").unwrap(),
         ),

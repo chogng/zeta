@@ -5,7 +5,6 @@ use zeta_protocol::SkillId;
 use zeta_protocol::SkillRef;
 use zeta_protocol::UserInput;
 use zeta_skills::SkillCompatibility;
-use zeta_skills::SkillTrust;
 
 use crate::SkillRuntimeEntry;
 use crate::SkillRuntimeSnapshot;
@@ -57,7 +56,7 @@ fn eligible(entry: &SkillRuntimeEntry) -> bool {
             entry.catalog_entry.compatibility(),
             SkillCompatibility::Compatible
         )
-        && entry.catalog_entry.source().trust() == SkillTrust::BuiltInVerified
+        && entry.catalog_entry.source().allows_automatic_activation()
 }
 
 fn score(entry: &SkillRuntimeEntry, text: &str, input_tokens: &BTreeSet<String>) -> u64 {

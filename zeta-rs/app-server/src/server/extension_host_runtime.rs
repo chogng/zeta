@@ -20,10 +20,10 @@ use zeta_editor_extension_host::ExtensionInvocationTarget;
 use zeta_editor_extension_host::LanguageProviderOperation;
 use zeta_editor_extension_host::RegistrationKind;
 use zeta_editor_extension_host::RestartPolicy;
+use zeta_file_access::Authorization;
+use zeta_file_access::Permission;
 use zeta_marketplace_manager::MarketplaceManager;
 use zeta_plugins::PluginActivationAuthority;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceCapability;
 
 use super::update_broker::UpdateBroker;
 
@@ -70,7 +70,7 @@ struct FleetState {
     generation: u64,
     authority_generation: u64,
     source_revision: source::EditorExtensionSourceRevision,
-    workspace: Option<TrustedWorkspace>,
+    authorization: Option<Authorization>,
     entries: BTreeMap<String, RuntimeEntry>,
     published: Vec<ExtensionHostExtensionSnapshot>,
 }
@@ -153,7 +153,7 @@ impl ExtensionHostRuntime {
                 generation: 1,
                 authority_generation: 0,
                 source_revision: source::EditorExtensionSourceRevision::default(),
-                workspace: None,
+                authorization: None,
                 entries: BTreeMap::new(),
                 published: Vec::new(),
             }),
@@ -186,12 +186,12 @@ impl ExtensionHostRuntime {
         Ok(Self { inner })
     }
 
-    pub(super) fn bind_workspace(
+    pub(super) fn bind_dir(
         &self,
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
     ) -> Result<ExtensionHostFleetSnapshot, ExtensionHostRuntimeError> {
-        if workspace.capability() != WorkspaceCapability::ActivateWorkspaceExtension
-            || workspace.ensure_active().is_err()
+        if authorization.permission() != Permission::DiscoverPlugins
+            || authorization.ensure_active().is_err()
         {
             return Err(ExtensionHostRuntimeError::Host(
                 ExtensionHostError::AuthorityDenied,
@@ -207,11 +207,11 @@ impl ExtensionHostRuntime {
             .state
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .workspace = Some(workspace);
+            .authorization = Some(authorization);
         self.inner.reconcile_authority_locked(true)
     }
 
-    pub(super) fn unbind_workspace(&self) {
+    pub(super) fn unbind_dir(&self) {
         let Ok(_gate) = self.inner.reconcile_gate.lock() else {
             return;
         };
@@ -220,7 +220,7 @@ impl ExtensionHostRuntime {
             let Ok(mut state) = self.inner.state.lock() else {
                 return;
             };
-            state.workspace = None;
+            state.authorization = None;
             state.authority_generation = 0;
             state.source_revision = source::EditorExtensionSourceRevision::default();
             self.inner

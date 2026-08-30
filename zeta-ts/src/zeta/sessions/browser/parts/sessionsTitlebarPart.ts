@@ -2,7 +2,7 @@ import "./media/sessionsTitlebarPart.css";
 import "../common/sessionsControls.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { SessionsProfile } from "../../common/sessionsProfile.js";
-import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
+import type { ISessionsService } from "../../services/view/common/sessionsService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 
 export interface SessionsTitlebarPartDelegate {
@@ -15,7 +15,7 @@ export class SessionsTitlebarPart extends WorkbenchPart {
 	override get minimumHeight(): number { return 46; }
 	override get maximumHeight(): number { return 46; }
 
-	constructor(container: HTMLElement, profile: SessionsProfile, viewService: ISessionsViewService, delegate: SessionsTitlebarPartDelegate) {
+	constructor(container: HTMLElement, profile: SessionsProfile, viewService: ISessionsService, delegate: SessionsTitlebarPartDelegate) {
 		super(container, "titlebar");
 		const ownerDocument = container.ownerDocument;
 		const returnButton = h(ownerDocument, "button");

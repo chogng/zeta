@@ -11,21 +11,21 @@ import { type IServerEventApi } from "../../../../platform/app-server/common/app
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { type IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../generated/app-server/types.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
-import { resolveAppServerLanguageWorkspaceTrust } from "./appServerLanguageWorkspace.js";
+import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
 import { acquireJsonLanguageDiagnostics } from '../common/jsonLanguageDiagnostics.js';
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
-const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageRequestFailed", "LanguageServiceUnavailable", "WorkspaceTrustRequired"]);
+const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageRequestFailed", "LanguageServiceUnavailable", "PermissionRequired"]);
 
 interface LanguageDocumentEntry {
 	readonly resource: URI;
-	readonly workspaceFolderId: string;
+	readonly dirId: string;
 	readonly wireWorkspaceFolderId?: string;
 	readonly path: string;
 	readonly languageId: string;
@@ -52,23 +52,23 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private readonly changeEmitter = this._register(new Emitter<URI>());
 	private nextPublisherId = 1;
 	private workspaceDiagnosticsQueued = false;
-	private trustRefreshQueued = false;
-	private trustRefreshGeneration = 0;
-	private workspaceTrusted: boolean;
-	private trustQueue = Promise.resolve();
+	private permissionRefreshQueued = false;
+	private permissionRefreshGeneration = 0;
+	private languageAllowed: boolean;
+	private permissionQueue = Promise.resolve();
 	private alive = true;
 	readonly onDidChangeDiagnostics = this.changeEmitter.event;
 
-	constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService, private readonly codeIntelligenceDocuments?: ICodeIntelligenceDocumentService, private readonly workspaceTrust?: IWorkspaceTrustService) {
+	constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService, private readonly codeIntelligenceDocuments?: ICodeIntelligenceDocumentService, private readonly dirPermissions?: IDirPermissionsService) {
 		super();
-		this.workspaceTrusted = workspaceTrust === undefined;
+		this.languageAllowed = dirPermissions === undefined;
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
-			if (event.method === "config/changed") this.queueTrustRefresh();
+			if (event.method === "config/changed") this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(workspace.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
-			this.workspaceTrusted = this.workspaceTrust === undefined;
+			this.languageAllowed = this.dirPermissions === undefined;
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
 				entry.timer = undefined;
@@ -76,7 +76,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				entry.codeIntelligenceSynchronized = false;
 			}
 			this.clearServerDiagnostics();
-			if (nextWorkspace.folders.length > 0) this.queueTrustRefresh();
+			if (nextWorkspace.folders.length > 0) this.queuePermissionRefresh();
 		}));
 		this._register(toDisposable(() => {
 			this.alive = false;
@@ -89,7 +89,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			this.workspaceServerKeys.clear();
 			this.publishedDiagnostics.clear();
 		}));
-		this.queueTrustRefresh();
+		this.queuePermissionRefresh();
 	}
 
 	acquire(resource: URI, languageId: string, model: TextModel): IDisposable {
@@ -110,8 +110,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}
 		const entry: LanguageDocumentEntry = {
 			resource,
-			workspaceFolderId: target.workspaceFolderId,
-			...(this.workspace.getWorkspace().folders.length > 1 ? { wireWorkspaceFolderId: target.workspaceFolderId } : {}),
+			dirId: target.dirId,
+			...(this.workspace.getWorkspace().folders.length > 1 ? { wireWorkspaceFolderId: target.dirId } : {}),
 			path: target.path,
 			languageId,
 			model,
@@ -169,7 +169,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	private schedule(entry: LanguageDocumentEntry, immediate: boolean): void {
 		const target = this.workspaceTarget(entry.resource);
-		if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry || target?.workspaceFolderId !== entry.workspaceFolderId || target.path !== entry.path) return;
+		if (!this.languageAllowed || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry || target?.dirId !== entry.dirId || target.path !== entry.path) return;
 		if (entry.timer !== undefined) clearTimeout(entry.timer);
 		if (immediate) {
 			entry.timer = undefined;
@@ -183,13 +183,13 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private enqueueSynchronization(entry: LanguageDocumentEntry): void {
-		if (!this.workspaceTrusted) return;
+		if (!this.languageAllowed) return;
 		const snapshot = entry.model.createSnapshot();
 		const text = snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
-			if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-			const document = { ...(entry.wireWorkspaceFolderId ? { workspaceFolderId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
+			if (!this.languageAllowed || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+			const document = { ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
 			let codeIntelligenceSynchronized = false;
 			await Promise.all([
 				this.api.synchronize({ document }),
@@ -197,12 +197,12 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 					? this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError)
 					: undefined,
 			]);
-			if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+			if (!this.languageAllowed || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			entry.languageSynchronized = true;
 			entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
 			try {
 				const report = await this.api.documentDiagnostics({ document });
-				if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { workspaceFolderId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
+				if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
 			} catch (error) {
 				if (!isUnsupportedDiagnosticPull(error)) throw error;
 			}
@@ -211,7 +211,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private queueWorkspaceDiagnostics(): void {
-		if (!this.workspaceTrusted || this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
+		if (!this.languageAllowed || this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
 		this.workspaceDiagnosticsQueued = true;
 		queueMicrotask(() => {
 			this.workspaceDiagnosticsQueued = false;
@@ -220,14 +220,14 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private async refreshWorkspaceDiagnostics(): Promise<void> {
-		if (!this.workspaceTrusted || !this.hasWorkspaceFolder()) return;
+		if (!this.languageAllowed || !this.hasWorkspaceFolder()) return;
 		const next = new Map<string, LanguageDiagnosticSnapshot>();
 		let supported = false;
 		for (const folder of this.workspace.getWorkspace().folders) {
 			for (const languageId of APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS) {
-				if (!this.alive || !this.workspaceTrusted || !this.hasWorkspaceFolder()) return;
+				if (!this.alive || !this.languageAllowed || !this.hasWorkspaceFolder()) return;
 				try {
-					const report = await this.api.workspaceDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { workspaceFolderId: folder.id } : {}), languageId });
+					const report = await this.api.directoryDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { dirId: folder.id } : {}), languageId });
 					if (!report.supported) continue;
 					supported = true;
 					for (const snapshot of report.snapshots) {
@@ -268,24 +268,24 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		for (const resource of changed) this.changeEmitter.fire(resource);
 	}
 
-	private queueTrustRefresh(): void {
+	private queuePermissionRefresh(): void {
 		if (!this.alive) return;
-		this.trustRefreshGeneration += 1;
-		if (this.trustRefreshQueued) return;
-		this.trustRefreshQueued = true;
+		this.permissionRefreshGeneration += 1;
+		if (this.permissionRefreshQueued) return;
+		this.permissionRefreshQueued = true;
 		queueMicrotask(() => {
-			this.trustRefreshQueued = false;
-			const generation = this.trustRefreshGeneration;
-			this.trustQueue = this.trustQueue.catch(() => undefined).then(() => this.refreshWorkspaceTrust(generation)).catch(reportWorkspaceTrustRefreshError);
+			this.permissionRefreshQueued = false;
+			const generation = this.permissionRefreshGeneration;
+			this.permissionQueue = this.permissionQueue.catch(() => undefined).then(() => this.refreshDirAccess(generation)).catch(reportDirAccessRefreshError);
 		});
 	}
 
-	private async refreshWorkspaceTrust(generation: number): Promise<void> {
-		const trust = await resolveAppServerLanguageWorkspaceTrust(this.workspace, this.workspaceTrust);
-		if (!this.alive || generation !== this.trustRefreshGeneration || this.workspace.getWorkspace().id !== trust.workspaceId) return;
-		const changed = this.workspaceTrusted !== trust.trusted;
-		this.workspaceTrusted = trust.trusted;
-		if (!trust.trusted) {
+	private async refreshDirAccess(generation: number): Promise<void> {
+		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.dirPermissions);
+		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
+		const changed = this.languageAllowed !== access.allowed;
+		this.languageAllowed = access.allowed;
+		if (!access.allowed) {
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
 				entry.timer = undefined;
@@ -315,7 +315,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
 			if (entry.references > 0) return;
-			const closeLanguage = entry.languageSynchronized ? this.api.close({ ...(entry.wireWorkspaceFolderId ? { workspaceFolderId: entry.wireWorkspaceFolderId } : {}), path: entry.path }) : Promise.resolve();
+			const closeLanguage = entry.languageSynchronized ? this.api.close({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path }) : Promise.resolve();
 			const closeCodeIntelligence = entry.codeIntelligenceSynchronized && this.canSynchronizeCodeIntelligence(entry) ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
 			entry.languageSynchronized = false;
 			entry.codeIntelligenceSynchronized = false;
@@ -327,8 +327,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	private acceptDiagnostics(notification: LanguageDiagnosticsNotification): void {
 		const folders = this.workspace.getWorkspace().folders;
-		const folder = notification.workspaceFolderId
-			? folders.find(folder => folder.id === notification.workspaceFolderId)
+		const folder = notification.dirId
+			? folders.find(folder => folder.id === notification.dirId)
 			: folders.length === 1 ? folders[0] : undefined;
 		if (!folder) return;
 		const resource = workspaceResourceFromPath(folder.uri, notification.path);
@@ -356,21 +356,21 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		return Object.freeze({ resource, revision, diagnostics: Object.freeze(diagnostics) });
 	}
 
-	private workspaceTarget(resource: URI): { readonly workspaceFolderId: string; readonly path: string } | undefined {
-		let match: { readonly workspaceFolderId: string; readonly path: string; readonly rootLength: number } | undefined;
+	private workspaceTarget(resource: URI): { readonly dirId: string; readonly path: string } | undefined {
+		let match: { readonly dirId: string; readonly path: string; readonly rootLength: number } | undefined;
 		for (const folder of this.workspace.getWorkspace().folders) {
 			try {
 				const path = workspaceRelativePath(folder.uri, resource);
-				if (!match || folder.uri.path.length > match.rootLength) match = { workspaceFolderId: folder.id, path, rootLength: folder.uri.path.length };
+				if (!match || folder.uri.path.length > match.rootLength) match = { dirId: folder.id, path, rootLength: folder.uri.path.length };
 			} catch {
 				// Resource belongs to a different Workspace folder.
 			}
 		}
-		return match && { workspaceFolderId: match.workspaceFolderId, path: match.path };
+		return match && { dirId: match.dirId, path: match.path };
 	}
 
 	private canSynchronizeCodeIntelligence(entry: LanguageDocumentEntry): boolean {
-		return this.workspace.getWorkspace().folders[0]?.id === entry.workspaceFolderId;
+		return this.workspace.getWorkspace().folders[0]?.id === entry.dirId;
 	}
 }
 
@@ -378,8 +378,8 @@ function reportCodeIntelligenceSynchronizationError(error: unknown): void {
 	console.error("Code-intelligence document synchronization failed", error);
 }
 
-function reportWorkspaceTrustRefreshError(error: unknown): void {
-	console.error("Workspace Trust refresh for language services failed", error);
+function reportDirAccessRefreshError(error: unknown): void {
+	console.error("Directory access refresh for language services failed", error);
 }
 
 function isUnsupportedDiagnosticPull(error: unknown): boolean {

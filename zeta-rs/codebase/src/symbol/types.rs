@@ -11,7 +11,7 @@ const DEFAULT_MAX_QUERY_BYTES: usize = 8 * 1024;
 const DEFAULT_MAX_RESULTS: usize = 100;
 const DEFAULT_MATCHER_THREADS: usize = 2;
 
-/// Language-neutral kind of one syntactically declared workspace symbol.
+/// Language-neutral kind of one syntactically declared directory symbol.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum SymbolKind {
     Constant,
@@ -78,7 +78,7 @@ pub struct SymbolRange {
     pub end_column: usize,
 }
 
-/// Revision-bound location of one declaration extracted from a verified workspace source.
+/// Revision-bound location of one declaration extracted from a verified directory source.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SymbolReference {
     pub root_id: IndexRootId,
@@ -91,7 +91,7 @@ pub struct SymbolReference {
     pub selection_range: SymbolRange,
 }
 
-/// One syntactically declared workspace symbol.
+/// One syntactically declared directory symbol.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IndexedSymbol {
     pub reference: SymbolReference,
@@ -108,7 +108,7 @@ pub struct SymbolSearchHit {
     pub matched_indices: Vec<u32>,
 }
 
-/// Literal workspace-symbol query and requested result bound.
+/// Literal directory-symbol query and requested result bound.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SymbolIndexQuery {
     text: String,

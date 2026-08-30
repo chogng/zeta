@@ -44,7 +44,7 @@ async fn query_runner_captures_system_git_output() {
 fn git_commands_remove_inherited_repository_selectors() {
     let client = GitClient::system();
     let invocation = GitInvocation::query(
-        std::path::Path::new("/workspace"),
+        std::path::Path::new("/dir"),
         ["status"],
         FsmonitorOverride::Disabled,
     );

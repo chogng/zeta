@@ -28,19 +28,15 @@ impl ProductApp {
     }
 
     pub(super) fn show_files_pane(&mut self) {
-        self.open_workspace_input(PaneInput::files(
-            self.workspace_context.working_directory().to_path_buf(),
-        ));
+        self.open_main_input(PaneInput::files(self.env.working_directory().to_path_buf()));
     }
 
     pub(super) fn show_changes_pane(&mut self) {
-        self.open_workspace_input(PaneInput::diff(
-            self.workspace_context.working_directory().to_path_buf(),
-        ));
+        self.open_main_input(PaneInput::diff(self.env.working_directory().to_path_buf()));
     }
 
-    /// Mounts one workspace capability as the active input of the current PaneGroup.
-    fn open_workspace_input(&mut self, input: PaneInput) {
+    /// Mounts one product capability as the active input of the current PaneGroup.
+    fn open_main_input(&mut self, input: PaneInput) {
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
@@ -59,20 +55,20 @@ impl ProductApp {
         {
             return;
         }
-        self.workspace_surface.show_agent();
+        self.main_surface.show_agent();
         self.workbench.collapse_inspector();
         let _ = self.activate_pane_context(tab_key, pane);
     }
 
-    /// Restores the active Session's Agent pane after a workspace feature pane is dismissed.
+    /// Restores the active Session's Agent pane after a file feature pane is dismissed.
     pub(super) fn show_agent_pane(&mut self) {
         let _ = self.bind_agent_pane();
-        self.workspace_surface.show_agent();
+        self.main_surface.show_agent();
     }
 
     /// Binds the active Session's Agent descriptor without changing the visible surface.
     ///
-    /// File-editor and terminal transitions use this form when the `WorkspaceSurface` has already
+    /// File-editor and terminal transitions use this form when the `MainSurface` has already
     /// selected the surface that should remain visible.
     pub(super) fn bind_agent_pane(&mut self) -> bool {
         let Some(tab_key) = self.active_session_tab_key() else {
@@ -111,7 +107,7 @@ impl ProductApp {
         self.activate_pane_context(tab_key, pane)
     }
 
-    pub(super) fn active_workspace_pane_kind(&self) -> Option<PaneInputKind> {
+    pub(super) fn active_main_pane_kind(&self) -> Option<PaneInputKind> {
         let tab_key = self.active_session_tab_key()?;
         let pane = self
             .workbench
@@ -126,12 +122,12 @@ impl ProductApp {
     }
 
     /// Restores the input selected before the Terminal surface was opened.
-    pub(super) fn restore_workspace_pane_after_terminal(&mut self) {
+    pub(super) fn restore_main_pane_after_terminal(&mut self) {
         let Some(tab_key) = self.active_session_tab_key() else {
             self.show_agent_pane();
             return;
         };
-        if !self.workspace_surface.is_editor() {
+        if !self.main_surface.is_editor() {
             let _ = self.bind_agent_pane();
             return;
         }
@@ -209,7 +205,7 @@ impl ProductApp {
     }
 
     pub(super) fn active_screen(&self) -> ScreenBuffer {
-        if self.workspace_surface.is_terminal() {
+        if self.main_surface.is_terminal() {
             ScreenBuffer::Alternate
         } else {
             ScreenBuffer::Primary

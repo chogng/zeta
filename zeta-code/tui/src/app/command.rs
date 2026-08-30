@@ -2,8 +2,8 @@ use crate::components::chat_input::ChatSubmission;
 use crate::components::chat_input::SlashCommandInvocation;
 use crate::components::queue::QueueId;
 use crate::components::steer::SteerId;
-use crate::features::config::AdditionalDirectoryPermissionEdit;
 use crate::features::config::ConfigEdit;
+use crate::features::config::PermissionEdit;
 use crate::features::config::ProviderApiKeyEdit;
 use crate::features::interactions::InteractionResponse;
 use crate::features::keymap::KeymapEdit;
@@ -27,7 +27,7 @@ pub(crate) enum AppCommand {
     OpenStatusLinePane,
     EditKeymap(KeymapEdit),
     EditConfig(ConfigEdit),
-    EditAdditionalDirectoryPermissions(AdditionalDirectoryPermissionEdit),
+    EditPermissions(PermissionEdit),
     SetProviderApiKey(ProviderApiKeyEdit),
     EditStatusLine(StatusLineEdit),
     ConnectConnectorDeviceOAuth {
@@ -44,8 +44,8 @@ pub(crate) enum AppCommand {
     ReadClipboardImage,
     OpenCustomThemePane,
     OpenRewindPane,
-    RemoveAdditionalDirectory {
-        root: PathBuf,
+    RemoveDir {
+        path: PathBuf,
     },
     RewindToCheckpoint {
         before_turn_id: TurnId,

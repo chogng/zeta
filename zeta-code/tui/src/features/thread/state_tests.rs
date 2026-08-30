@@ -191,6 +191,8 @@ fn thread_snapshot() -> Thread {
     Thread {
         session_id: session_id(),
         thread_id: thread_id(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 7,

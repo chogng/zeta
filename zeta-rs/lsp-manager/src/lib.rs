@@ -2,7 +2,7 @@
 //!
 //! This crate owns enablement, resolved server definition consumption, document snapshot routing,
 //! diagnostic freshness, position conversion, and manager-thread lifecycle. It does not own
-//! editor text, filesystem access, UI presentation, executable discovery, installation, or trust.
+//! editor text, filesystem access, UI presentation, executable discovery, installation, or verification.
 
 mod capabilities;
 mod configuration;
@@ -45,21 +45,20 @@ pub use requests::{
     LanguageCodeAction, LanguageCodeActions, LanguageCommandResult, LanguageCompletionDetails,
     LanguageCompletionInsertTextFormat, LanguageCompletionItem, LanguageCompletionItemKind,
     LanguageCompletionTrigger, LanguageCompletions, LanguageDeleteMode, LanguageDocumentPosition,
-    LanguageExistingTargetBehavior, LanguageFormattingEdits, LanguageFormattingOptions,
-    LanguageHierarchyEntry, LanguageHierarchyItem, LanguageHierarchyKind, LanguageHierarchyResult,
-    LanguageHover, LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHints,
-    LanguageLinkedEditingRanges, LanguageLocationKind, LanguageLocationPosition,
-    LanguageLocationRange, LanguageLocationTarget, LanguageLocations,
-    LanguageMissingTargetBehavior, LanguageParameterInformation, LanguagePositionEncoding,
-    LanguagePulledDiagnosticReport, LanguagePulledDiagnostics, LanguageRenamePreparation,
-    LanguageRequestId, LanguageRequestKind, LanguageSignatureHelp, LanguageSignatureHelpTrigger,
-    LanguageSignatureInformation, LanguageTextEdit, LanguageWorkspaceDocumentEdit,
-    LanguageWorkspaceEdit, LanguageWorkspaceEditEntry, LanguageWorkspaceEditResult,
-    LanguageWorkspaceSymbol, LanguageWorkspaceSymbols, LanguageWorkspaceTextEdit,
+    LanguageEdit, LanguageEditEntry, LanguageEditResult, LanguageExistingTargetBehavior,
+    LanguageFormattingEdits, LanguageFormattingOptions, LanguageHierarchyEntry,
+    LanguageHierarchyItem, LanguageHierarchyKind, LanguageHierarchyResult, LanguageHover,
+    LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHints, LanguageLinkedEditingRanges,
+    LanguageLocationKind, LanguageLocationPosition, LanguageLocationRange, LanguageLocationTarget,
+    LanguageLocations, LanguageMissingTargetBehavior, LanguageParameterInformation,
+    LanguagePositionEncoding, LanguagePulledDiagnosticReport, LanguagePulledDiagnostics,
+    LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind, LanguageSignatureHelp,
+    LanguageSignatureHelpTrigger, LanguageSignatureInformation, LanguageSymbol, LanguageSymbols,
+    LanguageTextEdit, LanguageWorkspaceDocumentEdit, LanguageWorkspaceTextEdit,
 };
 pub use restart::LanguageServerRestartPolicy;
 pub use semantic_tokens::{LanguageSemanticToken, LanguageSemanticTokens};
-pub use workspace_diagnostics::{LanguageWorkspaceDiagnostic, LanguageWorkspaceDiagnostics};
+pub use workspace_diagnostics::{LanguageDirectoryDiagnostic, LanguageDirectoryDiagnostics};
 pub use zeta_lsp_server_provider::LanguageServerDefinition;
 
 /// Compatibility name for the pre-LSP manager configuration.

@@ -19,7 +19,7 @@ fn session_canvas_reserves_a_stable_header_above_the_thread_timeline() {
 }
 
 #[test]
-fn empty_session_header_shows_ready_workspace_context() {
+fn empty_session_header_shows_ready_environment_context() {
     let header = SessionHeader::new(
         Rect::from_xywh(0.0, 0.0, 700.0, 64.0),
         "",

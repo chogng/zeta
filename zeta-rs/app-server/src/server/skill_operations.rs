@@ -193,7 +193,7 @@ fn skill_list_result(snapshot: &SkillRuntimeSnapshot) -> SkillListResult {
                     source_kind: match catalog.source().kind() {
                         SkillSourceKind::BuiltIn => SkillSourceKindDto::BuiltIn,
                         SkillSourceKind::User => SkillSourceKindDto::User,
-                        SkillSourceKind::Workspace => SkillSourceKindDto::Workspace,
+                        SkillSourceKind::Directory => SkillSourceKindDto::Directory,
                         SkillSourceKind::Plugin => SkillSourceKindDto::Plugin,
                         SkillSourceKind::Marketplace => SkillSourceKindDto::Marketplace,
                     },

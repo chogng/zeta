@@ -155,7 +155,7 @@ fn project_snapshot(
 ) -> CodebaseStatusResult {
     CodebaseStatusResult {
         state,
-        root_id: runtime.root().trust_id().as_str().to_owned(),
+        root_id: runtime.root().id().as_str().to_owned(),
         generation: snapshot.map_or(0, |snapshot| snapshot.generation),
         indexed_file_count: snapshot.map_or(0, |snapshot| snapshot.indexed_file_count),
         indexed_chunk_count: snapshot.map_or(0, |snapshot| snapshot.indexed_chunk_count),

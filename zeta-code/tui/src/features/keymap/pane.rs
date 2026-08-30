@@ -395,7 +395,7 @@ fn fixed_shortcut_items() -> impl Iterator<Item = ListSelectionItem> {
         ("Esc Esc", "open rewind checkpoints from the root view"),
         (
             "Tab",
-            "complete the selected slash command or workspace path",
+            "complete the selected slash command or directory path",
         ),
         ("Home / End", "move to the start or end of the input line"),
         ("PageUp / PageDown", "scroll the conversation"),

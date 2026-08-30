@@ -14,7 +14,6 @@ fn session(id: &str, title: &str) -> Session {
         title: title.to_owned(),
         status: SessionStatus::Active,
         model: None,
-        workspace: None,
         next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         current_thread_id: None,
         sequence: 1,
@@ -26,11 +25,11 @@ fn thread(id: &str) -> ThreadId {
     ThreadId::new(id).expect("test thread ID is non-empty")
 }
 
-fn upsert_session(workbench: &mut Workbench, session: &Session, workspace: &str) -> TabInputChange {
+fn upsert_session(workbench: &mut Workbench, session: &Session, dir: &str) -> TabInputChange {
     workbench.upsert_session_input(
         TabInput::session(
             session.session_id.clone(),
-            TabInputMetadata::new(&session.title, workspace).with_status(TabStatus::idle("Active")),
+            TabInputMetadata::new(&session.title, dir).with_status(TabStatus::idle("Active")),
         ),
         PaneInput::terminal(session.session_id.clone()),
     )
@@ -65,7 +64,7 @@ fn tab_creation_initializes_the_matching_pane_container_terminal_pane() {
     let session = session("session-1", "Terminal");
     let key = TabInputKey::session(session.session_id.clone());
 
-    upsert_session(&mut workbench, &session, "/workspace");
+    upsert_session(&mut workbench, &session, "/dir");
 
     assert_eq!(workbench.tab_part().active_tab_key(), Some(&key));
     let panes = workbench
@@ -128,7 +127,7 @@ fn session_and_settings_tabs_select_their_one_to_one_pane_containers() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let session_key = TabInputKey::session(session.session_id.clone());
-    upsert_session(&mut workbench, &session, "/workspace");
+    upsert_session(&mut workbench, &session, "/dir");
 
     assert_eq!(
         workbench.active_pane().map(|pane| pane.input().kind()),
@@ -153,7 +152,7 @@ fn workbench_creates_or_destroys_active_panes() {
     let session = session("session-1", "Terminal");
     let session_id = session.session_id.clone();
     let key = TabInputKey::session(session_id.clone());
-    upsert_session(&mut workbench, &session, "/workspace");
+    upsert_session(&mut workbench, &session, "/dir");
 
     let pane = workbench
         .create_pane_with_direction(
@@ -172,7 +171,7 @@ fn workbench_creates_or_destroys_active_panes() {
     let second_input = workbench
         .pane_part_mut(&key)
         .expect("session Pane Part")
-        .open_input(pane, PaneInput::files("/workspace".into()))
+        .open_input(pane, PaneInput::files("/dir".into()))
         .expect("opened group input");
     assert_eq!(second_input.value(), 2);
 
@@ -192,7 +191,7 @@ fn pane_part_routes_group_input_changes_by_stable_ids() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let key = TabInputKey::session(session.session_id.clone());
-    upsert_session(&mut workbench, &session, "/workspace");
+    upsert_session(&mut workbench, &session, "/dir");
 
     let group_id = workbench
         .pane_part(&key)
@@ -228,11 +227,7 @@ fn pane_part_routes_group_input_changes_by_stable_ids() {
     let replaced = workbench
         .pane_part_mut(&key)
         .expect("session Pane Part")
-        .replace_input(
-            group_id,
-            first_input_id,
-            PaneInput::files("/workspace".into()),
-        );
+        .replace_input(group_id, first_input_id, PaneInput::files("/dir".into()));
     assert_eq!(
         replaced.map(|input| input.kind()),
         Some(PaneInputKind::Terminal)
@@ -316,7 +311,7 @@ fn workbench_routes_pane_changes_by_logical_ids() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let tab_key = TabInputKey::session(session.session_id.clone());
-    upsert_session(&mut workbench, &session, "/workspace");
+    upsert_session(&mut workbench, &session, "/dir");
     let root = workbench.active_pane_for(&tab_key).expect("root pane").id();
     let input_id = workbench
         .pane(&tab_key, root)

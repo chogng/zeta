@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
-import type { AgentTreeNode, Session } from "../../../../../sessions/services/sessions/common/session.js";
+import type { AgentTreeNode, ISession } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import type { TurnChangeDetails, TurnChangeSetSummary } from "../../../../services/chat/common/chatService.js";
 import type { ChatPaneModel } from "../../browser/pane/chatPaneModel.js";
@@ -66,14 +66,13 @@ function modelFixture(threadId: string, initial: readonly TurnChangeSetSummary[]
 		sessionId: "session-1",
 		title: "Session",
 		status: "active",
-		sequence: 1,
 		nextApprovalMode: "askPermissions",
-		threads: [
+		chats: [
 			{ threadId, status: "active", origin: { type: "root" } },
 			{ threadId: "thread-child", status: "active", origin: root.children[0]!.origin },
 		],
 		agentTree: [root],
-	} as Session;
+	} as ISession;
 	const details = (changeSetId: string): TurnChangeDetails | undefined => {
 		const summary = changes.find((candidate) => candidate.changeSetId === changeSetId);
 		return summary ? {

@@ -32,14 +32,14 @@ fn input_uses_the_zeta_protocol_and_canonical_safe_point_identity() {
     let bytes = encode_input(
         &hook,
         &HookInvocation::BeforeTool(&request),
-        Path::new("/workspace"),
+        Path::new("/dir"),
     )
     .unwrap();
     let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
     assert_eq!(value["protocolVersion"], 1);
     assert_eq!(value["hookId"], "user:hook:audit");
-    assert_eq!(value["workspace"], "/workspace");
+    assert_eq!(value["dir"], "/dir");
     assert_eq!(value["event"]["name"], "beforeTool");
     assert_eq!(value["event"]["threadId"], "thread-7");
     assert_eq!(value["event"]["turnId"], "turn-3");

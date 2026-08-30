@@ -128,7 +128,7 @@ fn short_replies_use_agent_follow_up_context() {
 }
 
 #[test]
-fn workspace_token_semantics_short_circuit_only_clear_commands() {
+fn dir_token_semantics_short_circuit_only_clear_commands() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join("Justfile"), "build:\n    cargo build\n").unwrap();
     let classifier = InputClassifier::for_working_directory(root.path());

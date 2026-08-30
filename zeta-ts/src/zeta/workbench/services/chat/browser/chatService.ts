@@ -151,7 +151,7 @@ export class ChatService extends Disposable implements IChatService {
 			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
 			{ type: "text", text: options.text },
 		];
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, input });
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", input });
 	}
 
 	async compactContext(options: CompactContextOptions): Promise<void> {

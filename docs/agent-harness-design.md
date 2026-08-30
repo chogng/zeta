@@ -96,8 +96,8 @@ loop:
 | --- | --- | --- | --- |
 | 模型基础 instructions | 身份、指令优先级、注入防护、通用工作行为和输出风格 | 新 Turn 创建时冻结；已开始 Turn 永不变化 | `zeta-models-manager` 拥有资产；App Server 冻结到 durable `TurnInstructions` |
 | 工具契约 | exact schema、描述、使用边界和错误语义 | 随 tool profile | 各工具 owner；随冻结的 `ToolDefinition` 进入请求，不复制进基础 instructions |
-| 环境快照 | 见 §4.2 | 静态字段在 Workspace 启动时冻结；workspace roots 在每次模型调用时读取 | `zeta-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
-| 工作区与功能指令 | Global `.zeta/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用 | 各功能 owner 提供，Core 按 layer 和 provenance 组装 |
+| 环境快照 | 见 §4.2 | 环境连接时采集静态字段；accessible dirs 在每次模型调用时读取 | `zeta-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
+| 目录与功能指令 | Global `.zeta/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用 | 各功能 owner 提供，Core 按 layer 和 provenance 组装 |
 
 `zeta-prompts` 只拥有公共设施和共享产品提示词。目前 context compaction 与通用代码 review 在这里；模型基础 instructions 留在 `zeta-models-manager`，Goal 与动态 context fragment 留在 Core，动作授权审查提示词留在 `zeta-auto-review`。
 
@@ -120,24 +120,24 @@ loop:
   <git_status>porcelain 摘要，最多 40 行，超出标注截断</git_status>
   <git_recent_commits>最近 5 条 oneline</git_recent_commits>
   <filesystem>
-    <workspace_roots>
-      <root>/abs/path</root>
-      <root>/通过 add-dir 授权的目录</root>
-    </workspace_roots>
+    <accessible_dirs>
+      <dir>/abs/path</dir>
+      <dir>/通过 add-dir 授权的目录</dir>
+    </accessible_dirs>
   </filesystem>
 </environment_context>
 ```
 
-冻结纪律：git、platform、shell 等字段在 Workspace 启动时采集一次；需要新鲜状态时模型自己调工具。
-`workspace_roots` 来自当前 Session 的运行时授权，每次模型调用读取一次。Core 把完整快照作为最后一条
+冻结纪律：git、platform、shell 等字段在 Environment 连接时采集一次；需要新鲜状态时模型自己调工具。
+`accessible_dirs` 来自当前 Session tree 的有效 Grant，每次模型调用读取一次。Core 把完整快照作为最后一条
 user-role context 放在 durable Thread history 之后，因此目录变化只改请求尾部，不改 system instructions，
 也不制造持久用户消息。
 
-职责边界：`zeta-agent-environment` 只拥有不可变值、根目录不变量和确定性渲染；App Server 的 `workspace_environment` 执行平台与 Git 采集，`SessionWorkspaceAccess` 保存每个 Session 的 `WorkspaceAccessAuthority`；Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发权限，也不参与工具路径判定。
+职责边界：`zeta-agent-environment` 只拥有不可变值、目录不变量和确定性渲染；App Server 采集平台与 Git 信息，并通过 `DirGrants` 读取 Session tree 的有效 Authorization；Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发 Grant，也不参与工具路径判定。
 
-### 4.3 Workspace Instruction 发现与注入
+### 4.3 Directory Instruction 发现与注入
 
-- 发现：只读取 workspace root 的 `.zeta/instructions/*.md` 原生文件；`AGENTS.md` 和其他生态
+- 发现：只读取已授权目录的 `.zeta/instructions/*.md` 文件；`AGENTS.md` 和其他生态
   格式必须经 `zeta-agent-import`，native loader 不兼容扫描；
 - 注入：当前只把 `load: global` 条目渲染为 `input[0]` user message，并标注其优先级低于
   system 与安全策略；

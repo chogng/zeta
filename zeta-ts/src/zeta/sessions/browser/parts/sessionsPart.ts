@@ -8,7 +8,7 @@ import type { IChatService } from "../../../workbench/services/chat/common/chatS
 import type { IChatContextPickService } from "../../../workbench/services/chat/common/chatContextService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
-import type { SessionsViewSelection } from "../../services/view/common/sessionsViewService.js";
+import type { SessionsViewSelection } from "../../services/view/common/sessionsService.js";
 import { SessionsChatView } from "../common/sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
 

@@ -1,6 +1,6 @@
 import "./media/sessionsSidebarPart.css";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
-import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
+import type { ISessionsService } from "../../services/view/common/sessionsService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import { SessionsList } from "../common/sessionsList.js";
 
@@ -11,7 +11,7 @@ export class SessionsSidebarPart extends WorkbenchPart {
 	override get minimumWidth(): number { return 190; }
 	override get maximumWidth(): number { return 460; }
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService) {
 		super(container, "sidebar");
 		this.list = this._register(new SessionsList(this.contentDomNode, sessionService, viewService, "Sessions", "New session"));
 	}

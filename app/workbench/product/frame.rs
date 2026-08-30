@@ -33,7 +33,7 @@ impl ProductApp {
         );
         let requested_focus = self.pending_focus.take();
         let preferred_focus = requested_focus.unwrap_or_else(|| {
-            if self.workspace_surface.is_editor() {
+            if self.main_surface.is_editor() {
                 FILE_EDITOR_DOCUMENT
             } else {
                 COMPOSER
@@ -106,11 +106,11 @@ impl ProductApp {
             .active_tab_key()
             .cloned()
         else {
-            self.terminal_workspace.resize_all(fallback_size);
+            self.terminal_runtime.resize_all(fallback_size);
             return;
         };
         let Some(layout) = self.workbench.workbench().pane_part(&tab_key) else {
-            self.terminal_workspace.resize_all(fallback_size);
+            self.terminal_runtime.resize_all(fallback_size);
             return;
         };
         let panes = terminal_pane_bounds_for_viewport(
@@ -121,7 +121,7 @@ impl ProductApp {
             layout,
         );
         if panes.is_empty() {
-            self.terminal_workspace.resize_all(fallback_size);
+            self.terminal_runtime.resize_all(fallback_size);
             return;
         }
         let resize_requests = panes
@@ -134,7 +134,7 @@ impl ProductApp {
             })
             .collect::<Vec<_>>();
         for (key, size) in resize_requests {
-            self.terminal_workspace.resize_key(key, size);
+            self.terminal_runtime.resize_key(key, size);
         }
     }
 

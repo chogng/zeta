@@ -1,15 +1,15 @@
 use super::*;
-use zeta_workspace_search::WorkspaceSearchMatch;
-use zeta_workspace_search::WorkspaceSearchMatchRange;
+use zeta_content_search::ContentSearchMatch;
+use zeta_content_search::ContentSearchMatchRange;
 
 #[test]
-fn maps_protocol_query_to_workspace_search_query() {
-    let query = search_query(WorkspaceSearchStartParams {
-        workspace_folder_id: None,
+fn maps_protocol_query_to_content_search_query() {
+    let query = search_query(ContentSearchStartParams {
+        dir_id: None,
         session_directory: None,
         query: "needle".into(),
-        pattern_kind: WorkspaceSearchPatternKind::Regex,
-        case_sensitivity: WorkspaceSearchProtocolCaseSensitivity::Insensitive,
+        pattern_kind: ContentSearchPatternKind::Regex,
+        case_sensitivity: ContentSearchProtocolCaseSensitivity::Insensitive,
         include_patterns: vec!["src/**".into()],
         exclude_patterns: vec!["**/*.test.rs".into()],
         max_results: 400,
@@ -17,10 +17,10 @@ fn maps_protocol_query_to_workspace_search_query() {
 
     assert_eq!(
         query,
-        WorkspaceSearchQuery {
+        ContentSearchQuery {
             query: "needle".into(),
-            pattern: WorkspaceSearchPattern::Regex,
-            case_sensitivity: WorkspaceSearchCaseSensitivity::Insensitive,
+            pattern: ContentSearchPattern::Regex,
+            case_sensitivity: ContentSearchCaseSensitivity::Insensitive,
             include_patterns: vec!["src/**".into()],
             exclude_patterns: vec!["**/*.test.rs".into()],
             max_results: 400,
@@ -29,15 +29,15 @@ fn maps_protocol_query_to_workspace_search_query() {
 }
 
 #[test]
-fn maps_workspace_search_page_to_protocol_result() {
+fn maps_content_search_page_to_protocol_result() {
     let result = search_page(
         "search-1".into(),
-        WorkspaceSearchPage {
-            matches: vec![WorkspaceSearchMatch {
+        ContentSearchPage {
+            matches: vec![ContentSearchMatch {
                 path: "src/lib.rs".into(),
                 line_number: 7,
                 preview: "let needle = true;".into(),
-                ranges: vec![WorkspaceSearchMatchRange { start: 4, end: 10 }],
+                ranges: vec![ContentSearchMatchRange { start: 4, end: 10 }],
             }],
             next_match: 1,
             completed: true,
@@ -54,7 +54,7 @@ fn maps_workspace_search_page_to_protocol_result() {
     );
     assert_eq!(
         result.matches[0].ranges,
-        [WorkspaceSearchProtocolMatchRange { start: 4, end: 10 }]
+        [ContentSearchProtocolMatchRange { start: 4, end: 10 }]
     );
     assert_eq!(result.next_match, 1);
     assert!(result.completed);

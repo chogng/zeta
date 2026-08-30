@@ -1,6 +1,6 @@
 # zeta-text-file
 
-`zeta-text-file` owns the editor-independent lifecycle of one UTF-8 workspace file. Cross-crate
+`zeta-text-file` owns the editor-independent lifecycle of one UTF-8 directory file. Cross-crate
 placement and product composition are documented in
 [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md); this README is canonical for
 the crate's implementation contract.
@@ -22,7 +22,7 @@ one of those dependencies would be architectural drift.
 
 ## Public contract and execution path
 
-`TextFileSnapshot` binds workspace-relative path, UTF-8 content and `TextFileDiskVersion` captured
+`TextFileSnapshot` binds directory-relative path, UTF-8 content and `TextFileDiskVersion` captured
 by a host read. `TextFileLifecycle::new` retains that content only as the saved baseline; the host
 keeps authoritative mutable editor text and supplies it to lifecycle operations.
 
@@ -47,7 +47,7 @@ performs no I/O and therefore has no transport errors. A snapshot for another pa
 ## Integration obligations
 
 - Construct a snapshot from content and metadata belonging to the same logical read.
-- Keep paths in the workspace-relative identity form selected by the host; the crate compares them
+- Keep paths in the directory-relative identity form selected by the host; the crate compares them
   lexically and does not canonicalize or authorize them.
 - Do not mutate the editor document when merely observing an external snapshot. Reload is an explicit
   host decision using `take_pending_external`.

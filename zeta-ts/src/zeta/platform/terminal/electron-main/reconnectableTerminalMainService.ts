@@ -18,7 +18,7 @@ export interface ReconnectableTerminalMainServiceOptions {
 
 interface TerminalRecord {
 	readonly terminalId: string;
-	readonly workspaceFolderId: string | undefined;
+	readonly dirId: string | undefined;
 	reconnectToken: string;
 	reconnectGracePeriodMillis: number;
 	rows: number;
@@ -61,7 +61,7 @@ export class ReconnectableTerminalMainService extends Disposable {
 			lease = requireReconnectLease(result.reconnect);
 		} catch (error) {
 			if (result.terminalId) {
-				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(params.workspaceFolderId), terminalId: result.terminalId }).catch(() => {});
+				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(params.dirId), terminalId: result.terminalId }).catch(() => {});
 			}
 			throw error;
 		}
@@ -70,7 +70,7 @@ export class ReconnectableTerminalMainService extends Disposable {
 		}
 		this.terminals.set(result.terminalId, {
 			terminalId: result.terminalId,
-			workspaceFolderId: params.workspaceFolderId,
+			dirId: params.dirId,
 			reconnectToken: lease.reconnectToken,
 			reconnectGracePeriodMillis: lease.reconnectGracePeriodMillis,
 			rows: params.rows,
@@ -127,7 +127,7 @@ export class ReconnectableTerminalMainService extends Disposable {
 		for (const record of records) record.closing = true;
 		if (this.supervisor.state !== "ready") return;
 		for (const record of records) {
-			void this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(record.workspaceFolderId), terminalId: record.terminalId }).catch(() => {
+			void this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(record.dirId), terminalId: record.terminalId }).catch(() => {
 				// The old connection is about to stop; its broker expires any unclosed lease.
 			});
 		}
@@ -182,7 +182,7 @@ export class ReconnectableTerminalMainService extends Disposable {
 			}
 			try {
 				const attached = await this.supervisor.request(APP_SERVER_METHODS["terminal/attach"], {
-					...workspaceFolder(record.workspaceFolderId),
+					...workspaceFolder(record.dirId),
 					terminalId: record.terminalId,
 					reconnectToken: record.reconnectToken,
 					rows: record.rows,
@@ -226,8 +226,8 @@ export class ReconnectableTerminalMainService extends Disposable {
 	}
 }
 
-function workspaceFolder(workspaceFolderId: string | undefined): { readonly workspaceFolderId?: string } {
-	return workspaceFolderId === undefined ? {} : { workspaceFolderId };
+function workspaceFolder(dirId: string | undefined): { readonly dirId?: string } {
+	return dirId === undefined ? {} : { dirId };
 }
 
 function requireReconnectLease(value: TerminalReconnectLease | null): TerminalReconnectLease {

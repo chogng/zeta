@@ -1,4 +1,4 @@
-use super::workspace_runtime::WorkspaceRuntime;
+use super::environment_runtime::EnvRuntime;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::Weak;
@@ -12,7 +12,7 @@ use zeta_protocol::UserInput;
 
 /// Stable backend handle shared by product Turn dispatch and multi-agent tools.
 ///
-/// Composition replaces the target after all builder-only Workspace mutations finish, while
+/// Composition replaces the target after all builder-only environment mutations finish, while
 /// existing consumers retain this handle and therefore observe the canonical router.
 pub(crate) struct TurnBackendHandle {
     target: RwLock<Arc<dyn TurnExecutionBackend>>,
@@ -36,7 +36,7 @@ impl TurnBackendHandle {
         self.replace(Arc::new(executor));
     }
 
-    pub(crate) fn install_current_workspace(&self, runtime: &Arc<RwLock<WorkspaceRuntime>>) {
+    pub(crate) fn install_current_environment(&self, runtime: &Arc<RwLock<EnvRuntime>>) {
         self.replace(Arc::new(CurrentLocalTurnBackend::new(runtime)));
     }
 
@@ -75,13 +75,13 @@ impl TurnExecutionBackend for TurnBackendHandle {
     }
 }
 
-/// Delegates to the latest local executor installed for the active workspace.
+/// Delegates to the latest local executor installed for the active environment.
 struct CurrentLocalTurnBackend {
-    runtime: Weak<RwLock<WorkspaceRuntime>>,
+    runtime: Weak<RwLock<EnvRuntime>>,
 }
 
 impl CurrentLocalTurnBackend {
-    fn new(runtime: &Arc<RwLock<WorkspaceRuntime>>) -> Self {
+    fn new(runtime: &Arc<RwLock<EnvRuntime>>) -> Self {
         Self {
             runtime: Arc::downgrade(runtime),
         }

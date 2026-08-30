@@ -140,13 +140,8 @@ pub use multi_agent::InvalidContextSeedDigest;
 pub use multi_agent::InvalidDelegationResultDigest;
 pub use multi_agent::ThreadSequenceRange;
 pub use session::Session;
-pub use session::SessionCommand;
-pub use session::SessionEvent;
 pub use session::SessionStatus;
 pub use session::SessionThread;
-pub use session::SessionThreadStatus;
-pub use session::SessionUpdate;
-pub use session::SessionUpdateEnvelope;
 pub use session::ThreadOrigin;
 pub use skill::ContentDigest;
 pub use skill::FrozenSkillActivation;
@@ -196,8 +191,6 @@ pub use turn::TurnInstructions;
 pub use turn::TurnKind;
 pub use turn::TurnStatus;
 pub use turn_execution::TurnExecutionBinding;
-pub use zeta_workspace::WorkspaceBinding;
-pub use zeta_workspace::WorkspaceTrustId;
 
 #[cfg(test)]
 #[path = "contract_tests.rs"]

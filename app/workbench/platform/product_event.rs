@@ -5,7 +5,7 @@ use crate::remote_tunnel_process::RemoteTunnelEvent;
 use crate::session_host::SessionRuntimeEvent;
 use crate::terminal_session::{TerminalSessionEventEnvelope, TerminalSessionReady};
 use zeta_editor_host::FileEditorLanguageEvent;
-use zeta_terminal_workspace::TerminalRuntimeEvent;
+use zeta_terminal_runtime::TerminalRuntimeEvent;
 
 pub(crate) enum ProductEvent {
     Session(SessionRuntimeEvent),

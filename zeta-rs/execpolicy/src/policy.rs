@@ -207,10 +207,10 @@ fn validate(
             if !rule.is_valid() {
                 return Err(ExecPolicyError::InvalidRule(rule.id().clone()));
             }
-            if layer.kind() == ExecPolicyLayerKind::Workspace
+            if layer.kind() == ExecPolicyLayerKind::Directory
                 && matches!(rule.effect(), ExecPolicyEffect::AllowUnsandboxed)
             {
-                return Err(ExecPolicyError::WorkspaceRuleMayNotAllow(rule.id().clone()));
+                return Err(ExecPolicyError::DirectoryRuleMayNotAllow(rule.id().clone()));
             }
             if !rule_ids.insert(rule.id().clone()) {
                 return Err(ExecPolicyError::DuplicateRuleId(rule.id().clone()));
@@ -227,7 +227,7 @@ pub enum ExecPolicyError {
     DuplicateRuleId(ExecPolicyRuleId),
     InvalidDefault,
     InvalidRule(ExecPolicyRuleId),
-    WorkspaceRuleMayNotAllow(ExecPolicyRuleId),
+    DirectoryRuleMayNotAllow(ExecPolicyRuleId),
     Serialization(String),
 }
 
@@ -255,9 +255,9 @@ impl fmt::Display for ExecPolicyError {
             Self::InvalidRule(id) => {
                 write!(formatter, "invalid execution-policy rule: {}", id.as_str())
             }
-            Self::WorkspaceRuleMayNotAllow(id) => write!(
+            Self::DirectoryRuleMayNotAllow(id) => write!(
                 formatter,
-                "Workspace execution-policy rule may not allow unsandboxed execution: {}",
+                "directory execution-policy rule may not allow unsandboxed execution: {}",
                 id.as_str()
             ),
             Self::Serialization(reason) => {

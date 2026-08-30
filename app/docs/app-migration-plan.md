@@ -156,7 +156,7 @@ App Server Session 的连接 worker、订阅、命令队列和重连策略已经
 | crate | 进入的职责 | Workbench 组合职责 |
 | --- | --- | --- |
 | `zeta-session` | App Server Session client、worker、订阅、命令/事件队列和重连策略；单个 Session Pane 的 Thread metadata、后端 transcript 条目、时间线、滚动、Composer 状态、输入、交互、布局和绘制 | Local/Remote 连接目标、文件/Git/配置请求、提交 effect 和平台事件接线 |
-| `zeta-terminal-workspace` | Terminal runtime、Pane binding、每个 PaneInput 的滚动/指针/选择视图状态 | 平台事件转发和终端进程适配 |
+| `zeta-terminal-runtime` | Terminal runtime、Pane binding、每个 PaneInput 的滚动/指针/选择视图状态 | 平台事件转发和终端进程适配 |
 | `zeta-files` | Files Pane、目录树、文件搜索状态、滚动、布局、Toolbar 和交互 | 目录 DTO 转换以及打开文件、加载目录副作用 |
 | `zeta-scm` | Changes Pane、变更文件状态、多文件 Diff、折叠、滚动、布局和交互 | 仓库快照转换以及 Git 请求 |
 | `zeta-editor-host` | Editor Tab、文档/视口、保存冲突、查找替换、诊断、补全和自动滚动 | 文件与 LSP 请求、平台输入转发 |

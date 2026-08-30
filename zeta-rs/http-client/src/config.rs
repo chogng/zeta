@@ -212,7 +212,7 @@ impl Default for ConnectionPoolPolicy {
 /// A hard upper bound for a buffered response or one successful streamed body.
 ///
 /// [`HttpClientConfig`] keeps separate values for buffered responses and successful streaming
-/// responses so large artifacts do not also permit oversized diagnostics.
+/// responses so large artifacts do not also authorization oversized diagnostics.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResponseBodyLimit {
     bytes: NonZeroUsize,

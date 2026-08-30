@@ -6,20 +6,20 @@ use zeta_codebase::Codebase;
 use zeta_codebase::CodebaseLimits;
 use zeta_codebase::SymbolIndexQuery;
 use zeta_codebase_store::CodebaseStore;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 use super::SymbolIndexRuntime;
 use super::SymbolIndexRuntimeState;
 
-fn workspace() -> TempDir {
-    let directory = tempfile::tempdir().expect("workspace");
+fn dir_fixture() -> TempDir {
+    let directory = tempfile::tempdir().expect("directory");
     fs::create_dir(directory.path().join(".git")).expect("git marker");
     directory
 }
 
 fn codebase(directory: &TempDir) -> Arc<Codebase> {
     let index = Codebase::open_memory(
-        WorkspaceRoot::open(directory.path()).expect("workspace root"),
+        Dir::open_local(directory.path()).expect("directory root"),
         CodebaseLimits::default(),
     )
     .expect("Codebase");
@@ -29,7 +29,7 @@ fn codebase(directory: &TempDir) -> Arc<Codebase> {
 
 #[test]
 fn reconcile_publishes_a_searchable_generation() {
-    let directory = workspace();
+    let directory = dir_fixture();
     fs::write(directory.path().join("lib.rs"), "pub fn searchable() {}\n").expect("source");
     let runtime = SymbolIndexRuntime::open(codebase(&directory), Arc::new(CodebaseStore::memory()))
         .expect("symbol-index runtime");
@@ -50,7 +50,7 @@ fn reconcile_publishes_a_searchable_generation() {
 
 #[test]
 fn search_marks_a_projection_stale_after_source_generation_changes() {
-    let directory = workspace();
+    let directory = dir_fixture();
     let source = directory.path().join("lib.rs");
     fs::write(&source, "pub fn before() {}\n").expect("source");
     let codebase = codebase(&directory);

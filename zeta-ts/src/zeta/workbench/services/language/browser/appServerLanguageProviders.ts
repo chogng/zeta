@@ -25,14 +25,14 @@ import { type LanguageColorProvider, type LanguageColorPresentationRequest, type
 import { RGBA8 } from "../../../../editor/common/core/misc/rgba.js";
 import { type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/languageFoldingRanges.js";
 import { LanguageDiagnosticSeverity } from "../../../../editor/common/languages/languageResults.js";
-import { type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto, type LanguageWorkspaceEditDto } from "../../../../../../generated/app-server/types.js";
+import { type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from "../../../../../../generated/app-server/types.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
-import { type IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 import { APP_SERVER_LANGUAGE_IDS } from "./appServerLanguageSupport.js";
-import { resolveAppServerLanguageWorkspaceTrust } from "./appServerLanguageWorkspace.js";
+import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 
 type LocationKind = "declaration" | "definition" | "implementation" | "typeDefinition" | "references";
 const APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -53,7 +53,7 @@ export class AppServerLanguageProviders extends Disposable {
 
 	constructor(private readonly languageFeatures: ILanguageFeaturesService, private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly options: AppServerLanguageProvidersOptions = {}) {
 		super();
-		if (options.workspaceTrust && !options.events) throw new Error("Trust-aware App Server language providers require the App Server event stream");
+		if (options.dirPermissions && !options.events) throw new Error("Permission-aware App Server language providers require the App Server event stream");
 		if (options.events) {
 			const subscription = options.events.subscribe(event => {
 				if (event.method === "config/changed") this.queueRefresh();
@@ -62,7 +62,7 @@ export class AppServerLanguageProviders extends Disposable {
 		}
 		this._register(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
 		this._register(toDisposable(() => { this.alive = false; }));
-		if (!options.workspaceTrust && workspace.getWorkspace().folders.length > 0) this.registrations.value = this.install();
+		if (!options.dirPermissions && workspace.getWorkspace().folders.length > 0) this.registrations.value = this.install();
 		else this.queueRefresh();
 	}
 
@@ -104,15 +104,15 @@ export class AppServerLanguageProviders extends Disposable {
 			const generation = this.refreshGeneration;
 			this.refreshQueue = this.refreshQueue.catch(() => undefined).then(() => this.refresh(generation)).catch(error => {
 				this.registrations.clear();
-				console.error("Workspace Trust refresh for App Server language providers failed", error);
+				console.error("Directory access refresh for App Server language providers failed", error);
 			});
 		});
 	}
 
 	private async refresh(generation: number): Promise<void> {
-		const trust = await resolveAppServerLanguageWorkspaceTrust(this.workspace, this.options.workspaceTrust);
-		if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== trust.workspaceId) return;
-		if (trust.trusted) {
+		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.options.dirPermissions);
+		if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
+		if (access.allowed) {
 			if (!this.registrations.value) this.registrations.value = this.install();
 		} else {
 			this.registrations.clear();
@@ -121,7 +121,7 @@ export class AppServerLanguageProviders extends Disposable {
 }
 
 export interface AppServerLanguageProvidersOptions {
-	readonly workspaceTrust?: IWorkspaceTrustService;
+	readonly dirPermissions?: IDirPermissionsService;
 	readonly events?: IServerEventApi;
 }
 
@@ -444,7 +444,7 @@ class AppServerWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvide
 		const roots = folders.map(folder => ({ id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) }));
 		const responses = await Promise.all(roots.flatMap(root => APP_SERVER_LANGUAGE_IDS.map(async languageId => {
 			if (signal.aborted) return [];
-			try { return (await this.api.workspaceSymbols({ ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), languageId, query }, { signal })).symbols.map(symbol => ({ root, symbol })); } catch { return []; }
+			try { return (await this.api.directorySymbols({ ...(root.wireId ? { dirId: root.wireId } : {}), languageId, query }, { signal })).symbols.map(symbol => ({ root, symbol })); } catch { return []; }
 		})));
 		if (signal.aborted) return Object.freeze([]);
 		const seen = new Set<string>();
@@ -463,7 +463,7 @@ function languageDocument(root: LanguageWorkspaceRoot, request: LanguageLocation
 	if (request.model.largeFile.tooLargeForSynchronization) return undefined;
 	const text = request.snapshot.getText();
 	if (VSBuffer.fromString(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
-	return { ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
+	return { ...(root.wireId ? { dirId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
 }
 
 function languageCompletionDocument(root: LanguageWorkspaceRoot, request: LanguageCompletionProviderRequest) {
@@ -475,7 +475,7 @@ function languageSnapshotDocument(root: LanguageWorkspaceRoot, request: { readon
 	if (!request.resource) return undefined;
 	const text = request.snapshot.getText();
 	if (VSBuffer.fromString(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
-	return { ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
+	return { ...(root.wireId ? { dirId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
 }
 
 function languageFormattingDocument(root: LanguageWorkspaceRoot, request: LanguageFormattingRequest) {
@@ -554,7 +554,7 @@ function hierarchyItemDto(root: LanguageWorkspaceRoot, item: LanguageHierarchyIt
 
 function dtoRange(value: Range) { return { start: dtoPosition(value.getStartPosition()), end: dtoPosition(value.getEndPosition()) }; }
 
-function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageWorkspaceEditDto) {
+function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageDirectoryEditDto) {
 	return Object.freeze({ entries: Object.freeze(edit.entries.map(entry => {
 		switch (entry.kind) {
 			case "textDocument": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.document.path), expectedText: entry.document.expectedText, edits: Object.freeze(entry.document.edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))) });

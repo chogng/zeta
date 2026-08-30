@@ -6,6 +6,7 @@ use zeta_async_utils::CancellationToken;
 use zeta_config::HookAction;
 use zeta_config::HookConfig;
 use zeta_core::CoreError;
+use zeta_file_access::Dir;
 use zeta_tool_executor::ApprovalPolicy;
 use zeta_tool_executor::ApprovalRequirement;
 use zeta_tool_executor::CommandExecutionAuthority;
@@ -14,13 +15,12 @@ use zeta_tool_executor::CommandExecutor;
 use zeta_tool_executor::CommandInput;
 use zeta_tool_executor::CommandRequest;
 use zeta_tool_executor::ExecutionLimits;
-use zeta_workspace::WorkspaceRoot;
 
 const HOOK_TIMEOUT: Duration = Duration::from_secs(30);
 const HOOK_OUTPUT_BYTES: usize = 64 * 1024;
 
 pub(crate) trait HookProcessExecutor: Send + Sync {
-    fn workspace(&self) -> &WorkspaceRoot;
+    fn dir(&self) -> &Dir;
 
     fn execute(
         &self,
@@ -39,18 +39,18 @@ impl ApprovalPolicy for AlwaysAuthorized {
     }
 }
 
-pub(crate) struct NativeHookProcessExecutor {
-    workspace: WorkspaceRoot,
-    executor: CommandExecutor<AlwaysAuthorized, NativeSandbox>,
+pub(crate) struct LocalHookProcessExecutor {
+    dir: Dir,
+    executor: CommandExecutor<AlwaysAuthorized, PlatformSandbox>,
 }
 
-impl NativeHookProcessExecutor {
-    pub(crate) fn new(workspace: WorkspaceRoot) -> Result<Self, String> {
-        let backend = native_sandbox().map_err(|error| error.to_string())?;
+impl LocalHookProcessExecutor {
+    pub(crate) fn new(dir: Dir) -> Result<Self, String> {
+        let backend = platform_sandbox().map_err(|error| error.to_string())?;
         Ok(Self {
-            workspace: workspace.clone(),
+            dir: dir.clone(),
             executor: CommandExecutor::new(
-                workspace,
+                dir,
                 backend,
                 AlwaysAuthorized,
                 ExecutionLimits {
@@ -62,9 +62,9 @@ impl NativeHookProcessExecutor {
     }
 }
 
-impl HookProcessExecutor for NativeHookProcessExecutor {
-    fn workspace(&self) -> &WorkspaceRoot {
-        &self.workspace
+impl HookProcessExecutor for LocalHookProcessExecutor {
+    fn dir(&self) -> &Dir {
+        &self.dir
     }
 
     fn execute(
@@ -79,7 +79,7 @@ impl HookProcessExecutor for NativeHookProcessExecutor {
             CommandRequest {
                 program: program.clone(),
                 arguments: args.clone(),
-                working_directory: self.workspace.canonical_path().to_path_buf(),
+                working_directory: self.dir.canonical_path().to_path_buf(),
                 input: CommandInput::Bytes(input),
             },
             authority,
@@ -90,7 +90,7 @@ impl HookProcessExecutor for NativeHookProcessExecutor {
                 parse_output(hook.id.as_str(), output)
             }
             Ok(CommandExecutionOutcome::SandboxDenied(_)) => Err(CoreError::Policy(format!(
-                "Hook '{}' was denied by the Workspace sandbox",
+                "Hook '{}' was denied by the directory sandbox",
                 hook.id
             ))),
             Err(error) => Err(CoreError::Execution(hook_execution_error(error))),
@@ -99,28 +99,28 @@ impl HookProcessExecutor for NativeHookProcessExecutor {
 }
 
 #[cfg(target_os = "macos")]
-type NativeSandbox = zeta_sandboxing::MacosSeatbeltSandbox;
+type PlatformSandbox = zeta_sandboxing::MacosSeatbeltSandbox;
 
 #[cfg(target_os = "macos")]
-fn native_sandbox() -> Result<NativeSandbox, String> {
-    Ok(NativeSandbox::new())
+fn platform_sandbox() -> Result<PlatformSandbox, String> {
+    Ok(PlatformSandbox::new())
 }
 
 #[cfg(target_os = "linux")]
-type NativeSandbox = zeta_linux_sandbox::LinuxSandbox;
+type PlatformSandbox = zeta_linux_sandbox::LinuxSandbox;
 
 #[cfg(target_os = "linux")]
-fn native_sandbox() -> Result<NativeSandbox, String> {
-    NativeSandbox::discover(&zeta_install_context::InstallContext::current())
+fn platform_sandbox() -> Result<PlatformSandbox, String> {
+    PlatformSandbox::discover(&zeta_install_context::InstallContext::current())
         .map_err(|error| error.to_string())
 }
 
 #[cfg(target_os = "windows")]
-type NativeSandbox = zeta_windows_sandbox::WindowsSandbox;
+type PlatformSandbox = zeta_windows_sandbox::WindowsSandbox;
 
 #[cfg(target_os = "windows")]
-fn native_sandbox() -> Result<NativeSandbox, String> {
-    NativeSandbox::discover(&zeta_install_context::InstallContext::current())
+fn platform_sandbox() -> Result<PlatformSandbox, String> {
+    PlatformSandbox::discover(&zeta_install_context::InstallContext::current())
         .map_err(|error| error.to_string())
 }
 

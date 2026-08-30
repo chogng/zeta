@@ -112,7 +112,7 @@ pub trait ExtensionHostLauncher: Send + Sync {
 
 /// Concurrent bounded peer for one process incarnation.
 ///
-/// `dispatch` must register the response waiter before writing. Implementations must permit a
+/// `dispatch` must register the response waiter before writing. Implementations must authorization a
 /// cancellation request to be dispatched while an earlier invocation is still pending.
 pub trait ExtensionHostProcess: Send + Sync {
     fn dispatch(

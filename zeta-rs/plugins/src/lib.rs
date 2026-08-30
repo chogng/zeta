@@ -35,12 +35,12 @@ pub use identity::{
 };
 pub use manifest::{
     AssetContribution, ConnectorContribution, ContributionKind, ContributionReference,
-    CredentialKind, CredentialSlot, DeclarativeExtensionContribution,
+    CredentialKind, CredentialSlot, DeclarativeExtensionContribution, DirectoryAccess,
     EditorExtensionActivationEvent, EditorExtensionCapability, EditorExtensionContribution,
     EditorExtensionRuntimeApiVersion, InvalidContributionReference, InvalidManifestLocalId,
     InvalidNetworkHost, InvalidVersionRequirement, ManifestLocalId, McpServerContribution,
     NetworkHost, Permission, PluginCompatibility, PluginContributions, PluginManifest,
-    SkillContribution, WorkspaceAccess, ZetaVersionRequirement,
+    SkillContribution, ZetaVersionRequirement,
 };
 pub use package::{
     InstalledPluginPackage, LocalPluginCatalog, LocalPluginPackage, PackageFileStats,

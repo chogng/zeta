@@ -25,9 +25,10 @@ use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
 use crate::components::chat_input_area::ChatInputAreaPointerTarget;
-use crate::features::additional_directories;
 use crate::features::config;
 use crate::features::config::ConfigResource;
+use crate::features::dirs;
+use crate::features::file_search::FileSearchManager;
 use crate::features::interactions;
 use crate::features::keymap::KeymapResource;
 use crate::features::keymap::KeymapResourcePoll;
@@ -42,7 +43,6 @@ use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadUpdateDisposition;
 use crate::features::thread::read_older_thread_history;
 use crate::features::thread::read_thread_history;
-use crate::features::workspace_files::FileSearchManager;
 use crate::host;
 use crate::terminal;
 use crate::ui;
@@ -62,10 +62,7 @@ pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<
     let shutdown = session.shutdown();
     match (result, shutdown) {
         (Err(error), _) => Err(error),
-        (
-            Ok(exit @ (TuiExit::ConnectionLost { .. } | TuiExit::WorkspaceReconnectRequested(_))),
-            _,
-        ) => Ok(exit),
+        (Ok(exit @ TuiExit::ConnectionLost { .. }), _) => Ok(exit),
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
     }
@@ -76,8 +73,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let events = session.take_events()?;
     let TuiOptions {
         thread_title,
-        display_workspace_root,
-        host_workspace_root,
+        display_dir_root,
+        host_dir_root,
         host_file_search_root,
         keybindings_path,
         status_line_path,
@@ -120,11 +117,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut terminal = terminal::TerminalSession::open()?;
     crate::ui::configure(terminal.background_color());
     let mut file_search = host_file_search_root.map(FileSearchManager::new);
-    let mut app = App::for_workspace_with_slash_commands(
-        &display_workspace_root,
-        slash_registry.catalog.clone(),
-    );
-    app.set_next_approval_mode(conversation.next_approval_mode());
+    let mut app =
+        App::for_dir_with_slash_commands(&display_dir_root, slash_registry.catalog.clone());
     let now = Instant::now();
     let mut keymap_resource = keybindings_path.map(|path| KeymapResource::new(path, now));
     let mut status_line_resource = status_line_path.map(StatusLineResource::new);
@@ -301,11 +295,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             let mut request_client = client.clone();
                             let next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
-                            let additional_directory_permissions = config_resource
+                            let dir_permissions = config_resource
                                 .as_ref()
                                 .map(ConfigResource::settings)
                                 .unwrap_or_default()
-                                .additional_directory_permissions();
+                                .dir_permissions();
                             pending_request = spawn_request(
                                 "zeta-tui-product-command",
                                 move || {
@@ -314,7 +308,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             next_conversation,
                                             &mut request_client,
                                             invocation,
-                                            additional_directory_permissions,
+                                            dir_permissions,
                                         )
                                         .and_then(
                                             |output| {
@@ -409,14 +403,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                         Err(error) => app.update(AppEvent::FailureReported(error)),
                     },
-                    AppCommand::EditAdditionalDirectoryPermissions(edit) => {
+                    AppCommand::EditPermissions(edit) => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
                             pending_request = spawn_request(
-                                "zeta-tui-set-additional-directory-permissions",
+                                "zeta-tui-set-directory-permissions",
                                 move || {
                                     RequestCompletion::Presentation(
-                                        config::set_additional_directory_permissions(
+                                        config::set_permissions(
                                             &mut request_client,
                                             edit,
                                         )
@@ -526,7 +520,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             Err("there is no conversation to export".to_owned())
                         } else {
                             host::transcript_export::write(
-                                &host_workspace_root,
+                                &host_dir_root,
                                 requested_path.as_deref(),
                                 &markdown,
                             )
@@ -585,23 +579,23 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::RemoveAdditionalDirectory { root } => {
+                    AppCommand::RemoveDir { path } => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
                             let session_id = conversation.session_id().clone();
-                            let event_root = root.clone();
+                            let event_path = path.clone();
                             pending_request = spawn_request(
-                                "zeta-tui-remove-additional-directory",
+                                "zeta-tui-remove-directory",
                                 move || {
                                     RequestCompletion::Presentation(
-                                        additional_directories::remove(
+                                        dirs::remove(
                                             &mut request_client,
                                             &session_id,
-                                            root,
+                                            path,
                                         )
-                                        .map(|view| AppEvent::AdditionalDirectoryRemoved {
-                                            root: event_root,
-                                            pane_spec: view,
+                                        .map(|pane_spec| AppEvent::DirRemoved {
+                                            path: event_path,
+                                            pane_spec,
                                         })
                                         .map_err(|error| error.to_string()),
                                     )
@@ -656,9 +650,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 move || match next_conversation
                                     .resume_session(&mut request_client, &session_id)
                                 {
-                                    Ok(ResumeOutcome::WorkspaceReconnect(reconnect)) => {
-                                        RequestCompletion::WorkspaceReconnect(reconnect)
-                                    }
                                     Ok(ResumeOutcome::Changed(change)) => {
                                         RequestCompletion::ConversationChanged {
                                             command,
@@ -826,37 +817,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::CycleNextApprovalMode => {
-                        if pending_request.is_none() {
-                            let approval_mode = match conversation.next_approval_mode() {
-                                zeta_protocol::ApprovalMode::AskPermissions => {
-                                    zeta_protocol::ApprovalMode::AutoReview
-                                }
-                                zeta_protocol::ApprovalMode::AutoReview => {
-                                    zeta_protocol::ApprovalMode::BypassPermissions
-                                }
-                                zeta_protocol::ApprovalMode::BypassPermissions => {
-                                    zeta_protocol::ApprovalMode::AskPermissions
-                                }
-                            };
-                            let mut next_conversation = conversation.clone();
-                            let mut request_client = client.clone();
-                            pending_request = spawn_request(
-                                "zeta-tui-set-approval-mode",
-                                move || {
-                                    let result = next_conversation
-                                        .set_next_approval_mode(&mut request_client, approval_mode)
-                                        .map(|()| next_conversation);
-                                    RequestCompletion::ApprovalModeChanged(result)
-                                },
-                                &mut app,
-                            );
-                        }
+                        app.cycle_next_approval_mode();
                     }
                     AppCommand::SubmitTurn { submission } => {
                         draw_terminal(&mut terminal, &app)?;
                         if pending_request.is_none() {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
+                            let approval_mode = app.approval_mode();
                             let history = thread_subscription.history();
                             pending_request = spawn_request(
                                 "zeta-tui-start-turn",
@@ -865,6 +833,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         request_client,
                                         scope,
                                         submission,
+                                        approval_mode,
                                         history,
                                     ))
                                 },
@@ -880,6 +849,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         if pending_request.is_none() {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
+                            let approval_mode = app.approval_mode();
                             let history = thread_subscription.history();
                             pending_request = spawn_request(
                                 "zeta-tui-start-queued-turn",
@@ -889,6 +859,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         request_client,
                                         scope,
                                         submission,
+                                        approval_mode,
                                         history,
                                     ),
                                 },
@@ -1153,11 +1124,7 @@ fn refresh_server_event(
             app.update(AppEvent::GitStatusReceived(status));
             ServerRefresh::default()
         }
-        client::ClientEvent::SessionUpdated(update) => {
-            conversation.apply_session_update(&update);
-            app.set_next_approval_mode(conversation.next_approval_mode());
-            ServerRefresh::default()
-        }
+        client::ClientEvent::SessionChanged(_) => ServerRefresh::default(),
         client::ClientEvent::ThreadUpdated(update) => {
             match thread_subscription.classify_update(&update) {
                 ThreadUpdateDisposition::Ignore => ServerRefresh::default(),

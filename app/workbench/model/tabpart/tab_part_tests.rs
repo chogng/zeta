@@ -15,7 +15,6 @@ fn session(id: &str, title: &str) -> Session {
         title: title.to_owned(),
         status: SessionStatus::Active,
         model: None,
-        workspace: None,
         next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         current_thread_id: None,
         sequence: 1,
@@ -23,23 +22,19 @@ fn session(id: &str, title: &str) -> Session {
     }
 }
 
-fn input(session: &Session, workspace: &str) -> TabInput {
+fn input(session: &Session, dir: &str) -> TabInput {
     TabInput::session(
         session.session_id.clone(),
-        TabInputMetadata::new(&session.title, workspace).with_status(TabStatus::idle("Active")),
+        TabInputMetadata::new(&session.title, dir).with_status(TabStatus::idle("Active")),
     )
 }
 
-fn upsert_session(part: &mut TabPart, session: &Session, workspace: &str) -> TabInputChange {
-    part.upsert_session_input(input(session, workspace))
+fn upsert_session(part: &mut TabPart, session: &Session, dir: &str) -> TabInputChange {
+    part.upsert_session_input(input(session, dir))
 }
 
-fn upsert_catalog_session(
-    part: &mut TabPart,
-    session: &Session,
-    workspace: &str,
-) -> TabInputChange {
-    part.upsert_catalog_session_input(input(session, workspace))
+fn upsert_catalog_session(part: &mut TabPart, session: &Session, dir: &str) -> TabInputChange {
+    part.upsert_catalog_session_input(input(session, dir))
 }
 
 #[test]

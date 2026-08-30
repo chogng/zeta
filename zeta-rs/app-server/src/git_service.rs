@@ -3,6 +3,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
+use zeta_file_access::Authorization;
+use zeta_file_access::Dir;
+use zeta_file_access::Permission;
 use zeta_git::GitBranch;
 use zeta_git::GitChangeFile;
 use zeta_git::GitChangeFileComparison;
@@ -20,9 +23,6 @@ use zeta_git::GitRepository;
 use zeta_git::GitRepositorySnapshot;
 use zeta_git::GitTextDiffLimits;
 use zeta_git::GitTextDiffSnapshot;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceCapability;
-use zeta_workspace::WorkspaceRoot;
 
 const MAX_TEXT_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_COMMIT_FILE_BYTES: usize = 2 * 1024 * 1024;
@@ -55,9 +55,9 @@ enum GitRemoteMutation {
     Push,
 }
 
-/// Workspace-scoped owner of the async Git runtime used by synchronous RPC dispatch.
+/// Directory-scoped owner of the async Git runtime used by synchronous RPC dispatch.
 pub(crate) struct GitService {
-    workspace: TrustedWorkspace,
+    authorization: Authorization,
     projection_root: PathBuf,
     client: GitClient,
     runtime: Mutex<Runtime>,
@@ -65,16 +65,16 @@ pub(crate) struct GitService {
 
 impl GitService {
     pub(crate) fn new(
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
         projection_root: PathBuf,
     ) -> Result<Self, GitServiceError> {
         if !matches!(
-            workspace.capability(),
-            WorkspaceCapability::InspectRepository | WorkspaceCapability::MutateRepository
+            authorization.permission(),
+            Permission::InspectRepository | Permission::MutateRepository
         ) {
-            return Err(GitServiceError::Trust);
+            return Err(GitServiceError::Permission);
         }
-        if !projection_root.starts_with(workspace.root().canonical_path())
+        if !projection_root.starts_with(authorization.dir().canonical_path())
             || !projection_root.is_dir()
         {
             return Err(GitServiceError::Boundary);
@@ -84,7 +84,7 @@ impl GitService {
             .build()
             .map_err(|_| GitServiceError::Runtime)?;
         Ok(Self {
-            workspace,
+            authorization,
             projection_root,
             client: GitClient::system(),
             runtime: Mutex::new(runtime),
@@ -111,12 +111,12 @@ impl GitService {
         })
     }
 
-    pub(crate) fn workspace_root(&self) -> &Path {
+    pub(crate) fn dir_root(&self) -> &Path {
         &self.projection_root
     }
 
-    pub(crate) fn workspace(&self) -> &WorkspaceRoot {
-        self.workspace.root()
+    pub(crate) fn dir(&self) -> &Dir {
+        self.authorization.dir()
     }
 
     pub(crate) fn stage(
@@ -198,14 +198,14 @@ impl GitService {
     pub(crate) fn commit_file(
         &self,
         object_id: &str,
-        workspace_path: &Path,
+        path: &Path,
     ) -> Result<GitCommitFile, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
-            let workspace_prefix = self.repository_prefix(&repository)?;
-            let repository_path = workspace_prefix.join(workspace_path);
+            let dir_prefix = self.repository_prefix(&repository)?;
+            let repository_path = dir_prefix.join(path);
             let (parent_object_id, changes) = self
                 .client
                 .commit_changes(&repository, object_id)
@@ -217,7 +217,7 @@ impl GitService {
                 .ok_or(GitServiceError::CommitChangeNotFound)?;
             let original_path = change
                 .original_path()
-                .filter(|path| path.strip_prefix(&workspace_prefix).is_ok());
+                .filter(|path| path.strip_prefix(&dir_prefix).is_ok());
             self.client
                 .commit_file(
                     &repository,
@@ -234,15 +234,15 @@ impl GitService {
 
     pub(crate) fn change_file(
         &self,
-        workspace_path: &Path,
+        path: &Path,
         comparison: GitChangeFileComparison,
     ) -> Result<GitChangeFile, GitServiceError> {
         self.ensure_readable()?;
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
-            let workspace_prefix = self.repository_prefix(&repository)?;
-            let repository_path = workspace_prefix.join(workspace_path);
+            let dir_prefix = self.repository_prefix(&repository)?;
+            let repository_path = dir_prefix.join(path);
             let snapshot = self
                 .client
                 .snapshot(&repository)
@@ -270,7 +270,7 @@ impl GitService {
                 GitChangeStatus::Renamed | GitChangeStatus::Copied
             ) && change
                 .original_path()
-                .is_some_and(|path| path.strip_prefix(&workspace_prefix).is_err())
+                .is_some_and(|path| path.strip_prefix(&dir_prefix).is_err())
             {
                 return Err(GitServiceError::Boundary);
             }
@@ -290,10 +290,10 @@ impl GitService {
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
-            let workspace_prefix = self.repository_prefix(&repository)?;
+            let dir_prefix = self.repository_prefix(&repository)?;
             let snapshot = self
                 .client
-                .text_diff_snapshot_under(&repository, &workspace_prefix, limits)
+                .text_diff_snapshot_under(&repository, &dir_prefix, limits)
                 .await
                 .map_err(GitServiceError::Git)?;
             Ok((repository, snapshot))
@@ -446,11 +446,11 @@ impl GitService {
         repository: &GitRepository,
         paths: Vec<PathBuf>,
     ) -> Result<GitPathspecSet, GitServiceError> {
-        let workspace_prefix = self.repository_prefix(repository)?;
+        let dir_prefix = self.repository_prefix(repository)?;
         GitPathspecSet::new(
             paths
                 .into_iter()
-                .map(|path| workspace_prefix.join(path))
+                .map(|path| dir_prefix.join(path))
                 .collect(),
         )
         .map_err(GitServiceError::Git)
@@ -465,23 +465,23 @@ impl GitService {
 
     fn ensure_readable(&self) -> Result<(), GitServiceError> {
         if !matches!(
-            self.workspace.capability(),
-            WorkspaceCapability::InspectRepository | WorkspaceCapability::MutateRepository
+            self.authorization.permission(),
+            Permission::InspectRepository | Permission::MutateRepository
         ) {
-            return Err(GitServiceError::Trust);
+            return Err(GitServiceError::Permission);
         }
-        self.workspace
+        self.authorization
             .ensure_active()
-            .map_err(|_| GitServiceError::Trust)
+            .map_err(|_| GitServiceError::Permission)
     }
 
     fn ensure_mutable(&self) -> Result<(), GitServiceError> {
-        if self.workspace.capability() != WorkspaceCapability::MutateRepository {
-            return Err(GitServiceError::Trust);
+        if self.authorization.permission() != Permission::MutateRepository {
+            return Err(GitServiceError::Permission);
         }
-        self.workspace
+        self.authorization
             .ensure_active()
-            .map_err(|_| GitServiceError::Trust)
+            .map_err(|_| GitServiceError::Permission)
     }
 }
 
@@ -492,5 +492,5 @@ pub(crate) enum GitServiceError {
     CommitChangeNotFound,
     Git(GitError),
     Runtime,
-    Trust,
+    Permission,
 }

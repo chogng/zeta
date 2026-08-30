@@ -60,7 +60,7 @@ pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest>
         ContextAction::Location => AppCommandId::PickExecutionLocation,
         ContextAction::WorkingDirectory => AppCommandId::PickWorkingDirectory,
         ContextAction::GitBranch => AppCommandId::PickGitBranch,
-        ContextAction::Diff => AppCommandId::ShowWorkspaceDiff,
+        ContextAction::Diff => AppCommandId::ShowGitDiff,
     };
     Some(command.into())
 }

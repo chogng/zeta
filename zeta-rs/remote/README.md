@@ -9,7 +9,7 @@ store credentials, decide how a runtime is installed, or render a Remote UI.
 
 - `SshHost::parse` accepts only an OpenSSH host alias. User names, passwords, shell syntax, and
   control characters never enter the profile.
-- `RemoteWorkspacePath::parse` accepts one canonical absolute POSIX Workspace root.
+- `RemoteDirPath::parse` accepts one canonical absolute POSIX Directory root.
 - `RemoteRuntime::new` identifies a runtime selected by an installer or an already-compatible
   `zeta code` CLI. It is an executable reference, not a product identity.
 - `RemotePlatform` represents only the currently supported POSIX package targets: Linux GNU/musl
@@ -33,12 +33,12 @@ Remote is therefore a backend of the App Server client, not the product's top-le
 host. This crate owns the target identity passed into that backend; it does not own the App Server
 session, request/event lifecycle, or product connection registry.
 
-`zeta-remote-server` consumes the Workspace root after SSH reaches the target; this crate has no
+`zeta-remote-server` consumes the Directory root after SSH reaches the target; this crate has no
 dependency on either implementation.
 
 ## Failure semantics
 
-Invalid hosts, Workspace paths, and executable references fail before any process is launched as
+Invalid hosts, Directory paths, and executable references fail before any process is launched as
 `RemoteAddressError`. A valid profile does not prove that the host is reachable or that the
 runtime exists; those are connection and installation concerns.
 

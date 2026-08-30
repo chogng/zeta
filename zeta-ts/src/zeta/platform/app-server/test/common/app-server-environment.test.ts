@@ -15,7 +15,7 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		ZETA_ELECTRON_RUN_AS_NODE_PATH: "/opt/Zeta/zeta",
 		ZETA_PROFILE_ROOT: "/state",
 		ZETA_WORKSPACE_ROOT: "/workspace",
-		ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+		ZETA_DIR_GRANT_SOURCE: "userConfig",
 	});
 
 	assert.deepEqual(environment, {
@@ -28,12 +28,12 @@ test("App Server environment keeps safe POSIX session variables and excludes cre
 		ZETA_ELECTRON_RUN_AS_NODE_PATH: "/opt/Zeta/zeta",
 		ZETA_PROFILE_ROOT: "/state",
 		ZETA_WORKSPACE_ROOT: "/workspace",
-		ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+		ZETA_DIR_GRANT_SOURCE: "userConfig",
 	});
 	assert.equal(isAllowedAppServerEnvironmentKey("OPENAI_API_KEY"), false);
 	assert.equal(isAllowedAppServerEnvironmentKey("ZETA_APP_SERVER_DAEMON_PATH"), true);
 	assert.equal(isAllowedAppServerEnvironmentKey("ZETA_ELECTRON_RUN_AS_NODE_PATH"), true);
-	assert.equal(isAllowedAppServerEnvironmentKey("ZETA_WORKSPACE_TRUST_SOURCE"), true);
+	assert.equal(isAllowedAppServerEnvironmentKey("ZETA_DIR_GRANT_SOURCE"), true);
 	assert.equal(isAllowedAppServerEnvironmentKey("ELECTRON_RUN_AS_NODE"), false);
 });
 

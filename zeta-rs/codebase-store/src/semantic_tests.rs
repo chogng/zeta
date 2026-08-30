@@ -9,8 +9,8 @@ use zeta_codebase::Codebase;
 use zeta_codebase::CodebaseLimits;
 use zeta_codebase::IndexedLanguage;
 use zeta_codebase::SourceRevision;
+use zeta_file_access::Dir;
 use zeta_model_provider::EmbeddingVector;
-use zeta_workspace::WorkspaceRoot;
 
 use super::ANN_MIN_CHUNKS;
 use super::ANN_REVISION;
@@ -24,11 +24,11 @@ use zeta_codebase::EmbeddingIndexKey;
 
 #[test]
 fn large_projection_uses_ann_candidates_and_falls_back_when_projection_is_unavailable() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    std::fs::create_dir(workspace.path().join(".git")).expect("git marker");
-    std::fs::write(workspace.path().join("seed.rs"), "fn seed() {}\n").expect("source");
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::create_dir(dir.path().join(".git")).expect("git marker");
+    std::fs::write(dir.path().join("seed.rs"), "fn seed() {}\n").expect("source");
     let index = Codebase::open_memory(
-        WorkspaceRoot::open(workspace.path()).expect("root"),
+        Dir::open_local(dir.path()).expect("root"),
         CodebaseLimits::default(),
     )
     .expect("index");

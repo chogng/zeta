@@ -7,7 +7,7 @@ use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::LocalProductServicesConfig;
 use zeta_app_server::open_local_app_server;
 
-const WORKSPACE_ROOT_ENV: &str = "ZETA_WORKSPACE_ROOT";
+const DIR_ROOT_ENV: &str = "ZETA_WORKSPACE_ROOT";
 const PROFILE_ROOT_ENV: &str = "ZETA_PROFILE_ROOT";
 pub(crate) const PRODUCT_SERVICES_PATH_ENV: &str = "ZETA_REMOTE_SERVER_PRODUCT_SERVICES_PATH";
 
@@ -15,16 +15,16 @@ pub(crate) const PRODUCT_SERVICES_PATH_ENV: &str = "ZETA_REMOTE_SERVER_PRODUCT_S
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RemoteServerOptions {
     profile_root: PathBuf,
-    workspace_root: PathBuf,
+    dir_root: PathBuf,
     product_services_path: Option<PathBuf>,
 }
 
 impl RemoteServerOptions {
-    /// Creates the server options after the host has selected one remote profile and Workspace.
-    pub fn new(profile_root: impl Into<PathBuf>, workspace_root: impl Into<PathBuf>) -> Self {
+    /// Creates the server options after the host has selected one remote profile and Directory.
+    pub fn new(profile_root: impl Into<PathBuf>, dir_root: impl Into<PathBuf>) -> Self {
         Self {
             profile_root: profile_root.into(),
-            workspace_root: workspace_root.into(),
+            dir_root: dir_root.into(),
             product_services_path: None,
         }
     }
@@ -34,9 +34,9 @@ impl RemoteServerOptions {
         &self.profile_root
     }
 
-    /// Returns the remote Workspace authority passed to the App Server.
-    pub fn workspace_root(&self) -> &std::path::Path {
-        &self.workspace_root
+    /// Returns the remote Directory authority passed to the App Server.
+    pub fn dir_root(&self) -> &std::path::Path {
+        &self.dir_root
     }
 
     /// Selects a product-host-owned services manifest without teaching this crate discovery policy.
@@ -50,7 +50,7 @@ impl RemoteServerOptions {
     }
 }
 
-/// Runs a direct stdio server or the durable per-Workspace broker connection command.
+/// Runs a direct stdio server or the durable per-Directory broker connection command.
 pub fn run_from_environment(
     arguments: impl IntoIterator<Item = String>,
 ) -> Result<(), RemoteServerError> {
@@ -97,8 +97,8 @@ pub fn serve_stdio(options: RemoteServerOptions) -> Result<(), RemoteServerError
 }
 
 pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, RemoteServerError> {
-    let mut local_options = LocalAppServerOptions::new(options.profile_root.clone())
-        .with_workspace_root(&options.workspace_root);
+    let mut local_options =
+        LocalAppServerOptions::new(options.profile_root.clone()).with_dir_root(&options.dir_root);
     if let Some(path) = &options.product_services_path {
         let services = LocalProductServicesConfig::load(path, &options.profile_root)
             .map_err(|error| RemoteServerError::new(error.to_string()))?;
@@ -108,16 +108,16 @@ pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, Re
 }
 
 fn options_from_environment() -> Result<RemoteServerOptions, RemoteServerError> {
-    let workspace_root = env::var_os(WORKSPACE_ROOT_ENV)
+    let dir_root = env::var_os(DIR_ROOT_ENV)
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
         .ok_or_else(|| {
-            RemoteServerError::new("ZETA_WORKSPACE_ROOT must be an absolute Remote Workspace path")
+            RemoteServerError::new("ZETA_WORKSPACE_ROOT must be an absolute Remote Directory path")
         })?;
     let profile_root = env::var_os(PROFILE_ROOT_ENV)
         .map(PathBuf::from)
         .unwrap_or_else(default_profile_root);
-    let mut options = RemoteServerOptions::new(profile_root, workspace_root);
+    let mut options = RemoteServerOptions::new(profile_root, dir_root);
     if let Some(path) = env::var_os(PRODUCT_SERVICES_PATH_ENV) {
         options = options.with_product_services_path(path);
     }

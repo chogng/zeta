@@ -36,7 +36,7 @@ InputClassifier::classify
   → NL one-off / Shell allowlist
   → ShellContext::analyze
       zeta-shell-completion::ShellCompletionEngine::analyze
-      executable + builtin + recursive signature + workspace/alias/path descriptions
+      executable + builtin + recursive signature + directory/alias/path descriptions
       strict token threshold
   → EmbeddedClassifier
       Tokenizer::encode_fast
@@ -60,7 +60,7 @@ Shell token 阈值采用 Warp 当前严格方案：所有解析 token 都有 She
 | 证据不足 | 交给 BERT-Tiny | 交给 BERT-Tiny |
 
 当前 App 的 Shell Turn 由 App Server 以 `/bin/sh -lc` 执行，尚未向 engine 提供交互 PTY alias 和动态
-generator 候选；因此静态 command grammar、PATH 和 workspace evidence 已生效，alias API 暂时没有产品数据源。
+generator 候选；因此静态 command grammar、PATH 和 directory evidence 已生效，alias API 暂时没有产品数据源。
 如果后续让 Composer 直接执行到交互 PTY，应由 App adapter 提供带环境 revision 的 alias/动态候选快照；
 不应把 PTY 或命令执行运行时移进 `zeta-input-classifier` 或 `zeta-shell-completion`。
 

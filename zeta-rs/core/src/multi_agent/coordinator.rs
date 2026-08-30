@@ -1,12 +1,12 @@
 use super::AgentTreeLimits;
 use super::budget::validate_spawn_capacity;
-use crate::CommandDisposition;
 use crate::CoreError;
+use crate::CreateAgentThreadRequest;
 use crate::InterruptTurnRequest;
 use crate::SequenceExpectation;
-use crate::SessionCoordinator;
-use crate::SpawnAgentThreadRequest;
 use crate::StartTurnDisposition;
+use crate::StartTurnRequest;
+use crate::ThreadController;
 use crate::ThreadSnapshot;
 use crate::thread_reducer::satisfied_agent_join;
 use serde::Serialize;
@@ -40,7 +40,6 @@ use zeta_protocol::DelegationResult;
 use zeta_protocol::DelegationResultDigest;
 use zeta_protocol::DelegationResultStatus;
 use zeta_protocol::SessionId;
-use zeta_protocol::SessionStatus;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadSequenceRange;
 use zeta_protocol::TurnId;
@@ -51,6 +50,12 @@ const MAX_TASK_BYTES: usize = 256 * 1024;
 const MAX_ROLE_BYTES: usize = 64 * 1024;
 const MAX_RESULT_BYTES: usize = 256 * 1024;
 const MAX_MATERIALIZED_CONTEXT_BYTES: usize = 2 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AgentCommandDisposition {
+    Committed,
+    Replayed,
+}
 
 /// Complete caller intent required to create one child Agent Thread.
 pub struct SpawnAgentRequest {
@@ -71,9 +76,8 @@ pub struct SpawnedAgent {
     pub child_thread_id: ThreadId,
     pub child_turn_id: TurnId,
     pub context_seed: AgentContextSeed,
-    pub session_sequence: u64,
     pub child_sequence: u64,
-    pub disposition: CommandDisposition,
+    pub disposition: AgentCommandDisposition,
 }
 
 /// Terminal child result material to commit and deliver to its parent.
@@ -119,22 +123,19 @@ pub struct JoinedAgents {
 
 /// Coordinates durable Agent spawn and cross-Thread delivery without owning any Thread context.
 pub struct MultiAgentCoordinator {
-    sessions: Arc<SessionCoordinator>,
+    threads: Arc<ThreadController>,
     limits: AgentTreeLimits,
 }
 
 impl MultiAgentCoordinator {
-    pub fn new(sessions: Arc<SessionCoordinator>, limits: AgentTreeLimits) -> Self {
-        Self { sessions, limits }
+    pub fn new(threads: Arc<ThreadController>, limits: AgentTreeLimits) -> Self {
+        Self { threads, limits }
     }
 
     /// Commits a parent request, creates and seeds its child Thread, then accepts the initial Turn.
     pub fn spawn(&self, request: SpawnAgentRequest) -> Result<SpawnedAgent, CoreError> {
         validate_spawn_request(&request)?;
-        let parent = self
-            .sessions
-            .threads()
-            .read_thread(&request.parent_thread_id)?;
+        let parent = self.threads.read_thread(&request.parent_thread_id)?;
         if parent.session_id != request.session_id {
             return Err(CoreError::InvalidInput(
                 "delegation parent belongs to another Session".into(),
@@ -145,18 +146,17 @@ impl MultiAgentCoordinator {
             validate_context_seed_digest(&existing.seed)?;
             return self.finish_spawn(existing.seed.clone());
         }
-        let session = self.sessions.read_session(&request.session_id)?;
-        if session.status != SessionStatus::Active {
-            return Err(CoreError::InvalidInput(
-                "Agent can only be spawned in an active Session".into(),
-            ));
-        }
-        validate_spawn_capacity(&session, &request.parent_thread_id, self.limits)?;
+        let threads = self.threads.list_session_threads(&request.session_id)?;
+        validate_spawn_capacity(
+            &threads,
+            &request.session_id,
+            &request.parent_thread_id,
+            self.limits,
+        )?;
         let materialized_context = self.materialize_context(&request, &parent)?;
         let seed =
             build_context_seed_with_materialized(request, parent.sequence, materialized_context)?;
-        self.sessions
-            .threads()
+        self.threads
             .record_delegation_requested(&seed.parent_thread_id, seed.clone())?;
         self.finish_spawn(seed)
     }
@@ -171,10 +171,7 @@ impl MultiAgentCoordinator {
                 "delegation result summary must be non-empty and bounded".into(),
             ));
         }
-        let parent = self
-            .sessions
-            .threads()
-            .read_thread(&request.parent_thread_id)?;
+        let parent = self.threads.read_thread(&request.parent_thread_id)?;
         let delegation = parent
             .delegations
             .get(&request.delegation_id)
@@ -182,7 +179,7 @@ impl MultiAgentCoordinator {
         let child_thread_id = delegation.child_thread_id.clone().ok_or_else(|| {
             CoreError::InvalidInput("delegation has not started a child Thread".into())
         })?;
-        let child = self.sessions.threads().read_thread(&child_thread_id)?;
+        let child = self.threads.read_thread(&child_thread_id)?;
         if child
             .turns
             .iter()
@@ -220,8 +217,7 @@ impl MultiAgentCoordinator {
                 .expect("static result digest placeholder is valid"),
         };
         result.digest = delegation_result_digest(&result)?;
-        self.sessions
-            .threads()
+        self.threads
             .record_delegation_result_produced(&child_thread_id, result.clone())?;
         self.deliver_result(&request.parent_thread_id, result.clone())?;
         Ok(result)
@@ -235,7 +231,7 @@ impl MultiAgentCoordinator {
         &self,
         child_thread_id: &ThreadId,
     ) -> Result<Option<DelegationResult>, CoreError> {
-        let child = self.sessions.threads().read_thread(child_thread_id)?;
+        let child = self.threads.read_thread(child_thread_id)?;
         let Some(seed) = child.agent_context_seed.as_ref() else {
             return Ok(None);
         };
@@ -300,14 +296,8 @@ impl MultiAgentCoordinator {
                 "Agent message must be non-empty and bounded".into(),
             ));
         }
-        let sender = self
-            .sessions
-            .threads()
-            .read_thread(&request.sender_thread_id)?;
-        let receiver = self
-            .sessions
-            .threads()
-            .read_thread(&request.receiver_thread_id)?;
+        let sender = self.threads.read_thread(&request.sender_thread_id)?;
+        let receiver = self.threads.read_thread(&request.receiver_thread_id)?;
         if sender.session_id != receiver.session_id {
             return Err(CoreError::InvalidInput(
                 "Agent messages cannot cross product Sessions".into(),
@@ -336,12 +326,10 @@ impl MultiAgentCoordinator {
             },
         };
         let sender_sequence = self
-            .sessions
-            .threads()
+            .threads
             .record_agent_message_sent(&message.sender_thread_id, message.clone())?;
         let receiver_sequence = self
-            .sessions
-            .threads()
+            .threads
             .record_agent_message_received(&message.receiver_thread_id, message.clone())?;
         Ok(DeliveredAgentMessage {
             message,
@@ -352,10 +340,7 @@ impl MultiAgentCoordinator {
 
     /// Creates or replays a durable join and evaluates it from parent result facts.
     pub fn join(&self, request: JoinAgentsRequest) -> Result<JoinedAgents, CoreError> {
-        let parent = self
-            .sessions
-            .threads()
-            .read_thread(&request.parent_thread_id)?;
+        let parent = self.threads.read_thread(&request.parent_thread_id)?;
         if let Some(existing) = parent.agent_joins.get(&request.join_id) {
             if existing.policy != request.policy
                 || request
@@ -368,7 +353,7 @@ impl MultiAgentCoordinator {
         } else {
             let delegations =
                 frozen_join_targets(&parent, &request.policy, request.delegations.as_deref())?;
-            self.sessions.threads().record_agent_join_requested(
+            self.threads.record_agent_join_requested(
                 &request.parent_thread_id,
                 AgentJoin {
                     join_id: request.join_id.clone(),
@@ -389,7 +374,7 @@ impl MultiAgentCoordinator {
         parent_thread_id: &ThreadId,
         delegation_id: &DelegationId,
     ) -> Result<DelegationResult, CoreError> {
-        let parent = self.sessions.threads().read_thread(parent_thread_id)?;
+        let parent = self.threads.read_thread(parent_thread_id)?;
         if let Some(result) = parent
             .received_delegation_results
             .get(delegation_id)
@@ -397,15 +382,14 @@ impl MultiAgentCoordinator {
         {
             return Ok(result);
         }
-        self.sessions
-            .threads()
+        self.threads
             .record_delegation_cancellation_requested(parent_thread_id, delegation_id.clone())?;
         self.finish_cancellation(parent_thread_id, delegation_id)
     }
 
     /// Propagates cancellation from one parent Thread to every live descendant delegation.
     pub fn cancel_descendants(&self, parent_thread_id: &ThreadId) -> Result<usize, CoreError> {
-        let parent = self.sessions.threads().read_thread(parent_thread_id)?;
+        let parent = self.threads.read_thread(parent_thread_id)?;
         let pending = parent
             .delegations
             .keys()
@@ -422,27 +406,19 @@ impl MultiAgentCoordinator {
         Ok(pending.len())
     }
 
-    /// Reconciles incomplete spawn and delivery sagas from durable Session and Thread facts.
+    /// Reconciles incomplete spawn and delivery sagas from durable Thread facts.
     pub fn recover_session(&self, session_id: &SessionId) -> Result<Vec<SpawnedAgent>, CoreError> {
-        let session = self.sessions.recover_session(session_id)?;
+        let threads = self.threads.list_session_threads(session_id)?;
         let mut recovered = Vec::new();
-        for membership in &session.threads {
-            let parent = self
-                .sessions
-                .threads()
-                .read_thread(&membership.membership.thread_id)?;
+        for parent in &threads {
             for delegation in parent.delegations.values() {
                 recovered.push(self.finish_spawn(delegation.seed.clone())?);
             }
         }
-        for membership in &session.threads {
-            let sender = self
-                .sessions
-                .threads()
-                .read_thread(&membership.membership.thread_id)?;
+        for stored in &threads {
+            let sender = self.threads.read_thread(&stored.thread_id)?;
             for message in sender.sent_agent_messages.values() {
-                self.sessions
-                    .threads()
+                self.threads
                     .record_agent_message_received(&message.receiver_thread_id, message.clone())?;
             }
             self.reconcile_terminal_delegation(&sender.thread_id)?;
@@ -462,10 +438,7 @@ impl MultiAgentCoordinator {
 
     fn finish_spawn(&self, seed: AgentContextSeed) -> Result<SpawnedAgent, CoreError> {
         validate_context_seed_digest(&seed)?;
-        let parent = self
-            .sessions
-            .threads()
-            .read_thread(&seed.parent_thread_id)?;
+        let parent = self.threads.read_thread(&seed.parent_thread_id)?;
         let parent_turn = parent
             .turns
             .iter()
@@ -479,30 +452,27 @@ impl MultiAgentCoordinator {
                 parent_turn.turn_id
             ))
         })?;
-        let session = self.sessions.read_session(&parent.session_id)?;
-        let spawned = self.sessions.spawn_agent_thread(SpawnAgentThreadRequest {
-            command_id: spawn_command_id(&seed.delegation_id)?,
-            session_id: session.session_id.clone(),
-            expected_sequence: SequenceExpectation::Any,
-            parent_thread_id: seed.parent_thread_id.clone(),
+        let spawned = self.threads.create_agent_thread(CreateAgentThreadRequest {
+            session_id: parent.session_id.clone(),
+            thread_id: agent_thread_id(&seed.delegation_id)?,
             title: seed.task.title.clone(),
             context_seed: seed.clone(),
         })?;
-        self.sessions.threads().record_delegation_started(
+        self.threads.record_delegation_started(
             &seed.parent_thread_id,
             seed.delegation_id.clone(),
             spawned.thread_id.clone(),
         )?;
-        let initial_turn = self.sessions.start_turn(
-            &session.session_id,
+        let initial_turn = self.threads.start_turn(
             &spawned.thread_id,
-            crate::StartSessionTurnRequest {
+            StartTurnRequest {
                 command_id: initial_turn_command_id(&seed.delegation_id)?,
                 expected_sequence: SequenceExpectation::Any,
                 model: seed.role.model.clone(),
                 kind: parent_turn.kind,
                 instructions: parent_instructions,
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
+                approval_mode: parent_turn.approval_mode,
                 tool_mode: parent_tool_mode,
                 tool_profile: parent_tool_profile,
                 activated_skills: seed.capability_scope.skills.clone(),
@@ -516,14 +486,11 @@ impl MultiAgentCoordinator {
             child_thread_id: spawned.thread_id,
             child_turn_id: initial_turn.turn_id,
             context_seed: seed,
-            session_sequence: spawned.sequence,
             child_sequence: initial_turn.sequence,
-            disposition: if spawned.disposition == CommandDisposition::Replayed
-                || initial_turn.disposition == StartTurnDisposition::Replayed
-            {
-                CommandDisposition::Replayed
+            disposition: if initial_turn.disposition == StartTurnDisposition::Replayed {
+                AgentCommandDisposition::Replayed
             } else {
-                CommandDisposition::Committed
+                AgentCommandDisposition::Committed
             },
         })
     }
@@ -533,10 +500,7 @@ impl MultiAgentCoordinator {
         parent_thread_id: &ThreadId,
         result: DelegationResult,
     ) -> Result<(), CoreError> {
-        let child = self
-            .sessions
-            .threads()
-            .read_thread(&result.child_thread_id)?;
+        let child = self.threads.read_thread(&result.child_thread_id)?;
         let message_id = result_message_id(&result.delegation_id)?;
         let message = child
             .sent_agent_messages
@@ -553,14 +517,11 @@ impl MultiAgentCoordinator {
                 },
                 provenance: AgentMessageProvenance::Agent,
             });
-        self.sessions
-            .threads()
+        self.threads
             .record_agent_message_sent(&message.sender_thread_id, message.clone())?;
-        self.sessions
-            .threads()
+        self.threads
             .record_agent_message_received(parent_thread_id, message)?;
-        self.sessions
-            .threads()
+        self.threads
             .record_delegation_result_received(parent_thread_id, result)?;
         self.refresh_waiting_joins(parent_thread_id)?;
         Ok(())
@@ -571,7 +532,7 @@ impl MultiAgentCoordinator {
         parent_thread_id: &ThreadId,
         join_id: &AgentJoinId,
     ) -> Result<JoinedAgents, CoreError> {
-        let parent = self.sessions.threads().read_thread(parent_thread_id)?;
+        let parent = self.threads.read_thread(parent_thread_id)?;
         let join = parent
             .agent_joins
             .get(join_id)
@@ -580,13 +541,13 @@ impl MultiAgentCoordinator {
         if join.status == AgentJoinStatus::Waiting
             && let Some(satisfied_by) = satisfied_agent_join(&parent, &join)
         {
-            self.sessions.threads().record_agent_join_satisfied(
+            self.threads.record_agent_join_satisfied(
                 parent_thread_id,
                 join_id.clone(),
                 satisfied_by,
             )?;
         }
-        let parent = self.sessions.threads().read_thread(parent_thread_id)?;
+        let parent = self.threads.read_thread(parent_thread_id)?;
         let join = parent
             .agent_joins
             .get(join_id)
@@ -606,7 +567,7 @@ impl MultiAgentCoordinator {
     }
 
     fn refresh_waiting_joins(&self, parent_thread_id: &ThreadId) -> Result<(), CoreError> {
-        let parent = self.sessions.threads().read_thread(parent_thread_id)?;
+        let parent = self.threads.read_thread(parent_thread_id)?;
         let waiting = parent
             .agent_joins
             .values()
@@ -624,7 +585,7 @@ impl MultiAgentCoordinator {
         parent_thread_id: &ThreadId,
         delegation_id: &DelegationId,
     ) -> Result<DelegationResult, CoreError> {
-        let parent = self.sessions.threads().read_thread(parent_thread_id)?;
+        let parent = self.threads.read_thread(parent_thread_id)?;
         let delegation = parent
             .delegations
             .get(delegation_id)
@@ -632,7 +593,7 @@ impl MultiAgentCoordinator {
         let child_thread_id = delegation.child_thread_id.clone().ok_or_else(|| {
             CoreError::InvalidInput("cannot cancel a delegation before child creation".into())
         })?;
-        let child = self.sessions.threads().read_thread(&child_thread_id)?;
+        let child = self.threads.read_thread(&child_thread_id)?;
         if let Some(result) = child
             .produced_delegation_results
             .get(delegation_id)
@@ -641,14 +602,14 @@ impl MultiAgentCoordinator {
             self.deliver_result(parent_thread_id, result.clone())?;
             return Ok(result);
         }
-        self.sessions.threads().record_agent_cancellation_received(
+        self.threads.record_agent_cancellation_received(
             &child_thread_id,
             delegation_id.clone(),
             parent_thread_id.clone(),
         )?;
         self.cancel_descendants(&child_thread_id)?;
         loop {
-            let child = self.sessions.threads().read_thread(&child_thread_id)?;
+            let child = self.threads.read_thread(&child_thread_id)?;
             let interruptible = child
                 .turns
                 .iter()
@@ -659,7 +620,7 @@ impl MultiAgentCoordinator {
                 break;
             }
             for turn_id in interruptible {
-                self.sessions.threads().interrupt_turn(
+                self.threads.interrupt_turn(
                     &child_thread_id,
                     InterruptTurnRequest {
                         command_id: cancellation_command_id(delegation_id, &turn_id)?,
@@ -718,7 +679,7 @@ impl MultiAgentCoordinator {
         source: &AgentContextSource,
     ) -> Result<AgentMaterializedContext, CoreError> {
         let (source_thread_id, source_sequence) = source_identity(source);
-        let snapshot = self.sessions.threads().read_thread(source_thread_id)?;
+        let snapshot = self.threads.read_thread(source_thread_id)?;
         if &snapshot.session_id != session_id {
             return Err(CoreError::InvalidInput(
                 "Selected Agent context cannot cross product Sessions".into(),
@@ -1178,8 +1139,8 @@ pub(crate) fn validate_delegation_result_digest(
     Ok(())
 }
 
-fn spawn_command_id(delegation_id: &DelegationId) -> Result<CommandId, CoreError> {
-    CommandId::new(format!("agent-spawn:{delegation_id}"))
+fn agent_thread_id(delegation_id: &DelegationId) -> Result<ThreadId, CoreError> {
+    ThreadId::new(format!("agent-thread:{delegation_id}"))
         .map_err(|error| CoreError::InvalidInput(error.to_string()))
 }
 

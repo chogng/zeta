@@ -44,7 +44,7 @@ fn initialize_response_with_protocol(server_schema_hash: &str, protocol_major: u
                 "attachments": false,
                 "fileSystem": false,
                 "git": false,
-                "workspaceSearch": false,
+                "contentSearch": false,
                 "codebase": false,
                 "cloudCodebase": false,
                 "terminal": false,

@@ -362,14 +362,14 @@ impl FileEditorHost {
         true
     }
 
-    pub fn request_workspace_replace(&self) -> FileEditorCloseRequest {
+    pub fn request_dir_change(&self) -> FileEditorCloseRequest {
         if self.tabs.iter().any(FileEditorTab::is_dirty) {
             return FileEditorCloseRequest::NeedsConfirmation;
         }
         FileEditorCloseRequest::CanClose
     }
 
-    pub fn replace_workspace(&mut self) {
+    pub fn reset_for_dir_change(&mut self) {
         self.tabs.clear();
         self.active = None;
     }

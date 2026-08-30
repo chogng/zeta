@@ -3,7 +3,7 @@ use std::fs::OpenOptions;
 
 use serde_json::json;
 use tempfile::TempDir;
-use zeta_remote::RemoteWorkspacePath;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 
@@ -155,8 +155,8 @@ fn invalid_unknown_or_duplicate_records_reject_the_complete_document() {
         serde_json::to_vec(&json!({
             "formatVersion": 1,
             "connections": [
-                {"name": "BUILD", "host": "one", "workspace": "/srv/one"},
-                {"name": "build", "host": "two", "workspace": "/srv/two"}
+                {"name": "BUILD", "host": "one", "dir": "/srv/one"},
+                {"name": "build", "host": "two", "dir": "/srv/two"}
             ]
         }))
         .unwrap(),
@@ -224,12 +224,12 @@ fn name(value: &str) -> RemoteConnectionName {
     RemoteConnectionName::parse(value).unwrap()
 }
 
-fn entry(name_value: &str, host: &str, workspace: &str) -> RemoteConnectionEntry {
+fn entry(name_value: &str, host: &str, dir: &str) -> RemoteConnectionEntry {
     RemoteConnectionEntry::new(
         name(name_value),
         SshTarget::new(
             SshHost::parse(host).unwrap(),
-            RemoteWorkspacePath::parse(workspace).unwrap(),
+            RemoteDirPath::parse(dir).unwrap(),
         ),
     )
 }

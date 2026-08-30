@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use zeta_app_server_client::local_profile_root;
-use zeta_remote::RemoteWorkspacePath;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionCatalog;
@@ -22,7 +22,7 @@ use runtime::RemoteConnectRuntimeSelection;
 
 const CONNECT_USAGE: &str = concat!(
     "usage: zeta remote connect (--name <saved-name> | --host <ssh-host> ",
-    "--workspace <absolute-remote-path>) [--runtime <remote-runtime>] ",
+    "--dir <absolute-remote-path>) [--runtime <remote-runtime>] ",
     "[--ssh <openssh-path>] ",
     "[--runtime-catalog <local-catalog> --runtime-catalog-sha256 <digest> | ",
     "--runtime-catalog-url <https-catalog.json> --runtime-catalog-sha256 <digest> ",
@@ -52,7 +52,7 @@ pub(super) enum RemoteConnectMode {
 pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectOptions, String> {
     let mut name = None;
     let mut host = None;
-    let mut workspace = None;
+    let mut dir = None;
     let mut runtime = None;
     let mut ssh_executable = None;
     let mut runtime_catalog = None;
@@ -83,9 +83,9 @@ pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectOptions, String
                 SshHost::parse(value).map_err(string_error)?,
                 option,
             )?,
-            "--workspace" => assign_once(
-                &mut workspace,
-                RemoteWorkspacePath::parse(value).map_err(string_error)?,
+            "--dir" => assign_once(
+                &mut dir,
+                RemoteDirPath::parse(value).map_err(string_error)?,
                 option,
             )?,
             "--runtime" => assign_once(
@@ -109,19 +109,17 @@ pub(super) fn parse(arguments: &[String]) -> Result<RemoteConnectOptions, String
             }
         }
     }
-    let target = match (name, host, workspace) {
+    let target = match (name, host, dir) {
         (Some(name), None, None) => RemoteConnectTarget::Named(name),
-        (None, Some(host), Some(workspace)) => {
-            RemoteConnectTarget::Direct(SshTarget::new(host, workspace))
-        }
+        (None, Some(host), Some(dir)) => RemoteConnectTarget::Direct(SshTarget::new(host, dir)),
         (Some(_), _, _) => {
             return Err(format!(
-                "--name cannot be combined with --host or --workspace\n\n{CONNECT_USAGE}"
+                "--name cannot be combined with --host or --dir\n\n{CONNECT_USAGE}"
             ));
         }
         (None, _, _) => {
             return Err(format!(
-                "select --name or both --host and --workspace\n\n{CONNECT_USAGE}"
+                "select --name or both --host and --dir\n\n{CONNECT_USAGE}"
             ));
         }
     };
@@ -215,7 +213,7 @@ fn print_profile(record: &RemoteConnectionProfileRecord) -> Result<(), String> {
 #[serde(rename_all = "camelCase")]
 struct RemoteConnectOutput {
     host: String,
-    workspace: String,
+    dir: String,
     active_runtime: String,
 }
 
@@ -223,7 +221,7 @@ impl From<&RemoteConnectionProfileRecord> for RemoteConnectOutput {
     fn from(record: &RemoteConnectionProfileRecord) -> Self {
         Self {
             host: record.target().host().as_str().into(),
-            workspace: record.target().workspace().as_str().into(),
+            dir: record.target().dir().as_str().into(),
             active_runtime: record.active_runtime().executable().into(),
         }
     }

@@ -36,7 +36,7 @@ impl ProductApp {
         };
         for binding in bindings {
             if let Some(terminal_key) = binding.terminal_key() {
-                let _ = self.terminal_workspace.remove_key(terminal_key);
+                let _ = self.terminal_runtime.remove_key(terminal_key);
             }
         }
         let active_terminal_view = self
@@ -58,7 +58,7 @@ impl ProductApp {
                 }
                 Some(TabInputKey::Settings) => self.activate_settings_tab(),
                 None => {
-                    self.workspace_surface.show_agent();
+                    self.main_surface.show_agent();
                     self.pending_focus = Some(zeta_session::interaction::COMPOSER);
                 }
             }
@@ -69,12 +69,12 @@ impl ProductApp {
 
     pub(super) fn ensure_terminal_for_session(&mut self, session_id: &SessionId) -> bool {
         match self
-            .terminal_workspace
+            .terminal_runtime
             .ensure_for_session(session_id, self.terminal_size())
         {
             Ok(()) => {
                 let tab_key = TabInputKey::session(session_id.clone());
-                if let Some(terminal_key) = self.terminal_workspace.key_for_session(session_id) {
+                if let Some(terminal_key) = self.terminal_runtime.key_for_session(session_id) {
                     let input = PaneInput::terminal(session_id.clone());
                     let Some((_, binding)) = self.workbench.ensure_root_binding_with(
                         tab_key,
@@ -106,7 +106,7 @@ impl ProductApp {
         else {
             return false;
         };
-        let Some(terminal_key) = self.terminal_workspace.key_for_session(session_id) else {
+        let Some(terminal_key) = self.terminal_runtime.key_for_session(session_id) else {
             return false;
         };
         let Some(activation) = self.workbench.open_or_activate_input_with(
@@ -149,15 +149,15 @@ impl ProductApp {
         let Some(terminal_key) = terminal_key else {
             return true;
         };
-        self.terminal_workspace.activate_key(terminal_key)
-            || self.terminal_workspace.active_key() == Some(terminal_key)
+        self.terminal_runtime.activate_key(terminal_key)
+            || self.terminal_runtime.active_key() == Some(terminal_key)
     }
 
     pub(super) fn active_pane_terminal_key(&self) -> Option<TerminalSessionKey> {
         self.workbench
             .active_mount()
             .and_then(|mount| mount.binding().terminal_key())
-            .or_else(|| self.terminal_workspace.active_key())
+            .or_else(|| self.terminal_runtime.active_key())
     }
 
     pub(super) fn update_terminal_status(
@@ -165,7 +165,7 @@ impl ProductApp {
         key: TerminalSessionKey,
         status: crate::TabStatus,
     ) {
-        let Some(session_id) = self.terminal_workspace.session_id_for_key(key) else {
+        let Some(session_id) = self.terminal_runtime.session_id_for_key(key) else {
             return;
         };
         self.workbench.update_session_status(&session_id, status);
@@ -173,12 +173,12 @@ impl ProductApp {
 
     pub(super) fn active_terminal(&self) -> Option<&TerminalSession> {
         self.active_pane_terminal_key()
-            .and_then(|key| self.terminal_workspace.terminal(key))
+            .and_then(|key| self.terminal_runtime.terminal(key))
     }
 
     pub(super) fn active_terminal_mut(&mut self) -> Option<&mut TerminalSession> {
         let key = self.active_pane_terminal_key()?;
-        self.terminal_workspace.terminal_mut(key)
+        self.terminal_runtime.terminal_mut(key)
     }
 
     pub(super) fn active_session_tab_key(&self) -> Option<TabInputKey> {
@@ -191,7 +191,7 @@ impl ProductApp {
     }
 
     pub(super) fn split_active_pane(&mut self, direction: PaneSplitDirection) {
-        if !self.workspace_surface.is_terminal() {
+        if !self.main_surface.is_terminal() {
             return;
         }
         let Some(tab_key) = self.active_session_tab_key() else {
@@ -204,13 +204,13 @@ impl ProductApp {
             return;
         }
         let terminal_size = self.terminal_size();
-        let (workbench, terminal_workspace) = (&mut self.workbench, &mut self.terminal_workspace);
+        let (workbench, terminal_runtime) = (&mut self.workbench, &mut self.terminal_runtime);
         let key = match workbench.try_split_active_with(
             PaneInput::terminal(session_id.clone()),
             direction,
             || {
-                let terminal_key = terminal_workspace.spawn_pane(terminal_size)?;
-                terminal_workspace.bind_key_to_session(terminal_key, session_id);
+                let terminal_key = terminal_runtime.spawn_pane(terminal_size)?;
+                terminal_runtime.bind_key_to_session(terminal_key, session_id);
                 Ok::<_, anyhow::Error>(PaneBinding::terminal(terminal_key))
             },
         ) {
@@ -226,7 +226,7 @@ impl ProductApp {
     }
 
     pub(super) fn close_active_pane(&mut self) {
-        if !self.workspace_surface.is_terminal() {
+        if !self.main_surface.is_terminal() {
             return;
         }
         let Some(tab_key) = self.active_session_tab_key() else {
@@ -242,7 +242,7 @@ impl ProductApp {
         let replacement_pane = closed.active_pane();
         for binding in closed.into_bindings() {
             if let Some(key) = binding.terminal_key() {
-                let _ = self.terminal_workspace.remove_key(key);
+                let _ = self.terminal_runtime.remove_key(key);
             }
         }
         let _ = self.activate_pane_context(tab_key, replacement_pane);
@@ -258,7 +258,7 @@ impl ProductApp {
     }
 
     pub(super) fn focus_adjacent_pane(&mut self, next: bool) {
-        if !self.workspace_surface.is_terminal() {
+        if !self.main_surface.is_terminal() {
             return;
         }
         let Some(tab_key) = self.active_session_tab_key() else {
@@ -284,7 +284,7 @@ impl ProductApp {
         SplitViewOrientation,
         SplitViewResizeSnapshot,
     )> {
-        if !self.workspace_surface.is_terminal() {
+        if !self.main_surface.is_terminal() {
             return None;
         }
         let tab_key = self.active_session_tab_key()?;
@@ -379,7 +379,7 @@ impl ProductApp {
         self.settings.reopen();
         let _ = self.workbench.activate_settings();
         let _ = self.git_branch_context_menu.dismiss();
-        let _ = self.workspace_path_picker.dismiss();
+        let _ = self.path_picker.dismiss();
         let _ = self.remote_connection_picker.dismiss();
         if !remote_selected || !remote_is_mounted {
             self.dismiss_remote_connection_manager();
@@ -396,7 +396,7 @@ impl ProductApp {
 
     /// Returns to the last selected session without fabricating a session for Settings.
     pub(super) fn activate_session_workbench_tab(&mut self) {
-        let was_terminal = self.workspace_surface.is_terminal();
+        let was_terminal = self.main_surface.is_terminal();
         let _ = self.workbench.activate_last_session();
         if let Some(session_id) = self
             .workbench
@@ -411,7 +411,7 @@ impl ProductApp {
             }
         }
         self.settings.close();
-        self.pending_focus = Some(if self.workspace_surface.is_editor() {
+        self.pending_focus = Some(if self.main_surface.is_editor() {
             zeta_editor_host::FILE_EDITOR_DOCUMENT
         } else {
             zeta_session::interaction::COMPOSER

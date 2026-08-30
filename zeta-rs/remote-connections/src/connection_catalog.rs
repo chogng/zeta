@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
-use zeta_remote::RemoteWorkspacePath;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_utils_path::write_atomically;
@@ -82,7 +82,7 @@ pub struct RemoteConnectionEntry {
 }
 
 impl RemoteConnectionEntry {
-    /// Associates a user-facing connection name with one validated host and Workspace.
+    /// Associates a user-facing connection name with one validated host and Directory.
     pub fn new(name: RemoteConnectionName, target: SshTarget) -> Self {
         Self { name, target }
     }
@@ -92,7 +92,7 @@ impl RemoteConnectionEntry {
         &self.name
     }
 
-    /// Returns the OpenSSH host alias and authoritative Remote Workspace.
+    /// Returns the OpenSSH host alias and authoritative Remote Directory.
     pub const fn target(&self) -> &SshTarget {
         &self.target
     }
@@ -315,12 +315,12 @@ impl RemoteConnectionCatalog {
                     "Remote connection catalog has an invalid host: {error}"
                 ))
             })?;
-            let workspace = RemoteWorkspacePath::parse(value.workspace).map_err(|error| {
+            let dir = RemoteDirPath::parse(value.dir).map_err(|error| {
                 RemoteConnectionCatalogError::invalid(format!(
-                    "Remote connection catalog has an invalid Workspace: {error}"
+                    "Remote connection catalog has an invalid Directory: {error}"
                 ))
             })?;
-            let entry = RemoteConnectionEntry::new(name, SshTarget::new(host, workspace));
+            let entry = RemoteConnectionEntry::new(name, SshTarget::new(host, dir));
             if entries
                 .iter()
                 .any(|existing: &RemoteConnectionEntry| existing.name == entry.name)
@@ -374,7 +374,7 @@ struct CatalogDocument {
 struct CatalogRecord {
     name: String,
     host: String,
-    workspace: String,
+    dir: String,
 }
 
 impl From<&RemoteConnectionEntry> for CatalogRecord {
@@ -382,7 +382,7 @@ impl From<&RemoteConnectionEntry> for CatalogRecord {
         Self {
             name: entry.name.as_str().into(),
             host: entry.target.host().as_str().into(),
-            workspace: entry.target.workspace().as_str().into(),
+            dir: entry.target.dir().as_str().into(),
         }
     }
 }

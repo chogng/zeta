@@ -26,5 +26,8 @@ Before modifying this repository:
 - 禁止使用 mod.rs, 有 mod.rs 让其退场
 - 思考问题时，避免局部视角看问题，从整体看
 
+## Learnings
+
+* 命名先判断作用域和歧义：公开领域类型与跨模块接口使用准确全称；局部变量、私有函数和命令使用最短且不歧义的词。仅在多个独立单词组合时使用 `_`，不要把已经由上下文表达的限定词重复进名字；例如领域已是目录时用 `dirs`、`add_dir`，不用 `additional_directories`、`add_additional_directory`。
 
 

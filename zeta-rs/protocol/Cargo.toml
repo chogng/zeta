@@ -16,7 +16,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 ts-rs = { workspace = true }
-zeta-workspace = { workspace = true }
 
 [lints]
 workspace = true

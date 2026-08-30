@@ -7,7 +7,6 @@ use zeta_action_policy::ExecutionDecision;
 use zeta_action_policy::GrantId;
 use zeta_core::ActionPolicyService;
 use zeta_core::CreateThreadRequest;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::ModelSelection;
 use zeta_core::ModelService;
@@ -85,10 +84,6 @@ fn tool_call_durably_updates_the_running_turn_plan() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads.clone(),
-    ));
     let thread_id = ThreadId::new("plan-thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
@@ -122,7 +117,7 @@ fn tool_call_durably_updates_the_running_turn_plan() {
     let executor = TurnExecutor::new(
         threads.clone(),
         model,
-        Arc::new(UpdatePlanToolService::new(sessions)),
+        Arc::new(UpdatePlanToolService::new(Arc::clone(&threads))),
         Arc::new(PlanPolicy),
     );
 

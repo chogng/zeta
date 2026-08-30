@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::path::PathBuf;
 
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 const DEFAULT_MAX_FILES: usize = 50_000;
 const DEFAULT_MAX_FILE_BYTES: usize = 4 * 1024 * 1024;
@@ -16,15 +16,15 @@ const DEFAULT_MAX_RESULTS: usize = 100;
 
 /// Stable, path-derived identity for one canonical index root.
 ///
-/// This is intentionally distinct from workspace trust state even though both identities are
+/// This is intentionally distinct from directory capability state even though both identities are
 /// derived from the same canonical path boundary.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct IndexRootId(String);
 
 impl IndexRootId {
     #[doc(hidden)]
-    pub fn from_root(root: &WorkspaceRoot) -> Self {
-        Self(root.trust_id().as_str().to_owned())
+    pub fn from_root(root: &Dir) -> Self {
+        Self(root.id().as_str().to_owned())
     }
 
     pub fn as_str(&self) -> &str {
@@ -168,10 +168,10 @@ pub struct ChunkReference {
     pub span: ChunkSpan,
 }
 
-/// Revision-bound source excerpt projected from a Workspace-owned chunk reference.
+/// Revision-bound source excerpt projected from a Directory-owned chunk reference.
 ///
 /// This transport/context identity omits the internal chunk key, but it must originate from an
-/// exact [`ChunkReference`] selected and verified inside the Workspace authority. Remote services
+/// exact [`ChunkReference`] selected and verified inside the directory authority. Remote services
 /// do not define new excerpt boundaries.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SourceExcerptReference {
@@ -203,7 +203,7 @@ pub struct SearchHit {
     pub score: f64,
 }
 
-/// A search hit reread and verified against the current workspace file revision.
+/// A search hit reread and verified against the current directory file revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MaterializedChunk {
     pub reference: ChunkReference,
@@ -211,7 +211,7 @@ pub struct MaterializedChunk {
     pub content: String,
 }
 
-/// A source excerpt reread and verified against the current workspace file revision.
+/// A source excerpt reread and verified against the current directory file revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MaterializedExcerpt {
     pub reference: SourceExcerptReference,
@@ -251,7 +251,7 @@ pub struct MaterializedSource {
     pub content: String,
 }
 
-/// Latest immutable editor snapshot submitted to the Workspace-owned in-memory overlay.
+/// Latest immutable editor snapshot submitted to the directory-owned in-memory overlay.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodebaseOverlayDocument {
     pub relative_path: PathBuf,
@@ -374,7 +374,7 @@ impl CodebaseQuery {
     }
 }
 
-/// Immutable publication summary for one indexed workspace generation.
+/// Immutable publication summary for one indexed directory generation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodebaseSnapshot {
     pub root_id: IndexRootId,

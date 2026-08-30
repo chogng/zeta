@@ -15,7 +15,7 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
-        commit_message_active_workspace_authorized: false,
+        commit_message_active_dir_authorized: false,
         tool_mode: zeta_protocol::ToolMode::Direct,
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         providers: BTreeMap::new(),

@@ -1,5 +1,5 @@
 use crate::ConfigError;
-use crate::WorkspaceId;
+use crate::DirId;
 use serde::Deserialize;
 use serde::Serialize;
 use zeta_execpolicy::ExecPolicyDefault;
@@ -53,22 +53,19 @@ impl UserExecPolicyConfig {
     }
 }
 
-/// Workspace-authored policy restrictions preserved as untrusted configuration input.
+/// Directory-authored policy restrictions preserved as capability-gated configuration input.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkspaceExecPolicyConfig {
+pub struct DirExecPolicyConfig {
     #[serde(default)]
     pub rules: Vec<ExecPolicyRule>,
 }
 
-impl WorkspaceExecPolicyConfig {
-    pub(crate) fn snapshot_layer(
-        &self,
-        workspace_id: &WorkspaceId,
-    ) -> Result<ExecPolicyLayer, ConfigError> {
+impl DirExecPolicyConfig {
+    pub(crate) fn snapshot_layer(&self, dir_id: &DirId) -> Result<ExecPolicyLayer, ConfigError> {
         let layer = ExecPolicyLayer::new(
-            ExecPolicyLayerId::new(format!("workspace:{}", workspace_id.as_str())),
-            ExecPolicyLayerKind::Workspace,
+            ExecPolicyLayerId::new(format!("dir:{}", dir_id.as_str())),
+            ExecPolicyLayerKind::Directory,
             self.rules.clone(),
         );
         ExecPolicySnapshot::new(ExecPolicyDefault::Continue, vec![layer.clone()])
@@ -77,29 +74,30 @@ impl WorkspaceExecPolicyConfig {
     }
 }
 
-/// Composes trusted host/organization layers with durable User rules and restrictive Workspace
+/// Composes host/organization authority layers with durable User rules and restrictive directory
 /// rules into the immutable snapshot consumed by action policy.
 pub fn compose_exec_policy(
     default: ExecPolicyDefault,
-    mut trusted_layers: Vec<ExecPolicyLayer>,
+    mut authority_layers: Vec<ExecPolicyLayer>,
     user: &UserExecPolicyConfig,
-    workspace: Option<(&WorkspaceId, &WorkspaceExecPolicyConfig)>,
+    dir: Option<(&DirId, &DirExecPolicyConfig)>,
 ) -> Result<ExecPolicySnapshot, ConfigError> {
-    if trusted_layers.iter().any(|layer| {
+    if authority_layers.iter().any(|layer| {
         !matches!(
             layer.kind(),
             ExecPolicyLayerKind::Host | ExecPolicyLayerKind::Organization
         )
     }) {
         return Err(ConfigError(
-            "trusted execution-policy inputs must be Host or Organization layers".into(),
+            "execution-policy authority inputs must be Host or Organization layers".into(),
         ));
     }
-    trusted_layers.push(user.snapshot_layer()?);
-    if let Some((workspace_id, workspace)) = workspace {
-        trusted_layers.push(workspace.snapshot_layer(workspace_id)?);
+    authority_layers.push(user.snapshot_layer()?);
+    if let Some((dir_id, dir)) = dir {
+        authority_layers.push(dir.snapshot_layer(dir_id)?);
     }
-    ExecPolicySnapshot::new(default, trusted_layers).map_err(|error| ConfigError(error.to_string()))
+    ExecPolicySnapshot::new(default, authority_layers)
+        .map_err(|error| ConfigError(error.to_string()))
 }
 
 #[cfg(test)]

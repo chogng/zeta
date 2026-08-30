@@ -7,9 +7,9 @@ pub(crate) struct WelcomeModel {
 }
 
 impl WelcomeModel {
-    pub(crate) fn for_workspace(workspace_root: &Path) -> Self {
+    pub(crate) fn for_dir(dir_root: &Path) -> Self {
         Self {
-            directory: format_directory(workspace_root, dirs::home_dir().as_deref()),
+            directory: format_directory(dir_root, dirs::home_dir().as_deref()),
         }
     }
 

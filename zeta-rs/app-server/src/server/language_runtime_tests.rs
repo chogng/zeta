@@ -21,7 +21,7 @@ fn manually_injected_provider_requires_explicit_user_enablement() {
         configured_provider_definitions(
             &providers,
             &LanguageServersConfig::default(),
-            fixture.workspace.path(),
+            fixture.dir.path(),
         )
         .unwrap()
         .is_empty()
@@ -29,8 +29,7 @@ fn manually_injected_provider_requires_explicit_user_enablement() {
 
     let configuration = configuration(LanguageServerModeConfig::Automatic, None);
     let definitions =
-        configured_provider_definitions(&providers, &configuration, fixture.workspace.path())
-            .unwrap();
+        configured_provider_definitions(&providers, &configuration, fixture.dir.path()).unwrap();
     assert_eq!(definitions.len(), 1);
     assert_eq!(definitions[0].name().as_str(), CSS_LANGUAGE_SERVER_ID);
 }
@@ -43,7 +42,7 @@ fn configured_provider_definitions_preserve_explicit_executable_override_semanti
     let definitions = configured_provider_definitions(
         &fixture.providers(),
         &configuration(LanguageServerModeConfig::Enabled, Some(executable.clone())),
-        fixture.workspace.path(),
+        fixture.dir.path(),
     )
     .unwrap();
     let (_, command, _) = definitions.into_iter().next().unwrap().into_launch_parts();
@@ -70,21 +69,17 @@ fn configuration(
 
 struct ProviderFixture {
     root: TempDir,
-    workspace: TempDir,
+    dir: TempDir,
     node: std::path::PathBuf,
 }
 
 impl ProviderFixture {
     fn new() -> Self {
         let root = TempDir::new().unwrap();
-        let workspace = TempDir::new().unwrap();
+        let dir = TempDir::new().unwrap();
         let node = root.path().join("node");
         write_executable(&node);
-        Self {
-            root,
-            workspace,
-            node,
-        }
+        Self { root, dir, node }
     }
 
     fn providers(&self) -> LspServerProviders {

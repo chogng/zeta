@@ -6,18 +6,18 @@ use crate::{
     HookEnablement, HookId, LanguageServerConfig, LanguageServerId, McpServerConfig,
     McpServerEnablement, McpServerId, ModelRef, PluginId, PluginRequest, PluginRequestEnablement,
     SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement, SkillSourceId,
-    WorkspaceTrustSetting,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use zeta_execpolicy::ExecPolicyRule;
 use zeta_execpolicy::ExecPolicyRuleId;
+use zeta_file_access::DirId;
+use zeta_file_access::Permissions;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::CommandId;
 use zeta_protocol::Patch;
 use zeta_protocol::ProviderId;
 use zeta_protocol::ToolMode;
-use zeta_workspace::WorkspaceTrustId;
 
 /// A three-state update for user-facing preferences.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -106,20 +106,20 @@ pub enum UserConfigCommand {
         config: ToolSearchConfig,
     },
     AuthorizeCommitMessageEgress {
-        workspace: WorkspaceTrustId,
+        dir: DirId,
     },
     RevokeCommitMessageEgress {
-        workspace: WorkspaceTrustId,
+        dir: DirId,
     },
-    SetWorkspaceTrust {
-        workspace: WorkspaceTrustId,
-        setting: WorkspaceTrustSetting,
-        /// Optional canonical root retained as non-authoritative display metadata.
+    SetDirPermissions {
+        dir: DirId,
+        permissions: Permissions,
+        /// Optional canonical path retained as non-authoritative display metadata.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        display_root: Option<PathBuf>,
+        display_path: Option<PathBuf>,
     },
-    ForgetWorkspaceTrust {
-        workspace: WorkspaceTrustId,
+    ForgetDirPermissions {
+        dir: DirId,
     },
     UpsertExecPolicyRule {
         rule: ExecPolicyRule,

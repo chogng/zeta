@@ -1,4 +1,4 @@
-//! Validated workspace patch application as one model-visible tool.
+//! Validated dir patch application as one model-visible tool.
 //!
 //! The parser accepts a small explicit patch grammar. Every operation is prepared before any file
 //! is changed, and replacement writes are atomic per file.
@@ -15,13 +15,12 @@ use serde_json::json;
 use std::fmt;
 use std::fs;
 use std::future;
-use std::path::PathBuf;
+use zeta_file_access::Dir;
 use zeta_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,
     ToolOutputSchema, ToolPayload, ToolSchemaMode, ToolStartFailure, ToolUncertainOutcome,
 };
-use zeta_workspace::WorkspaceRoot;
 
 const DEFAULT_MAX_PATCH_BYTES: usize = 512 * 1024;
 const DEFAULT_MAX_CHANGED_FILES: usize = 128;
@@ -87,27 +86,27 @@ impl fmt::Display for ApplyPatchError {
 
 impl std::error::Error for ApplyPatchError {}
 
-/// Applies a validated, workspace-contained patch.
+/// Applies a validated, dir-contained patch.
 ///
 /// The accepted grammar has `*** Begin Patch` / `*** End Patch` delimiters and `*** Update File:`,
 /// `*** Add File:`, and `*** Delete File:` operations. Every hunk is matched against the current
 /// file before any write begins. A partial multi-file commit is reported as an uncertain outcome.
 pub struct ApplyPatchTool {
-    environment_id: zeta_tools::ToolEnvironmentId,
-    workspace: WorkspaceRoot,
+    environment_id: zeta_tools::EnvId,
+    dir: Dir,
     limits: ApplyPatchLimits,
     definition: ToolDefinition,
 }
 
 impl ApplyPatchTool {
     pub fn new(
-        environment_id: zeta_tools::ToolEnvironmentId,
-        workspace: WorkspaceRoot,
+        environment_id: zeta_tools::EnvId,
+        dir: Dir,
         limits: ApplyPatchLimits,
     ) -> Result<Self, ApplyPatchError> {
         Ok(Self {
             environment_id,
-            workspace,
+            dir,
             limits,
             definition: apply_patch_definition()?,
         })
@@ -133,15 +132,7 @@ impl ApplyPatchTool {
                 self.limits.max_patch_bytes()
             ));
         }
-        let workspace = match input.workspace_root {
-            Some(root) => match WorkspaceRoot::open(root) {
-                Ok(workspace) => workspace,
-                Err(error) => {
-                    return not_started(format!("workspace root is unavailable: {error}"));
-                }
-            },
-            None => self.workspace.clone(),
-        };
+        let dir = self.dir.clone();
         let document = match PatchDocument::parse(&input.patch) {
             Ok(document) => document,
             Err(error) => return returned_error(format!("invalid patch: {error}")),
@@ -157,7 +148,7 @@ impl ApplyPatchTool {
             return not_started("patch application was cancelled before writes began");
         }
 
-        let prepared = match Self::prepare(&workspace, document) {
+        let prepared = match Self::prepare(&dir, document) {
             Ok(prepared) => prepared,
             Err(error) => return returned_error(format!("patch could not be prepared: {error}")),
         };
@@ -182,26 +173,21 @@ impl ApplyPatchTool {
         }
     }
 
-    fn prepare(
-        workspace: &WorkspaceRoot,
-        document: PatchDocument,
-    ) -> Result<Vec<PreparedChange>, PatchError> {
+    fn prepare(dir: &Dir, document: PatchDocument) -> Result<Vec<PreparedChange>, PatchError> {
         document
             .operations
             .into_iter()
-            .map(|operation| Self::prepare_operation(workspace, operation))
+            .map(|operation| Self::prepare_operation(dir, operation))
             .collect()
     }
 
     fn prepare_operation(
-        workspace: &WorkspaceRoot,
+        dir: &Dir,
         operation: PatchOperation,
     ) -> Result<PreparedChange, PatchError> {
         match operation {
             PatchOperation::Update { path, hunks } => {
-                let target = workspace
-                    .resolve_existing(&path)
-                    .map_err(PatchError::sandbox)?;
+                let target = dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
                 let metadata = fs::metadata(&target).map_err(PatchError::io)?;
                 if !metadata.is_file() {
                     return Err(PatchError::Message(format!(
@@ -220,9 +206,7 @@ impl ApplyPatchTool {
                 })
             }
             PatchOperation::Add { path, lines } => {
-                let target = workspace
-                    .resolve_for_write(&path)
-                    .map_err(PatchError::sandbox)?;
+                let target = dir.resolve_for_write(&path).map_err(PatchError::sandbox)?;
                 if target.exists() {
                     return Err(PatchError::Message(format!(
                         "add target already exists: {}",
@@ -247,9 +231,7 @@ impl ApplyPatchTool {
                 })
             }
             PatchOperation::Delete { path } => {
-                let target = workspace
-                    .resolve_existing(&path)
-                    .map_err(PatchError::sandbox)?;
+                let target = dir.resolve_existing(&path).map_err(PatchError::sandbox)?;
                 if !fs::metadata(&target).map_err(PatchError::io)?.is_file() {
                     return Err(PatchError::Message(format!(
                         "delete target is not a file: {}",
@@ -272,7 +254,7 @@ impl ToolExecutor for ApplyPatchTool {
 
     fn concurrency(&self) -> ToolConcurrency {
         ToolConcurrency::ConflictClass(
-            ToolConflictClass::new("workspace-write").expect("constant conflict class is valid"),
+            ToolConflictClass::new("dir-write").expect("constant conflict class is valid"),
         )
     }
 
@@ -285,14 +267,12 @@ impl ToolExecutor for ApplyPatchTool {
 #[serde(deny_unknown_fields)]
 struct ApplyPatchInput {
     patch: String,
-    #[serde(default)]
-    workspace_root: Option<PathBuf>,
 }
 
 fn apply_patch_definition() -> Result<ToolDefinition, ApplyPatchError> {
     ToolDefinition::function(
         ToolName::new("apply_patch").map_err(definition_error)?,
-        "Apply a validated workspace patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. Prefer this tool for general multi-hunk or multi-file code changes; use edit for one exact local replacement.",
+        "Apply a validated dir patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. Prefer this tool for general multi-hunk or multi-file code changes; use edit for one exact local replacement.",
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {

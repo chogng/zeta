@@ -1,4 +1,4 @@
-//! Incremental fuzzy workspace-file search.
+//! Incremental fuzzy directory-file search.
 
 use ignore::WalkBuilder;
 use nucleo::Config;
@@ -26,7 +26,7 @@ use std::time::Duration;
 const MATCH_TICK: Duration = Duration::from_millis(10);
 const IDLE_WAIT: Duration = Duration::from_millis(100);
 
-/// One fuzzy file-path match relative to the searched workspace root.
+/// One fuzzy file-path match relative to the searched directory root.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathMatch {
     /// Relevance score produced by Nucleo.
@@ -50,7 +50,7 @@ pub struct PathSearchSnapshot {
     pub total_match_count: usize,
     /// Number of ordinary UTF-8 file paths injected by the walker.
     pub scanned_file_count: usize,
-    /// Whether the workspace walker has finished.
+    /// Whether the directory walker has finished.
     pub scan_complete: bool,
     /// Whether both walking and matching are idle for this query revision.
     pub search_complete: bool,

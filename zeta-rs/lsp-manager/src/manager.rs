@@ -27,16 +27,15 @@ use crate::{
     LanguageCodeActions, LanguageCodeLens, LanguageCodeLenses, LanguageColor,
     LanguageColorPresentations, LanguageCommand, LanguageCommandResult, LanguageCompletionDetails,
     LanguageCompletionTrigger, LanguageCompletions, LanguageDiagnostic, LanguageDiagnostics,
-    LanguageDocumentColors, LanguageDocumentLink, LanguageDocumentLinks, LanguageDocumentPosition,
-    LanguageDocumentRevision, LanguageDocumentSymbols, LanguageFoldingRanges,
-    LanguageFormattingEdits, LanguageFormattingOptions, LanguageHierarchyItem,
-    LanguageHierarchyResult, LanguageHover, LanguageInlayHints, LanguageLinkedEditingRanges,
-    LanguageLocationRange, LanguageLocations, LanguagePulledDiagnostics, LanguageRenamePreparation,
-    LanguageRequestId, LanguageRequestKind, LanguageSemanticTokens, LanguageServerCapabilities,
-    LanguageServerDefinition, LanguageSignatureHelp, LanguageSignatureHelpTrigger,
-    LanguageTextRange, LanguageWorkspaceDiagnostics, LanguageWorkspaceEditResult,
-    LanguageWorkspaceSymbols, LspDocumentSnapshot, LspManagerConfiguration, LspManagerEnablement,
-    LspManagerError,
+    LanguageDirectoryDiagnostics, LanguageDocumentColors, LanguageDocumentLink,
+    LanguageDocumentLinks, LanguageDocumentPosition, LanguageDocumentRevision,
+    LanguageDocumentSymbols, LanguageEditResult, LanguageFoldingRanges, LanguageFormattingEdits,
+    LanguageFormattingOptions, LanguageHierarchyItem, LanguageHierarchyResult, LanguageHover,
+    LanguageInlayHints, LanguageLinkedEditingRanges, LanguageLocationRange, LanguageLocations,
+    LanguagePulledDiagnostics, LanguageRenamePreparation, LanguageRequestId, LanguageRequestKind,
+    LanguageSemanticTokens, LanguageServerCapabilities, LanguageServerDefinition,
+    LanguageSignatureHelp, LanguageSignatureHelpTrigger, LanguageSymbols, LanguageTextRange,
+    LspDocumentSnapshot, LspManagerConfiguration, LspManagerEnablement, LspManagerError,
 };
 
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
@@ -137,10 +136,10 @@ pub enum LspManagerRequestResult {
     CommandResult(LanguageCommandResult),
     Locations(LanguageLocations),
     Hierarchy(LanguageHierarchyResult),
-    WorkspaceSymbols(LanguageWorkspaceSymbols),
-    WorkspaceDiagnostics(LanguageWorkspaceDiagnostics),
+    WorkspaceSymbols(LanguageSymbols),
+    DirectoryDiagnostics(LanguageDirectoryDiagnostics),
     RenamePreparation(LanguageRenamePreparation),
-    WorkspaceEdit(LanguageWorkspaceEditResult),
+    WorkspaceEdit(LanguageEditResult),
     CodeActions(LanguageCodeActions),
     FormattingEdits(LanguageFormattingEdits),
     SignatureHelp(LanguageSignatureHelp),
@@ -174,7 +173,7 @@ impl LspManagerRequestResult {
             Self::Locations(result) => result.request_id,
             Self::Hierarchy(result) => result.request_id,
             Self::WorkspaceSymbols(result) => result.request_id,
-            Self::WorkspaceDiagnostics(result) => result.request_id,
+            Self::DirectoryDiagnostics(result) => result.request_id,
             Self::RenamePreparation(result) => result.request_id,
             Self::WorkspaceEdit(result) => result.request_id,
             Self::CodeActions(result) => result.request_id,
@@ -233,10 +232,10 @@ pub enum LanguageServiceEvent {
     CommandResult(LanguageCommandResult),
     Locations(LanguageLocations),
     Hierarchy(LanguageHierarchyResult),
-    WorkspaceSymbols(LanguageWorkspaceSymbols),
-    WorkspaceDiagnostics(LanguageWorkspaceDiagnostics),
+    WorkspaceSymbols(LanguageSymbols),
+    DirectoryDiagnostics(LanguageDirectoryDiagnostics),
     RenamePreparation(LanguageRenamePreparation),
-    WorkspaceEdit(LanguageWorkspaceEditResult),
+    WorkspaceEdit(LanguageEditResult),
     CodeActions(LanguageCodeActions),
     FormattingEdits(LanguageFormattingEdits),
     SignatureHelp(LanguageSignatureHelp),
@@ -310,8 +309,8 @@ impl From<LspManagerEvent> for LanguageServiceEvent {
                 LspManagerRequestResult::Locations(result) => Self::Locations(result),
                 LspManagerRequestResult::Hierarchy(result) => Self::Hierarchy(result),
                 LspManagerRequestResult::WorkspaceSymbols(result) => Self::WorkspaceSymbols(result),
-                LspManagerRequestResult::WorkspaceDiagnostics(result) => {
-                    Self::WorkspaceDiagnostics(result)
+                LspManagerRequestResult::DirectoryDiagnostics(result) => {
+                    Self::DirectoryDiagnostics(result)
                 }
                 LspManagerRequestResult::RenamePreparation(result) => {
                     Self::RenamePreparation(result)
@@ -416,8 +415,8 @@ impl From<LanguageServiceEvent> for LspManagerEvent {
             LanguageServiceEvent::WorkspaceSymbols(result) => {
                 Self::RequestResult(LspManagerRequestResult::WorkspaceSymbols(result))
             }
-            LanguageServiceEvent::WorkspaceDiagnostics(result) => {
-                Self::RequestResult(LspManagerRequestResult::WorkspaceDiagnostics(result))
+            LanguageServiceEvent::DirectoryDiagnostics(result) => {
+                Self::RequestResult(LspManagerRequestResult::DirectoryDiagnostics(result))
             }
             LanguageServiceEvent::RenamePreparation(result) => {
                 Self::RequestResult(LspManagerRequestResult::RenamePreparation(result))
@@ -883,7 +882,7 @@ impl LspManager {
         language_id: impl Into<String>,
     ) -> Result<LanguageRequestId, LspManagerError> {
         let id = self.next_request_id();
-        self.send(SupervisorCommand::WorkspaceDiagnostics {
+        self.send(SupervisorCommand::DirectoryDiagnostics {
             id,
             language_id: language_id.into(),
         })?;
@@ -1233,19 +1232,19 @@ enum SupervisorCommand {
         server: LanguageServerName,
         generation: u64,
         server_epoch: u64,
-        result: Result<LanguageWorkspaceSymbols, String>,
+        result: Result<LanguageSymbols, String>,
     },
-    WorkspaceDiagnostics {
+    DirectoryDiagnostics {
         id: LanguageRequestId,
         language_id: String,
     },
-    WorkspaceDiagnosticsCompleted {
+    DirectoryDiagnosticsCompleted {
         id: LanguageRequestId,
         language_id: String,
         server: LanguageServerName,
         generation: u64,
         server_epoch: u64,
-        result: Result<LanguageWorkspaceDiagnostics, String>,
+        result: Result<LanguageDirectoryDiagnostics, String>,
     },
     LanguageRequestCompleted {
         request_id: LanguageRequestId,
@@ -1418,10 +1417,10 @@ impl Supervisor {
                         result,
                     );
                 }
-                SupervisorCommand::WorkspaceDiagnostics { id, language_id } => {
+                SupervisorCommand::DirectoryDiagnostics { id, language_id } => {
                     self.begin_workspace_diagnostics(id, language_id);
                 }
-                SupervisorCommand::WorkspaceDiagnosticsCompleted {
+                SupervisorCommand::DirectoryDiagnosticsCompleted {
                     id,
                     language_id,
                     server,
@@ -1728,7 +1727,7 @@ impl Supervisor {
         if path.is_absolute() {
             path.to_path_buf()
         } else {
-            self.configuration.workspace_root.join(path)
+            self.configuration.dir_root.join(path)
         }
     }
 
@@ -1854,7 +1853,7 @@ fn validate_definitions(configuration: &LspManagerConfiguration) -> Result<(), L
             }
         }
     }
-    file_uri(&configuration.workspace_root).map(|_| ())
+    file_uri(&configuration.dir_root).map(|_| ())
 }
 
 fn router_snapshot(current: &DocumentState) -> Result<LanguageDocumentSnapshot, LspManagerError> {

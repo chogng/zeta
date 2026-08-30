@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use tempfile::TempDir;
 use zeta_codebase::Codebase;
 use zeta_codebase::CodebaseLimits;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 use super::*;
 
@@ -110,7 +110,7 @@ impl CloudCodebaseProvider for RecordingProvider {
                 .collect(),
         );
         Ok(CloudCodebasePublication {
-            remote_generation: format!("workspace-projection-{}", request.local_generation),
+            remote_generation: format!("dir-projection-{}", request.local_generation),
         })
     }
 
@@ -151,20 +151,16 @@ impl CloudCodebaseProvider for RecordingProvider {
 }
 
 #[test]
-fn workspace_chunks_are_the_only_cloud_publication_unit() {
-    let workspace = workspace();
-    std::fs::create_dir(workspace.path().join("src")).expect("src");
+fn dir_chunks_are_the_only_cloud_publication_unit() {
+    let dir = dir();
+    std::fs::create_dir(dir.path().join("src")).expect("src");
     std::fs::write(
-        workspace.path().join("src/lib.rs"),
+        dir.path().join("src/lib.rs"),
         "pub fn selected_source() -> bool { true }\n",
     )
     .expect("source");
-    std::fs::write(
-        workspace.path().join("README.md"),
-        "outside_selection_marker\n",
-    )
-    .expect("readme");
-    let index = index(&workspace);
+    std::fs::write(dir.path().join("README.md"), "outside_selection_marker\n").expect("readme");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider = Arc::new(RecordingProvider::new());
     let controller = controller(Arc::clone(&index), Arc::clone(&provider));
@@ -208,14 +204,10 @@ fn workspace_chunks_are_the_only_cloud_publication_unit() {
 }
 
 #[test]
-fn cloud_query_rejects_a_chunk_not_published_by_the_workspace() {
-    let workspace = workspace();
-    std::fs::write(
-        workspace.path().join("lib.rs"),
-        "pub fn workspace_owned_chunk() {}\n",
-    )
-    .expect("source");
-    let index = index(&workspace);
+fn cloud_query_rejects_a_chunk_not_published_by_the_dir() {
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn dir_owned_chunk() {}\n").expect("source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider = Arc::new(RecordingProvider::new());
     let controller = controller(Arc::clone(&index), Arc::clone(&provider));
@@ -235,22 +227,22 @@ fn cloud_query_rejects_a_chunk_not_published_by_the_workspace() {
     assert!(matches!(
         controller.query(
             &CloudCodebaseQuery::new(
-                "workspace_owned_chunk",
+                "dir_owned_chunk",
                 NonZeroUsize::new(10).expect("result limit"),
             )
             .expect("query"),
         ),
         Err(CloudCodebaseError::InvalidProviderResult(
-            "candidate is not an exact chunk from the published Workspace generation"
+            "candidate is not an exact chunk from the published directory generation"
         ))
     ));
 }
 
 #[test]
 fn legacy_managed_grant_is_migrated_to_deletion_only_state() {
-    let workspace = workspace();
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn legacy() {}\n").expect("source");
-    let index = index(&workspace);
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn legacy() {}\n").expect("source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider = Arc::new(RecordingProvider::new());
     let state = tempfile::tempdir().expect("state");
@@ -278,9 +270,9 @@ fn legacy_managed_grant_is_migrated_to_deletion_only_state() {
 
 #[test]
 fn legacy_uploaded_grant_preserves_its_ready_generation() {
-    let workspace = workspace();
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn legacy() {}\n").expect("source");
-    let index = index(&workspace);
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn legacy() {}\n").expect("source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider = Arc::new(RecordingProvider::new());
     let state = tempfile::tempdir().expect("state");
@@ -300,9 +292,9 @@ fn legacy_uploaded_grant_preserves_its_ready_generation() {
 
 #[test]
 fn schema_two_grant_uses_the_existing_collection_as_its_cloud_codebase_id() {
-    let workspace = workspace();
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn legacy() {}\n").expect("source");
-    let index = index(&workspace);
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn legacy() {}\n").expect("source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let state = tempfile::tempdir().expect("state");
     let database = state.path().join("cloud.sqlite3");
@@ -323,9 +315,9 @@ fn schema_two_grant_uses_the_existing_collection_as_its_cloud_codebase_id() {
 
 #[test]
 fn cloud_preview_requires_a_published_local_generation() {
-    let workspace = workspace();
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn not_ready() {}\n").expect("source");
-    let index = index(&workspace);
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn not_ready() {}\n").expect("source");
+    let index = index(&dir);
     let provider = Arc::new(RecordingProvider::new());
     let controller = controller(index, provider);
 
@@ -340,9 +332,9 @@ fn cloud_preview_requires_a_published_local_generation() {
 
 #[test]
 fn consent_is_bounded_and_cannot_be_silently_widened() {
-    let workspace = workspace();
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn bounded() {}\n").expect("source");
-    let index = index(&workspace);
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn bounded() {}\n").expect("source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider = Arc::new(RecordingProvider::new());
     let controller = controller(Arc::clone(&index), provider);
@@ -383,9 +375,9 @@ fn consent_is_bounded_and_cannot_be_silently_widened() {
 
 #[test]
 fn grant_is_rejected_without_idempotent_provider_deletion() {
-    let workspace = workspace();
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn protected() {}\n").expect("source");
-    let index = index(&workspace);
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn protected() {}\n").expect("source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider: Arc<dyn CloudCodebaseProvider> = Arc::new(UnsafeDeletionProvider::new());
     let registry = CloudCodebaseProviderRegistry::new([provider]).expect("registry");
@@ -418,13 +410,9 @@ fn grant_is_rejected_without_idempotent_provider_deletion() {
 
 #[test]
 fn failed_deletion_remains_durable_and_can_resume_after_restart() {
-    let workspace = workspace();
-    std::fs::write(
-        workspace.path().join("lib.rs"),
-        "pub fn durable_delete() {}\n",
-    )
-    .expect("source");
-    let index = index(&workspace);
+    let dir = dir();
+    std::fs::write(dir.path().join("lib.rs"), "pub fn durable_delete() {}\n").expect("source");
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider = Arc::new(RecordingProvider::new());
     let registry = registry(Arc::clone(&provider));
@@ -462,10 +450,10 @@ fn failed_deletion_remains_durable_and_can_resume_after_restart() {
 
 #[test]
 fn a_new_local_generation_marks_the_cloud_projection_stale() {
-    let workspace = workspace();
-    let source_path = workspace.path().join("lib.rs");
+    let dir = dir();
+    let source_path = dir.path().join("lib.rs");
     std::fs::write(&source_path, "pub fn before() {}\n").expect("source");
-    let index = index(&workspace);
+    let index = index(&dir);
     index.rebuild().expect("rebuild");
     let provider = Arc::new(RecordingProvider::new());
     let controller = controller(Arc::clone(&index), provider);
@@ -490,16 +478,16 @@ fn a_new_local_generation_marks_the_cloud_projection_stale() {
     );
 }
 
-fn workspace() -> TempDir {
-    let directory = tempfile::tempdir().expect("workspace");
+fn dir() -> TempDir {
+    let directory = tempfile::tempdir().expect("dir");
     std::fs::create_dir(directory.path().join(".git")).expect("git marker");
     directory
 }
 
-fn index(workspace: &TempDir) -> Arc<Codebase> {
+fn index(dir: &TempDir) -> Arc<Codebase> {
     Arc::new(
         Codebase::open_memory(
-            WorkspaceRoot::open(workspace.path()).expect("root"),
+            Dir::open_local(dir.path()).expect("root"),
             CodebaseLimits::default(),
         )
         .expect("index"),

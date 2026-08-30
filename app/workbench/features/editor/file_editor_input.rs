@@ -19,7 +19,7 @@ use zeta_editor_host::{
 
 impl ProductApp {
     pub(super) fn file_editor_keyboard_input(&mut self, event: &KeyEvent) -> bool {
-        if !self.workspace_surface.is_editor() {
+        if !self.main_surface.is_editor() {
             return false;
         }
         let shortcut = self.modifiers.control_key() || self.modifiers.super_key();
@@ -322,7 +322,7 @@ impl ProductApp {
     }
 
     pub(super) fn route_file_editor_pointer_button(&mut self, state: ElementState) -> bool {
-        if !self.workspace_surface.is_editor() {
+        if !self.main_surface.is_editor() {
             return false;
         }
         if state == ElementState::Released {
@@ -360,7 +360,7 @@ impl ProductApp {
     }
 
     pub(super) fn route_file_editor_wheel(&mut self, delta: MouseScrollDelta) -> bool {
-        if !self.workspace_surface.is_editor() {
+        if !self.main_surface.is_editor() {
             return false;
         }
         let Some(point) = self.cursor_position else {
@@ -421,7 +421,7 @@ impl ProductApp {
             self.file_editor_host.select(index);
             self.file_editor_input.dismiss_prompt();
             self.workbench.expand_inspector();
-            self.workspace_surface.show_editor();
+            self.main_surface.show_editor();
             self.file_editor_input.reset_wheel_accumulator();
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
             self.rebuild_presentation_on_next_redraw();
@@ -455,13 +455,13 @@ impl ProductApp {
                 self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
             }
             FileEditorAction::Overwrite => {
-                if self.overwrite_active_workspace_file() {
+                if self.overwrite_active_file() {
                     self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
                 }
             }
             FileEditorAction::SaveAndClose => {
                 self.file_editor_input.dismiss_prompt();
-                if self.try_save_active_workspace_file() {
+                if self.try_save_active_file() {
                     self.close_active_file_editor_tab();
                     return;
                 }
@@ -519,7 +519,7 @@ impl ProductApp {
         if self.file_editor_host.active().is_some() {
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
         } else {
-            self.workspace_surface.show_agent();
+            self.main_surface.show_agent();
             self.pending_focus = Some(zeta_session::interaction::COMPOSER);
         }
         self.rebuild_presentation_on_next_redraw();

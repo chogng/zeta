@@ -64,7 +64,7 @@ impl ProductApp {
         );
         self.workbench.dismiss_tab_context_menu();
         self.git_branch_context_menu.dismiss();
-        self.workspace_path_picker.dismiss();
+        self.path_picker.dismiss();
         self.dismiss_remote_connection_manager();
         self.dismiss_remote_tunnel_manager();
         self.rebuild_and_focus_remote_connection_search();

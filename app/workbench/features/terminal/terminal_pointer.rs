@@ -2,7 +2,7 @@ use anyhow::Result;
 use zeta_terminal::TerminalMousePosition;
 use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
-pub(crate) use zeta_terminal_workspace::{PointerInput, TerminalPointer};
+pub(crate) use zeta_terminal_runtime::{PointerInput, TerminalPointer};
 
 use crate::PaneGroupId as PaneId;
 use crate::ProductApp;
@@ -107,7 +107,7 @@ impl ProductApp {
         &self,
         point: zui::ui::Point,
     ) -> Option<TerminalMousePosition> {
-        if !self.workspace_surface.is_terminal() {
+        if !self.main_surface.is_terminal() {
             return None;
         }
         if let Some((pane, position)) = self.terminal_pane_hit(point) {

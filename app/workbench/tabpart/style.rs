@@ -42,8 +42,8 @@ pub struct WorkbenchUiStyle {
     pub(super) pinned_icon: Icon,
     pub(super) tabs_expanded_icon: Icon,
     pub(super) tabs_collapsed_icon: Icon,
-    pub(super) workspace_visible_icon: Icon,
-    pub(super) workspace_hidden_icon: Icon,
+    pub(super) files_visible_icon: Icon,
+    pub(super) files_hidden_icon: Icon,
 }
 
 impl WorkbenchUiStyle {
@@ -94,8 +94,8 @@ impl WorkbenchUiStyle {
         pinned_icon: Icon,
         tabs_expanded_icon: Icon,
         tabs_collapsed_icon: Icon,
-        workspace_visible_icon: Icon,
-        workspace_hidden_icon: Icon,
+        files_visible_icon: Icon,
+        files_hidden_icon: Icon,
     ) -> Self {
         Self {
             colors,
@@ -106,8 +106,8 @@ impl WorkbenchUiStyle {
             pinned_icon,
             tabs_expanded_icon,
             tabs_collapsed_icon,
-            workspace_visible_icon,
-            workspace_hidden_icon,
+            files_visible_icon,
+            files_hidden_icon,
         }
     }
 }

@@ -349,7 +349,7 @@ fn workspace_edit_projection_preserves_multiple_documents_versions_and_unicode_r
     )
     .expect("workspace edit");
     assert_eq!(result.edit.entries.len(), 2);
-    let LanguageWorkspaceEditEntry::TextDocument(first_edit) = &result.edit.entries[0] else {
+    let LanguageEditEntry::TextDocument(first_edit) = &result.edit.entries[0] else {
         panic!("expected text edit")
     };
     assert_eq!(first_edit.server_version, Some(3));
@@ -386,7 +386,7 @@ fn workspace_edit_projection_preserves_resource_operation_order() {
     )
     .expect("workspace edit");
     assert!(
-        matches!(&result.edit.entries[0], LanguageWorkspaceEditEntry::Create { path, existing: LanguageExistingTargetBehavior::Error } if path == &absolute_test_path("created.ts"))
+        matches!(&result.edit.entries[0], LanguageEditEntry::Create { path, existing: LanguageExistingTargetBehavior::Error } if path == &absolute_test_path("created.ts"))
     );
 }
 

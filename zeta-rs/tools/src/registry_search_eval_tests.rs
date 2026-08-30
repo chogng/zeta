@@ -15,44 +15,44 @@ struct EvalTool {
 const TOOLS: &[EvalTool] = &[
     EvalTool {
         name: "read_file",
-        description: "Read the contents of a workspace file by path without changing it.",
-        catalog: "coding workspace filesystem",
+        description: "Read the contents of a accessible file by path without changing it.",
+        catalog: "coding accessible filesystem",
         schema_hint: "file path and optional line range",
     },
     EvalTool {
         name: "write_file",
-        description: "Create or completely replace a workspace file with new content.",
-        catalog: "coding workspace filesystem",
+        description: "Create or completely replace a accessible file with new content.",
+        catalog: "coding accessible filesystem",
         schema_hint: "file path and complete content",
     },
     EvalTool {
         name: "edit_file",
-        description: "Replace exact existing text in a workspace file.",
-        catalog: "coding workspace filesystem",
+        description: "Replace exact existing text in a accessible file.",
+        catalog: "coding accessible filesystem",
         schema_hint: "file path old text and replacement text",
     },
     EvalTool {
         name: "grep",
         description: "Search file contents for a regular expression or text pattern.",
-        catalog: "coding workspace search",
+        catalog: "coding file search",
         schema_hint: "regex pattern and directory path",
     },
     EvalTool {
         name: "glob",
         description: "Find files by file name or glob path pattern.",
-        catalog: "coding workspace search",
+        catalog: "coding file search",
         schema_hint: "glob pattern and directory path",
     },
     EvalTool {
         name: "shell_command",
-        description: "Run an approved shell command in the workspace.",
+        description: "Run an approved shell command in the selected directory.",
         catalog: "coding terminal process",
         schema_hint: "shell command and working directory",
     },
     EvalTool {
         name: "apply_patch",
         description: "Apply a structured patch to add update or delete files.",
-        catalog: "coding workspace filesystem",
+        catalog: "coding accessible filesystem",
         schema_hint: "unified patch containing file changes",
     },
     EvalTool {
@@ -146,7 +146,7 @@ const LEXICAL_CASES: &[EvalCase] = &[
         relevant: &["read_file"],
     },
     EvalCase {
-        query: "read workspace file by path",
+        query: "read accessible file by path",
         relevant: &["read_file"],
     },
     EvalCase {
@@ -415,7 +415,7 @@ fn scaled_evaluation_snapshot() -> ToolRegistrySnapshot {
             3 => "slack member profile",
             4 => "browser screenshot capture",
             5 => "git branch protection",
-            _ => "workspace telemetry shard",
+            _ => "runtime telemetry shard",
         };
         let name = format!("connector_{index:03}_archive_record");
         let description = format!(

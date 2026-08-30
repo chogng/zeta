@@ -133,7 +133,7 @@ export const SettingsNavigation = [
 				settings: ['editor.suggest.*', 'editor.inlineSuggest.*', 'editor.parameterHints.*', 'editor.inlayHints.*', 'editor.codeLens', 'editor.colorDecorators', 'editor.colorDecoratorsActivatedOn', 'editor.colorDecoratorsLimit', 'editor.defaultColorDecorators'],
 			},
 			{
-				id: 'workspace-search',
+				id: 'content-search',
 				label: 'Workspace search',
 				description: 'Set defaults for searches across workspace files.',
 				settings: ['search.*'],

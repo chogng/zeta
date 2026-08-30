@@ -44,8 +44,7 @@ pub use execution::{
     ToolRuntimeAuthority, ToolStartFailure, ToolUncertainOutcome,
 };
 pub use identity::{
-    ToolBindingId, ToolEnvironmentId, ToolIdentityError, ToolOperationId, ToolRegistryGeneration,
-    ToolRuntimeKey,
+    ToolBindingId, ToolIdentityError, ToolOperationId, ToolRegistryGeneration, ToolRuntimeKey,
 };
 pub use image_detail::{
     ImageDetailCapabilities, ImageDetailDecision, ImageDetailDecisionReason, ImageDetailSelection,
@@ -63,6 +62,7 @@ pub use registry::{
     ToolSearchResult, ToolSearchScore,
 };
 pub use schema::{ToolInputSchema, ToolSchema, ToolSchemaDigest};
+pub use zeta_environment::EnvId;
 pub use zeta_protocol::{ImageDetail, ToolCallId, ToolName};
 pub use zeta_protocol::{
     ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolReplaySafety,

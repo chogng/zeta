@@ -37,11 +37,11 @@ pub const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(2);
 /// The result type used by request/response commands.
 pub type CommandResult<T> = std::result::Result<T, String>;
 
-/// The result prepared before the host reconnects to another workspace.
+/// The result prepared before the host reconnects with another cwd.
 #[derive(Debug)]
-pub struct WorkspaceSwitchResult {
-    /// The workspace root that the next connection should use.
-    pub root: PathBuf,
+pub struct EnvCwdSetResult {
+    /// The cwd that the next connection should use.
+    pub cwd: PathBuf,
 }
 
 /// Events emitted by the Session runtime worker.
@@ -57,7 +57,7 @@ pub enum SessionRuntimeEvent {
         /// Models advertised by the server.
         models: Vec<ModelCatalogEntry>,
     },
-    /// Session list for the current workspace.
+    /// Session list available through the current environment connection.
     SessionCatalog(Vec<Session>),
     /// Authoritative snapshot for the active thread.
     Snapshot {
@@ -89,12 +89,12 @@ pub enum SessionRuntimeCommand {
         /// Completion channel.
         response: SyncSender<CommandResult<()>>,
     },
-    /// Subscribe to a Session and optionally prepare a workspace reconnect.
+    /// Subscribe to a Session.
     SubscribeSession {
         /// Session to subscribe to.
         session_id: SessionId,
         /// Completion channel.
-        response: SyncSender<CommandResult<Option<WorkspaceSwitchResult>>>,
+        response: SyncSender<CommandResult<()>>,
     },
     /// Submit a text turn to the active Thread.
     SubmitAgentMessage(String),
@@ -111,18 +111,18 @@ pub enum SessionRuntimeCommand {
     },
     /// Submit a shell turn to the active Thread.
     SubmitShellCommand(String),
-    /// Change the model for the active Session.
-    SelectModel(ModelRef),
+    /// Change the preferred model used by subsequent Turns.
+    SetPreferredModel(ModelRef),
     /// Change the approval mode frozen by the next Turn in the active Session.
     SelectNextApprovalMode(ApprovalMode),
     /// Refresh the active Session and Thread snapshot.
     Refresh,
-    /// Prepare a connection to another workspace.
-    SwitchWorkspace {
-        /// Workspace root to use for the next connection.
-        root: PathBuf,
+    /// Prepare a connection with another cwd.
+    SetEnvCwd {
+        /// cwd to use for the next connection.
+        cwd: PathBuf,
         /// Completion channel.
-        response: SyncSender<CommandResult<WorkspaceSwitchResult>>,
+        response: SyncSender<CommandResult<EnvCwdSetResult>>,
     },
     /// Ask the worker to stop after draining no further work.
     Shutdown,
@@ -164,7 +164,7 @@ pub fn reconnect_delay_within_window(elapsed: Duration, attempt: usize) -> Optio
 pub fn reject_disconnected_command(command: SessionRuntimeCommand) -> bool {
     match command {
         SessionRuntimeCommand::Shutdown => return true,
-        SessionRuntimeCommand::SwitchWorkspace { response, .. } => {
+        SessionRuntimeCommand::SetEnvCwd { response, .. } => {
             let _ = response.send(disconnected_command_error());
         }
         SessionRuntimeCommand::SubscribeSession { response, .. } => {
@@ -177,7 +177,7 @@ pub fn reject_disconnected_command(command: SessionRuntimeCommand) -> bool {
         | SessionRuntimeCommand::SubmitAgentMessage(_)
         | SessionRuntimeCommand::RewriteAgentMessage { .. }
         | SessionRuntimeCommand::SubmitShellCommand(_)
-        | SessionRuntimeCommand::SelectModel(_)
+        | SessionRuntimeCommand::SetPreferredModel(_)
         | SessionRuntimeCommand::SelectNextApprovalMode(_)
         | SessionRuntimeCommand::Refresh => {}
     }

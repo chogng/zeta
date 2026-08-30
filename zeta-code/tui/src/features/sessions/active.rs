@@ -1,5 +1,3 @@
-use crate::TuiRecoveryState;
-use crate::TuiWorkspaceReconnect;
 use crate::client::new_command_id;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
@@ -12,17 +10,11 @@ use zeta_app_server_protocol::protocol::session::SessionRequestParams;
 use zeta_app_server_protocol::protocol::session::SessionRequestResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadResult;
-use zeta_protocol::ApprovalMode;
-use zeta_protocol::ModelRef;
 use zeta_protocol::Session;
-use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
-use zeta_protocol::SessionThreadStatus;
-use zeta_protocol::SessionUpdate;
-use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadOrigin;
+use zeta_protocol::ThreadStatus;
 use zeta_protocol::TurnId;
 
 /// Mutable product Session/Thread selection used by one TUI conversation.
@@ -51,7 +43,6 @@ pub(crate) enum ConversationTranscript {
 pub(crate) enum ResumeOutcome {
     Listed(String),
     Changed(ConversationChange),
-    WorkspaceReconnect(TuiWorkspaceReconnect),
 }
 
 impl ActiveConversation {
@@ -76,17 +67,18 @@ impl ActiveConversation {
         let session = client
             .read_session(SessionReadParams { session_id })?
             .session;
-        let thread_id = current_conversation_thread(&session)
-            .or_else(|| {
-                session.threads.iter().find(|thread| {
-                    thread.thread_id == preferred_thread_id
-                        && thread.status == SessionThreadStatus::Active
-                        && is_conversation_thread(thread)
-                })
+        let thread_id = session
+            .threads
+            .iter()
+            .find(|thread| {
+                thread.thread_id == preferred_thread_id
+                    && thread.status == ThreadStatus::Active
+                    && is_conversation_thread(thread)
             })
+            .or_else(|| current_conversation_thread(&session))
             .or_else(|| {
                 session.threads.iter().rev().find(|thread| {
-                    thread.status == SessionThreadStatus::Active && is_conversation_thread(thread)
+                    thread.status == ThreadStatus::Active && is_conversation_thread(thread)
                 })
             })
             .map(|thread| thread.thread_id.clone())
@@ -114,10 +106,6 @@ impl ActiveConversation {
         &self.session.session_id
     }
 
-    pub(crate) fn model(&self) -> Option<&ModelRef> {
-        self.session.model.as_ref()
-    }
-
     pub(crate) fn thread_id(&self) -> &ThreadId {
         &self.thread_id
     }
@@ -128,49 +116,6 @@ impl ActiveConversation {
 
     pub(crate) fn set_thread_sequence(&mut self, sequence: u64) {
         self.thread_sequence = sequence;
-    }
-
-    pub(crate) fn next_approval_mode(&self) -> ApprovalMode {
-        self.session.next_approval_mode
-    }
-
-    pub(crate) fn set_next_approval_mode<T>(
-        &mut self,
-        client: &mut AppServerClient<T>,
-        approval_mode: ApprovalMode,
-    ) -> Result<(), ClientError>
-    where
-        T: JsonRpcTransport,
-    {
-        let result = client.request_session(SessionRequestParams {
-            command_id: new_command_id("approval-mode"),
-            session_id: self.session.session_id.clone(),
-            expected_sequence: self.session.sequence,
-            request: SessionRequest::SetNextApprovalMode { approval_mode },
-        })?;
-        self.session = expect_session_result(result)?.session;
-        Ok(())
-    }
-
-    pub(crate) fn apply_session_update(&mut self, update: &SessionUpdateEnvelope) {
-        if update.session_id != self.session.session_id
-            || update.durable_sequence <= self.session.sequence
-        {
-            return;
-        }
-        let SessionUpdate::Committed { event } = &update.update;
-        if let SessionEvent::SessionNextApprovalModeChanged { approval_mode, .. } = event {
-            self.session.next_approval_mode = *approval_mode;
-        }
-        self.session.sequence = update.durable_sequence;
-    }
-
-    pub(crate) fn merge_session_from(&mut self, next: Self) {
-        if next.session.session_id == self.session.session_id
-            && next.session.sequence >= self.session.sequence
-        {
-            self.session = next.session;
-        }
     }
 
     pub(crate) fn archive_session<T>(
@@ -190,7 +135,6 @@ impl ActiveConversation {
             .request_session(SessionRequestParams {
                 command_id: new_command_id("archive"),
                 session_id: archived_id.clone(),
-                expected_sequence: self.session.sequence,
                 request: SessionRequest::Archive,
             })
             .and_then(expect_session_result)?
@@ -244,7 +188,6 @@ impl ActiveConversation {
             .request_session(SessionRequestParams {
                 command_id: new_command_id("fork"),
                 session_id: self.session.session_id.clone(),
-                expected_sequence: self.session.sequence,
                 request: SessionRequest::ForkThread {
                     parent_thread_id: self.thread_id.clone(),
                     title,
@@ -281,7 +224,6 @@ impl ActiveConversation {
             .request_session(SessionRequestParams {
                 command_id: new_command_id("rewind"),
                 session_id: self.session.session_id.clone(),
-                expected_sequence: self.session.sequence,
                 request: SessionRequest::RewindThread {
                     parent_thread_id: self.thread_id.clone(),
                     before_turn_id,
@@ -341,7 +283,7 @@ impl ActiveConversation {
         let thread_id = current_conversation_thread(&session)
             .or_else(|| {
                 session.threads.iter().rev().find(|thread| {
-                    thread.status == SessionThreadStatus::Active && is_conversation_thread(thread)
+                    thread.status == ThreadStatus::Active && is_conversation_thread(thread)
                 })
             })
             .map(|thread| thread.thread_id.clone())
@@ -351,9 +293,6 @@ impl ActiveConversation {
                     session.session_id
                 ))
             })?;
-        if let Some(reconnect) = workspace_reconnect(&self.session, &session, &thread_id)? {
-            return Ok(ResumeOutcome::WorkspaceReconnect(reconnect));
-        }
         let snapshot = client
             .read_session_thread(SessionThreadReadParams {
                 session_id: session.session_id.clone(),
@@ -375,39 +314,14 @@ impl ActiveConversation {
 }
 
 fn current_conversation_thread(session: &Session) -> Option<&zeta_protocol::SessionThread> {
-    let current_thread_id = session.current_thread_id.as_ref()?;
     session.threads.iter().find(|thread| {
-        thread.thread_id == *current_thread_id
-            && thread.status == SessionThreadStatus::Active
-            && is_conversation_thread(thread)
+        thread.thread_id.as_str() == session.session_id.as_str()
+            && thread.status == ThreadStatus::Active
     })
 }
 
 fn is_conversation_thread(thread: &zeta_protocol::SessionThread) -> bool {
-    matches!(
-        thread.origin,
-        ThreadOrigin::Root | ThreadOrigin::Fork { .. } | ThreadOrigin::Rewind { .. }
-    )
-}
-
-fn workspace_reconnect(
-    current: &Session,
-    target: &Session,
-    thread_id: &ThreadId,
-) -> Result<Option<TuiWorkspaceReconnect>, SessionsError> {
-    if target.workspace == current.workspace {
-        return Ok(None);
-    }
-    let workspace = target.workspace.as_ref().ok_or_else(|| {
-        SessionsError(format!(
-            "session {} predates Workspace binding and is read-only",
-            target.session_id
-        ))
-    })?;
-    Ok(Some(TuiWorkspaceReconnect::new(
-        workspace.root.clone(),
-        TuiRecoveryState::new(target.session_id.clone(), thread_id.clone()),
-    )))
+    thread.parent_thread_id.is_none() || thread.forked_from_id.is_some()
 }
 
 fn create_conversation<T>(
@@ -419,27 +333,27 @@ where
 {
     let session = client.create_session(SessionCreateParams {
         command_id: new_command_id("session"),
-        title: title.clone(),
+        title,
     })?;
-    let thread = client
-        .request_session(SessionRequestParams {
-            command_id: new_command_id("thread"),
-            session_id: session.session.session_id.clone(),
-            expected_sequence: session.session.sequence,
-            request: SessionRequest::CreateThread { title },
-        })
-        .and_then(expect_thread_result)?;
+    let thread_id = current_conversation_thread(&session.session)
+        .map(|thread| thread.thread_id.clone())
+        .ok_or_else(|| {
+            ClientError::Protocol(format!(
+                "created session {} has no active root Thread",
+                session.session.session_id
+            ))
+        })?;
     let snapshot = client
         .read_session_thread(SessionThreadReadParams {
-            session_id: thread.session.session_id.clone(),
-            thread_id: thread.thread_id.clone(),
+            session_id: session.session.session_id.clone(),
+            thread_id: thread_id.clone(),
             history: None,
         })?
         .thread;
     Ok((
         ActiveConversation {
-            session: thread.session,
-            thread_id: thread.thread_id,
+            session: session.session,
+            thread_id,
             thread_sequence: snapshot.sequence,
         },
         snapshot,

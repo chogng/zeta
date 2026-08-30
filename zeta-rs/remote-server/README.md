@@ -1,7 +1,7 @@
 # `zeta-remote-server`
 
 `zeta-remote-server` is the headless runtime installed or selected on a target host. It owns a
-per-user, per-Workspace broker that keeps one shared App Server alive across replacement SSH stdio
+per-user, per-Directory broker that keeps one shared App Server alive across replacement SSH stdio
 connections. It does not initiate SSH and has no desktop or TUI presentation responsibilities.
 
 ## Invocation
@@ -9,7 +9,7 @@ connections. It does not initiate SSH and has no desktop or TUI presentation res
 The normal connection command is:
 
 ```bash
-ZETA_WORKSPACE_ROOT=/absolute/remote/workspace \
+ZETA_WORKSPACE_ROOT=/absolute/remote/dir \
 zeta-remote-server remote-server connect
 ```
 
@@ -37,7 +37,7 @@ Remote connection host
   -> AppServer::serve_jsonl for each connection
 ```
 
-The endpoint identity hashes the canonical profile root, canonical Workspace root, canonical
+The endpoint identity hashes the canonical profile root, canonical Directory root, canonical
 runtime executable generation (path plus Unix file identity and timestamps), selected
 product-services manifest identity, and App Server schema. Rebuilding a development executable at
 the same path therefore starts a new broker generation instead of reconnecting to an older daemon;
@@ -49,7 +49,7 @@ exits after a bounded idle period. A reconnectable terminal is detached for 30 s
 connection closes, accepts only its 256-bit bearer token, and rotates that token after a successful
 attach.
 
-`RemoteServerOptions` owns the remote profile and Workspace roots plus an optional manifest path
+`RemoteServerOptions` owns the remote profile and Directory roots plus an optional manifest path
 selected by the executable host. The full `zeta` host supplies its packaged product-services
 manifest; the standalone binary supplies none by default. Manifest discovery, runtime download,
 activation, rollback, SSH retry, and tunnel policy stay outside this crate.

@@ -17,7 +17,7 @@ fn session_id(value: &str) -> zeta_protocol::SessionId {
 fn session_input(id: zeta_protocol::SessionId) -> TabInput {
     TabInput::session(
         id,
-        TabInputMetadata::new("Session", "/workspace").with_status(TabStatus::idle("Active")),
+        TabInputMetadata::new("Session", "/dir").with_status(TabStatus::idle("Active")),
     )
 }
 
@@ -66,12 +66,7 @@ fn switching_group_inputs_preserves_each_binding() {
         .clone();
 
     let opened = host
-        .open_or_activate_input_with(
-            &tab,
-            pane,
-            PaneInput::files("/workspace".into()),
-            || "files",
-        )
+        .open_or_activate_input_with(&tab, pane, PaneInput::files("/dir".into()), || "files")
         .expect("files activation");
     assert_eq!(host.binding(&terminal), Some(&"terminal"));
     assert_eq!(host.binding(opened.current()), Some(&"files"));
@@ -106,7 +101,7 @@ fn closing_a_pane_detaches_all_group_input_bindings() {
     host.open_or_activate_input_with(
         &tab,
         split.pane(),
-        PaneInput::files("/workspace".into()),
+        PaneInput::files("/dir".into()),
         || "split-files",
     )
     .expect("second split input");

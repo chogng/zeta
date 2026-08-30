@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn defaults_bound_one_turn() {
-    let options = McpServerOptions::new("state", "workspace");
+    let options = McpServerOptions::new("state", "dir");
     let limits = options.runtime_limits();
 
     assert_eq!(limits.default_turn_timeout, Duration::from_secs(60));
@@ -13,7 +13,7 @@ fn defaults_bound_one_turn() {
 
 #[test]
 fn invalid_runtime_limits_are_rejected() {
-    let options = McpServerOptions::new("state", "workspace")
+    let options = McpServerOptions::new("state", "dir")
         .with_default_turn_timeout(Duration::from_secs(2))
         .with_maximum_turn_timeout(Duration::from_secs(1));
 

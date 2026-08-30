@@ -40,7 +40,7 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
 		},
 	);
 	await assert.rejects(
-		api.workspaceSearch.start({
+		api.contentSearch.start({
 			query: "needle",
 			patternKind: "literal",
 			caseSensitivity: "smart",
@@ -50,7 +50,7 @@ test("disconnected Web renderer API rejects product operations explicitly", asyn
 		}),
 		(error: unknown) => {
 			assert.ok(error instanceof WebAppServerUnavailableError);
-			assert.equal(error.operation, "workspaceSearch.start");
+			assert.equal(error.operation, "contentSearch.start");
 			return true;
 		},
 	);

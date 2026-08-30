@@ -59,7 +59,7 @@ pub struct TurnToolExecutionStarted {
     pub write_capable: bool,
 }
 
-/// Host boundary for durable Turn workspace checkpoints.
+/// Host boundary for durable Turn change checkpoints.
 ///
 /// `will_execute` is fail-closed: returning an error prevents model and Tool execution. Repeated
 /// calls for a resumed Turn must be idempotent. `did_finish` must retain sealing failures in the

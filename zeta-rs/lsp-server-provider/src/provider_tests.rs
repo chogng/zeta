@@ -27,7 +27,7 @@ fn css_provider_uses_managed_node_and_a_clean_environment() {
     let definition = registry
         .definition(
             CSS_LANGUAGE_SERVER_ID,
-            fixture.workspace.path(),
+            fixture.dir.path(),
             LspServerLaunch::Packaged,
         )
         .unwrap()
@@ -63,7 +63,7 @@ fn css_provider_uses_managed_node_and_a_clean_environment() {
             .environment()
             .contains_key(std::ffi::OsStr::new("ELECTRON_RUN_AS_NODE"))
     );
-    assert_eq!(command.current_dir(), Some(fixture.workspace.path()));
+    assert_eq!(command.current_dir(), Some(fixture.dir.path()));
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn css_provider_uses_electron_only_for_the_language_server_child() {
     let definition = registry
         .definition(
             CSS_LANGUAGE_SERVER_ID,
-            fixture.workspace.path(),
+            fixture.dir.path(),
             LspServerLaunch::Packaged,
         )
         .unwrap()
@@ -112,7 +112,7 @@ fn css_provider_accepts_an_authoritative_executable_override() {
     let definition = registry
         .definition(
             CSS_LANGUAGE_SERVER_ID,
-            fixture.workspace.path(),
+            fixture.dir.path(),
             LspServerLaunch::ExplicitExecutable(&executable),
         )
         .unwrap()
@@ -168,7 +168,7 @@ fn direct_package_provider_launches_the_verified_executable() {
     let definition = registry
         .definition(
             "demo-language-server",
-            fixture.workspace.path(),
+            fixture.dir.path(),
             LspServerLaunch::Packaged,
         )
         .unwrap()
@@ -180,12 +180,12 @@ fn direct_package_provider_launches_the_verified_executable() {
         direct.canonicalize().unwrap().as_os_str()
     );
     assert!(command.arguments().is_empty());
-    assert_eq!(command.current_dir(), Some(fixture.workspace.path()));
+    assert_eq!(command.current_dir(), Some(fixture.dir.path()));
 }
 
 struct ProviderFixture {
     root: TempDir,
-    workspace: TempDir,
+    dir: TempDir,
     node: std::path::PathBuf,
     entrypoint: std::path::PathBuf,
 }
@@ -193,7 +193,7 @@ struct ProviderFixture {
 impl ProviderFixture {
     fn new() -> Self {
         let root = TempDir::new().unwrap();
-        let workspace = TempDir::new().unwrap();
+        let dir = TempDir::new().unwrap();
         let node = root.path().join("node");
         let entrypoint = root
             .path()
@@ -206,7 +206,7 @@ impl ProviderFixture {
         fs::write(&entrypoint, b"// server").unwrap();
         Self {
             root,
-            workspace,
+            dir,
             node,
             entrypoint,
         }

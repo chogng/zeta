@@ -115,13 +115,14 @@ import {
 	ViewsService,
 } from "../services/views/browser/viewsService.js";
 import { AppServerSessionsManagementService } from "../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
+import { AppServerSessionsProvider } from "../../sessions/services/sessions/browser/appServerSessionsProvider.js";
 import { ISessionsManagementService } from "../../sessions/services/sessions/common/sessionsManagementService.js";
 import {
 	WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
 import {
 	DialogService,
-} from "../services/dialogs/common/dialog.js";
+} from "../services/dialogs/common/dialogService.js";
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeController } from "./theme.js";
 import { IResourceLabelService, ResourceLabelService } from "./labels.js";
@@ -131,8 +132,8 @@ import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layou
 import { IWorkbenchLayoutStyleService } from "../services/layout/common/workbenchLayoutStyleService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
-import { IWorkspaceSearchService } from "../../platform/search/common/search.js";
-import { BrowserWorkspaceSearchService } from "../../platform/search/browser/searchService.js";
+import { IContentSearchService } from "../../platform/search/common/search.js";
+import { BrowserContentSearchService } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
@@ -170,10 +171,10 @@ import { IChatService } from "../services/chat/common/chatService.js";
 import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
 import { AppServerCodebaseService } from "../services/codebase/browser/appServerCodebaseService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
-import { IWorkspaceTrustService } from "../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { IDirPermissionsService } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
 import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
-import { AppServerWorkspaceTrustService } from "../services/workspaces/browser/appServerWorkspaceTrustService.js";
+import { AppServerDirPermissionsService } from "../services/dirPermissions/browser/appServerDirPermissionsService.js";
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
 import { IAccountService } from "../../platform/accounts/common/accountService.js";
@@ -359,8 +360,8 @@ export class Workbench extends Disposable {
 		const labelService = this._register(new LabelService(workspaceContext));
 		services.registerInstance(ILabelService, labelService);
 		services.registerInstance(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
-		const workspaceTrustService = new AppServerWorkspaceTrustService(api.workspaceTrust);
-		services.registerInstance(IWorkspaceTrustService, workspaceTrustService);
+		const dirPermissionsService = new AppServerDirPermissionsService(api.dirPermissions);
+		services.registerInstance(IDirPermissionsService, dirPermissionsService);
 		const workspaceFileService = new BrowserFileService({
 			api: api.fs,
 			resourceApi: api.resource,
@@ -404,12 +405,12 @@ export class Workbench extends Disposable {
 		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		this._register(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
-		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
+		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: dirPermissionsService, events: api.events }));
 		const diffService = new AppServerDiffService(api.diff);
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
 		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
-		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, workspaceTrustService));
+		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, dirPermissionsService));
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
@@ -419,8 +420,8 @@ export class Workbench extends Disposable {
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
 		services.registerInstance(
-			IWorkspaceSearchService,
-			new BrowserWorkspaceSearchService(api.workspaceSearch, workspaceContext),
+			IContentSearchService,
+			new BrowserContentSearchService(api.contentSearch, workspaceContext),
 		);
 		const terminalService = this._register(new TerminalService(api.terminal, workspaceContext));
 		services.registerInstance(ITerminalService, terminalService);
@@ -585,17 +586,12 @@ export class Workbench extends Disposable {
 			contextKeyService: contextKeys,
 		}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
-		const sessionService = this._register(new AppServerSessionsManagementService({
+		const sessionService = this._register(new AppServerSessionsManagementService(new AppServerSessionsProvider({
 			session: api.session,
+			model: api.model,
 			turn: api.turn,
 			events: api.events,
-			...(nativeHostApi ? {
-				workspaceRouter: {
-					currentWorkspaceRoot: () => workspaceOpenTarget(workspaceContext.getWorkspace()),
-					reopenWorkspace: (root: string) => nativeHostApi.openWorkspace(root),
-				},
-			} : {}),
-		}));
+		})));
 		services.registerInstance(ISessionsManagementService, sessionService);
 		const keybindings = interactionServices.keybindingService;
 		const contributions = this._register(

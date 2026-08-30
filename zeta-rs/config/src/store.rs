@@ -113,7 +113,6 @@ impl ConfigStore {
             }
             document = serde_json::from_str(&legacy.document_json)
                 .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))?;
-            document.workspace_trust.normalize_legacy_entries();
             document.validate()?;
             crate::store_file::write_document(&config_path, &document)?;
             replace_content_digest(&connection, &crate::store_file::document_digest(&document)?)?;
@@ -365,11 +364,7 @@ fn read_authority(
 }
 
 fn read_document_and_migrate(config_path: &Path) -> Result<UserConfigDocument, ConfigError> {
-    let mut document = crate::store_file::read_document(config_path)?;
-    if document.workspace_trust.normalize_legacy_entries() {
-        crate::store_file::write_document(config_path, &document)?;
-    }
-    Ok(document)
+    crate::store_file::read_document(config_path)
 }
 
 fn write_metadata(connection: &Connection, authority: &ConfigAuthority) -> Result<(), ConfigError> {

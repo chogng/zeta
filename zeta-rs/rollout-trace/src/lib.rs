@@ -1,9 +1,9 @@
-//! Read-only, serializable traces of one Session's authoritative rollout.
+//! Read-only, serializable traces of one Session tree's authoritative Thread rollouts.
 //!
-//! A trace preserves the independent Session and Thread sequences from the durable source. It is
-//! an inspection artifact, never a second authority or an input to runtime decisions. Raw durable
-//! events can contain sensitive user and tool data, so this crate deliberately performs no I/O or
-//! implicit export.
+//! A trace groups Thread streams by the `session_id` recorded on each root event. It is an
+//! inspection artifact, never a second authority or an input to runtime decisions. Raw durable
+//! events can contain sensitive user and tool data, so this crate performs no I/O or implicit
+//! export.
 
 mod error;
 mod trace;

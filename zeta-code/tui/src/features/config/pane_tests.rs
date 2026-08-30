@@ -10,13 +10,12 @@ use crate::test_support::empty_config_snapshot;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustStateDto;
 use zeta_protocol::SessionId;
 
 fn providers() -> ProviderListResult {
@@ -42,10 +41,10 @@ fn session_id() -> SessionId {
     SessionId::new("config-session").unwrap()
 }
 
-fn no_additional_directories() -> WorkspaceAdditionalDirectoryListResult {
-    WorkspaceAdditionalDirectoryListResult {
+fn no_directories() -> SessionDirListResult {
+    SessionDirListResult {
         revision: 0,
-        directories: Vec::new(),
+        dirs: Vec::new(),
     }
 }
 
@@ -61,7 +60,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
         TerminalSettings::default(),
         7,
         &session_id(),
-        &no_additional_directories(),
+        &no_directories(),
     );
     let mut state = ListSelectionState::new(view.model.into_body());
 
@@ -102,7 +101,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     ));
 
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(state.visible_items().len(), 12);
+    assert_eq!(state.visible_items().len(), 15);
     assert_eq!(state.visible_items()[0].label(), "Read files");
     assert_eq!(state.visible_items()[1].label(), "Modify files");
     assert!(matches!(
@@ -110,10 +109,10 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
             .get(state.visible_items()[5].id().unwrap())
             .unwrap(),
         ConfigSelectionAction::SetTerminalSettings(edit)
-            if edit.terminal.settings.additional_directory_permissions() == vec![
-                WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-                WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
-                WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch,
+            if edit.terminal.settings.dir_permissions() == vec![
+                PermissionDto::ReadFiles,
+                PermissionDto::WriteFiles,
+                PermissionDto::SearchFiles,
             ]
     ));
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -146,7 +145,7 @@ fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabl
         terminal,
         0,
         &session_id(),
-        &no_additional_directories(),
+        &no_directories(),
     );
     let state = ListSelectionState::new(view.model.into_body());
 
@@ -158,16 +157,12 @@ fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabl
 
 #[test]
 fn add_dir_items_emit_revision_bound_complete_permission_sets() {
-    let directories = WorkspaceAdditionalDirectoryListResult {
+    let directories = SessionDirListResult {
         revision: 4,
-        directories: vec![WorkspaceAdditionalDirectoryDto {
+        dirs: vec![SessionDirDto {
             contributions: Default::default(),
-            root: "/workspace/shared".into(),
-            trust: WorkspaceTrustStateDto::Trusted,
-            permissions: vec![
-                WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-                WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
-            ],
+            path: "/dir/shared".into(),
+            permissions: vec![PermissionDto::ReadFiles, PermissionDto::WriteFiles],
         }],
     };
     let view = config_pane_spec(
@@ -181,46 +176,44 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
     let mut state = ListSelectionState::new(view.model.into_body());
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
-    assert_eq!(state.visible_items().len(), 24);
+    assert_eq!(state.visible_items().len(), 30);
     assert_eq!(
-        state.visible_items()[12].label(),
-        "Read files · /workspace/shared"
-    );
-    assert_eq!(
-        state.visible_items()[12].description(),
-        Some("Allow read_file, grep and glob [ ✔ ]")
-    );
-    let execute = &state.visible_items()[14];
-    assert_eq!(
-        execute.description(),
-        Some("Allow shell-command and Session terminals; requires Read files [   ]")
+        state.visible_items()[15].label(),
+        "Read files · /dir/shared"
     );
     assert_eq!(
         state.visible_items()[15].description(),
-        Some(
-            "Refresh authorized project configuration after file changes; requires Read files [   ]"
-        )
+        Some("Allow read_file, grep and glob [ ✔ ]")
     );
+    let execute = &state.visible_items()[17];
     assert_eq!(
-        state.visible_items()[16].description(),
-        Some("Show this directory in Workspace Files; requires Read files [   ]")
+        execute.description(),
+        Some("Allow shell-command and Session terminals [   ]")
     );
     assert_eq!(
         state.visible_items()[18].description(),
-        Some("Load .zeta/instructions and .zeta/agents; requires Read files [   ]")
+        Some("Watch this directory for file changes [   ]")
     );
     assert_eq!(
-        state.visible_items()[20].description(),
+        state.visible_items()[19].description(),
+        Some("Show this directory in file browsing surfaces [   ]")
+    );
+    assert_eq!(
+        state.visible_items()[21].description(),
+        Some("Load .zeta/instructions and .zeta/agents [   ]")
+    );
+    assert_eq!(
+        state.visible_items()[24].description(),
         Some("Authorize MCP declarations (0 found); connect them separately [   ]")
     );
     assert!(matches!(
         view.actions.get(execute.id().unwrap()).unwrap(),
-        ConfigSelectionAction::SetAdditionalDirectoryPermissions(edit)
+        ConfigSelectionAction::SetPermissions(edit)
             if edit.params.expected_revision == 4
                 && edit.params.permissions == vec![
-                    WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-                    WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
-                    WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands,
+                    PermissionDto::ReadFiles,
+                    PermissionDto::WriteFiles,
+                    PermissionDto::ExecuteCommands,
                 ]
     ));
 }

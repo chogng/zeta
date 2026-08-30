@@ -44,7 +44,6 @@ fn session(id: &str, title: &str) -> Session {
         title: title.to_owned(),
         status: SessionStatus::Active,
         model: None,
-        workspace: None,
         next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         current_thread_id: None,
         sequence: 1,
@@ -704,22 +703,22 @@ fn browser_style_groups_project_as_separate_tab_lists_with_group_labels() {
 }
 
 #[test]
-fn workspace_preview_expands_all_roots_and_resets_after_hover_ends() {
-    let session = session("session-roots", "Workspace session");
+fn dirs_preview_expands_all_roots_and_resets_after_hover_ends() {
+    let session = session("session-roots", "Directory session");
     let key = TabInputKey::session(session.session_id.clone());
     let roots = (1..=12)
-        .map(|index| PathBuf::from(format!("/workspace/root-{index}")))
+        .map(|index| PathBuf::from(format!("/dir/root-{index}")))
         .collect::<Vec<_>>();
     let mut part = TabPart::default();
     part.upsert_session_input(TabInput::session(
         session.session_id,
         TabInputMetadata::new(session.title, "root-1")
-            .with_workspace_roots(roots.clone())
+            .with_dirs(roots.clone())
             .with_status(TabStatus::idle("Active")),
     ));
     let tab_id = part.tab_id(&key).unwrap();
     let tab_element = session_tab_id(tab_id);
-    let disclosure = super::workspace_preview_disclosure_id(tab_element);
+    let disclosure = super::dirs_preview_disclosure_id(tab_element);
     let bounds = Rect::from_xywh(0.0, 36.0, 220.0, 664.0);
     let viewport = Rect::from_xywh(0.0, 0.0, 900.0, 700.0);
     let mut dispatch = UiDispatch::default();
@@ -768,9 +767,9 @@ fn workspace_preview_expands_all_roots_and_resets_after_hover_ends() {
                         .with_blur_radius(12.0),
                 )
     }));
-    assert!(collapsed_text.contains(&"/workspace/root-1"));
-    assert!(collapsed_text.contains(&"/workspace/root-3"));
-    assert!(!collapsed_text.contains(&"/workspace/root-4"));
+    assert!(collapsed_text.contains(&"/dir/root-1"));
+    assert!(collapsed_text.contains(&"/dir/root-3"));
+    assert!(!collapsed_text.contains(&"/dir/root-4"));
     let disclosure_node = collapsed.interaction().node(disclosure).unwrap();
     assert_eq!(
         disclosure_node.expansion(),
@@ -810,14 +809,14 @@ fn workspace_preview_expands_all_roots_and_resets_after_hover_ends() {
             .scene()
             .text_blocks()
             .iter()
-            .any(|text| text.text() == "/workspace/root-5")
+            .any(|text| text.text() == "/dir/root-5")
     );
     assert_eq!(
         expanded.interaction().node(disclosure).unwrap().expansion(),
         AccessibilityExpansion::Expanded
     );
-    let scroll_id = super::workspace_preview_scroll_id(tab_element);
-    let forward = super::workspace_preview_scroll_forward_id(tab_element);
+    let scroll_id = super::dirs_preview_scroll_id(tab_element);
+    let forward = super::dirs_preview_scroll_forward_id(tab_element);
     let forward_bounds = expanded.interaction().node(forward).unwrap().bounds();
     drop(expanded_container);
     dispatch.pointer_moved(
@@ -849,8 +848,8 @@ fn workspace_preview_expands_all_roots_and_resets_after_hover_ends() {
         .iter()
         .map(|text| text.text())
         .collect::<Vec<_>>();
-    assert!(!scrolled_text.contains(&"/workspace/root-1"));
-    assert!(scrolled_text.contains(&"/workspace/root-9"));
+    assert!(!scrolled_text.contains(&"/dir/root-1"));
+    assert!(scrolled_text.contains(&"/dir/root-9"));
     drop(scrolled_container);
     dispatch.pointer_moved(Point::new(850.0, 650.0), scrolled.interaction());
     let closed_container = TabContainer::from_tab_part(

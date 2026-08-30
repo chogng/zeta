@@ -154,13 +154,13 @@ pub(crate) fn event_affects_catalog(runtime: &SkillRuntime, event: &FileWatcherE
         .map(|source| source.root.clone())
         .collect::<Vec<_>>();
     drop(state);
-    if let Some(workspace_root) = runtime
-        .workspace_root
+    if let Some(dir_root) = runtime
+        .dir_root
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .as_ref()
     {
-        catalog_roots.push(workspace_root.join(".zeta/skills"));
+        catalog_roots.push(dir_root.join(".zeta/skills"));
     }
     paths.iter().any(|changed| {
         catalog_roots

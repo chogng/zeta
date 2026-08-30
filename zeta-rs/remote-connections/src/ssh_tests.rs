@@ -17,11 +17,11 @@ use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 #[cfg(unix)]
 use zeta_app_server_protocol::protocol::initialize::{
-    APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
+    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
 };
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 
@@ -29,7 +29,7 @@ fn profile() -> RemoteProfile {
     RemoteProfile::new(
         SshTarget::new(
             SshHost::parse("build-linux").unwrap(),
-            RemoteWorkspacePath::parse("/srv/zeta/project with spaces").unwrap(),
+            RemoteDirPath::parse("/srv/zeta/project with spaces").unwrap(),
         ),
         RemoteRuntime::new("/opt/zeta/bin/zeta-remote-server").unwrap(),
     )
@@ -58,11 +58,11 @@ fn ssh_connection_starts_a_non_interactive_stdio_channel() {
 }
 
 #[test]
-fn remote_command_quotes_the_workspace_and_runtime_as_independent_arguments() {
+fn remote_command_quotes_the_dir_and_runtime_as_independent_arguments() {
     let profile = RemoteProfile::new(
         SshTarget::new(
             SshHost::parse("build-linux").unwrap(),
-            RemoteWorkspacePath::parse("/srv/o'reilly").unwrap(),
+            RemoteDirPath::parse("/srv/o'reilly").unwrap(),
         ),
         RemoteRuntime::new("/opt/zeta remote/bin/server").unwrap(),
     );
@@ -78,7 +78,7 @@ fn remote_runtime_probe_is_shell_quoted_and_reports_a_resolved_executable() {
     let profile = RemoteProfile::new(
         SshTarget::new(
             SshHost::parse("build-linux").unwrap(),
-            RemoteWorkspacePath::parse("/srv/zeta").unwrap(),
+            RemoteDirPath::parse("/srv/zeta").unwrap(),
         ),
         RemoteRuntime::new("/opt/zeta's/bin/zeta-server").unwrap(),
     );
@@ -158,7 +158,7 @@ fn runtime_probe_distinguishes_available_and_missing_runtime() {
     let missing_profile = RemoteProfile::new(
         SshTarget::new(
             SshHost::parse("build-linux").unwrap(),
-            RemoteWorkspacePath::parse("/srv/zeta/project").unwrap(),
+            RemoteDirPath::parse("/srv/zeta/project").unwrap(),
         ),
         RemoteRuntime::new("missing-runtime").unwrap(),
     );
@@ -227,7 +227,7 @@ fn write_initialize_server(path: &Path, protocol_major: u32, server_schema_hash:
                 "attachments": false,
                 "fileSystem": false,
                 "git": false,
-                "workspaceSearch": false,
+                "contentSearch": false,
                 "codebase": false,
                 "cloudCodebase": false,
                 "terminal": false,
@@ -242,9 +242,9 @@ fn write_initialize_server(path: &Path, protocol_major: u32, server_schema_hash:
                 "mcp": false,
                 "mcpOAuth": false,
                 "contracts": {
-                    "sessions": { "version": 1 },
-                    "threads": { "version": 1 },
-                    "turns": { "version": 1 }
+                    "sessions": { "version": APP_SERVER_CAPABILITY_VERSION },
+                    "threads": { "version": APP_SERVER_CAPABILITY_VERSION },
+                    "turns": { "version": APP_SERVER_CAPABILITY_VERSION }
                 }
             },
             "slashCommands": []

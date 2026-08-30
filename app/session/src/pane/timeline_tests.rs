@@ -14,6 +14,8 @@ fn timeline_groups_shell_result_under_its_tool_call() {
     let thread = Thread {
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Agent".to_owned(),
         status: ThreadStatus::Active,
         sequence: 5,
@@ -22,6 +24,8 @@ fn timeline_groups_shell_result_under_its_tool_call() {
         turns: vec![Turn {
             turn_id: TurnId::new("turn").unwrap(),
             status: TurnStatus::Completed,
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: Default::default(),

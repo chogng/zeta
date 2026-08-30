@@ -13,8 +13,8 @@ use serde_json::Value;
 use serde_json::json;
 use tempfile::TempDir;
 
-use crate::ThreadWorkspaceKind;
 use crate::ThreadWorktreeCleanupEligibility;
+use crate::ThreadWorktreeKind;
 use crate::ThreadWorktreeProvisionRequest;
 use crate::ThreadWorktreeSource;
 use crate::ThreadWorktreeTarget;
@@ -84,16 +84,10 @@ async fn list_and_resolve_preserve_the_source_relative_directory() {
     assert_eq!(worktrees.len(), 2);
     assert_eq!(worktrees[0].kind(), WorktreeKind::Primary);
     assert!(worktrees[0].is_current());
-    assert_eq!(
-        worktrees[0].workspace_directory(),
-        source_directory.as_path()
-    );
+    assert_eq!(worktrees[0].dir(), source_directory.as_path());
     assert_eq!(worktrees[1].kind(), WorktreeKind::Linked);
     assert_eq!(worktrees[1].branch(), Some("topic"));
-    assert_eq!(
-        worktrees[1].workspace_directory(),
-        checkout.join("nested/component")
-    );
+    assert_eq!(worktrees[1].dir(), checkout.join("nested/component"));
 
     let target = fixture
         .manager()
@@ -104,10 +98,7 @@ async fn list_and_resolve_preserve_the_source_relative_directory() {
         .await
         .expect("resolve branch worktree");
     assert_eq!(target.checkout_root(), checkout);
-    assert_eq!(
-        target.workspace_directory(),
-        checkout.join("nested/component")
-    );
+    assert_eq!(target.dir(), checkout.join("nested/component"));
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -353,11 +344,11 @@ async fn thread_provision_freezes_dirty_source_and_recovers_the_binding() {
     let manager = fixture.manager();
     let binding = manager
         .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::WorkspaceSnapshot {
+            source: ThreadWorktreeSource::DirSnapshot {
                 source_directory: fixture.repository.clone(),
             },
             target: ThreadWorktreeTarget::SourceHead,
-            source_workspace_id: "workspace-1".into(),
+            source_dir_id: "dir-1".into(),
             thread_id: "thread-1".into(),
         })
         .await
@@ -405,11 +396,11 @@ async fn thread_provision_supports_an_unborn_target_without_creating_its_branch(
 
     let binding = manager
         .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::WorkspaceSnapshot {
+            source: ThreadWorktreeSource::DirSnapshot {
                 source_directory: repository.clone(),
             },
             target: ThreadWorktreeTarget::SourceHead,
-            source_workspace_id: "unborn-workspace".into(),
+            source_dir_id: "unborn-dir".into(),
             thread_id: "unborn-thread".into(),
         })
         .await
@@ -418,7 +409,7 @@ async fn thread_provision_supports_an_unborn_target_without_creating_its_branch(
     assert_eq!(binding.target_branch(), Some("main"));
     assert!(binding.target_unborn());
     assert_eq!(
-        fs::read_to_string(binding.workspace_directory().join("baseline.txt")).unwrap(),
+        fs::read_to_string(binding.dir().join("baseline.txt")).unwrap(),
         "initial baseline\n"
     );
     let branch = Command::new("git")
@@ -465,11 +456,11 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
 
     let binding = manager
         .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::WorkspaceSnapshot {
+            source: ThreadWorktreeSource::DirSnapshot {
                 source_directory: fixture.repository.clone(),
             },
             target: ThreadWorktreeTarget::SourceHead,
-            source_workspace_id: "nested-workspace".into(),
+            source_dir_id: "nested-dir".into(),
             thread_id: "nested-thread".into(),
         })
         .await
@@ -504,7 +495,7 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
     let child = manager
         .provision_thread(&ThreadWorktreeProvisionRequest {
             source: ThreadWorktreeSource::ImmutableTree {
-                source_directory: binding.workspace_directory().to_path_buf(),
+                source_directory: binding.dir().to_path_buf(),
                 tree_id: binding.baseline_tree().to_string(),
                 repository_trees: BTreeMap::from([
                     (PathBuf::from("."), binding.baseline_tree().to_string()),
@@ -518,7 +509,7 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
                 name: binding.target_branch().unwrap().to_string(),
                 object_id: binding.target_head().to_string(),
             },
-            source_workspace_id: "nested-workspace".into(),
+            source_dir_id: "nested-dir".into(),
             thread_id: "nested-child".into(),
         })
         .await
@@ -603,38 +594,38 @@ fn concurrent_thread_binding_publishes_exactly_one_owner() {
 #[tokio::test]
 async fn non_git_threads_use_durable_managed_directory_snapshots() {
     let temporary = tempfile::tempdir().expect("create temporary directory");
-    let workspace = temporary.path().join("plain-workspace");
+    let dir = temporary.path().join("plain-dir");
     let profile = temporary.path().join("profile");
-    fs::create_dir_all(&workspace).expect("create workspace");
+    fs::create_dir_all(&dir).expect("create dir");
     fs::create_dir_all(&profile).expect("create profile");
-    fs::write(workspace.join("source.txt"), "baseline\n").expect("write source");
+    fs::write(dir.join("source.txt"), "baseline\n").expect("write source");
     let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
     let binding = manager
         .provision_thread(&ThreadWorktreeProvisionRequest {
-            source: ThreadWorktreeSource::WorkspaceSnapshot {
-                source_directory: workspace.clone(),
+            source: ThreadWorktreeSource::DirSnapshot {
+                source_directory: dir.clone(),
             },
             target: ThreadWorktreeTarget::SourceHead,
-            source_workspace_id: "workspace-id".into(),
+            source_dir_id: "dir-id".into(),
             thread_id: "plain-thread".into(),
         })
         .await
         .expect("provision plain Thread");
 
-    assert_eq!(binding.kind(), ThreadWorkspaceKind::Directory);
+    assert_eq!(binding.kind(), ThreadWorktreeKind::Directory);
     assert_eq!(
-        fs::read_to_string(binding.workspace_directory().join("source.txt")).unwrap(),
+        fs::read_to_string(binding.dir().join("source.txt")).unwrap(),
         "baseline\n"
     );
-    assert!(!binding.workspace_directory().join(".git").exists());
-    fs::write(workspace.join("source.txt"), "main workspace changed\n").unwrap();
+    assert!(!binding.dir().join(".git").exists());
+    fs::write(dir.join("source.txt"), "main dir changed\n").unwrap();
     assert_eq!(
-        fs::read_to_string(binding.workspace_directory().join("source.txt")).unwrap(),
+        fs::read_to_string(binding.dir().join("source.txt")).unwrap(),
         "baseline\n"
     );
 
     let recovered = manager
-        .recover_threads(&workspace, "workspace-id")
+        .recover_threads(&dir, "dir-id")
         .await
         .expect("recover plain Thread");
     assert_eq!(recovered, vec![("plain-thread".into(), binding.clone())]);

@@ -1,6 +1,6 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
-import { IWorkspaceSearchService } from "../../../../platform/search/common/search.js";
+import { IContentSearchService } from "../../../../platform/search/common/search.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { SearchViewPane } from "./searchViewPane.js";
@@ -27,7 +27,7 @@ export function registerSearchViews(
 		order: 1,
 		canToggleVisibility: false,
 		ctorDescriptor: new ServiceConstructionDescriptor(SearchViewPane, {
-			serviceDependencies: [IWorkspaceSearchService, IConfigurationService],
+			serviceDependencies: [IContentSearchService, IConfigurationService],
 		}),
 	}]);
 }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use thiserror::Error;
-use zeta_workspace::WorkspacePathError;
+use zeta_file_access::DirPathError;
 
 use crate::SourceRevision;
 
@@ -14,7 +14,7 @@ pub enum CodebaseError {
     InvalidQuery(&'static str),
     #[error("codebase identity is invalid: {0}")]
     InvalidIdentity(&'static str),
-    #[error("codebase storage belongs to another workspace root")]
+    #[error("codebase storage belongs to another directory root")]
     StorageRootMismatch,
     #[error("codebase storage failed: {0}")]
     Storage(String),
@@ -25,7 +25,7 @@ pub enum CodebaseError {
         source: std::io::Error,
     },
     #[error(transparent)]
-    WorkspacePath(#[from] WorkspacePathError),
+    DirPath(#[from] DirPathError),
     #[error("indexed source revision is stale (expected {expected}, observed {observed})")]
     StaleRevision {
         expected: SourceRevision,
@@ -39,9 +39,9 @@ pub enum CodebaseError {
     ChunkSpanMismatch,
     #[error("indexed chunk content no longer matches its stable identity")]
     ChunkIdentityMismatch,
-    #[error("workspace document overlay path is not an authorized relative source path")]
+    #[error("directory document overlay path is not an authorized relative source path")]
     InvalidOverlayPath,
-    #[error("workspace document overlay revision does not advance consistently")]
+    #[error("directory document overlay revision does not advance consistently")]
     OverlayRevisionConflict,
     #[error("a dirty document overlay supersedes the requested persistent source revision")]
     OverlaySupersedesPersistentSource,

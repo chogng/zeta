@@ -14,22 +14,22 @@ use zeta_app_server::open_local_app_server;
 use zeta_fast_regex_search::FastRegexWorkerCommand;
 
 use crate::ConnectionOptions;
+use crate::wire::ConnectionGrantSource;
 use crate::wire::ConnectionPrelude;
-use crate::wire::ConnectionWorkspaceTrustSource;
 
 const MAX_PRODUCT_SERVICES_IDENTITY_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct WorkspaceRuntimeKey {
-    workspace_root: Option<PathBuf>,
-    workspace_trust_source: ConnectionWorkspaceTrustSource,
+struct DirRuntimeKey {
+    dir_root: Option<PathBuf>,
+    dir_grant_source: ConnectionGrantSource,
     product_services_identity: Option<[u8; 32]>,
 }
 
 pub(crate) struct ProfileAppServerRegistry {
     host: ConnectionOptions,
     profile_runtime: Arc<LocalProfileRuntime>,
-    servers: Mutex<BTreeMap<WorkspaceRuntimeKey, Arc<AppServer>>>,
+    servers: Mutex<BTreeMap<DirRuntimeKey, Arc<AppServer>>>,
 }
 
 impl ProfileAppServerRegistry {
@@ -46,8 +46,8 @@ impl ProfileAppServerRegistry {
 
     pub(crate) fn server_for(&self, prelude: ConnectionPrelude) -> Result<Arc<AppServer>, String> {
         prelude.validate()?;
-        let workspace_root = prelude
-            .workspace_root
+        let dir_root = prelude
+            .dir_root
             .as_deref()
             .map(dunce::canonicalize)
             .transpose()
@@ -56,22 +56,22 @@ impl ProfileAppServerRegistry {
             prelude.product_services.as_deref(),
             self.host.profile_root(),
         )?;
-        let key = WorkspaceRuntimeKey {
-            workspace_root: workspace_root.clone(),
-            workspace_trust_source: prelude.workspace_trust_source,
+        let key = DirRuntimeKey {
+            dir_root: dir_root.clone(),
+            dir_grant_source: prelude.dir_grant_source,
             product_services_identity,
         };
         let mut servers = self
             .servers
             .lock()
-            .map_err(|_| "local App Server Workspace registry lock poisoned".to_string())?;
+            .map_err(|_| "local App Server dir registry lock poisoned".to_string())?;
         if let Some(server) = servers.get(&key) {
             return Ok(Arc::clone(server));
         }
         let host = ConnectionOptions::new(
             self.host.profile_root(),
-            workspace_root,
-            prelude.trust_source(),
+            dir_root,
+            prelude.grant_source(),
             prelude.product_services,
         );
         let server = Arc::new(open_server_with_profile_runtime(
@@ -105,14 +105,10 @@ fn open_server_with_profile_runtime(
         std::env::current_exe().map_err(|error| error.to_string())?,
         [crate::FAST_REGEX_WORKER_PROCESS_ARGUMENT],
     ));
-    if let Some(workspace_root) = host.workspace_root() {
-        options = match host.workspace_trust_source() {
-            crate::WorkspaceTrustSource::UserConfig => {
-                options.with_user_config_workspace_root(workspace_root)
-            }
-            crate::WorkspaceTrustSource::HostConfiguration => {
-                options.with_workspace_root(workspace_root)
-            }
+    if let Some(dir_root) = host.dir_root() {
+        options = match host.dir_grant_source() {
+            crate::GrantSource::UserConfig => options.with_user_config_dir_root(dir_root),
+            crate::GrantSource::HostConfiguration => options.with_dir_root(dir_root),
         };
     }
     if let Some(path) = host.product_services() {

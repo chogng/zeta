@@ -37,7 +37,7 @@ fn a_group_keeps_input_identity_when_replacing_content() {
     let input_id = group.active_input_id().expect("active input");
 
     let previous = group
-        .replace_active_input(PaneInput::files("/workspace".into()))
+        .replace_active_input(PaneInput::files("/dir".into()))
         .expect("previous input");
 
     assert_eq!(previous.kind(), crate::PaneInputKind::Agent);
@@ -52,7 +52,7 @@ fn a_group_keeps_input_identity_when_replacing_content() {
 fn closing_active_input_selects_the_nearest_remaining_input() {
     let mut group = PaneGroup::new();
     let first = group.open_input(PaneInput::settings());
-    let second = group.open_input(PaneInput::files("/workspace".into()));
+    let second = group.open_input(PaneInput::files("/dir".into()));
 
     assert_eq!(
         group.close_input(second).unwrap().kind(),

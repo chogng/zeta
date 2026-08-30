@@ -3,9 +3,9 @@ use crate::launch::LaunchParseError;
 use crate::launch::RemoteRuntimeCatalogSource;
 use crate::launch::RemoteRuntimeSource;
 
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionProfileStore;
@@ -28,7 +28,7 @@ fn runtime_selection_flags_are_complete_and_unambiguous() {
         AppLaunch::parse([
             "--remote".into(),
             "build".into(),
-            "--workspace".into(),
+            "--dir".into(),
             "/srv/project".into(),
             "--runtime-catalog".into(),
             "/opt/app/catalog.json".into(),
@@ -39,7 +39,7 @@ fn runtime_selection_flags_are_complete_and_unambiguous() {
         AppLaunch::parse([
             "--remote".into(),
             "build".into(),
-            "--workspace".into(),
+            "--dir".into(),
             "/srv/project".into(),
             "--runtime".into(),
             "/opt/zeta/bin/zeta-server".into(),
@@ -54,7 +54,7 @@ fn runtime_selection_flags_are_complete_and_unambiguous() {
         AppLaunch::parse([
             "--remote".into(),
             "build".into(),
-            "--workspace".into(),
+            "--dir".into(),
             "/srv/project".into(),
             "--runtime-catalog".into(),
             "/opt/app/catalog.json".into(),
@@ -69,7 +69,7 @@ fn runtime_selection_flags_are_complete_and_unambiguous() {
     let rollback = AppLaunch::parse([
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--rollback-runtime".into(),
     ])
@@ -85,7 +85,7 @@ fn runtime_selection_flags_are_complete_and_unambiguous() {
         AppLaunch::parse([
             "--remote".into(),
             "build".into(),
-            "--workspace".into(),
+            "--dir".into(),
             "/srv/project".into(),
             "--rollback-runtime".into(),
             "--runtime".into(),
@@ -100,7 +100,7 @@ fn network_runtime_catalog_requires_an_authenticated_release_and_absolute_cache(
     let launch = AppLaunch::parse([
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--runtime-catalog-url".into(),
         "https://releases.example/zeta/catalog.json".into(),
@@ -131,7 +131,7 @@ fn network_runtime_catalog_requires_an_authenticated_release_and_absolute_cache(
         AppLaunch::parse([
             "--remote".into(),
             "build".into(),
-            "--workspace".into(),
+            "--dir".into(),
             "/srv/project".into(),
             "--runtime-catalog-url".into(),
             "http://releases.example/zeta/catalog.json".into(),
@@ -144,7 +144,7 @@ fn network_runtime_catalog_requires_an_authenticated_release_and_absolute_cache(
         AppLaunch::parse([
             "--remote".into(),
             "build".into(),
-            "--workspace".into(),
+            "--dir".into(),
             "/srv/project".into(),
             "--runtime-catalog-url".into(),
             "https://releases.example/zeta/catalog.json".into(),
@@ -251,7 +251,7 @@ fn remote_arguments(fake_ssh: &Path) -> Vec<String> {
     vec![
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--ssh".into(),
         fake_ssh.to_string_lossy().into_owned(),
@@ -280,7 +280,7 @@ fn profile_store(directory: &tempfile::TempDir) -> RemoteConnectionProfileStore 
 fn target() -> SshTarget {
     SshTarget::new(
         SshHost::parse("build").unwrap(),
-        RemoteWorkspacePath::parse("/srv/project").unwrap(),
+        RemoteDirPath::parse("/srv/project").unwrap(),
     )
 }
 

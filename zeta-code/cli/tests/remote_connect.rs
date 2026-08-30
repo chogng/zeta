@@ -18,14 +18,17 @@ use sha2::Sha256;
 use tar::Builder;
 use tar::EntryType;
 use tar::Header;
+use zeta_app_server_protocol::protocol::initialize::{
+    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
+};
 
 #[test]
 fn resolves_a_saved_target_and_checks_the_real_broker() {
     let root = test_root("saved-target");
-    let workspace = root.join("workspace");
+    let dir = root.join("dir");
     let profile_root = root.join("profile");
     let fake_ssh = root.join("fake-ssh");
-    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(&dir).unwrap();
     fs::write(
         &fake_ssh,
         "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\nexec /bin/sh -c \"$command\"\n",
@@ -42,8 +45,8 @@ fn resolves_a_saved_target_and_checks_the_real_broker() {
             "local-build",
             "--host",
             "local-ssh-double",
-            "--workspace",
-            workspace.to_str().unwrap(),
+            "--dir",
+            dir.to_str().unwrap(),
         ])
         .env("ZETA_PROFILE_ROOT", &profile_root)
         .output()
@@ -79,7 +82,7 @@ fn resolves_a_saved_target_and_checks_the_real_broker() {
         serde_json::from_slice::<serde_json::Value>(&connected.stdout).unwrap(),
         json!({
             "host": "local-ssh-double",
-            "workspace": workspace.to_str().unwrap(),
+            "dir": dir.to_str().unwrap(),
             "activeRuntime": env!("CARGO_BIN_EXE_zeta"),
         })
     );
@@ -99,7 +102,7 @@ fn installs_a_missing_runtime_before_activating_it() {
 }
 
 #[test]
-fn replaces_a_schema_incompatible_managed_runtime() {
+fn replaces_a_protocol_incompatible_managed_runtime() {
     run_install_case(
         "install-incompatible",
         InitialRemoteRuntime::Incompatible,
@@ -125,13 +128,13 @@ fn run_install_case(
     failed_catalog_attempt: FailedCatalogAttempt,
 ) {
     let root = test_root(label);
-    let workspace = root.join("workspace");
+    let dir = root.join("dir");
     let profile_root = root.join("profile");
     let artifacts = root.join("artifacts");
     let catalog_path = root.join("catalog.json");
     let fake_ssh = root.join("fake-ssh");
     let installed_state = root.join("installed");
-    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(&dir).unwrap();
     fs::create_dir_all(&artifacts).unwrap();
     let artifact = create_runtime_archive(&artifacts);
     let catalog = json!({
@@ -161,7 +164,7 @@ fn run_install_case(
         FailedCatalogAttempt::VerifyNoActivation
     ) {
         let rejected = connect_with_catalog(
-            &workspace,
+            &dir,
             &profile_root,
             &fake_ssh,
             &catalog_path,
@@ -177,7 +180,7 @@ fn run_install_case(
     }
 
     let connected = connect_with_catalog(
-        &workspace,
+        &dir,
         &profile_root,
         &fake_ssh,
         &catalog_path,
@@ -192,7 +195,7 @@ fn run_install_case(
         serde_json::from_slice::<serde_json::Value>(&connected.stdout).unwrap(),
         json!({
             "host": "install-double",
-            "workspace": workspace.to_str().unwrap(),
+            "dir": dir.to_str().unwrap(),
             "activeRuntime": env!("CARGO_BIN_EXE_zeta"),
         })
     );
@@ -204,8 +207,8 @@ fn run_install_case(
             "connect",
             "--host",
             "install-double",
-            "--workspace",
-            workspace.to_str().unwrap(),
+            "--dir",
+            dir.to_str().unwrap(),
             "--ssh",
             fake_ssh.to_str().unwrap(),
             "--check",
@@ -226,7 +229,7 @@ fn run_install_case(
 }
 
 fn connect_with_catalog(
-    workspace: &Path,
+    dir: &Path,
     profile_root: &Path,
     fake_ssh: &Path,
     catalog_path: &Path,
@@ -238,8 +241,8 @@ fn connect_with_catalog(
             "connect",
             "--host",
             "install-double",
-            "--workspace",
-            workspace.to_str().unwrap(),
+            "--dir",
+            dir.to_str().unwrap(),
             "--ssh",
             fake_ssh.to_str().unwrap(),
             "--runtime-catalog",
@@ -277,14 +280,14 @@ fn write_installing_fake_ssh(
             "printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:/legacy/bin/zeta-server'"
         }
     };
-    let obsolete_response = initialize_response("obsolete-schema");
+    let incompatible_response = incompatible_initialize_response();
     let receipt_runtime = format!(
         "/srv/zeta/remote/runtimes/x86_64-unknown-linux-gnu/0.1.0/{artifact_sha256}/bin/zeta-server"
     );
     fs::write(
         path,
         format!(
-            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) if [ -f '{installed}' ]; then export ZETA_PROFILE_ROOT='{profile}'; exec /bin/sh -c \"$command\"; else IFS= read -r request || exit 65; printf '%s\\n' '{obsolete_response}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{installed}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{artifact_sha256}:{receipt_runtime}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{installed}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{actual_runtime}'; else {initial_probe}; fi ;;\n  *) exit 64 ;;\nesac\n",
+            "#!/bin/sh\ncommand=''\nfor argument in \"$@\"; do command=$argument; done\ncase \"$command\" in\n  *\"'remote-server' 'connect'\"*) if [ -f '{installed}' ]; then export ZETA_PROFILE_ROOT='{profile}'; exec /bin/sh -c \"$command\"; else IFS= read -r request || exit 65; printf '%s\\n' '{incompatible_response}'; fi ;;\n  *__ZETA_REMOTE_PLATFORM__*) printf '%s\\n' '__ZETA_REMOTE_PLATFORM__:linux:x86_64:gnu' ;;\n  *__ZETA_REMOTE_RUNTIME_INSTALLED__*) cat >/dev/null; printf '%s\\n' install >> '{installed}'; printf '%s\\n' '__ZETA_REMOTE_RUNTIME_INSTALLED__:{artifact_sha256}:{receipt_runtime}' ;;\n  *__ZETA_REMOTE_RUNTIME_FOUND__*) if [ -f '{installed}' ]; then printf '%s\\n' '__ZETA_REMOTE_RUNTIME_FOUND__:{actual_runtime}'; else {initial_probe}; fi ;;\n  *) exit 64 ;;\nesac\n",
             installed = installed_state.display(),
             profile = profile_root.display(),
             actual_runtime = env!("CARGO_BIN_EXE_zeta"),
@@ -318,6 +321,8 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
     let mut unpacked_size =
         append_archive_file(&mut builder, "zeta-package.json", &metadata, 0o644);
     unpacked_size += append_archive_file(&mut builder, "bin/zeta-server", b"zeta", 0o755);
+    unpacked_size +=
+        append_archive_file(&mut builder, "bin/zeta-app-server-daemon", b"daemon", 0o755);
     unpacked_size += append_archive_file(&mut builder, "zeta-path/rg", b"rg", 0o755);
     unpacked_size +=
         append_archive_file(&mut builder, "zeta-resources/node/bin/node", b"node", 0o755);
@@ -345,24 +350,28 @@ fn append_archive_file(
     bytes.len() as u64
 }
 
-fn initialize_response(server_schema_hash: &str) -> String {
+fn incompatible_initialize_response() -> String {
     json!({
         "jsonrpc": "2.0",
         "id": 1,
         "result": {
             "serverInfo": { "name": "fake-remote", "version": "1" },
-            "schemaHash": server_schema_hash,
+            "protocolVersion": {
+                "major": APP_SERVER_PROTOCOL_MAJOR + 1,
+                "revision": APP_SERVER_PROTOCOL_REVISION
+            },
+            "schemaHash": "incompatible-protocol",
             "capabilities": {
                 "agentInteractions": false,
                 "documentCollaboration": false,
-                "sessions": false,
-                "threads": false,
-                "turns": false,
+                "sessions": true,
+                "threads": true,
+                "turns": true,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,
                 "git": false,
-                "workspaceSearch": false,
+                "contentSearch": false,
                 "codebase": false,
                 "cloudCodebase": false,
                 "terminal": false,
@@ -375,7 +384,12 @@ fn initialize_response(server_schema_hash: &str) -> String {
                 "plugins": false,
                 "marketplace": false,
                 "mcp": false,
-                "mcpOAuth": false
+                "mcpOAuth": false,
+                "contracts": {
+                    "sessions": { "version": APP_SERVER_CAPABILITY_VERSION },
+                    "threads": { "version": APP_SERVER_CAPABILITY_VERSION },
+                    "turns": { "version": APP_SERVER_CAPABILITY_VERSION }
+                }
             },
             "slashCommands": []
         }

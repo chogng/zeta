@@ -15,7 +15,7 @@ EXPECTED_APP_MEMBERS = {
     "app/markdown",
     "app/keybindings",
     "app/settings",
-    "app/terminal-workspace",
+    "app/terminal-runtime",
     "app/workbench",
     "app/zui",
     "app/zui-demo",

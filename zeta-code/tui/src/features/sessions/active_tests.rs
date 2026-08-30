@@ -17,56 +17,7 @@ use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
 
 use super::ActiveConversation;
-use super::workspace_reconnect;
 use crate::TuiRecoveryState;
-use zeta_protocol::Session;
-use zeta_protocol::SessionId;
-use zeta_protocol::SessionStatus;
-use zeta_protocol::ThreadId;
-use zeta_protocol::WorkspaceBinding;
-use zeta_protocol::WorkspaceTrustId;
-
-#[test]
-fn foreign_workspace_session_requests_host_reconnect() {
-    let current = bound_session("current", "/workspaces/current", '1');
-    let target = bound_session("target", "/workspaces/target", '2');
-    let thread_id = ThreadId::new("target-thread").unwrap();
-
-    let reconnect = workspace_reconnect(&current, &target, &thread_id)
-        .unwrap()
-        .unwrap();
-
-    assert_eq!(
-        reconnect.workspace_root(),
-        std::path::Path::new("/workspaces/target")
-    );
-    assert_eq!(reconnect.recovery().session_id(), &target.session_id);
-    assert_eq!(reconnect.recovery().thread_id(), &thread_id);
-    assert!(
-        workspace_reconnect(&target, &target, &thread_id)
-            .unwrap()
-            .is_none()
-    );
-}
-
-fn bound_session(id: &str, root: &str, digest: char) -> Session {
-    Session {
-        session_id: SessionId::new(id).unwrap(),
-        title: id.into(),
-        status: SessionStatus::Active,
-        model: None,
-        workspace: Some(WorkspaceBinding {
-            authority_id: format!("sha256:{}", digest.to_string().repeat(64))
-                .parse::<WorkspaceTrustId>()
-                .unwrap(),
-            root: root.into(),
-        }),
-        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        current_thread_id: None,
-        sequence: 1,
-        threads: Vec::new(),
-    }
-}
 
 #[test]
 fn recovery_reopens_the_exact_durable_conversation() {
@@ -87,7 +38,7 @@ fn recovery_reopens_the_exact_durable_conversation() {
 }
 
 #[test]
-fn recovery_uses_the_canonical_current_thread_over_stale_product_state() {
+fn recovery_keeps_the_explicit_branch_after_another_branch_is_created() {
     let (mut client, state_root) = client();
     let mut conversation =
         ActiveConversation::start(&mut client, "recover fallback".into()).unwrap();
@@ -96,15 +47,15 @@ fn recovery_uses_the_canonical_current_thread_over_stale_product_state() {
     conversation
         .fork_active_thread(&mut client, "surviving thread")
         .unwrap();
-    let active_thread_id = conversation.thread_id().clone();
+    assert_ne!(conversation.thread_id(), &stale_thread_id);
 
     let recovered = ActiveConversation::recover(
         &mut client,
-        TuiRecoveryState::new(session_id, stale_thread_id),
+        TuiRecoveryState::new(session_id, stale_thread_id.clone()),
     )
     .unwrap();
 
-    assert_eq!(recovered.thread_id(), &active_thread_id);
+    assert_eq!(recovered.thread_id(), &stale_thread_id);
     drop(client);
     let _ = fs::remove_dir_all(state_root);
 }

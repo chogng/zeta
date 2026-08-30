@@ -237,7 +237,7 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 		],
 		configuration: URI.file("C:\\project.code-workspace"),
 	});
-	const requests: { readonly workspaceFolderId?: string; readonly path: string }[] = [];
+	const requests: { readonly dirId?: string; readonly path: string }[] = [];
 	const service = new BrowserFileService({
 		workspaceContextService,
 		resourceApi: unavailableResourceApi(),
@@ -254,8 +254,8 @@ test("BrowserFileService routes nested multi-root resources by Workspace folder 
 	await service.readFile(URI.file("C:\\project\\packages\\nested\\src\\main.ts"));
 
 	assert.deepEqual(requests, [
-		{ workspaceFolderId: "parent", path: "README.md" },
-		{ workspaceFolderId: "nested", path: "src/main.ts" },
+		{ dirId: "parent", path: "README.md" },
+		{ dirId: "nested", path: "src/main.ts" },
 	]);
 	assert.throws(() => service.rename(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"), "error"), /across workspace folders/i);
 });

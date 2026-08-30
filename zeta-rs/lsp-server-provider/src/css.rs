@@ -58,17 +58,17 @@ impl LanguageServerProvider for CssLanguageServerProvider {
 
     fn definition(
         &self,
-        workspace_root: &Path,
+        dir_root: &Path,
         launch: LspServerLaunch<'_>,
     ) -> Result<LanguageServerDefinition, LanguageServerProviderError> {
         let command = match launch {
-            LspServerLaunch::Packaged => self
-                .node
-                .command_for_script(&self.entrypoint, workspace_root)?,
+            LspServerLaunch::Packaged => {
+                self.node.command_for_script(&self.entrypoint, dir_root)?
+            }
             LspServerLaunch::ExplicitExecutable(executable) => LanguageServerCommand::new(
                 canonical_executable(executable, "explicit CSS language-server executable")?,
             )
-            .with_current_dir(workspace_root),
+            .with_current_dir(dir_root),
         };
         LanguageServerDefinition::new(
             CSS_LANGUAGE_SERVER_ID,

@@ -16,6 +16,7 @@ use std::fmt;
 use std::future;
 use std::path::PathBuf;
 use zeta_async_utils::CancellationToken;
+use zeta_file_access::Dir;
 use zeta_sandboxing::SandboxBackend;
 use zeta_tool_executor::CommandExecutor;
 use zeta_tool_executor::CommandInput;
@@ -25,7 +26,6 @@ use zeta_tools::{
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
     ToolPayload, ToolRuntimeAuthority, ToolSchemaMode, ToolStartFailure,
 };
-use zeta_workspace::WorkspaceRoot;
 
 pub use zeta_tool_executor::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
@@ -50,27 +50,27 @@ impl fmt::Display for ShellCommandToolError {
 
 impl std::error::Error for ShellCommandToolError {}
 
-/// Executes one approved local process with an explicit program, arguments, and workspace path.
+/// Executes one approved local process with an explicit program, arguments, and dir path.
 ///
 /// The selected environment ID must match the immutable ID configured at construction. The
 /// executor never starts a shell implicitly: callers must choose the program they intend to run.
 pub struct ShellCommandTool<P, B> {
-    environment_id: zeta_tools::ToolEnvironmentId,
+    environment_id: zeta_tools::EnvId,
     executor: CommandExecutor<P, B>,
     definition: ToolDefinition,
 }
 
 impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
     pub fn new(
-        environment_id: zeta_tools::ToolEnvironmentId,
-        workspace: WorkspaceRoot,
+        environment_id: zeta_tools::EnvId,
+        dir: Dir,
         backend: B,
         approval_policy: P,
         limits: ShellCommandLimits,
     ) -> Result<Self, ShellCommandToolError> {
         Ok(Self {
             environment_id,
-            executor: CommandExecutor::new(workspace, backend, approval_policy, limits),
+            executor: CommandExecutor::new(dir, backend, approval_policy, limits),
             definition: shell_command_definition()?,
         })
     }
@@ -87,12 +87,12 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
-        let workspace = request
-            .workspace_root()
-            .map(WorkspaceRoot::open)
+        let dir = request
+            .dir_root()
+            .map(Dir::open_local)
             .transpose()
             .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
-        self.executor.execute_in_workspace(
+        self.executor.execute_in_dir(
             CommandRequest {
                 program: request.program,
                 arguments: request.arguments,
@@ -101,7 +101,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             },
             authority,
             cancellation,
-            workspace.as_ref(),
+            dir.as_ref(),
         )
     }
 
@@ -173,7 +173,7 @@ pub struct ShellCommandRequest {
     arguments: Vec<String>,
     working_directory: PathBuf,
     #[serde(default)]
-    workspace_root: Option<PathBuf>,
+    dir_root: Option<PathBuf>,
 }
 
 impl ShellCommandRequest {
@@ -193,7 +193,7 @@ impl ShellCommandRequest {
             program,
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
-            workspace_root: None,
+            dir_root: None,
         })
     }
 
@@ -212,7 +212,7 @@ impl ShellCommandRequest {
             decoded.arguments,
             decoded.working_directory,
         )?;
-        request.workspace_root = decoded.workspace_root;
+        request.dir_root = decoded.dir_root;
         Ok(request)
     }
 
@@ -228,12 +228,12 @@ impl ShellCommandRequest {
         &self.working_directory
     }
 
-    pub fn workspace_root(&self) -> Option<&std::path::Path> {
-        self.workspace_root.as_deref()
+    pub fn dir_root(&self) -> Option<&std::path::Path> {
+        self.dir_root.as_deref()
     }
 
-    pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
-        self.workspace_root = Some(workspace_root.into());
+    pub fn with_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
+        self.dir_root = Some(dir_root.into());
         self
     }
 
@@ -251,7 +251,7 @@ impl ShellCommandRequest {
             program,
             arguments,
             working_directory: self.working_directory,
-            workspace_root: self.workspace_root,
+            dir_root: self.dir_root,
         }
     }
 }
@@ -260,13 +260,13 @@ impl ShellCommandRequest {
 pub fn shell_command_definition() -> Result<ToolDefinition, ShellCommandToolError> {
     ToolDefinition::function(
         ToolName::new("shell-command").map_err(definition_error)?,
-        "Run one approved command in a workspace directory. Pass the program and each argument separately; no shell is started implicitly.",
+        "Run one approved command in a dir directory. Pass the program and each argument separately; no shell is started implicitly.",
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {
                 "program": { "type": "string", "description": "Program to execute." },
                 "arguments": { "type": "array", "items": { "type": "string" }, "description": "Arguments passed to the program in order." },
-                "working_directory": { "type": "string", "description": "Directory used as the process working directory. Use an absolute path for an authorized additional directory." }
+                "working_directory": { "type": "string", "description": "Directory used as the process working directory. Use an absolute path for an authorized directory." }
             },
             "required": ["program", "arguments", "working_directory"],
             "additionalProperties": false

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { ModelRef, ServerNotification, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../../../generated/app-server/types.js";
+import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../../../generated/app-server/types.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../../../base/common/actions.js";
@@ -28,8 +28,9 @@ import { ChatContextPickService } from "../../../../../workbench/services/chat/b
 import type { ThreadUpdateEnvelope, TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
-import { AppServerSessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
-import type { Session } from "../../../../../sessions/services/sessions/common/session.js";
+import { AppServerSessionsManagementService as SessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
+import { AppServerSessionsProvider } from "../../../../../sessions/services/sessions/browser/appServerSessionsProvider.js";
+import type { ISession } from "../../../../../sessions/services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { IViewsService, ViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
@@ -42,6 +43,12 @@ const emptyChatContextPickService = new ChatContextPickService();
 const unavailableQuickInputService = {
 	createQuickPick: () => { throw new Error("Quick input is unavailable in this test"); },
 } as IQuickInputService;
+
+class AppServerSessionsManagementService extends SessionsManagementService {
+	constructor(api: IRendererHost) {
+		super(new AppServerSessionsProvider({ session: api.session, model: api.model, turn: api.turn, events: api.events }));
+	}
+}
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -373,11 +380,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	await nextTask();
 
 	assert.deepEqual(
-		fake.stopRequests.map(({ sessionId, expectedSequence }) => ({
-			sessionId,
-			expectedSequence,
-		})),
-		[{ sessionId: "session-1", expectedSequence: 2 }],
+			fake.stopRequests.map(({ sessionId }) => ({ sessionId })),
+			[{ sessionId: "session-1" }],
 	);
 	assert.equal(sessions.active?.session.sessionId, "session-2");
 	assert.deepEqual(
@@ -721,9 +725,9 @@ test("failed first send keeps the untitled session and its input draft", async (
 test("one Session retains one Chat pane while its selected Thread changes", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
-	const multiThreadSession: Session = {
+	const multiThreadSession: ISession = {
 		...session("session-1", "thread-1", "One Chat"),
-		threads: [
+		chats: [
 			{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
 			{
 				threadId: "thread-2",
@@ -918,11 +922,8 @@ test("AppServerSessionsManagementService archives a Session and selects the next
 	await service.archiveSession("session-1");
 
 	assert.deepEqual(
-		fake.archiveRequests.map(({ sessionId, expectedSequence }) => ({
-			sessionId,
-			expectedSequence,
-		})),
-		[{ sessionId: "session-1", expectedSequence: 2 }],
+			fake.archiveRequests.map(({ sessionId }) => ({ sessionId })),
+			[{ sessionId: "session-1" }],
 	);
 	assert.equal(
 		service.sessions.find(({ sessionId }) => sessionId === "session-1")
@@ -968,7 +969,7 @@ test("AppServerSessionsManagementService selects another untitled session and pe
 	assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("AppServerSessionsManagementService changes the model only for the selected Session", async () => {
+test("AppServerSessionsManagementService persists and reflects the preferred model", async () => {
 	const fake = fakeApi({
 		sessions: [
 			session("session-1", "thread-1"),
@@ -979,16 +980,12 @@ test("AppServerSessionsManagementService changes the model only for the selected
 	await service.initialize();
 	const model: ModelRef = { provider: "openai", model: "gpt-session" };
 
-	await service.setModel("session-1", model);
+	await service.setPreferredModel(model);
 
-	assert.deepEqual(fake.setModelRequests.map(({ sessionId, expectedSequence, model }) => ({
-		sessionId,
-		expectedSequence,
-		model,
-	})), [{ sessionId: "session-1", expectedSequence: 2, model }]);
 	assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-1")?.model, model);
-	assert.equal(service.sessions.find(({ sessionId }) => sessionId === "session-2")?.model, undefined);
+	assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-2")?.model, model);
 	assert.deepEqual(service.active?.session.model, model);
+	assert.deepEqual(fake.preferredModelRequests.map(request => request.model), [model]);
 });
 
 test("ChatPaneModel applies backend-assembled transcript entries", async () => {
@@ -1232,7 +1229,7 @@ test("Turn error presentation is selected only from the stable error code", () =
 		{ code: "interactionDeadlineElapsed", retryable: true },
 		{ code: "toolRepetition", retryable: false },
 		{ code: "usageLimited", retryable: false },
-		{ code: "workspaceCaptureFailed", retryable: true },
+		{ code: "worktreeCaptureFailed", retryable: true },
 	];
 
 	assert.deepEqual(cases.map(({ code, retryable }) => {
@@ -1248,7 +1245,7 @@ test("Turn error presentation is selected only from the stable error code", () =
 		{ code: "interactionDeadlineElapsed", label: "Interaction expired", action: "retry", message },
 		{ code: "toolRepetition", label: "Repeated tool failure", action: "revise", message },
 		{ code: "usageLimited", label: "Usage limit", action: "chooseModel", message },
-		{ code: "workspaceCaptureFailed", label: "Workspace capture failed", action: "retry", message },
+		{ code: "worktreeCaptureFailed", label: "Worktree capture failed", action: "retry", message },
 	]);
 });
 
@@ -1311,11 +1308,11 @@ test("ChatPaneModel retries only the latest retryable failed Turn as a new visib
 });
 
 interface FakeOptions {
-	readonly sessions?: readonly Session[];
-	readonly createSession?: Session;
+	readonly sessions?: readonly ISession[];
+	readonly createSession?: ISession;
 	readonly createSessionError?: Error;
 	readonly createThread?: {
-		readonly session: Session;
+		readonly session: ISession;
 		readonly threadId: string;
 	};
 	readonly thread?: () => Thread;
@@ -1442,7 +1439,7 @@ test("Chat service caches the static catalog and filters picker entries by user 
 	assert.equal(fake.modelListRequests.length, 2);
 });
 
-test("Chat picker retains the selected Session model when it is hidden", async () => {
+test("Chat picker retains the preferred model when it is hidden", async () => {
 	const entry = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
@@ -1548,11 +1545,11 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly stopRequests: readonly SessionMutationParams[];
 	readonly createSessionRequests: readonly SessionCreateParams[];
 	readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
-	readonly setModelRequests: readonly SessionOperationInput<"setModel">[];
 	readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
+	readonly preferredModelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
 	readonly emit: (notification: ServerNotification) => void;
 	readonly emitReady: () => void;
 } {
@@ -1562,13 +1559,13 @@ function fakeApi(options: FakeOptions = {}): {
 	const stopRequests: SessionMutationParams[] = [];
 	const createSessionRequests: SessionCreateParams[] = [];
 	const createThreadRequests: SessionOperationInput<"createThread">[] = [];
-	const setModelRequests: SessionOperationInput<"setModel">[] = [];
 	const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
+	const preferredModelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
 	const currentThread = () => options.thread?.() ?? thread();
-	const currentSession = (sessionId: string): Session => options.sessions?.find(candidate => candidate.sessionId === sessionId)
+	const currentSession = (sessionId: string): ISession => options.sessions?.find(candidate => candidate.sessionId === sessionId)
 		?? (options.createThread?.session.sessionId === sessionId ? options.createThread.session : undefined)
 		?? (options.createSession?.sessionId === sessionId ? options.createSession : undefined)
 		?? session(sessionId);
@@ -1582,12 +1579,12 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		session: {
-			list: async () => ({ sessions: [...(options.sessions ?? [])] }),
+			list: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			read: async ({ sessionId }: { sessionId: string }) => ({
-				session: currentSession(sessionId),
+				session: sessionDto(currentSession(sessionId)),
 			}),
 			subscribe: async ({ sessionId }: { sessionId: string }) => ({
-				session: currentSession(sessionId),
+				session: sessionDto(currentSession(sessionId)),
 				updates: [],
 				threadProjections: [],
 				agentTree: { roots: [] },
@@ -1596,14 +1593,15 @@ function fakeApi(options: FakeOptions = {}): {
 			create: async (params: SessionCreateParams) => {
 				createSessionRequests.push(params);
 				if (options.createSessionError) throw options.createSessionError;
-				return { session: options.createSession ?? session("created") };
+				return { session: sessionDto(options.createSession ?? session("created")) };
 			},
 			createThread: async (params: SessionOperationInput<"createThread">) => {
 				createThreadRequests.push(params);
-				return options.createThread ?? {
+				const created = options.createThread ?? {
 					session: session("created", "created-thread"),
 					threadId: "created-thread",
 				};
+				return { ...created, session: sessionDto(created.session) };
 			},
 			archive: async (params: SessionMutationParams) => {
 				archiveRequests.push(params);
@@ -1612,9 +1610,8 @@ function fakeApi(options: FakeOptions = {}): {
 				) ?? session(params.sessionId);
 				return {
 					session: {
-						...archived,
-						status: "archived" as const,
-						sequence: archived.sequence + 1,
+						...sessionDto(archived),
+							status: "archived" as const,
 					},
 				};
 			},
@@ -1625,26 +1622,20 @@ function fakeApi(options: FakeOptions = {}): {
 				) ?? session(params.sessionId);
 				return {
 					session: {
-						...stopped,
-						status: "archived" as const,
-						sequence: stopped.sequence + 1,
+						...sessionDto(stopped),
+							status: "archived" as const,
 					},
 				};
-			},
-			setModel: async (params: SessionOperationInput<"setModel">) => {
-				setModelRequests.push(params);
-				const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
-				return { session: { ...current, model: params.model, sequence: current.sequence + 1 } };
-			},
-			setNextApprovalMode: async (params: SessionOperationInput<"setNextApprovalMode">) => {
-				const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
-				return { session: { ...current, nextApprovalMode: params.approvalMode, sequence: current.sequence + 1 } };
 			},
 		},
 		model: {
 			list: async () => {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };
+			},
+			readPreferred: async () => options.sessions?.find(session => session.model)?.model ?? null,
+			setPreferred: async (params: { readonly commandId: string; readonly model: ModelRef }) => {
+				preferredModelRequests.push(params);
 			},
 		},
 		skills: {
@@ -1691,11 +1682,11 @@ function fakeApi(options: FakeOptions = {}): {
 		stopRequests,
 		createSessionRequests,
 		createThreadRequests,
-		setModelRequests,
 		turnStartRequests,
 		turnCompactRequests,
 		turnSteerRequests,
 		modelListRequests,
+		preferredModelRequests,
 		emit: (notification) => {
 			for (const listener of listeners) listener(notification);
 		},
@@ -1709,16 +1700,29 @@ function session(
 	id: string,
 	threadId?: string,
 	title = `Session ${id}`,
-): Session {
+): ISession {
 	return {
 		sessionId: id,
 		title,
 		status: "active",
 		nextApprovalMode: "askPermissions",
-		sequence: threadId ? 2 : 1,
-		threads: threadId
+		chats: threadId
 			? [{ threadId, origin: { type: "root" }, status: "active" }]
 			: [],
+	};
+}
+
+function sessionDto(value: ISession): SessionDto {
+	return {
+		sessionId: value.sessionId,
+		title: value.title,
+		status: value.status,
+		threads: value.chats.map(chat => ({
+			threadId: chat.threadId,
+			status: chat.status,
+			...(chat.origin.type === "root" ? {} : { parentThreadId: chat.origin.parentThreadId }),
+			...(chat.origin.type === "fork" || chat.origin.type === "rewind" ? { forkedFromId: chat.origin.parentThreadId } : {}),
+		})),
 	};
 }
 

@@ -1,13 +1,12 @@
 //! Built-in product command dispatch for the active Session and Thread.
 
-use crate::TuiWorkspaceReconnect;
 use crate::app::AppEvent;
 use crate::app::help_pane_spec;
 use crate::components::chat_input::ChatInputItem;
 use crate::components::chat_input::SlashCommandInvocation;
 use crate::components::chat_input::TuiSlashCommandAction;
-use crate::features::additional_directories;
 use crate::features::config;
+use crate::features::dirs;
 use crate::features::mcp;
 use crate::features::models;
 use crate::features::rewind;
@@ -24,9 +23,9 @@ use std::fmt;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirMutationDto;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
 use zeta_protocol::TurnId;
 
 #[cfg(test)]
@@ -42,7 +41,6 @@ pub(crate) struct ProductCommandOutput {
     pub(crate) conversation: ActiveConversation,
     pub(crate) events: Vec<AppEvent>,
     pub(crate) conversation_change: Option<ConversationChange>,
-    pub(crate) workspace_reconnect: Option<TuiWorkspaceReconnect>,
     pub(crate) exit_requested: bool,
 }
 
@@ -50,18 +48,17 @@ pub(crate) fn execute_product_command<T>(
     mut conversation: ActiveConversation,
     client: &mut AppServerClient<T>,
     invocation: SlashCommandInvocation,
-    additional_directory_permissions: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
+    dir_permissions: Vec<PermissionDto>,
 ) -> Result<ProductCommandOutput, String>
 where
     T: JsonRpcTransport,
 {
     conversation
-        .try_execute(client, invocation, &additional_directory_permissions)
+        .try_execute(client, invocation, &dir_permissions)
         .map(|output| ProductCommandOutput {
             conversation,
             events: output.events,
             conversation_change: output.conversation_change,
-            workspace_reconnect: output.workspace_reconnect,
             exit_requested: output.exit_requested,
         })
         .map_err(|error| error.to_string())
@@ -81,7 +78,7 @@ impl ActiveConversation {
             self.clone(),
             client,
             invocation,
-            config::TerminalSettings::default().additional_directory_permissions(),
+            config::TerminalSettings::default().dir_permissions(),
         ) {
             Ok(output) => {
                 *self = output.conversation;
@@ -103,7 +100,7 @@ impl ActiveConversation {
         &mut self,
         client: &mut AppServerClient<T>,
         invocation: SlashCommandInvocation,
-        additional_directory_permissions: &[WorkspaceAdditionalDirectoryPermissionDto],
+        dir_permissions: &[PermissionDto],
     ) -> Result<CommandOutput, CommandExecutionError>
     where
         T: JsonRpcTransport,
@@ -127,7 +124,6 @@ impl ActiveConversation {
                         status::StatusRequestScope {
                             session_id: self.session_id(),
                             thread_id: self.thread_id(),
-                            model: self.model(),
                         },
                     )?));
             }
@@ -168,9 +164,6 @@ impl ActiveConversation {
                         }
                         ResumeOutcome::Changed(change) => {
                             output.conversation_change = Some(change);
-                        }
-                        ResumeOutcome::WorkspaceReconnect(reconnect) => {
-                            output.workspace_reconnect = Some(reconnect);
                         }
                     }
                 }
@@ -218,27 +211,28 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::AdditionalDirectoriesPaneOpened(
-                            additional_directories::load_selection(client, self.session_id())?,
-                        ));
+                        .push(AppEvent::DirsPaneOpened(dirs::load_selection(
+                            client,
+                            self.session_id(),
+                        )?));
                 } else {
                     let command = format!("/add-dir {arguments}");
-                    let update = additional_directories::add(
+                    let update = dirs::add(
                         client,
                         self.session_id(),
                         std::path::PathBuf::from(&arguments),
-                        additional_directory_permissions.to_vec(),
+                        dir_permissions.to_vec(),
                     )?;
                     let result = match update.mutation {
-                        WorkspaceAdditionalDirectoryMutationDto::Added => {
+                        SessionDirMutationDto::Added => {
                             format!("Added directory {arguments}")
                         }
-                        WorkspaceAdditionalDirectoryMutationDto::AlreadyPresent => {
+                        SessionDirMutationDto::AlreadyPresent => {
                             format!("Directory already added: {arguments}")
                         }
-                        WorkspaceAdditionalDirectoryMutationDto::Updated
-                        | WorkspaceAdditionalDirectoryMutationDto::Removed
-                        | WorkspaceAdditionalDirectoryMutationDto::NotPresent => {
+                        SessionDirMutationDto::Updated
+                        | SessionDirMutationDto::Removed
+                        | SessionDirMutationDto::NotPresent => {
                             return Err(CommandExecutionError(
                                 "add-dir returned an invalid mutation result".into(),
                             ));
@@ -318,7 +312,6 @@ impl ActiveConversation {
 struct CommandOutput {
     events: Vec<AppEvent>,
     conversation_change: Option<ConversationChange>,
-    workspace_reconnect: Option<TuiWorkspaceReconnect>,
     exit_requested: bool,
 }
 

@@ -145,6 +145,7 @@ test("capability IPC validators reject malformed input", () => {
 		...terminalIpcRoutes(supervisor),
 	];
 	const sessionCreate = routes.find((route) => route.channel === "zeta:session:create")!;
+	const modelPreferredSet = routes.find((route) => route.channel === "zeta:model:preferred:set")!;
 	const turnStart = routes.find((route) => route.channel === "zeta:turn:start")!;
 	const resolveInteraction = routes.find(
 		(route) => route.channel === "zeta:turn:interaction:resolve",
@@ -161,10 +162,10 @@ test("capability IPC validators reject malformed input", () => {
 		(route) => route.channel === "zeta:fs:read-binary-file",
 	)!;
 	const searchStart = routes.find(
-		(route) => route.channel === "zeta:workspace-search:start",
+		(route) => route.channel === "zeta:content-search:start",
 	)!;
 	const searchRead = routes.find(
-		(route) => route.channel === "zeta:workspace-search:read",
+		(route) => route.channel === "zeta:content-search:read",
 	)!;
 	const terminalCreate = routes.find(
 		(route) => route.channel === "zeta:terminal:create",
@@ -196,6 +197,17 @@ test("capability IPC validators reject malformed input", () => {
 		sessionCreate.validate({ commandId: "one", title: "title" }),
 		{ commandId: "one", title: "title" },
 	);
+	assert.deepEqual(modelPreferredSet.validate({
+		commandId: "model-1",
+		model: { provider: "openai", model: "gpt-5" },
+	}), {
+		commandId: "model-1",
+		model: { provider: "openai", model: "gpt-5" },
+	});
+	assert.throws(
+		() => modelPreferredSet.validate({ commandId: "model-1", model: { provider: "", model: "gpt-5" } }),
+		/model.provider/,
+	);
 	assert.throws(
 		() =>
 			sessionCreate.validate({
@@ -212,6 +224,7 @@ test("capability IPC validators reject malformed input", () => {
 				sessionId: "session_1",
 				threadId: "thread_1",
 				expectedSequence: 1,
+				approvalMode: "askPermissions",
 				input: [],
 			}),
 		/non-empty array/,
@@ -223,6 +236,7 @@ test("capability IPC validators reject malformed input", () => {
 				sessionId: "session_1",
 				threadId: "thread_1",
 				expectedSequence: 1,
+				approvalMode: "askPermissions",
 				input: [{ type: "image", text: "no" }],
 			}),
 		/must be text/,
@@ -339,7 +353,7 @@ test("capability IPC validators reject malformed input", () => {
 			includePatterns,
 			excludePatterns: [],
 			maxResults: 2_000,
-		}), /workspace-relative glob/);
+		}), /directory-relative glob/);
 	}
 	assert.throws(() => searchStart.validate({
 		query: "needle",

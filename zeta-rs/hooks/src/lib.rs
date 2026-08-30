@@ -13,4 +13,4 @@ pub use records::HookRunEvent;
 pub use records::HookRunRecord;
 pub use records::HookRunStatus;
 pub use runtime::DeclarativeHookRuntime;
-pub use runtime::HookWorkspaceBindingError;
+pub use runtime::HookDirBindingError;

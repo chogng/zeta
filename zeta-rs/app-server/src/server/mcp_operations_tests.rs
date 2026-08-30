@@ -4,9 +4,7 @@ use std::sync::Mutex;
 use serde_json::Value;
 use url::Url;
 use zeta_config::ConfigStore;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_mcp_extension::McpOAuthChallenge;
 use zeta_mcp_extension::McpOAuthCredential;
@@ -95,10 +93,6 @@ fn server() -> (AppServer, Arc<TestOAuthProvider>, tempfile::TempDir) {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     let provider = Arc::new(TestOAuthProvider::default());
     let provider_port: Arc<dyn McpOAuthProvider> = provider.clone();
     let server_id = McpServerId::new("user:mcp:calendar").unwrap();
@@ -107,7 +101,7 @@ fn server() -> (AppServer, Arc<TestOAuthProvider>, tempfile::TempDir) {
         [(server_id, provider_port)],
     ));
     let server = AppServer::new(
-        sessions,
+        threads,
         Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_config_store(config)

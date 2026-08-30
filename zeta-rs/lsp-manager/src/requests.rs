@@ -394,7 +394,7 @@ pub struct LanguageHierarchyResult {
 
 /// One project-wide symbol returned independently of an open editor document.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LanguageWorkspaceSymbol {
+pub struct LanguageSymbol {
     pub name: String,
     pub symbol_kind: u32,
     pub container_name: Option<String>,
@@ -405,10 +405,10 @@ pub struct LanguageWorkspaceSymbol {
 
 /// Bounded project-wide symbol response from one language server.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LanguageWorkspaceSymbols {
+pub struct LanguageSymbols {
     pub request_id: LanguageRequestId,
     pub query: String,
-    pub symbols: Vec<LanguageWorkspaceSymbol>,
+    pub symbols: Vec<LanguageSymbol>,
 }
 
 /// One prepare-rename response projected into the authoritative source snapshot.
@@ -461,7 +461,7 @@ pub enum LanguageDeleteMode {
 
 /// One resource operation in the exact order supplied by the language server.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum LanguageWorkspaceEditEntry {
+pub enum LanguageEditEntry {
     TextDocument(LanguageWorkspaceDocumentEdit),
     Create {
         path: PathBuf,
@@ -481,18 +481,18 @@ pub enum LanguageWorkspaceEditEntry {
 
 /// Ordered workspace edit containing text and optional resource operations.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LanguageWorkspaceEdit {
+pub struct LanguageEdit {
     pub encoding: LanguagePositionEncoding,
-    pub entries: Vec<LanguageWorkspaceEditEntry>,
+    pub entries: Vec<LanguageEditEntry>,
 }
 
 /// Fresh rename result bound to the source revision that initiated it.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LanguageWorkspaceEditResult {
+pub struct LanguageEditResult {
     pub request_id: LanguageRequestId,
     pub source_path: PathBuf,
     pub source_revision: LanguageDocumentRevision,
-    pub edit: LanguageWorkspaceEdit,
+    pub edit: LanguageEdit,
 }
 
 /// One LSP code action with any text edit projected and resolve payload kept opaque.
@@ -502,7 +502,7 @@ pub struct LanguageCodeAction {
     pub kind: Option<String>,
     pub is_preferred: bool,
     pub disabled_reason: Option<String>,
-    pub edit: Option<LanguageWorkspaceEdit>,
+    pub edit: Option<LanguageEdit>,
     pub provider_data: Value,
 }
 
@@ -803,7 +803,7 @@ pub(crate) fn project_workspace_symbols(
     query: String,
     encoding: &PositionEncodingKind,
     response: Option<WorkspaceSymbolResponse>,
-) -> LanguageWorkspaceSymbols {
+) -> LanguageSymbols {
     let symbols = match response {
         Some(WorkspaceSymbolResponse::Flat(symbols)) => symbols
             .into_iter()
@@ -834,7 +834,7 @@ pub(crate) fn project_workspace_symbols(
             .collect(),
         None => Vec::new(),
     };
-    LanguageWorkspaceSymbols {
+    LanguageSymbols {
         request_id,
         query,
         symbols,
@@ -885,9 +885,9 @@ pub(crate) fn project_workspace_edit(
     source_revision: LanguageDocumentRevision,
     encoding: &PositionEncodingKind,
     edit: Option<WorkspaceEdit>,
-) -> Result<LanguageWorkspaceEditResult, String> {
+) -> Result<LanguageEditResult, String> {
     let edit = project_text_workspace_edit(encoding, edit.unwrap_or_default())?;
-    Ok(LanguageWorkspaceEditResult {
+    Ok(LanguageEditResult {
         request_id,
         source_path,
         source_revision,
@@ -1209,23 +1209,22 @@ fn project_code_action(
 fn project_text_workspace_edit(
     encoding: &PositionEncodingKind,
     edit: WorkspaceEdit,
-) -> Result<LanguageWorkspaceEdit, String> {
+) -> Result<LanguageEdit, String> {
     let has_document_changes = edit.document_changes.is_some();
     let mut entries = if let Some(changes) = edit.document_changes {
         match changes {
             DocumentChanges::Edits(edits) => edits
                 .into_iter()
-                .map(|edit| {
-                    project_text_document_edit(edit).map(LanguageWorkspaceEditEntry::TextDocument)
-                })
+                .map(|edit| project_text_document_edit(edit).map(LanguageEditEntry::TextDocument))
                 .collect::<Result<Vec<_>, _>>()?,
             DocumentChanges::Operations(operations) => operations
                 .into_iter()
                 .map(|operation| match operation {
-                    DocumentChangeOperation::Edit(edit) => project_text_document_edit(edit)
-                        .map(LanguageWorkspaceEditEntry::TextDocument),
+                    DocumentChangeOperation::Edit(edit) => {
+                        project_text_document_edit(edit).map(LanguageEditEntry::TextDocument)
+                    }
                     DocumentChangeOperation::Op(ResourceOp::Create(operation)) => {
-                        Ok(LanguageWorkspaceEditEntry::Create {
+                        Ok(LanguageEditEntry::Create {
                             path: file_path(&operation.uri).ok_or_else(|| {
                                 "workspace create target is not a file URI".to_owned()
                             })?,
@@ -1242,7 +1241,7 @@ fn project_text_workspace_edit(
                         })
                     }
                     DocumentChangeOperation::Op(ResourceOp::Rename(operation)) => {
-                        Ok(LanguageWorkspaceEditEntry::Rename {
+                        Ok(LanguageEditEntry::Rename {
                             source: file_path(&operation.old_uri).ok_or_else(|| {
                                 "workspace rename source is not a file URI".to_owned()
                             })?,
@@ -1262,7 +1261,7 @@ fn project_text_workspace_edit(
                         })
                     }
                     DocumentChangeOperation::Op(ResourceOp::Delete(operation)) => {
-                        Ok(LanguageWorkspaceEditEntry::Delete {
+                        Ok(LanguageEditEntry::Delete {
                             path: file_path(&operation.uri).ok_or_else(|| {
                                 "workspace delete target is not a file URI".to_owned()
                             })?,
@@ -1296,7 +1295,7 @@ fn project_text_workspace_edit(
             .unwrap_or_default()
             .into_iter()
             .map(|(uri, edits)| {
-                Ok(LanguageWorkspaceEditEntry::TextDocument(
+                Ok(LanguageEditEntry::TextDocument(
                     LanguageWorkspaceDocumentEdit {
                         path: file_path(&uri)
                             .ok_or_else(|| "workspace edit target is not a file URI".to_owned())?,
@@ -1310,7 +1309,7 @@ fn project_text_workspace_edit(
     if !has_document_changes {
         entries.sort_by(|left, right| workspace_entry_path(left).cmp(workspace_entry_path(right)));
     }
-    Ok(LanguageWorkspaceEdit {
+    Ok(LanguageEdit {
         encoding: language_position_encoding(encoding),
         entries,
     })
@@ -1329,12 +1328,11 @@ fn existing_target_behavior(
     }
 }
 
-fn workspace_entry_path(entry: &LanguageWorkspaceEditEntry) -> &PathBuf {
+fn workspace_entry_path(entry: &LanguageEditEntry) -> &PathBuf {
     match entry {
-        LanguageWorkspaceEditEntry::TextDocument(edit) => &edit.path,
-        LanguageWorkspaceEditEntry::Create { path, .. }
-        | LanguageWorkspaceEditEntry::Delete { path, .. } => path,
-        LanguageWorkspaceEditEntry::Rename { source, .. } => source,
+        LanguageEditEntry::TextDocument(edit) => &edit.path,
+        LanguageEditEntry::Create { path, .. } | LanguageEditEntry::Delete { path, .. } => path,
+        LanguageEditEntry::Rename { source, .. } => source,
     }
 }
 
@@ -1370,8 +1368,8 @@ fn project_workspace_symbol(
     uri: Uri,
     range: Range,
     encoding: &PositionEncodingKind,
-) -> Option<LanguageWorkspaceSymbol> {
-    Some(LanguageWorkspaceSymbol {
+) -> Option<LanguageSymbol> {
+    Some(LanguageSymbol {
         name,
         symbol_kind: serde_json::to_value(kind)
             .ok()?

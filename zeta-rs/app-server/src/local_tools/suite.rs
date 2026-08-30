@@ -1,6 +1,6 @@
 use super::LocalShellToolService;
 use super::read_only_sandbox;
-use crate::session_workspace_access::SessionWorkspaceAccess;
+use crate::dir_grants::DirGrants;
 use serde_json::Value;
 use serde_json::json;
 use sha2::Digest;
@@ -32,9 +32,12 @@ use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
 use zeta_core::ToolService;
+use zeta_file_access::Authorization;
+use zeta_file_access::Dir;
+use zeta_file_access::Permission as DirPermission;
+use zeta_file_system::FileSystem;
 use zeta_file_system::FileWriteCondition;
 use zeta_file_system::LocalFileSystem;
-use zeta_file_system::WorkspaceFileSystem;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
@@ -44,13 +47,10 @@ use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
 use zeta_protocol::ToolOutputStream;
 use zeta_shell_command::RipgrepExecutable;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceCapability;
-use zeta_workspace::WorkspaceRoot;
 
 use super::AgentGrepService;
 
-const READ_DESCRIPTION: &str = r#"Reads a file from the workspace and returns its content with line numbers.
+const READ_DESCRIPTION: &str = r#"Reads a file from an authorized directory and returns its content with line numbers.
 
 Usage notes:
 - Returns at most 2000 lines starting from `offset` (1-based). The last line
@@ -111,8 +111,8 @@ fn definition(name: &str, description: &str, parameters: &str) -> ToolDefinition
 const READ_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path to the file to read."},"offset":{"type":["integer","null"],"description":"1-based line number to start from. Defaults to 1."},"limit":{"type":["integer","null"],"description":"Maximum lines to return. Defaults to 2000."}},"required":["path","offset","limit"],"additionalProperties":false}"#;
 const WRITE_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path of the file to write."},"content":{"type":"string","description":"Full content to write. The previous content is replaced entirely."}},"required":["path","content"],"additionalProperties":false}"#;
 const EDIT_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path of the file to modify."},"old_string":{"type":"string","description":"Exact text to replace. Must be unique in the file unless replace_all is true."},"new_string":{"type":"string","description":"Replacement text. Must differ from old_string."},"replace_all":{"type":["boolean","null"],"description":"Replace every occurrence. Defaults to false."}},"required":["path","old_string","new_string","replace_all"],"additionalProperties":false}"#;
-const GREP_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression to search for."},"path":{"type":["string","null"],"description":"File or directory to search. Defaults to the workspace root."},"glob":{"type":["string","null"],"description":"Restrict to files matching this glob, e.g. \"*.rs\"."},"case_insensitive":{"type":["boolean","null"],"description":"Case-insensitive search. Defaults to false."}},"required":["pattern","path","glob","case_insensitive"],"additionalProperties":false}"#;
-const GLOB_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern to match file paths against."},"path":{"type":["string","null"],"description":"Directory to search in. Defaults to the workspace root."}},"required":["pattern","path"],"additionalProperties":false}"#;
+const GREP_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression to search for."},"path":{"type":["string","null"],"description":"File or directory to search. Defaults to the selected directory."},"glob":{"type":["string","null"],"description":"Restrict to files matching this glob, e.g. \"*.rs\"."},"case_insensitive":{"type":["boolean","null"],"description":"Case-insensitive search. Defaults to false."}},"required":["pattern","path","glob","case_insensitive"],"additionalProperties":false}"#;
+const GLOB_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern to match file paths against."},"path":{"type":["string","null"],"description":"Directory to search in. Defaults to the selected directory."}},"required":["pattern","path"],"additionalProperties":false}"#;
 const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
@@ -122,15 +122,15 @@ pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
     ripgrep: RipgrepExecutable,
     agent_grep: Arc<AgentGrepService>,
-    workspace: TrustedWorkspace,
-    session_workspace_access: Arc<SessionWorkspaceAccess>,
+    authorization: Authorization,
+    dir_grants: Arc<DirGrants>,
     read_paths: Mutex<BTreeSet<(String, PathBuf)>>,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
 }
 
 pub(super) struct ResolvedFilePath {
-    pub(super) root: WorkspaceRoot,
+    pub(super) root: Dir,
     pub(super) relative: PathBuf,
     pub(super) absolute: PathBuf,
 }
@@ -140,9 +140,9 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         shell: LocalShellToolService<B>,
         ripgrep: RipgrepExecutable,
         agent_grep: Arc<AgentGrepService>,
-        session_workspace_access: Arc<SessionWorkspaceAccess>,
+        dir_grants: Arc<DirGrants>,
     ) -> Self {
-        let workspace = shell.workspace.clone();
+        let authorization = shell.authorization.clone();
         let definitions = vec![
             shell.definition.clone(),
             definition("read_file", READ_DESCRIPTION, READ_SCHEMA),
@@ -155,8 +155,8 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             shell,
             ripgrep,
             agent_grep,
-            workspace,
-            session_workspace_access,
+            authorization,
+            dir_grants,
             read_paths: Mutex::new(BTreeSet::new()),
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
             definitions,
@@ -169,47 +169,47 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         existing: bool,
         session_id: Option<&SessionId>,
         thread_id: Option<&ThreadId>,
-        capability: WorkspaceCapability,
+        permission: DirPermission,
     ) -> Result<ResolvedFilePath, String> {
-        self.workspace
+        self.authorization
             .ensure_active()
             .map_err(|error| error.to_string())?;
         let path = PathBuf::from(value);
-        let thread_workspace = thread_id
+        let thread_dir = thread_id
             .map(|thread_id| {
-                self.session_workspace_access
-                    .thread_workspace(thread_id, capability)
+                self.dir_grants
+                    .thread_dir(thread_id, permission)
                     .map_err(|error| error.to_string())
             })
             .transpose()?
             .flatten();
-        let primary = thread_workspace
+        let primary = thread_dir
             .as_ref()
-            .map(|workspace| workspace.root().clone())
-            .unwrap_or_else(|| self.workspace.root().clone());
+            .map(|authorization| authorization.dir().clone())
+            .unwrap_or_else(|| self.authorization.dir().clone());
         let mut roots = vec![primary.clone()];
         if let Some(session_id) = session_id {
             if let Some(snapshot) = self
-                .session_workspace_access
-                .snapshot_for(session_id, capability)
+                .dir_grants
+                .snapshot_for(session_id, permission)
                 .map_err(|error| error.to_string())?
             {
                 roots.extend(
                     snapshot
-                        .additional_roots()
+                        .authorizations()
                         .iter()
-                        .filter(|workspace| workspace.ensure_active().is_ok())
-                        .map(|workspace| workspace.root().clone()),
+                        .filter(|authorization| authorization.ensure_active().is_ok())
+                        .map(|authorization| authorization.dir().clone()),
                 );
             }
         }
         let (root, relative) = if path.is_absolute() {
-            if let Some(workspace) = &thread_workspace
+            if let Some(authorization) = &thread_dir
                 && let Ok(relative) = path
-                    .strip_prefix(self.workspace.root().canonical_path())
-                    .or_else(|_| path.strip_prefix(self.workspace.root().requested_path()))
+                    .strip_prefix(self.authorization.dir().canonical_path())
+                    .or_else(|_| path.strip_prefix(self.authorization.dir().requested_path()))
             {
-                (workspace.root().clone(), relative.to_path_buf())
+                (authorization.dir().clone(), relative.to_path_buf())
             } else {
                 roots
                     .into_iter()
@@ -220,9 +220,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                             .map(|relative| (root, relative.to_path_buf()))
                     })
                     .max_by_key(|(root, _)| root.canonical_path().components().count())
-                    .ok_or_else(|| {
-                        format!("path is outside the workspace and added directories: {value}")
-                    })?
+                    .ok_or_else(|| format!("path is outside the authorized directories: {value}"))?
             }
         } else {
             (primary, path)
@@ -234,7 +232,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         } else {
             root.resolve_for_write(&relative)
         }
-        .map_err(|_| format!("path is outside the workspace: {value}"))?;
+        .map_err(|_| format!("path is outside the authorized directories: {value}"))?;
         Ok(ResolvedFilePath {
             root,
             relative,
@@ -254,8 +252,8 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .get("path")
             .and_then(Value::as_str)
             .unwrap_or_else(|| {
-                self.workspace
-                    .root()
+                self.authorization
+                    .dir()
                     .canonical_path()
                     .to_str()
                     .unwrap_or(".")
@@ -267,9 +265,9 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 session_id,
                 thread_id,
                 if write {
-                    WorkspaceCapability::MutateRepository
+                    DirPermission::MutateRepository
                 } else {
-                    WorkspaceCapability::InspectRepository
+                    DirPermission::InspectRepository
                 },
             )
             .map_err(CoreError::Policy)?;
@@ -332,7 +330,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                WorkspaceCapability::InspectRepository,
+                DirPermission::InspectRepository,
             )
             .map_err(CoreError::Execution)?;
         let metadata = fs::metadata(&resolved.absolute)
@@ -411,7 +409,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                WorkspaceCapability::MutateRepository,
+                DirPermission::MutateRepository,
             )
             .map_err(CoreError::Execution)?;
         if resolved.absolute.is_dir() {
@@ -499,7 +497,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                WorkspaceCapability::MutateRepository,
+                DirPermission::MutateRepository,
             )
             .map_err(CoreError::Execution)?;
         if !self
@@ -597,15 +595,20 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let pattern = string_arg(&call.arguments, "pattern")?;
-        let path = nullable_string(&call.arguments, "path")?
-            .unwrap_or_else(|| self.workspace.root().canonical_path().display().to_string());
+        let path = nullable_string(&call.arguments, "path")?.unwrap_or_else(|| {
+            self.authorization
+                .dir()
+                .canonical_path()
+                .display()
+                .to_string()
+        });
         let resolved = self
             .resolve(
                 &path,
                 false,
                 session_id,
                 thread_id,
-                WorkspaceCapability::InspectRepository,
+                DirPermission::InspectRepository,
             )
             .map_err(CoreError::Execution)?;
         let glob = nullable_string(&call.arguments, "glob")?;
@@ -622,15 +625,20 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let pattern = string_arg(&call.arguments, "pattern")?;
-        let path = nullable_string(&call.arguments, "path")?
-            .unwrap_or_else(|| self.workspace.root().canonical_path().display().to_string());
+        let path = nullable_string(&call.arguments, "path")?.unwrap_or_else(|| {
+            self.authorization
+                .dir()
+                .canonical_path()
+                .display()
+                .to_string()
+        });
         let resolved = self
             .resolve(
                 &path,
                 false,
                 session_id,
                 thread_id,
-                WorkspaceCapability::InspectRepository,
+                DirPermission::InspectRepository,
             )
             .map_err(CoreError::Execution)?;
         let mut command = Command::new(self.ripgrep.path());
@@ -706,16 +714,16 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         facts: &ToolExecutionFacts,
     ) -> Result<ActionReviewRequest, CoreError> {
         if call.name.as_str() == "shell-command" {
-            let workspace = facts
+            let authorization = facts
                 .execution_identity()
                 .map(|identity| {
-                    self.session_workspace_access
-                        .thread_workspace(identity.thread_id(), WorkspaceCapability::ExecuteProcess)
+                    self.dir_grants
+                        .thread_dir(identity.thread_id(), DirPermission::ExecuteCommands)
                 })
                 .transpose()
                 .map_err(|error| CoreError::Policy(error.to_string()))?
                 .flatten();
-            return self.shell.prepare_in_workspace(call, workspace.as_ref());
+            return self.shell.prepare_in_dir(call, authorization.as_ref());
         }
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Policy("local tools require durable caller identity".into())
@@ -784,7 +792,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
                 true,
                 Some(session_id),
                 Some(identity.thread_id()),
-                WorkspaceCapability::InspectRepository,
+                DirPermission::InspectRepository,
             ) {
                 self.read_paths
                     .lock()
@@ -833,19 +841,19 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         if call.name.as_str() == "shell-command" {
-            let workspace = thread_id
+            let dir_authorization = thread_id
                 .map(|thread_id| {
-                    self.session_workspace_access
-                        .thread_workspace(thread_id, WorkspaceCapability::ExecuteProcess)
+                    self.dir_grants
+                        .thread_dir(thread_id, DirPermission::ExecuteCommands)
                 })
                 .transpose()
                 .map_err(|error| CoreError::Execution(error.to_string()))?
                 .flatten();
-            return self.shell.execute_in_workspace(
+            return self.shell.execute_in_dir(
                 call,
                 authorization,
                 cancellation,
-                workspace.as_ref(),
+                dir_authorization.as_ref(),
             );
         }
         cancellation

@@ -16,12 +16,12 @@ use crate::TabContainerState;
 
 #[path = "layout_inspector.rs"]
 mod inspector_state;
+#[path = "layout_main.rs"]
+mod main;
 #[path = "layout_tab_container.rs"]
 mod tab_container;
 #[path = "layout_workbench.rs"]
 mod workbench;
-#[path = "layout_workspace.rs"]
-mod workspace;
 
 /// Logical dimensions of a presentation viewport.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -58,12 +58,12 @@ pub enum PartVisibility {
 }
 
 pub use inspector_state::InspectorPartState;
+pub use main::InspectorLayoutSpec;
+pub use main::MainLayout;
 pub use tab_container::TabContainerLayout;
 pub use tab_container::TabContainerLayoutSpec;
 pub use workbench::WorkbenchLayout;
 pub use workbench::WorkbenchLayoutSpec;
-pub use workspace::InspectorLayoutSpec;
-pub use workspace::WorkspaceLayout;
 
 /// Canonical visibility, sizing, and resize-gesture state for Workbench parts.
 #[derive(Clone, Copy, Debug, PartialEq)]

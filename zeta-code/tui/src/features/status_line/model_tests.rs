@@ -126,7 +126,7 @@ fn git_status(change_count: usize) -> GitStatusResult {
         repository_id: "repository-1".into(),
         stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
         revision: 3,
-        workspace_path: String::new(),
+        path: String::new(),
         head: GitHeadDto::Branch {
             name: "main".into(),
             object_id: "0123456789abcdef".into(),

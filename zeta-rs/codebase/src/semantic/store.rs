@@ -10,14 +10,14 @@ use crate::VectorSearchHit;
 
 /// Exact-generation vector persistence and nearest-neighbor primitive used by Codebase.
 ///
-/// Implementations must atomically replace one Workspace generation, never merge references
-/// across generations or embedding models, preserve Workspace chunk identities, and make deletion idempotent.
+/// Implementations must atomically replace one Directory generation, never merge references
+/// across generations or embedding models, preserve Directory chunk identities, and make deletion idempotent.
 /// Similarity search returns candidates in descending relevance order; final rerank policy remains
 /// with [`crate::CodebaseSemanticService`].
 pub trait CodebaseVectorStore: Send + Sync {
     /// Loads reusable embeddings for stable chunks in input order.
     ///
-    /// Implementations may reuse a vector only when the Workspace root, embedding model, relative
+    /// Implementations may reuse a vector only when the Directory root, embedding model, relative
     /// path, language, and stable chunk key match. A generation mismatch alone must not prevent
     /// reuse because lexical generations advance after restart and rebuild.
     fn reusable_embeddings(

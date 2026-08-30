@@ -1,8 +1,8 @@
-//! Complete, workspace-side code knowledge construction and retrieval.
+//! Complete, directory-side code knowledge construction and retrieval.
 //!
 //! The crate owns source scanning, stable identities, local indexes, semantic model input,
 //! candidate fusion, current-source verification, and retrieval budgets. Product hosts retain
-//! workspace authorization, watcher lifecycle, model construction, and transport adaptation.
+//! directory authorization, watcher lifecycle, model construction, and transport adaptation.
 
 mod chunker;
 mod error;
@@ -22,7 +22,7 @@ pub use error::CodebaseError;
 pub use index::Codebase;
 pub use retrieval::*;
 #[doc(hidden)]
-pub use scanner::{PreparedFile, WorkspaceScan};
+pub use scanner::{DirScan, PreparedFile};
 pub use semantic::*;
 pub use store::{CodebaseIndexStore, FileUpdate, StoredSource};
 pub use symbol::*;

@@ -39,7 +39,7 @@ zeta-scm = { workspace = true }
 zeta-server-host = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-terminal = { workspace = true }
-zeta-terminal-workspace = { workspace = true }
+zeta-terminal-runtime = { workspace = true }
 zeta-text-file = { workspace = true }
 zeta-theme = { workspace = true }
 zeta-ui-components = { workspace = true }
@@ -57,4 +57,4 @@ tar = { workspace = true }
 tempfile = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-text-file = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }

@@ -21,7 +21,7 @@ impl CloudCodebaseProviderError {
 pub enum CloudCodebaseError {
     #[error("cloud codebase input is invalid: {0}")]
     InvalidInput(&'static str),
-    #[error("cloud codebase storage belongs to another workspace root")]
+    #[error("cloud codebase storage belongs to another directory root")]
     StorageRootMismatch,
     #[error("cloud codebase storage schema is incompatible")]
     IncompatibleStorage,

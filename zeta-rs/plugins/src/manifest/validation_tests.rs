@@ -63,7 +63,7 @@ fn valid_manifest() -> Value {
         },
         "permissions": [
             { "type": "process", "executable": "bin/review-server" },
-            { "type": "workspace", "access": "read" },
+            { "type": "directory", "access": "read" },
             { "type": "network", "hosts": ["api.example.com"] }
         ],
         "credentialSlots": [

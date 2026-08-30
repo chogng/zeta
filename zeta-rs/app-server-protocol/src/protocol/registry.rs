@@ -61,10 +61,10 @@ use crate::protocol::codebase_symbols::CodebaseSymbolsSearchParams;
 use crate::protocol::codebase_symbols::CodebaseSymbolsSearchResult;
 use crate::protocol::codebase_symbols::CodebaseSymbolsStateDto;
 use crate::protocol::codebase_symbols::CodebaseSymbolsStatusResult;
+use crate::protocol::codebase_symbols::DocumentOverlayCloseParams;
+use crate::protocol::codebase_symbols::DocumentOverlayStatusResult;
+use crate::protocol::codebase_symbols::DocumentOverlaySynchronizeParams;
 use crate::protocol::codebase_symbols::SymbolKindDto;
-use crate::protocol::codebase_symbols::WorkspaceDocumentOverlayCloseParams;
-use crate::protocol::codebase_symbols::WorkspaceDocumentOverlayStatusResult;
-use crate::protocol::codebase_symbols::WorkspaceDocumentOverlaySynchronizeParams;
 use crate::protocol::collaboration::DocumentCollaborationOpenParams;
 use crate::protocol::collaboration::DocumentCollaborationOpenResult;
 use crate::protocol::collaboration::DocumentCollaborationPresence;
@@ -80,6 +80,7 @@ use crate::protocol::common::BrowserCapability;
 use crate::protocol::common::ClientCapabilities;
 use crate::protocol::common::ClientInfo;
 use crate::protocol::common::CommandId;
+use crate::protocol::common::DirPermissionsHostCapability;
 use crate::protocol::common::EmptyParams;
 use crate::protocol::common::ItemId;
 use crate::protocol::common::RequestId;
@@ -91,7 +92,6 @@ use crate::protocol::common::ThreadId;
 use crate::protocol::common::ToolCallId;
 use crate::protocol::common::ToolName;
 use crate::protocol::common::TurnId;
-use crate::protocol::common::WorkspaceTrustHostCapability;
 use crate::protocol::config::AgentGrepBackendDto;
 use crate::protocol::config::ApprovalReviewModelSelectionDto;
 use crate::protocol::config::CodebaseAutomaticContextDto;
@@ -194,6 +194,30 @@ use crate::protocol::document::TypstCompileResult;
 use crate::protocol::document::TypstDiagnosticDto;
 use crate::protocol::document::TypstDiagnosticSeverityDto;
 use crate::protocol::document::TypstSourceRangeDto;
+use crate::protocol::environment::DirContributionsDto;
+use crate::protocol::environment::DirGrantDto;
+use crate::protocol::environment::DirPermissionsEntryDto;
+use crate::protocol::environment::DirPermissionsForgetParams;
+use crate::protocol::environment::DirPermissionsListResult;
+use crate::protocol::environment::DirPermissionsReadParams;
+use crate::protocol::environment::DirPermissionsReadResult;
+use crate::protocol::environment::DirPermissionsSetParams;
+use crate::protocol::environment::EnvCwdSetParams;
+use crate::protocol::environment::EnvCwdSetResult;
+use crate::protocol::environment::EnvDirDto;
+use crate::protocol::environment::EnvDirSetEntry;
+use crate::protocol::environment::EnvDirsSetParams;
+use crate::protocol::environment::EnvDirsSetResult;
+use crate::protocol::environment::PermissionDto;
+use crate::protocol::environment::SessionDirAddParams;
+use crate::protocol::environment::SessionDirDto;
+use crate::protocol::environment::SessionDirListParams;
+use crate::protocol::environment::SessionDirListResult;
+use crate::protocol::environment::SessionDirMutationDto;
+use crate::protocol::environment::SessionDirMutationResult;
+use crate::protocol::environment::SessionDirPermissionsSetParams;
+use crate::protocol::environment::SessionDirRemoveParams;
+use crate::protocol::environment::SessionDirSelector;
 use crate::protocol::error::AppServerError;
 use crate::protocol::error::AppServerErrorName;
 use crate::protocol::extension_host::ExtensionHostCancellationReasonDto;
@@ -320,6 +344,14 @@ use crate::protocol::language::LanguageCompletionsResult;
 use crate::protocol::language::LanguageDiagnosticReportKindDto;
 use crate::protocol::language::LanguageDiagnosticSeverityDto;
 use crate::protocol::language::LanguageDiagnosticsNotification;
+use crate::protocol::language::LanguageDirectoryDiagnosticSnapshotDto;
+use crate::protocol::language::LanguageDirectoryDiagnosticsParams;
+use crate::protocol::language::LanguageDirectoryDiagnosticsResult;
+use crate::protocol::language::LanguageDirectoryEditDto;
+use crate::protocol::language::LanguageDirectoryEditEntryDto;
+use crate::protocol::language::LanguageDirectorySymbolDto;
+use crate::protocol::language::LanguageDirectorySymbolsParams;
+use crate::protocol::language::LanguageDirectorySymbolsResult;
 use crate::protocol::language::LanguageDocumentColorDto;
 use crate::protocol::language::LanguageDocumentColorsResult;
 use crate::protocol::language::LanguageDocumentDiagnosticsParams;
@@ -382,14 +414,6 @@ use crate::protocol::language::LanguageSignatureInformationDto;
 use crate::protocol::language::LanguageSynchronizeParams;
 use crate::protocol::language::LanguageTextDocumentEditDto;
 use crate::protocol::language::LanguageTextEditDto;
-use crate::protocol::language::LanguageWorkspaceDiagnosticSnapshotDto;
-use crate::protocol::language::LanguageWorkspaceDiagnosticsParams;
-use crate::protocol::language::LanguageWorkspaceDiagnosticsResult;
-use crate::protocol::language::LanguageWorkspaceEditDto;
-use crate::protocol::language::LanguageWorkspaceEditEntryDto;
-use crate::protocol::language::LanguageWorkspaceSymbolDto;
-use crate::protocol::language::LanguageWorkspaceSymbolsParams;
-use crate::protocol::language::LanguageWorkspaceSymbolsResult;
 use crate::protocol::marketplace::MarketplaceAcquireCapabilityParams;
 use crate::protocol::marketplace::MarketplaceAcquiredCapabilityDto;
 use crate::protocol::marketplace::MarketplaceActivationSpecDto;
@@ -444,7 +468,6 @@ use crate::protocol::mcp::McpServerStatusDto;
 use crate::protocol::mcp::McpServerStatusResult;
 use crate::protocol::model::ModelCatalogEntry;
 use crate::protocol::model::ModelListResult;
-use crate::protocol::notification::SessionUpdateEnvelope;
 use crate::protocol::notification::ThreadTranscriptUpdateEnvelope;
 use crate::protocol::notification::ThreadUpdateEnvelope;
 use crate::protocol::plugins::PluginCommandDispositionDto;
@@ -464,15 +487,16 @@ use crate::protocol::resources::ResourceMetadataResult;
 use crate::protocol::resources::ResourceReadParams;
 use crate::protocol::resources::ResourceReadResult;
 use crate::protocol::resources::ResourceReleaseParams;
-use crate::protocol::search::WorkspaceSearchCancelParams;
-use crate::protocol::search::WorkspaceSearchCaseSensitivity;
-use crate::protocol::search::WorkspaceSearchMatch;
-use crate::protocol::search::WorkspaceSearchMatchRange;
-use crate::protocol::search::WorkspaceSearchPatternKind;
-use crate::protocol::search::WorkspaceSearchReadParams;
-use crate::protocol::search::WorkspaceSearchReadResult;
-use crate::protocol::search::WorkspaceSearchStartParams;
-use crate::protocol::search::WorkspaceSearchStartResult;
+use crate::protocol::search::ContentSearchCancelParams;
+use crate::protocol::search::ContentSearchCaseSensitivity;
+use crate::protocol::search::ContentSearchMatch;
+use crate::protocol::search::ContentSearchMatchRange;
+use crate::protocol::search::ContentSearchPatternKind;
+use crate::protocol::search::ContentSearchReadParams;
+use crate::protocol::search::ContentSearchReadResult;
+use crate::protocol::search::ContentSearchStartParams;
+use crate::protocol::search::ContentSearchStartResult;
+use crate::protocol::session::SessionChanged;
 use crate::protocol::session::SessionCreateParams;
 use crate::protocol::session::SessionListResult;
 use crate::protocol::session::SessionReadParams;
@@ -551,8 +575,8 @@ use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
 use crate::protocol::turn::TurnSteerResult;
 use crate::protocol::turn_changes::ChangeSetId;
-use crate::protocol::turn_changes::ThreadWorkspaceBinding;
-use crate::protocol::turn_changes::ThreadWorkspaceRepositoryBindingDto;
+use crate::protocol::turn_changes::ThreadDirBinding;
+use crate::protocol::turn_changes::ThreadWorktreeRepositoryBindingDto;
 use crate::protocol::turn_changes::TurnChangeCaptureStateDto;
 use crate::protocol::turn_changes::TurnChangeCommitStateDto;
 use crate::protocol::turn_changes::TurnChangeFileDto;
@@ -573,35 +597,10 @@ use crate::protocol::turn_changes::TurnChangesReadFileResult;
 use crate::protocol::turn_changes::TurnChangesReadParams;
 use crate::protocol::turn_changes::TurnChangesReadResult;
 use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryContributionsDto;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryDto;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryMutationResult;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryPermissionsSetParams;
-use crate::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
-use crate::protocol::workspace::WorkspaceFolderDto;
-use crate::protocol::workspace::WorkspaceFolderSetEntry;
-use crate::protocol::workspace::WorkspaceFoldersSetParams;
-use crate::protocol::workspace::WorkspaceFoldersSetResult;
-use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
-use crate::protocol::workspace::WorkspaceSwitchParams;
-use crate::protocol::workspace::WorkspaceSwitchResult;
-use crate::protocol::workspace::WorkspaceSwitchTrust;
-use crate::protocol::workspace::WorkspaceTrustEntryDto;
-use crate::protocol::workspace::WorkspaceTrustForgetParams;
-use crate::protocol::workspace::WorkspaceTrustListResult;
-use crate::protocol::workspace::WorkspaceTrustReadParams;
-use crate::protocol::workspace::WorkspaceTrustReadResult;
-use crate::protocol::workspace::WorkspaceTrustSetParams;
-use crate::protocol::workspace::WorkspaceTrustSettingDto;
-use crate::protocol::workspace::WorkspaceTrustStateDto;
 use schemars::JsonSchema;
 use ts_rs::Config;
 use ts_rs::TS;
+use zeta_file_access::DirId;
 use zeta_protocol::ActionApprovalCapability;
 use zeta_protocol::ActionApprovalCapabilityKind;
 use zeta_protocol::ActionApprovalDecision;
@@ -682,11 +681,8 @@ use zeta_protocol::RequestUserInputResponse;
 use zeta_protocol::ReviewTarget;
 use zeta_protocol::SandboxDenialOutput;
 use zeta_protocol::Session;
-use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
-use zeta_protocol::SessionThreadStatus;
-use zeta_protocol::SessionUpdate;
 use zeta_protocol::SkillActivationReason;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillName;
@@ -722,8 +718,6 @@ use zeta_protocol::TurnStatus;
 use zeta_protocol::UserInputAnswer;
 use zeta_protocol::UserInputOption;
 use zeta_protocol::UserInputQuestion;
-use zeta_protocol::WorkspaceBinding;
-use zeta_protocol::WorkspaceTrustId;
 
 /// Selects whether equal scheduling keys exclude or share execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1001,53 +995,53 @@ client_methods! {
         response: InitializeResult,
         serialization: GlobalExclusive,
     },
-    WorkspaceSwitch => "workspace/switch" {
-        params: WorkspaceSwitchParams,
-        response: WorkspaceSwitchResult,
+    EnvCwdSet => "env/cwd/set" {
+        params: EnvCwdSetParams,
+        response: EnvCwdSetResult,
         serialization: GlobalExclusive,
     },
-    WorkspaceFoldersSet => "workspace/folders/set" {
-        params: WorkspaceFoldersSetParams,
-        response: WorkspaceFoldersSetResult,
+    EnvDirsSet => "env/dirs/set" {
+        params: EnvDirsSetParams,
+        response: EnvDirsSetResult,
         serialization: GlobalExclusive,
     },
-    WorkspaceAdditionalDirectoryList => "workspace/additionalDirectories/list" {
-        params: WorkspaceAdditionalDirectoryListParams,
-        response: WorkspaceAdditionalDirectoryListResult,
+    SessionDirList => "session/dirs/list" {
+        params: SessionDirListParams,
+        response: SessionDirListResult,
         serialization: SessionSharedRead,
     },
-    WorkspaceAdditionalDirectoryAdd => "workspace/additionalDirectories/add" {
-        params: WorkspaceAdditionalDirectoryAddParams,
-        response: WorkspaceAdditionalDirectoryMutationResult,
+    SessionDirAdd => "session/dirs/add" {
+        params: SessionDirAddParams,
+        response: SessionDirMutationResult,
         serialization: SessionExclusive,
     },
-    WorkspaceAdditionalDirectoryRemove => "workspace/additionalDirectories/remove" {
-        params: WorkspaceAdditionalDirectoryRemoveParams,
-        response: WorkspaceAdditionalDirectoryMutationResult,
+    SessionDirRemove => "session/dirs/remove" {
+        params: SessionDirRemoveParams,
+        response: SessionDirMutationResult,
         serialization: SessionExclusive,
     },
-    WorkspaceAdditionalDirectoryPermissionsSet => "workspace/additionalDirectories/permissions/set" {
-        params: WorkspaceAdditionalDirectoryPermissionsSetParams,
-        response: WorkspaceAdditionalDirectoryMutationResult,
+    SessionDirPermissionsSet => "session/dirs/permissions/set" {
+        params: SessionDirPermissionsSetParams,
+        response: SessionDirMutationResult,
         serialization: SessionExclusive,
     },
-    WorkspaceTrustRead => "workspace/trust/read" {
-        params: WorkspaceTrustReadParams,
-        response: WorkspaceTrustReadResult,
+    DirPermissionsRead => "config/dirPermissions/read" {
+        params: DirPermissionsReadParams,
+        response: DirPermissionsReadResult,
         serialization: GlobalSharedRead,
     },
-    WorkspaceTrustList => "workspace/trust/list" {
+    DirPermissionsList => "config/dirPermissions/list" {
         params: EmptyParams,
-        response: WorkspaceTrustListResult,
+        response: DirPermissionsListResult,
         serialization: GlobalSharedRead,
     },
-    WorkspaceTrustSet => "workspace/trust/set" {
-        params: WorkspaceTrustSetParams,
+    DirPermissionsSet => "config/dirPermissions/set" {
+        params: DirPermissionsSetParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
-    WorkspaceTrustForget => "workspace/trust/forget" {
-        params: WorkspaceTrustForgetParams,
+    DirPermissionsForget => "config/dirPermissions/forget" {
+        params: DirPermissionsForgetParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
@@ -1401,17 +1395,17 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
-    CodebaseConfigure => "workspace/codebase/configure" {
+    CodebaseConfigure => "codebase/configure" {
         params: CodebaseConfigureParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
-    CommitMessageAuthorize => "workspace/commitMessage/authorize" {
+    CommitMessageAuthorize => "commitMessage/authorize" {
         params: CommitMessageAuthorizeParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
-    CommitMessageRevoke => "workspace/commitMessage/revoke" {
+    CommitMessageRevoke => "commitMessage/revoke" {
         params: CommitMessageRevokeParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
@@ -1661,9 +1655,9 @@ client_methods! {
         response: LanguageDocumentDiagnosticsResult,
         serialization: GlobalSharedRead,
     },
-    LanguageWorkspaceDiagnostics => "language/workspaceDiagnostics" {
-        params: LanguageWorkspaceDiagnosticsParams,
-        response: LanguageWorkspaceDiagnosticsResult,
+    LanguageDirectoryDiagnostics => "language/directoryDiagnostics" {
+        params: LanguageDirectoryDiagnosticsParams,
+        response: LanguageDirectoryDiagnosticsResult,
         serialization: GlobalSharedRead,
     },
     LanguageLocations => "language/locations" {
@@ -1676,9 +1670,9 @@ client_methods! {
         response: LanguageHierarchyResultDto,
         serialization: GlobalSharedRead,
     },
-    LanguageWorkspaceSymbols => "language/workspaceSymbols" {
-        params: LanguageWorkspaceSymbolsParams,
-        response: LanguageWorkspaceSymbolsResult,
+    LanguageDirectorySymbols => "language/directorySymbols" {
+        params: LanguageDirectorySymbolsParams,
+        response: LanguageDirectorySymbolsResult,
         serialization: GlobalSharedRead,
     },
     LanguagePrepareRename => "language/prepareRename" {
@@ -1688,7 +1682,7 @@ client_methods! {
     },
     LanguageRename => "language/rename" {
         params: LanguageRenameParams,
-        response: LanguageWorkspaceEditDto,
+        response: LanguageDirectoryEditDto,
         serialization: GlobalSharedRead,
     },
     LanguageCodeActions => "language/codeActions" {
@@ -1876,97 +1870,97 @@ client_methods! {
         response: GitOperationResult,
         serialization: GlobalExclusive,
     },
-    WorkspaceSearchStart => "workspace/search/start" {
-        params: WorkspaceSearchStartParams,
-        response: WorkspaceSearchStartResult,
+    ContentSearchStart => "content/search/start" {
+        params: ContentSearchStartParams,
+        response: ContentSearchStartResult,
         serialization: None,
     },
-    WorkspaceSearchRead => "workspace/search/read" {
-        params: WorkspaceSearchReadParams,
-        response: WorkspaceSearchReadResult,
+    ContentSearchRead => "content/search/read" {
+        params: ContentSearchReadParams,
+        response: ContentSearchReadResult,
         serialization: None,
     },
-    WorkspaceSearchCancel => "workspace/search/cancel" {
-        params: WorkspaceSearchCancelParams,
+    ContentSearchCancel => "content/search/cancel" {
+        params: ContentSearchCancelParams,
         response: (),
         serialization: None,
     },
-    CodebaseStatus => "workspace/codebase/status" {
+    CodebaseStatus => "codebase/status" {
         params: EmptyParams,
         response: CodebaseStatusResult,
         serialization: GlobalSharedRead,
     },
-    CodebaseSearch => "workspace/codebase/search" {
+    CodebaseSearch => "codebase/search" {
         params: CodebaseSearchParams,
         response: CodebaseSearchResult,
         serialization: GlobalSharedRead,
     },
-    CodebaseSymbolsStatus => "workspace/codebase/symbols/status" {
+    CodebaseSymbolsStatus => "codebase/symbols/status" {
         params: EmptyParams,
         response: CodebaseSymbolsStatusResult,
         serialization: GlobalSharedRead,
     },
-    CodebaseSymbolsSearch => "workspace/codebase/symbols/search" {
+    CodebaseSymbolsSearch => "codebase/symbols/search" {
         params: CodebaseSymbolsSearchParams,
         response: CodebaseSymbolsSearchResult,
         serialization: GlobalSharedRead,
     },
-    WorkspaceDocumentOverlaySynchronize => "workspace/codeIntelligence/document/synchronize" {
-        params: WorkspaceDocumentOverlaySynchronizeParams,
-        response: WorkspaceDocumentOverlayStatusResult,
+    DocumentOverlaySynchronize => "codeIntelligence/document/synchronize" {
+        params: DocumentOverlaySynchronizeParams,
+        response: DocumentOverlayStatusResult,
         serialization: GlobalSharedRead,
     },
-    WorkspaceDocumentOverlayClose => "workspace/codeIntelligence/document/close" {
-        params: WorkspaceDocumentOverlayCloseParams,
-        response: WorkspaceDocumentOverlayStatusResult,
+    DocumentOverlayClose => "codeIntelligence/document/close" {
+        params: DocumentOverlayCloseParams,
+        response: DocumentOverlayStatusResult,
         serialization: GlobalSharedRead,
     },
-    CodebaseRetrieve => "workspace/codebase/retrieve" {
+    CodebaseRetrieve => "codebase/retrieve" {
         params: CodebaseRetrievalParams,
         response: CodebaseRetrievalResult,
         serialization: GlobalSharedRead,
     },
-    CodebaseRebuild => "workspace/codebase/rebuild" {
+    CodebaseRebuild => "codebase/rebuild" {
         params: EmptyParams,
         response: CodebaseStatusResult,
         serialization: GlobalExclusive,
     },
-    FastRegexIndexStatus => "workspace/agentGrep/fastRegex/status" {
+    FastRegexIndexStatus => "agentGrep/fastRegex/status" {
         params: EmptyParams,
         response: FastRegexIndexStatusResult,
         serialization: GlobalSharedRead,
     },
-    FastRegexIndexRebuild => "workspace/agentGrep/fastRegex/rebuild" {
+    FastRegexIndexRebuild => "agentGrep/fastRegex/rebuild" {
         params: EmptyParams,
         response: FastRegexIndexStatusResult,
         serialization: GlobalExclusive,
     },
-    FastRegexDisableAndDelete => "workspace/agentGrep/fastRegex/disableAndDelete" {
+    FastRegexDisableAndDelete => "agentGrep/fastRegex/disableAndDelete" {
         params: FastRegexDisableAndDeleteParams,
         response: FastRegexDisableAndDeleteResult,
         serialization: GlobalExclusive,
     },
-    CloudCodebaseStatus => "workspace/codebase/cloud/status" {
+    CloudCodebaseStatus => "codebase/cloud/status" {
         params: EmptyParams,
         response: CloudCodebaseStatusResult,
         serialization: GlobalSharedRead,
     },
-    CloudCodebasePreview => "workspace/codebase/cloud/preview" {
+    CloudCodebasePreview => "codebase/cloud/preview" {
         params: CloudCodebasePreviewParams,
         response: CloudCodebasePreviewResult,
         serialization: GlobalSharedRead,
     },
-    CloudCodebaseAuthorize => "workspace/codebase/cloud/authorize" {
+    CloudCodebaseAuthorize => "codebase/cloud/authorize" {
         params: CloudCodebaseAuthorizeParams,
         response: CloudCodebaseStatusResult,
         serialization: GlobalExclusive,
     },
-    CloudCodebaseSync => "workspace/codebase/cloud/sync" {
+    CloudCodebaseSync => "codebase/cloud/sync" {
         params: EmptyParams,
         response: CloudCodebaseStatusResult,
         serialization: GlobalExclusive,
     },
-    CloudCodebaseRevoke => "workspace/codebase/cloud/revoke" {
+    CloudCodebaseRevoke => "codebase/cloud/revoke" {
         params: EmptyParams,
         response: CloudCodebaseStatusResult,
         serialization: GlobalExclusive,
@@ -2235,14 +2229,14 @@ server_notifications! {
     AgentRequest => "agent/request" {
         params: AgentRequestEnvelope,
     },
+    SessionChanged => "session/changed" {
+        params: SessionChanged,
+    },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
     DocumentCollaborationPresence => "document/collaboration/presence" {
         params: DocumentCollaborationPresenceSnapshot,
-    },
-    SessionUpdate => "session/update" {
-        params: SessionUpdateEnvelope,
     },
     SessionThreadUpdate => "session/thread/update" {
         params: ThreadUpdateEnvelope,
@@ -2284,7 +2278,7 @@ server_notifications! {
     FsChanged => "fs/changed" {
         params: FsChanged,
     },
-    LanguageDiagnostics => "language/diagnostics" {
+    LanguageDirectoryDiagnostics => "language/diagnostics" {
         params: LanguageDiagnosticsNotification,
     },
     LanguageServerMessage => "language/serverMessage" {
@@ -2337,8 +2331,7 @@ typescript_bindings! {
     ItemId,
     ToolCallId,
     ToolName,
-    WorkspaceTrustId,
-    WorkspaceBinding,
+    DirId,
     ConnectorAccountDto,
     ConnectorAvailableActionDto,
     ConnectorOAuthMethodDto,
@@ -2429,7 +2422,7 @@ typescript_bindings! {
     ClientInfo,
     AgentInteractionCapability,
     BrowserCapability,
-    WorkspaceTrustHostCapability,
+    DirPermissionsHostCapability,
     BrowserBinaryPayload,
     BrowserCloseParams,
     BrowserCreateParams,
@@ -2602,45 +2595,40 @@ typescript_bindings! {
     ServerCapabilities,
     InitializeParams,
     InitializeResult,
-    WorkspaceSwitchParams,
-    WorkspaceSwitchResult,
-    WorkspaceSwitchTrust,
-    WorkspaceFolderDto,
-    WorkspaceFolderSetEntry,
-    WorkspaceFoldersSetParams,
-    WorkspaceFoldersSetResult,
-    WorkspaceSessionDirectorySelector,
-    WorkspaceAdditionalDirectoryDto,
-    WorkspaceAdditionalDirectoryContributionsDto,
-    WorkspaceAdditionalDirectoryListParams,
-    WorkspaceAdditionalDirectoryListResult,
-    WorkspaceAdditionalDirectoryAddParams,
-    WorkspaceAdditionalDirectoryRemoveParams,
-    WorkspaceAdditionalDirectoryMutationDto,
-    WorkspaceAdditionalDirectoryMutationResult,
-    WorkspaceAdditionalDirectoryPermissionDto,
-    WorkspaceAdditionalDirectoryPermissionsSetParams,
-    WorkspaceTrustReadParams,
-    WorkspaceTrustReadResult,
-    WorkspaceTrustEntryDto,
-    WorkspaceTrustListResult,
-    WorkspaceTrustSetParams,
-    WorkspaceTrustForgetParams,
-    WorkspaceTrustSettingDto,
-    WorkspaceTrustStateDto,
+    EnvCwdSetParams,
+    EnvCwdSetResult,
+    DirGrantDto,
+    EnvDirDto,
+    EnvDirSetEntry,
+    EnvDirsSetParams,
+    EnvDirsSetResult,
+    SessionDirSelector,
+    SessionDirDto,
+    DirContributionsDto,
+    SessionDirListParams,
+    SessionDirListResult,
+    SessionDirAddParams,
+    SessionDirRemoveParams,
+    SessionDirMutationDto,
+    SessionDirMutationResult,
+    PermissionDto,
+    SessionDirPermissionsSetParams,
+    DirPermissionsReadParams,
+    DirPermissionsReadResult,
+    DirPermissionsEntryDto,
+    DirPermissionsListResult,
+    DirPermissionsSetParams,
+    DirPermissionsForgetParams,
     SessionStatus,
     ThreadOrigin,
-    SessionThreadStatus,
     SessionThread,
     Session,
-    SessionEvent,
-    SessionUpdate,
-    SessionUpdateEnvelope,
     ApprovalMode,
     SessionCreateParams,
     SessionReadParams,
     SessionSubscribeParams,
     SessionUnsubscribeParams,
+    SessionChanged,
     SessionRequest,
     SessionRequestParams,
     SessionRequestResult,
@@ -2764,8 +2752,8 @@ typescript_bindings! {
     TurnChangeFileKindDto,
     TurnChangeFileDto,
     TurnChangeFileStatisticsDto,
-    ThreadWorkspaceBinding,
-    ThreadWorkspaceRepositoryBindingDto,
+    ThreadDirBinding,
+    ThreadWorktreeRepositoryBindingDto,
     TurnChangeSetSummary,
     TurnChangesListParams,
     TurnChangesListResult,
@@ -2848,9 +2836,9 @@ typescript_bindings! {
     LanguageDocumentDiagnosticsParams,
     LanguageDiagnosticReportKindDto,
     LanguageDocumentDiagnosticsResult,
-    LanguageWorkspaceDiagnosticsParams,
-    LanguageWorkspaceDiagnosticSnapshotDto,
-    LanguageWorkspaceDiagnosticsResult,
+    LanguageDirectoryDiagnosticsParams,
+    LanguageDirectoryDiagnosticSnapshotDto,
+    LanguageDirectoryDiagnosticsResult,
     LanguageFormattingOptionsDto,
     LanguageDocumentFormattingParams,
     LanguageRangeFormattingParams,
@@ -2896,17 +2884,17 @@ typescript_bindings! {
     LanguageHierarchyParams,
     LanguageHierarchyEntryDto,
     LanguageHierarchyResultDto,
-    LanguageWorkspaceSymbolsParams,
-    LanguageWorkspaceSymbolDto,
-    LanguageWorkspaceSymbolsResult,
+    LanguageDirectorySymbolsParams,
+    LanguageDirectorySymbolDto,
+    LanguageDirectorySymbolsResult,
     LanguagePrepareRenameParams,
     LanguageRenamePreparationDto,
     LanguagePrepareRenameResult,
     LanguageRenameParams,
     LanguageTextEditDto,
     LanguageTextDocumentEditDto,
-    LanguageWorkspaceEditDto,
-    LanguageWorkspaceEditEntryDto,
+    LanguageDirectoryEditDto,
+    LanguageDirectoryEditEntryDto,
     LanguageDiagnosticSeverityDto,
     LanguageCodeActionDiagnosticDto,
     LanguageDiagnosticsNotification,
@@ -2967,15 +2955,15 @@ typescript_bindings! {
     GitCommitParams,
     GitOperationResult,
     GitCommitResult,
-    WorkspaceSearchPatternKind,
-    WorkspaceSearchCaseSensitivity,
-    WorkspaceSearchStartParams,
-    WorkspaceSearchStartResult,
-    WorkspaceSearchReadParams,
-    WorkspaceSearchMatchRange,
-    WorkspaceSearchMatch,
-    WorkspaceSearchReadResult,
-    WorkspaceSearchCancelParams,
+    ContentSearchPatternKind,
+    ContentSearchCaseSensitivity,
+    ContentSearchStartParams,
+    ContentSearchStartResult,
+    ContentSearchReadParams,
+    ContentSearchMatchRange,
+    ContentSearchMatch,
+    ContentSearchReadResult,
+    ContentSearchCancelParams,
     CodebaseStateDto,
     CodebaseStatusResult,
     FastRegexIndexStatusResult,
@@ -2992,9 +2980,9 @@ typescript_bindings! {
     SymbolKindDto,
     CodebaseSymbolsSearchHitDto,
     CodebaseSymbolsSearchResult,
-    WorkspaceDocumentOverlaySynchronizeParams,
-    WorkspaceDocumentOverlayCloseParams,
-    WorkspaceDocumentOverlayStatusResult,
+    DocumentOverlaySynchronizeParams,
+    DocumentOverlayCloseParams,
+    DocumentOverlayStatusResult,
     CodebaseRetrievalParams,
     CodebaseRetrievalDegradationDto,
     CodebaseRetrievalHitDto,

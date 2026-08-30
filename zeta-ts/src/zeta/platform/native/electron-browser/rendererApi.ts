@@ -14,7 +14,7 @@ import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/
 import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
 import { createUserKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
-import { createWorkspaceSearchApi } from "../../search/electron-browser/searchApi.js";
+import { createContentSearchApi } from "../../search/electron-browser/searchApi.js";
 import { createModelApi, createSessionApi, createThreadApi, createTurnApi } from "../../sessions/electron-browser/sessionApi.js";
 import { createSkillApi } from "../../skills/electron-browser/skillApi.js";
 import { ElectronTerminalProcessService } from "../../terminal/electron-browser/electronTerminalProcessService.js";
@@ -37,7 +37,7 @@ import { createRemoteAgentApi } from "../../remote/electron-browser/remoteAgentA
 import { createRemoteConnectionApi } from "../../remote/electron-browser/remoteConnectionApi.js";
 import { createRemoteTunnelApi } from "../../remote/electron-browser/remoteTunnelApi.js";
 import { createMarketplaceApi } from "../../marketplace/electron-browser/marketplaceApi.js";
-import { createWorkspaceTrustApi } from "../../workspaceTrust/electron-browser/workspaceTrustApi.js";
+import { createDirPermissionsApi } from "../../dirPermissions/electron-browser/dirPermissionsApi.js";
 import { createAccountApi } from "../../accounts/electron-browser/accountApi.js";
 import { createTurnChangesApi } from "../../turnChanges/electron-browser/turnChangesApi.js";
 
@@ -76,7 +76,7 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
 		syntax: createSyntaxApi(),
 		language: createLanguageApi(),
 		git: createGitApi(),
-		workspaceSearch: createWorkspaceSearchApi(),
+		contentSearch: createContentSearchApi(),
 		terminal: new ElectronTerminalProcessService(appServer),
 		...capabilities,
 		events: createServerEventApi(),
@@ -95,6 +95,6 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
 		plugins: createPluginApi(),
 		marketplace: createMarketplaceApi(),
 		toolSearch: createToolSearchApi(),
-		workspaceTrust: createWorkspaceTrustApi(),
+		dirPermissions: createDirPermissionsApi(),
 	};
 }

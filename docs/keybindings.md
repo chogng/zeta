@@ -194,7 +194,7 @@ CLI 把 active profile root 显式交给 TUI；TUI 启动时加载产品资源�
 | Zeta Code 录制与原子保存 | Current | 单键/两段 Chord 录制只在临时 Pane 中截获输入；revision 过期时拒绝保存，完整编译成功后才原子替换文件和运行时规则 |
 | Profile 切换 | Planned boundary | host 先切换 active profile，再给端侧资源 owner 一个新 generation；旧 watcher 不得覆盖新 profile |
 | Settings Sync/导入导出 | Deferred | 先定义 profile 同步 authority、冲突格式和隐私边界 |
-| Workspace 级键位 | Not accepted | 默认不信任仓库控制的按键重映射；如需支持必须先定义 Workspace Trust 与显式启用 |
+| 目录提供的键位 | Not accepted | `DirConfigDocument` 不接受键位声明；如需支持必须先定义独立来源 capability 与显式启用 |
 | OS `systemWide` 热键 | Not accepted | 只可能由有窗口/native shortcut authority 的 Zeta/App 实现；TUI 不支持 |
 
 ## 7. 可靠性、隐私和兼容性

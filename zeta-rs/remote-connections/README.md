@@ -140,7 +140,7 @@ app `AppServerHost` / Electron Main
   -> AppServerSession::start_stdio (canonical App Server client boundary)
   -> OpenSSH stdio
   -> Remote runtime remote-server connect
-  -> per-Workspace Remote Server daemon
+  -> per-Directory Remote Server daemon
 ```
 
 连接启动后，`AppServerSession` 持有子进程生命周期、typed initialize/schema gate、请求配对和通知流。

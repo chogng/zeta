@@ -13,7 +13,7 @@ fn parses_codex_style_search_arguments() {
         "--threads",
         "1",
         "-C",
-        "workspace",
+        "directory",
         "--compute-indices",
         "src",
     ])
@@ -22,23 +22,23 @@ fn parses_codex_style_search_arguments() {
     assert!(cli.json);
     assert_eq!(cli.limit.get(), 7);
     assert_eq!(cli.threads.get(), 1);
-    assert_eq!(cli.cwd, Some(PathBuf::from("workspace")));
+    assert_eq!(cli.cwd, Some(PathBuf::from("directory")));
     assert!(cli.compute_indices);
     assert_eq!(cli.pattern.as_deref(), Some("src"));
 }
 
 #[test]
 fn json_output_uses_the_library_search_results() {
-    let workspace = temporary_workspace();
-    fs::create_dir_all(workspace.join("src")).unwrap();
-    fs::write(workspace.join("src/lib.rs"), "contents").unwrap();
-    fs::write(workspace.join("notes.md"), "contents").unwrap();
+    let directory = temporary_dir();
+    fs::create_dir_all(directory.join("src")).unwrap();
+    fs::write(directory.join("src/lib.rs"), "contents").unwrap();
+    fs::write(directory.join("notes.md"), "contents").unwrap();
     let cli = Cli::try_parse_from([
         "zeta-file-search",
         "--json",
         "--compute-indices",
         "-C",
-        workspace.to_str().unwrap(),
+        directory.to_str().unwrap(),
         "lib",
     ])
     .unwrap();
@@ -56,15 +56,15 @@ fn json_output_uses_the_library_search_results() {
             .is_some_and(|indices| !indices.is_empty())
     );
     assert!(warnings.is_empty());
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(directory);
 }
 
 #[test]
-fn omitted_pattern_lists_workspace_files_in_plain_text() {
-    let workspace = temporary_workspace();
-    fs::write(workspace.join("alpha.rs"), "contents").unwrap();
-    fs::write(workspace.join("beta.rs"), "contents").unwrap();
-    let cli = Cli::try_parse_from(["zeta-file-search", "-C", workspace.to_str().unwrap()]).unwrap();
+fn omitted_pattern_lists_dir_files_in_plain_text() {
+    let directory = temporary_dir();
+    fs::write(directory.join("alpha.rs"), "contents").unwrap();
+    fs::write(directory.join("beta.rs"), "contents").unwrap();
+    let cli = Cli::try_parse_from(["zeta-file-search", "-C", directory.to_str().unwrap()]).unwrap();
     let mut output = Vec::new();
     let mut warnings = Vec::new();
 
@@ -72,10 +72,10 @@ fn omitted_pattern_lists_workspace_files_in_plain_text() {
 
     assert_eq!(String::from_utf8(output).unwrap(), "alpha.rs\nbeta.rs\n");
     assert!(warnings.is_empty());
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(directory);
 }
 
-fn temporary_workspace() -> PathBuf {
+fn temporary_dir() -> PathBuf {
     let path = std::env::temp_dir().join(format!(
         "zeta-file-search-cli-tests-{}-{}",
         std::process::id(),

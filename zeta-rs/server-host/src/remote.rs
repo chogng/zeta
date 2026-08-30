@@ -5,10 +5,10 @@ use serde::Serialize;
 use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemotePlatform;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionProfileRecord;
@@ -45,14 +45,14 @@ const FETCH_USAGE: &str = concat!(
     "[--progress json-lines]"
 );
 const PROFILE_GET_USAGE: &str =
-    "usage: zeta-server remote profile get --host <ssh-host> --workspace <absolute-remote-path>";
+    "usage: zeta-server remote profile get --host <ssh-host> --dir <absolute-remote-path>";
 const PROFILE_ACTIVATE_USAGE: &str = concat!(
     "usage: zeta-server remote profile activate --host <ssh-host> ",
-    "--workspace <absolute-remote-path> --runtime <verified-remote-runtime>"
+    "--dir <absolute-remote-path> --runtime <verified-remote-runtime>"
 );
 const PROFILE_ROLLBACK_USAGE: &str = concat!(
     "usage: zeta-server remote profile rollback --host <ssh-host> ",
-    "--workspace <absolute-remote-path> [--ssh <openssh-path>]"
+    "--dir <absolute-remote-path> [--ssh <openssh-path>]"
 );
 
 pub(crate) fn run(arguments: Vec<String>) -> Result<(), String> {
@@ -224,7 +224,7 @@ fn parse_profile(arguments: &[String]) -> Result<RemoteCommand, String> {
 
 fn parse_profile_rollback(arguments: &[String]) -> Result<RemoteProfileRollbackOptions, String> {
     let mut host = None;
-    let mut workspace = None;
+    let mut dir = None;
     let mut ssh_executable = None;
     parse_options(arguments, |name, value| match name {
         "--host" => assign_once(
@@ -232,9 +232,9 @@ fn parse_profile_rollback(arguments: &[String]) -> Result<RemoteProfileRollbackO
             SshHost::parse(value).map_err(string_error)?,
             name,
         ),
-        "--workspace" => assign_once(
-            &mut workspace,
-            RemoteWorkspacePath::parse(value).map_err(string_error)?,
+        "--dir" => assign_once(
+            &mut dir,
+            RemoteDirPath::parse(value).map_err(string_error)?,
             name,
         ),
         "--ssh" => assign_once(&mut ssh_executable, PathBuf::from(value), name),
@@ -245,7 +245,7 @@ fn parse_profile_rollback(arguments: &[String]) -> Result<RemoteProfileRollbackO
     Ok(RemoteProfileRollbackOptions {
         target: SshTarget::new(
             host.ok_or_else(|| required_for("--host", PROFILE_ROLLBACK_USAGE))?,
-            workspace.ok_or_else(|| required_for("--workspace", PROFILE_ROLLBACK_USAGE))?,
+            dir.ok_or_else(|| required_for("--dir", PROFILE_ROLLBACK_USAGE))?,
         ),
         ssh_executable,
     })
@@ -256,16 +256,16 @@ fn parse_profile_target(
     usage: &'static str,
 ) -> Result<RemoteProfileTargetOptions, String> {
     let mut host = None;
-    let mut workspace = None;
+    let mut dir = None;
     parse_options(arguments, |name, value| match name {
         "--host" => assign_once(
             &mut host,
             SshHost::parse(value).map_err(string_error)?,
             name,
         ),
-        "--workspace" => assign_once(
-            &mut workspace,
-            RemoteWorkspacePath::parse(value).map_err(string_error)?,
+        "--dir" => assign_once(
+            &mut dir,
+            RemoteDirPath::parse(value).map_err(string_error)?,
             name,
         ),
         _ => Err(format!("unknown remote profile option: {name}\n\n{usage}")),
@@ -273,14 +273,14 @@ fn parse_profile_target(
     Ok(RemoteProfileTargetOptions {
         target: SshTarget::new(
             host.ok_or_else(|| required_for("--host", usage))?,
-            workspace.ok_or_else(|| required_for("--workspace", usage))?,
+            dir.ok_or_else(|| required_for("--dir", usage))?,
         ),
     })
 }
 
 fn parse_profile_activation(arguments: &[String]) -> Result<RemoteProfileActivateOptions, String> {
     let mut host = None;
-    let mut workspace = None;
+    let mut dir = None;
     let mut runtime = None;
     parse_options(arguments, |name, value| match name {
         "--host" => assign_once(
@@ -288,9 +288,9 @@ fn parse_profile_activation(arguments: &[String]) -> Result<RemoteProfileActivat
             SshHost::parse(value).map_err(string_error)?,
             name,
         ),
-        "--workspace" => assign_once(
-            &mut workspace,
-            RemoteWorkspacePath::parse(value).map_err(string_error)?,
+        "--dir" => assign_once(
+            &mut dir,
+            RemoteDirPath::parse(value).map_err(string_error)?,
             name,
         ),
         "--runtime" => assign_once(
@@ -304,7 +304,7 @@ fn parse_profile_activation(arguments: &[String]) -> Result<RemoteProfileActivat
     })?;
     let target = SshTarget::new(
         host.ok_or_else(|| required_for("--host", PROFILE_ACTIVATE_USAGE))?,
-        workspace.ok_or_else(|| required_for("--workspace", PROFILE_ACTIVATE_USAGE))?,
+        dir.ok_or_else(|| required_for("--dir", PROFILE_ACTIVATE_USAGE))?,
     );
     Ok(RemoteProfileActivateOptions {
         profile: RemoteProfile::new(

@@ -368,6 +368,7 @@ fn decision_name(decision: &ExecutionDecision) -> EvalFinalDecision {
         ExecutionDecision::Block(_) => EvalFinalDecision::Block,
         ExecutionDecision::RunSandboxed(_)
         | ExecutionDecision::RunUnsandboxed { .. }
+        | ExecutionDecision::RunExecPolicyGranted(_)
         | ExecutionDecision::RunWithPermissionBypass(_) => {
             panic!("eval cases must reach the classifier path")
         }
@@ -462,7 +463,7 @@ impl EvalEvidenceKind {
             Self::PriorToolCall => ReviewEvidenceKind::PriorToolCall,
             Self::PriorToolResult => ReviewEvidenceKind::PriorToolResult,
             Self::PreparedAction => ReviewEvidenceKind::PreparedAction,
-            Self::WorkspaceFile => ReviewEvidenceKind::WorkspaceFile,
+            Self::WorkspaceFile => ReviewEvidenceKind::DirectoryFile,
         }
     }
 }

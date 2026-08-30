@@ -7,7 +7,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
-import type { IActiveSessionThread, IUntitledChatSession, Session, SessionThread, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { ChatPane } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
@@ -230,7 +230,7 @@ export class ChatViewPane extends ViewPane {
 		for (const entry of orderedEntries) entry.pane.setTabId(tabIds.get(entry.tabId));
 	}
 
-	private selectionForSession(session: Session): IActiveSessionThread | undefined {
+	private selectionForSession(session: ISession): IActiveSessionThread | undefined {
 		const active = this.sessionService.active;
 		if (
 			active?.session.sessionId === session.sessionId &&
@@ -242,7 +242,7 @@ export class ChatViewPane extends ViewPane {
 		if (retainedThreadId && isActiveThread(session, retainedThreadId)) {
 			return { session, threadId: retainedThreadId };
 		}
-		const thread = rootThread(session) ?? session.threads.find((candidate) => candidate.status === "active");
+		const thread = rootThread(session) ?? session.chats.find((candidate) => candidate.status === "active");
 		return thread ? { session, threadId: thread.threadId } : undefined;
 	}
 
@@ -372,19 +372,19 @@ export class ChatViewPane extends ViewPane {
 
 }
 
-function isActiveThread(session: Session, threadId: ThreadId): boolean {
-	return session.threads.some((thread) => thread.threadId === threadId && thread.status === "active");
+function isActiveThread(session: ISession, threadId: ThreadId): boolean {
+	return session.chats.some((thread) => thread.threadId === threadId && thread.status === "active");
 }
 
-function rootThread(session: Session): SessionThread | undefined {
-	return session.threads.find((thread) => thread.status === "active" && thread.origin.type === "root");
+function rootThread(session: ISession): IChat | undefined {
+	return session.chats.find((thread) => thread.status === "active" && thread.origin.type === "root");
 }
 
 function untitledSessionPaneId(session: IUntitledChatSession): string {
 	return `untitled:${session.untitledSessionId}`;
 }
 
-function sessionPaneId(session: Session): string {
+function sessionPaneId(session: ISession): string {
 	return sessionPaneIdFromId(session.sessionId);
 }
 

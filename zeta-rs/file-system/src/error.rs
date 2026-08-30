@@ -1,7 +1,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-/// Failure returned by a workspace-scoped filesystem implementation.
+/// Failure returned by a directory-scoped filesystem implementation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileSystemError {
     InvalidPath(PathBuf),
@@ -22,7 +22,7 @@ impl fmt::Display for FileSystemError {
             Self::InvalidPath(path) => {
                 write!(
                     formatter,
-                    "path is not available in the workspace: {}",
+                    "path is outside the authorized directory: {}",
                     path.display()
                 )
             }

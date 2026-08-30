@@ -23,7 +23,7 @@ use zeta_skills::SkillSourceId;
 use zeta_skills::SkillSourceRoot;
 
 const BUILT_IN_SOURCE_ID: &str = "builtin:skill-source:zeta-release";
-const WORKSPACE_SOURCE_ID: &str = "workspace:skill-source:.zeta";
+const DIR_SOURCE_ID: &str = "dir:skill-source:.zeta";
 
 /// Supplies resolved Skill configuration to the shared Skill runtime.
 ///
@@ -46,7 +46,7 @@ pub trait DynamicSkillSourceProvider: Send + Sync {
     fn snapshot(&self) -> Result<DynamicSkillSourceSnapshot, String>;
 }
 
-/// Supplies Session-authorized additional-directory Skill roots.
+/// Supplies Session-authorized session-dir Skill roots.
 pub trait SessionSkillSourceProvider: Send + Sync {
     fn snapshot(&self, session_id: &SessionId) -> Result<DynamicSkillSourceSnapshot, String>;
 }
@@ -108,7 +108,7 @@ pub struct SkillRuntime {
     dynamic_sources: Mutex<Option<Arc<dyn DynamicSkillSourceProvider>>>,
     session_sources: Mutex<Option<Arc<dyn SessionSkillSourceProvider>>>,
     pub(crate) config: Arc<dyn SkillConfigSnapshotProvider>,
-    pub(crate) workspace_root: Mutex<Option<PathBuf>>,
+    pub(crate) dir_root: Mutex<Option<PathBuf>>,
     pub(crate) state: Mutex<SkillRuntimeState>,
     events: Arc<dyn SkillRuntimeEventSink>,
 }
@@ -136,7 +136,7 @@ struct SourceComposition {
 enum SourceKind {
     BuiltIn,
     User,
-    Workspace,
+    Directory,
 }
 
 impl SkillRuntime {
@@ -174,7 +174,7 @@ impl SkillRuntime {
             dynamic_sources: Mutex::new(dynamic_sources),
             session_sources: Mutex::new(None),
             config,
-            workspace_root: Mutex::new(None),
+            dir_root: Mutex::new(None),
             state: Mutex::new(SkillRuntimeState {
                 source_fingerprint: composition.fingerprint,
                 catalog,
@@ -425,15 +425,15 @@ impl SkillRuntime {
             .map_err(|_| "Session Skill source lock poisoned".to_string())?
             .clone();
         let config = self.config.snapshot()?;
-        let workspace_root = self
-            .workspace_root
+        let dir_root = self
+            .dir_root
             .lock()
-            .map_err(|_| "Workspace Skill source lock poisoned".to_string())?
+            .map_err(|_| "Directory Skill source lock poisoned".to_string())?
             .clone();
         let mut composition = compose_sources(
             &self.built_in_source,
             &config,
-            workspace_root.as_deref(),
+            dir_root.as_deref(),
             self.dynamic_sources
                 .lock()
                 .map_err(|_| "Dynamic Skill source lock poisoned".to_string())?
@@ -481,17 +481,17 @@ impl SkillRuntime {
             .map(|source| source.root.clone())
             .collect::<Vec<_>>();
         drop(state);
-        if let Some(workspace_root) = self
-            .workspace_root
+        if let Some(dir_root) = self
+            .dir_root
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .as_ref()
         {
-            let metadata_root = workspace_root.join(".zeta");
+            let metadata_root = dir_root.join(".zeta");
             paths.push(if metadata_root.is_dir() {
                 metadata_root
             } else {
-                workspace_root.clone()
+                dir_root.clone()
             });
         }
         paths.sort();
@@ -499,25 +499,22 @@ impl SkillRuntime {
         paths
     }
 
-    /// Rebinds the native `.zeta/skills` source for the active Workspace.
-    pub fn bind_workspace_root(
-        &self,
-        workspace_root: PathBuf,
-    ) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+    /// Rebinds the native `.zeta/skills` source for the active directory.
+    pub fn bind_dir_root(&self, dir_root: PathBuf) -> Result<Arc<SkillRuntimeSnapshot>, String> {
         let previous = {
             let mut current = self
-                .workspace_root
+                .dir_root
                 .lock()
-                .map_err(|_| "Workspace Skill source lock poisoned".to_string())?;
-            current.replace(workspace_root)
+                .map_err(|_| "Directory Skill source lock poisoned".to_string())?;
+            current.replace(dir_root)
         };
         match self.reconcile(SkillCatalogReload::Refresh) {
             Ok(snapshot) => Ok(snapshot),
             Err(error) => {
                 *self
-                    .workspace_root
+                    .dir_root
                     .lock()
-                    .map_err(|_| "Workspace Skill source lock poisoned".to_string())? = previous;
+                    .map_err(|_| "Directory Skill source lock poisoned".to_string())? = previous;
                 Err(error)
             }
         }
@@ -525,15 +522,15 @@ impl SkillRuntime {
 
     fn reconcile(&self, reload: SkillCatalogReload) -> Result<Arc<SkillRuntimeSnapshot>, String> {
         let skills_config = self.config.snapshot()?;
-        let workspace_root = self
-            .workspace_root
+        let dir_root = self
+            .dir_root
             .lock()
-            .map_err(|_| "Workspace Skill source lock poisoned".to_string())?
+            .map_err(|_| "Directory Skill source lock poisoned".to_string())?
             .clone();
         let composition = compose_sources(
             &self.built_in_source,
             &skills_config,
-            workspace_root.as_deref(),
+            dir_root.as_deref(),
             self.dynamic_sources
                 .lock()
                 .map_err(|_| "Dynamic Skill source lock poisoned".to_string())?
@@ -580,7 +577,7 @@ impl SkillRuntime {
 fn compose_sources(
     built_in_source: &BuiltInSkillSource,
     config: &SkillsConfig,
-    workspace_root: Option<&Path>,
+    dir_root: Option<&Path>,
     dynamic_sources: Option<DynamicSkillSourceSnapshot>,
 ) -> Result<SourceComposition, String> {
     let mut fingerprint = Vec::new();
@@ -588,8 +585,8 @@ fn compose_sources(
     let mut diagnostics = Vec::new();
     let built_in_id = SkillSourceId::new(BUILT_IN_SOURCE_ID)
         .expect("the repository built-in Skill source ID is valid");
-    let workspace_id = SkillSourceId::new(WORKSPACE_SOURCE_ID)
-        .expect("the native Workspace Skill source ID is valid");
+    let dir_id =
+        SkillSourceId::new(DIR_SOURCE_ID).expect("the native Directory Skill source ID is valid");
     match built_in_source {
         BuiltInSkillSource::Root(root) => add_source(
             built_in_id.clone(),
@@ -610,7 +607,7 @@ fn compose_sources(
         .values()
         .filter(|source| source.enablement == SkillSourceEnablement::Enabled)
     {
-        if source.id == built_in_id || source.id == workspace_id {
+        if source.id == built_in_id || source.id == dir_id {
             diagnostics.push(source_unavailable_diagnostic(
                 &source.id,
                 "native Skill source identities cannot be registered as user sources",
@@ -646,21 +643,21 @@ fn compose_sources(
             roots.push(root);
         }
     }
-    if let Some(workspace_root) = workspace_root {
-        let root = workspace_root.join(".zeta/skills");
+    if let Some(dir_root) = dir_root {
+        let root = dir_root.join(".zeta/skills");
         match std::fs::symlink_metadata(&root) {
             Ok(_) => add_source(
-                workspace_id.clone(),
+                dir_id.clone(),
                 root,
-                SourceKind::Workspace,
+                SourceKind::Directory,
                 &mut fingerprint,
                 &mut roots,
                 &mut diagnostics,
             ),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(_) => diagnostics.push(source_unavailable_diagnostic(
-                &workspace_id,
-                "the native Workspace Skill source cannot be inspected",
+                &dir_id,
+                "the native Directory Skill source cannot be inspected",
             )),
         }
     }
@@ -683,7 +680,7 @@ fn add_source(
     let source = match kind {
         SourceKind::BuiltIn => SkillSourceRoot::built_in(id.clone(), &root),
         SourceKind::User => SkillSourceRoot::user(id.clone(), &root),
-        SourceKind::Workspace => SkillSourceRoot::workspace(id.clone(), &root),
+        SourceKind::Directory => SkillSourceRoot::directory(id.clone(), &root),
     };
     match source {
         Ok(source) => {

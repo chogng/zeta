@@ -97,7 +97,7 @@ pub enum HookAction {
     },
 }
 
-/// Runtime-free Hook declaration stored in User or Workspace TOML.
+/// Runtime-free Hook declaration stored in User or Directory TOML.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HookConfig {

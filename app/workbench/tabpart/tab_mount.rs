@@ -120,8 +120,8 @@ pub struct WorkbenchTab<'a> {
     pub(super) close_id: ElementId,
     pub(super) kind: WorkbenchTabKind,
     pub(super) name: &'a str,
-    pub(super) workspace: &'a str,
-    pub(super) workspace_roots: &'a [PathBuf],
+    pub(super) location: &'a str,
+    pub(super) dirs: &'a [PathBuf],
     pub(super) status: TabStatus,
     pub(super) pinned: bool,
 }
@@ -306,11 +306,11 @@ impl<'a> WorkbenchTab<'a> {
                 placement.action_id(tab_id),
                 placement.close_id(tab_id),
                 tab_part.tab_name(input),
-                input.workspace(),
+                input.location(),
                 input.status().clone(),
                 tab_part.is_tab_pinned(input.key()),
             )
-            .with_workspace_roots(input.workspace_roots())
+            .with_dirs(input.dirs())
         }
     }
 
@@ -319,7 +319,7 @@ impl<'a> WorkbenchTab<'a> {
         action_id: ElementId,
         close_id: ElementId,
         name: &'a str,
-        workspace: &'a str,
+        location: &'a str,
         status: TabStatus,
         pinned: bool,
     ) -> Self {
@@ -329,15 +329,15 @@ impl<'a> WorkbenchTab<'a> {
             close_id,
             kind: WorkbenchTabKind::Session,
             name,
-            workspace,
-            workspace_roots: &[],
+            location,
+            dirs: &[],
             status,
             pinned,
         }
     }
 
-    pub fn with_workspace_roots(mut self, workspace_roots: &'a [PathBuf]) -> Self {
-        self.workspace_roots = workspace_roots;
+    pub fn with_dirs(mut self, dirs: &'a [PathBuf]) -> Self {
+        self.dirs = dirs;
         self
     }
 
@@ -353,8 +353,8 @@ impl<'a> WorkbenchTab<'a> {
             close_id,
             kind: WorkbenchTabKind::Settings,
             name,
-            workspace: "Application",
-            workspace_roots: &[],
+            location: "Application",
+            dirs: &[],
             status: TabStatus::idle("Settings"),
             pinned: false,
         }

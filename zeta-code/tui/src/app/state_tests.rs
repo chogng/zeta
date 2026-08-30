@@ -16,6 +16,7 @@ use crate::components::pane::PaneSpec;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use crate::features::config::config_pane_spec;
+use crate::features::file_search::FileSearchManager;
 use crate::features::keymap::KeymapEditIntent;
 use crate::features::keymap::KeymapEditKind;
 use crate::features::keymap::keymap_pane_spec;
@@ -29,7 +30,6 @@ use crate::features::theme::ThemePreviewPalette;
 use crate::features::theme::custom_theme_pane_spec;
 use crate::features::theme::theme_pane_spec;
 use crate::features::thread::TurnActivity;
-use crate::features::workspace_files::FileSearchManager;
 use crate::keymap::AppKeymap;
 use crate::mouse::MouseMode;
 use crate::test_support::empty_config_snapshot;
@@ -42,13 +42,12 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustStateDto;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
@@ -75,10 +74,10 @@ fn config_session() -> SessionId {
     SessionId::new("config-state-session").unwrap()
 }
 
-fn no_additional_directories() -> WorkspaceAdditionalDirectoryListResult {
-    WorkspaceAdditionalDirectoryListResult {
+fn no_directories() -> SessionDirListResult {
+    SessionDirListResult {
         revision: 0,
-        directories: Vec::new(),
+        dirs: Vec::new(),
     }
 }
 use zeta_slash_commands::{
@@ -174,6 +173,8 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
     let thread = Thread {
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "thread".into(),
         status: ThreadStatus::Active,
         sequence: 5,
@@ -548,7 +549,7 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
         TerminalSettings::default(),
         7,
         &config_session(),
-        &no_additional_directories(),
+        &no_directories(),
     )));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -571,7 +572,7 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
         TerminalSettings::default(),
         7,
         &config_session(),
-        &no_additional_directories(),
+        &no_directories(),
     )));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
@@ -603,16 +604,12 @@ fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
 #[test]
 fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
     let config = empty_config_snapshot();
-    let directories = WorkspaceAdditionalDirectoryListResult {
+    let directories = SessionDirListResult {
         revision: 3,
-        directories: vec![WorkspaceAdditionalDirectoryDto {
+        dirs: vec![SessionDirDto {
             contributions: Default::default(),
-            root: "/workspace/shared".into(),
-            trust: WorkspaceTrustStateDto::Trusted,
-            permissions: vec![
-                WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-                WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
-            ],
+            path: "/dir/shared".into(),
+            permissions: vec![PermissionDto::ReadFiles, PermissionDto::WriteFiles],
         }],
     };
     let mut app = App::new();
@@ -625,7 +622,7 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
         &directories,
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    for _ in 0..12 {
+    for _ in 0..15 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
 
@@ -633,8 +630,9 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
 
     assert!(matches!(
         action,
-        Some(AppCommand::EditAdditionalDirectoryPermissions(edit))
-            if edit.params.expected_revision == 3 && edit.params.permissions.is_empty()
+        Some(AppCommand::EditPermissions(edit))
+            if edit.params.expected_revision == 3
+                && edit.params.permissions == vec![PermissionDto::WriteFiles]
     ));
 }
 
@@ -656,7 +654,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         TerminalSettings::default(),
         7,
         &config_session(),
-        &no_additional_directories(),
+        &no_directories(),
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -683,7 +681,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
             TerminalSettings::default(),
             7,
             &config_session(),
-            &no_additional_directories(),
+            &no_directories(),
         ),
     });
 
@@ -708,7 +706,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         TerminalSettings::default(),
         7,
         &config_session(),
-        &no_additional_directories(),
+        &no_directories(),
     )));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -818,17 +816,17 @@ fn inline_product_arguments_reach_the_typed_dispatcher() {
 
 #[test]
 fn runtime_command_registry_drives_popup_and_submission_consistently() {
-    let workspace = temporary_workspace("dynamic-slash-command");
+    let dir = temporary_dir("dynamic-slash-command");
     let registry = SlashCommandCatalog::with_local_and_server(
         built_in_slash_command_definitions(),
         [SlashCommandDefinition {
             name: "diagnose".into(),
-            description: "inspect the current workspace".into(),
+            description: "inspect the current dir".into(),
             argument_mode: SlashCommandArgumentMode::Optional,
         }],
     )
     .unwrap();
-    let mut app = App::for_workspace_with_slash_commands(&workspace, registry);
+    let mut app = App::for_dir_with_slash_commands(&dir, registry);
     app.insert_text("/diag logs");
     app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
 
@@ -848,12 +846,12 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
     assert_eq!(app.status(), &Status::Working);
     assert_eq!(app.messages()[0].role, MessageRole::User);
     assert_eq!(app.messages()[0].text, "/diagnose logs");
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(dir);
 }
 
 #[test]
 fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
-    let workspace = temporary_workspace("skill-selector");
+    let dir = temporary_dir("skill-selector");
     let skill = SkillRef::pinned(
         SkillId::new(
             SkillSourceId::new("user:skill-source:test").unwrap(),
@@ -866,7 +864,7 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
         std::iter::empty(),
     )
     .unwrap();
-    let mut app = App::for_workspace_with_slash_commands(&workspace, registry.clone());
+    let mut app = App::for_dir_with_slash_commands(&dir, registry.clone());
     app.replace_chat_input_catalog(
         registry,
         vec![crate::components::chat_input::SkillSelectorItem::new(
@@ -899,7 +897,7 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
         })
     );
     assert_eq!(app.messages()[0].text, "$commit staged changes");
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -949,14 +947,14 @@ fn clickable_chat_input_popups_declare_ui_click_mouse_mode() {
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 
-    let workspace = temporary_workspace("mouse-interaction-mention");
-    fs::write(workspace.join("notes.md"), "notes").unwrap();
-    let mut app = App::for_workspace(&workspace);
+    let dir = temporary_dir("mouse-interaction-mention");
+    fs::write(dir.join("notes.md"), "notes").unwrap();
+    let mut app = App::for_dir(&dir);
     app.insert_text("@notes");
-    wait_for_mention_results(&mut app, &workspace);
+    wait_for_mention_results(&mut app, &dir);
 
     assert_eq!(app.mouse_mode(), MouseMode::UiClick);
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -985,13 +983,13 @@ fn tab_completes_the_selected_slash_command_without_executing_it() {
 }
 
 #[test]
-fn at_file_popup_completes_an_atomic_workspace_path_before_submission() {
-    let workspace = temporary_workspace("mention-completion");
-    fs::create_dir_all(workspace.join("src")).unwrap();
-    fs::write(workspace.join("src/lib.rs"), "fn main() {}").unwrap();
-    let mut app = App::for_workspace(&workspace);
+fn at_file_popup_completes_an_atomic_path_before_submission() {
+    let dir = temporary_dir("mention-completion");
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/lib.rs"), "fn main() {}").unwrap();
+    let mut app = App::for_dir(&dir);
     app.insert_text("review @lib");
-    wait_for_mention_results(&mut app, &workspace);
+    wait_for_mention_results(&mut app, &dir);
 
     assert!(matches!(
         app.suggest(),
@@ -1005,14 +1003,14 @@ fn at_file_popup_completes_an_atomic_workspace_path_before_submission() {
 
     let submission = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_text_submission(submission, "review src/lib.rs");
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(dir);
 }
 
 #[test]
 fn escape_dismisses_an_at_file_popup_and_is_inert_at_the_root() {
-    let workspace = temporary_workspace("mention-dismiss");
-    fs::write(workspace.join("notes.md"), "notes").unwrap();
-    let mut app = App::for_workspace(&workspace);
+    let dir = temporary_dir("mention-dismiss");
+    fs::write(dir.join("notes.md"), "notes").unwrap();
+    let mut app = App::for_dir(&dir);
     app.insert_text("@notes");
 
     let dismissed = app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -1023,7 +1021,7 @@ fn escape_dismisses_an_at_file_popup_and_is_inert_at_the_root() {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         None
     );
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -1369,7 +1367,7 @@ fn assert_text_submission(action: Option<AppCommand>, expected: &str) {
 }
 
 #[test]
-fn backtab_requests_the_next_backend_owned_approval_mode() {
+fn backtab_cycles_the_next_turn_approval_mode() {
     let mut app = App::new();
 
     let action = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
@@ -1381,8 +1379,8 @@ fn backtab_requests_the_next_backend_owned_approval_mode() {
     assert_eq!(action, Some(AppCommand::CycleNextApprovalMode));
 }
 
-fn wait_for_mention_results(app: &mut App, workspace: &Path) {
-    let mut file_search = FileSearchManager::new(workspace.to_path_buf());
+fn wait_for_mention_results(app: &mut App, dir: &Path) {
+    let mut file_search = FileSearchManager::new(dir.to_path_buf());
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         if let Some(query) = app.mention_query() {
@@ -1407,7 +1405,7 @@ fn wait_for_mention_results(app: &mut App, workspace: &Path) {
     }
 }
 
-fn temporary_workspace(label: &str) -> std::path::PathBuf {
+fn temporary_dir(label: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!(
         "zeta-tui-{label}-{}-{}",
         std::process::id(),

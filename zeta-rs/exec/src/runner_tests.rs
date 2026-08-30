@@ -182,7 +182,6 @@ fn resume_and_fork_preserve_their_distinct_preparation_semantics() {
 
     let parent_thread_id = ThreadId::new("parent-thread").unwrap();
     let mut fork = FakeConnection::new(&ids, completed);
-    fork.session.sequence = 12;
     test_runner()
         .run_connected(
             &mut fork,
@@ -199,7 +198,6 @@ fn resume_and_fork_preserve_their_distinct_preparation_semantics() {
         )
         .unwrap();
     assert_eq!(fork.preparation_calls, ["read-session", "fork-thread"]);
-    assert_eq!(fork.fork_sequence, Some(12));
     assert_eq!(fork.fork_parent, Some(parent_thread_id));
     assert_eq!(fork.start_sequences, [7]);
 }
@@ -280,11 +278,6 @@ fn session(ids: &TestIds) -> Session {
         session_id: ids.session_id.clone(),
         title: "test run".into(),
         status: SessionStatus::Active,
-        model: None,
-        workspace: None,
-        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        current_thread_id: None,
-        sequence: 0,
         threads: vec![],
     }
 }
@@ -293,6 +286,8 @@ fn thread(ids: &TestIds, sequence: u64, turns: Vec<Turn>) -> Thread {
     Thread {
         session_id: ids.session_id.clone(),
         thread_id: ids.thread_id.clone(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "test run".into(),
         status: ThreadStatus::Active,
         sequence,
@@ -338,7 +333,6 @@ struct FakeConnection {
     interrupts: usize,
     unsubscribed: bool,
     preparation_calls: Vec<&'static str>,
-    fork_sequence: Option<u64>,
     fork_parent: Option<ThreadId>,
     start_sequences: Vec<u64>,
 }
@@ -358,7 +352,6 @@ impl FakeConnection {
             interrupts: 0,
             unsubscribed: false,
             preparation_calls: Vec::new(),
-            fork_sequence: None,
             fork_parent: None,
             start_sequences: Vec::new(),
         }
@@ -380,27 +373,14 @@ impl ExecConnection for FakeConnection {
         Ok(self.session.clone())
     }
 
-    fn create_thread(
-        &mut self,
-        _command_id: CommandId,
-        _session_id: SessionId,
-        _expected_sequence: u64,
-        _title: String,
-    ) -> Result<ThreadId, ConnectionError> {
-        self.preparation_calls.push("create-thread");
-        Ok(self.thread_id.clone())
-    }
-
     fn fork_thread(
         &mut self,
         _command_id: CommandId,
         _session_id: SessionId,
-        expected_sequence: u64,
         parent_thread_id: ThreadId,
         _title: String,
     ) -> Result<ThreadId, ConnectionError> {
         self.preparation_calls.push("fork-thread");
-        self.fork_sequence = Some(expected_sequence);
         self.fork_parent = Some(parent_thread_id);
         Ok(self.thread_id.clone())
     }

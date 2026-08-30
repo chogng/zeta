@@ -11,6 +11,7 @@ use zeta_protocol::DelegationResult;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadOrigin;
 
 /// Creation request for a child Thread whose immutable Agent seed is committed atomically.
 pub struct CreateAgentThreadRequest {
@@ -29,6 +30,15 @@ impl ThreadController {
         &self,
         request: CreateAgentThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
+        self.bind_thread_worktree(
+            request.session_id.clone(),
+            request.thread_id.clone(),
+            ThreadOrigin::AgentSpawn {
+                parent_thread_id: request.context_seed.parent_thread_id.clone(),
+                parent_sequence: request.context_seed.parent_sequence,
+                delegation_id: request.context_seed.delegation_id.clone(),
+            },
+        )?;
         let slot = self.loaded_threads.slot(&request.thread_id)?;
         let _permit = slot.enter_mutation()?;
         let _lease = self.acquire_writer_lease(&request.thread_id)?;

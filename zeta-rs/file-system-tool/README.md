@@ -6,7 +6,7 @@
 
 本 crate 只把 `zeta-file-system` 适配为 model-visible `file-system` Tool。它拥有 Tool
 definition、binding 校验、UTF-8 text 解码和输出上限；不拥有宿主 filesystem access、
-workspace confinement、App Server RPC、mutation 或 watcher。
+directory confinement、App Server RPC、mutation 或 watcher。
 
 ## 公共契约与内部接口
 
@@ -28,7 +28,7 @@ ToolExecutor::execute
 → validate_invocation
 → decode_arguments<FileSystemInput>
 → read | list | metadata
-→ Arc<dyn WorkspaceFileSystem>
+→ Arc<dyn FileSystem>
 → ToolExecutionOutcome
 ```
 

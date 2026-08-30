@@ -535,6 +535,41 @@ fn reducer_rejects_a_fork_import_with_an_incomplete_tool_exchange() {
     );
 }
 
+#[test]
+fn empty_fork_completion_preserves_the_source_thread_identity() {
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let source_thread_id = ThreadId::new("source_thread").unwrap();
+    let created = reduce_thread_event(
+        None,
+        &envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: thread_id.clone(),
+                title: "empty fork child".into(),
+            },
+        ),
+    )
+    .unwrap();
+
+    let completed = reduce_thread_event(
+        Some(created),
+        &envelope(
+            2,
+            ThreadEvent::ForkHistoryImportCompleted {
+                thread_id,
+                source_thread_id: source_thread_id.clone(),
+                source_sequence: 1,
+                imported_turn_count: 0,
+                context_checkpoint: None,
+            },
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(completed.forked_from_id, Some(source_thread_id));
+}
+
 fn imported_turn(turn_id: &str, items: Vec<ThreadItem>) -> Turn {
     Turn {
         kind: zeta_protocol::TurnKind::Coding,

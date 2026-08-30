@@ -29,7 +29,6 @@ zeta-agent-environment = { workspace = true }
 zeta-prompts = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
-zeta-session-store = { workspace = true }
 zeta-thread-store = { workspace = true }
 zeta-utils-image = { workspace = true }
 zeta-utils-stream-parser = { workspace = true }

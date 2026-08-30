@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_remote::RemoteAddressError;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionError;
@@ -35,7 +35,7 @@ const REMOTE_RUNTIME_DOWNLOAD_CACHE: &str = "remote-runtime-downloads";
 
 /// Product-owned launch selection made before the desktop event loop starts.
 ///
-/// A Remote launch carries only the SSH host, remote Workspace path, runtime reference, and
+/// A Remote launch carries only the SSH host, remote Directory path, runtime reference, and
 /// optional OpenSSH executable. Credentials remain in the local OpenSSH configuration and agent.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AppLaunch {
@@ -80,7 +80,7 @@ impl AppLaunch {
         arguments: impl IntoIterator<Item = String>,
     ) -> Result<Self, LaunchParseError> {
         let mut remote_host = None;
-        let mut remote_workspace = None;
+        let mut remote_dir = None;
         let mut remote_runtime = None;
         let mut ssh_executable = None;
         let mut runtime_catalog = None;
@@ -97,7 +97,7 @@ impl AppLaunch {
             };
             match argument.as_str() {
                 "--remote" => remote_host = Some(value("--remote", &mut arguments)?),
-                "--workspace" => remote_workspace = Some(value("--workspace", &mut arguments)?),
+                "--dir" => remote_dir = Some(value("--dir", &mut arguments)?),
                 "--runtime" => remote_runtime = Some(value("--runtime", &mut arguments)?),
                 "--ssh" => ssh_executable = Some(PathBuf::from(value("--ssh", &mut arguments)?)),
                 "--runtime-catalog" => {
@@ -121,7 +121,7 @@ impl AppLaunch {
         }
 
         let Some(remote_host) = remote_host else {
-            if remote_workspace.is_some()
+            if remote_dir.is_some()
                 || remote_runtime.is_some()
                 || ssh_executable.is_some()
                 || runtime_catalog.is_some()
@@ -134,12 +134,9 @@ impl AppLaunch {
             }
             return Ok(Self::Local);
         };
-        let remote_workspace = remote_workspace.ok_or(LaunchParseError::MissingValue {
-            flag: "--workspace",
-        })?;
+        let remote_dir = remote_dir.ok_or(LaunchParseError::MissingValue { flag: "--dir" })?;
         let host = SshHost::parse(remote_host).map_err(LaunchParseError::Address)?;
-        let workspace =
-            RemoteWorkspacePath::parse(remote_workspace).map_err(LaunchParseError::Address)?;
+        let dir = RemoteDirPath::parse(remote_dir).map_err(LaunchParseError::Address)?;
         if rollback_runtime
             && (remote_runtime.is_some()
                 || runtime_catalog.is_some()
@@ -196,16 +193,16 @@ impl AppLaunch {
             RemoteRuntime::new(remote_runtime.unwrap_or_else(|| DEFAULT_REMOTE_RUNTIME.into()))
                 .map_err(LaunchParseError::Address)?;
         Ok(Self::Remote {
-            profile: RemoteProfile::new(SshTarget::new(host, workspace), runtime),
+            profile: RemoteProfile::new(SshTarget::new(host, dir), runtime),
             ssh_executable,
             runtime_source,
         })
     }
 
     /// Resolves the App Server host used by Agent, Language, and Terminal connections.
-    pub(crate) fn app_server_host(&self, local_workspace_root: &Path) -> AppServerHost {
+    pub(crate) fn app_server_host(&self, local_dir_root: &Path) -> AppServerHost {
         match self {
-            Self::Local => AppServerHost::local(local_workspace_root),
+            Self::Local => AppServerHost::local(local_dir_root),
             Self::Remote {
                 profile,
                 ssh_executable,
@@ -344,10 +341,10 @@ fn prepare_remote_runtime_rollback(
     store: &RemoteConnectionProfileStore,
 ) -> Result<(), String> {
     let stored = load_connection_profile(store, profile.target())?.ok_or_else(|| {
-        "this Remote host and Workspace have no stored runtime generation to roll back".to_owned()
+        "this Remote host and Directory have no stored runtime generation to roll back".to_owned()
     })?;
     let previous = stored.previous_profile().ok_or_else(|| {
-        "this Remote host and Workspace have no previous runtime generation to roll back".to_owned()
+        "this Remote host and Directory have no previous runtime generation to roll back".to_owned()
     })?;
     let verified = validate_remote_runtime(&previous, ssh_executable).map_err(|error| {
         format!(
@@ -558,7 +555,7 @@ impl fmt::Display for LaunchParseError {
 impl std::error::Error for LaunchParseError {}
 
 pub(crate) const fn usage() -> &'static str {
-    "usage: app [--remote <ssh-host> --workspace <absolute-remote-path>]\n\
+    "usage: app [--remote <ssh-host> --dir <absolute-remote-path>]\n\
      [--runtime <remote-runtime>] [--ssh <openssh-path>]\n\
      [--runtime-catalog <local-catalog> --runtime-catalog-sha256 <digest>]\n\
      [--runtime-catalog-url <https-catalog.json> --runtime-catalog-sha256 <digest>]\n\

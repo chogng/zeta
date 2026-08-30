@@ -59,7 +59,7 @@ parity。Vim、remote selector/reconnect、通用 structured Mention 和 durable
 
 Zeta 已经在 TUI 外部拥有：
 
-- `zeta-core` 中权威的 `SessionCoordinator` 和 `ThreadController`；
+- `zeta-core` 中权威的 `ThreadController`；Session tree 由 Thread 的 `session_id` 聚合；
 - `zeta-app-server-protocol` 中唯一的 wire contract；
 - `zeta-app-server-client` 中共享的 App Server 启动、初始化、请求/事件连接与关闭层；
 - CLI 交付的启动配置与产品入口参数。
@@ -97,8 +97,8 @@ zeta-cli
        → zeta-core
 ```
 
-本地只读能力不必统一绕行 App Server：`ChatInput` 的 workspace path mention 直接调用
-`zeta-file-search`；需要 workspace authority、跨进程一致性或 watcher revision 的 Git 状态通过
+本地只读能力不必统一绕行 App Server：`ChatInput` 的当前目录路径 mention 直接调用
+`zeta-file-search`；需要环境目录授权、跨进程一致性或 watcher revision 的 Git 状态通过
 typed App Server Git contract。原则不是“所有数据经过一个 facade”，而是
 “每个 feature 消费事实 owner 已提供的 public typed interface”。
 
@@ -340,7 +340,7 @@ zeta-app-server-client
 `client/` 只提供执行与投递机制，不复制 App Server 的领域 contract。
 
 一次逻辑写操作在超时或响应丢失后重试时必须复用原 `CommandId` 和 exact typed payload。
-用户再次点击或再次提交是新命令，必须生成新 ID。`expectedSequence` 来自目标 aggregate
+用户再次点击或再次提交是新命令，必须生成新 ID。`expectedSequence` 来自目标 Thread
 在对应 feature 中最后确认的 canonical snapshot，不能使用 JSON-RPC request ID、stream
 cursor 或另一个 aggregate 的 sequence。
 
@@ -392,8 +392,7 @@ Session 列表和 Session 页面状态归 `features/sessions/`，不会进入一
 
 ### 7.1 持久化序列
 
-Session 与 Thread 的 durable sequence 由各自 feature 分别跟踪。Thread 收到 committed update
-时：
+只有 Thread 拥有 durable sequence。Session 是由共同 `session_id` 聚合出来的读取视图；`session/changed` 只通知消费端重新读取，不携带序列。Thread 收到 committed update 时：
 
 1. `durableSequence <= localSequence`：作为重复 delivery 忽略；
 2. `durableSequence == localSequence + 1`：应用到 active Thread state；
@@ -408,8 +407,7 @@ subscribe result 必须作为一个完整的 resync package 处理：
 4. 丢弃已经排队且 sequence 不大于 snapshot sequence 的重复 notification；
 5. 从 snapshot sequence 开始继续应用新的连续 live notification。
 
-只有 Session 与 Thread 确实出现相同的连续序列算法后，才提取一个只处理
-`aggregate identity + sequence` 的小型 helper；不能重新演变成保存所有领域状态的 store。
+连续序列算法只处理 `ThreadId + sequence`，不能扩展成保存所有领域状态的 store。
 
 ### 7.2 临时流游标
 
@@ -517,7 +515,7 @@ owner 的公开 typed interface，`pane.rs` 组装打开 Pane 需要的 `PaneSpe
 | `interactions` | owner-directed approval 与 structured user-input view/response mapping |
 | `config` | typed config read/update UI |
 | `skills` | typed catalog、enablement intent 和 selection row model |
-| `additional_directories` | 当前 Session 的附加目录列表、添加、移除和逐目录能力修改意图 |
+| `dirs` | 当前 Session 的目录列表、添加、移除和逐目录能力修改意图 |
 | `workspace_files` | `zeta-file-search` mention completion |
 | `status_line` | 汇集既有接口结果并执行 item 排列、降级与渲染 |
 
@@ -547,7 +545,7 @@ TUI 不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策�
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)，
 Skill 来源边界见 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
 
-`/add-dir <path>` 是 Session 级目录授权流程。Config 页的 Add-dir 标签始终显示 Read files、Modify files、Run commands、Watch file changes、Workspace Files、Workspace Search、Instructions & Agents、Skills、MCP、LSP、Hooks 和 Plugins 十二项默认授权；TUI 发送 `workspace/additionalDirectories/add` 时把当前默认值交给 App Server。当前 Session 已有附加目录时，同一标签页在默认项后追加该目录的十二项开关，并通过带期望版本的 `workspace/additionalDirectories/permissions/set` 更新后端权限。不带参数的 `/add-dir` 打开可搜索目录列表，Enter 通过 remove RPC 撤销目录。除 Read files 外的开关都依赖读取权限；MCP 和 Plugins 只授权发现声明，不代替连接或安装确认；MCP、LSP、Hooks 或 Plugin 后续需要启动进程时还必须具有 Run commands。新增、移除和权限修改都会撤销旧凭证，活动 Terminal、搜索任务和语言服务随相关权限撤销而退出或失效。该流程不写入对话历史，也不改变主 Workspace 或 cwd。
+`/add-dir <path>` 是 Session tree 级目录授权流程。Config 页的 Add-dir 标签显示 Read files、Modify files、Run commands、Watch files、Browse files、Search files、Instructions、Config、Skills、MCP、Language services、Hooks、Plugins、Inspect repository 和 Mutate repository。TUI 通过 `session/dirs/add` 添加目录，通过 `session/dirs/permissions/set` 按 revision 替换 Permission；不带参数时列出目录，Enter 通过 `session/dirs/remove` 撤销。新增、移除和权限修改都会撤销旧 Authorization，依赖相关 Permission 的 Terminal、搜索任务和语言服务随之停止或失效。该流程不写入对话历史，也不改变 `cwd`。
 
 Feature 之间不能依赖彼此的私有模块。跨功能结果由 `app/` 协调，交互复用通过
 `components/`，纯布局复用通过 `ui/`；只有重复已经出现且语义一致时才提取公开的小型 value
@@ -567,7 +565,7 @@ Git、配置或 Thread。
 | Welcome workspace | `TuiOptions::workspace_root` | `WelcomeModel` 在 App 构造阶段把用户主目录缩写为 `~`，只供空会话 Welcome Banner 显示 | 已实现；不属于 status line |
 | Git branch | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | startup/read 与 notification 映射 branch | 已实现 |
 | Git changes | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | 映射变更数量，干净时省略 | 已实现 |
-| permission mode | App 持有的当前 `ApprovalMode` | 只格式化当前模式，不复制或推进权限状态 | 已实现 |
+| permission mode | App 保存下一次 Turn 要提交的 `ApprovalMode`；运行中 Turn 提供冻结值 | 只格式化 `current` / `next`，不修改 Session 或权限状态 | 已实现 |
 | Thread/Turn/usage | App Server typed snapshot/update | 消费 contract 已提供的字段，不从 transcript 推导 | Thread usage contract 已提供；status line 尚未接入 |
 | connection state | `client/` 本地状态 | 只在已接受的用户场景中映射 | Potential；embedded TUI 当前无独立 connection UI 需求 |
 
@@ -861,16 +859,16 @@ lib.rs + lib_tests.rs
 - `features/thread/request.rs` 只构造并执行 typed Thread/Turn request，返回 typed result；
   request module 不引用或更新 `App`。event loop 把结果转换为 `AppEvent`，presentation module
   只把 canonical Turn snapshot 分类为可展示 outcome；
-- `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，create/fork/rewind/resume/switch 返回 conversation change，archive 成功后请求退出，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker 与 Session 归档由同一 feature 拥有；
+- `features/sessions/ActiveConversation` 拥有当前 `session_id`、选中 Thread identity 与 Thread sequence，create/fork/rewind/resume/switch 返回 conversation change，archive 成功后请求退出，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker 与 Session 归档由同一 feature 拥有；
 - `features/interactions` 把 owner-directed full request 分别适配成 Approval 或多问题 Query 覆盖交互，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
-- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 只调度请求并把 feature result 转成 `AppEvent`；Config 页面读取服务端配置、Provider 和当前 Session 的附加目录权限，API key 保存后的重读链及带版本的目录能力修改也由 `features/config/request.rs` 完成。`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其中 Mouse interactions 只约束 TUI 本地 `MouseMode`，Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，默认 Queue，两者都不进入 App Server 配置；
+- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 只调度请求并把 feature result 转成 `AppEvent`；Config 页面读取服务端配置、Provider 和当前 Session 的目录权限，API key 保存后的重读链及带版本的权限修改也由 `features/config/request.rs` 完成。`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其中 Mouse interactions 只约束 TUI 本地 `MouseMode`，Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，默认 Queue，两者都不进入 App Server 配置；
 - `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；Space 进入搜索，左右调整当前配置项，不切标签；只读详情、文本输入和按键录制已分别交给 `DetailList`、`TextPrompt` 和 `KeyCapture`；
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
 - 根级 `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和 footer 提示；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；`ChatInput` 编辑、`ListSelection` 导航与 `ChatHistory` 滚动继续由局部 component 拥有；
-- `features/keymap` 已读取 CLI 显式提供的 active profile 下 `zeta-code/keybindings.json`，在 event-loop Tick 中有界热重载 User command/blocker、平台覆盖与 `when`；`/shortcuts` 打开 Keymap 设置界面，汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单、单键/两段 Chord 录制和资源路径。保存要求打开界面时的 revision 仍有效，完整编译和 TUI Chord 安全校验成功后才原子替换文件与 `AppKeymap`；坏更新或保存失败保留上一份有效映射。资源不进入 App Server，也不从 Remote Workspace 读取客户端按键配置；
+- `features/keymap` 已读取 CLI 显式提供的 active profile 下 `zeta-code/keybindings.json`，在 event-loop Tick 中有界热重载 User command/blocker、平台覆盖与 `when`；`/shortcuts` 打开 Keymap 设置界面，汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单、单键/两段 Chord 录制和资源路径。保存要求打开界面时的 revision 仍有效，完整编译和 TUI Chord 安全校验成功后才原子替换文件与 `AppKeymap`；坏更新或保存失败保留上一份有效映射。资源不进入 App Server，也不从远程目录读取客户端按键配置；
 - `App` 处理 presentation coordination 与 Keymap action，并把输入委托给 `ChatInputArea`。`ChatWidget` 统一分配 `ChatHistory + ChatInputArea + Footer`；
 - `ChatInput`、editor、attachment、paste 和 `/`/`@`/`$` Suggest 位于 `components/chat_input/`；Pane 栈、Queue/Steer/Plan 占高条目和 Approval/Query 覆盖交互位于 `components/chat_input_area/`；
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
@@ -912,15 +910,15 @@ lib.rs + lib_tests.rs
   Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `app`，
   不是 TUI 的“尚未完成”；
 - Mouse 只覆盖 Slash/File/Plugin Suggest、多标签 `ListSelection` Pane 的左键切换，以及可执行候选项的左键命中与 hover。Config 标签页中的 Mouse interactions item 可关闭这类交互，关闭后页面把鼠标拖选留给宿主终端；完整 pointer/selection 交互不属于当前 `zeta code` 要求，Vim mode/motion/operator 也没有被产品文档接受；
-- 当前入口通过 `AppServerSession` 消费 profile/Workspace-scoped local authority，不提供 remote
+- 当前入口通过 `AppServerSession` 消费 profile 和 Environment 目录授权，不提供 remote
   selector 或自动 reconnect。若未来接受
   远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；
-- File mention 插入 workspace-relative 原子路径，Plugin mention 插入 effective package 的原子 `@plugin-id`。没有已接受 contract 的 login、compact、service tier、usage 和 review surface 不注册；
+- File mention 插入当前目录的相对路径，Plugin mention 插入 effective package 的原子 `@plugin-id`。没有已接受 contract 的 login、compact、service tier、usage 和 review surface 不注册；
 - 图片输入已形成“本地路径/系统 clipboard → 草稿 data URL → App Server 分块上传 →
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
-- status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。Mouse interactions、Follow-up messages 和 Add-dir 的十二项新增目录默认授权由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置；Follow-up messages 默认 Queue，用左右明确选择 Queue/Steer，Enter 在两者间切换，Tab/Shift-Tab 切标签，Space 进入搜索。默认授权只保存能力集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个附加目录的十二项独立能力，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
+- status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；当前目录路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
+- Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。Mouse interactions、Follow-up messages 和 Add-dir 的新增目录默认 Permission 由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置；Follow-up messages 默认 Queue，用左右明确选择 Queue/Steer，Enter 在两者间切换，Tab/Shift-Tab 切标签，Space 进入搜索。默认 Permission 只保存权限集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个目录的独立 Permission，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。
@@ -1126,7 +1124,7 @@ metadata-only 诊断与包含测试 fixture 的受控 trace。
 - active Thread snapshot、sequence 和 transient merge 只有 `features/thread` 一个 TUI owner；
 - durable sequence 和 transient cursor 分开处理；
 - sequence gap、runtime 切换和未知 update 会触发 resync，而不是猜测状态；
-- `expectedSequence` 来自正确 aggregate，逻辑重试复用原 `CommandId`；
+- `expectedSequence` 来自正确 Thread，逻辑重试复用原 `CommandId`；
 - transcript 展示完整 typed Turn/ThreadItem lifecycle；
 - Ctrl-C 在 Turn 运行时优先发出 `session/request` 的 `InterruptTurn`，空闲时才退出；
 - terminal 在正常退出、错误、panic 和 Unix termination signal 路径均可恢复；

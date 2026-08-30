@@ -115,7 +115,7 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 	readonly onDidChangeInstances = Event.None;
 	readonly onDidChangeActiveInstance = Event.None;
 	async getProfiles(): Promise<readonly ITerminalProfile[]> { return [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }]; }
-	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.workspaceFolderId ?? "folder", options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
+	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.dirId ?? "folder", options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
 	async relaunchTerminal() {}
 	setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
 	moveTerminal() {}
@@ -132,7 +132,7 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	readonly onDidChangeCommandStatus = this.commandEmitter.event;
 	readonly onDidExit = Event.None;
 	readonly onDidChangeState = Event.None;
-	constructor(readonly id: string, readonly workspaceFolderId: string, readonly title: string) { super(); }
+	constructor(readonly id: string, readonly dirId: string, readonly title: string) { super(); }
 	write(data: string): void { this.writes.push(data); }
 	resize(_dimensions: ITerminalDimensions): void {}
 	async close(): Promise<void> { this.state = "exited"; }

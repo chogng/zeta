@@ -9,12 +9,12 @@ use std::time::UNIX_EPOCH;
 
 #[test]
 fn handle_streams_scored_paths_and_highlight_indices() {
-    let workspace = TestWorkspace::new();
-    workspace.write("docs/src-notes.md");
-    workspace.write("tests/s_r_c.rs");
-    workspace.write("src/lib.rs");
+    let directory = TestWorkspace::new();
+    directory.write("docs/src-notes.md");
+    directory.write("tests/s_r_c.rs");
+    directory.write("src/lib.rs");
     let (handle, snapshots) =
-        PathSearchHandle::start(workspace.path.clone(), PathSearchOptions::default()).unwrap();
+        PathSearchHandle::start(directory.path.clone(), PathSearchOptions::default()).unwrap();
 
     let revision = handle.update_query("src");
     let snapshot = wait_for_snapshot(&snapshots, "src", |snapshot| snapshot.search_complete);
@@ -46,11 +46,11 @@ fn handle_streams_scored_paths_and_highlight_indices() {
 
 #[test]
 fn query_updates_reuse_the_handle_and_publish_the_latest_query() {
-    let workspace = TestWorkspace::new();
-    workspace.write("src/alpha.rs");
-    workspace.write("src/beta.rs");
+    let directory = TestWorkspace::new();
+    directory.write("src/alpha.rs");
+    directory.write("src/beta.rs");
     let (handle, snapshots) =
-        PathSearchHandle::start(workspace.path.clone(), PathSearchOptions::default()).unwrap();
+        PathSearchHandle::start(directory.path.clone(), PathSearchOptions::default()).unwrap();
 
     let first_revision = handle.update_query("alpha");
     let first = wait_for_snapshot(&snapshots, "alpha", |snapshot| snapshot.search_complete);
@@ -66,15 +66,15 @@ fn query_updates_reuse_the_handle_and_publish_the_latest_query() {
 
 #[test]
 fn walker_respects_gitignore_and_skips_generated_directories() {
-    let workspace = TestWorkspace::new();
-    fs::create_dir(workspace.path.join(".git")).unwrap();
-    fs::write(workspace.path.join(".gitignore"), "ignored.rs\n").unwrap();
-    workspace.write("src/lib.rs");
-    workspace.write("ignored.rs");
-    workspace.write("target/debug/zeta");
-    workspace.write("node_modules/package/index.js");
+    let directory = TestWorkspace::new();
+    fs::create_dir(directory.path.join(".git")).unwrap();
+    fs::write(directory.path.join(".gitignore"), "ignored.rs\n").unwrap();
+    directory.write("src/lib.rs");
+    directory.write("ignored.rs");
+    directory.write("target/debug/zeta");
+    directory.write("node_modules/package/index.js");
     let (handle, snapshots) =
-        PathSearchHandle::start(workspace.path.clone(), PathSearchOptions::default()).unwrap();
+        PathSearchHandle::start(directory.path.clone(), PathSearchOptions::default()).unwrap();
 
     handle.update_query("");
     let snapshot = wait_for_snapshot(&snapshots, "", |snapshot| snapshot.search_complete);
@@ -108,7 +108,7 @@ fn wait_for_snapshot(
     }
 }
 
-static NEXT_WORKSPACE: AtomicUsize = AtomicUsize::new(0);
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
 struct TestWorkspace {
     path: PathBuf,
@@ -116,7 +116,7 @@ struct TestWorkspace {
 
 impl TestWorkspace {
     fn new() -> Self {
-        let sequence = NEXT_WORKSPACE.fetch_add(1, Ordering::Relaxed);
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "zeta-path-search-tests-{}-{}-{sequence}",
             std::process::id(),

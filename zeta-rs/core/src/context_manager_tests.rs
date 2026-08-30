@@ -67,7 +67,10 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
     ThreadSnapshot {
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "test".into(),
+        status: zeta_protocol::ThreadStatus::Active,
         turn_execution_binding: None,
         sequence,
         usage: zeta_protocol::ModelUsageSummary::default(),

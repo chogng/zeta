@@ -191,7 +191,7 @@ fn profile_commands_require_a_credential_free_target_and_verified_runtime() {
         "get",
         "--host",
         "build-linux",
-        "--workspace",
+        "--dir",
         "/srv/project",
     ]))
     .unwrap();
@@ -199,14 +199,14 @@ fn profile_commands_require_a_credential_free_target_and_verified_runtime() {
         panic!("expected profile get command");
     };
     assert_eq!(options.target.host().as_str(), "build-linux");
-    assert_eq!(options.target.workspace().as_str(), "/srv/project");
+    assert_eq!(options.target.dir().as_str(), "/srv/project");
 
     let activate = parse(strings([
         "profile",
         "activate",
         "--host",
         "build-linux",
-        "--workspace",
+        "--dir",
         "/srv/project",
         "--runtime",
         "/srv/zeta/runtime/bin/zeta",
@@ -227,7 +227,7 @@ fn profile_commands_require_a_credential_free_target_and_verified_runtime() {
             "activate",
             "--host",
             "build-linux",
-            "--workspace",
+            "--dir",
             "relative",
             "--runtime",
             "zeta",
@@ -240,7 +240,7 @@ fn profile_commands_require_a_credential_free_target_and_verified_runtime() {
         "rollback",
         "--host",
         "build-linux",
-        "--workspace",
+        "--dir",
         "/srv/project",
         "--ssh",
         "/usr/bin/ssh",
@@ -249,7 +249,7 @@ fn profile_commands_require_a_credential_free_target_and_verified_runtime() {
     let RemoteCommand::Profile(RemoteProfileCommand::Rollback(options)) = rollback else {
         panic!("expected profile rollback command");
     };
-    assert_eq!(options.target.workspace().as_str(), "/srv/project");
+    assert_eq!(options.target.dir().as_str(), "/srv/project");
     assert_eq!(
         options.ssh_executable.as_deref(),
         Some(Path::new("/usr/bin/ssh"))
@@ -265,7 +265,7 @@ fn connection_commands_parse_shared_credential_free_catalog_operations() {
         "Build",
         "--host",
         "build-linux",
-        "--workspace",
+        "--dir",
         "/srv/project",
         "--mode",
         "replace",
@@ -276,7 +276,7 @@ fn connection_commands_parse_shared_credential_free_catalog_operations() {
     };
     assert_eq!(entry.name().as_str(), "build");
     assert_eq!(entry.target().host().as_str(), "build-linux");
-    assert_eq!(entry.target().workspace().as_str(), "/srv/project");
+    assert_eq!(entry.target().dir().as_str(), "/srv/project");
     assert_eq!(mode, RemoteConnectionSaveMode::Replace);
 
     let update = parse(strings([
@@ -288,7 +288,7 @@ fn connection_commands_parse_shared_credential_free_catalog_operations() {
         "Production",
         "--host",
         "production-linux",
-        "--workspace",
+        "--dir",
         "/srv/production",
     ]))
     .unwrap();
@@ -302,7 +302,7 @@ fn connection_commands_parse_shared_credential_free_catalog_operations() {
     assert_eq!(original_name.as_str(), "build");
     assert_eq!(entry.name().as_str(), "production");
     assert_eq!(entry.target().host().as_str(), "production-linux");
-    assert_eq!(entry.target().workspace().as_str(), "/srv/production");
+    assert_eq!(entry.target().dir().as_str(), "/srv/production");
 
     assert_eq!(
         parse(strings(["connections", "list"])).unwrap(),
@@ -322,7 +322,7 @@ fn connection_commands_parse_shared_credential_free_catalog_operations() {
             "build",
             "--host",
             "user@host",
-            "--workspace",
+            "--dir",
             "/srv/project",
         ]))
         .is_err()

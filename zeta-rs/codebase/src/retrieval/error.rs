@@ -5,7 +5,7 @@ use thiserror::Error;
 pub enum CodebaseRetrievalError {
     #[error("codebase-retrieval query is invalid: {0}")]
     InvalidQuery(&'static str),
-    #[error("code retrieval sources belong to different workspace roots")]
+    #[error("code retrieval sources belong to different directory roots")]
     RootMismatch,
     #[error("local codebase retrieval failed: {0}")]
     LocalIndex(#[from] crate::CodebaseError),

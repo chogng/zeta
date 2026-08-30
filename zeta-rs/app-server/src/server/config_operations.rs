@@ -77,7 +77,7 @@ use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::Patch;
 use zeta_state::ClearOutcome;
-use zeta_state::WorkspaceIndexKind;
+use zeta_state::DirIndexKind;
 
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
@@ -109,7 +109,7 @@ impl AppServer {
             .map_err(config_error)?;
         result(&config_read_result(
             snapshot,
-            self.active_workspace_trust_id().as_ref(),
+            self.active_dir_id().as_ref(),
             self.tool_search_embedding_status(),
         ))
     }
@@ -170,8 +170,8 @@ impl AppServer {
 
     pub(super) fn fast_regex_disable_and_delete(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FastRegexDisableAndDeleteParams = decode(params)?;
-        let workspace = self
-            .active_workspace_trust_id()
+        let dir = self
+            .active_dir_id()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
         let store = self
             .config
@@ -191,16 +191,16 @@ impl AppServer {
             })
             .map_err(config_operation_error)?;
         let snapshot = store.read_snapshot().map_err(config_error)?;
-        self.workspace_runtime_control()
+        self.env_runtime_control()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?
             .reconcile_local_tool_config(&snapshot.values)
             .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
-        let deletion = match &self.workspace_state {
-            super::WorkspaceStateMode::Persistent(state) => state
-                .clear_index(&workspace, WorkspaceIndexKind::AgentGrep)
+        let deletion = match &self.env_state {
+            super::EnvStateMode::Persistent(state) => state
+                .clear_index(&dir, DirIndexKind::AgentGrep)
                 .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?,
-            super::WorkspaceStateMode::Ephemeral => ClearOutcome::AlreadyAbsent,
-            super::WorkspaceStateMode::Unconfigured => {
+            super::EnvStateMode::Ephemeral => ClearOutcome::AlreadyAbsent,
+            super::EnvStateMode::Unconfigured => {
                 return Err(RpcError::new(
                     -32090,
                     AppServerErrorName::CodebaseUnavailable,
@@ -283,8 +283,8 @@ impl AppServer {
 
     pub(super) fn commit_message_authorize(&self, params: &Value) -> Result<Value, RpcError> {
         let params: CommitMessageAuthorizeParams = decode(params)?;
-        let workspace = self
-            .active_workspace_trust_id()
+        let dir = self
+            .active_dir_id()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
         let store = self
             .config
@@ -294,7 +294,7 @@ impl AppServer {
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::AuthorizeCommitMessageEgress { workspace },
+                command: UserConfigCommand::AuthorizeCommitMessageEgress { dir },
             })
             .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
@@ -302,8 +302,8 @@ impl AppServer {
 
     pub(super) fn commit_message_revoke(&self, params: &Value) -> Result<Value, RpcError> {
         let params: CommitMessageRevokeParams = decode(params)?;
-        let workspace = self
-            .active_workspace_trust_id()
+        let dir = self
+            .active_dir_id()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
         let store = self
             .config
@@ -313,7 +313,7 @@ impl AppServer {
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::RevokeCommitMessageEgress { workspace },
+                command: UserConfigCommand::RevokeCommitMessageEgress { dir },
             })
             .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
@@ -527,15 +527,15 @@ pub(super) fn config_operation_error(error: ConfigCommandError) -> RpcError {
 
 fn config_read_result(
     snapshot: ResolvedConfigSnapshot,
-    active_workspace: Option<&zeta_workspace::WorkspaceTrustId>,
+    active_dir: Option<&zeta_file_access::DirId>,
     tool_search_status: ToolSearchEmbeddingStatus,
 ) -> ConfigReadResult {
-    let commit_message_active_workspace_authorized = active_workspace.is_some_and(|workspace| {
+    let commit_message_active_dir_authorized = active_dir.is_some_and(|dir| {
         snapshot
             .values
             .commit_messages
             .authorized_model(
-                workspace,
+                dir,
                 snapshot.values.commit_message_model.as_ref(),
                 &snapshot.values.providers,
             )
@@ -568,7 +568,7 @@ fn config_read_result(
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
         commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
-        commit_message_active_workspace_authorized,
+        commit_message_active_dir_authorized,
         tool_mode: snapshot.values.tool_mode,
         agent_grep_backend: agent_grep_backend_dto(snapshot.values.agent_grep_backend),
         providers: snapshot

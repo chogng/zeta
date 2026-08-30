@@ -18,7 +18,7 @@ pub enum LanguageServerEnvironmentPolicy {
 
 /// A local language-server process command supplied by the product host.
 ///
-/// Server discovery, executable trust, installation, sandboxing, and environment policy belong to
+/// Server discovery, executable verification, installation, sandboxing, and environment policy belong to
 /// the caller. This value only preserves the resolved process launch contract.
 #[derive(Clone, Debug)]
 pub struct LanguageServerCommand {

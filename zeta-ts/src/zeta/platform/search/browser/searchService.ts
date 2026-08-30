@@ -1,5 +1,5 @@
-import type { IWorkspaceSearchApi } from "../common/searchApi.js";
-import type { IWorkspaceSearchOptions, IWorkspaceSearchQuery, IWorkspaceSearchComplete, IWorkspaceSearchService } from "../common/search.js";
+import type { IContentSearchApi } from "../common/searchApi.js";
+import type { IContentSearchOptions, IContentSearchQuery, IContentSearchComplete, IContentSearchService } from "../common/search.js";
 import type { IWorkspaceContextService, IWorkspaceFolder } from "../../workspace/common/workspace.js";
 
 const DEFAULT_MAX_RESULTS = 2_000;
@@ -7,17 +7,17 @@ const RESULT_BATCH_SIZE = 100;
 const IDLE_POLL_MILLIS = 20;
 
 /** Pulls bounded backend batches and exposes one cancellable renderer search. */
-export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
-	private readonly api: IWorkspaceSearchApi;
+export class BrowserContentSearchService implements IContentSearchService {
+	private readonly api: IContentSearchApi;
 
-	constructor(api: IWorkspaceSearchApi, private readonly workspaceContext?: IWorkspaceContextService) {
+	constructor(api: IContentSearchApi, private readonly workspaceContext?: IWorkspaceContextService) {
 		this.api = api;
 	}
 
 	async search(
-		query: IWorkspaceSearchQuery,
-		options: IWorkspaceSearchOptions = {},
-	): Promise<IWorkspaceSearchComplete> {
+		query: IContentSearchQuery,
+		options: IContentSearchOptions = {},
+	): Promise<IContentSearchComplete> {
 		const folders = this.workspaceContext?.getWorkspace().folders;
 		if (!folders) return this.searchFolder(undefined, query, options);
 		if (folders.length === 0) return { resultCount: 0, limitHit: false, error: "Open a folder to search files." };
@@ -40,12 +40,12 @@ export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
 
 	private async searchFolder(
 		folder: IWorkspaceFolder | undefined,
-		query: IWorkspaceSearchQuery,
-		options: IWorkspaceSearchOptions,
-	): Promise<IWorkspaceSearchComplete> {
+		query: IContentSearchQuery,
+		options: IContentSearchOptions,
+	): Promise<IContentSearchComplete> {
 		throwIfAborted(options.signal);
 		const started = await this.api.start({
-			...(folder ? { workspaceFolderId: folder.id } : {}),
+			...(folder ? { dirId: folder.id } : {}),
 			query: query.text,
 			patternKind: query.patternKind,
 			caseSensitivity: query.caseSensitivity,
@@ -58,7 +58,7 @@ export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
 			while (true) {
 				throwIfAborted(options.signal);
 				const snapshot = await this.api.read({
-					...(folder ? { workspaceFolderId: folder.id } : {}),
+					...(folder ? { dirId: folder.id } : {}),
 					searchId: started.searchId,
 					afterMatch: cursor,
 					maxMatches: RESULT_BATCH_SIZE,
@@ -67,7 +67,7 @@ export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
 					cursor = snapshot.nextMatch;
 					options.onProgress?.(snapshot.matches.map((match) => ({
 						...match,
-						...(folder ? { workspaceFolderId: folder.id, workspaceFolderName: folder.name } : {}),
+						...(folder ? { dirId: folder.id, dirName: folder.name } : {}),
 						ranges: match.ranges.map((range) => ({ ...range })),
 					})));
 				}
@@ -82,7 +82,7 @@ export class BrowserWorkspaceSearchService implements IWorkspaceSearchService {
 			}
 		} finally {
 			await this.api.cancel({
-				...(folder ? { workspaceFolderId: folder.id } : {}),
+				...(folder ? { dirId: folder.id } : {}),
 				searchId: started.searchId,
 			}).catch(() => {
 				// Cancellation is cleanup after completion or connection loss.

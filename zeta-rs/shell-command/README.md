@@ -34,7 +34,7 @@ App Server local adapter
 ├─ InstallContext::executable_candidates(Ripgrep)
 ├─ RipgrepExecutable::from_override / discover_candidates
 ├─ ShellCommandRequest::from_arguments
-├─ workspace argument validation
+├─ directory argument validation
 ├─ RipgrepExecutable::materialize
 └─ ShellCommandTool::execute_authorized
 ```
@@ -60,7 +60,7 @@ preprocessor、hostname command、archive search、symlink follow、pattern file
 参数，包括 `-f/path`、`-LH` 等紧凑短参数形式，因为它们会扩大进程或文件读取边界。该 policy
 只负责 built-in 参数安全，不替代下层 OS sandbox。
 App Server adapter 还拒绝绝对路径和含 `..` component 的参数。
-已存在的相对 path argument 会在 review 前 canonicalize；通过 Workspace 内 symlink 指向外部的
+已存在的相对 path argument 会在 review 前 canonicalize；通过目录内 symlink 指向外部的
 路径同样被拒绝。
 
 canonical package builder 当前按 checksum-locked manifest 把 ripgrep 放到

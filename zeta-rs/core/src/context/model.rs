@@ -14,7 +14,7 @@ use zeta_protocol::TurnId;
 pub(crate) enum InstructionLayer {
     System,
     Product,
-    Workspace,
+    Directory,
     Skill,
 }
 
@@ -134,7 +134,7 @@ impl TryFrom<zeta_extension_api::PromptFragment> for InstructionFragment {
             layer: match fragment.layer() {
                 zeta_extension_api::PromptFragmentLayer::System => InstructionLayer::System,
                 zeta_extension_api::PromptFragmentLayer::Product => InstructionLayer::Product,
-                zeta_extension_api::PromptFragmentLayer::Workspace => InstructionLayer::Workspace,
+                zeta_extension_api::PromptFragmentLayer::Directory => InstructionLayer::Directory,
                 zeta_extension_api::PromptFragmentLayer::Skill => InstructionLayer::Skill,
             },
             retention: match fragment.retention() {

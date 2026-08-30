@@ -62,7 +62,7 @@ export class DebugAdapterSession extends Disposable implements IDebugSession {
 		const adapter = replaceWorkspaceVariables(options.configuration.adapter, workspaceFolder) as IDebugConfiguration["adapter"];
 		const sessionId = await options.processService.start({
 			...adapter,
-			...(options.configuration.workspaceFolderId ? { workspaceFolderId: options.configuration.workspaceFolderId } : {}),
+			...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}),
 		});
 		const session = new DebugAdapterSession(options.configuration, options.processService, sessionId, options.breakpoints, options.workspace, options.runInTerminal, options.updateBreakpoints, options.exceptionBreakpoints);
 		try {

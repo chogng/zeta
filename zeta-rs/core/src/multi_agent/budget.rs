@@ -1,9 +1,8 @@
 use crate::CoreError;
-use crate::SessionSnapshot;
+use crate::ThreadSnapshot;
 use std::collections::BTreeSet;
-use zeta_protocol::SessionThreadStatus;
+use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadOrigin;
 
 /// Structural resource ceilings applied before a child Agent Thread is reserved.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,30 +43,22 @@ impl Default for AgentTreeLimits {
 }
 
 pub(super) fn validate_spawn_capacity(
-    session: &SessionSnapshot,
+    threads: &[ThreadSnapshot],
+    session_id: &SessionId,
     parent_thread_id: &ThreadId,
     limits: AgentTreeLimits,
 ) -> Result<(), CoreError> {
-    let parent_depth = agent_depth(session, parent_thread_id)?;
+    let parent_depth = agent_depth(threads, session_id, parent_thread_id)?;
     if parent_depth.saturating_add(1) > limits.max_depth {
         return Err(CoreError::InvalidInput(
             "Agent tree maximum depth has been reached".into(),
         ));
     }
-    let live_children = session
-        .threads
+    let live_children = threads
         .iter()
         .filter(|thread| {
-            matches!(
-                &thread.membership.origin,
-                ThreadOrigin::AgentSpawn {
-                    parent_thread_id: parent,
-                    ..
-                } if parent == parent_thread_id
-            ) && matches!(
-                thread.membership.status,
-                SessionThreadStatus::Creating | SessionThreadStatus::Active
-            )
+            &thread.session_id == session_id
+                && thread.parent_thread_id.as_ref() == Some(parent_thread_id)
         })
         .count() as u32;
     if live_children >= limits.max_live_children {
@@ -76,13 +67,13 @@ pub(super) fn validate_spawn_capacity(
         ));
     }
 
-    let root = agent_root(session, parent_thread_id)?;
-    let descendants = session
-        .threads
+    let root = agent_root(threads, session_id, parent_thread_id)?;
+    let descendants = threads
         .iter()
         .filter(|thread| {
-            matches!(thread.membership.origin, ThreadOrigin::AgentSpawn { .. })
-                && agent_root(session, &thread.membership.thread_id)
+            &thread.session_id == session_id
+                && thread.parent_thread_id.is_some()
+                && agent_root(threads, session_id, &thread.thread_id)
                     .is_ok_and(|candidate| candidate == root)
         })
         .count() as u32;
@@ -94,17 +85,26 @@ pub(super) fn validate_spawn_capacity(
     Ok(())
 }
 
-fn agent_depth(session: &SessionSnapshot, thread_id: &ThreadId) -> Result<u32, CoreError> {
-    let root = agent_root_and_depth(session, thread_id)?;
+fn agent_depth(
+    threads: &[ThreadSnapshot],
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+) -> Result<u32, CoreError> {
+    let root = agent_root_and_depth(threads, session_id, thread_id)?;
     Ok(root.1)
 }
 
-fn agent_root(session: &SessionSnapshot, thread_id: &ThreadId) -> Result<ThreadId, CoreError> {
-    Ok(agent_root_and_depth(session, thread_id)?.0)
+fn agent_root(
+    threads: &[ThreadSnapshot],
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+) -> Result<ThreadId, CoreError> {
+    Ok(agent_root_and_depth(threads, session_id, thread_id)?.0)
 }
 
 fn agent_root_and_depth(
-    session: &SessionSnapshot,
+    threads: &[ThreadSnapshot],
+    session_id: &SessionId,
     thread_id: &ThreadId,
 ) -> Result<(ThreadId, u32), CoreError> {
     let mut current = thread_id.clone();
@@ -116,21 +116,16 @@ fn agent_root_and_depth(
                 "Agent Thread lineage contains a cycle".into(),
             ));
         }
-        let thread = session
-            .threads
+        let thread = threads
             .iter()
-            .find(|thread| thread.membership.thread_id == current)
+            .find(|thread| thread.session_id == *session_id && thread.thread_id == current)
             .ok_or_else(|| CoreError::NotFound(current.to_string()))?;
-        match &thread.membership.origin {
-            ThreadOrigin::AgentSpawn {
-                parent_thread_id, ..
-            } => {
+        match &thread.parent_thread_id {
+            Some(parent_thread_id) => {
                 current = parent_thread_id.clone();
                 depth = depth.saturating_add(1);
             }
-            ThreadOrigin::Root | ThreadOrigin::Fork { .. } | ThreadOrigin::Rewind { .. } => {
-                return Ok((current, depth));
-            }
+            None => return Ok((current, depth)),
         }
     }
 }

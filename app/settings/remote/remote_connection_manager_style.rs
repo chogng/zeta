@@ -42,7 +42,7 @@ pub(crate) fn input_bounds(panel: Rect, field: RemoteConnectionManagerField) -> 
     let top = match field {
         RemoteConnectionManagerField::Name => 100.0,
         RemoteConnectionManagerField::Host => 177.0,
-        RemoteConnectionManagerField::Workspace => 254.0,
+        RemoteConnectionManagerField::Directory => 254.0,
     };
     let left = form_left(panel);
     Rect::from_xywh(

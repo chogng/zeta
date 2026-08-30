@@ -2,18 +2,18 @@ import "./media/sessionsAuxiliarybarPart.css";
 import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
-import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
+import type { ISessionsService } from "../../services/view/common/sessionsService.js";
 import { h } from "../../../base/browser/dom.js";
 
 /** Typed Session and Thread context for the active Sessions Workbench slot. */
 export class SessionsAuxiliarybarPart extends WorkbenchPart {
 	private readonly sessionService: ISessionsManagementService;
-	private readonly viewService: ISessionsViewService;
+	private readonly viewService: ISessionsService;
 
 	override get minimumWidth(): number { return 220; }
 	override get maximumWidth(): number { return 460; }
 
-	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsService) {
 		super(container, "auxiliarybar");
 		this.sessionService = sessionService;
 		this.viewService = viewService;
@@ -31,7 +31,7 @@ export class SessionsAuxiliarybarPart extends WorkbenchPart {
 			content.replaceChildren(heading, contextList(content.ownerDocument, [
 				["Status", active.session.status],
 				["Model", active.session.model ? `${active.session.model.provider}/${active.session.model.model}` : "Default"],
-				["Threads", String(active.session.threads.length)],
+				["Chats", String(active.session.chats.length)],
 				["Active thread", active.threadId],
 				["Session", active.session.sessionId],
 			]));

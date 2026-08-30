@@ -7,9 +7,7 @@ use zeta_marketplace_client::MarketplaceServiceClient;
 use super::AppServer;
 use crate::local::ProviderModelService;
 use crate::server::ConnectionState;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_model_provider::EchoModel;
 
@@ -18,12 +16,8 @@ fn app_server_exposes_only_the_manager_business_contract() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     let server = AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_marketplace_manager_client(Arc::new(FakeMarketplaceManager));

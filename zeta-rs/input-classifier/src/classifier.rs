@@ -90,7 +90,7 @@ impl InputClassification {
     }
 }
 
-/// Stateful local classifier that owns workspace and executable-resolution context.
+/// Stateful local classifier that owns directory and executable-resolution context.
 #[derive(Clone, Debug)]
 pub struct InputClassifier {
     shell_context: ShellContext,
@@ -112,7 +112,7 @@ impl InputClassifier {
         }
     }
 
-    /// Rebinds workspace-relative command and path evidence.
+    /// Rebinds directory-relative command and path evidence.
     pub fn set_working_directory(&mut self, working_directory: &Path) {
         self.shell_context.set_working_directory(working_directory);
     }
@@ -127,9 +127,9 @@ impl InputClassifier {
         self.shell_context.replace_aliases(aliases);
     }
 
-    /// Re-reads workspace-owned package scripts, Just recipes, and Make targets.
-    pub fn refresh_shell_workspace(&mut self) {
-        self.shell_context.refresh_workspace();
+    /// Re-reads directory-owned package scripts, Just recipes, and Make targets.
+    pub fn refresh_dir_catalog(&mut self) {
+        self.shell_context.refresh_dir_catalog();
     }
 
     /// Returns structural Shell completion candidates using the same evidence as classification.

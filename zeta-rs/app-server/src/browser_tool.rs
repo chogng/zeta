@@ -87,7 +87,7 @@ impl<B> BrowserToolService<B> {
                 ),
                 definition(
                     "browser_back",
-                    "Navigate one browser target backward when history permits.",
+                    "Navigate one browser target backward when history authorizations.",
                     TARGET_SCHEMA,
                 ),
                 definition(

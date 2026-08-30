@@ -12,9 +12,9 @@ while `run_app_server` and `run_remote` preserve compatibility for product hosts
 their own top-level arguments. `src/main.rs` only maps process success and failure to an exit code.
 
 `src/app_server.rs::run` validates direct, broker-connect, and daemon lifecycle commands; binds
-`ZETA_PROFILE_ROOT`; binds a Workspace only when `ZETA_WORKSPACE_ROOT` is explicitly present;
+`ZETA_PROFILE_ROOT`; binds a directory only when `ZETA_WORKSPACE_ROOT` is explicitly present;
 resolves the optional product services manifest through `InstallContext`; and delegates server
-behavior to `zeta-app-server`. It must never infer a Workspace from the host process current
+behavior to `zeta-app-server`. It must never infer a directory from the host process current
 directory.
 
 `zeta-app-server-daemon` owns the local profile authority process, serialized lifecycle operations,
@@ -22,7 +22,7 @@ private socket paths, bounded data/control preludes, process-generation records,
 readiness probes, stdio proxy, bounded logs, cooperative stop, idle shutdown, and stale-state recovery.
 `app-server connect` resolves its packaged executable from `ZETA_APP_SERVER_DAEMON_PATH`, or from
 the `zeta-server` sibling path for standalone and Remote runtime packages. The daemon crate's
-[`README`](../app-server-daemon/README.md) defines its profile-wide and Workspace-scoped ownership.
+[`README`](../app-server-daemon/README.md) defines its profile-wide and directory-scoped ownership.
 
 `src/remote.rs::run` owns the non-interactive Remote command adapter used by Desktop: runtime probe,
 download and installation, connection catalog operations, and runtime profile operations. Domain
@@ -33,8 +33,8 @@ validation and SSH behavior remain in `zeta-remote` and `zeta-remote-connections
 
 Unknown or malformed commands fail before opening an App Server or starting SSH. Domain failures
 are returned as text to the executable boundary, printed to stderr, and produce a failing exit code.
-The App Server inherits no implicit Workspace authority; without `ZETA_WORKSPACE_ROOT`, Workspace
-operations report their canonical unavailable errors. A Session mutation whose durable Workspace
+The App Server inherits no implicit directory authority; without `ZETA_WORKSPACE_ROOT`, directory
+operations report their canonical unavailable errors. A Session mutation whose durable directory
 binding differs from the connection runtime fails with `WorkspaceAuthorityMismatch`; legacy
 unbound Sessions remain readable but cannot be mutated implicitly.
 

@@ -41,7 +41,7 @@ impl ProductApp {
         self.remote_tunnel_manager.open(host, restore_focus);
         self.workbench.dismiss_tab_context_menu();
         self.git_branch_context_menu.dismiss();
-        self.workspace_path_picker.dismiss();
+        self.path_picker.dismiss();
         self.remote_connection_picker.dismiss();
         self.dismiss_remote_connection_manager();
         self.rebuild_and_focus_remote_tunnel_port();

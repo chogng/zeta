@@ -35,7 +35,7 @@ pub fn run_stdio(options: McpServerOptions) -> Result<(), McpServerError> {
                 version: env!("CARGO_PKG_VERSION").into(),
             },
         )
-        .with_workspace_root(options.workspace_root()),
+        .with_dir_root(options.dir_root()),
     )
     .map_err(McpServerError::app_server)?;
     let agent = Arc::new(AppServerAgentService::with_receipts(
@@ -65,7 +65,7 @@ pub fn run_http(
                 version: env!("CARGO_PKG_VERSION").into(),
             },
         )
-        .with_workspace_root(options.workspace_root()),
+        .with_dir_root(options.dir_root()),
     )
     .map_err(McpServerError::app_server)?;
     http::serve(host, options.runtime_limits(), receipts, http_options)

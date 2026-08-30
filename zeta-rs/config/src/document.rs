@@ -3,6 +3,8 @@ use crate::CommitMessageConfig;
 use crate::ConfigDiagnostic;
 use crate::ConfigError;
 use crate::ConfigProvenance;
+use crate::DirConfigIntent;
+use crate::DirPermissionsConfig;
 use crate::HooksConfig;
 use crate::LanguageServersConfig;
 use crate::McpConfig;
@@ -10,8 +12,6 @@ use crate::PluginsConfig;
 use crate::SkillsConfig;
 use crate::ToolSearchConfig;
 use crate::UserExecPolicyConfig;
-use crate::WorkspaceConfigIntent;
-use crate::WorkspaceTrustConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -147,7 +147,7 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub exec_policy: UserExecPolicyConfig,
     #[serde(default)]
-    pub workspace_trust: WorkspaceTrustConfig,
+    pub dir_permissions: DirPermissionsConfig,
     #[serde(default)]
     pub desktop: HashMap<String, serde_json::Value>,
 }
@@ -238,7 +238,7 @@ impl UserConfigDocument {
 
 /// Effective configuration derived from the currently supported user configuration sources.
 ///
-/// Additional sources such as Workspace documents and session defaults will be resolved into this
+/// Additional sources such as Directory documents and session defaults will be resolved into this
 /// type without exposing file or authority implementation details to runtime consumers.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ResolvedConfig {
@@ -257,9 +257,9 @@ pub struct ResolvedConfig {
     pub codebase: CodebaseConfig,
     pub commit_messages: CommitMessageConfig,
     pub exec_policy: UserExecPolicyConfig,
-    pub workspace_trust: WorkspaceTrustConfig,
+    pub dir_permissions: DirPermissionsConfig,
     pub desktop: HashMap<String, serde_json::Value>,
-    pub workspace: Option<WorkspaceConfigIntent>,
+    pub dir_config: Option<DirConfigIntent>,
 }
 
 impl ResolvedConfig {
@@ -336,9 +336,9 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             codebase: document.codebase.clone(),
             commit_messages: document.commit_messages.clone(),
             exec_policy: document.exec_policy.clone(),
-            workspace_trust: document.workspace_trust.clone(),
+            dir_permissions: document.dir_permissions.clone(),
             desktop: document.desktop.clone(),
-            workspace: None,
+            dir_config: None,
         }
     }
 }

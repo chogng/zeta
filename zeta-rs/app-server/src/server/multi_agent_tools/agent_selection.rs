@@ -52,12 +52,12 @@ pub(super) fn resolve_agent_selection(
                 )),
                 [] => {
                     return Err(CoreError::InvalidInput(format!(
-                        "Workspace Agent definition '{name}' is not available"
+                        "Agent definition '{name}' is not available"
                     )));
                 }
                 _ => {
                     return Err(CoreError::InvalidInput(format!(
-                        "Workspace Agent definition '{name}' is ambiguous across authorized directories"
+                        "Agent definition '{name}' is ambiguous across authorized directories"
                     )));
                 }
             }

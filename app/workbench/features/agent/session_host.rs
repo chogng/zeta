@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::path::PathBuf;
 
 use crate::PaneBinding;
@@ -14,7 +13,6 @@ use zeta_app_server_protocol::protocol::fs::FsWriteFileParams;
 use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
-use zeta_editor_host::FileEditorCloseRequest;
 use zeta_files::DirectoryEntry;
 use zeta_protocol::Session;
 use zeta_scm::ScmDiff;
@@ -33,9 +31,9 @@ use crate::app_server::ServerNotification;
 
 const FILE_SNAPSHOT_READ_ATTEMPTS: usize = 3;
 
+pub(crate) use zeta_session::EnvCwdSetResult;
 pub(crate) use zeta_session::SessionRuntime;
 pub(crate) use zeta_session::SessionRuntimeEvent;
-pub(crate) use zeta_session::WorkspaceSwitchResult;
 
 impl ProductApp {
     pub(crate) fn add_session(&mut self) {
@@ -56,34 +54,15 @@ impl ProductApp {
         let Some(session_id) = tab.session_id().cloned() else {
             return;
         };
-        let target_workspace_root = tab.workspace_root().map(Path::to_path_buf);
-        let switches_workspace = target_workspace_root
-            .as_deref()
-            .is_some_and(|target| target != self.workspace_context.working_directory());
-        if switches_workspace
-            && self.file_editor_host.request_workspace_replace()
-                == FileEditorCloseRequest::NeedsConfirmation
-        {
-            eprintln!("could not open Session Workspace while the active file has unsaved changes");
-            return;
-        }
-        let was_terminal = self.workspace_surface.is_terminal();
+        let was_terminal = self.main_surface.is_terminal();
         if !self.ensure_terminal_for_session(&session_id) {
             return;
         }
         let Some(session) = self.session_runtime.as_ref() else {
             return;
         };
-        let workspace_switch = match session.subscribe_session(session_id.clone()) {
-            Ok(workspace_switch) => workspace_switch,
-            Err(error) => {
-                eprintln!("could not subscribe to Session: {error}");
-                return;
-            }
-        };
-        if let Some(result) = workspace_switch
-            && !self.apply_workspace_switch_result(result)
-        {
+        if let Err(error) = session.subscribe_session(session_id.clone()) {
+            eprintln!("could not subscribe to Session: {error}");
             return;
         }
         self.activate_session_workbench_tab();
@@ -95,19 +74,19 @@ impl ProductApp {
     }
 
     fn upsert_session_tab(&mut self, session: &Session) {
-        let workspace = self.workspace_context.working_directory_label().to_owned();
+        let cwd_label = self.env.working_directory_label().to_owned();
         let _ = self.workbench.upsert_session_input_with(
-            crate::session_tab_input(session, &workspace),
+            crate::session_tab_input(session, &cwd_label),
             PaneInput::terminal(session.session_id.clone()),
             PaneBinding::new,
         );
     }
 
     fn upsert_session_catalog(&mut self, sessions: &[Session]) {
-        let workspace = self.workspace_context.working_directory_label().to_owned();
+        let cwd_label = self.env.working_directory_label().to_owned();
         for session in sessions {
             self.workbench.upsert_catalog_session_input_with(
-                crate::session_tab_input(session, &workspace),
+                crate::session_tab_input(session, &cwd_label),
                 PaneInput::terminal(session.session_id.clone()),
                 PaneBinding::new,
             );
@@ -158,7 +137,7 @@ impl ProductApp {
                     .active_session_tab_key()
                     .and_then(|key| key.session_id().cloned());
                 if active_session.as_ref() == Some(&session.session_id)
-                    && !self.workspace_surface.is_terminal()
+                    && !self.main_surface.is_terminal()
                 {
                     let _ = self.bind_agent_pane();
                 }
@@ -176,7 +155,7 @@ impl ProductApp {
                 }
                 ServerNotification::FsChanged(changed) => {
                     if shell_completion_sources_changed(&changed) {
-                        self.session_pane.refresh_shell_workspace();
+                        self.session_pane.refresh_dir_catalog();
                     }
                     self.refresh_files_from_app_server();
                     self.refresh_open_files_from_app_server(&changed);
@@ -222,10 +201,10 @@ fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
 }
 
 impl ProductApp {
-    pub(crate) fn replace_workspace_capability_state(&mut self) {
-        let pane_kind = self.active_workspace_pane_kind();
+    pub(crate) fn refresh_dir_capabilities(&mut self) {
+        let pane_kind = self.active_main_pane_kind();
         self.files
-            .set_workspace_root(self.workspace_context.working_directory().to_path_buf());
+            .set_dir_root(self.env.working_directory().to_path_buf());
         let mut removed = self.scm.replace_diffs([]);
         removed.extend(self.sync_repository_state());
         match pane_kind {
@@ -243,7 +222,7 @@ impl ProductApp {
 
     fn sync_repository_state(&mut self) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
         self.scm.replace_diffs(
-            self.workspace_context
+            self.env
                 .diffs()
                 .iter()
                 .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
@@ -266,12 +245,12 @@ impl ProductApp {
             return;
         };
         match client.read_directory(FsReadDirectoryParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: PathBuf::from("."),
         }) {
             Ok(result) => self.files.refresh(directory_entries(result.entries)),
-            Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
+            Err(error) => eprintln!("could not read App Server directory: {error}"),
         }
     }
 
@@ -280,7 +259,7 @@ impl ProductApp {
             return;
         };
         match client.read_directory(FsReadDirectoryParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path,
         }) {
@@ -288,15 +267,15 @@ impl ProductApp {
                 self.files
                     .complete_directory_load(element, directory_entries(result.entries));
             }
-            Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
+            Err(error) => eprintln!("could not read App Server directory: {error}"),
         }
     }
 
-    pub(crate) fn open_workspace_file(&mut self, path: PathBuf) {
+    pub(crate) fn open_file(&mut self, path: PathBuf) {
         let Some(client) = self.app_server_client.as_mut() else {
             return;
         };
-        match read_workspace_file(client, path) {
+        match read_file(client, path) {
             Ok(snapshot) => {
                 self.file_editor_host.open(snapshot);
                 self.language_service
@@ -304,12 +283,12 @@ impl ProductApp {
                 self.file_editor_input.reset_for_document_change();
                 self.show_agent_pane();
                 self.workbench.expand_inspector();
-                self.workspace_surface.show_editor();
+                self.main_surface.show_editor();
                 self.pending_focus = Some(zeta_editor_host::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            Err(error) => eprintln!("could not open App Server workspace file: {error}"),
+            Err(error) => eprintln!("could not open App Server file: {error}"),
         }
     }
 
@@ -320,7 +299,7 @@ impl ProductApp {
         let Some(client) = self.app_server_client.as_mut() else {
             return;
         };
-        match read_workspace_file(client, target.path) {
+        match read_file(client, target.path) {
             Ok(snapshot) => {
                 self.file_editor_host.open(snapshot);
                 if let Some(position) = definition_editor_position(
@@ -340,7 +319,7 @@ impl ProductApp {
                 self.file_editor_input.reset_for_document_change();
                 self.show_agent_pane();
                 self.workbench.expand_inspector();
-                self.workspace_surface.show_editor();
+                self.main_surface.show_editor();
                 self.pending_focus = Some(zeta_editor_host::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
                 self.request_redraw();
@@ -349,37 +328,37 @@ impl ProductApp {
         }
     }
 
-    pub(crate) fn save_active_workspace_file(&mut self) {
+    pub(crate) fn save_active_file(&mut self) {
         let Some(request) = self.file_editor_host.save_request() else {
             return;
         };
-        let _ = self.write_active_workspace_file(request);
+        let _ = self.write_active_file(request);
     }
 
-    pub(crate) fn try_save_active_workspace_file(&mut self) -> bool {
+    pub(crate) fn try_save_active_file(&mut self) -> bool {
         let Some(request) = self.file_editor_host.save_request() else {
             return false;
         };
-        self.write_active_workspace_file(request)
+        self.write_active_file(request)
     }
 
-    pub(crate) fn overwrite_active_workspace_file(&mut self) -> bool {
+    pub(crate) fn overwrite_active_file(&mut self) -> bool {
         let Some(request) = self.file_editor_host.overwrite_request() else {
             return false;
         };
-        self.write_active_workspace_file(request)
+        self.write_active_file(request)
     }
 
-    fn write_active_workspace_file(&mut self, request: TextFileSaveRequest) -> bool {
+    fn write_active_file(&mut self, request: TextFileSaveRequest) -> bool {
         let path = request.path().to_owned();
         let Some(client) = self.app_server_client.as_mut() else {
             return false;
         };
-        let saved = match write_workspace_file(client, request) {
+        let saved = match write_file(client, request) {
             Ok(version) => self.file_editor_host.mark_active_saved(version),
             Err(error) => {
-                eprintln!("could not save App Server workspace file: {error}");
-                if let Ok(snapshot) = read_workspace_file(client, path.clone()) {
+                eprintln!("could not save App Server file: {error}");
+                if let Ok(snapshot) = read_file(client, path.clone()) {
                     self.file_editor_host.observe_external(snapshot);
                 }
                 false
@@ -413,11 +392,11 @@ impl ProductApp {
             return;
         };
         for path in paths {
-            match read_workspace_file(client, path) {
+            match read_file(client, path) {
                 Ok(snapshot) => {
                     self.file_editor_host.observe_external(snapshot);
                 }
-                Err(error) => eprintln!("could not refresh open workspace file: {error}"),
+                Err(error) => eprintln!("could not refresh open file: {error}"),
             }
         }
     }
@@ -439,7 +418,7 @@ impl ProductApp {
             .as_mut()
             .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
         let snapshot = read_git_snapshot(client)?;
-        self.workspace_context.apply_git_snapshot(snapshot.as_ref());
+        self.env.apply_git_snapshot(snapshot.as_ref());
         self.sync_repository_capability_state();
         Ok(())
     }
@@ -468,14 +447,11 @@ impl ProductApp {
     }
 }
 
-fn read_workspace_file(
-    client: &mut AppServerRequestHandle,
-    path: PathBuf,
-) -> Result<TextFileSnapshot> {
+fn read_file(client: &mut AppServerRequestHandle, path: PathBuf) -> Result<TextFileSnapshot> {
     for _ in 0..FILE_SNAPSHOT_READ_ATTEMPTS {
         let before = client
             .get_file_metadata(FsGetMetadataParams {
-                workspace_folder_id: None,
+                dir_id: None,
                 session_directory: None,
                 path: path.clone(),
             })
@@ -483,7 +459,7 @@ fn read_workspace_file(
             .map_err(client_error)?;
         let content = client
             .read_file(FsReadFileParams {
-                workspace_folder_id: None,
+                dir_id: None,
                 session_directory: None,
                 path: path.clone(),
             })
@@ -491,7 +467,7 @@ fn read_workspace_file(
             .content;
         let after = client
             .get_file_metadata(FsGetMetadataParams {
-                workspace_folder_id: None,
+                dir_id: None,
                 session_directory: None,
                 path: path.clone(),
             })
@@ -507,14 +483,14 @@ fn read_workspace_file(
     ))
 }
 
-fn write_workspace_file(
+fn write_file(
     client: &mut AppServerRequestHandle,
     request: TextFileSaveRequest,
 ) -> Result<TextFileDiskVersion> {
     let (path, content, expected_version) = request.into_parts();
     let current = client
         .get_file_metadata(FsGetMetadataParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: path.clone(),
         })
@@ -531,7 +507,7 @@ fn write_workspace_file(
     }
     client
         .write_file(FsWriteFileParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path,
             content,

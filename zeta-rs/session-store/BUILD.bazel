@@ -1,6 +1,0 @@
-load("//:defs.bzl", "zeta_rust_crate")
-
-zeta_rust_crate(
-    name = "session-store",
-    crate_name = "zeta_session_store",
-)

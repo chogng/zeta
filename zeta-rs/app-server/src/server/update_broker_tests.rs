@@ -13,8 +13,6 @@ use zeta_protocol::DynamicToolCall;
 use zeta_protocol::ItemDelta;
 use zeta_protocol::ItemId;
 use zeta_protocol::RequestId;
-use zeta_protocol::SessionEvent;
-use zeta_protocol::SessionUpdate;
 use zeta_protocol::StreamCursor;
 use zeta_protocol::StreamInstanceId;
 use zeta_protocol::ThreadEvent;
@@ -26,32 +24,13 @@ use zeta_protocol::ToolName;
 use zeta_protocol::TurnId;
 
 #[test]
-fn broker_fans_out_and_advances_each_connection_cursor() {
-    let broker = UpdateBroker::default();
-    let first = NotificationQueue::default();
-    let second = NotificationQueue::default();
-    let session_id = SessionId::new("session_1").expect("test ID is non-empty");
-    broker.register(1, &first);
-    broker.register(2, &second);
-    broker.subscribe_session(1, session_id.clone(), 0);
-    broker.subscribe_session(2, session_id.clone(), 1);
-    let updates = vec![update(&session_id, 1), update(&session_id, 2)];
-
-    broker.publish_session(&session_id, &updates);
-    broker.publish_session(&session_id, &updates);
-
-    assert_eq!(first.len(), 2);
-    assert_eq!(second.len(), 1);
-}
-
-#[test]
 fn broker_fans_out_filesystem_invalidation_without_a_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
     broker.register(1, &queue);
 
     broker.publish_fs_changed(FsChanged::PathsChanged {
-        workspace_folder_id: None,
+        dir_id: None,
         paths: vec!["src/lib.rs".into()],
     });
 
@@ -62,7 +41,7 @@ fn broker_fans_out_filesystem_invalidation_without_a_subscription() {
 }
 
 #[test]
-fn profile_broker_shares_sessions_but_isolates_workspace_notifications() {
+fn profile_broker_shares_thread_updates_but_isolates_env_notifications() {
     let first_scope = UpdateBroker::default();
     let second_scope = first_scope.fork_scope();
     let first = NotificationQueue::default();
@@ -70,25 +49,38 @@ fn profile_broker_shares_sessions_but_isolates_workspace_notifications() {
     let first_connection = first_scope.allocate_connection_id();
     let second_connection = second_scope.allocate_connection_id();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
+    let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     first_scope.register(first_connection, &first);
     second_scope.register(second_connection, &second);
-    first_scope.subscribe_session(first_connection, session_id.clone(), 0);
-    second_scope.subscribe_session(second_connection, session_id.clone(), 0);
+    first_scope.subscribe_session(first_connection, session_id.clone());
+    second_scope.subscribe_session(second_connection, session_id.clone());
+    first_scope.subscribe_session_thread(
+        first_connection,
+        session_id.clone(),
+        thread_id.clone(),
+        0,
+    );
+    second_scope.subscribe_session_thread(
+        second_connection,
+        session_id.clone(),
+        thread_id.clone(),
+        0,
+    );
 
-    first_scope.publish_session(&session_id, &[update(&session_id, 1)]);
+    first_scope.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 1)]);
     first_scope.publish_fs_changed(FsChanged::PathsChanged {
-        workspace_folder_id: None,
+        dir_id: None,
         paths: vec!["first/src/lib.rs".into()],
     });
 
     assert_ne!(first_connection, second_connection);
     assert_eq!(first.len(), 2);
     assert_eq!(second.len(), 1);
-    assert_eq!(second.drain()[0]["method"], "session/update");
+    assert_eq!(second.drain()[0]["method"], "session/thread/update");
 }
 
 #[test]
-fn profile_broker_fans_out_marketplace_generations_across_workspace_scopes() {
+fn profile_broker_fans_out_marketplace_generations_across_env_scopes() {
     let first_scope = UpdateBroker::default();
     let second_scope = first_scope.fork_scope();
     let first = NotificationQueue::default();
@@ -152,7 +144,7 @@ fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
     broker.register(1, &queue);
 
     broker.publish_language_server_state(LanguageServerStateNotification {
-        workspace_folder_id: None,
+        dir_id: None,
         server: "rust-analyzer".into(),
         state: LanguageServerStateDto::BackingOff {
             attempt: 2,
@@ -179,7 +171,7 @@ fn session_owned_thread_subscription_follows_session_lifecycle() {
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     broker.register(1, &queue);
-    broker.subscribe_session(1, session_id.clone(), 0);
+    broker.subscribe_session(1, session_id.clone());
     broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
 
     broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 1)]);
@@ -263,6 +255,8 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
     let thread = zeta_protocol::Thread {
         session_id,
         thread_id,
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "Thread".into(),
         status: zeta_protocol::ThreadStatus::Active,
         sequence: 0,
@@ -464,7 +458,7 @@ fn agent_request_waits_until_a_matching_capability_subscribes() {
 }
 
 #[test]
-fn agent_request_is_not_assigned_to_a_foreign_workspace_scope() {
+fn agent_request_is_not_assigned_to_a_foreign_env_scope() {
     let owning_scope = UpdateBroker::default();
     let foreign_scope = owning_scope.fork_scope();
     let queue = NotificationQueue::default();
@@ -543,21 +537,6 @@ fn approval_request(session_id: &SessionId, thread_id: &ThreadId) -> AgentReques
                 },
             },
             deadline: None,
-        },
-    }
-}
-
-fn update(session_id: &SessionId, sequence: u64) -> SessionUpdateEnvelope {
-    SessionUpdateEnvelope {
-        session_id: session_id.clone(),
-        durable_sequence: sequence,
-        update: SessionUpdate::Committed {
-            event: SessionEvent::SessionCreated {
-                session_id: session_id.clone(),
-                title: "task".into(),
-                model: None,
-                workspace: None,
-            },
         },
     }
 }

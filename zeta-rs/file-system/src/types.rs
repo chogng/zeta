@@ -7,7 +7,7 @@ pub enum FileType {
     Other,
 }
 
-/// Metadata for one existing workspace path.
+/// Metadata for one existing directory path.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FileMetadata {
     pub file_type: FileType,

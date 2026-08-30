@@ -6,7 +6,7 @@ import { createDisconnectedSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createDisconnectedGitApi } from "../../git/browser/gitApi.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import { unavailableOperation, WebAppServerUnavailableError } from "../../renderer/browser/disconnectedHost.js";
-import { createDisconnectedWorkspaceSearchApi } from "../../search/browser/searchApi.js";
+import { createDisconnectedContentSearchApi } from "../../search/browser/searchApi.js";
 import { createDisconnectedModelApi, createDisconnectedSessionApi, createDisconnectedThreadApi, createDisconnectedTurnApi } from "../../sessions/browser/sessionApi.js";
 import { createDisconnectedSkillApi } from "../../skills/browser/skillApi.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
@@ -20,7 +20,7 @@ import { createDisconnectedLanguageApi } from "../../language/browser/languageAp
 import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js";
 import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
 import { createDisconnectedMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
-import { createDisconnectedWorkspaceTrustApi } from "../../workspaceTrust/browser/workspaceTrustApi.js";
+import { createDisconnectedDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createDisconnectedAccountApi } from "../../accounts/browser/accountApi.js";
 import { createDisconnectedTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 
@@ -48,7 +48,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		syntax: createDisconnectedSyntaxApi(unavailableOperation),
 		language: createDisconnectedLanguageApi(unavailableOperation),
 		git: createDisconnectedGitApi(unavailableOperation),
-		workspaceSearch: createDisconnectedWorkspaceSearchApi(unavailableOperation),
+		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
 		events: createDisconnectedServerEventApi(),
 		codebase: createDisconnectedCodebaseApi(unavailableOperation),
@@ -57,6 +57,6 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		plugins: createDisconnectedPluginApi(unavailableOperation),
 		marketplace: createDisconnectedMarketplaceApi(unavailableOperation),
 		toolSearch: createDisconnectedToolSearchApi(unavailableOperation),
-		workspaceTrust: createDisconnectedWorkspaceTrustApi(unavailableOperation),
+		dirPermissions: createDisconnectedDirPermissionsApi(unavailableOperation),
 	};
 }

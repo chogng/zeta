@@ -88,7 +88,7 @@ fn tunnel_uses_named_host_and_fixed_loopback_forward_in_the_foreground() {
         "build".into(),
         "--host".into(),
         "build.example".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
     ])
     .unwrap()
@@ -147,7 +147,7 @@ fn tunnel_does_not_advertise_an_endpoint_when_openssh_exits_during_startup() {
         "build".into(),
         "--host".into(),
         "build.example".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
     ])
     .unwrap()

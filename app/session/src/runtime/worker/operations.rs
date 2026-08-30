@@ -9,9 +9,9 @@ use anyhow::Result;
 use anyhow::anyhow;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
-use zeta_app_server_client::SessionWorkspaceRoute;
-use zeta_app_server_client::route_session_workspace;
 use zeta_app_server_protocol::protocol::common::CommandId;
+use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
+use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::session::SessionCreateParams;
 use zeta_app_server_protocol::protocol::session::SessionReadParams;
 use zeta_app_server_protocol::protocol::session::SessionRequest;
@@ -24,20 +24,20 @@ use zeta_app_server_protocol::protocol::session::SessionUnsubscribeParams;
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
+use zeta_protocol::Patch;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
-use zeta_protocol::SessionThreadStatus;
 use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadOrigin;
+use zeta_protocol::ThreadStatus;
 use zeta_protocol::TurnId;
 
 use super::ConnectionLost;
+use crate::EnvCwdSetResult;
 use crate::SessionRuntimeEvent;
 use crate::SessionRuntimeEventSink;
 use crate::SessionRuntimeTarget;
-use crate::WorkspaceSwitchResult;
 
 pub(super) fn unsubscribe_active(
     event_sink: &SessionRuntimeEventSink,
@@ -61,15 +61,15 @@ fn client_error(error: ClientError) -> anyhow::Error {
 
 pub(super) struct ActiveSession {
     pub(super) session_id: SessionId,
-    pub(super) session_sequence: u64,
     pub(super) thread_id: ThreadId,
     pub(super) sequence: u64,
+    pub(super) approval_mode: ApprovalMode,
     pub(super) subscription: SessionSubscribeResult,
 }
 
 pub(super) fn ensure_active_session(
     client: &mut AppServerRequestHandle,
-    workspace_root: &Path,
+    cwd: &Path,
     preferred_session_id: Option<&SessionId>,
 ) -> Result<(Vec<Session>, ActiveSession)> {
     let mut sessions = client.list_sessions().map_err(client_error)?.sessions;
@@ -81,52 +81,41 @@ pub(super) fn ensure_active_session(
     let session = preferred_session_id
         .and_then(|preferred| {
             sessions.iter().find(|session| {
-                &session.session_id == preferred
-                    && session.status == SessionStatus::Active
-                    && session_is_current_workspace(session, workspace_root)
+                &session.session_id == preferred && session.status == SessionStatus::Active
             })
         })
         .or_else(|| {
-            sessions.iter().find(|session| {
-                session.status == SessionStatus::Active
-                    && session_is_current_workspace(session, workspace_root)
-            })
+            sessions
+                .iter()
+                .find(|session| session.status == SessionStatus::Active)
         })
         .cloned();
     let session = match session {
         Some(session) => session,
         None => {
-            let session = create_session(client, workspace_root)?;
+            let session = create_session(client, cwd)?;
             sessions.push(session.clone());
             session
         }
     };
-    let active = initialize_session(client, session, workspace_root)?;
+    let active = initialize_session(client, session, cwd)?;
     sessions.retain(|session| session.status == SessionStatus::Active);
     Ok((sessions, active))
 }
 
 pub(super) fn create_active_session(
     client: &mut AppServerRequestHandle,
-    workspace_root: &Path,
+    cwd: &Path,
 ) -> Result<ActiveSession> {
-    let session = create_session(client, workspace_root)?;
-    initialize_session(client, session, workspace_root)
-}
-
-pub(super) enum SessionActivation {
-    Current(ActiveSession),
-    Reconnect {
-        root: PathBuf,
-        preferred_session_id: SessionId,
-    },
+    let session = create_session(client, cwd)?;
+    initialize_session(client, session, cwd)
 }
 
 pub(super) fn resolve_session_activation(
     client: &mut AppServerRequestHandle,
     session_id: SessionId,
-    workspace_root: &Path,
-) -> Result<SessionActivation> {
+    cwd: &Path,
+) -> Result<ActiveSession> {
     let session = client
         .read_session(SessionReadParams { session_id })
         .map_err(client_error)?
@@ -134,71 +123,32 @@ pub(super) fn resolve_session_activation(
     if session.status != SessionStatus::Active {
         return Err(anyhow!("cannot activate a non-active Session"));
     }
-    match route_session_for_target(&session, workspace_root)? {
-        SessionWorkspaceRoute::Current => {
-            initialize_session(client, session, workspace_root).map(SessionActivation::Current)
-        }
-        SessionWorkspaceRoute::Reconnect(binding) => Ok(SessionActivation::Reconnect {
-            root: binding.root,
-            preferred_session_id: session.session_id,
-        }),
-        SessionWorkspaceRoute::LegacyUnbound => Err(anyhow!(
-            "cannot activate legacy Session {} because it has no Workspace binding",
-            session.session_id
-        )),
-    }
-}
-
-fn session_is_current_workspace(session: &Session, workspace_root: &Path) -> bool {
-    matches!(
-        route_session_for_target(session, workspace_root),
-        Ok(SessionWorkspaceRoute::Current)
-    )
-}
-
-fn route_session_for_target(
-    session: &Session,
-    workspace_root: &Path,
-) -> Result<SessionWorkspaceRoute> {
-    if session
-        .workspace
-        .as_ref()
-        .is_some_and(|binding| binding.root() == workspace_root)
-    {
-        return Ok(SessionWorkspaceRoute::Current);
-    }
-    if workspace_root.exists() {
-        return route_session_workspace(session, workspace_root).map_err(anyhow::Error::from);
-    }
-    Ok(match session.workspace.as_ref() {
-        Some(binding) => SessionWorkspaceRoute::Reconnect(binding.clone()),
-        None => SessionWorkspaceRoute::LegacyUnbound,
-    })
+    initialize_session(client, session, cwd)
 }
 
 fn initialize_session(
     client: &mut AppServerRequestHandle,
     session: Session,
-    workspace_root: &Path,
+    cwd: &Path,
 ) -> Result<ActiveSession> {
-    let (session, thread_id) = ensure_session_thread(client, session, workspace_root)?;
-    let subscription = subscribe_session(client, &session.session_id, 0)?;
+    let (session, thread_id) = ensure_session_thread(client, session, cwd)?;
+    let subscription = subscribe_session(client, &session.session_id)?;
     let thread = active_thread_entry(&subscription, &thread_id)?;
     let sequence = thread.thread.sequence;
     Ok(ActiveSession {
         session_id: subscription.session.session_id.clone(),
-        session_sequence: subscription.session.sequence,
         thread_id,
         sequence,
+        approval_mode: ApprovalMode::AskPermissions,
         subscription,
     })
 }
 
-fn create_session(client: &mut AppServerRequestHandle, workspace_root: &Path) -> Result<Session> {
+fn create_session(client: &mut AppServerRequestHandle, cwd: &Path) -> Result<Session> {
     client
         .create_session(SessionCreateParams {
             command_id: next_command_id("session"),
-            title: workspace_title(workspace_root),
+            title: cwd_title(cwd),
         })
         .map(|result| result.session)
         .map_err(client_error)
@@ -221,7 +171,6 @@ pub(super) fn stop_session(
         .request_session(SessionRequestParams {
             command_id: next_command_id("stop-session"),
             session_id: session.session_id,
-            expected_sequence: session.sequence,
             request: SessionRequest::Stop,
         })
         .map_err(client_error)?;
@@ -236,7 +185,7 @@ pub(super) fn stop_session(
 fn ensure_session_thread(
     client: &mut AppServerRequestHandle,
     session: Session,
-    workspace_root: &Path,
+    cwd: &Path,
 ) -> Result<(Session, ThreadId)> {
     if let Some(thread) = selected_conversation_thread(&session) {
         return Ok((session.clone(), thread.thread_id.clone()));
@@ -245,9 +194,8 @@ fn ensure_session_thread(
         .request_session(SessionRequestParams {
             command_id: next_command_id("thread"),
             session_id: session.session_id,
-            expected_sequence: session.sequence,
             request: SessionRequest::CreateThread {
-                title: workspace_title(workspace_root),
+                title: cwd_title(cwd),
             },
         })
         .map_err(client_error)?;
@@ -261,38 +209,31 @@ fn ensure_session_thread(
 
 fn selected_conversation_thread<'a>(session: &'a Session) -> Option<&'a SessionThread> {
     session
-        .current_thread_id
-        .as_ref()
-        .and_then(|selected| {
-            session.threads.iter().find(|thread| {
-                thread.thread_id == *selected
-                    && thread.status == SessionThreadStatus::Active
-                    && is_conversation_thread(thread)
-            })
-        })
+        .threads
+        .iter()
+        .find(|thread| thread.status == ThreadStatus::Active && is_root_thread(thread))
         .or_else(|| {
             session.threads.iter().rev().find(|thread| {
-                thread.status == SessionThreadStatus::Active && is_conversation_thread(thread)
+                thread.status == ThreadStatus::Active && is_conversation_thread(thread)
             })
         })
 }
 
+fn is_root_thread(thread: &SessionThread) -> bool {
+    thread.parent_thread_id.is_none() && thread.forked_from_id.is_none()
+}
+
 fn is_conversation_thread(thread: &SessionThread) -> bool {
-    matches!(
-        thread.origin,
-        ThreadOrigin::Root | ThreadOrigin::Fork { .. } | ThreadOrigin::Rewind { .. }
-    )
+    is_root_thread(thread) || thread.forked_from_id.is_some()
 }
 
 pub(super) fn subscribe_session(
     client: &mut AppServerRequestHandle,
     session_id: &SessionId,
-    after_sequence: u64,
 ) -> Result<SessionSubscribeResult> {
     client
         .subscribe_session(SessionSubscribeParams {
             session_id: session_id.clone(),
-            after_sequence,
         })
         .map_err(client_error)
 }
@@ -336,9 +277,10 @@ pub(super) fn submit_agent_message(
         .request_session(SessionRequestParams {
             command_id: next_command_id("turn"),
             session_id: active.session_id.clone(),
-            expected_sequence: active.sequence,
             request: SessionRequest::StartTurn {
                 thread_id: active.thread_id.clone(),
+                expected_sequence: active.sequence,
+                approval_mode: active.approval_mode,
                 tool_mode: None,
                 input: vec![InputItem::Text { text }],
             },
@@ -368,7 +310,6 @@ pub(super) fn rewrite_agent_message(
         .request_session(SessionRequestParams {
             command_id: operation_id,
             session_id: active.session_id.clone(),
-            expected_sequence: active.session_sequence,
             request: SessionRequest::RewriteThread {
                 parent_thread_id: source_thread_id,
                 before_turn_id,
@@ -383,7 +324,7 @@ pub(super) fn rewrite_agent_message(
     };
     let session_id = rewritten.session.session_id.clone();
     let thread_id = rewritten.thread_id;
-    let subscription = subscribe_session(client, &session_id, rewritten.session.sequence)?;
+    let subscription = subscribe_session(client, &session_id)?;
     let thread = active_thread_entry(&subscription, &thread_id)?;
     let sequence = thread.thread.sequence;
     if sequence < rewritten.turn.sequence {
@@ -393,9 +334,9 @@ pub(super) fn rewrite_agent_message(
     }
     *active = ActiveSession {
         session_id,
-        session_sequence: subscription.session.sequence,
         thread_id,
         sequence,
+        approval_mode: active.approval_mode,
         subscription,
     };
     Ok(())
@@ -413,9 +354,10 @@ pub(super) fn submit_shell_command(
         .request_session(SessionRequestParams {
             command_id: next_command_id("shell-turn"),
             session_id: active.session_id.clone(),
-            expected_sequence: active.sequence,
             request: SessionRequest::StartShellTurn {
                 thread_id: active.thread_id.clone(),
+                expected_sequence: active.sequence,
+                approval_mode: active.approval_mode,
                 command,
                 working_directory: ".".into(),
             },
@@ -430,62 +372,42 @@ pub(super) fn submit_shell_command(
     Ok(())
 }
 
-pub(super) fn select_model(
+pub(super) fn set_preferred_model(
     client: &mut AppServerRequestHandle,
-    active: &mut ActiveSession,
     model: ModelRef,
 ) -> Result<()> {
-    let result = client
-        .request_session(SessionRequestParams {
+    let config = client.read_config().map_err(client_error)?;
+    client
+        .update_config(ConfigUpdateParams {
             command_id: next_command_id("model"),
-            session_id: active.session_id.clone(),
-            expected_sequence: active.session_sequence,
-            request: SessionRequest::SetModel { model },
+            expected_revision: config.revision,
+            preferred_model: Patch::Value(ModelRefDto {
+                provider: model.provider.to_string(),
+                model: model.model.to_string(),
+            }),
+            approval_review_model: Patch::Missing,
+            commit_message_model: Patch::Missing,
+            tool_mode: Patch::Missing,
+            agent_grep_backend: Patch::Missing,
         })
         .map_err(client_error)?;
-    let SessionRequestResult::Session(result) = result else {
-        return Err(anyhow!(
-            "Session request returned an unexpected Session result"
-        ));
-    };
-    active.session_sequence = result.session.sequence;
-    active.subscription.session = result.session;
     Ok(())
 }
 
-pub(super) fn select_next_approval_mode(
-    client: &mut AppServerRequestHandle,
-    active: &mut ActiveSession,
-    approval_mode: ApprovalMode,
-) -> Result<()> {
-    let result = client
-        .request_session(SessionRequestParams {
-            command_id: next_command_id("approval-mode"),
-            session_id: active.session_id.clone(),
-            expected_sequence: active.session_sequence,
-            request: SessionRequest::SetNextApprovalMode { approval_mode },
-        })
-        .map_err(client_error)?;
-    let SessionRequestResult::Session(result) = result else {
-        return Err(anyhow!(
-            "Session request returned an unexpected Session result"
-        ));
-    };
-    active.session_sequence = result.session.sequence;
-    active.subscription.session = result.session;
-    Ok(())
+pub(super) fn select_next_approval_mode(active: &mut ActiveSession, approval_mode: ApprovalMode) {
+    active.approval_mode = approval_mode;
 }
 
-pub(super) fn prepare_workspace_reconnect(
+pub(super) fn prepare_cwd_reconnect(
     target: &dyn SessionRuntimeTarget,
-    root: PathBuf,
-) -> Result<WorkspaceSwitchResult> {
-    let target = target.retarget(&root).map_err(anyhow::Error::msg)?;
+    cwd: PathBuf,
+) -> Result<EnvCwdSetResult> {
+    let target = target.with_cwd(&cwd).map_err(anyhow::Error::msg)?;
     let session = target.start().map_err(anyhow::Error::msg)?;
     session
         .shutdown()
         .map_err(|error| anyhow!(error.to_string()))?;
-    Ok(WorkspaceSwitchResult { root })
+    Ok(EnvCwdSetResult { cwd })
 }
 
 pub(super) fn send_event(
@@ -505,9 +427,8 @@ pub(super) fn next_command_id(prefix: &str) -> CommandId {
     .expect("generated Session runtime command ID is non-empty")
 }
 
-fn workspace_title(workspace_root: &Path) -> String {
-    workspace_root
-        .file_name()
+fn cwd_title(cwd: &Path) -> String {
+    cwd.file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.trim().is_empty())
         .unwrap_or("Session")

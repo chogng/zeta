@@ -11,7 +11,7 @@ use zeta_file_search::PathSearchOptions;
 use zeta_file_search::PathSearchSnapshot;
 
 #[derive(Debug, Parser)]
-#[command(version, about = "Fuzzy-match file paths below a workspace directory")]
+#[command(version, about = "Fuzzy-match file paths below a directory directory")]
 struct Cli {
     /// Emit one JSON object per match.
     #[arg(long)]
@@ -21,7 +21,7 @@ struct Cli {
     #[arg(long, short = 'l', default_value = "64")]
     limit: NonZeroUsize,
 
-    /// Workspace directory to search.
+    /// Directory directory to search.
     #[arg(long, short = 'C')]
     cwd: Option<PathBuf>,
 
@@ -33,7 +33,7 @@ struct Cli {
     #[arg(long, default_value = "2")]
     threads: NonZeroUsize,
 
-    /// Fuzzy pattern. Omitting it lists workspace files.
+    /// Fuzzy pattern. Omitting it lists directory files.
     pattern: Option<String>,
 }
 

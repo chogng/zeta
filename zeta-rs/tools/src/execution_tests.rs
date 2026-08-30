@@ -3,9 +3,9 @@ use super::{
     ToolInvocation, ToolPayload, ToolRuntimeAuthority,
 };
 use crate::{
-    ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolInputSchema, ToolLoading,
-    ToolName, ToolOperationId, ToolOutput, ToolOutputSchema, ToolRegistryGeneration,
-    ToolRuntimeKey, ToolSchemaMode,
+    EnvId, ToolBinding, ToolBindingId, ToolDefinition, ToolInputSchema, ToolLoading, ToolName,
+    ToolOperationId, ToolOutput, ToolOutputSchema, ToolRegistryGeneration, ToolRuntimeKey,
+    ToolSchemaMode,
 };
 use serde_json::json;
 use zeta_async_utils::CancellationSource;
@@ -28,7 +28,7 @@ fn invocation_keeps_the_frozen_binding_and_environment() {
         binding,
         ToolPayload::FunctionArguments(json!({"query": "zeta"})),
         ToolExecutionContext::new(
-            ToolEnvironmentId::new("workspace_1").expect("valid environment"),
+            EnvId::new("env_1").expect("valid environment"),
             CancellationSource::new().token(),
             ToolRuntimeAuthority::Unrestricted,
         ),
@@ -39,10 +39,7 @@ fn invocation_keeps_the_frozen_binding_and_environment() {
         "builtin:search"
     );
     assert_eq!(invocation.binding().registry_generation().get(), 7);
-    assert_eq!(
-        invocation.context().environment_id().as_str(),
-        "workspace_1"
-    );
+    assert_eq!(invocation.context().environment_id().as_str(), "env_1");
     assert_eq!(
         invocation.context().authority(),
         ToolRuntimeAuthority::Unrestricted

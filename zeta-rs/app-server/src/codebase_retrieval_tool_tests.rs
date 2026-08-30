@@ -2,11 +2,12 @@ use super::*;
 use std::fs;
 use zeta_action_policy::GrantId;
 use zeta_codebase::CodebaseLimits;
+use zeta_file_access::Dir;
+use zeta_file_access::Grant;
+use zeta_file_access::GrantSource;
+use zeta_file_access::Permission;
+use zeta_file_access::Permissions;
 use zeta_protocol::ToolCallId;
-use zeta_workspace::WorkspaceCapability;
-use zeta_workspace::WorkspaceRoot;
-use zeta_workspace::WorkspaceTrustDecision;
-use zeta_workspace::WorkspaceTrustSource;
 
 #[test]
 fn explicit_search_code_tool_requires_its_exact_read_only_grant_and_returns_local_hits() {
@@ -17,16 +18,17 @@ fn explicit_search_code_tool_requires_its_exact_read_only_grant_and_returns_loca
         "pub fn explicit_agent_retrieval() -> bool { true }\n",
     )
     .unwrap();
-    let root = WorkspaceRoot::open(directory.path()).unwrap();
-    let workspace = TrustedWorkspace::require(
+    let root = Dir::open_local(directory.path()).unwrap();
+    let authorization = Grant::for_environment(
         root.clone(),
-        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::HostConfiguration),
-        WorkspaceCapability::ExecuteProcess,
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::ExecuteCommands]),
     )
+    .authorize(Permission::ExecuteCommands)
     .unwrap();
     let index = Arc::new(Codebase::open_memory(root, CodebaseLimits::default()).unwrap());
     index.rebuild().unwrap();
-    let tool = CodebaseRetrievalTool::new(workspace, index, None, None, None);
+    let tool = CodebaseRetrievalTool::new(authorization, index, None, None, None);
     let call = ToolCall {
         id: ToolCallId::new("search-code-test").unwrap(),
         name: ToolName::new(CODE_RETRIEVAL_TOOL_NAME).unwrap(),
@@ -51,7 +53,7 @@ fn explicit_search_code_tool_requires_its_exact_read_only_grant_and_returns_loca
         .execute(
             &call,
             &ToolAuthorization::UnsandboxedGrant {
-                grant_id: GrantId::new("workspace-codebase-read-only"),
+                grant_id: GrantId::new("codebase-read"),
             },
             &zeta_async_utils::CancellationSource::new().token(),
         )

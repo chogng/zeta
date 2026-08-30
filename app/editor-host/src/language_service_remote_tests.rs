@@ -40,7 +40,7 @@ fn remote_completion_and_diagnostic_ranges_project_back_to_utf8_bytes() {
     };
     let completions = project_completions(
         9,
-        PathBuf::from("/workspace/src/main.rs"),
+        PathBuf::from("/dir/src/main.rs"),
         text,
         LanguageCompletionsResult {
             revision: 3,

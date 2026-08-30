@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type CodebaseSymbolsSearchParams, type WorkspaceDocumentOverlayCloseParams, type WorkspaceDocumentOverlaySynchronizeParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type CodebaseSymbolsSearchParams, type DocumentOverlayCloseParams, type DocumentOverlaySynchronizeParams } from "../../../../../generated/app-server/types.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { positiveInteger, record } from "../../ipc/electron-main/ipcValidation.js";
@@ -6,10 +6,10 @@ import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 
 export function codebaseSymbolsIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
 	return [
-		route({ channel: "zeta:codebase-symbols:status", validate: emptyParams, invoke: () => supervisor.request(APP_SERVER_METHODS["workspace/codebase/symbols/status"], {}) }),
-		route({ channel: "zeta:codebase-symbols:search", validate: searchParams, invoke: params => supervisor.request(APP_SERVER_METHODS["workspace/codebase/symbols/search"], params) }),
-		route({ channel: "zeta:codebase-symbols:document-synchronize", validate: synchronizeParams, invoke: params => supervisor.request(APP_SERVER_METHODS["workspace/codeIntelligence/document/synchronize"], params) }),
-		route({ channel: "zeta:codebase-symbols:document-close", validate: closeParams, invoke: params => supervisor.request(APP_SERVER_METHODS["workspace/codeIntelligence/document/close"], params) }),
+		route({ channel: "zeta:codebase-symbols:status", validate: emptyParams, invoke: () => supervisor.request(APP_SERVER_METHODS["codebase/symbols/status"], {}) }),
+		route({ channel: "zeta:codebase-symbols:search", validate: searchParams, invoke: params => supervisor.request(APP_SERVER_METHODS["codebase/symbols/search"], params) }),
+		route({ channel: "zeta:codebase-symbols:document-synchronize", validate: synchronizeParams, invoke: params => supervisor.request(APP_SERVER_METHODS["codeIntelligence/document/synchronize"], params) }),
+		route({ channel: "zeta:codebase-symbols:document-close", validate: closeParams, invoke: params => supervisor.request(APP_SERVER_METHODS["codeIntelligence/document/close"], params) }),
 	];
 }
 
@@ -30,7 +30,7 @@ function searchParams(value: unknown): CodebaseSymbolsSearchParams {
 	return { query: params.query, maxResults };
 }
 
-function synchronizeParams(value: unknown): WorkspaceDocumentOverlaySynchronizeParams {
+function synchronizeParams(value: unknown): DocumentOverlaySynchronizeParams {
 	const params = record(value, ["document"]);
 	const document = record(params.document, ["path", "languageId", "revision", "text"]);
 	if (typeof document.path !== "string" || document.path.length === 0 || document.path.length > 4096) throw new Error("document.path must be a bounded path");
@@ -40,7 +40,7 @@ function synchronizeParams(value: unknown): WorkspaceDocumentOverlaySynchronizeP
 	return { document: { path: document.path, languageId: document.languageId, revision: document.revision as number, text: document.text } };
 }
 
-function closeParams(value: unknown): WorkspaceDocumentOverlayCloseParams {
+function closeParams(value: unknown): DocumentOverlayCloseParams {
 	const params = record(value, ["path"]);
 	if (typeof params.path !== "string" || params.path.length === 0 || params.path.length > 4096) throw new Error("path must be a bounded path");
 	return { path: params.path };

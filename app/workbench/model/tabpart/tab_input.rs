@@ -1,5 +1,6 @@
 //! Logical Workbench tab inputs and their product metadata.
 
+#[cfg(test)]
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -55,36 +56,28 @@ pub struct TabInput {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabInputMetadata {
     title: String,
-    workspace: String,
-    workspace_roots: Vec<PathBuf>,
+    location: String,
+    dirs: Vec<PathBuf>,
     status: TabStatus,
 }
 
 impl TabInputMetadata {
-    pub fn new(title: impl Into<String>, workspace: impl Into<String>) -> Self {
+    pub fn new(title: impl Into<String>, location: impl Into<String>) -> Self {
         Self {
             title: title.into(),
-            workspace: workspace.into(),
-            workspace_roots: Vec::new(),
+            location: location.into(),
+            dirs: Vec::new(),
             status: TabStatus::default(),
         }
     }
 
-    pub fn with_workspace_root(mut self, workspace_root: PathBuf) -> Self {
-        self.workspace_roots = vec![workspace_root];
-        self
-    }
-
     #[cfg(test)]
-    /// Supplies the primary Workspace root followed by any additional roots shown for this tab.
-    pub fn with_workspace_roots(
-        mut self,
-        workspace_roots: impl IntoIterator<Item = PathBuf>,
-    ) -> Self {
-        self.workspace_roots.clear();
-        for root in workspace_roots {
-            if !self.workspace_roots.contains(&root) {
-                self.workspace_roots.push(root);
+    /// Supplies the directories shown for this tab.
+    pub fn with_dirs(mut self, dirs: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.dirs.clear();
+        for dir in dirs {
+            if !self.dirs.contains(&dir) {
+                self.dirs.push(dir);
             }
         }
         self
@@ -131,17 +124,18 @@ impl TabInput {
         &self.metadata.title
     }
 
-    pub fn workspace(&self) -> &str {
-        &self.metadata.workspace
+    pub fn location(&self) -> &str {
+        &self.metadata.location
     }
 
-    pub fn workspace_root(&self) -> Option<&Path> {
-        self.metadata.workspace_roots.first().map(PathBuf::as_path)
+    #[cfg(test)]
+    pub fn first_dir(&self) -> Option<&Path> {
+        self.metadata.dirs.first().map(PathBuf::as_path)
     }
 
-    /// Returns the primary Workspace root followed by additional roots in display order.
-    pub fn workspace_roots(&self) -> &[PathBuf] {
-        &self.metadata.workspace_roots
+    /// Returns the directories in display order.
+    pub fn dirs(&self) -> &[PathBuf] {
+        &self.metadata.dirs
     }
 
     pub const fn status(&self) -> &TabStatus {

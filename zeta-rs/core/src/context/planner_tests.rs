@@ -46,10 +46,10 @@ fn same_input_produces_an_equivalent_ordered_plan() {
         current_turn,
         vec![
             instruction(
-                "workspace",
-                InstructionLayer::Workspace,
+                "directory",
+                InstructionLayer::Directory,
                 InstructionRetention::Required,
-                "workspace rule",
+                "directory rule",
             ),
             instruction(
                 "system",
@@ -73,7 +73,7 @@ fn same_input_produces_an_equivalent_ordered_plan() {
     assert_eq!(first.source_thread_sequence(), base_snapshot.sequence);
     assert_eq!(first.selected_items().len(), 3);
     assert_eq!(first.instructions()[0].layer(), InstructionLayer::System);
-    assert_eq!(first.instructions()[1].layer(), InstructionLayer::Workspace);
+    assert_eq!(first.instructions()[1].layer(), InstructionLayer::Directory);
     let super::super::ContextBudgetReport::CoreManaged { maximum_input, .. } = first.budget()
     else {
         panic!("test budget must be Core-managed");
@@ -550,7 +550,10 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
         session_id: id::<SessionId>("session"),
         thread_id: id::<ThreadId>("thread"),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "test".into(),
+        status: zeta_protocol::ThreadStatus::Active,
         turn_execution_binding: None,
         sequence: items.len() as u64 + 2,
         usage: zeta_protocol::ModelUsageSummary::default(),

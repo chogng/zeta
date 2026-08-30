@@ -59,12 +59,6 @@ opaque_tool_identity!(
     "Host-generated identity for one concrete tool execution attempt.",
     "tool operation ID"
 );
-opaque_tool_identity!(
-    ToolEnvironmentId,
-    "Host-selected execution environment identity visible to a materialized tool invocation.",
-    "tool environment ID"
-);
-
 /// Monotonic generation assigned to one immutable host tool registry snapshot.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ToolRegistryGeneration(u64);

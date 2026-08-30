@@ -9,9 +9,9 @@ use zeta_app_server_client::local_profile_root;
 use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
-use zeta_app_server_protocol::protocol::common::WorkspaceTrustHostCapability;
+use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::SshAppServerConnectionOptions;
@@ -29,21 +29,19 @@ pub(crate) struct AppServerHost {
 #[derive(Clone, Debug)]
 enum AppServerBackend {
     Local {
-        workspace_root: PathBuf,
+        cwd: PathBuf,
     },
     Remote {
         connection: SshAppServerConnectionOptions,
-        workspace_root: PathBuf,
+        cwd: PathBuf,
     },
 }
 
 impl AppServerHost {
-    /// Selects the profile-scoped local App Server authority for one Workspace.
-    pub(crate) fn local(workspace_root: impl Into<PathBuf>) -> Self {
+    /// Selects the profile-scoped local App Server with an initial cwd.
+    pub(crate) fn local(cwd: impl Into<PathBuf>) -> Self {
         Self {
-            backend: AppServerBackend::Local {
-                workspace_root: workspace_root.into(),
-            },
+            backend: AppServerBackend::Local { cwd: cwd.into() },
         }
     }
 
@@ -52,16 +50,13 @@ impl AppServerHost {
         profile: RemoteProfile,
         ssh_executable: Option<&Path>,
     ) -> Self {
-        let workspace_root = PathBuf::from(profile.target().workspace().as_str());
+        let cwd = PathBuf::from(profile.target().dir().as_str());
         let mut connection = SshAppServerConnectionOptions::new(profile);
         if let Some(ssh_executable) = ssh_executable {
             connection = connection.with_ssh_executable(ssh_executable);
         }
         Self {
-            backend: AppServerBackend::Remote {
-                connection,
-                workspace_root,
-            },
+            backend: AppServerBackend::Remote { connection, cwd },
         }
     }
 
@@ -70,25 +65,24 @@ impl AppServerHost {
         matches!(&self.backend, AppServerBackend::Remote { .. })
     }
 
-    /// Returns the authoritative Workspace path used in App Server requests and UI context.
-    pub(crate) fn workspace_root(&self) -> &Path {
+    /// Returns the cwd used by App Server requests and UI context.
+    pub(crate) fn cwd(&self) -> &Path {
         match &self.backend {
-            AppServerBackend::Local { workspace_root }
-            | AppServerBackend::Remote { workspace_root, .. } => workspace_root,
+            AppServerBackend::Local { cwd } | AppServerBackend::Remote { cwd, .. } => cwd,
         }
     }
 
-    /// Retargets the same local profile or SSH host/runtime to another Workspace authority.
-    pub(crate) fn with_workspace_root(&self, root: &Path) -> Result<Self> {
+    /// Retargets the same local profile or SSH host/runtime to another cwd.
+    pub(crate) fn with_cwd(&self, cwd: &Path) -> Result<Self> {
         match &self.backend {
-            AppServerBackend::Local { .. } => Ok(Self::local(root)),
+            AppServerBackend::Local { .. } => Ok(Self::local(cwd)),
             AppServerBackend::Remote { connection, .. } => {
-                let root = root
+                let cwd = cwd
                     .to_str()
-                    .ok_or_else(|| anyhow!("Remote Workspace path is not valid UTF-8"))?;
+                    .ok_or_else(|| anyhow!("Remote cwd is not valid UTF-8"))?;
                 let target = SshTarget::new(
                     connection.profile().target().host().clone(),
-                    RemoteWorkspacePath::parse(root).map_err(|error| anyhow!(error.to_string()))?,
+                    RemoteDirPath::parse(cwd).map_err(|error| anyhow!(error.to_string()))?,
                 );
                 Ok(Self::remote_with_executable(
                     RemoteProfile::new(target, connection.profile().runtime().clone()),
@@ -124,14 +118,14 @@ impl AppServerHost {
             version: env!("CARGO_PKG_VERSION").into(),
         };
         match &self.backend {
-            AppServerBackend::Local { workspace_root } => {
+            AppServerBackend::Local { cwd } => {
                 let executable = std::env::current_exe()
                     .map_err(|error| anyhow!("could not resolve app executable: {error}"))?;
                 let daemon_executable = development_daemon_executable(&executable);
                 let command = local_app_server_command(
                     executable,
                     local_profile_root(),
-                    workspace_root,
+                    cwd,
                     daemon_executable,
                 );
                 AppServerSession::start_stdio(command, client_info, local_client_capabilities())
@@ -149,15 +143,15 @@ impl zeta_session::SessionRuntimeTarget for AppServerHost {
         AppServerHost::is_remote(self)
     }
 
-    fn workspace_root(&self) -> &Path {
-        AppServerHost::workspace_root(self)
+    fn cwd(&self) -> &Path {
+        AppServerHost::cwd(self)
     }
 
-    fn retarget(
+    fn with_cwd(
         &self,
-        root: &Path,
+        cwd: &Path,
     ) -> zeta_session::CommandResult<Box<dyn zeta_session::SessionRuntimeTarget>> {
-        self.with_workspace_root(root)
+        self.with_cwd(cwd)
             .map(|target| Box::new(target) as Box<dyn zeta_session::SessionRuntimeTarget>)
             .map_err(|error| error.to_string())
     }
@@ -180,17 +174,14 @@ impl zeta_editor_host::RemoteLanguageSessionTarget for AppServerHost {
 pub(crate) fn local_app_server_command(
     executable: PathBuf,
     profile_root: PathBuf,
-    workspace_root: &Path,
+    dir_root: &Path,
     daemon_executable: Option<PathBuf>,
 ) -> StdioAppServerCommand {
     let command = StdioAppServerCommand::new(executable)
         .with_argument("app-server")
         .with_argument("connect")
         .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.into_os_string())
-        .with_environment_variable(
-            "ZETA_WORKSPACE_ROOT",
-            workspace_root.as_os_str().to_os_string(),
-        );
+        .with_environment_variable("ZETA_WORKSPACE_ROOT", dir_root.as_os_str().to_os_string());
     match daemon_executable {
         Some(daemon_executable) => {
             command.with_environment_variable(DAEMON_PATH_ENV, daemon_executable.into_os_string())
@@ -209,7 +200,7 @@ fn development_daemon_executable(app_executable: &Path) -> Option<PathBuf> {
 
 fn local_client_capabilities() -> ClientCapabilities {
     ClientCapabilities {
-        workspace_trust_host: Some(WorkspaceTrustHostCapability { version: 1 }),
+        dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
         ..ClientCapabilities::default()
     }
 }

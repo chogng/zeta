@@ -26,6 +26,7 @@
 | 你要做什么 | 看这些（按序） |
 | --- | --- |
 | 新人理解 Zeta 全貌 | [`architecture.md`](architecture.md) → 感兴趣系统的领域文档 |
+| 改 Project / Session / Thread / Workspace / Environment 命名 | [`domain-model.md`](domain-model.md) |
 | **搭 / 改 agent harness**（提示词、工具、循环） | [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md)（照着做）→ [`agent-tools-spec.md`](agent-tools-spec.md)（照着抄）→ [`agent-harness-design.md`](agent-harness-design.md)（查原因） |
 | 改执行内核（Turn/Thread/恢复/取消） | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) → [`core.md`](core.md) |
 | 做上下文预算 / 压缩 | [`core-context.md`](core-context.md) + [`agent-harness-design.md`](agent-harness-design.md) §9–§11 |
@@ -36,7 +37,7 @@
 | 加 / 改一个工具 | [`agent-tools-spec.md`](agent-tools-spec.md) → [`tools.md`](tools.md)（契约层） |
 | 改协议 / 加 App Server 方法 | [`protocol.md`](protocol.md) → [`zeta-app-server-api.md`](zeta-app-server-api.md) → [`app-server-client.md`](app-server-client.md) |
 | 权限 / 审批 / 沙箱 | [`permissions.md`](permissions.md) → [`auto-review.md`](auto-review.md) → [`sandboxing.md`](sandboxing.md) |
-| 环境选择与目录访问 | [`environment-access.md`](environment-access.md)（长期目标）→ [`workspace-security.md`](workspace-security.md)（当前实现） |
+| 环境选择与目录访问 | [`domain-model.md`](domain-model.md) → [`environment-access.md`](environment-access.md) → [`permissions.md`](permissions.md) |
 | 接 / 改模型供应商 | [`model-provider.md`](model-provider.md) → [`model-provider-config.md`](model-provider-config.md) → [`models-manager.md`](models-manager.md) |
 | 接 / 改独立 Marketplace | [`marketplace-integration.md`](marketplace-integration.md) → [`localization.md`](localization.md) 或对应 [`plugins.md`](plugins.md)、[`lsp.md`](lsp.md)、[`skills.md`](skills.md) 或 [`mcp.md`](mcp.md) → 对应 crate README |
 | 改 Desktop UI | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`ui-styling-ownership.md`](ui-styling-ownership.md) |
@@ -81,7 +82,7 @@
 
 ### 协议与 API
 
-[`protocol.md`](protocol.md)（canonical 产品契约）、
+[`domain-model.md`](domain-model.md)（领域身份与命名）、[`protocol.md`](protocol.md)（canonical 产品契约）、
 [`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、
 [`zeta-api.md`](zeta-api.md)、[`zeta-api-interface-requirements.md`](zeta-api-interface-requirements.md)、
 [`zeta-api-interface-template.md`](zeta-api-interface-template.md)（模板）、
@@ -96,7 +97,7 @@
 ### 安全与权限
 
 [`permissions.md`](permissions.md)、[`auto-review.md`](auto-review.md)、
-[`sandboxing.md`](sandboxing.md)、[`environment-access.md`](environment-access.md)（长期目标）、
+[`sandboxing.md`](sandboxing.md)、[`environment-access.md`](environment-access.md)、
 [`workspace-security.md`](workspace-security.md)（当前实现）、
 [`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)（参考/手册）
 
@@ -133,7 +134,7 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 
 | 文档 | 状态 |
 | --- | --- |
-| [`zeta-code-architecture-codex-style-v2.md`](zeta-code-architecture-codex-style-v2.md) | 长期演进方向 |
+| [`zeta-code-architecture-codex-style-v2.md`](zeta-code-architecture-codex-style-v2.md) | Done；结论已并入领域、Core 与协议文档 |
 | [`app/docs/native-deprecation-plan.md`](../app/docs/native-deprecation-plan.md) | Native 弃用迁移 |
 | [`app/docs/app-migration-plan.md`](../app/docs/app-migration-plan.md) | App 迁移 |
 | [`app/docs/app-release-graph.md`](../app/docs/app-release-graph.md) | App 发布依赖 |

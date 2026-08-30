@@ -91,22 +91,22 @@ impl std::fmt::Display for ConnectionLost {
 impl std::error::Error for ConnectionLost {}
 
 #[derive(Debug)]
-struct ReconnectWorkspace {
-    root: PathBuf,
+struct ReconnectEnvCwd {
+    cwd: PathBuf,
     preferred_session_id: Option<SessionId>,
 }
 
-impl std::fmt::Display for ReconnectWorkspace {
+impl std::fmt::Display for ReconnectEnvCwd {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "reconnect Workspace authority at {}",
-            self.root.display()
+            "reconnect environment with cwd {}",
+            self.cwd.display()
         )
     }
 }
 
-impl std::error::Error for ReconnectWorkspace {}
+impl std::error::Error for ReconnectEnvCwd {}
 
 fn run_with_recovery(
     event_sink: &SessionRuntimeEventSink,
@@ -126,13 +126,13 @@ fn run_with_recovery(
             available,
         ) {
             Ok(()) => return Ok(()),
-            Err(failure) if failure.error.downcast_ref::<ReconnectWorkspace>().is_some() => {
+            Err(failure) if failure.error.downcast_ref::<ReconnectEnvCwd>().is_some() => {
                 let reconnect = failure
                     .error
-                    .downcast_ref::<ReconnectWorkspace>()
+                    .downcast_ref::<ReconnectEnvCwd>()
                     .expect("guard verified reconnect marker");
                 target = target
-                    .retarget(&reconnect.root)
+                    .with_cwd(&reconnect.cwd)
                     .map_err(anyhow::Error::msg)?;
                 preferred_session_id = reconnect.preferred_session_id.clone();
                 attempts = 0;
@@ -204,7 +204,7 @@ fn run_connection(
     available: &AtomicBool,
 ) -> std::result::Result<(), SessionRuntimeFailure> {
     available.store(false, Ordering::Release);
-    let workspace_root = target.workspace_root();
+    let cwd = target.cwd();
     let mut session = target
         .start()
         .map_err(anyhow::Error::msg)
@@ -229,9 +229,8 @@ fn run_connection(
     let events = session
         .take_events()
         .map_err(|error| SessionRuntimeFailure::connection(anyhow!(error.to_string())))?;
-    let (sessions, mut active) =
-        ensure_active_session(&mut client, workspace_root, preferred_session_id)
-            .map_err(SessionRuntimeFailure::connection)?;
+    let (sessions, mut active) = ensure_active_session(&mut client, cwd, preferred_session_id)
+        .map_err(SessionRuntimeFailure::connection)?;
     send_event(event_sink, SessionRuntimeEvent::SessionCatalog(sessions))
         .map_err(SessionRuntimeFailure::fatal)?;
     publish_subscription(event_sink, &active.subscription, &active.thread_id)
@@ -246,7 +245,7 @@ fn run_connection(
         &events,
         &mut client,
         &mut active,
-        workspace_root,
+        cwd,
         target,
     );
     available.store(false, Ordering::Release);
@@ -274,14 +273,14 @@ fn drive(
     events: &AppServerEvents,
     client: &mut AppServerRequestHandle,
     active: &mut ActiveSession,
-    workspace_root: &Path,
+    cwd: &Path,
     target: &dyn SessionRuntimeTarget,
 ) -> Result<()> {
     loop {
         loop {
             match commands.try_recv() {
                 Ok(SessionRuntimeCommand::CreateSession) => {
-                    match create_active_session(client, workspace_root) {
+                    match create_active_session(client, cwd) {
                         Ok(next) => {
                             unsubscribe_active(event_sink, client, active)?;
                             *active = next;
@@ -307,30 +306,13 @@ fn drive(
                 Ok(SessionRuntimeCommand::SubscribeSession {
                     session_id,
                     response,
-                }) => match resolve_session_activation(client, session_id, workspace_root) {
-                    Ok(SessionActivation::Current(next)) => {
+                }) => match resolve_session_activation(client, session_id, cwd) {
+                    Ok(next) => {
                         unsubscribe_active(event_sink, client, active)?;
                         *active = next;
                         publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
-                        let _ = response.send(Ok(None));
+                        let _ = response.send(Ok(()));
                     }
-                    Ok(SessionActivation::Reconnect {
-                        root,
-                        preferred_session_id,
-                    }) => match prepare_workspace_reconnect(target, root.clone()) {
-                        Ok(prepared) => {
-                            let _ = response.send(Ok(Some(prepared)));
-                            return Err(anyhow!(ReconnectWorkspace {
-                                root,
-                                preferred_session_id: Some(preferred_session_id),
-                            }));
-                        }
-                        Err(error) => {
-                            let message = error.to_string();
-                            let _ = response.send(Err(message.clone()));
-                            send_event(event_sink, SessionRuntimeEvent::Error(message))?;
-                        }
-                    },
                     Err(error) => {
                         let message = error.to_string();
                         let _ = response.send(Err(message.clone()));
@@ -363,30 +345,26 @@ fn drive(
                 Ok(SessionRuntimeCommand::SubmitShellCommand(command)) => {
                     submit_shell_command(client, active, command)?;
                 }
-                Ok(SessionRuntimeCommand::SelectModel(model)) => {
-                    select_model(client, active, model)?;
-                    publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
+                Ok(SessionRuntimeCommand::SetPreferredModel(model)) => {
+                    set_preferred_model(client, model)?;
                 }
                 Ok(SessionRuntimeCommand::SelectNextApprovalMode(approval_mode)) => {
-                    select_next_approval_mode(client, active, approval_mode)?;
-                    publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
+                    select_next_approval_mode(active, approval_mode);
                 }
                 Ok(SessionRuntimeCommand::Refresh) => {
-                    active.subscription =
-                        subscribe_session(client, &active.session_id, active.session_sequence)?;
-                    active.session_sequence = active.subscription.session.sequence;
+                    active.subscription = subscribe_session(client, &active.session_id)?;
                     active.sequence = active_thread_entry(&active.subscription, &active.thread_id)?
                         .thread
                         .sequence;
                     publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
                 }
-                Ok(SessionRuntimeCommand::SwitchWorkspace { root, response }) => {
-                    match prepare_workspace_reconnect(target, root.clone()) {
+                Ok(SessionRuntimeCommand::SetEnvCwd { cwd, response }) => {
+                    match prepare_cwd_reconnect(target, cwd.clone()) {
                         Ok(prepared) => {
-                            let root = prepared.root.clone();
+                            let cwd = prepared.cwd.clone();
                             let _ = response.send(Ok(prepared));
-                            return Err(anyhow!(ReconnectWorkspace {
-                                root,
+                            return Err(anyhow!(ReconnectEnvCwd {
+                                cwd,
                                 preferred_session_id: None,
                             }));
                         }
@@ -402,13 +380,9 @@ fn drive(
         }
 
         match events.recv_timeout(EVENT_POLL_INTERVAL) {
-            Ok(AppServerEvent::Notification(ServerNotification::SessionUpdate(update))) => {
-                if update.session_id == active.session_id
-                    && update.durable_sequence > active.session_sequence
-                {
-                    active.subscription =
-                        subscribe_session(client, &active.session_id, active.session_sequence)?;
-                    active.session_sequence = active.subscription.session.sequence;
+            Ok(AppServerEvent::Notification(ServerNotification::SessionChanged(update))) => {
+                if update.session_id == active.session_id {
+                    active.subscription = subscribe_session(client, &active.session_id)?;
                     publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
                 }
             }
@@ -416,9 +390,7 @@ fn drive(
                 if update.session_id == active.session_id && update.thread_id == active.thread_id {
                     active.sequence = active.sequence.max(update.durable_sequence);
                     if matches!(&update.update, ThreadUpdate::Committed { .. }) {
-                        active.subscription =
-                            subscribe_session(client, &active.session_id, active.session_sequence)?;
-                        active.session_sequence = active.subscription.session.sequence;
+                        active.subscription = subscribe_session(client, &active.session_id)?;
                         active.sequence =
                             active_thread_entry(&active.subscription, &active.thread_id)?
                                 .thread

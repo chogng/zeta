@@ -140,7 +140,7 @@ Marketplace 或必须常驻的 Plugin runtime。
 | Theme package 的 `asset` | `zeta-extensions` → Workbench Theme | 规范化为 Theme capability，并把 portable theme manifest 转成 host declarative manifest 后进入共享 Extension catalog | Theme 选择与应用 |
 | Language package 的 `asset` + `executable` | `zeta-extensions` + `LspServerProviders` | editor assets 与 LSP route 分别消费同一安装 | 文档路由、LSP lifecycle |
 | `localization` | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window | 文案提取、产品 bundle 设计与 UI 重建 |
-| `executable` + 可选 `zeta/editor-extensions.json` | Editor Extension source/admission → Host | Zeta consumer sidecar 绑定 exact executable；admission generation/lease 与 Manager lease 同时成立 | enable/grant、Workspace trust、进程隔离 |
+| `executable` + 可选 `zeta/editor-extensions.json` | Editor Extension source/admission → Host | Zeta consumer sidecar 绑定 exact executable；admission generation/lease 与 Manager lease 同时成立 | enable/grant、目录执行 capability、进程隔离 |
 
 `zeta/editor-extensions.json` 是可选的产品 consumer adapter，并非 Marketplace schema、Plugin package
 或通用发布工具的必需结构。没有 sidecar 的 executable 可以继续被 Language 等其他 consumer 使用；
@@ -248,7 +248,7 @@ relative path 和 size limits 约束。
 | Marketplace Language server | ✅ 按 signed language route 组合 `node`/`direct` provider，并在 install/update/uninstall 后热重建 |
 | Marketplace Theme | ✅ Theme activation spec + portable-to-host manifest normalization + 共享 declarative Extension catalog；来源标记为 Marketplace |
 | Marketplace Localization | ✅ 独立 `localization` package family、静态 catalog capability、安装生命周期通知、内置 en/zh-CN、核心 Workbench shell 与 Settings locale selector；领域文案仍按 bundle/key 增量迁移 |
-| Marketplace executable Editor Extension | ✅ 可选产品 sidecar、独立 admission + Workspace trust、Manager lease 与 Host deployment seam；生产 launcher 仍按 Host 文档失败关闭 |
+| Marketplace executable Editor Extension | ✅ 可选产品 sidecar、独立 admission + 目录执行 capability、Manager lease 与 Host deployment seam；生产 launcher 仍按 Host 文档失败关闭 |
 | Plugin bundle 语义 | ✅ Manager 只安装一次，运行时按 capability 分解；legacy `zeta-plugins` 仅保留本地/兼容来源 authority |
 | 旧 Plugin distribution consumer 迁移 | ✅ 专用 catalog、install/update RPC 与远端 crate 已删除 |
 | 旧 Language distribution consumer 迁移 | ✅ 专用 crate、RPC、Desktop service 与 duplicate storage 已删除 |

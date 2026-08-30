@@ -397,7 +397,7 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
     let tools = Arc::new(ReviewTool {
         requires_escalation: true,
         evidence: vec![ReviewEvidence::new(
-            ReviewEvidenceKind::WorkspaceFile,
+            ReviewEvidenceKind::DirectoryFile,
             ReviewEvidenceTrust::UntrustedContent,
             "script.py",
             "print('safe')",

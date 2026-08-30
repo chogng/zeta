@@ -9,6 +9,7 @@ use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolExecutionFacts;
 use zeta_core::ToolOutputSink;
+use zeta_file_access::Authorization;
 use zeta_protocol::ContentPart;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallId;
@@ -16,9 +17,9 @@ use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolOutputStream;
 use zeta_protocol::TurnId;
 use zeta_tools::DEFAULT_TOOL_OUTPUT_MAX_BYTES;
+use zeta_tools::EnvId;
 use zeta_tools::ToolBinding;
 use zeta_tools::ToolContent;
-use zeta_tools::ToolEnvironmentId;
 use zeta_tools::ToolExecutionContext;
 use zeta_tools::ToolExecutionOutcome;
 use zeta_tools::ToolExecutor;
@@ -28,7 +29,6 @@ use zeta_tools::ToolOutputStatus;
 use zeta_tools::ToolOutputTruncationPolicy;
 use zeta_tools::ToolPayload;
 use zeta_tools::ToolRuntimeAuthority;
-use zeta_workspace::TrustedWorkspace;
 
 /// Materializes the security review owned by one executable tool contribution.
 ///
@@ -55,7 +55,7 @@ pub(crate) trait ToolExecutorReviewer: Send + Sync {
 pub(crate) struct PreparedToolExecution {
     review: ActionReviewRequest,
     payload: ToolPayload,
-    workspace_guards: Vec<TrustedWorkspace>,
+    dir_authorizations: Vec<Authorization>,
 }
 
 impl PreparedToolExecution {
@@ -63,24 +63,24 @@ impl PreparedToolExecution {
         Self {
             review,
             payload,
-            workspace_guards: Vec::new(),
+            dir_authorizations: Vec::new(),
         }
     }
 
-    pub(crate) fn with_workspace_guard(mut self, workspace: TrustedWorkspace) -> Self {
-        self.workspace_guards.push(workspace);
+    pub(crate) fn with_dir_authorization(mut self, authorization: Authorization) -> Self {
+        self.dir_authorizations.push(authorization);
         self
     }
 }
 
 struct PreparedToolInvocation {
     payload: ToolPayload,
-    workspace_guards: Vec<TrustedWorkspace>,
+    dir_authorizations: Vec<Authorization>,
 }
 
 pub(crate) struct ToolExecutorRuntime {
     executor: Arc<dyn ToolExecutor>,
-    environment_id: ToolEnvironmentId,
+    environment_id: EnvId,
     reviewer: Arc<dyn ToolExecutorReviewer>,
     prepared: Mutex<BTreeMap<ToolCallId, PreparedToolInvocation>>,
 }
@@ -88,7 +88,7 @@ pub(crate) struct ToolExecutorRuntime {
 impl ToolExecutorRuntime {
     pub(crate) fn new(
         executor: Arc<dyn ToolExecutor>,
-        environment_id: ToolEnvironmentId,
+        environment_id: EnvId,
         reviewer: Arc<dyn ToolExecutorReviewer>,
     ) -> Self {
         Self {
@@ -129,7 +129,7 @@ impl ToolExecutorRuntime {
                 call.id.clone(),
                 PreparedToolInvocation {
                     payload: prepared.payload,
-                    workspace_guards: prepared.workspace_guards,
+                    dir_authorizations: prepared.dir_authorizations,
                 },
             );
         Ok(prepared.review)
@@ -176,7 +176,7 @@ impl ToolExecutorRuntime {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let operation_id = ToolOperationId::new(format!("{turn_id}:{}", call.id))
             .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let (payload, workspace_guards) = {
+        let (payload, dir_authorizations) = {
             let prepared = self
                 .prepared
                 .lock()
@@ -187,10 +187,24 @@ impl ToolExecutorRuntime {
                     call.id
                 ))
             })?;
-            (prepared.payload.clone(), prepared.workspace_guards.clone())
+            (
+                prepared.payload.clone(),
+                prepared.dir_authorizations.clone(),
+            )
         };
-        for workspace in &workspace_guards {
-            if let Err(error) = workspace.ensure_active() {
+        for authorization in &dir_authorizations {
+            if authorization.dir().env() != &self.environment_id {
+                self.prepared
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(&call.id);
+                return Err(CoreError::Execution(format!(
+                    "directory authorization belongs to environment {}, but the tool runs in {}",
+                    authorization.dir().env(),
+                    self.environment_id
+                )));
+            }
+            if let Err(error) = authorization.ensure_active() {
                 self.prepared
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)

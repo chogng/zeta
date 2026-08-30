@@ -115,22 +115,19 @@ fn readonly_tabs_allow_navigation_but_reject_text_mutation() {
 }
 
 #[test]
-fn workspace_replacement_never_discards_dirty_tabs_implicitly() {
+fn dir_change_never_discards_dirty_tabs_implicitly() {
     let mut host = FileEditorHost::default();
     host.open(snapshot("first.txt", "first", 1));
     host.apply(CodeEditorCommand::Insert("dirty ".into()));
 
     assert_eq!(
-        host.request_workspace_replace(),
+        host.request_dir_change(),
         FileEditorCloseRequest::NeedsConfirmation
     );
     assert_eq!(host.tabs().len(), 1);
     assert!(host.close_active_discarding_changes());
-    assert_eq!(
-        host.request_workspace_replace(),
-        FileEditorCloseRequest::CanClose
-    );
-    host.replace_workspace();
+    assert_eq!(host.request_dir_change(), FileEditorCloseRequest::CanClose);
+    host.reset_for_dir_change();
 }
 
 #[test]

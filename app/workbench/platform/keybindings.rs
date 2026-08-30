@@ -220,7 +220,7 @@ fn default_keybinding(command: AppCommandId) -> Option<&'static KeySequence> {
         })),
         AppCommandId::ManageRemoteTunnels
         | AppCommandId::ToggleTabContainer
-        | AppCommandId::ToggleWorkspacePane
+        | AppCommandId::ToggleFilesPane
         | AppCommandId::AddSession
         | AppCommandId::ShowAgentChanges
         | AppCommandId::ShowAgentFiles
@@ -234,7 +234,7 @@ fn default_keybinding(command: AppCommandId) -> Option<&'static KeySequence> {
         | AppCommandId::PickExecutionLocation
         | AppCommandId::PickWorkingDirectory
         | AppCommandId::PickGitBranch
-        | AppCommandId::ShowWorkspaceDiff
+        | AppCommandId::ShowGitDiff
         | AppCommandId::FocusNextPane
         | AppCommandId::FocusPreviousPane
         | AppCommandId::ClosePane => None,

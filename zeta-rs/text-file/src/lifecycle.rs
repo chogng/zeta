@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-/// Whether the filesystem snapshot permits the host to persist new text.
+/// Whether the filesystem snapshot authorizations the host to persist new text.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextFileAccess {
     Writable,
@@ -59,7 +59,7 @@ impl TextFileDiskVersion {
     }
 }
 
-/// One authoritative UTF-8 snapshot loaded through a workspace filesystem capability.
+/// One authoritative UTF-8 snapshot loaded through a directory filesystem capability.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TextFileSnapshot {
     path: PathBuf,

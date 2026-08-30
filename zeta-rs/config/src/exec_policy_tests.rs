@@ -5,9 +5,9 @@ use zeta_execpolicy::ExecPolicyRuleId;
 use zeta_execpolicy::ExecPolicySelector;
 
 #[test]
-fn workspace_policy_can_restrict_but_cannot_grant() {
-    let workspace_id = WorkspaceId::new("project").unwrap();
-    let restrictive = WorkspaceExecPolicyConfig {
+fn directory_policy_can_restrict_but_cannot_grant() {
+    let dir_id: DirId = format!("sha256:{}", "cd".repeat(32)).parse().unwrap();
+    let restrictive = DirExecPolicyConfig {
         rules: vec![ExecPolicyRule::new(
             ExecPolicyRuleId::new("deny"),
             ExecPolicySelector::Any,
@@ -19,12 +19,12 @@ fn workspace_policy_can_restrict_but_cannot_grant() {
             ExecPolicyDefault::Continue,
             Vec::new(),
             &UserExecPolicyConfig::default(),
-            Some((&workspace_id, &restrictive)),
+            Some((&dir_id, &restrictive)),
         )
         .is_ok()
     );
 
-    let granting = WorkspaceExecPolicyConfig {
+    let granting = DirExecPolicyConfig {
         rules: vec![ExecPolicyRule::new(
             ExecPolicyRuleId::new("allow"),
             ExecPolicySelector::Any,
@@ -36,7 +36,7 @@ fn workspace_policy_can_restrict_but_cannot_grant() {
             ExecPolicyDefault::Continue,
             Vec::new(),
             &UserExecPolicyConfig::default(),
-            Some((&workspace_id, &granting)),
+            Some((&dir_id, &granting)),
         )
         .is_err()
     );

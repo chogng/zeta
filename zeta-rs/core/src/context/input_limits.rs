@@ -383,7 +383,7 @@ mod tests {
             .join("\n");
         let items = tool_exchange(
             "read_file",
-            r#"{"path":"/workspace/large.txt","offset":51,"limit":null}"#,
+            r#"{"path":"/dir/large.txt","offset":51,"limit":null}"#,
             None,
             input.clone(),
             None,

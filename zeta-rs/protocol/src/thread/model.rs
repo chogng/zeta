@@ -15,6 +15,12 @@ use ts_rs::TS;
 pub struct Thread {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub parent_thread_id: Option<ThreadId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub forked_from_id: Option<ThreadId>,
     pub title: String,
     pub status: ThreadStatus,
     #[ts(type = "number")]

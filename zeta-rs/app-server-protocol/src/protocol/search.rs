@@ -1,41 +1,41 @@
-use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
+use crate::protocol::environment::SessionDirSelector;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
 
-/// Selects how the workspace search query is interpreted by the backend.
+/// Selects how the directory search query is interpreted by the backend.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum WorkspaceSearchPatternKind {
+pub enum ContentSearchPatternKind {
     Literal,
     Regex,
 }
 
-/// Selects the case-matching behavior used by one workspace search.
+/// Selects the case-matching behavior used by one directory search.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum WorkspaceSearchCaseSensitivity {
+pub enum ContentSearchCaseSensitivity {
     Smart,
     Sensitive,
     Insensitive,
 }
 
-/// Starts one bounded, connection-owned workspace content search.
+/// Starts one bounded, connection-owned directory content search.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSearchStartParams {
+pub struct ContentSearchStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     #[schemars(length(min = 1, max = 16384))]
     pub query: String,
-    pub pattern_kind: WorkspaceSearchPatternKind,
-    pub case_sensitivity: WorkspaceSearchCaseSensitivity,
+    pub pattern_kind: ContentSearchPatternKind,
+    pub case_sensitivity: ContentSearchCaseSensitivity,
     #[schemars(length(max = 64))]
     pub include_patterns: Vec<String>,
     #[schemars(length(max = 64))]
@@ -44,23 +44,23 @@ pub struct WorkspaceSearchStartParams {
     pub max_results: usize,
 }
 
-/// Identity allocated for one running workspace search.
+/// Identity allocated for one running directory search.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSearchStartResult {
+pub struct ContentSearchStartResult {
     pub search_id: String,
 }
 
 /// Reads a bounded result batch after an already observed match cursor.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSearchReadParams {
+pub struct ContentSearchReadParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     #[schemars(length(min = 1))]
     pub search_id: String,
     pub after_match: usize,
@@ -71,43 +71,43 @@ pub struct WorkspaceSearchReadParams {
 /// UTF-16 range within one returned preview line.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSearchMatchRange {
+pub struct ContentSearchMatchRange {
     pub start: usize,
     pub end: usize,
 }
 
-/// One line containing one or more matches in a workspace-relative file.
+/// One line containing one or more matches in a directory-relative file.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSearchMatch {
+pub struct ContentSearchMatch {
     pub path: PathBuf,
     pub line_number: usize,
     pub preview: String,
-    pub ranges: Vec<WorkspaceSearchMatchRange>,
+    pub ranges: Vec<ContentSearchMatchRange>,
 }
 
-/// Bounded progress snapshot for a running or completed workspace search.
+/// Bounded progress snapshot for a running or completed directory search.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSearchReadResult {
+pub struct ContentSearchReadResult {
     pub search_id: String,
-    pub matches: Vec<WorkspaceSearchMatch>,
+    pub matches: Vec<ContentSearchMatch>,
     pub next_match: usize,
     pub completed: bool,
     pub limit_hit: bool,
     pub error: Option<String>,
 }
 
-/// Cancels and releases one connection-owned workspace search.
+/// Cancels and releases one connection-owned directory search.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceSearchCancelParams {
+pub struct ContentSearchCancelParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
+    pub session_directory: Option<SessionDirSelector>,
     #[schemars(length(min = 1))]
     pub search_id: String,
 }

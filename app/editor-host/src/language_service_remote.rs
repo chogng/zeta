@@ -84,7 +84,7 @@ pub enum RemoteLanguageEvent {
 
 pub(crate) fn protocol_document(document: LanguageServiceDocument) -> LanguageDocumentDto {
     LanguageDocumentDto {
-        workspace_folder_id: None,
+        dir_id: None,
         session_directory: None,
         path: document.path().to_path_buf(),
         language_id: document.language_id().to_owned(),

@@ -10,16 +10,16 @@ use crate::FastRegexSearchSnapshot;
 use crate::FastRegexSearchStatistics;
 use crate::FastRegexSearchStorage;
 use crate::FastRegexUpdateOutcome;
+use crate::dir_files::dir_walk_builder;
+use crate::dir_files::read_text_file;
+use crate::dir_files::read_text_file_with_stamp;
+use crate::dir_files::scan_dir;
+use crate::dir_files::scan_dir_stamps;
 use crate::disk_index::DiskBaseIndex;
 use crate::file_stamp::FileStamp;
 use crate::ngram::covering_ngrams;
 use crate::ngram::sparse_ngrams;
 use crate::storage;
-use crate::workspace_files::read_text_file;
-use crate::workspace_files::read_text_file_with_stamp;
-use crate::workspace_files::scan_workspace;
-use crate::workspace_files::scan_workspace_stamps;
-use crate::workspace_files::workspace_walk_builder;
 use globset::GlobBuilder;
 use globset::GlobSet;
 use globset::GlobSetBuilder;
@@ -38,13 +38,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 const DELTA_COMPACTION_MIN_PATHS: usize = 128;
 const DELTA_COMPACTION_MAX_PATHS: usize = 4_096;
 
 pub struct FastRegexSearch {
-    root: WorkspaceRoot,
+    root: Dir,
     storage: FastRegexSearchStorage,
     limits: FastRegexSearchLimits,
     ignore_matcher: Mutex<ignore::IncrementalIgnore>,
@@ -79,7 +79,7 @@ pub(crate) struct IndexedDocument {
 
 impl FastRegexSearch {
     pub fn open(
-        root: WorkspaceRoot,
+        root: Dir,
         storage: FastRegexSearchStorage,
         limits: FastRegexSearchLimits,
     ) -> Result<Self, FastRegexError> {
@@ -94,11 +94,11 @@ impl FastRegexSearch {
         if let FastRegexSearchStorage::Persistent(path) = &storage {
             fs::create_dir_all(path).map_err(|source| io_error(path, source))?;
         }
-        let ignore_matcher = workspace_walk_builder(root.canonical_path())
+        let ignore_matcher = dir_walk_builder(root.canonical_path())
             .build_matchers()
             .into_iter()
             .next()
-            .expect("workspace walk has exactly one root");
+            .expect("directory walk has exactly one root");
         let state = storage::load(&storage)?.unwrap_or_default();
         let requires_rebuild = state.requires_rebuild;
         let search = Self {
@@ -111,12 +111,12 @@ impl FastRegexSearch {
         if requires_rebuild {
             search.rebuild()?;
         } else if search.snapshot().generation != 0 {
-            search.reconcile_workspace()?;
+            search.reconcile_dir()?;
         }
         Ok(search)
     }
 
-    pub fn root(&self) -> &WorkspaceRoot {
+    pub fn root(&self) -> &Dir {
         &self.root
     }
 
@@ -125,7 +125,7 @@ impl FastRegexSearch {
     }
 
     pub fn rebuild(&self) -> Result<FastRegexSearchSnapshot, FastRegexError> {
-        let prepared = scan_workspace(&self.root, &self.limits)?;
+        let prepared = scan_dir(&self.root, &self.limits)?;
         let mut next = IndexState::default();
         for (path, content, stamp) in prepared {
             insert_document(&mut next, path, content, stamp);
@@ -154,11 +154,11 @@ impl FastRegexSearch {
             .ignore_matcher
             .lock()
             .unwrap_or_else(|error| error.into_inner()) =
-            workspace_walk_builder(self.root.canonical_path())
+            dir_walk_builder(self.root.canonical_path())
                 .build_matchers()
                 .into_iter()
                 .next()
-                .expect("workspace walk has exactly one root");
+                .expect("directory walk has exactly one root");
         let snapshot = snapshot(&state);
         if let Some(error) = reload_error {
             return Err(error);
@@ -187,7 +187,7 @@ impl FastRegexSearch {
                 || is_ignore_control(path)
                 || self.root.canonical_path().join(path).is_dir()
         }) {
-            return self.reconcile_workspace();
+            return self.reconcile_dir();
         }
         let mut state = self
             .state
@@ -365,8 +365,8 @@ impl FastRegexSearch {
             .is_ignore()
     }
 
-    pub fn reconcile_workspace(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
-        let current = scan_workspace_stamps(&self.root, &self.limits)?;
+    pub fn reconcile_dir(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
+        let current = scan_dir_stamps(&self.root, &self.limits)?;
         let mut state = self
             .state
             .write()
@@ -436,11 +436,11 @@ impl FastRegexSearch {
             .ignore_matcher
             .lock()
             .unwrap_or_else(|error| error.into_inner()) =
-            workspace_walk_builder(self.root.canonical_path())
+            dir_walk_builder(self.root.canonical_path())
                 .build_matchers()
                 .into_iter()
                 .next()
-                .expect("workspace walk has exactly one root");
+                .expect("directory walk has exactly one root");
     }
 
     fn should_compact_delta(&self, state: &IndexState) -> bool {

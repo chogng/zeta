@@ -90,10 +90,10 @@ fn tied_builtin_candidates_are_not_activated() {
 }
 
 #[test]
-fn workspace_skill_metadata_is_never_automatically_activated() {
-    let workspace = test_directory("selector-workspace");
+fn dir_skill_metadata_is_never_automatically_activated() {
+    let dir = test_directory("selector-dir");
     write_skill(
-        &workspace.join(".zeta/skills"),
+        &dir.join(".zeta/skills"),
         "deploy-service",
         "Deploy and publish the service to production",
     );
@@ -103,7 +103,7 @@ fn workspace_skill_metadata_is_never_automatically_activated() {
         Arc::new(NoSkillRuntimeEvents),
     )
     .unwrap();
-    runtime.bind_workspace_root(workspace.clone()).unwrap();
+    runtime.bind_dir_root(dir.clone()).unwrap();
     let mut builder = ExtensionRegistryBuilder::new();
     crate::install(&mut builder, runtime);
 
@@ -115,5 +115,5 @@ fn workspace_skill_metadata_is_never_automatically_activated() {
         .unwrap();
 
     assert!(activations.is_empty());
-    let _ = std::fs::remove_dir_all(workspace);
+    let _ = std::fs::remove_dir_all(dir);
 }

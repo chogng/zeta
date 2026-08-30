@@ -12,5 +12,5 @@ fn session_name_matching_is_case_insensitive_and_ignores_outer_query_whitespace(
     search.apply(TextInputCommand::Insert("  TERMINAL  ".to_owned()));
 
     assert!(search.matches_session_name("Review terminal navigation"));
-    assert!(!search.matches_session_name("Workspace setup"));
+    assert!(!search.matches_session_name("Directory setup"));
 }

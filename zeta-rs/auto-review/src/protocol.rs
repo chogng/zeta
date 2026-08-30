@@ -166,7 +166,7 @@ impl<'a> From<&'a ActionReviewRequest> for ModelInput<'a> {
             SandboxCompatibility::Supported(policy) => ModelSandboxCompatibility::Supported {
                 filesystem: match policy.file_system() {
                     zeta_sandboxing::FileSystemAccess::ReadOnly => "read_only",
-                    zeta_sandboxing::FileSystemAccess::WorkspaceWrite => "workspace_write",
+                    zeta_sandboxing::FileSystemAccess::DirectoryWrite => "dir_write",
                     zeta_sandboxing::FileSystemAccess::FullAccess => "full_access",
                 },
                 network: match policy.network() {

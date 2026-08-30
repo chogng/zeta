@@ -12,7 +12,7 @@ fn non_remote_commands_preserve_the_existing_launch_surface() {
     let invocation = AppInvocation::parse([
         "--remote".into(),
         "build.example".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
     ])
     .unwrap();
@@ -32,7 +32,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
         "Build".into(),
         "--host".into(),
         "build.example".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
     ])
     .unwrap();
@@ -64,7 +64,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
         "build".into(),
         "--host".into(),
         "other.example".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/other".into(),
     ])
     .unwrap();
@@ -81,7 +81,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
         "build".into(),
         "--host".into(),
         "other.example".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/other".into(),
         "--replace".into(),
     ])
@@ -111,7 +111,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
         panic!("expected Remote launch");
     };
     assert_eq!(profile.target().host().as_str(), "other.example");
-    assert_eq!(profile.target().workspace().as_str(), "/srv/other");
+    assert_eq!(profile.target().dir().as_str(), "/srv/other");
     assert_eq!(profile.runtime().executable(), "/opt/zeta/bin/zeta-server");
     assert_eq!(ssh_executable.unwrap().to_string_lossy(), "/usr/bin/ssh");
     assert_eq!(runtime_source, RemoteRuntimeSource::ExplicitRuntime);
@@ -129,7 +129,7 @@ fn named_connections_cannot_be_overridden_by_raw_target_flags() {
         "build".into(),
         "--remote".into(),
         "other".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/other".into(),
     ])
     .err()
@@ -142,14 +142,14 @@ fn named_connections_cannot_be_overridden_by_raw_target_flags() {
 }
 
 #[test]
-fn save_requires_a_valid_name_host_and_absolute_workspace() {
+fn save_requires_a_valid_name_host_and_absolute_dir() {
     let invalid_name = AppInvocation::parse([
         "remote".into(),
         "save".into(),
         "build server".into(),
         "--host".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
     ]);
     assert!(matches!(
@@ -163,7 +163,7 @@ fn save_requires_a_valid_name_host_and_absolute_workspace() {
         "remote".into(),
         "save".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
     ]);
     assert!(matches!(
@@ -176,17 +176,17 @@ fn save_requires_a_valid_name_host_and_absolute_workspace() {
         ))
     ));
 
-    let relative_workspace = AppInvocation::parse([
+    let relative_dir = AppInvocation::parse([
         "remote".into(),
         "save".into(),
         "build".into(),
         "--host".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "project".into(),
     ]);
     assert!(matches!(
-        relative_workspace,
+        relative_dir,
         Err(AppInvocationParseError::Remote(
             RemoteConnectionCommandParseError::Address(_)
         ))

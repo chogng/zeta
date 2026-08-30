@@ -6,12 +6,12 @@
 
 mod catalog;
 mod completion;
+mod dir;
 mod engine;
 mod environment;
 mod parser;
 mod registry;
 mod types;
-mod workspace;
 
 pub use completion::ShellCompletion;
 pub use completion::ShellCompletionKind;

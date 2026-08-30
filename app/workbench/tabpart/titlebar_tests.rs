@@ -6,8 +6,8 @@ use crate::Point;
 use crate::Rect;
 use crate::TabPart;
 use crate::tabpart::identity::{
-    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, TITLEBAR_SETTINGS_CLOSE,
-    TITLEBAR_TAB_CONTAINER, WORKSPACE_PANE_TOGGLE,
+    FILES_PANE_TOGGLE, TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON,
+    TITLEBAR_SETTINGS_CLOSE, TITLEBAR_TAB_CONTAINER,
 };
 use crate::tabpart::test_style;
 use crate::{TabInputKey, TabIntent, tab_intent_for_element};
@@ -89,23 +89,23 @@ fn collapsed_tab_part_hides_tabs_and_keeps_titlebar_actions() {
         Some(UiIntent::Activate(TITLEBAR_SETTINGS_BUTTON))
     );
 
-    let workspace_bounds = frame
+    let dir_bounds = frame
         .interaction()
-        .node(WORKSPACE_PANE_TOGGLE)
-        .expect("workspace action")
+        .node(FILES_PANE_TOGGLE)
+        .expect("dir action")
         .bounds();
-    let workspace_point = Point::new(
-        workspace_bounds.origin.x + workspace_bounds.size.width * 0.5,
-        workspace_bounds.origin.y + workspace_bounds.size.height * 0.5,
+    let dir_point = Point::new(
+        dir_bounds.origin.x + dir_bounds.size.width * 0.5,
+        dir_bounds.origin.y + dir_bounds.size.height * 0.5,
     );
-    dispatch.pointer_moved(workspace_point, frame.interaction());
+    dispatch.pointer_moved(dir_point, frame.interaction());
     dispatch.press_primary(frame.interaction());
-    assert!(dispatch.is_pressed(WORKSPACE_PANE_TOGGLE));
+    assert!(dispatch.is_pressed(FILES_PANE_TOGGLE));
     assert_eq!(
         dispatch
-            .release_primary(workspace_point, frame.interaction())
+            .release_primary(dir_point, frame.interaction())
             .intent,
-        Some(UiIntent::Activate(WORKSPACE_PANE_TOGGLE))
+        Some(UiIntent::Activate(FILES_PANE_TOGGLE))
     );
 }
 

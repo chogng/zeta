@@ -21,7 +21,7 @@ zeta-model-provider-config = { workspace = true }
 zeta-execpolicy = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-state = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [lints]
 workspace = true

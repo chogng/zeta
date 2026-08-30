@@ -21,9 +21,7 @@ use zeta_connectors_extension::ConnectorOAuthProvider;
 use zeta_connectors_extension::ConnectorOAuthRefreshRequest;
 use zeta_connectors_extension::ConnectorOAuthRevokeRequest;
 use zeta_connectors_extension::ConnectorOAuthService;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_model_provider::EchoModel;
 use zeta_secrets::MemorySecretStore;
@@ -44,12 +42,8 @@ fn server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_connector_service(service)
@@ -128,12 +122,8 @@ fn oauth_server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_connector_service(service)
@@ -218,12 +208,8 @@ fn device_oauth_server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
     .with_connector_service(service)

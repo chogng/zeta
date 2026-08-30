@@ -5,7 +5,7 @@
 > [`docs/agent-customizations.md`](../../docs/agent-customizations.md) 维护；Thread execution identity
 > 与 multi-agent gate 由 [`docs/core-multi-agent.md`](../../docs/core-multi-agent.md) 维护。
 
-`zeta-agents` 对一个 Workspace 的 `.zeta/agents/*.md` 执行有界、非递归发现，校验 definition
+`zeta-agents` 对一个目录的 `.zeta/agents/*.md` 执行有界、非递归发现，校验 definition
 frontmatter 和 role instructions，并发布不可变 catalog snapshot。它不创建 Thread、不调用模型、
 不解析外部 Agent 格式，也不把 tool/model references 解释成权限或可用性保证。
 
@@ -70,12 +70,12 @@ cargo test -p zeta-agents
 cargo clippy -p zeta-agents --all-targets --no-deps -- -D warnings
 ```
 
-当前已实现 Workspace 原生 definition 发现、格式校验、内容摘要、不可变 snapshot 与 refresh；
-App Server 的 `WorkspaceCustomizations` 在 Workspace 激活时拥有 catalog，并响应 filesystem
+当前已实现目录 definition 发现、格式校验、内容摘要、不可变 snapshot 与 refresh；
+App Server 的 `DirContributions` 在目录加入 Env 时拥有 catalog，并响应 filesystem
 invalidation。`spawn_agent` 可以显式按 name 选择，或在 task 与 metadata 唯一匹配时自动选择；选择
 结果冻结 catalog generation、exact content digest 和 reason。model 按 `provider/model` 解析；Tool
-和 Skill 只能缩小 parent 当前可见集合，引用的 Workspace Instructions 正文会进入 frozen role，
+和 Skill 只能缩小 parent 当前可见集合，引用的 directory instructions 正文会进入 frozen role，
 缺失或越权引用 fail closed。
 
 当前限制是尚无 App Server definition list/picker API，也不支持跨 authority Agent definition 引用；
-自动选择只使用当前 Workspace catalog metadata，不运行模型或读取其他产品格式。
+自动选择只使用当前 directory catalog metadata，不运行模型或读取其他产品格式。

@@ -77,26 +77,24 @@ Canonical 产品实体和内部契约的详细定义见 [`protocol.md`](protocol
 
 - App Server connection/session 只是传输生命周期，不能与产品 Session 混用。
 
-Session 不嵌入 Thread 历史，只保存 membership、lineage 和 lifecycle。Fork 的 lineage 固定为 `parentThreadId + parentSequence`；Core 按这个锚点重放父 Thread，并把锚点内连续、已结束的 Turn 导入子 Thread，因此未完成的 Turn 和父 Thread 后续提交都不会进入已创建的分支。
+Session 是按 `sessionId` 聚合 Thread 的只读树视图，不保存独立状态。Fork 的 lineage 固定为
+`parentThreadId + parentSequence`；Core 按这个锚点重放父 Thread，并把锚点内连续、已结束的 Turn
+导入子 Thread，因此未完成的 Turn 和父 Thread 后续提交都不会进入已创建的分支。
 
 ## 2. 一致性模型
 
 每个修改命令都使用：
 
 - `commandId`：客户端生成的稳定命令身份；
-- `expectedSequence`：客户端观察到的目标 aggregate sequence；
+- Thread 写入分支中的 `expectedSequence`：客户端观察到的目标 Thread sequence；
 - typed command payload：参与重放与冲突判断。
 
 同一 `commandId + typed payload` 重试返回原结果；同一 `commandId` 携带不同 payload 返回
 `CommandConflict`。JSON-RPC request `id` 只做当前 connection 的 response pairing，不能替代
 `commandId`。
 
-Session 与每个 Thread 拥有独立 durable sequence：
-
-- Session sequence 只排序 topology 与 lifecycle；
-- Thread sequence 只排序该分支内的 Turn 与 Item；
-- 修改一个 Thread 不会占用 Session 或其他 Thread 的 sequence；
-- `expectedSequence` 始终针对 method 所修改的 aggregate。
+每个 Thread 拥有独立 durable sequence。修改一个 Thread 不会占用其他 Thread 的 sequence；Session
+没有 sequence。Create、fork、rewind 和 tree lifecycle 请求不伪造 Session 并发序号。
 
 ## 3. 传输
 
@@ -146,7 +144,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "turns": true,
     "resources": true,
     "fileSystem": true,
-    "workspaceSearch": true,
+    "directorySearch": true,
     "codebase": true,
     "cloudCodebase": false,
     "terminal": true,
@@ -265,8 +263,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `config/update` | config | typed command 更新配置 |
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
-| `workspace/additionalDirectories/list` / `add` / `remove` / `permissions/set` | Session Workspace access | 管理当前 Session 的附加目录与完整能力集合；权限替换使用 Workspace access revision，目录不会成为主 Workspace |
-| `workspace/codebase/configure` | config + Workspace | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
+| `session/dirs/list` / `add` / `remove` / `permissions/set` | Session directory access | 管理当前 Session 的目录与完整能力集合；权限替换使用目录访问 revision，不改变 `cwd` |
+| `codebase/configure` | config + Directory | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 修改 Provider declaration |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
@@ -276,47 +274,47 @@ Desktop 当前实现和 Playwright 后续边界见
 | `mcp/oauth/refresh` / `mcp/oauth/revoke` | MCP OAuth owner + secret store | 轮换 runtime/lifecycle credential；或先断开 runtime、远端 revoke 后删除本地 secret |
 | `skill/source/add` / `skill/source/remove` / `skill/source/enablement/set` | config | 修改 User Skill source |
 | `plugin/request/upsert` / `plugin/request/remove` / `plugin/request/enablement/set` | config | 修改 exact Plugin request；不安装或激活 |
-| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config + `zeta-hooks` runtime | 修改 declarative Hook；App Server 在 trusted Workspace 中组合 runtime，后续 safe point 按 immutable snapshot 执行匹配的 sandbox process |
+| `hook/upsert` / `hook/remove` / `hook/enablement/set` | config + `zeta-hooks` runtime | 修改 declarative Hook；App Server 取得目录执行 Authorization 后组合 runtime，后续 safe point 按 immutable snapshot 执行匹配的 sandbox process |
 | `skills/list` | global Skill catalog | 读取 cached projection 或请求完整 refresh |
 | `skill/enablement/set` | config + Skill catalog | revision-checked 启用/禁用 exact `SkillId` |
 | `skill/resource/open` | Skill runtime + Resource | 将 digest-pinned package resource materialize 为 connection-owned resource |
 | `resource/metadata` | Resource | 读取元数据 |
 | `resource/read` | Resource | 分块读取 |
 | `resource/release` | Resource | 释放 connection-owned resource |
-| `fs/getMetadata` | workspace | 读取根相对路径的 metadata |
-| `fs/readDirectory` | workspace | 枚举根相对目录的直接子项 |
-| `fs/readFile` | workspace | 读取不超过 10 MiB 的 UTF-8 文件 |
-| `fs/writeFile` | workspace | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
+| `fs/getMetadata` | directory | 读取根相对路径的 metadata |
+| `fs/readDirectory` | directory | 枚举根相对目录的直接子项 |
+| `fs/readFile` | directory | 读取不超过 10 MiB 的 UTF-8 文件 |
+| `fs/writeFile` | directory | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
 | `syntax/analyze` | stateless syntax | 返回同一 revision 的 bounded token/fold/symbol/diagnostic facts |
 | `syntax/selectionRanges` | stateless syntax | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes |
-| `git/status` | workspace | 读取 HEAD、upstream 和 index/worktree change snapshot |
-| `git/textDiff` | workspace | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
-| `git/graph` | workspace | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
-| `git/branch/list` | workspace | 列出现有本地分支及 current/upstream 信息 |
-| `git/branch/switch` | workspace | 切换到 host 重新解析确认存在的本地分支 |
-| `git/stage` | workspace | stage 一组 workspace-relative path |
-| `git/unstage` | workspace | 从 index 移除一组 path 的 staged change |
-| `git/discardWorktree` | workspace | 恢复 tracked working-tree change，不删除 untracked 文件 |
-| `git/commit` | workspace | 使用有界非空 message 创建 commit |
-| `git/fetch` | workspace | non-interactive fetch all remotes 并 prune |
-| `git/pull` | workspace | non-interactive fast-forward-only pull |
-| `git/push` | workspace | 按当前 Git upstream/default 配置 push |
-| `workspace/search/start` | connection + workspace | 启动有界内容搜索 |
-| `workspace/search/read` | connection + search job | 按游标读取最多 200 条结果 |
-| `workspace/search/cancel` | connection + search job | 取消并释放搜索 |
-| `workspace/codebase/status` | workspace | 读取本地 index lifecycle 与 generation counters |
-| `workspace/codebase/search` | workspace | 返回有界、revision-bound 的本地 lexical chunks |
-| `workspace/codebase/symbols/status` / `search` | workspace | 读取 declaration projection 状态并执行有界 local fuzzy symbol query |
-| `workspace/codeIntelligence/document/synchronize` / `close` | workspace + editor document | 发布或释放 ephemeral dirty snapshot；不持久化 overlay |
-| `workspace/codebase/retrieve` | workspace | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
-| `workspace/codebase/rebuild` | workspace | 同步执行一次 full reconcile |
-| `workspace/codebase/cloud/status` | workspace | 读取 selected deployment、grant 与 local/remote generation state |
-| `workspace/codebase/cloud/preview` | workspace | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
-| `workspace/codebase/cloud/authorize` | workspace | 持久化 root-bound destination/scope/byte grant |
-| `workspace/codebase/cloud/sync` | workspace | 按 grant 复核 source revision 后调用 provider publication |
-| `workspace/codebase/cloud/revoke` | workspace | 先持久化 Revoking，再请求 provider 幂等删除 |
-| `terminal/profile/list` | workspace | 列出 App Server 冻结的可信 Shell Profile |
-| `terminal/create` | connection + workspace | 在可信 workspace root 启动 PTY |
+| `git/status` | directory | 读取 HEAD、upstream 和 index/worktree change snapshot |
+| `git/textDiff` | directory | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
+| `git/graph` | directory | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
+| `git/branch/list` | directory | 列出现有本地分支及 current/upstream 信息 |
+| `git/branch/switch` | directory | 切换到 host 重新解析确认存在的本地分支 |
+| `git/stage` | directory | stage 一组 directory-relative path |
+| `git/unstage` | directory | 从 index 移除一组 path 的 staged change |
+| `git/discardWorktree` | directory | 恢复 tracked working-tree change，不删除 untracked 文件 |
+| `git/commit` | directory | 使用有界非空 message 创建 commit |
+| `git/fetch` | directory | non-interactive fetch all remotes 并 prune |
+| `git/pull` | directory | non-interactive fast-forward-only pull |
+| `git/push` | directory | 按当前 Git upstream/default 配置 push |
+| `content/search/start` | connection + directory | 启动有界内容搜索 |
+| `content/search/read` | connection + search job | 按游标读取最多 200 条结果 |
+| `content/search/cancel` | connection + search job | 取消并释放搜索 |
+| `codebase/status` | directory | 读取本地 index lifecycle 与 generation counters |
+| `codebase/search` | directory | 返回有界、revision-bound 的本地 lexical chunks |
+| `codebase/symbols/status` / `search` | directory | 读取 declaration projection 状态并执行有界 local fuzzy symbol query |
+| `codeIntelligence/document/synchronize` / `close` | directory + editor document | 发布或释放 ephemeral dirty snapshot；不持久化 overlay |
+| `codebase/retrieve` | directory | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
+| `codebase/rebuild` | directory | 同步执行一次 full reconcile |
+| `codebase/cloud/status` | directory | 读取 selected deployment、grant 与 local/remote generation state |
+| `codebase/cloud/preview` | directory | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
+| `codebase/cloud/authorize` | directory | 持久化 root-bound destination/scope/byte grant |
+| `codebase/cloud/sync` | directory | 按 grant 复核 source revision 后调用 provider publication |
+| `codebase/cloud/revoke` | directory | 先持久化 Revoking，再请求 provider 幂等删除 |
+| `terminal/profile/list` | directory | 列出 App Server 冻结的可信 Shell Profile |
+| `terminal/create` | connection + directory | 在可信 directory root 启动 PTY |
 | `terminal/write` | connection + Terminal | 写入有界 UTF-8 输入 batch |
 | `terminal/resize` | connection + Terminal | 修改 PTY rows/cols |
 | `terminal/read` | connection + Terminal | 按 sequence 拉取有界 Base64 输出 |
@@ -371,7 +369,7 @@ Plugin request 是 config intent；legacy Plugin lifecycle authority 是另一�
 
 同一 profile 的 App Server daemon 是 Marketplace mutation 的 single writer。成功的
 install/update/uninstall 在 consumer reconcile 后推进共享 generation，并向该 profile 的全部
-Workspace connection 广播 `marketplace/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
+Directory connection 广播 `marketplace/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
 过期”；客户端必须重新调用 `marketplace/listInstalled`，并以返回的 instanceId + generation + packages 为事实。
 `whenUnused` 卸载会先广播 pending-removal 状态；最后一个 capability lease 被释放或随连接关闭清理、删除
 真正提交时再广播一次，避免其他端长期保留已经消失的 Skill、Connector 或 Extension 投影。
@@ -387,7 +385,7 @@ Zeta account control plane 另见[第 11 节](#11-account-与登录)。其 Rust 
 
 ### 文件系统
 
-Filesystem method 的 `path` 是配置 workspace root 下的相对路径；空字符串表示 root。
+Filesystem method 的 `path` 是配置 directory root 下的相对路径；空字符串表示 root。
 绝对路径、父目录逃逸和解析后越过 root 的 symlink 会在可信 Rust 边界被拒绝。Desktop 的
 IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
 
@@ -395,12 +393,12 @@ IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
 用于单根 Folder 的 Explorer、文本文件打开和后端保存。读写均限制为不超过 10 MiB 的 UTF-8；
 写入在目标同目录完成有界临时写、flush 和原子替换，保留现有文件权限，不隐式创建父目录。
 
-App Server 对整个 workspace root 建立递归 watcher。普通变化经 75ms debounce 后发布
-`fs/changed { type: "pathsChanged", paths }`，其中 path 全部是 workspace-relative；backend
+App Server 对整个 directory root 建立递归 watcher。普通变化经 75ms debounce 后发布
+`fs/changed { type: "pathsChanged", paths }`，其中 path 全部是 directory-relative；backend
 可能丢失事件时发布 `fs/changed { type: "rescanRequired" }`。两种通知都是失效 hint，不是
 durable event 或文件内容事实，客户端收到后必须重新读取自己拥有的视图。
 
-Filesystem contract 仍不包含重命名、删除、多根 Workspace 或跨请求 snapshot 一致性。当前
+Filesystem contract 仍不包含重命名、删除、多根 Directory 或跨请求 snapshot 一致性。当前
 Desktop 尚未调用 `fs/writeFile` 或消费 `fs/changed`；这些属于独立的前端接入阶段。
 
 ### 语法事实
@@ -417,17 +415,17 @@ projection，不建立 App Server-owned editor document，也不返回 Tree-sitt
 
 ### Git SCM
 
-`initialize.capabilities.git` 表示 server 已冻结可信 workspace root 并安装 Git backend。
+`initialize.capabilities.git` 表示 server 已冻结可信 directory root 并安装 Git backend。
 `git/status` 不接受路径参数，返回 `GitStatusResult`：标识当前 Git runtime incarnation 的
-`streamInstanceId`、在该实例内单调递增的 workspace status revision、
+`streamInstanceId`、在该实例内单调递增的 directory status revision、
 HEAD 的 branch/detached/unborn
-状态、可选 upstream ahead/behind，以及每个 workspace-relative path 的 index/worktree status、
+状态、可选 upstream ahead/behind，以及每个 directory-relative path 的 index/worktree status、
 rename original path、conflict 和 submodule flags。Revision 表示 App Server 观察到的投影版本，
 不是 durable CAS token，客户端不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。
-当 workspace 是更大 repository 的子目录时，server 会过滤 workspace 外 change，并将保留路径
-重新映射为 workspace-relative。
+当 directory 是更大 repository 的子目录时，server 会过滤 directory 外 change，并将保留路径
+重新映射为 directory-relative。
 
-App Server 通过 `zeta-file-watcher` 接收 workspace、Git metadata 和相关 ancestor `.gitignore`
+App Server 通过 `zeta-file-watcher` 接收 directory、Git metadata 和相关 ancestor `.gitignore`
 invalidation hint，100ms debounce 后重新读取 authoritative Git status。投影内容变化时 revision
 递增并向支持 notification 的连接发送 `git/statusChanged { status }`；内容未变时不发送。
 Watcher 初始化失败时显式 `git/status` 与 mutation 仍可用。客户端只在相同
@@ -435,7 +433,7 @@ Watcher 初始化失败时显式 `git/status` 与 mutation 仍可用。客户端
 App Server 已重启，客户端必须接受新 snapshot，并在连接重新 ready 时主动执行 `git/status`
 恢复权威状态。
 
-`git/textDiff` 返回同一 workspace 范围内的 `GitStatusResult`、每个可展示文本变化的 original/
+`git/textDiff` 返回同一 directory 范围内的 `GitStatusResult`、每个可展示文本变化的 original/
 modified UTF-8 source，以及文件级和聚合增删行统计。单侧文件上限为 2 MiB；binary、symlink、
 非 UTF-8、不可读或超限内容仍保留在 status 中，但不进入 text diff。客户端可以用 source 构建
 presentation diff，不得直接读取 Git revision 或复制 Git 统计规则。
@@ -451,9 +449,9 @@ repository snapshot，不是 GitHub API、PR、Checks 或 review 查询，也不
 和 GitHub repository 摘要。
 
 `git/commitChanges` 接受 graph 返回的完整 commit object ID，按第一父提交（root commit 使用空树）
-返回 workspace-relative changed paths、rename original path、status 和 comparison parent object ID。
+返回 directory-relative changed paths、rename original path、status 和 comparison parent object ID。
 `git/commitFile` 接受同一个 commit object ID 与上述结果中的 path；server 会重新解析该 commit 的
-changed paths 并确认 path 属于该提交和当前 workspace，然后按需返回 original/modified 两侧的
+changed paths 并确认 path 属于该提交和当前 directory，然后按需返回 original/modified 两侧的
 `text`、`binary` 或 `missing` 状态。每侧文本上限为 2 MiB。Desktop SCM 因而只在展开 history item
 时读取路径，并只在用户点击具体文件时读取内容；modified/renamed 文件打开只读 diff，added/deleted
 文件打开存在的一侧。
@@ -464,63 +462,63 @@ server 会重新列出当前仓库分支并按 exact name 解析后才执行 mut
 Git 拒绝，server 不重试或丢弃用户内容。
 
 Mutation contract 提供 `git/stage`、`git/unstage`、`git/discardWorktree`、`git/commit`、
-`git/branch/switch`、`git/fetch`、`git/pull` 和 `git/push`。Path mutation 接受 1–5000 个 workspace-relative path；
+`git/branch/switch`、`git/fetch`、`git/pull` 和 `git/push`。Path mutation 接受 1–5000 个 directory-relative path；
 Rust service 负责最终边界校验和 repository-relative 映射。Commit message 必须非空、无 NUL，
 且不超过 64 KiB UTF-8。每个成功 mutation 都返回新的 status；commit 另外返回 object ID。
 
 Remote operation 禁用 terminal/credential prompt，pull 固定使用 fast-forward only。Discard 只恢复
-tracked working tree，不删除 untracked 文件。Operation 在单 workspace runtime 内串行执行；当前
+tracked working tree，不删除 untracked 文件。Operation 在单 directory runtime 内串行执行；当前
 没有可观测 queue、progress 或 caller cancellation。跨层 ownership、当前 UI 和演进顺序见
 [`git.md`](git.md)。
 
-### Workspace 搜索
+### Directory 搜索
 
-`initialize.capabilities.workspaceSearch` 表示 server 已安装 workspace 内容搜索 backend。
-客户端通过 `workspace/search/start` 获得 connection-owned `searchId`，用
-`workspace/search/read` 的 `afterMatch` cursor 分批读取结果，最后调用
-`workspace/search/cancel` 释放作业。每个结果包含 workspace-relative path、1-based line
+`initialize.capabilities.directorySearch` 表示 server 已安装 directory 内容搜索 backend。
+客户端通过 `content/search/start` 获得 connection-owned `searchId`，用
+`content/search/read` 的 `afterMatch` cursor 分批读取结果，最后调用
+`content/search/cancel` 释放作业。每个结果包含 directory-relative path、1-based line
 number、单行 preview 和 UTF-16 match ranges。
 
-查询、glob、batch 和总结果都有协议上限；Rust backend 重新校验 workspace 边界并直接启动
+查询、glob、batch 和总结果都有协议上限；Rust backend 重新校验 directory 边界并直接启动
 冻结的 ripgrep executable。未知 ID、跨 connection 访问和并发超限使用稳定的
 `SearchNotFound`、`SearchNotOwner` 与 `SearchBusy` error name。执行失败作为 terminal
 read result 的脱敏 `error` 返回。完整 ownership 与当前 UI 限制见
 [`search.md`](search.md)。
 
-### Workspace 代码索引
+### Directory 代码索引
 
-`initialize.capabilities.codebase` 表示 local composition 可以在当前 workspace authority 内建立
-本地代码索引。`workspace/codebase/status` 返回 `empty/indexing/ready/stale/failed` 和 published
-generation counters；`workspace/codebase/search` 接受最多 8 KiB query 与 1–100 个结果上限，
+`initialize.capabilities.codebase` 表示 local composition 可以在当前 directory authority 内建立
+本地代码索引。`codebase/status` 返回 `empty/indexing/ready/stale/failed` 和 published
+generation counters；`codebase/search` 接受最多 8 KiB query 与 1–100 个结果上限，
 返回 root-relative path、language、source revision、chunk key/hash、UTF-8 byte/line span、当前
 验证过的 content 与 lexical score。初始 generation 尚未发布时返回 `CodebaseNotReady`。
 
-`workspace/codebase/symbols/status` 投影 `empty/indexing/ready/stale/failed` 与 source/symbol generation；
-`workspace/codebase/symbols/search` 对当前持久 projection 和 dirty overlay 做 Nucleo fuzzy query，返回 UTF-16
+`codebase/symbols/status` 投影 `empty/indexing/ready/stale/failed` 与 source/symbol generation；
+`codebase/symbols/search` 对当前持久 projection 和 dirty overlay 做 Nucleo fuzzy query，返回 UTF-16
 declaration/selection ranges、source revision、score 与 matched name indices。它不声称 reference 或 type
 语义；LSP workspace symbols 由 Desktop provider aggregator 并发补充。
 
-`workspace/codebase/retrieve` 使用相同 query/result 数量上限；内部始终按 Workspace excerpt identity
+`codebase/retrieve` 使用相同 query/result 数量上限；内部始终按 Directory excerpt identity
 校验和去重，对外只返回 revision-bound excerpt 与 RRF score，不暴露全文、符号、设备内模型或云端模型
 等内部候选来源。非致命问题只返回 `codebaseIncomplete`、`cloudCodebaseUnavailable`、候选复核失败或
 content budget 丢弃计数，不把 provider candidate body 当作 source authority。
 
-`workspace/codeIntelligence/document/synchronize` 接收 Editor-authoritative full snapshot；Codebase
+`codeIntelligence/document/synchronize` 接收 Editor-authoritative full snapshot；Codebase
 首先校验 path、language、revision 与 text，再建立 canonical in-memory chunks，SymbolIndex 随后投影
 declarations。同一 dirty path 的磁盘 symbol、FTS、vector 和 cloud candidates 全部被抑制；保存后只有
-磁盘 generation 的 content hash 对齐才 handoff。`close`、Workspace replacement 或 host lifecycle
+磁盘 generation 的 content hash 对齐才 handoff。`close`、Directory replacement 或 host lifecycle
 释放 overlay。响应只包含 generation 和 dirty document count，不泄露正文。
 
-`workspace/codebase/rebuild` 是 global-exclusive、同步 manual reconcile；通常由 watcher-driven
+`codebase/rebuild` 是 global-exclusive、同步 manual reconcile；通常由 watcher-driven
 runtime 自动维护，不应在每次查询前调用。该能力不创建 embedding/network 请求，也不等价于产品
 文字/正则搜索。完整 chunking、持久化、stale gate 与隐私边界见
 [`codebase.md`](codebase.md)。
 
 `initialize.capabilities.cloudCodebase` 表示 host 已注入非空 provider registry；未激活或受限
-Workspace 即使支持该方法，也没有 active cloud controller，调用会返回
-`CloudCodebaseUnavailable`。云端只有一种 publication contract：上传 Workspace 已切块并复核的
+Directory 即使支持该方法，也没有 active cloud controller，调用会返回
+`CloudCodebaseUnavailable`。云端只有一种 publication contract：上传 Directory 已切块并复核的
 exact chunks；provider 不得读取完整 source 后重新切块。客户端必须先用
-`workspace/codebase/cloud/preview` 展示 file/chunk/unit/byte shape，再用 authorize 固定
+`codebase/cloud/preview` 展示 file/chunk/unit/byte shape，再用 authorize 固定
 provider、tenant、collection、path scope 和 `maxEgressBytes`；该 ceiling 计算 source-content bytes，
 不包含 transport metadata overhead，authorize 本身不上传。旧 `mode` 字段按未知字段拒绝，不能把
 旧 `managed` consent 静默解释为新的 chunk-only grant。
@@ -528,17 +526,17 @@ provider、tenant、collection、path scope 和 `maxEgressBytes`；该 ceiling �
 同一 root 同时只允许一个 grant。destination、scope 或 byte ceiling 变化必须先 revoke；
 每次 sync 都重检 byte ceiling 和 source revision。状态为
 `localOnly/granted/syncing/ready/stale/revoking/failed`。revoke 在 provider call 前持久化
-`revoking`，删除失败保留 pending grant供幂等重试；Workspace 信任撤销也会自动触发删除并移除
+`revoking`，删除失败保留 pending grant供幂等重试；Directory 信任撤销也会自动触发删除并移除
 cloud runtime。默认 local composition 没有 concrete provider，所以示例 capability 为 false，当前
 不会发起云网络请求。
 
 ### 集成终端
 
-`initialize.capabilities.terminal` 表示 local composition 已提供可信 workspace root 和 PTY
+`initialize.capabilities.terminal` 表示 local composition 已提供可信 directory root 和 PTY
 runtime。`terminal/profile/list` 只返回稳定 `profileId`、显示标题与 default 标记，不暴露
 program、args 或 environment。`terminal/create` 接受 rows/cols 和 `default | profileId`
 tagged selection；Rust owner 把 ID 解析到冻结的本机 Shell Profile，并以显式 environment
-allowlist 在 workspace root 启动。客户端不能提交任意 executable、environment 或绝对 cwd。
+allowlist 在 directory root 启动。客户端不能提交任意 executable、environment 或绝对 cwd。
 Terminal ID 绑定创建它的 App Server connection，跨 connection 操作返回 `TerminalNotOwner`。
 
 Electron 与 Vite development host 只把 Shell 正常运行所需的用户目录、临时目录、locale、
@@ -554,7 +552,7 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 落后于 ring 时返回 `outputGap: true`，客户端必须显式显示截断而不能把缺口当作连续输出。
 `exited` 只在 authoritative process exit 且尾部输出流关闭后为 true。
 
-当前 terminal 不持久化、不跨 App Server 重启恢复，也不支持用户或 Workspace 环境变量修改、
+当前 terminal 不持久化、不跨 App Server 重启恢复，也不支持用户或 Directory 环境变量修改、
 `.env` 自动加载或远程 attach。
 正常客户端在实例关闭后调用 `terminal/close`；connection 结束时 server 终止该 connection
 拥有的剩余 PTY。App Server 重启后的显式 Relaunch 会创建新 PTY，不能冒充原进程恢复。
@@ -573,8 +571,8 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 }
 ```
 
-返回 `{ "session": Session }`。首次 durable event 为 `sessionCreated`，并在同一 atomic batch
-保存 typed command receipt。
+返回 `{ "session": Session }`。实现创建根 Thread；返回的 Session 由根 Thread 的 `sessionId`
+聚合得到。
 
 ### 创建 Thread
 
@@ -584,19 +582,13 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
   "params": {
     "commandId": "command_thread_1",
     "sessionId": "session_1",
-    "expectedSequence": 1,
     "request": { "type": "createThread", "title": "Main" }
   }
 }
 ```
 
-创建采用可恢复 saga：
-
-1. Session 写入 `threadCreationPlanned`，membership 状态为 `creating`；
-2. 创建带相同 `sessionId` 的 Thread stream；
-3. Session 写入 `threadAttached`，membership 状态变为 `active`。
-
-恢复时发现 `creating` membership 会继续完成后两步，而不是创建另一个 Thread。
+创建直接追加一个带相同 `sessionId` 的新 Thread stream。`commandId` receipt 提供幂等，不需要
+Session planned/attached saga。
 
 ### 分叉 Thread
 
@@ -604,21 +596,20 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 ### 生命周期
 
-`session/request` 的所有 mutation 都要求 `commandId`、`sessionId` 与 `expectedSequence`。
-`request.type` 明确选择 `complete`、`archive` 或 `stop`；Archived Session 不允许
-再修改。停止请求会先 durable archive Session，再中断该 Session 下所有活动 child Turn。连接断开
-只释放订阅、请求和资源 ownership，不隐式触发停止。
+`request.type` 明确选择 `archive` 或 `stop`。这些树级动作枚举同一 `sessionId` 下的
+Thread 并逐一归档；停止还会中断活动 Turn。连接断开只释放订阅、请求和资源 ownership，不隐式
+触发停止。
 
-### 会话模型
+### 执行选择
 
-`session/request::SetModel` 使用 `commandId`、`sessionId`、`expectedSequence` 和 provider-scoped
-`ModelRef`。选择结果写入 Session event stream，只影响该 Session。`session/request::StartTurn` 将 Session
-当前模型复制到新 Turn；后续 Session 或全局配置变化不会改变已经启动的 Turn。
+Session 不保存 model、下一次 approval mode 或 current Thread。`model/list` 返回可用模型目录；
+App Server 在创建 Turn 时读取执行配置，并把实际 model、approval mode、tool mode 与 policy revision
+冻结到该 Turn。产品当前选中的分支属于产品导航状态，不进入 Core Session 视图。
 
 `model/list` 的 direct provider seed、ChatGPT 订阅条目和 Kimi Code 订阅条目都派生自 `zeta-model-provider-config::STATIC_MODEL_CATALOG`。每个条目统一返回 provider-scoped identity、display name、`access`、完整 context window、automatic compaction threshold、`availableContextWindow`、capabilities、reasoning efforts 和默认 personality。`availableContextWindow` 使用与 Turn 执行相同的当前配置和预算规则，已经扣除 output reservation、safety margin 与 ordinary auto-compaction 边界；列目录不会调用 provider、`account/read` 或 upstream `model/list` 做健康检查。
-`session/request::SetModel` 只校验精确 identity 属于产品目录，然后把选择持久化到 Session。Provider
-配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都由本地 `TurnExecutor` 调用的模型服务
-验证，并以该 Turn 的稳定错误出现在对话中；它们不回写模型列表，也不阻止用户预先选择。`access = subscription` 只表示接入方式；静态 row 的 `runtime` 选择 provider-specific authenticated target。OpenAI 与 Kimi subscription rows 都使用本地 `TurnExecutor`。登录账户适配器内部的 `openai-chatgpt` identity 不进入 ModelRef，Kimi account/model provider identity 都是 `kimi`。登录状态不会隐式改变 Session model。
+Provider 配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都由 `TurnExecutor` 调用的
+模型服务验证，并以该 Turn 的稳定错误出现；它们不回写模型列表。`access = subscription` 只表示
+接入方式。登录状态不会隐式改变已经创建的 Turn。
 
 ## 7. Thread 与 Turn
 
@@ -643,10 +634,11 @@ Thread {
 {
   "commandId": "command_turn_1",
   "sessionId": "session_1",
-  "expectedSequence": 1,
   "request": {
     "type": "startTurn",
     "threadId": "thread_1",
+    "expectedSequence": 1,
+    "approvalMode": "askPermissions",
     "input": [
       { "type": "text", "text": "Describe this image" },
       {
@@ -686,10 +678,10 @@ snapshot 均只保存 content digest 和验证后的媒体元数据。旧 `image
 {
   "commandId": "command_compact_1",
   "sessionId": "session_1",
-  "expectedSequence": 8,
   "request": {
     "type": "compactContext",
     "threadId": "thread_1",
+    "expectedSequence": 8,
     "retentionPrompt": "保留当前迁移方案和未完成测试"
   }
 }
@@ -702,8 +694,8 @@ usage 和 verified checkpoint 都先持久化，再从新 snapshot 规划下一�
 半成品 checkpoint，相同 command replay 不会重复模型或后端调用。订阅模型的无提示请求转发
 upstream `thread/compact/start`；上游没有 retention prompt 字段，因此带提示的订阅请求明确失败。
 
-`session/request` 的 `ResolveInteraction` 携带同样的 aggregate identity、`commandId`、`expectedSequence`，
-以及 outstanding interaction 的 `requestId` 和 typed response。它只接受该 Turn 当前 pending
+`session/request` 的 `ResolveInteraction` 在具体 request 分支中携带 `expectedSequence`，并带上
+outstanding interaction 的 `requestId` 和 typed response。它只接受该 Turn 当前 pending
 interaction 的同一 request kind；相同 `commandId + typed payload` 会重放原结果，错误的
 `requestId` 或 response kind 会被拒绝。该 method 解决已 durable 的 interaction，不用于创建
 新的 Agent request。
@@ -726,13 +718,13 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 
 与 Session/Thread 交互相关的 notification method 包括：
 
-- `session/update`，payload 为 `SessionUpdateEnvelope`；
+- `session/changed`，只提示 `sessionId` 对应的派生树需要重新读取；
 - `session/thread/update`，payload 为 Session subscription 的 `ThreadUpdateEnvelope`；
 - `agent/request`，payload 为仅发送给 selected owner 的 full `AgentRequestEnvelope`；
 - `config/changed`，payload 为已提交的 Config `revision` 与 `generation`；
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
-- `git/statusChanged`，payload 为新的 workspace Git status；
+- `git/statusChanged`，payload 为新的 directory Git status；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint。
 
 durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 可额外携带
@@ -742,11 +734,9 @@ durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 
 - stream cursor 只用于检测当前 runtime 的瞬态 update 空洞；
 - streamInstanceId 变化时客户端丢弃旧瞬态 cursor，并以 durable snapshot/gap 重新同步。
 
-`session/request` 是产品 mutation 的 canonical aggregate port。请求固定携带 `commandId`、
-`sessionId`、`expectedSequence` 和 tagged `request` operation；其中 `expectedSequence` 对 Session
-操作指向 Session，对 child Thread/Turn 操作指向 request 选择的 child Thread。结果通过 tagged
-`SessionRequestResult` 区分 Session、child Thread 和 Turn 返回值。旧的独立 Session/Thread/Turn
-mutation 方法不在 registry 中；客户端不得重新引入平行入口。
+`session/request` 固定携带 `commandId`、`sessionId` 和 tagged `request` operation。只有修改具体
+Thread 的 operation 在 request 分支中携带该 Thread 的 `expectedSequence`。结果通过 tagged
+`SessionRequestResult` 区分树视图、child Thread 和 Turn 返回值。
 
 Session subscription 和显式 `session/thread/subscribe` 都使用同一个 `session/thread/update`
 notification；通知 payload 始终带有 Session/Thread scope。
@@ -771,7 +761,7 @@ tokenized command prefix、structured network target、capability scope 和显�
 `continue`、`allowUnsandboxed`、`requireApproval`、`requireSandbox` 与带理由的 `deny`。
 `execPolicy/rule/remove` 按 stable rule ID 删除。两者都使用 `commandId + expectedRevision`，并走
 Config authority 的 exact receipt/atomic TOML contract。`config/read.execPolicyRules` 返回当前 User
-rules；Workspace restrictions 不作为 User 配置回写。
+rules；Directory restrictions 不作为 User 配置回写。
 
 Config authority 提交 consumer-visible change 后向所有 connection 发布 `config/changed`。
 notification 是重新 `config/read` 的失效提示，不包含完整 desired document；no-op command 与
@@ -788,7 +778,7 @@ Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 run
 `toolSearch/configure` 的 `hybridEmbedding` 必须携带 exact `embeddingModel`。App Server 在 durable
 commit 前从 Provider Config 解析模型并发送固定 readiness probe；失败返回
 `ToolSearchUnavailable`，不会把混合模式写入配置。默认 `lexical` 完全本地运行。Tool Search 的模型
-选择与 semantic Codebase 的模型和 Workspace source-egress grant 相互独立。外部配置或启动恢复的
+选择与 semantic Codebase 的模型和 Directory source-egress grant 相互独立。外部配置或启动恢复的
 hybrid 模型不可用时，`embeddingStatus` 为 `unavailable`，自然语言搜索明确失败而不回退 BM25；
 显式 Regex 仍保持本地运行。
 
@@ -842,7 +832,7 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `GitNotRepository`
 - `GitOperationFailed`
 - `ConfigUnavailable`
-- `WorkspaceAccessRevisionConflict`
+- `DirectoryAccessRevisionConflict`
 - `McpServerNotFound`
 - `McpRuntimeUnavailable`
 - `McpOAuthUnavailable`
@@ -914,7 +904,7 @@ Browser 打开、URL 展示和 device code UI 属于 Desktop/CLI/TUI。Desktop �
 
 - opaque account ID；
 - email/display name（Provider 返回且 UI 需要时）；
-- workspace/organization display metadata；
+- directory/organization display metadata；
 - plan/status；
 - credential revision；
 - reauthentication required 状态。

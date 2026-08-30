@@ -29,10 +29,10 @@ use zeta_apply_patch::ApplyPatchLimits;
 use zeta_apply_patch::ApplyPatchTool;
 use zeta_async_utils::CancellationToken;
 use zeta_config::AgentGrepBackend;
+use zeta_config::DirExecPolicyConfig;
+use zeta_config::DirId;
 use zeta_config::ResolvedConfig;
 use zeta_config::UserExecPolicyConfig;
-use zeta_config::WorkspaceExecPolicyConfig;
-use zeta_config::WorkspaceId;
 use zeta_core::ActionPolicyService;
 use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
@@ -49,6 +49,9 @@ use zeta_execpolicy::ExecPolicyRule;
 use zeta_execpolicy::ExecPolicyRuleId;
 use zeta_execpolicy::ExecPolicySelector;
 use zeta_execpolicy::ExecPolicySnapshot;
+use zeta_file_access::Authorization;
+use zeta_file_access::Dir;
+use zeta_file_access::Permission as DirPermission;
 use zeta_install_context::ExecutableCandidates;
 use zeta_install_context::InstallContext;
 use zeta_install_context::ManagedExecutable;
@@ -72,11 +75,8 @@ use zeta_shell_command::ShellCommandRequest;
 use zeta_shell_command::ShellCommandTool;
 use zeta_tools::ToolPayload;
 use zeta_tools::to_protocol_tool_definition;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceCapability;
-use zeta_workspace::WorkspaceRoot;
 
-use crate::session_workspace_access::SessionWorkspaceAccess;
+use crate::dir_grants::DirGrants;
 use crate::tool_composition::ToolCompositionError;
 use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
@@ -106,7 +106,7 @@ pub(crate) struct LocalToolComposition {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct LocalToolConfig {
     user: UserExecPolicyConfig,
-    workspace: Option<(WorkspaceId, WorkspaceExecPolicyConfig)>,
+    dir_config: Option<(DirId, DirExecPolicyConfig)>,
     agent_grep_backend: AgentGrepBackend,
 }
 
@@ -114,12 +114,10 @@ impl LocalToolConfig {
     pub(crate) fn from_resolved(config: &ResolvedConfig) -> Self {
         Self {
             user: config.exec_policy.clone(),
-            workspace: config.workspace.as_ref().map(|workspace| {
-                (
-                    workspace.workspace_id.clone(),
-                    workspace.exec_policy.clone(),
-                )
-            }),
+            dir_config: config
+                .dir_config
+                .as_ref()
+                .map(|dir| (dir.dir_id.clone(), dir.exec_policy.clone())),
             agent_grep_backend: config.agent_grep_backend,
         }
     }
@@ -129,9 +127,7 @@ impl LocalToolConfig {
             ExecPolicyDefault::Deny("action is outside the local Tool policy contract".into()),
             vec![LOCAL_EXEC_POLICY_HOST_LAYER.clone()],
             &self.user,
-            self.workspace
-                .as_ref()
-                .map(|(workspace_id, workspace)| (workspace_id, workspace)),
+            self.dir_config.as_ref().map(|(dir_id, dir)| (dir_id, dir)),
         )
         .map_err(LocalToolError::policy)
     }
@@ -139,27 +135,26 @@ impl LocalToolConfig {
 
 struct LocalExecutorContribution {
     executor: Arc<dyn zeta_tools::ToolExecutor>,
-    environment_id: zeta_tools::ToolEnvironmentId,
+    environment_id: zeta_tools::EnvId,
     reviewer: Arc<dyn ToolExecutorReviewer>,
 }
 
 pub(crate) fn compose_local_tools_with_config(
-    workspace: TrustedWorkspace,
+    authorization: Authorization,
     config: &LocalToolConfig,
-    session_workspace_access: Arc<SessionWorkspaceAccess>,
+    dir_grants: Arc<DirGrants>,
     existing_agent_grep: Option<Arc<AgentGrepService>>,
     state_runtime: Option<Arc<zeta_state::StateRuntime>>,
     fast_regex_worker_command: Option<&zeta_fast_regex_search::FastRegexWorkerCommand>,
 ) -> Result<LocalToolComposition, LocalToolError> {
-    if workspace.capability() != WorkspaceCapability::ExecuteProcess {
-        return Err(LocalToolError::trust(
-            "local tools require the execute-process Workspace capability",
+    if authorization.permission() != DirPermission::ExecuteCommands {
+        return Err(LocalToolError::permission(
+            "local tools require the execute-command directory capability",
         ));
     }
     let install_context = InstallContext::current();
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
-    let environment_id = zeta_tools::ToolEnvironmentId::new("local-workspace")
-        .map_err(LocalToolError::definition)?;
+    let environment_id = zeta_tools::EnvId::local();
     let exec_policy = config.snapshot()?;
     let action_policy_revision = ActionPolicyRevision::from_components(
         exec_policy.revision(),
@@ -167,15 +162,15 @@ pub(crate) fn compose_local_tools_with_config(
         LOCAL_REVIEWER_POLICY_REVISION,
     );
     let reviewer: Arc<dyn ToolExecutorReviewer> = Arc::new(LocalExecutorReviewer {
-        workspace: workspace.clone(),
+        authorization: authorization.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: action_policy_revision.clone(),
-        session_workspace_access: Arc::clone(&session_workspace_access),
+        dir_grants: Arc::clone(&dir_grants),
     });
     let shell_executor: Arc<dyn zeta_tools::ToolExecutor> = Arc::new(
         ShellCommandTool::new(
             environment_id.clone(),
-            workspace.root().clone(),
+            authorization.dir().clone(),
             native_sandbox(&install_context)?,
             CoreAuthorized,
             ShellCommandLimits {
@@ -188,7 +183,7 @@ pub(crate) fn compose_local_tools_with_config(
     let apply_patch_executor: Arc<dyn zeta_tools::ToolExecutor> = Arc::new(
         ApplyPatchTool::new(
             environment_id.clone(),
-            workspace.root().clone(),
+            authorization.dir().clone(),
             ApplyPatchLimits::default(),
         )
         .map_err(LocalToolError::definition)?,
@@ -198,7 +193,7 @@ pub(crate) fn compose_local_tools_with_config(
         action_policy_revision: action_policy_revision.clone(),
     };
     let shell = LocalShellToolService::new_with_action_policy_revision(
-        workspace.clone(),
+        authorization.clone(),
         ripgrep.clone(),
         native_sandbox(&install_context)?,
         action_policy_revision.clone(),
@@ -215,12 +210,7 @@ pub(crate) fn compose_local_tools_with_config(
             _ => AgentGrepService::new(config.agent_grep_backend, ripgrep.clone(), state_runtime),
         },
     });
-    let service = LocalToolSuite::new(
-        shell,
-        ripgrep.clone(),
-        Arc::clone(&agent_grep),
-        session_workspace_access,
-    );
+    let service = LocalToolSuite::new(shell, ripgrep.clone(), Arc::clone(&agent_grep), dir_grants);
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),
@@ -496,7 +486,7 @@ impl ApprovalPolicy for CoreAuthorized {
 }
 
 struct LocalShellToolService<B> {
-    workspace: TrustedWorkspace,
+    authorization: Authorization,
     ripgrep: RipgrepExecutable,
     shell: ShellCommandTool<CoreAuthorized, B>,
     definition: ToolDefinition,
@@ -506,23 +496,27 @@ struct LocalShellToolService<B> {
 impl<B: SandboxBackend> LocalShellToolService<B> {
     #[cfg(test)]
     fn new(
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
         ripgrep: RipgrepExecutable,
         backend: B,
     ) -> Result<Self, LocalToolError> {
-        Self::new_with_action_policy_revision(workspace, ripgrep, backend, local_policy_revision())
+        Self::new_with_action_policy_revision(
+            authorization,
+            ripgrep,
+            backend,
+            local_policy_revision(),
+        )
     }
 
     fn new_with_action_policy_revision(
-        workspace: TrustedWorkspace,
+        authorization: Authorization,
         ripgrep: RipgrepExecutable,
         backend: B,
         action_policy_revision: ActionPolicyRevision,
     ) -> Result<Self, LocalToolError> {
         let shell = ShellCommandTool::new(
-            zeta_tools::ToolEnvironmentId::new("local-workspace")
-                .map_err(LocalToolError::definition)?,
-            workspace.root().clone(),
+            zeta_tools::EnvId::local(),
+            authorization.dir().clone(),
             backend,
             CoreAuthorized,
             ShellCommandLimits {
@@ -534,7 +528,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         let definition = to_protocol_tool_definition(shell.host_definition())
             .map_err(LocalToolError::definition)?;
         Ok(Self {
-            workspace,
+            authorization,
             ripgrep,
             shell,
             definition,
@@ -543,15 +537,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
     }
 
     fn materialize(&self, call: &ToolCall) -> Result<ShellCommandRequest, CoreError> {
-        self.materialize_in_workspace(call, None)
+        self.materialize_in_dir(call, None)
     }
 
-    fn materialize_in_workspace(
+    fn materialize_in_dir(
         &self,
         call: &ToolCall,
-        managed_workspace: Option<&TrustedWorkspace>,
+        authorization: Option<&Authorization>,
     ) -> Result<ShellCommandRequest, CoreError> {
-        self.workspace
+        self.authorization
             .ensure_active()
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name != self.definition.name {
@@ -564,24 +558,24 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        let selected_root = managed_workspace
-            .map(TrustedWorkspace::root)
-            .unwrap_or_else(|| self.workspace.root());
+        let selected_root = authorization
+            .map(Authorization::dir)
+            .unwrap_or_else(|| self.authorization.dir());
         let requested_directory = request.working_directory();
         let relative = if requested_directory.is_absolute() {
             requested_directory
                 .strip_prefix(selected_root.canonical_path())
                 .or_else(|_| requested_directory.strip_prefix(selected_root.requested_path()))
                 .or_else(|_| {
-                    requested_directory.strip_prefix(self.workspace.root().canonical_path())
+                    requested_directory.strip_prefix(self.authorization.dir().canonical_path())
                 })
                 .or_else(|_| {
-                    requested_directory.strip_prefix(self.workspace.root().requested_path())
+                    requested_directory.strip_prefix(self.authorization.dir().requested_path())
                 })
                 .map(Path::to_path_buf)
                 .map_err(|_| {
                     CoreError::Policy(
-                        "shell-command working directory is outside the Thread workspace".into(),
+                        "shell-command working directory is outside the Thread directory".into(),
                     )
                 })?
         } else {
@@ -593,9 +587,9 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             } else {
                 relative
             })
-            .with_workspace_root(selected_root.canonical_path());
+            .with_dir_root(selected_root.canonical_path());
         if request.program() == "rg" {
-            validate_workspace_arguments(selected_root, &request)?;
+            validate_dir_arguments(selected_root, &request)?;
         }
         let working_directory = selected_root
             .resolve_existing(request.working_directory())
@@ -619,11 +613,11 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         request: &ShellCommandRequest,
     ) -> Result<ActionReviewRequest, CoreError> {
         let selected_root = request
-            .workspace_root()
-            .map(WorkspaceRoot::open)
+            .dir_root()
+            .map(Dir::open_local)
             .transpose()
             .map_err(|error| CoreError::Policy(error.to_string()))?
-            .unwrap_or_else(|| self.workspace.root().clone());
+            .unwrap_or_else(|| self.authorization.dir().clone());
         let canonical_working_directory = selected_root
             .resolve_existing(request.working_directory())
             .map_err(|error| CoreError::Policy(error.to_string()))?;
@@ -666,23 +660,23 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         ))
     }
 
-    fn prepare_in_workspace(
+    fn prepare_in_dir(
         &self,
         call: &ToolCall,
-        workspace: Option<&TrustedWorkspace>,
+        authorization: Option<&Authorization>,
     ) -> Result<ActionReviewRequest, CoreError> {
-        self.review_request(&self.materialize_in_workspace(call, workspace)?)
+        self.review_request(&self.materialize_in_dir(call, authorization)?)
     }
 
-    fn execute_in_workspace(
+    fn execute_in_dir(
         &self,
         call: &ToolCall,
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
-        workspace: Option<&TrustedWorkspace>,
+        dir_authorization: Option<&Authorization>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         self.execute_request(
-            self.materialize_in_workspace(call, workspace)?,
+            self.materialize_in_dir(call, dir_authorization)?,
             authorization,
             cancellation,
         )
@@ -774,10 +768,10 @@ impl<B: SandboxBackend> ToolService for LocalShellToolService<B> {
 }
 
 struct LocalExecutorReviewer {
-    workspace: TrustedWorkspace,
+    authorization: Authorization,
     ripgrep: RipgrepExecutable,
     action_policy_revision: ActionPolicyRevision,
-    session_workspace_access: Arc<SessionWorkspaceAccess>,
+    dir_grants: Arc<DirGrants>,
 }
 
 impl ToolExecutorReviewer for LocalExecutorReviewer {
@@ -808,33 +802,34 @@ impl LocalExecutorReviewer {
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
     ) -> Result<PreparedToolExecution, CoreError> {
-        self.workspace
+        self.authorization
             .ensure_active()
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name.as_str() == "shell-command" {
-            let (review, request, workspace) = self.prepare_shell(call, session_id, thread_id)?;
+            let (review, request, authorization) =
+                self.prepare_shell(call, session_id, thread_id)?;
             return Ok(PreparedToolExecution::new(
                 review,
                 ToolPayload::FunctionArguments(json!({
                     "program": request.program(),
                     "arguments": request.arguments(),
                     "working_directory": request.working_directory(),
-                    "workspace_root": request.workspace_root(),
+                    "dir_root": request.dir_root(),
                 })),
             )
-            .with_workspace_guard(workspace));
+            .with_dir_authorization(authorization));
         }
         if call.name.as_str() == "apply_patch" {
-            let (review, patch, workspace) =
+            let (review, patch, authorization) =
                 self.prepare_apply_patch(call, session_id, thread_id)?;
             return Ok(PreparedToolExecution::new(
                 review,
                 ToolPayload::FunctionArguments(json!({
                     "patch": patch,
-                    "workspace_root": workspace.root().canonical_path(),
+                    "dir_root": authorization.dir().canonical_path(),
                 })),
             )
-            .with_workspace_guard(workspace));
+            .with_dir_authorization(authorization));
         }
         let review = match call.name.as_str() {
             _ => Err(CoreError::Policy(format!(
@@ -846,7 +841,7 @@ impl LocalExecutorReviewer {
             review,
             ToolPayload::FunctionArguments(call.arguments.clone()),
         )
-        .with_workspace_guard(self.workspace.clone()))
+        .with_dir_authorization(self.authorization.clone()))
     }
 
     fn prepare_shell(
@@ -854,23 +849,23 @@ impl LocalExecutorReviewer {
         call: &ToolCall,
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
-    ) -> Result<(ActionReviewRequest, ShellCommandRequest, TrustedWorkspace), CoreError> {
-        if call.arguments.get("workspace_root").is_some() {
+    ) -> Result<(ActionReviewRequest, ShellCommandRequest, Authorization), CoreError> {
+        if call.arguments.get("dir_root").is_some() {
             return Err(CoreError::Policy(
-                "shell-command workspace_root is host-owned".into(),
+                "shell-command dir_root is host-owned".into(),
             ));
         }
         let mut request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        let (workspace, relative_working_directory, working_directory) =
-            self.resolve_execution_workspace(request.working_directory(), session_id, thread_id)?;
+        let (authorization, relative_working_directory, working_directory) =
+            self.resolve_execution_dir(request.working_directory(), session_id, thread_id)?;
         request = request
             .with_working_directory(relative_working_directory)
-            .with_workspace_root(workspace.root().canonical_path());
+            .with_dir_root(authorization.dir().canonical_path());
         if request.program() == "rg" {
-            validate_workspace_arguments(workspace.root(), &request)?;
+            validate_dir_arguments(authorization.dir(), &request)?;
         }
         if !working_directory.is_dir() {
             return Err(CoreError::Policy(
@@ -891,7 +886,7 @@ impl LocalExecutorReviewer {
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let is_ripgrep = request.program() == self.ripgrep.path().to_string_lossy();
         let capabilities = if is_ripgrep {
-            local_capabilities(workspace.root(), &self.ripgrep)
+            local_capabilities(authorization.dir(), &self.ripgrep)
         } else {
             shell_capabilities()
         };
@@ -920,69 +915,71 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::Supported(sandbox),
             self.action_policy_revision.clone(),
         );
-        Ok((review, request, workspace))
+        Ok((review, request, authorization))
     }
 
-    fn resolve_execution_workspace(
+    fn resolve_execution_dir(
         &self,
         requested: &Path,
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
-    ) -> Result<(TrustedWorkspace, std::path::PathBuf, std::path::PathBuf), CoreError> {
-        let thread_workspace = thread_id
+    ) -> Result<(Authorization, std::path::PathBuf, std::path::PathBuf), CoreError> {
+        let thread_dir = thread_id
             .map(|thread_id| {
-                self.session_workspace_access
-                    .thread_workspace(thread_id, WorkspaceCapability::ExecuteProcess)
+                self.dir_grants
+                    .thread_dir(thread_id, DirPermission::ExecuteCommands)
                     .map_err(|error| CoreError::Policy(error.to_string()))
             })
             .transpose()?
             .flatten();
         if requested.is_relative() {
-            let workspace = thread_workspace
+            let authorization = thread_dir
                 .clone()
-                .unwrap_or_else(|| self.workspace.clone());
-            let absolute = workspace
-                .root()
+                .unwrap_or_else(|| self.authorization.clone());
+            let absolute = authorization
+                .dir()
                 .resolve_existing(requested)
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
-            return Ok((workspace, requested.to_path_buf(), absolute));
+            return Ok((authorization, requested.to_path_buf(), absolute));
         }
-        if let Some(workspace) = &thread_workspace
+        if let Some(authorization) = &thread_dir
             && let Ok(relative) = requested
-                .strip_prefix(self.workspace.root().canonical_path())
-                .or_else(|_| requested.strip_prefix(self.workspace.root().requested_path()))
+                .strip_prefix(self.authorization.dir().canonical_path())
+                .or_else(|_| requested.strip_prefix(self.authorization.dir().requested_path()))
         {
             let relative = if relative.as_os_str().is_empty() {
                 PathBuf::from(".")
             } else {
                 relative.to_path_buf()
             };
-            let absolute = workspace
-                .root()
+            let absolute = authorization
+                .dir()
                 .resolve_existing(&relative)
                 .map_err(|error| CoreError::Policy(error.to_string()))?;
-            return Ok((workspace.clone(), relative, absolute));
+            return Ok((authorization.clone(), relative, absolute));
         }
-        let mut workspaces = thread_workspace.into_iter().collect::<Vec<_>>();
-        workspaces.push(self.workspace.clone());
+        let mut authorizations = thread_dir.into_iter().collect::<Vec<_>>();
+        authorizations.push(self.authorization.clone());
         if let Some(session_id) = session_id
             && let Some(snapshot) = self
-                .session_workspace_access
-                .snapshot_for(session_id, WorkspaceCapability::ExecuteProcess)
+                .dir_grants
+                .snapshot_for(session_id, DirPermission::ExecuteCommands)
                 .map_err(|error| CoreError::Policy(error.to_string()))?
         {
-            workspaces.extend(snapshot.additional_roots().iter().cloned());
+            authorizations.extend(snapshot.authorizations().iter().cloned());
         }
-        let (workspace, relative) = workspaces
+        let (authorization, relative) = authorizations
             .into_iter()
-            .filter_map(|workspace| {
+            .filter_map(|authorization| {
                 requested
-                    .strip_prefix(workspace.root().canonical_path())
-                    .or_else(|_| requested.strip_prefix(workspace.root().requested_path()))
+                    .strip_prefix(authorization.dir().canonical_path())
+                    .or_else(|_| requested.strip_prefix(authorization.dir().requested_path()))
                     .ok()
-                    .map(|relative| (workspace, relative.to_path_buf()))
+                    .map(|relative| (authorization, relative.to_path_buf()))
             })
-            .max_by_key(|(workspace, _)| workspace.root().canonical_path().components().count())
+            .max_by_key(|(authorization, _)| {
+                authorization.dir().canonical_path().components().count()
+            })
             .ok_or_else(|| {
                 CoreError::Policy(format!(
                     "shell-command working directory is not authorized: {}",
@@ -994,11 +991,11 @@ impl LocalExecutorReviewer {
         } else {
             relative
         };
-        let absolute = workspace
-            .root()
+        let absolute = authorization
+            .dir()
             .resolve_existing(&relative)
             .map_err(|error| CoreError::Policy(error.to_string()))?;
-        Ok((workspace, relative, absolute))
+        Ok((authorization, relative, absolute))
     }
 
     fn prepare_apply_patch(
@@ -1006,10 +1003,10 @@ impl LocalExecutorReviewer {
         call: &ToolCall,
         session_id: Option<&zeta_protocol::SessionId>,
         thread_id: Option<&zeta_protocol::ThreadId>,
-    ) -> Result<(ActionReviewRequest, String, TrustedWorkspace), CoreError> {
-        if call.arguments.get("workspace_root").is_some() {
+    ) -> Result<(ActionReviewRequest, String, Authorization), CoreError> {
+        if call.arguments.get("dir_root").is_some() {
             return Err(CoreError::Policy(
-                "apply_patch workspace_root is host-owned".into(),
+                "apply_patch dir_root is host-owned".into(),
             ));
         }
         let patch = call
@@ -1017,28 +1014,28 @@ impl LocalExecutorReviewer {
             .get("patch")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| CoreError::Policy("apply_patch patch must be a string".into()))?;
-        let thread_workspace = thread_id
+        let thread_dir = thread_id
             .map(|thread_id| {
-                self.session_workspace_access
-                    .thread_workspace(thread_id, WorkspaceCapability::MutateRepository)
+                self.dir_grants
+                    .thread_dir(thread_id, DirPermission::MutateRepository)
                     .map_err(|error| CoreError::Policy(error.to_string()))
             })
             .transpose()?
             .flatten();
-        let mut workspaces = thread_workspace.clone().into_iter().collect::<Vec<_>>();
-        workspaces.push(self.workspace.clone());
+        let mut authorizations = thread_dir.clone().into_iter().collect::<Vec<_>>();
+        authorizations.push(self.authorization.clone());
         if let Some(session_id) = session_id
             && let Some(snapshot) = self
-                .session_workspace_access
-                .snapshot_for(session_id, WorkspaceCapability::MutateRepository)
+                .dir_grants
+                .snapshot_for(session_id, DirPermission::MutateRepository)
                 .map_err(|error| CoreError::Policy(error.to_string()))?
         {
-            workspaces.extend(snapshot.additional_roots().iter().cloned());
+            authorizations.extend(snapshot.authorizations().iter().cloned());
         }
-        let (workspace, rewritten_patch, targets) = materialize_patch_targets(
-            &workspaces,
+        let (authorization, rewritten_patch, targets) = materialize_patch_targets(
+            &authorizations,
             patch,
-            thread_workspace.as_ref().map(|_| self.workspace.root()),
+            thread_dir.as_ref().map(|_| self.authorization.dir()),
         )?;
         let capabilities = targets.iter().flat_map(|target| {
             [
@@ -1056,28 +1053,28 @@ impl LocalExecutorReviewer {
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 ActionKind::FileSystemMutation,
-                format!("apply patch to {} workspace file(s)", targets.len()),
+                format!("apply patch to {} directory file(s)", targets.len()),
                 CapabilitySet::new(capabilities),
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, "apply_patch"),
             SandboxCompatibility::NotApplicable {
-                reason: "apply_patch validates every target through WorkspaceRoot and commits host-mediated file mutations".into(),
+                reason: "apply_patch validates every target through Dir and commits host-mediated file mutations".into(),
             },
             self.action_policy_revision.clone(),
         );
-        Ok((review, rewritten_patch, workspace))
+        Ok((review, rewritten_patch, authorization))
     }
 }
 
 fn materialize_patch_targets(
-    workspaces: &[TrustedWorkspace],
+    authorizations: &[Authorization],
     patch: &str,
-    primary_alias: Option<&WorkspaceRoot>,
-) -> Result<(TrustedWorkspace, String, Vec<String>), CoreError> {
-    let primary = workspaces
+    primary_alias: Option<&Dir>,
+) -> Result<(Authorization, String, Vec<String>), CoreError> {
+    let primary = authorizations
         .first()
-        .ok_or_else(|| CoreError::Policy("apply_patch has no authorized workspace".into()))?;
-    let mut selected: Option<TrustedWorkspace> = None;
+        .ok_or_else(|| CoreError::Policy("apply_patch has no writable directory".into()))?;
+    let mut selected: Option<Authorization> = None;
     let mut targets = Vec::new();
     let mut rewritten = Vec::new();
     for line in patch.lines() {
@@ -1098,7 +1095,7 @@ fn materialize_patch_targets(
             ));
         }
         let path = Path::new(path);
-        let (workspace, relative) = if path.is_absolute() {
+        let (authorization, relative) = if path.is_absolute() {
             if let Some(alias) = primary_alias
                 && let Ok(relative) = path
                     .strip_prefix(alias.canonical_path())
@@ -1106,16 +1103,16 @@ fn materialize_patch_targets(
             {
                 (primary.clone(), relative.to_path_buf())
             } else {
-                workspaces
+                authorizations
                     .iter()
-                    .filter_map(|workspace| {
-                        path.strip_prefix(workspace.root().canonical_path())
-                            .or_else(|_| path.strip_prefix(workspace.root().requested_path()))
+                    .filter_map(|authorization| {
+                        path.strip_prefix(authorization.dir().canonical_path())
+                            .or_else(|_| path.strip_prefix(authorization.dir().requested_path()))
                             .ok()
-                            .map(|relative| (workspace.clone(), relative.to_path_buf()))
+                            .map(|relative| (authorization.clone(), relative.to_path_buf()))
                     })
-                    .max_by_key(|(workspace, _)| {
-                        workspace.root().canonical_path().components().count()
+                    .max_by_key(|(authorization, _)| {
+                        authorization.dir().canonical_path().components().count()
                     })
                     .ok_or_else(|| {
                         CoreError::Policy(format!(
@@ -1128,17 +1125,17 @@ fn materialize_patch_targets(
             (primary.clone(), path.to_path_buf())
         };
         if let Some(selected) = &selected
-            && selected.root() != workspace.root()
+            && selected.dir() != authorization.dir()
         {
             return Err(CoreError::Policy(
-                "one apply_patch call cannot modify more than one workspace root".into(),
+                "one apply_patch call cannot modify more than one directory".into(),
             ));
         }
-        selected = Some(workspace.clone());
+        selected = Some(authorization.clone());
         let resolved = if existing {
-            workspace.root().resolve_existing(&relative)
+            authorization.dir().resolve_existing(&relative)
         } else {
-            workspace.root().resolve_for_write(&relative)
+            authorization.dir().resolve_for_write(&relative)
         }
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         targets.push(resolved.display().to_string());
@@ -1159,7 +1156,7 @@ fn materialize_patch_targets(
         ));
     }
     Ok((
-        selected.expect("a patch with targets selected one workspace"),
+        selected.expect("a patch with targets selected one directory"),
         rewritten.join("\n"),
         targets,
     ))
@@ -1227,7 +1224,7 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             ExecPolicyEffect::Continue,
         ),
         local_rule(
-            "workspace-codebase-read-only",
+            "codebase-read",
             crate::codebase_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME,
             ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::AllowUnsandboxed,
@@ -1328,7 +1325,7 @@ impl ActionClassifier for LocalPolicyClassifier {
             request.phase(),
             zeta_action_policy::ActionReviewPhase::SandboxDenial(_)
         ) {
-            "the command requires authority outside the workspace sandbox"
+            "the command requires authority outside the configured sandbox"
         } else {
             "the action requires user approval"
         };
@@ -1373,11 +1370,11 @@ impl ActionPolicyService for LocalShellPolicy {
     }
 }
 
-fn local_capabilities(workspace: &WorkspaceRoot, ripgrep: &RipgrepExecutable) -> CapabilitySet {
+fn local_capabilities(authorization: &Dir, ripgrep: &RipgrepExecutable) -> CapabilitySet {
     CapabilitySet::new([
         Capability::new(
             CapabilityKind::FileRead,
-            workspace.canonical_path().to_string_lossy(),
+            authorization.canonical_path().to_string_lossy(),
         ),
         Capability::new(
             CapabilityKind::ProcessSpawn,
@@ -1404,11 +1401,11 @@ fn read_only_sandbox() -> SandboxPolicy {
 }
 
 fn shell_sandbox() -> SandboxPolicy {
-    SandboxPolicy::new(FileSystemAccess::WorkspaceWrite, NetworkAccess::Denied)
+    SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
 }
 
-fn validate_workspace_arguments(
-    workspace: &WorkspaceRoot,
+fn validate_dir_arguments(
+    authorization: &Dir,
     request: &ShellCommandRequest,
 ) -> Result<(), CoreError> {
     for argument in request.arguments() {
@@ -1419,22 +1416,16 @@ fn validate_workspace_arguments(
                 .any(|component| matches!(component, Component::ParentDir))
         {
             return Err(CoreError::Policy(format!(
-                "ripgrep argument escapes the workspace: {argument}"
+                "ripgrep argument escapes the directory: {argument}"
             )));
         }
-        let workspace_relative = request.working_directory().join(path);
-        if workspace
-            .canonical_path()
-            .join(&workspace_relative)
-            .exists()
-        {
-            workspace
-                .resolve_existing(&workspace_relative)
-                .map_err(|_| {
-                    CoreError::Policy(format!(
-                        "ripgrep argument resolves outside the workspace: {argument}"
-                    ))
-                })?;
+        let dir_relative = request.working_directory().join(path);
+        if authorization.canonical_path().join(&dir_relative).exists() {
+            authorization.resolve_existing(&dir_relative).map_err(|_| {
+                CoreError::Policy(format!(
+                    "ripgrep argument resolves outside the directory: {argument}"
+                ))
+            })?;
         }
     }
     Ok(())
@@ -1486,8 +1477,10 @@ compile_error!("local shell tools require a supported sandbox backend");
 pub(crate) struct LocalToolError(String);
 
 impl LocalToolError {
-    fn trust(error: impl fmt::Display) -> Self {
-        Self(format!("workspace trust rejected local tools: {error}"))
+    fn permission(error: impl fmt::Display) -> Self {
+        Self(format!(
+            "directory permission rejected local tools: {error}"
+        ))
     }
 
     fn ripgrep(error: impl fmt::Display) -> Self {

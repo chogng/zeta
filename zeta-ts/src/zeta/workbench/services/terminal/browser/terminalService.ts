@@ -68,7 +68,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
-		const workspaceFolder = this.requireWorkspaceFolder(options.workspaceFolderId);
+		const workspaceFolder = this.requireWorkspaceFolder(options.dirId);
 		const processWorkspaceFolderId = this.workspaceContext.getWorkspace().folders.length > 1
 			? workspaceFolder.id
 			: undefined;
@@ -175,9 +175,9 @@ export class TerminalService extends Disposable implements ITerminalService {
 		}
 	}
 
-	private requireWorkspaceFolder(workspaceFolderId?: string) {
+	private requireWorkspaceFolder(dirId?: string) {
 		const folders = this.workspaceContext.getWorkspace().folders;
-		const folder = workspaceFolderId ? folders.find(folder => folder.id === workspaceFolderId) : folders[0];
+		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
 		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
 		return folder;
 	}
@@ -212,7 +212,7 @@ class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	constructor(
 		readonly id: string,
-		readonly workspaceFolderId: string,
+		readonly dirId: string,
 		private readonly processWorkspaceFolderId: string | undefined,
 		serverTerminalId: string,
 		title: string,
@@ -492,8 +492,8 @@ function isHighSurrogate(codeUnit: number): boolean {
 	return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
 }
 
-function processWorkspaceFolder(workspaceFolderId: string | undefined): { readonly workspaceFolderId?: string } {
-	return workspaceFolderId === undefined ? {} : { workspaceFolderId };
+function processWorkspaceFolder(dirId: string | undefined): { readonly dirId?: string } {
+	return dirId === undefined ? {} : { dirId };
 }
 
 function terminalProfileTitle(profile: ITerminalProfile): string {

@@ -24,8 +24,8 @@ use zeta_extension_api::ExtensionRegistry;
 use zeta_extension_api::ExtensionToolAuthority;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolName;
+use zeta_tools::EnvId;
 use zeta_tools::ToolDefinition;
-use zeta_tools::ToolEnvironmentId;
 use zeta_tools::ToolInvocationKind;
 use zeta_tools::ToolPayload;
 
@@ -90,7 +90,7 @@ pub(crate) fn compose_extension_tools(
         return Ok(None);
     }
     let registrations = Arc::new(registrations);
-    let environment_id = ToolEnvironmentId::new("host-extensions")
+    let environment_id = EnvId::new("host-extensions")
         .map_err(|error| ExtensionToolCompositionError(error.to_string()))?;
     ToolPort::extension(
         executors,

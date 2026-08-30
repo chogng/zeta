@@ -1,4 +1,4 @@
-use zeta_remote::RemoteWorkspacePath;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionEntry;
@@ -24,7 +24,7 @@ pub const REMOTE_CONNECTION_MANAGER_NAME: ElementId =
     ElementId::scoped(REMOTE_CONNECTION_MANAGER_SCOPE, 4);
 pub const REMOTE_CONNECTION_MANAGER_HOST: ElementId =
     ElementId::scoped(REMOTE_CONNECTION_MANAGER_SCOPE, 5);
-pub const REMOTE_CONNECTION_MANAGER_WORKSPACE: ElementId =
+pub const REMOTE_CONNECTION_MANAGER_DIRECTORY: ElementId =
     ElementId::scoped(REMOTE_CONNECTION_MANAGER_SCOPE, 6);
 pub const REMOTE_CONNECTION_MANAGER_SAVE: ElementId =
     ElementId::scoped(REMOTE_CONNECTION_MANAGER_SCOPE, 7);
@@ -43,7 +43,7 @@ pub const REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT: f32 = 34.0;
 pub enum RemoteConnectionManagerField {
     Name,
     Host,
-    Workspace,
+    Directory,
 }
 
 impl RemoteConnectionManagerField {
@@ -51,12 +51,12 @@ impl RemoteConnectionManagerField {
         match self {
             Self::Name => REMOTE_CONNECTION_MANAGER_NAME,
             Self::Host => REMOTE_CONNECTION_MANAGER_HOST,
-            Self::Workspace => REMOTE_CONNECTION_MANAGER_WORKSPACE,
+            Self::Directory => REMOTE_CONNECTION_MANAGER_DIRECTORY,
         }
     }
 
     pub fn from_element_id(id: ElementId) -> Option<Self> {
-        [Self::Name, Self::Host, Self::Workspace]
+        [Self::Name, Self::Host, Self::Directory]
             .into_iter()
             .find(|field| field.element_id() == id)
     }
@@ -101,7 +101,7 @@ pub struct RemoteConnectionManagerState {
     open: Option<OpenRemoteConnectionManager>,
     name: TextInput,
     host: TextInput,
-    workspace: TextInput,
+    dir: TextInput,
     scroll: ScrollState,
 }
 
@@ -225,7 +225,7 @@ impl RemoteConnectionManagerState {
         match field {
             RemoteConnectionManagerField::Name => &self.name,
             RemoteConnectionManagerField::Host => &self.host,
-            RemoteConnectionManagerField::Workspace => &self.workspace,
+            RemoteConnectionManagerField::Directory => &self.dir,
         }
     }
 
@@ -254,7 +254,7 @@ impl RemoteConnectionManagerState {
         for field in [
             RemoteConnectionManagerField::Name,
             RemoteConnectionManagerField::Host,
-            RemoteConnectionManagerField::Workspace,
+            RemoteConnectionManagerField::Directory,
         ] {
             if Some(field) != active {
                 self.input_mut(field).cancel_composition();
@@ -408,12 +408,8 @@ impl RemoteConnectionManagerState {
         let name =
             RemoteConnectionName::parse(self.name.text()).map_err(|error| error.to_string())?;
         let host = SshHost::parse(self.host.text()).map_err(|error| error.to_string())?;
-        let workspace =
-            RemoteWorkspacePath::parse(self.workspace.text()).map_err(|error| error.to_string())?;
-        Ok(RemoteConnectionEntry::new(
-            name,
-            SshTarget::new(host, workspace),
-        ))
+        let dir = RemoteDirPath::parse(self.dir.text()).map_err(|error| error.to_string())?;
+        Ok(RemoteConnectionEntry::new(name, SshTarget::new(host, dir)))
     }
 
     fn load_connection(&mut self, index: usize) {
@@ -432,7 +428,7 @@ impl RemoteConnectionManagerState {
     fn load_new_draft(&mut self) {
         replace_text(&mut self.name, "");
         replace_text(&mut self.host, "");
-        replace_text(&mut self.workspace, "");
+        replace_text(&mut self.dir, "");
         if let Some(open) = self.open.as_mut() {
             open.original = None;
             open.dirty = false;
@@ -444,14 +440,14 @@ impl RemoteConnectionManagerState {
     fn replace_draft(&mut self, entry: &RemoteConnectionEntry) {
         replace_text(&mut self.name, entry.name().as_str());
         replace_text(&mut self.host, entry.target().host().as_str());
-        replace_text(&mut self.workspace, entry.target().workspace().as_str());
+        replace_text(&mut self.dir, entry.target().dir().as_str());
     }
 
     fn input_mut(&mut self, field: RemoteConnectionManagerField) -> &mut TextInput {
         match field {
             RemoteConnectionManagerField::Name => &mut self.name,
             RemoteConnectionManagerField::Host => &mut self.host,
-            RemoteConnectionManagerField::Workspace => &mut self.workspace,
+            RemoteConnectionManagerField::Directory => &mut self.dir,
         }
     }
 
@@ -566,7 +562,7 @@ impl RemoteConnectionManagerState {
 
 #[cfg(test)]
 mod tests {
-    use zeta_remote::RemoteWorkspacePath;
+    use zeta_remote::RemoteDirPath;
     use zeta_remote::SshHost;
     use zeta_remote::SshTarget;
     use zeta_remote_connections::RemoteConnectionEntry;
@@ -592,7 +588,7 @@ mod tests {
         );
         insert(
             &mut state,
-            RemoteConnectionManagerField::Workspace,
+            RemoteConnectionManagerField::Directory,
             "/srv/project",
         );
         let RemoteConnectionSaveRequest::Create(created) = state.save_request().unwrap() else {
@@ -654,7 +650,7 @@ mod tests {
 
         insert(
             &mut state,
-            RemoteConnectionManagerField::Workspace,
+            RemoteConnectionManagerField::Directory,
             "/changed",
         );
         assert!(!state.select(0));
@@ -671,7 +667,7 @@ mod tests {
         insert(&mut state, RemoteConnectionManagerField::Host, "host");
         insert(
             &mut state,
-            RemoteConnectionManagerField::Workspace,
+            RemoteConnectionManagerField::Directory,
             "relative",
         );
 
@@ -724,12 +720,12 @@ mod tests {
         RemoteConnectionName::parse(value).unwrap()
     }
 
-    fn entry(name_value: &str, host: &str, workspace: &str) -> RemoteConnectionEntry {
+    fn entry(name_value: &str, host: &str, dir: &str) -> RemoteConnectionEntry {
         RemoteConnectionEntry::new(
             name(name_value),
             SshTarget::new(
                 SshHost::parse(host).unwrap(),
-                RemoteWorkspacePath::parse(workspace).unwrap(),
+                RemoteDirPath::parse(dir).unwrap(),
             ),
         )
     }

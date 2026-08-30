@@ -5,7 +5,7 @@
 > [`docs/lsp.md`](../../docs/lsp.md)。
 
 `zeta-lsp-manager` 位于产品宿主与 `zeta-lsp` 之间。它拥有语言服务启停、调用方已经解析并
-信任的 server definitions、文档快照路由、editor revision freshness、LSP position 到 UTF-8 byte range
+验证过的 server definitions、文档快照路由、editor revision freshness、LSP position 到 UTF-8 byte range
 的转换，以及 supervisor thread 生命周期。它不读取文件、不拥有 mutable editor text、不发现或
 安装 executable，也不绘制诊断、补全或 hover UI。
 
@@ -14,7 +14,7 @@
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
 | `LspManager` | 提供非阻塞文档 API并拥有 supervisor thread、Tokio runtime、router 与 clients | 保存编辑器文本或直接修改 UI |
-| `LspManagerConfiguration` | 固定 workspace root、启用状态和 resolved server definitions | 读取设置、PATH 或安装目录 |
+| `LspManagerConfiguration` | 固定 directory root、启用状态和 resolved server definitions | 读取设置、PATH 或安装目录 |
 | `LanguageServerRestartPolicy` | 定义 Never 或有限指数退避、重启预算和 healthy-window reset | 发现 executable 或绘制错误 UI |
 | `LanguageServerState` | 向产品发布 Starting、Ready、BackingOff、CrashLoop、Failed、Stopped | 保存设置或作为协议状态 |
 | `zeta-lsp-server-provider::LanguageServerDefinition` | resolver/provider 委托的唯一 route、canonical command 与 initialize options | 在 runtime 内重新查询 PATH |
@@ -90,7 +90,7 @@ ownership 漂移。
 
 ## 校验、失败与宿主义务
 
-- workspace root 必须能转换为绝对 file URI；文档必须有非空绝对路径和 language ID。
+- directory root 必须能转换为绝对 file URI；文档必须有非空绝对路径和 language ID。
 - 同一路径只接受递增 editor revision；相同 revision 是无操作，旧 revision 产生异步文档错误。
 - 一个 language ID 只能路由到一个 server。resolver 歧义在 thread 启动前同步返回错误。
 - 启用后异步启动 resolved command；单个 server 启动或 transport 失败按配置发布 `Failed`、
@@ -106,7 +106,7 @@ ownership 漂移。
 - `shutdown` 是有界的显式关闭路径；直接 drop 只排队 best-effort shutdown，不能用于等待完成。
 
 产品宿主必须保存 authoritative editor document，并在每次文本 mutation 后发送 full snapshot；保存和
-关闭通过独立方法通知。宿主还必须提供经过配置、信任和 executable resolution 的 definitions，并把
+关闭通过独立方法通知。宿主还必须提供经过配置、授权和 executable resolution 的 definitions，并把
 事件快速投递到自己的 event loop。诊断是否画下划线、hover/completion 的触发时机和 UI 状态不属于
 本 crate。
 
@@ -128,7 +128,7 @@ server 选定的位置编码。
 
 - ✅ 产品级 supervisor、resolved definition 消费、显式启停、文档路由和规范 shutdown；
 - ✅ diagnostics freshness 与 product-neutral byte-range projection；
-- ✅ Desktop 已通过独立 adapter 接入 editor open/change/save/close 和 workspace replacement；
+- ✅ Desktop 已通过独立 adapter 接入 editor open/change/save/close 和 directory change；
 - ✅ Desktop 通过独立 resolver 自动解析 PATH 中的 Rust、JSON/JSONC 与 Shell server，不可用时保持 Disabled；
 - ✅ Desktop 消费 App Server Config snapshot，三个内置 server 均支持独立持久化 mode/path、Settings UI、
   热重配和打开文档重放；
@@ -140,7 +140,7 @@ server 选定的位置编码。
 - ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors 与 Folding 的 product-neutral projection 和 revision freshness；
 - ✅ 静态/动态 capability gate、dynamic registration 与 work-done progress 事件；
 - ✅ document pull diagnostics 的 full/unchanged report projection；full report 复用现有 diagnostics 事件和 freshness 规则；
-- ✅ workspace diagnostics 的 capability gate 与跨文件 raw-coordinate projection；文件读取和 UTF-16 转换仍由 App Server Workspace authority 完成；
+- ✅ workspace diagnostics 的 capability gate 与跨文件 raw-coordinate projection；文件读取和 UTF-16 转换仍由 App Server directory-access authority 完成；
 - ✅ message severity、show/log 区分与 work-done progress 的 product-neutral 事件；
 - ✅ request kind/server incarnation/configuration + service generation/cold-warm/latency/result-count 与
   delivered/empty/failed/cancelled/stale-discarded/rejected 指标；不记录路径、文本、query 或 position；
@@ -152,4 +152,4 @@ server 选定的位置编码。
 - 尚未完成：server-specific distribution provider 与产品级 message/install UI；
 - 尚未安装：references/navigation session cache；先由现有指标证明重复成本，再设计 incarnation/revision
   完整绑定的 key 与失效规则；
-- Potential：远程 workspace authority 出现后再评估是否把 execution 放到 App Server。
+- Potential：远程 directory authority 出现后再评估是否把 execution 放到 App Server。

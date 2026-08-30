@@ -34,7 +34,7 @@ filegroup(
         "//app/keybindings:keybindings_sources",
         "//app/session:session_sources",
         "//app/settings:settings_sources",
-        "//app/terminal-workspace:terminal-workspace_sources",
+        "//app/terminal-runtime:terminal-runtime_sources",
         "//app/theme:theme_sources",
         "//app/ui-components:ui-components_sources",
         "//app/workbench:workbench_sources",

@@ -6,6 +6,7 @@ mod coordinator;
 mod projection;
 
 pub use budget::AgentTreeLimits;
+pub use coordinator::AgentCommandDisposition;
 pub use coordinator::CompleteDelegationRequest;
 pub use coordinator::DeliveredAgentMessage;
 pub use coordinator::JoinAgentsRequest;

@@ -136,7 +136,7 @@ fn draw_expanded(
     frame.render_widget(
         Paragraph::new(vec![
             heading("Tips for getting started"),
-            Line::from("Use @ to mention workspace files and / to discover commands."),
+            Line::from("Use @ to mention files and / to discover commands."),
         ])
         .wrap(Wrap { trim: true }),
         sections[0],
@@ -149,7 +149,7 @@ fn draw_expanded(
     frame.render_widget(
         Paragraph::new(vec![
             heading("Try asking"),
-            Line::from("“Explain how this workspace is structured.”"),
+            Line::from("“Explain how these files are structured.”"),
             Line::from("“Implement the change and run the relevant tests.”"),
         ])
         .wrap(Wrap { trim: true }),
@@ -203,10 +203,10 @@ fn draw_compact(frame: &mut Frame<'_>, area: Rect, model: &WelcomeModel) {
             )),
             Line::default(),
             heading("Tips for getting started"),
-            Line::from("Use @ for workspace files and / for commands."),
+            Line::from("Use @ for files and / for commands."),
             Line::default(),
             heading("Try asking"),
-            Line::from("“Explain this workspace, then help me make a change.”"),
+            Line::from("“Explain this directory, then help me make a change.”"),
         ])
         .wrap(Wrap { trim: true }),
         content,

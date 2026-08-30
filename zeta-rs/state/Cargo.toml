@@ -17,11 +17,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 zeta-history = { workspace = true }
 zeta-protocol = { workspace = true }
-zeta-session-store = { workspace = true }
 zeta-thread-store = { workspace = true }
 zeta-turn-changes = { workspace = true }
 zeta-utils-path = { workspace = true }
-zeta-workspace = { workspace = true }
+zeta-file-access = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -3,7 +3,7 @@ use std::io;
 use std::io::Write;
 
 use zeta_remote::RemoteAddressError;
-use zeta_remote::RemoteWorkspacePath;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionCatalog;
@@ -101,7 +101,7 @@ impl RemoteConnectionCommand {
                 let launch_options = arguments.collect::<Vec<_>>();
                 if launch_options
                     .iter()
-                    .any(|option| matches!(option.as_str(), "--remote" | "--workspace"))
+                    .any(|option| matches!(option.as_str(), "--remote" | "--dir"))
                 {
                     return Err(RemoteConnectionCommandParseError::NamedTargetConflict);
                 }
@@ -129,7 +129,7 @@ impl RemoteConnectionCommand {
     ) -> Result<Self, RemoteConnectionCommandParseError> {
         let name = parse_name("save", &mut arguments)?;
         let mut host = None;
-        let mut workspace = None;
+        let mut dir = None;
         let mut mode = RemoteConnectionSaveMode::Create;
         while let Some(argument) = arguments.next() {
             match argument.as_str() {
@@ -142,14 +142,12 @@ impl RemoteConnectionCommand {
                         )?,
                     )?
                 }
-                "--workspace" => set_unique_value(
-                    &mut workspace,
-                    "--workspace",
+                "--dir" => set_unique_value(
+                    &mut dir,
+                    "--dir",
                     arguments
                         .next()
-                        .ok_or(RemoteConnectionCommandParseError::MissingValue {
-                            flag: "--workspace",
-                        })?,
+                        .ok_or(RemoteConnectionCommandParseError::MissingValue { flag: "--dir" })?,
                 )?,
                 "--replace" if mode == RemoteConnectionSaveMode::Create => {
                     mode = RemoteConnectionSaveMode::Replace;
@@ -171,15 +169,14 @@ impl RemoteConnectionCommand {
             command: "save",
             flag: "--host",
         })?;
-        let workspace = workspace.ok_or(RemoteConnectionCommandParseError::RequiredOption {
+        let dir = dir.ok_or(RemoteConnectionCommandParseError::RequiredOption {
             command: "save",
-            flag: "--workspace",
+            flag: "--dir",
         })?;
         let host = SshHost::parse(host).map_err(RemoteConnectionCommandParseError::Address)?;
-        let workspace = RemoteWorkspacePath::parse(workspace)
-            .map_err(RemoteConnectionCommandParseError::Address)?;
+        let dir = RemoteDirPath::parse(dir).map_err(RemoteConnectionCommandParseError::Address)?;
         Ok(Self::Save {
-            entry: RemoteConnectionEntry::new(name, SshTarget::new(host, workspace)),
+            entry: RemoteConnectionEntry::new(name, SshTarget::new(host, dir)),
             mode,
         })
     }
@@ -202,7 +199,7 @@ impl RemoteConnectionCommand {
                     "saved\t{}\t{}\t{}",
                     entry.name().as_str(),
                     entry.target().host().as_str(),
-                    entry.target().workspace().as_str()
+                    entry.target().dir().as_str()
                 )
                 .map_err(output_error)?;
                 Ok(None)
@@ -220,7 +217,7 @@ impl RemoteConnectionCommand {
                         "{}\t{}\t{}",
                         entry.name().as_str(),
                         entry.target().host().as_str(),
-                        entry.target().workspace().as_str()
+                        entry.target().dir().as_str()
                     )
                     .map_err(output_error)?;
                 }
@@ -250,8 +247,8 @@ impl RemoteConnectionCommand {
                 let mut arguments = vec![
                     "--remote".to_owned(),
                     entry.target().host().as_str().to_owned(),
-                    "--workspace".to_owned(),
-                    entry.target().workspace().as_str().to_owned(),
+                    "--dir".to_owned(),
+                    entry.target().dir().as_str().to_owned(),
                 ];
                 arguments.extend(launch_options);
                 AppLaunch::parse(arguments)
@@ -406,7 +403,7 @@ impl fmt::Display for RemoteConnectionCommandParseError {
             ),
             Self::NamedTargetConflict => write!(
                 formatter,
-                "a named Remote connection already selects --remote and --workspace\n\n{}",
+                "a named Remote connection already selects --remote and --dir\n\n{}",
                 remote_usage()
             ),
             Self::InvalidPort { flag, value } => write!(
@@ -424,7 +421,7 @@ impl std::error::Error for RemoteConnectionCommandParseError {}
 
 pub(crate) const fn remote_usage() -> &'static str {
     "usage:\n\
-     app remote save <name> --host <ssh-host> --workspace <absolute-remote-path> [--replace]\n\
+     app remote save <name> --host <ssh-host> --dir <absolute-remote-path> [--replace]\n\
      app remote list\n\
      app remote remove <name>\n\
      app remote connect <name> [--runtime <remote-runtime>] [--ssh <openssh-path>]\n\

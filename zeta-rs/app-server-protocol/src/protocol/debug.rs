@@ -10,7 +10,7 @@ use ts_rs::TS;
 pub struct DebugAdapterStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     #[schemars(length(min = 1, max = 4096))]
     pub program: String,
     #[schemars(length(max = 128))]
@@ -30,7 +30,7 @@ pub struct DebugAdapterStartResult {
 pub struct DebugAdapterSendParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     pub session_id: String,
     #[ts(type = "unknown")]
     pub message: Value,
@@ -42,7 +42,7 @@ pub struct DebugAdapterSendParams {
 pub struct DebugAdapterReadParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     pub session_id: String,
     #[ts(type = "number")]
     pub after_sequence: u64,
@@ -80,6 +80,6 @@ pub struct DebugAdapterReadResult {
 pub struct DebugAdapterCloseParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub workspace_folder_id: Option<String>,
+    pub dir_id: Option<String>,
     pub session_id: String,
 }

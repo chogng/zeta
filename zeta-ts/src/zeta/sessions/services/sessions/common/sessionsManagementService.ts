@@ -1,13 +1,13 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "./session.js";
+import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId } from "./session.js";
 
 export type SessionsManagementState = "loading" | "ready" | "creating" | "stopping" | "archiving" | "error";
 
 /** Owns canonical Session management, active selection, and window-local untitled Chats. */
 export interface ISessionsManagementService {
 	readonly onDidChange: Event<void>;
-	readonly sessions: readonly Session[];
+	readonly sessions: readonly ISession[];
 	readonly active: IActiveSessionThread | undefined;
 	readonly untitledSessions: readonly IUntitledChatSession[];
 	readonly activeUntitledSession: IUntitledChatSession | undefined;
@@ -26,8 +26,7 @@ export interface ISessionsManagementService {
 	startNewSession(title?: string): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
 	archiveSession(sessionId: SessionId): Promise<void>;
-	setModel(sessionId: SessionId, model: ModelRef): Promise<void>;
-	setNextApprovalMode(sessionId: SessionId, approvalMode: ApprovalMode): Promise<void>;
+	setPreferredModel(model: ModelRef): Promise<void>;
 }
 
 export const ISessionsManagementService = createServiceIdentifier<ISessionsManagementService>("sessionsManagementService");

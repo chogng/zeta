@@ -249,7 +249,7 @@ authorities:
 - `state.json` stores reconstructable machine state such as window bounds. It
   must not become a configuration store.
 - The Rust ConfigStore remains authoritative for cross-client backend intent
-  such as models, providers, MCP servers, Skills, and Workspace trust.
+  such as models, providers, MCP servers, Skills, and directory permissions.
   Presentation preferences, keyboard events, and Desktop command IDs do not
   cross that boundary.
 

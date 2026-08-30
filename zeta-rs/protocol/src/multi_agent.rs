@@ -8,10 +8,8 @@ use crate::ImageAttachmentRef;
 use crate::ItemId;
 use crate::ModelRef;
 use crate::ModelUsageSummary;
-use crate::SessionThreadStatus;
 use crate::ThreadGoal;
 use crate::ThreadId;
-use crate::ThreadOrigin;
 use crate::ToolName;
 use crate::TurnId;
 use schemars::JsonSchema;
@@ -83,7 +81,7 @@ pub enum AgentTreeWaitingReason {
     Capability,
 }
 
-/// One canonical, recursively nested Agent-tree node derived from durable Session and Thread facts.
+/// One canonical, recursively nested Agent-tree node derived from durable Thread facts.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTreeNodeProjection {
@@ -91,8 +89,12 @@ pub struct AgentTreeNodeProjection {
     #[ts(type = "number")]
     pub thread_sequence: u64,
     pub title: String,
-    pub origin: ThreadOrigin,
-    pub membership_status: SessionThreadStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub parent_thread_id: Option<ThreadId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub forked_from_id: Option<ThreadId>,
     pub execution_status: AgentTreeExecutionStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]

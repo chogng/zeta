@@ -7,8 +7,8 @@ export function codebaseIpcRoutes(supervisor: AppServerSupervisor): readonly Ipc
 	return [
 		route({ channel: "zeta:codebase:config-read", validate: emptyParams, invoke: () => supervisor.request(APP_SERVER_METHODS["config/read"], {}) }),
 		route({ channel: "zeta:codebase:provider-configure", validate: providerConfigureParams, invoke: params => supervisor.request(APP_SERVER_METHODS["provider/configure"], params) }),
-		route({ channel: "zeta:codebase:configure", validate: configureParams, invoke: params => supervisor.request(APP_SERVER_METHODS["workspace/codebase/configure"], params) }),
-		route({ channel: "zeta:codebase:status", validate: emptyParams, invoke: () => supervisor.request(APP_SERVER_METHODS["workspace/codebase/status"], {}) }),
+		route({ channel: "zeta:codebase:configure", validate: configureParams, invoke: params => supervisor.request(APP_SERVER_METHODS["codebase/configure"], params) }),
+		route({ channel: "zeta:codebase:status", validate: emptyParams, invoke: () => supervisor.request(APP_SERVER_METHODS["codebase/status"], {}) }),
 	];
 }
 

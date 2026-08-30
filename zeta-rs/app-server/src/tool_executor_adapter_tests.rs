@@ -17,17 +17,22 @@ use zeta_async_utils::CancellationSource;
 use zeta_core::CoreError;
 use zeta_core::ToolAuthorization;
 use zeta_core::ToolOutputSink;
+use zeta_file_access::Dir;
+use zeta_file_access::Grant;
+use zeta_file_access::GrantSource;
+use zeta_file_access::Permission;
+use zeta_file_access::Permissions;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
 use zeta_protocol::ToolOutputStream;
 use zeta_protocol::TurnId;
+use zeta_tools::EnvId;
 use zeta_tools::ToolBinding;
 use zeta_tools::ToolBindingId;
 use zeta_tools::ToolContent;
 use zeta_tools::ToolDefinition;
-use zeta_tools::ToolEnvironmentId;
 use zeta_tools::ToolExecutionFuture;
 use zeta_tools::ToolExecutionOutcome;
 use zeta_tools::ToolExecutor;
@@ -39,11 +44,6 @@ use zeta_tools::ToolPayload;
 use zeta_tools::ToolRegistryGeneration;
 use zeta_tools::ToolRuntimeKey;
 use zeta_tools::ToolSchemaMode;
-use zeta_workspace::WorkspaceAuthorization;
-use zeta_workspace::WorkspaceCapability;
-use zeta_workspace::WorkspaceRoot;
-use zeta_workspace::WorkspaceTrustDecision;
-use zeta_workspace::WorkspaceTrustSource;
 
 use super::PreparedToolExecution;
 use super::ToolExecutorReviewer;
@@ -64,7 +64,7 @@ impl ToolExecutor for RecordingExecutor {
         self.saw_frozen_binding.store(
             invocation.binding().id().as_str() == "binding-7"
                 && invocation.binding().registry_generation() == ToolRegistryGeneration::new(7)
-                && invocation.context().environment_id().as_str() == "workspace-7",
+                && invocation.context().environment_id().as_str() == "env-7",
             Ordering::SeqCst,
         );
         Box::pin(future::ready(ToolExecutionOutcome::Returned(
@@ -96,13 +96,13 @@ impl ToolExecutorReviewer for UnusedReviewer {
     }
 }
 
-struct WorkspaceGuardReviewer(zeta_workspace::TrustedWorkspace);
+struct DirPermitReviewer(zeta_file_access::Authorization);
 
-impl ToolExecutorReviewer for WorkspaceGuardReviewer {
+impl ToolExecutorReviewer for DirPermitReviewer {
     fn prepare(&self, call: &ToolCall) -> Result<PreparedToolExecution, CoreError> {
         UnusedReviewer
             .prepare(call)
-            .map(|prepared| prepared.with_workspace_guard(self.0.clone()))
+            .map(|prepared| prepared.with_dir_authorization(self.0.clone()))
     }
 }
 
@@ -148,7 +148,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
             saw_frozen_binding: Arc::clone(&observed),
             content: vec![ToolContent::Text("executor-result".into())],
         }),
-        ToolEnvironmentId::new("workspace-7").unwrap(),
+        EnvId::new("env-7").unwrap(),
         Arc::new(UnusedReviewer),
     );
     let call = ToolCall {
@@ -186,7 +186,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
 }
 
 #[test]
-fn executor_runtime_rechecks_and_retires_a_revoked_workspace_guard() {
+fn executor_runtime_rechecks_and_retires_a_revoked_dir_authorization() {
     let definition = ToolDefinition::function(
         ToolName::new("guarded-executor").unwrap(),
         "guarded executor",
@@ -203,13 +203,14 @@ fn executor_runtime_rechecks_and_retires_a_revoked_workspace_guard() {
         definition.digest(),
         ToolRuntimeKey::new("executor:9").unwrap(),
     );
-    let workspace = tempfile::tempdir().unwrap();
-    let authorization = WorkspaceAuthorization::new(
-        WorkspaceRoot::open(workspace.path()).unwrap(),
-        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+    let dir = tempfile::tempdir().unwrap();
+    let authorization = Grant::for_environment(
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands]),
     );
     let guard = authorization
-        .require(WorkspaceCapability::ExecuteProcess)
+        .authorize(Permission::ExecuteCommands)
         .unwrap();
     let executed = Arc::new(AtomicBool::new(false));
     let runtime = ToolExecutorRuntime::new(
@@ -218,8 +219,8 @@ fn executor_runtime_rechecks_and_retires_a_revoked_workspace_guard() {
             saw_frozen_binding: Arc::clone(&executed),
             content: Vec::new(),
         }),
-        ToolEnvironmentId::new("workspace-7").unwrap(),
-        Arc::new(WorkspaceGuardReviewer(guard)),
+        EnvId::new("env-7").unwrap(),
+        Arc::new(DirPermitReviewer(guard)),
     );
     let call = ToolCall {
         id: ToolCallId::new("call-9").unwrap(),
@@ -279,7 +280,7 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
                 detail: zeta_tools::ImageDetail::Original,
             }],
         }),
-        ToolEnvironmentId::new("workspace-7").unwrap(),
+        EnvId::new("env-7").unwrap(),
         Arc::new(UnusedReviewer),
     );
     let call = ToolCall {

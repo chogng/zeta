@@ -1,17 +1,16 @@
 use super::*;
 use crate::CodebaseModels;
 use crate::local::ProviderModelService;
-use crate::server::WorkspaceSwitchTrustPolicy;
+use crate::server::DirGrantPolicy;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use zeta_config::AgentGrepBackend;
 use zeta_config::ConfigStore;
 use zeta_config::ResolvedConfig;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
+use zeta_file_access::GrantSource;
 use zeta_model_provider::EchoModel;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
@@ -24,8 +23,7 @@ use zeta_model_provider::RerankInvoker;
 use zeta_model_provider::RerankRuntimeRequest;
 use zeta_model_provider::SemanticModelProvider;
 use zeta_model_provider::SemanticRuntimeLocation;
-use zeta_state::WorkspaceIndexKind;
-use zeta_workspace::WorkspaceTrustSource;
+use zeta_state::DirIndexKind;
 
 struct SemanticTestEmbedding;
 
@@ -99,23 +97,21 @@ impl SemanticModelProvider for SemanticTestProvider {
 
 #[test]
 fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
-    let workspace = tempfile::tempdir().unwrap();
-    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
     std::fs::write(
-        workspace.path().join("lib.rs"),
-        "pub fn workspace_side_chunking() -> bool { true }\n",
+        dir.path().join("lib.rs"),
+        "pub fn dir_side_chunking() -> bool { true }\n",
     )
     .unwrap();
     let server = server()
-        .with_local_workspace_host(
+        .with_local_env_host(
             None,
-            WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(
-                WorkspaceTrustSource::HostConfiguration,
-            ),
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
         )
         .unwrap();
     server
-        .switch_local_workspace_root(workspace.path().to_path_buf())
+        .switch_local_dir_root(dir.path().to_path_buf())
         .unwrap();
     let Ok(codebase) = server.codebase_service() else {
         panic!("Codebase should be installed");
@@ -139,7 +135,7 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
         &server,
         &mut connection,
         2,
-        "workspace/codebase/status",
+        "codebase/status",
         serde_json::json!({}),
     );
     assert_eq!(status["result"]["state"], "ready");
@@ -150,8 +146,8 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
         &server,
         &mut connection,
         3,
-        "workspace/codebase/search",
-        serde_json::json!({"query": "workspace_side_chunking", "maxResults": 10}),
+        "codebase/search",
+        serde_json::json!({"query": "dir_side_chunking", "maxResults": 10}),
     );
     assert_eq!(search["result"]["hits"][0]["path"], "lib.rs");
     assert_eq!(search["result"]["hits"][0]["language"], "rust");
@@ -165,15 +161,15 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
         search["result"]["hits"][0]["content"]
             .as_str()
             .unwrap()
-            .contains("workspace_side_chunking")
+            .contains("dir_side_chunking")
     );
 
     let retrieval = call(
         &server,
         &mut connection,
         4,
-        "workspace/codebase/retrieve",
-        serde_json::json!({"query": "workspace_side_chunking", "maxResults": 10}),
+        "codebase/retrieve",
+        serde_json::json!({"query": "dir_side_chunking", "maxResults": 10}),
     );
     assert_eq!(retrieval["result"]["hits"][0]["path"], "lib.rs");
     assert!(retrieval["result"]["hits"][0].get("origins").is_none());
@@ -183,8 +179,8 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
         &server,
         &mut connection,
         5,
-        "workspace/codebase/search",
-        serde_json::json!({"query": "workspace_side_chunking", "maxResults": 101}),
+        "codebase/search",
+        serde_json::json!({"query": "dir_side_chunking", "maxResults": 101}),
     );
     assert_eq!(invalid_limit["error"]["message"], "InvalidParams");
 
@@ -192,7 +188,7 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
         &server,
         &mut connection,
         6,
-        "workspace/codebase/status",
+        "codebase/status",
         serde_json::json!({"unexpected": true}),
     );
     assert_eq!(invalid_empty_params["error"]["message"], "InvalidParams");
@@ -200,14 +196,10 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
 
 #[test]
 fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
-    let workspace = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();
-    std::fs::create_dir(workspace.path().join(".git")).unwrap();
-    std::fs::write(
-        workspace.path().join("source.rs"),
-        "fast_regex_rpc_marker\n",
-    )
-    .unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    std::fs::write(dir.path().join("source.rs"), "fast_regex_rpc_marker\n").unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let index_storage = Arc::new(zeta_state::StateRuntime::open(profile.path()).unwrap());
     let resolved = ResolvedConfig {
@@ -220,19 +212,16 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
             &resolved,
         ))
-        .with_local_workspace_host(
+        .with_local_env_host(
             None,
-            WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(
-                WorkspaceTrustSource::HostConfiguration,
-            ),
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
         )
         .unwrap();
     server
-        .switch_local_workspace_root(workspace.path().to_path_buf())
+        .switch_local_dir_root(dir.path().to_path_buf())
         .unwrap();
-    let workspace_id = server.active_workspace_trust_id().unwrap();
-    let index_directory =
-        index_storage.index_directory(&workspace_id, WorkspaceIndexKind::AgentGrep);
+    let dir_id = server.active_dir_id().unwrap();
+    let index_directory = index_storage.index_directory(&dir_id, DirIndexKind::AgentGrep);
     let mut connection = server.connection();
     call(
         &server,
@@ -261,7 +250,7 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         3,
-        "workspace/agentGrep/fastRegex/status",
+        "agentGrep/fastRegex/status",
         serde_json::json!({}),
     );
     assert_eq!(initial["result"]["enabled"], true);
@@ -271,7 +260,7 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         4,
-        "workspace/agentGrep/fastRegex/rebuild",
+        "agentGrep/fastRegex/rebuild",
         serde_json::json!({}),
     );
     assert_eq!(rebuilt["result"]["active"], true);
@@ -282,7 +271,7 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         5,
-        "workspace/agentGrep/fastRegex/disableAndDelete",
+        "agentGrep/fastRegex/disableAndDelete",
         serde_json::json!({
             "commandId": "disable-delete-fast-regex",
             "expectedRevision": 1
@@ -296,7 +285,7 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         6,
-        "workspace/agentGrep/fastRegex/status",
+        "agentGrep/fastRegex/status",
         serde_json::json!({}),
     );
     assert_eq!(disabled["result"]["enabled"], false);
@@ -304,16 +293,16 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
 }
 
 #[test]
-fn rpc_retrieval_uses_local_semantic_models_installed_before_workspace_activation() {
-    let workspace = tempfile::tempdir().unwrap();
-    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+fn rpc_retrieval_uses_local_semantic_models_installed_before_dir_activation() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
     std::fs::write(
-        workspace.path().join("semantic.rs"),
+        dir.path().join("semantic.rs"),
         "pub fn hidden_semantic_target() -> bool { true }\n",
     )
     .unwrap();
     std::fs::write(
-        workspace.path().join("other.rs"),
+        dir.path().join("other.rs"),
         "pub fn unrelated_symbol() -> bool { false }\n",
     )
     .unwrap();
@@ -323,15 +312,13 @@ fn rpc_retrieval_uses_local_semantic_models_installed_before_workspace_activatio
     );
     let server = server()
         .with_codebase_models(models)
-        .with_local_workspace_host(
+        .with_local_env_host(
             None,
-            WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(
-                WorkspaceTrustSource::HostConfiguration,
-            ),
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
         )
         .unwrap();
     server
-        .switch_local_workspace_root(workspace.path().to_path_buf())
+        .switch_local_dir_root(dir.path().to_path_buf())
         .unwrap();
     let Ok(codebase) = server.codebase_service() else {
         panic!("Codebase should be installed");
@@ -358,7 +345,7 @@ fn rpc_retrieval_uses_local_semantic_models_installed_before_workspace_activatio
         &server,
         &mut connection,
         2,
-        "workspace/codebase/retrieve",
+        "codebase/retrieve",
         serde_json::json!({"query": "conceptual execution flow", "maxResults": 10}),
     );
 
@@ -369,11 +356,11 @@ fn rpc_retrieval_uses_local_semantic_models_installed_before_workspace_activatio
 
 #[test]
 fn codebase_model_config_rebinds_after_provider_changes() {
-    let workspace = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();
-    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
     std::fs::write(
-        workspace.path().join("semantic.rs"),
+        dir.path().join("semantic.rs"),
         "pub fn hidden_semantic_target() -> bool { true }\n",
     )
     .unwrap();
@@ -385,15 +372,13 @@ fn codebase_model_config_rebinds_after_provider_changes() {
     let server = server()
         .with_config_store(config)
         .with_semantic_model_provider(provider_trait)
-        .with_local_workspace_host(
+        .with_local_env_host(
             None,
-            WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(
-                WorkspaceTrustSource::HostConfiguration,
-            ),
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
         )
         .unwrap();
     server
-        .switch_local_workspace_root(workspace.path().to_path_buf())
+        .switch_local_dir_root(dir.path().to_path_buf())
         .unwrap();
     let Ok(codebase) = server.codebase_service() else {
         panic!("Codebase should be installed");
@@ -431,7 +416,7 @@ fn codebase_model_config_rebinds_after_provider_changes() {
         &server,
         &mut connection,
         3,
-        "workspace/codebase/configure",
+        "codebase/configure",
         serde_json::json!({
             "commandId": "configure-semantic-models",
             "expectedRevision": 1,
@@ -485,9 +470,9 @@ fn codebase_model_config_rebinds_after_provider_changes() {
 
 #[test]
 fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
-    let workspace = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();
-    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let provider = Arc::new(SemanticTestProvider {
         embedding_runtime_count: AtomicUsize::new(0),
@@ -496,15 +481,13 @@ fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
     let server = server()
         .with_config_store(config)
         .with_semantic_model_provider(provider_trait)
-        .with_local_workspace_host(
+        .with_local_env_host(
             None,
-            WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(
-                WorkspaceTrustSource::HostConfiguration,
-            ),
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
         )
         .unwrap();
     server
-        .switch_local_workspace_root(workspace.path().to_path_buf())
+        .switch_local_dir_root(dir.path().to_path_buf())
         .unwrap();
     let mut connection = server.connection();
     call(
@@ -536,7 +519,7 @@ fn unavailable_rerank_keeps_codebase_model_runtime_inactive() {
         &server,
         &mut connection,
         3,
-        "workspace/codebase/configure",
+        "codebase/configure",
         serde_json::json!({
             "commandId": "configure-semantic-models",
             "expectedRevision": 1,
@@ -572,15 +555,11 @@ fn server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
-    .with_ephemeral_workspace_state()
+    .with_ephemeral_env_state()
 }
 
 fn call(

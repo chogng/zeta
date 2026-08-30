@@ -15,12 +15,12 @@ use zeroize::Zeroizing;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirListResult;
+use zeta_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionsSetParams;
 use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -29,12 +29,12 @@ pub(crate) struct ConfigEdit {
     pub(crate) server_config: ConfigReadResult,
     pub(crate) providers: ProviderListResult,
     pub(crate) session_id: SessionId,
-    pub(crate) additional_directories: WorkspaceAdditionalDirectoryListResult,
+    pub(crate) dirs: SessionDirListResult,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct AdditionalDirectoryPermissionEdit {
-    pub(crate) params: WorkspaceAdditionalDirectoryPermissionsSetParams,
+pub(crate) struct PermissionEdit {
+    pub(crate) params: SessionDirPermissionsSetParams,
     pub(crate) terminal: TerminalSettings,
     pub(crate) terminal_revision: u64,
     pub(crate) server_config: ConfigReadResult,
@@ -48,7 +48,7 @@ pub(crate) enum ConfigSelectionAction {
         queue: Box<ConfigEdit>,
         steer: Box<ConfigEdit>,
     },
-    SetAdditionalDirectoryPermissions(AdditionalDirectoryPermissionEdit),
+    SetPermissions(PermissionEdit),
     OpenProviderApiKey {
         provider: String,
         display_name: String,
@@ -102,7 +102,7 @@ pub(crate) fn config_pane_spec(
     terminal: TerminalSettings,
     terminal_revision: u64,
     session_id: &SessionId,
-    additional_directories: &WorkspaceAdditionalDirectoryListResult,
+    dirs: &SessionDirListResult,
 ) -> ConfigPaneSpec {
     let mut actions = BTreeMap::new();
     let mouse_id = ListSelectionItemId::new("terminal-mouse-interactions");
@@ -119,7 +119,7 @@ pub(crate) fn config_pane_spec(
             server_config: config.clone(),
             providers: providers.clone(),
             session_id: session_id.clone(),
-            additional_directories: additional_directories.clone(),
+            dirs: dirs.clone(),
         }),
     );
     let follow_up_id = ListSelectionItemId::new("terminal-follow-up-mode");
@@ -138,7 +138,7 @@ pub(crate) fn config_pane_spec(
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
-                additional_directories: additional_directories.clone(),
+                dirs: dirs.clone(),
             }),
             steer: Box::new(ConfigEdit {
                 terminal: TerminalSettingsEdit {
@@ -148,7 +148,7 @@ pub(crate) fn config_pane_spec(
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
-                additional_directories: additional_directories.clone(),
+                dirs: dirs.clone(),
             }),
         },
     );
@@ -173,8 +173,8 @@ pub(crate) fn config_pane_spec(
     ];
     config_items.extend(overview(config));
     let provider_items = provider_items(providers, &mut actions);
-    let permission_items = additional_directory_permission_items(
-        additional_directories,
+    let permission_items = dir_permission_items(
+        dirs,
         session_id,
         terminal,
         terminal_revision,
@@ -202,8 +202,8 @@ pub(crate) fn config_pane_spec(
     }
 }
 
-fn additional_directory_permission_items(
-    snapshot: &WorkspaceAdditionalDirectoryListResult,
+fn dir_permission_items(
+    snapshot: &SessionDirListResult,
     session_id: &SessionId,
     terminal: TerminalSettings,
     terminal_revision: u64,
@@ -212,16 +212,13 @@ fn additional_directory_permission_items(
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
     let mut items = Vec::new();
-    let default_permissions = terminal.additional_directory_permissions();
-    for permission in all_additional_directory_permissions() {
-        let id = ListSelectionItemId::new(format!(
-            "additional-directory-default-{}",
-            permission_id(permission)
-        ));
+    let default_permissions = terminal.dir_permissions();
+    for permission in all_dir_permissions() {
+        let id = ListSelectionItemId::new(format!("dir-default-{}", permission_id(permission)));
         let enabled = default_permissions.contains(permission);
         let permissions = toggled_permissions(&default_permissions, *permission);
         let mut settings = terminal;
-        settings.set_additional_directory_permissions(&permissions);
+        settings.set_dir_permissions(&permissions);
         actions.insert(
             id.clone(),
             ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
@@ -232,7 +229,7 @@ fn additional_directory_permission_items(
                 server_config: config.clone(),
                 providers: providers.clone(),
                 session_id: session_id.clone(),
-                additional_directories: snapshot.clone(),
+                dirs: snapshot.clone(),
             }),
         );
         items.push(
@@ -241,42 +238,40 @@ fn additional_directory_permission_items(
                 .with_columns(permission_title(permission), "", checkbox(enabled)),
         );
     }
-    for (directory_index, directory) in snapshot.directories.iter().enumerate() {
-        for permission in all_additional_directory_permissions() {
+    for (directory_index, directory) in snapshot.dirs.iter().enumerate() {
+        for permission in all_dir_permissions() {
             let id = ListSelectionItemId::new(format!(
-                "additional-directory-{directory_index}-{}",
+                "dir-{directory_index}-{}",
                 permission_id(permission)
             ));
             let enabled = directory.permissions.contains(permission);
             actions.insert(
                 id.clone(),
-                ConfigSelectionAction::SetAdditionalDirectoryPermissions(
-                    AdditionalDirectoryPermissionEdit {
-                        params: WorkspaceAdditionalDirectoryPermissionsSetParams {
-                            session_id: session_id.clone(),
-                            root: directory.root.clone(),
-                            expected_revision: snapshot.revision,
-                            permissions: toggled_permissions(&directory.permissions, *permission),
-                        },
-                        terminal,
-                        terminal_revision,
-                        server_config: config.clone(),
-                        providers: providers.clone(),
+                ConfigSelectionAction::SetPermissions(PermissionEdit {
+                    params: SessionDirPermissionsSetParams {
+                        session_id: session_id.clone(),
+                        path: directory.path.clone(),
+                        expected_revision: snapshot.revision,
+                        permissions: toggled_permissions(&directory.permissions, *permission),
                     },
-                ),
+                    terminal,
+                    terminal_revision,
+                    server_config: config.clone(),
+                    providers: providers.clone(),
+                }),
             );
             items.push(
                 ListSelectionItem::new(format!(
                     "{} · {}",
                     permission_title(permission),
-                    directory.root.display()
+                    directory.path.display()
                 ))
                 .with_id(id)
                 .with_columns(
                     format!(
                         "{} · {}",
                         permission_title(permission),
-                        directory.root.display()
+                        directory.path.display()
                     ),
                     permission_description(permission, directory),
                     checkbox(enabled),
@@ -287,140 +282,123 @@ fn additional_directory_permission_items(
     items
 }
 
-fn all_additional_directory_permissions() -> &'static [WorkspaceAdditionalDirectoryPermissionDto] {
-    use WorkspaceAdditionalDirectoryPermissionDto as Permission;
+fn all_dir_permissions() -> &'static [PermissionDto] {
+    use PermissionDto as Permission;
     &[
         Permission::ReadFiles,
         Permission::WriteFiles,
         Permission::ExecuteCommands,
-        Permission::WatchFileChanges,
-        Permission::UseWorkspaceFiles,
-        Permission::UseWorkspaceSearch,
-        Permission::LoadInstructionsAndAgents,
+        Permission::WatchFiles,
+        Permission::BrowseFiles,
+        Permission::SearchFiles,
+        Permission::LoadInstructions,
+        Permission::LoadConfig,
         Permission::DiscoverSkills,
         Permission::DiscoverMcp,
         Permission::UseLanguageServices,
         Permission::DiscoverHooks,
         Permission::DiscoverPlugins,
+        Permission::InspectRepository,
+        Permission::MutateRepository,
     ]
 }
 
-fn toggled_permissions(
-    current: &[WorkspaceAdditionalDirectoryPermissionDto],
-    permission: WorkspaceAdditionalDirectoryPermissionDto,
-) -> Vec<WorkspaceAdditionalDirectoryPermissionDto> {
-    use WorkspaceAdditionalDirectoryPermissionDto::ReadFiles;
-
+fn toggled_permissions(current: &[PermissionDto], permission: PermissionDto) -> Vec<PermissionDto> {
     let mut permissions = current
         .iter()
         .copied()
         .collect::<std::collections::BTreeSet<_>>();
     if permissions.contains(&permission) {
-        if permission == ReadFiles {
-            permissions.clear();
-        } else {
-            permissions.remove(&permission);
-        }
+        permissions.remove(&permission);
     } else {
-        permissions.insert(ReadFiles);
         permissions.insert(permission);
     }
     permissions.into_iter().collect()
 }
 
-fn permission_id(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'static str {
+fn permission_id(permission: &PermissionDto) -> &'static str {
     match permission {
-        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => "read-files",
-        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "write-files",
-        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "execute-commands",
-        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "watch-file-changes",
-        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => "workspace-files",
-        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => "workspace-search",
-        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
-            "instructions-and-agents"
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => "skills",
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => "mcp",
-        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => "lsp",
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => "hooks",
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => "plugins",
+        PermissionDto::ReadFiles => "read-files",
+        PermissionDto::WriteFiles => "write-files",
+        PermissionDto::ExecuteCommands => "execute-commands",
+        PermissionDto::WatchFiles => "watch-files",
+        PermissionDto::BrowseFiles => "browse-files",
+        PermissionDto::SearchFiles => "search-files",
+        PermissionDto::LoadInstructions => "load-instructions",
+        PermissionDto::LoadConfig => "load-config",
+        PermissionDto::DiscoverSkills => "skills",
+        PermissionDto::DiscoverMcp => "mcp",
+        PermissionDto::UseLanguageServices => "lsp",
+        PermissionDto::DiscoverHooks => "hooks",
+        PermissionDto::DiscoverPlugins => "plugins",
+        PermissionDto::InspectRepository => "inspect-repository",
+        PermissionDto::MutateRepository => "mutate-repository",
     }
 }
 
-fn permission_title(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'static str {
+fn permission_title(permission: &PermissionDto) -> &'static str {
     match permission {
-        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => "Read files",
-        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "Modify files",
-        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "Run commands",
-        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "Watch file changes",
-        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => "Workspace Files",
-        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => "Workspace Search",
-        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
-            "Instructions & Agents"
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => "Skills",
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => "MCP",
-        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => "LSP",
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => "Hooks",
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => "Plugins",
+        PermissionDto::ReadFiles => "Read files",
+        PermissionDto::WriteFiles => "Modify files",
+        PermissionDto::ExecuteCommands => "Run commands",
+        PermissionDto::WatchFiles => "Watch file changes",
+        PermissionDto::BrowseFiles => "Browse files",
+        PermissionDto::SearchFiles => "Search files",
+        PermissionDto::LoadInstructions => "Load instructions",
+        PermissionDto::LoadConfig => "Load config",
+        PermissionDto::DiscoverSkills => "Skills",
+        PermissionDto::DiscoverMcp => "MCP",
+        PermissionDto::UseLanguageServices => "LSP",
+        PermissionDto::DiscoverHooks => "Hooks",
+        PermissionDto::DiscoverPlugins => "Plugins",
+        PermissionDto::InspectRepository => "Inspect repository",
+        PermissionDto::MutateRepository => "Mutate repository",
     }
 }
 
 fn permission_description(
-    permission: &WorkspaceAdditionalDirectoryPermissionDto,
-    directory: &zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto,
+    permission: &PermissionDto,
+    directory: &zeta_app_server_protocol::protocol::environment::SessionDirDto,
 ) -> String {
     match permission {
-        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => {
-            "Allow read_file, grep and glob".into()
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => {
-            "Allow file-writing tools and apply_patch; requires Read files".into()
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => {
-            "Allow shell-command and Session terminals; requires Read files".into()
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => {
-            "Refresh authorized project configuration after file changes; requires Read files"
-                .into()
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => {
-            "Show this directory in Workspace Files; requires Read files".into()
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => {
-            "Search this directory from Workspace Search; requires Read files".into()
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
-            "Load .zeta/instructions and .zeta/agents; requires Read files".into()
-        }
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => {
+        PermissionDto::ReadFiles => "Allow read_file, grep and glob".into(),
+        PermissionDto::WriteFiles => "Allow file-writing tools and apply_patch".into(),
+        PermissionDto::ExecuteCommands => "Allow shell-command and Session terminals".into(),
+        PermissionDto::WatchFiles => "Watch this directory for file changes".into(),
+        PermissionDto::BrowseFiles => "Show this directory in file browsing surfaces".into(),
+        PermissionDto::SearchFiles => "Search file contents in this directory".into(),
+        PermissionDto::LoadInstructions => "Load .zeta/instructions and .zeta/agents".into(),
+        PermissionDto::LoadConfig => "Load configuration supplied by this directory".into(),
+        PermissionDto::DiscoverSkills => {
             format!(
                 "Discover Skills from this directory ({} found); requires Read files",
                 directory.contributions.skills.len()
             )
         }
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => {
+        PermissionDto::DiscoverMcp => {
             format!(
                 "Authorize MCP declarations ({} found); connect them separately",
                 directory.contributions.mcp_servers.len()
             )
         }
-        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => {
+        PermissionDto::UseLanguageServices => {
             "Use language servers for this directory; starting them also requires Run commands"
                 .into()
         }
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => {
+        PermissionDto::DiscoverHooks => {
             format!(
                 "Discover Hooks ({} found); running them also requires Run commands",
                 directory.contributions.hooks.len()
             )
         }
-        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => {
+        PermissionDto::DiscoverPlugins => {
             format!(
                 "Authorize Plugin requests ({} found); installation stays separate",
                 directory.contributions.plugins.len()
             )
         }
+        PermissionDto::InspectRepository => "Read repository metadata and status".into(),
+        PermissionDto::MutateRepository => "Change repository state".into(),
     }
 }
 

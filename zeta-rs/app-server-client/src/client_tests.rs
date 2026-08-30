@@ -8,6 +8,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zeta_app_server::AppServer;
 use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirAddParams;
+use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
+use zeta_app_server_protocol::protocol::environment::SessionDirMutationDto;
+use zeta_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
+use zeta_app_server_protocol::protocol::environment::SessionDirRemoveParams;
 use zeta_app_server_protocol::protocol::fs::{
     FsFileType, FsGetMetadataParams, FsReadBinaryFileParams, FsReadDirectoryParams,
     FsReadFileParams, FsWriteFileParams,
@@ -43,18 +49,9 @@ use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use zeta_app_server_protocol::protocol::turn::InputItem;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionsSetParams;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use zeta_app_server_protocol::schema_hash;
 use zeta_async_utils::CancellationToken;
-use zeta_core::{
-    CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, SessionCoordinator,
-    ThreadController,
-};
+use zeta_core::{CoreError, InMemoryThreadStore, ModelService, ThreadController};
 use zeta_protocol::SessionId;
 use zeta_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
@@ -75,13 +72,7 @@ fn app_server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    AppServer::new(
-        Arc::new(SessionCoordinator::with_store(
-            Arc::new(InMemorySessionStore::default()),
-            threads,
-        )),
-        Arc::new(TestModel),
-    )
+    AppServer::new(threads, Arc::new(TestModel))
 }
 
 struct TestModel;
@@ -127,7 +118,7 @@ fn client_rejects_response_for_another_request() {
 }
 
 #[test]
-fn client_reads_workspace_directories_through_the_typed_contract() {
+fn client_reads_directories_through_the_typed_contract() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
         r#"{"jsonrpc":"2.0","id":1,"result":{"entries":[{"name":"src","fileType":"directory"}]}}"#
             .into(),
@@ -135,7 +126,7 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
 
     let result = client
         .read_directory(FsReadDirectoryParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: "nested".into(),
         })
@@ -147,65 +138,51 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
 }
 
 #[test]
-fn client_manages_session_additional_directories_through_typed_contracts() {
+fn client_manages_session_dirs_through_typed_contracts() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
-        r#"{"jsonrpc":"2.0","id":1,"result":{"revision":0,"directories":[]}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":2,"result":{"mutation":"added","revision":1,"directories":[{"root":"/tmp/extra","trust":"trusted","permissions":["readFiles","writeFiles"]}]}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":3,"result":{"mutation":"updated","revision":2,"directories":[{"root":"/tmp/extra","trust":"trusted","permissions":["readFiles"]}]}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":4,"result":{"mutation":"removed","revision":3,"directories":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":1,"result":{"revision":0,"dirs":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"mutation":"added","revision":1,"dirs":[{"path":"/tmp/extra","permissions":["readFiles","writeFiles"],"contributions":{"skills":[],"mcpServers":[],"hooks":[],"plugins":[],"diagnostics":[]}}]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":3,"result":{"mutation":"updated","revision":2,"dirs":[{"path":"/tmp/extra","permissions":["readFiles"],"contributions":{"skills":[],"mcpServers":[],"hooks":[],"plugins":[],"diagnostics":[]}}]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":4,"result":{"mutation":"removed","revision":3,"dirs":[]}}"#.into(),
     ])));
-    let session_id = SessionId::new("additional-directory-session").unwrap();
+    let session_id = SessionId::new("session-dir-session").unwrap();
 
     assert!(
         client
-            .list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
+            .list_session_dirs(SessionDirListParams {
                 session_id: session_id.clone(),
             })
             .unwrap()
-            .directories
+            .dirs
             .is_empty()
     );
     let added = client
-        .add_workspace_additional_directory(WorkspaceAdditionalDirectoryAddParams {
+        .add_session_dir(SessionDirAddParams {
             session_id: session_id.clone(),
-            root: "/tmp/extra".into(),
-            permissions: vec![
-                WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-                WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
-            ],
+            path: "/tmp/extra".into(),
+            permissions: vec![PermissionDto::ReadFiles, PermissionDto::WriteFiles],
         })
         .unwrap();
-    assert_eq!(
-        added.mutation,
-        WorkspaceAdditionalDirectoryMutationDto::Added
-    );
-    assert_eq!(added.directories[0].root, PathBuf::from("/tmp/extra"));
+    assert_eq!(added.mutation, SessionDirMutationDto::Added);
+    assert_eq!(added.dirs[0].path, PathBuf::from("/tmp/extra"));
     let updated = client
-        .set_workspace_additional_directory_permissions(
-            WorkspaceAdditionalDirectoryPermissionsSetParams {
-                session_id: session_id.clone(),
-                root: "/tmp/extra".into(),
-                expected_revision: 1,
-                permissions: vec![WorkspaceAdditionalDirectoryPermissionDto::ReadFiles],
-            },
-        )
+        .set_session_dir_permissions(SessionDirPermissionsSetParams {
+            session_id: session_id.clone(),
+            path: "/tmp/extra".into(),
+            expected_revision: 1,
+            permissions: vec![PermissionDto::ReadFiles],
+        })
         .unwrap();
-    assert_eq!(
-        updated.mutation,
-        WorkspaceAdditionalDirectoryMutationDto::Updated
-    );
+    assert_eq!(updated.mutation, SessionDirMutationDto::Updated);
     assert_eq!(updated.revision, 2);
     let removed = client
-        .remove_workspace_additional_directory(WorkspaceAdditionalDirectoryRemoveParams {
+        .remove_session_dir(SessionDirRemoveParams {
             session_id,
-            root: "/tmp/extra".into(),
+            path: "/tmp/extra".into(),
         })
         .unwrap();
-    assert_eq!(
-        removed.mutation,
-        WorkspaceAdditionalDirectoryMutationDto::Removed
-    );
-    assert!(removed.directories.is_empty());
+    assert_eq!(removed.mutation, SessionDirMutationDto::Removed);
+    assert!(removed.dirs.is_empty());
 }
 
 #[test]
@@ -249,7 +226,7 @@ fn client_drives_language_documents_and_requests_through_typed_methods() {
         r#"{"jsonrpc":"2.0","id":5,"result":null}"#.into(),
     ])));
     let document = LanguageDocumentDto {
-        workspace_folder_id: None,
+        dir_id: None,
         session_directory: None,
         path: "src/main.rs".into(),
         language_id: "rust".into(),
@@ -290,7 +267,7 @@ fn client_drives_language_documents_and_requests_through_typed_methods() {
         .unwrap();
     client
         .close_language_document(LanguageCloseParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: document.path,
         })
@@ -314,7 +291,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
 
     let created = client
         .terminal_create(TerminalCreateParams {
-            workspace_folder_id: None,
+            dir_id: None,
             rows: 24,
             cols: 80,
             profile: TerminalProfileSelection::Default,
@@ -324,7 +301,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
     assert_eq!(created.terminal_id, "terminal-1");
     let attached = client
         .terminal_attach(TerminalAttachParams {
-            workspace_folder_id: None,
+            dir_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: created.reconnect.unwrap().reconnect_token,
             rows: 24,
@@ -334,14 +311,14 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
     assert_eq!(attached.reconnect.reconnect_token, "b".repeat(64));
     client
         .terminal_write(TerminalWriteParams {
-            workspace_folder_id: None,
+            dir_id: None,
             terminal_id: created.terminal_id.clone(),
             data: "echo ready\n".into(),
         })
         .unwrap();
     client
         .terminal_resize(TerminalResizeParams {
-            workspace_folder_id: None,
+            dir_id: None,
             terminal_id: created.terminal_id.clone(),
             rows: 30,
             cols: 100,
@@ -349,7 +326,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
         .unwrap();
     let read = client
         .terminal_read(TerminalReadParams {
-            workspace_folder_id: None,
+            dir_id: None,
             terminal_id: created.terminal_id.clone(),
             after_sequence: 0,
             after_command_sequence: 0,
@@ -360,7 +337,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
     client
         .terminal_close(
             zeta_app_server_protocol::protocol::terminal::TerminalCloseParams {
-                workspace_folder_id: None,
+                dir_id: None,
                 terminal_id: created.terminal_id,
             },
         )
@@ -368,7 +345,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
 }
 
 #[test]
-fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
+fn client_reads_writes_and_versions_files_through_typed_contracts() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
         r#"{"jsonrpc":"2.0","id":1,"result":{"content":"fn main() {}\n","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#.into(),
         r#"{"jsonrpc":"2.0","id":2,"result":{"resource":{"resourceId":"resource_0000000000000001","mimeType":"application/octet-stream","size":9,"sha256":"sha256:abc"},"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}"#.into(),
@@ -378,28 +355,28 @@ fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
 
     let read = client
         .read_file(FsReadFileParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: "src/main.rs".into(),
         })
         .unwrap();
     let binary = client
         .read_binary_file(FsReadBinaryFileParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: "paper.pdf".into(),
         })
         .unwrap();
     let metadata = client
         .get_file_metadata(FsGetMetadataParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: "src/main.rs".into(),
         })
         .unwrap();
     let written = client
         .write_file(FsWriteFileParams {
-            workspace_folder_id: None,
+            dir_id: None,
             session_directory: None,
             path: "src/main.rs".into(),
             content: "fn main() { }\n".into(),
@@ -437,7 +414,6 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
         .request_session(SessionRequestParams {
             command_id: CommandId::new("thread-one").expect("test ID is non-empty"),
             session_id: session.session.session_id.clone(),
-            expected_sequence: session.session.sequence,
             request: SessionRequest::CreateThread {
                 title: "root".into(),
             },
@@ -451,9 +427,10 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
         .request_session(SessionRequestParams {
             command_id: CommandId::new("turn-one").expect("test ID is non-empty"),
             session_id: session.session.session_id.clone(),
-            expected_sequence: 1,
             request: SessionRequest::StartTurn {
                 thread_id: thread.thread_id.clone(),
+                expected_sequence: 1,
+                approval_mode: zeta_protocol::ApprovalMode::default(),
                 tool_mode: None,
                 input: vec![
                     InputItem::Text {
@@ -549,7 +526,7 @@ fn in_process_client_routes_syntax_analysis_to_the_server() {
 fn client_preserves_the_initialized_slash_command_snapshot() {
     let definition = SlashCommandDefinition {
         name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
+        description: "inspect the current directory".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
     };
     let server = app_server()
@@ -586,7 +563,7 @@ fn initialization_snapshot_is_unavailable_before_handshake() {
 fn embedded_startup_propagates_the_host_slash_command_catalog() {
     let definition = SlashCommandDefinition {
         name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
+        description: "inspect the current directory".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
     };
     let state_root = std::env::temp_dir().join(format!(
@@ -844,8 +821,8 @@ fn unique_directory(label: &str) -> std::path::PathBuf {
     directory
 }
 
-fn write_skill(root: &std::path::Path, name: &str, description: &str) {
-    let directory = root.join(name);
+fn write_skill(path: &std::path::Path, name: &str, description: &str) {
+    let directory = path.join(name);
     fs::create_dir_all(&directory).unwrap();
     fs::write(
         directory.join("SKILL.md"),

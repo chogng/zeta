@@ -1,6 +1,4 @@
-use crate::{
-    ToolBinding, ToolCallId, ToolDefinition, ToolEnvironmentId, ToolOperationId, ToolOutput,
-};
+use crate::{EnvId, ToolBinding, ToolCallId, ToolDefinition, ToolOperationId, ToolOutput};
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -56,7 +54,7 @@ impl ToolConflictClass {
 /// The host environment selected for one invocation without exposing a raw capability map.
 #[derive(Clone, Debug)]
 pub struct ToolExecutionContext {
-    environment_id: ToolEnvironmentId,
+    environment_id: EnvId,
     cancellation: CancellationToken,
     authority: ToolRuntimeAuthority,
     session_id: Option<zeta_protocol::SessionId>,
@@ -75,7 +73,7 @@ pub enum ToolRuntimeAuthority {
 
 impl ToolExecutionContext {
     pub fn new(
-        environment_id: ToolEnvironmentId,
+        environment_id: EnvId,
         cancellation: CancellationToken,
         authority: ToolRuntimeAuthority,
     ) -> Self {
@@ -96,7 +94,7 @@ impl ToolExecutionContext {
         self.session_id.as_ref()
     }
 
-    pub fn environment_id(&self) -> &ToolEnvironmentId {
+    pub fn environment_id(&self) -> &EnvId {
         &self.environment_id
     }
 

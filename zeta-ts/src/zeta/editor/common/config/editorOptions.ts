@@ -486,19 +486,19 @@ export type InternalGuidesOptions = Readonly<Required<IGuidesOptions>>;
 
 /** Unicode-confusable and invisible-character highlighting options. */
 export interface IUnicodeHighlightOptions {
-	readonly nonBasicASCII?: boolean | InUntrustedWorkspace;
+	readonly nonBasicASCII?: boolean | ForUntrustedContent;
 	readonly invisibleCharacters?: boolean;
 	readonly ambiguousCharacters?: boolean;
-	readonly includeComments?: boolean | InUntrustedWorkspace;
-	readonly includeStrings?: boolean | InUntrustedWorkspace;
+	readonly includeComments?: boolean | ForUntrustedContent;
+	readonly includeStrings?: boolean | ForUntrustedContent;
 	readonly allowedCharacters?: Record<string, true>;
 	readonly allowedLocales?: Record<string | '_os' | '_vscode', true>;
 }
 
 export type InternalUnicodeHighlightOptions = Required<Readonly<IUnicodeHighlightOptions>>;
 
-export type InUntrustedWorkspace = 'inUntrustedWorkspace';
-export const inUntrustedWorkspace: InUntrustedWorkspace = 'inUntrustedWorkspace';
+export type ForUntrustedContent = 'forUntrustedContent';
+export const forUntrustedContent: ForUntrustedContent = 'forUntrustedContent';
 
 /** Stable configuration keys used by Unicode highlighting consumers. */
 export const unicodeHighlightConfigKeys = Object.freeze({
@@ -2339,11 +2339,11 @@ function validateUnicodeHighlightOptions(input: unknown): InternalUnicodeHighlig
 	const allowedCharacters = validateBooleanMap(options.allowedCharacters, {});
 	const allowedLocales = validateBooleanMap(options.allowedLocales, { _os: true, _vscode: true });
 	return Object.freeze({
-		nonBasicASCII: primitiveSet(options.nonBasicASCII, inUntrustedWorkspace, [true, false, inUntrustedWorkspace]),
+		nonBasicASCII: primitiveSet(options.nonBasicASCII, forUntrustedContent, [true, false, forUntrustedContent]),
 		invisibleCharacters: boolean(options.invisibleCharacters, true),
 		ambiguousCharacters: boolean(options.ambiguousCharacters, true),
-		includeComments: primitiveSet(options.includeComments, inUntrustedWorkspace, [true, false, inUntrustedWorkspace]),
-		includeStrings: primitiveSet(options.includeStrings, true, [true, false, inUntrustedWorkspace]),
+		includeComments: primitiveSet(options.includeComments, forUntrustedContent, [true, false, forUntrustedContent]),
+		includeStrings: primitiveSet(options.includeStrings, true, [true, false, forUntrustedContent]),
 		allowedCharacters,
 		allowedLocales,
 	});

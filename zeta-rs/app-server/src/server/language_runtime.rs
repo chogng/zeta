@@ -92,7 +92,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
         {
             self.diagnostics.updates.publish_language_server_message(
                 LanguageServerMessageNotification {
-                    workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
+                    dir_id: self.diagnostics.dir_id.clone(),
                     server: server.clone(),
                     severity: match severity {
                         LanguageServerMessageSeverity::Error => {
@@ -128,7 +128,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
         {
             self.diagnostics.updates.publish_language_server_progress(
                 LanguageServerProgressNotification {
-                    workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
+                    dir_id: self.diagnostics.dir_id.clone(),
                     server: progress.server.clone(),
                     token: progress.token.clone(),
                     title: progress.title.clone(),
@@ -146,7 +146,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
         {
             self.diagnostics.updates.publish_language_server_state(
                 LanguageServerStateNotification {
-                    workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
+                    dir_id: self.diagnostics.dir_id.clone(),
                     server: server.clone(),
                     state: language_server_state_to_dto(state),
                 },
@@ -191,7 +191,7 @@ struct AppServerLanguageDocumentSnapshot {
 struct LanguageDiagnosticPublisher {
     documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
     updates: Arc<UpdateBroker>,
-    workspace_folder_id: Option<String>,
+    dir_id: Option<String>,
 }
 
 impl LanguageDiagnosticPublisher {
@@ -214,7 +214,7 @@ impl LanguageDiagnosticPublisher {
             .collect();
         self.updates
             .publish_language_diagnostics(LanguageDiagnosticsNotification {
-                workspace_folder_id: self.workspace_folder_id.clone(),
+                dir_id: self.dir_id.clone(),
                 path: snapshot.relative_path,
                 revision: snapshot.revision.value(),
                 diagnostics,
@@ -222,16 +222,16 @@ impl LanguageDiagnosticPublisher {
     }
 }
 
-struct AppServerLanguageWorkspaceState {
+struct AppServerLanguageDirState {
     documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
     root: Option<PathBuf>,
     config_generation: Option<u64>,
     language_servers: BTreeMap<String, String>,
     server_states: BTreeMap<String, LanguageServerState>,
-    workspace_folder_id: Option<String>,
+    dir_id: Option<String>,
 }
 
-impl Default for AppServerLanguageWorkspaceState {
+impl Default for AppServerLanguageDirState {
     fn default() -> Self {
         Self {
             documents: Arc::new(Mutex::new(BTreeMap::new())),
@@ -239,7 +239,7 @@ impl Default for AppServerLanguageWorkspaceState {
             config_generation: None,
             language_servers: BTreeMap::new(),
             server_states: BTreeMap::new(),
-            workspace_folder_id: None,
+            dir_id: None,
         }
     }
 }
@@ -248,10 +248,10 @@ pub(super) struct AppServerLanguageRuntime {
     pub(super) manager: Option<LspManager>,
     receiver: Option<mpsc::Receiver<LspManagerEvent>>,
     updates: Arc<UpdateBroker>,
-    workspace: AppServerLanguageWorkspaceState,
+    dir_state: AppServerLanguageDirState,
     providers: LspServerProviders,
-    workspace_runtimes: BTreeMap<PathBuf, Box<AppServerLanguageRuntime>>,
-    active_workspace_root: Option<PathBuf>,
+    env_runtimes: BTreeMap<PathBuf, Box<AppServerLanguageRuntime>>,
+    active_dir_root: Option<PathBuf>,
 }
 
 impl AppServerLanguageRuntime {
@@ -260,10 +260,10 @@ impl AppServerLanguageRuntime {
             manager: None,
             receiver: None,
             updates,
-            workspace: AppServerLanguageWorkspaceState::default(),
+            dir_state: AppServerLanguageDirState::default(),
             providers: LspServerProviders::new(),
-            workspace_runtimes: BTreeMap::new(),
-            active_workspace_root: None,
+            env_runtimes: BTreeMap::new(),
+            active_dir_root: None,
         }
     }
 
@@ -272,54 +272,53 @@ impl AppServerLanguageRuntime {
         self.providers = providers;
     }
 
-    pub(super) fn reset_workspace(&mut self) {
+    pub(super) fn reset_dirs(&mut self) {
         self.shutdown();
     }
 
-    pub(super) fn retain_workspace_roots(&mut self, roots: &std::collections::BTreeSet<PathBuf>) {
-        self.workspace_runtimes
-            .retain(|root, _| roots.contains(root));
+    pub(super) fn retain_dir_roots(&mut self, roots: &std::collections::BTreeSet<PathBuf>) {
+        self.env_runtimes.retain(|root, _| roots.contains(root));
         if self
-            .active_workspace_root
+            .active_dir_root
             .as_ref()
             .is_some_and(|root| !roots.contains(root))
         {
-            self.active_workspace_root = None;
+            self.active_dir_root = None;
         }
     }
 
     pub(super) fn ensure(
         &mut self,
-        workspace_root: &Path,
-        workspace_folder_id: Option<&str>,
+        dir_root: &Path,
+        dir_id: Option<&str>,
         config_generation: u64,
         configuration: &LanguageServersConfig,
         language_id: &str,
     ) -> Result<&LspManager, String> {
-        if self.workspace.root.is_some() && self.workspace.root.as_deref() != Some(workspace_root) {
-            self.active_workspace_root = Some(workspace_root.to_path_buf());
+        if self.dir_state.root.is_some() && self.dir_state.root.as_deref() != Some(dir_root) {
+            self.active_dir_root = Some(dir_root.to_path_buf());
             let runtime = self
-                .workspace_runtimes
-                .entry(workspace_root.to_path_buf())
+                .env_runtimes
+                .entry(dir_root.to_path_buf())
                 .or_insert_with(|| {
                     let mut runtime = AppServerLanguageRuntime::new(Arc::clone(&self.updates));
                     runtime.providers = self.providers.clone();
                     Box::new(runtime)
                 });
             return runtime.ensure(
-                workspace_root,
-                workspace_folder_id,
+                dir_root,
+                dir_id,
                 config_generation,
                 configuration,
                 language_id,
             );
         }
-        self.active_workspace_root = None;
-        self.workspace.workspace_folder_id = workspace_folder_id.map(str::to_owned);
-        if self.workspace.root.as_deref() != Some(workspace_root)
-            || self.workspace.config_generation != Some(config_generation)
+        self.active_dir_root = None;
+        self.dir_state.dir_id = dir_id.map(str::to_owned);
+        if self.dir_state.root.as_deref() != Some(dir_root)
+            || self.dir_state.config_generation != Some(config_generation)
         {
-            self.restart(workspace_root, config_generation, configuration)?;
+            self.restart(dir_root, config_generation, configuration)?;
         }
         self.wait_until_ready(language_id)?;
         self.manager
@@ -328,9 +327,9 @@ impl AppServerLanguageRuntime {
     }
 
     pub(super) fn manager(&self) -> Option<&LspManager> {
-        match &self.active_workspace_root {
+        match &self.active_dir_root {
             Some(root) => self
-                .workspace_runtimes
+                .env_runtimes
                 .get(root)
                 .and_then(|runtime| runtime.manager()),
             None => self.manager.as_ref(),
@@ -342,11 +341,11 @@ impl AppServerLanguageRuntime {
         request_id: LanguageRequestId,
         cancellation: &CancellationToken,
     ) -> Result<LspManagerRequestResult, String> {
-        if let Some(root) = self.active_workspace_root.clone() {
+        if let Some(root) = self.active_dir_root.clone() {
             return self
-                .workspace_runtimes
+                .env_runtimes
                 .get_mut(&root)
-                .ok_or_else(|| String::from("language workspace runtime is unavailable"))?
+                .ok_or_else(|| String::from("language directory runtime is unavailable"))?
                 .wait_for_request(request_id, cancellation);
         }
         let deadline = Instant::now() + REQUEST_TIMEOUT;
@@ -393,8 +392,8 @@ impl AppServerLanguageRuntime {
 
     pub(super) fn synchronize_document(
         &mut self,
-        workspace_root: &Path,
-        workspace_folder_id: Option<&str>,
+        dir_root: &Path,
+        dir_id: Option<&str>,
         config_generation: u64,
         configuration: &LanguageServersConfig,
         relative_path: &Path,
@@ -402,17 +401,17 @@ impl AppServerLanguageRuntime {
     ) -> Result<(), String> {
         let language_id = document.language_id().to_owned();
         self.ensure(
-            workspace_root,
-            workspace_folder_id,
+            dir_root,
+            dir_id,
             config_generation,
             configuration,
             &language_id,
         )?;
-        if let Some(root) = self.active_workspace_root.clone() {
+        if let Some(root) = self.active_dir_root.clone() {
             return self
-                .workspace_runtimes
+                .env_runtimes
                 .get_mut(&root)
-                .ok_or_else(|| String::from("language workspace runtime is unavailable"))?
+                .ok_or_else(|| String::from("language directory runtime is unavailable"))?
                 .synchronize_selected_document(relative_path, document);
         }
         self.synchronize_selected_document(relative_path, document)
@@ -423,7 +422,7 @@ impl AppServerLanguageRuntime {
         relative_path: &Path,
         document: LspDocumentSnapshot,
     ) -> Result<(), String> {
-        self.workspace
+        self.dir_state
             .documents
             .lock()
             .map_err(|_| String::from("language document snapshots are unavailable"))?
@@ -442,22 +441,18 @@ impl AppServerLanguageRuntime {
             .map_err(|error| error.to_string())
     }
 
-    pub(super) fn close_document(
-        &mut self,
-        workspace_root: &Path,
-        path: &Path,
-    ) -> Result<(), String> {
-        if self.workspace.root.as_deref() != Some(workspace_root) {
+    pub(super) fn close_document(&mut self, dir_root: &Path, path: &Path) -> Result<(), String> {
+        if self.dir_state.root.as_deref() != Some(dir_root) {
             return self
-                .workspace_runtimes
-                .get_mut(workspace_root)
+                .env_runtimes
+                .get_mut(dir_root)
                 .map_or(Ok(()), |runtime| runtime.close_selected_document(path));
         }
         self.close_selected_document(path)
     }
 
     fn close_selected_document(&mut self, path: &Path) -> Result<(), String> {
-        self.workspace
+        self.dir_state
             .documents
             .lock()
             .map_err(|_| String::from("language document snapshots are unavailable"))?
@@ -472,7 +467,7 @@ impl AppServerLanguageRuntime {
 
     fn restart(
         &mut self,
-        workspace_root: &Path,
+        dir_root: &Path,
         config_generation: u64,
         configuration: &LanguageServersConfig,
     ) -> Result<(), String> {
@@ -488,16 +483,16 @@ impl AppServerLanguageRuntime {
             .resolve(
                 &InstallContext::current(),
                 LanguageServerExecutionPolicy::Allowed,
-                workspace_root,
+                dir_root,
             )
             .map_err(|error| error.to_string())?;
         let mut definitions = resolution.into_definitions();
         definitions.extend(configured_provider_definitions(
             &self.providers,
             configuration,
-            workspace_root,
+            dir_root,
         )?);
-        self.workspace.language_servers = definitions
+        self.dir_state.language_servers = definitions
             .iter()
             .flat_map(|definition| {
                 let server = definition.name().to_string();
@@ -511,14 +506,14 @@ impl AppServerLanguageRuntime {
         }
         let (sender, receiver) = mpsc::channel();
         let manager = LspManager::start_with_events_and_metrics(
-            LspManagerConfiguration::enabled(workspace_root, definitions)
+            LspManagerConfiguration::enabled(dir_root, definitions)
                 .with_generation(config_generation),
             Arc::new(AppServerLanguageEventSink {
                 sender,
                 diagnostics: Arc::new(LanguageDiagnosticPublisher {
-                    documents: Arc::clone(&self.workspace.documents),
+                    documents: Arc::clone(&self.dir_state.documents),
                     updates: Arc::clone(&self.updates),
-                    workspace_folder_id: self.workspace.workspace_folder_id.clone(),
+                    dir_id: self.dir_state.dir_id.clone(),
                 }),
             }),
             Arc::new(AppServerLanguageMetrics),
@@ -526,20 +521,20 @@ impl AppServerLanguageRuntime {
         .map_err(|error| error.to_string())?;
         self.manager = Some(manager);
         self.receiver = Some(receiver);
-        self.workspace.root = Some(workspace_root.to_path_buf());
-        self.workspace.config_generation = Some(config_generation);
+        self.dir_state.root = Some(dir_root.to_path_buf());
+        self.dir_state.config_generation = Some(config_generation);
         Ok(())
     }
 
     fn wait_until_ready(&mut self, language_id: &str) -> Result<(), String> {
         let server = self
-            .workspace
+            .dir_state
             .language_servers
             .get(language_id)
             .cloned()
             .ok_or_else(|| format!("no language server is available for '{language_id}'"))?;
         if matches!(
-            self.workspace.server_states.get(&server),
+            self.dir_state.server_states.get(&server),
             Some(LanguageServerState::Ready)
         ) {
             return Ok(());
@@ -548,7 +543,7 @@ impl AppServerLanguageRuntime {
         loop {
             let event = self.recv_until(deadline)?;
             self.accept_state(&event);
-            match self.workspace.server_states.get(&server) {
+            match self.dir_state.server_states.get(&server) {
                 Some(LanguageServerState::Ready) => return Ok(()),
                 Some(LanguageServerState::Failed(message)) => return Err(message.clone()),
                 Some(LanguageServerState::CrashLoop { message, .. }) => return Err(message.clone()),
@@ -575,37 +570,37 @@ impl AppServerLanguageRuntime {
             state,
         }) = event
         {
-            self.workspace
+            self.dir_state
                 .server_states
                 .insert(server.clone(), state.clone());
         }
     }
 
     fn shutdown(&mut self) {
-        self.workspace_runtimes.clear();
-        self.active_workspace_root = None;
+        self.env_runtimes.clear();
+        self.active_dir_root = None;
         self.shutdown_selected();
     }
 
     fn shutdown_selected(&mut self) {
-        if let Ok(mut documents) = self.workspace.documents.lock() {
+        if let Ok(mut documents) = self.dir_state.documents.lock() {
             documents.clear();
         }
         if let Some(manager) = self.manager.take() {
             let _ = manager.shutdown();
         }
         self.receiver = None;
-        self.workspace.root = None;
-        self.workspace.config_generation = None;
-        self.workspace.language_servers.clear();
-        self.workspace.server_states.clear();
+        self.dir_state.root = None;
+        self.dir_state.config_generation = None;
+        self.dir_state.language_servers.clear();
+        self.dir_state.server_states.clear();
     }
 }
 
 fn configured_provider_definitions(
     providers: &LspServerProviders,
     configuration: &LanguageServersConfig,
-    workspace_root: &Path,
+    dir_root: &Path,
 ) -> Result<Vec<zeta_lsp_manager::LanguageServerDefinition>, String> {
     let mut definitions = Vec::new();
     for server_id in providers.ids() {
@@ -626,7 +621,7 @@ fn configured_provider_definitions(
                 LspServerLaunch::ExplicitExecutable,
             );
         if let Some(definition) = providers
-            .definition(server_id, workspace_root, launch)
+            .definition(server_id, dir_root, launch)
             .map_err(|error| error.to_string())?
         {
             definitions.push(definition);

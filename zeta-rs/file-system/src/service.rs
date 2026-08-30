@@ -9,11 +9,11 @@ use crate::MissingTargetBehavior;
 use crate::file_revision;
 use std::path::Path;
 
-/// Workspace-scoped filesystem access used by both client adapters and Agent tools.
+/// Directory-scoped filesystem access used by both client adapters and Agent tools.
 ///
 /// Implementations must resolve every relative input beneath their configured authority root and
 /// must reject absolute paths, parent traversal, and symlink escapes before performing I/O.
-pub trait WorkspaceFileSystem: Send + Sync {
+pub trait FileSystem: Send + Sync {
     /// Reads one existing file, failing if its content exceeds `maximum_bytes`.
     fn read_file(&self, path: &Path, maximum_bytes: usize) -> Result<Vec<u8>, FileSystemError>;
 
@@ -71,7 +71,7 @@ pub trait WorkspaceFileSystem: Send + Sync {
         existing: ExistingTargetBehavior,
     ) -> Result<FileMetadata, FileSystemError>;
 
-    /// Renames one workspace resource according to the explicit destination behavior.
+    /// Renames one directory resource according to the explicit destination behavior.
     fn rename(
         &self,
         source: &Path,
@@ -79,7 +79,7 @@ pub trait WorkspaceFileSystem: Send + Sync {
         existing: ExistingTargetBehavior,
     ) -> Result<(), FileSystemError>;
 
-    /// Deletes one workspace resource according to the explicit missing-target behavior and scope.
+    /// Deletes one directory resource according to the explicit missing-target behavior and scope.
     fn delete(
         &self,
         path: &Path,

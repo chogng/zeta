@@ -8,12 +8,12 @@ use zui::input::Ime;
 use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::window::ImeCursorArea;
 
+use crate::MainSurfaceKind;
 use crate::ProductApp;
 use crate::SESSION_SEARCH_INPUT;
 use crate::TAB_RENAME_INPUT;
-use crate::WorkspaceSurfaceKind;
 use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
-use crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT;
+use crate::path_picker::DIRECTORY_SEARCH_INPUT;
 use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
 use zeta_files::FILE_SEARCH_INPUT;
 use zeta_session::interaction::COMPOSER;
@@ -27,11 +27,11 @@ enum InputMethodTarget {
     TabRename,
     FileSearch,
     GitBranchSearch,
-    WorkspacePathSearch,
+    DirectoryPathSearch,
     RemoteConnectionSearch,
     RemoteConnectionName,
     RemoteConnectionHost,
-    RemoteConnectionWorkspace,
+    RemoteConnectionDirectory,
     RemoteTunnelPort,
     SettingsSearch,
     FileEditor,
@@ -43,7 +43,7 @@ enum InputMethodTarget {
 #[derive(Clone, Copy, Debug)]
 struct InputMethodContext {
     window_active: bool,
-    workspace_surface: WorkspaceSurfaceKind,
+    main_surface: MainSurfaceKind,
     composer_focused: bool,
     file_editor_focused: bool,
     file_editor_find_focused: bool,
@@ -52,7 +52,7 @@ struct InputMethodContext {
     tab_rename_focused: bool,
     file_search_focused: bool,
     git_branch_search_focused: bool,
-    workspace_path_search_focused: bool,
+    path_search_focused: bool,
     remote_connection_search_focused: bool,
     remote_connection_manager_field: Option<RemoteConnectionManagerField>,
     remote_tunnel_port_focused: bool,
@@ -76,8 +76,8 @@ impl InputMethodTarget {
         if context.git_branch_search_focused {
             return Self::GitBranchSearch;
         }
-        if context.workspace_path_search_focused {
-            return Self::WorkspacePathSearch;
+        if context.path_search_focused {
+            return Self::DirectoryPathSearch;
         }
         if context.remote_connection_search_focused {
             return Self::RemoteConnectionSearch;
@@ -86,7 +86,7 @@ impl InputMethodTarget {
             return match field {
                 RemoteConnectionManagerField::Name => Self::RemoteConnectionName,
                 RemoteConnectionManagerField::Host => Self::RemoteConnectionHost,
-                RemoteConnectionManagerField::Workspace => Self::RemoteConnectionWorkspace,
+                RemoteConnectionManagerField::Directory => Self::RemoteConnectionDirectory,
             };
         }
         if context.remote_tunnel_port_focused {
@@ -101,11 +101,11 @@ impl InputMethodTarget {
         if context.file_editor_replace_focused {
             return Self::FileEditorReplace;
         }
-        match context.workspace_surface {
-            WorkspaceSurfaceKind::Agent if context.composer_focused => Self::Composer,
-            WorkspaceSurfaceKind::Editor if context.file_editor_focused => Self::FileEditor,
-            WorkspaceSurfaceKind::Terminal => Self::TerminalGrid,
-            WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => Self::Disabled,
+        match context.main_surface {
+            MainSurfaceKind::Agent if context.composer_focused => Self::Composer,
+            MainSurfaceKind::Editor if context.file_editor_focused => Self::FileEditor,
+            MainSurfaceKind::Terminal => Self::TerminalGrid,
+            MainSurfaceKind::Agent | MainSurfaceKind::Editor => Self::Disabled,
         }
     }
 
@@ -173,13 +173,12 @@ impl ProductApp {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            InputMethodTarget::WorkspacePathSearch => {
+            InputMethodTarget::DirectoryPathSearch => {
                 let Some(composition) = text_input_composition_event(event) else {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.workspace_path_picker
-                    .apply_search_composition(composition);
+                self.path_picker.apply_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -195,7 +194,7 @@ impl ProductApp {
             }
             InputMethodTarget::RemoteConnectionName
             | InputMethodTarget::RemoteConnectionHost
-            | InputMethodTarget::RemoteConnectionWorkspace => {
+            | InputMethodTarget::RemoteConnectionDirectory => {
                 let Some(composition) = text_input_composition_event(event) else {
                     return;
                 };
@@ -291,11 +290,11 @@ impl ProductApp {
                 | InputMethodTarget::SessionSearch
                 | InputMethodTarget::FileSearch
                 | InputMethodTarget::GitBranchSearch
-                | InputMethodTarget::WorkspacePathSearch
+                | InputMethodTarget::DirectoryPathSearch
                 | InputMethodTarget::RemoteConnectionSearch
                 | InputMethodTarget::RemoteConnectionName
                 | InputMethodTarget::RemoteConnectionHost
-                | InputMethodTarget::RemoteConnectionWorkspace
+                | InputMethodTarget::RemoteConnectionDirectory
                 | InputMethodTarget::RemoteTunnelPort
                 | InputMethodTarget::SettingsSearch
                 | InputMethodTarget::FileEditor
@@ -318,8 +317,8 @@ impl ProductApp {
         if target != InputMethodTarget::GitBranchSearch {
             self.git_branch_context_menu.cancel_search_composition();
         }
-        if target != InputMethodTarget::WorkspacePathSearch {
-            self.workspace_path_picker.cancel_search_composition();
+        if target != InputMethodTarget::DirectoryPathSearch {
+            self.path_picker.cancel_search_composition();
         }
         if target != InputMethodTarget::RemoteConnectionSearch {
             self.remote_connection_picker.cancel_search_composition();
@@ -353,7 +352,7 @@ impl ProductApp {
     fn input_method_target(&self) -> InputMethodTarget {
         InputMethodTarget::for_context(InputMethodContext {
             window_active: self.ui_dispatch.window_active(),
-            workspace_surface: self.workspace_surface.active(),
+            main_surface: self.main_surface.active(),
             composer_focused: self.ui_dispatch.is_focused(COMPOSER),
             file_editor_focused: self
                 .ui_dispatch
@@ -364,7 +363,7 @@ impl ProductApp {
             tab_rename_focused: self.ui_dispatch.is_focused(TAB_RENAME_INPUT),
             file_search_focused: self.ui_dispatch.is_focused(FILE_SEARCH_INPUT),
             git_branch_search_focused: self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT),
-            workspace_path_search_focused: self.ui_dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT),
+            path_search_focused: self.ui_dispatch.is_focused(DIRECTORY_SEARCH_INPUT),
             remote_connection_search_focused: self
                 .ui_dispatch
                 .is_focused(REMOTE_CONNECTION_SEARCH_INPUT),
@@ -383,7 +382,7 @@ impl InputMethodTarget {
         match self {
             Self::RemoteConnectionName => Some(RemoteConnectionManagerField::Name),
             Self::RemoteConnectionHost => Some(RemoteConnectionManagerField::Host),
-            Self::RemoteConnectionWorkspace => Some(RemoteConnectionManagerField::Workspace),
+            Self::RemoteConnectionDirectory => Some(RemoteConnectionManagerField::Directory),
             _ => None,
         }
     }

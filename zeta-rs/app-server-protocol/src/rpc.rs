@@ -26,7 +26,7 @@ pub enum JsonRpcVersion {
 
 /// A JSON-RPC request identifier.
 ///
-/// JSON-RPC permits string and number identifiers; `Null` is retained for parse and invalid
+/// JSON-RPC authorizations string and number identifiers; `Null` is retained for parse and invalid
 /// request error responses. The App Server dispatcher applies its narrower positive-integer
 /// request-ID policy after decoding this wire representation.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]

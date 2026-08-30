@@ -15,6 +15,7 @@ use zeta_config::ConfigStore;
 use zeta_config::UserConfigCommand;
 use zeta_core::ContextSource;
 use zeta_core::ContextSourceRequest;
+use zeta_file_access::Dir;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
@@ -28,7 +29,6 @@ use zeta_protocol::ProviderId;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
-use zeta_workspace::WorkspaceRoot;
 
 use super::CodebaseRetrievalContextSource;
 
@@ -48,8 +48,8 @@ impl EmbeddingInvoker for ConstantEmbedding {
 
 #[test]
 fn automatic_context_requires_explicit_opt_in() {
-    let workspace = workspace();
-    let root = WorkspaceRoot::open(workspace.path()).expect("workspace root");
+    let dir = dir();
+    let root = Dir::open_local(dir.path()).expect("directory root");
     let index = Arc::new(Codebase::open_memory(root, CodebaseLimits::default()).expect("Codebase"));
     index.rebuild().expect("lexical index");
     let semantic = Arc::new(CodebaseSemanticService::new(
@@ -124,13 +124,13 @@ fn automatic_context_requires_explicit_opt_in() {
     assert!(evidence[0].body.contains("target_feature"));
 }
 
-fn workspace() -> TempDir {
-    let workspace = tempfile::tempdir().expect("workspace");
-    std::fs::create_dir(workspace.path().join(".git")).expect("git marker");
+fn dir() -> TempDir {
+    let dir = tempfile::tempdir().expect("directory");
+    std::fs::create_dir(dir.path().join(".git")).expect("git marker");
     std::fs::write(
-        workspace.path().join("lib.rs"),
+        dir.path().join("lib.rs"),
         "pub fn target_feature() -> bool { true }\n",
     )
     .expect("source");
-    workspace
+    dir
 }

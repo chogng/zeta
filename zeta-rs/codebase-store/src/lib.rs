@@ -12,9 +12,9 @@ use zeta_codebase::{
     Codebase, CodebaseError, CodebaseLimits, CodebaseVectorStoreError, IndexRootId, SymbolIndex,
     SymbolIndexError, SymbolIndexLimits,
 };
-use zeta_state::{StateRuntime, WorkspaceIndexKind, WorkspaceIndexLease};
-use zeta_workspace::WorkspaceRoot;
-use zeta_workspace::WorkspaceTrustId;
+use zeta_file_access::Dir;
+use zeta_file_access::DirId;
+use zeta_state::{DirIndexKind, DirIndexLease, StateRuntime};
 
 use semantic::SqliteCodebaseVectorStore;
 use source::SqliteCodebaseIndexStore;
@@ -27,10 +27,10 @@ pub(crate) enum CodebaseStoreStorage {
     Persistent(PathBuf),
 }
 
-/// One Workspace-scoped owner of the Codebase database and its lifecycle lock.
+/// One directory-scoped owner of the Codebase database and its lifecycle lock.
 pub struct CodebaseStore {
     storage: CodebaseStoreStorage,
-    _lease: Option<WorkspaceIndexLease>,
+    _lease: Option<DirIndexLease>,
 }
 
 impl CodebaseStore {
@@ -41,8 +41,8 @@ impl CodebaseStore {
         }
     }
 
-    pub fn open(state: &StateRuntime, workspace: &WorkspaceTrustId) -> std::io::Result<Self> {
-        let lease = state.acquire(workspace, WorkspaceIndexKind::Codebase)?;
+    pub fn open(state: &StateRuntime, dir: &DirId) -> std::io::Result<Self> {
+        let lease = state.acquire(dir, DirIndexKind::Codebase)?;
         Ok(Self {
             storage: CodebaseStoreStorage::Persistent(lease.directory().join("codebase.sqlite3")),
             _lease: Some(lease),
@@ -58,7 +58,7 @@ impl CodebaseStore {
 
     pub fn open_codebase(
         &self,
-        root: WorkspaceRoot,
+        root: Dir,
         limits: CodebaseLimits,
     ) -> Result<Codebase, CodebaseError> {
         let root_id = IndexRootId::from_root(&root);

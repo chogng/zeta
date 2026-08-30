@@ -245,10 +245,10 @@ export class GitService extends Disposable implements IGitService {
 }
 
 function toGitRepository(repository: GitRepositoryDto, workspaceFolders: readonly IWorkspaceFolder[]): GitRepository {
-	const workspaceFolder = repository.workspaceFolderId
-		? workspaceFolders.find(folder => folder.id === repository.workspaceFolderId)
+	const workspaceFolder = repository.dirId
+		? workspaceFolders.find(folder => folder.id === repository.dirId)
 		: workspaceFolders.length === 1 ? workspaceFolders[0] : undefined;
-	if (!workspaceFolder) throw new Error(`GitRepositoryWorkspaceFolderNotFound: ${repository.workspaceFolderId ?? repository.id}`);
+	if (!workspaceFolder) throw new Error(`GitRepositoryWorkspaceFolderNotFound: ${repository.dirId ?? repository.id}`);
 	return Object.freeze({
 		id: repository.id,
 		label: repository.label,

@@ -88,7 +88,7 @@ fn open_change_set() -> TurnChangeSet {
         thread_id: ThreadId::new("thread-1").unwrap(),
         turn_id: TurnId::new("turn-1").unwrap(),
         repository_id: "repository-1".into(),
-        worktree_root: PathBuf::from("/workspace/repository-1"),
+        worktree_root: PathBuf::from("/dir/repository-1"),
         target_branch: Some("main".into()),
         base_object_id: Some("head".into()),
         before_tree: "before".into(),
@@ -173,7 +173,7 @@ fn unresolved_dependency_prevents_commit_queueing() {
 }
 
 #[test]
-fn initial_workspace_dependency_prevents_commit_queueing() {
+fn initial_dir_dependency_prevents_commit_queueing() {
     let mut change_set = open_change_set();
     change_set
         .baseline_dependency_paths
@@ -190,7 +190,7 @@ fn initial_workspace_dependency_prevents_commit_queueing() {
         )
         .unwrap();
     change_set
-        .update_draft("fix(core): use workspace config".into())
+        .update_draft("fix(core): use dir config".into())
         .unwrap();
 
     assert_eq!(
@@ -218,9 +218,7 @@ fn open_or_incomplete_change_set_cannot_be_committed() {
         change_set.queue_commit(),
         Err(TurnChangeError::InvalidTransition)
     );
-    change_set
-        .mark_incomplete("late workspace write".into())
-        .unwrap();
+    change_set.mark_incomplete("late dir write".into()).unwrap();
     assert_eq!(
         change_set.queue_commit(),
         Err(TurnChangeError::InvalidTransition)
@@ -362,22 +360,18 @@ fn opaque_reads_do_not_claim_writes_outside_a_recorded_execution_window() {
 
 #[test]
 fn directory_snapshots_capture_and_restore_non_git_changes() {
-    let workspace = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let objects = tempfile::tempdir().unwrap();
-    std::fs::write(workspace.path().join("before.txt"), "one\ntwo\n").unwrap();
-    std::fs::write(workspace.path().join("binary.bin"), [0, 1, 2]).unwrap();
+    std::fs::write(dir.path().join("before.txt"), "one\ntwo\n").unwrap();
+    std::fs::write(dir.path().join("binary.bin"), [0, 1, 2]).unwrap();
     let snapshots = crate::DirectorySnapshotStore::new(objects.path());
-    let before = snapshots.capture(workspace.path()).unwrap();
+    let before = snapshots.capture(dir.path()).unwrap();
 
-    std::fs::rename(
-        workspace.path().join("before.txt"),
-        workspace.path().join("after.txt"),
-    )
-    .unwrap();
-    std::fs::write(workspace.path().join("after.txt"), "one\ntwo\nthree\n").unwrap();
-    std::fs::remove_file(workspace.path().join("binary.bin")).unwrap();
-    std::fs::write(workspace.path().join("added.txt"), "added\n").unwrap();
-    let after = snapshots.capture(workspace.path()).unwrap();
+    std::fs::rename(dir.path().join("before.txt"), dir.path().join("after.txt")).unwrap();
+    std::fs::write(dir.path().join("after.txt"), "one\ntwo\nthree\n").unwrap();
+    std::fs::remove_file(dir.path().join("binary.bin")).unwrap();
+    std::fs::write(dir.path().join("added.txt"), "added\n").unwrap();
+    let after = snapshots.capture(dir.path()).unwrap();
     let changes = snapshots.diff(&before, &after).unwrap();
 
     assert!(
@@ -394,16 +388,14 @@ fn directory_snapshots_capture_and_restore_non_git_changes() {
         change.path == PathBuf::from("added.txt") && change.kind == ChangeFileKind::Added
     }));
 
-    snapshots
-        .replace_directory(workspace.path(), &before)
-        .unwrap();
+    snapshots.replace_directory(dir.path(), &before).unwrap();
     assert_eq!(
-        std::fs::read_to_string(workspace.path().join("before.txt")).unwrap(),
+        std::fs::read_to_string(dir.path().join("before.txt")).unwrap(),
         "one\ntwo\n"
     );
-    assert!(!workspace.path().join("after.txt").exists());
+    assert!(!dir.path().join("after.txt").exists());
     assert_eq!(
-        std::fs::read(workspace.path().join("binary.bin")).unwrap(),
+        std::fs::read(dir.path().join("binary.bin")).unwrap(),
         [0, 1, 2]
     );
 }

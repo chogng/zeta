@@ -149,15 +149,15 @@ impl GitClient {
                 repository.worktree_root(),
                 [
                     "-c",
-                    "user.name=Zeta Thread Workspace",
+                    "user.name=Zeta Thread Worktree",
                     "-c",
-                    "user.email=zeta-thread-workspace@invalid",
+                    "user.email=zeta-thread-worktree@invalid",
                     "commit-tree",
                     tree.as_str(),
                     "-F",
                     "-",
                 ],
-                b"Zeta Thread workspace anchor\n".to_vec(),
+                b"Zeta Thread worktree anchor\n".to_vec(),
             )
             .await?
             .require_success()?;

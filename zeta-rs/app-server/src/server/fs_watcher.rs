@@ -12,26 +12,26 @@ use std::sync::mpsc::SyncSender;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
+use zeta_file_access::Dir;
 use zeta_file_watcher::DebouncedWatchReceiver;
 use zeta_file_watcher::FileWatcher;
 use zeta_file_watcher::FileWatcherBackend;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_file_watcher::WatchPath;
 use zeta_protocol::SessionId;
-use zeta_workspace::WorkspaceRoot;
 
 const FILE_SYSTEM_WATCH_DEBOUNCE: Duration = Duration::from_millis(75);
 const FILE_SYSTEM_WATCH_STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-/// Receives projected Workspace filesystem invalidations before client publication.
+/// Receives projected Directory filesystem invalidations before client publication.
 ///
 /// Implementations must keep the callback bounded because it runs on the watcher thread.
-pub(crate) trait WorkspaceFileChangeSink: Send + Sync {
+pub(crate) trait DirFileChangeSink: Send + Sync {
     fn files_changed(&self, changed: &FsChanged);
 }
 
-pub(crate) trait SessionDirectoryFileChangeSink: Send + Sync {
+pub(crate) trait SessionDirFileChangeSink: Send + Sync {
     fn session_files_changed(
         &self,
         session_id: &SessionId,
@@ -42,20 +42,20 @@ pub(crate) trait SessionDirectoryFileChangeSink: Send + Sync {
 
 enum FileSystemWatcherObservers {
     None,
-    WorkspaceRuntime {
+    EnvRuntime {
         codebase: Arc<CodebaseRuntime>,
         symbol_index: Arc<SymbolIndexRuntime>,
         codebase_semantic: Option<Arc<SemanticIndexJobController>>,
-        changes: Arc<dyn WorkspaceFileChangeSink>,
+        changes: Arc<dyn DirFileChangeSink>,
         agent_grep: Option<Arc<AgentGrepService>>,
     },
-    WorkspaceFolder {
+    Dir {
         agent_grep: Option<Arc<AgentGrepService>>,
     },
-    SessionDirectory {
+    SessionDir {
         session_id: SessionId,
         root: PathBuf,
-        changes: Arc<dyn SessionDirectoryFileChangeSink>,
+        changes: Arc<dyn SessionDirFileChangeSink>,
         agent_grep: Option<Arc<AgentGrepService>>,
     },
 }
@@ -188,7 +188,7 @@ struct AgentGrepRefreshWorker {
 }
 
 impl AgentGrepRefreshWorker {
-    fn start(service: Arc<AgentGrepService>, workspace: WorkspaceRoot) -> Result<Self, String> {
+    fn start(service: Arc<AgentGrepService>, dir: Dir) -> Result<Self, String> {
         let pending = Arc::new(Mutex::new(PendingIndexRefresh::None));
         let (wake, receiver) = std::sync::mpsc::sync_channel(1);
         let worker_pending = Arc::clone(&pending);
@@ -201,7 +201,7 @@ impl AgentGrepRefreshWorker {
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
                         .take_event();
                     if let Some(event) = event {
-                        service.apply_watcher_event(&workspace, &event);
+                        service.apply_watcher_event(&dir, &event);
                     }
                 }
             })
@@ -246,40 +246,40 @@ pub(super) struct FileSystemWatcher {
 
 impl FileSystemWatcher {
     pub(super) fn start(
-        workspace: WorkspaceRoot,
+        dir: Dir,
         updates: Arc<UpdateBroker>,
     ) -> Result<Self, FileSystemWatcherError> {
-        Self::start_inner(workspace, updates, None, FileSystemWatcherObservers::None)
+        Self::start_inner(dir, updates, None, FileSystemWatcherObservers::None)
     }
 
-    pub(super) fn start_for_workspace_folder(
-        workspace: WorkspaceRoot,
+    pub(super) fn start_for_dir(
+        dir: Dir,
         updates: Arc<UpdateBroker>,
-        workspace_folder_id: String,
+        dir_id: String,
         agent_grep: Option<Arc<AgentGrepService>>,
     ) -> Result<Self, FileSystemWatcherError> {
         Self::start_inner(
-            workspace,
+            dir,
             updates,
-            Some(workspace_folder_id),
-            FileSystemWatcherObservers::WorkspaceFolder { agent_grep },
+            Some(dir_id),
+            FileSystemWatcherObservers::Dir { agent_grep },
         )
     }
 
     pub(super) fn start_with_observers(
-        workspace: WorkspaceRoot,
+        dir: Dir,
         updates: Arc<UpdateBroker>,
         codebase: Arc<CodebaseRuntime>,
         symbol_index: Arc<SymbolIndexRuntime>,
         codebase_semantic: Option<Arc<SemanticIndexJobController>>,
-        changes: Arc<dyn WorkspaceFileChangeSink>,
+        changes: Arc<dyn DirFileChangeSink>,
         agent_grep: Option<Arc<AgentGrepService>>,
     ) -> Result<Self, FileSystemWatcherError> {
         Self::start_inner(
-            workspace,
+            dir,
             updates,
             None,
-            FileSystemWatcherObservers::WorkspaceRuntime {
+            FileSystemWatcherObservers::EnvRuntime {
                 codebase,
                 symbol_index,
                 codebase_semantic,
@@ -290,18 +290,18 @@ impl FileSystemWatcher {
     }
 
     pub(super) fn start_for_session_directory(
-        workspace: WorkspaceRoot,
+        dir: Dir,
         updates: Arc<UpdateBroker>,
         session_id: SessionId,
-        changes: Arc<dyn SessionDirectoryFileChangeSink>,
+        changes: Arc<dyn SessionDirFileChangeSink>,
         agent_grep: Option<Arc<AgentGrepService>>,
     ) -> Result<Self, FileSystemWatcherError> {
-        let root = workspace.canonical_path().to_path_buf();
+        let root = dir.canonical_path().to_path_buf();
         Self::start_inner(
-            workspace,
+            dir,
             updates,
             None,
-            FileSystemWatcherObservers::SessionDirectory {
+            FileSystemWatcherObservers::SessionDir {
                 session_id,
                 root,
                 changes,
@@ -311,25 +311,16 @@ impl FileSystemWatcher {
     }
 
     fn start_inner(
-        workspace: WorkspaceRoot,
+        dir: Dir,
         updates: Arc<UpdateBroker>,
-        workspace_folder_id: Option<String>,
+        dir_id: Option<String>,
         observers: FileSystemWatcherObservers,
     ) -> Result<Self, FileSystemWatcherError> {
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let (startup, startup_rx) = std::sync::mpsc::sync_channel(1);
         let thread = std::thread::Builder::new()
             .name("zeta-file-system-watcher".into())
-            .spawn(move || {
-                watch_workspace(
-                    workspace,
-                    updates,
-                    workspace_folder_id,
-                    observers,
-                    shutdown_rx,
-                    startup,
-                )
-            })
+            .spawn(move || watch_dir(dir, updates, dir_id, observers, shutdown_rx, startup))
             .map_err(|error| FileSystemWatcherError(error.to_string()))?;
         match startup_rx.recv_timeout(FILE_SYSTEM_WATCH_STARTUP_TIMEOUT) {
             Ok(Ok(())) => {}
@@ -375,10 +366,10 @@ impl Drop for FileSystemWatcher {
     }
 }
 
-fn watch_workspace(
-    workspace: WorkspaceRoot,
+fn watch_dir(
+    dir: Dir,
     updates: Arc<UpdateBroker>,
-    workspace_folder_id: Option<String>,
+    dir_id: Option<String>,
     observers: FileSystemWatcherObservers,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
@@ -386,10 +377,10 @@ fn watch_workspace(
     let (codebase, symbol_index, codebase_semantic, changes, session_changes, agent_grep) =
         match observers {
             FileSystemWatcherObservers::None => (None, None, None, None, None, None),
-            FileSystemWatcherObservers::WorkspaceFolder { agent_grep } => {
+            FileSystemWatcherObservers::Dir { agent_grep } => {
                 (None, None, None, None, None, agent_grep)
             }
-            FileSystemWatcherObservers::WorkspaceRuntime {
+            FileSystemWatcherObservers::EnvRuntime {
                 codebase,
                 symbol_index,
                 codebase_semantic,
@@ -403,7 +394,7 @@ fn watch_workspace(
                 None,
                 agent_grep,
             ),
-            FileSystemWatcherObservers::SessionDirectory {
+            FileSystemWatcherObservers::SessionDir {
                 session_id,
                 root,
                 changes,
@@ -425,7 +416,7 @@ fn watch_workspace(
         return;
     };
     tokio_runtime.block_on(async move {
-        let file_watcher = match FileWatcher::new_with_backend(watcher_backend(&workspace)) {
+        let file_watcher = match FileWatcher::new_with_backend(watcher_backend(&dir)) {
             Ok(file_watcher) => file_watcher,
             Err(error) => {
                 let _ = startup.send(Err(format!(
@@ -438,11 +429,11 @@ fn watch_workspace(
         let (subscriber, receiver) = file_watcher.add_subscriber();
         let registration = subscriber.register_paths(vec![
             WatchPath {
-                path: workspace.requested_path().to_path_buf(),
+                path: dir.requested_path().to_path_buf(),
                 recursive: true,
             },
             WatchPath {
-                path: workspace.canonical_path().to_path_buf(),
+                path: dir.canonical_path().to_path_buf(),
                 recursive: true,
             },
         ]);
@@ -468,15 +459,14 @@ fn watch_workspace(
             (None, None) => None,
             _ => {
                 let _ = startup.send(Err(
-                    "codebase and symbol-index watcher observers must be installed together"
-                        .into(),
+                    "codebase and symbol-index watcher observers must be installed together".into(),
                 ));
                 return;
             }
         };
         let mut agent_grep_worker = match agent_grep.as_ref() {
             Some(agent_grep) if agent_grep.watches_fast_regex() => {
-                match AgentGrepRefreshWorker::start(Arc::clone(agent_grep), workspace.clone()) {
+                match AgentGrepRefreshWorker::start(Arc::clone(agent_grep), dir.clone()) {
                     Ok(worker) => Some(worker),
                     Err(error) => {
                         let _ = startup.send(Err(error));
@@ -491,26 +481,24 @@ fn watch_workspace(
         }
         if let Some(changes) = &changes {
             changes.files_changed(&FsChanged::RescanRequired {
-                workspace_folder_id: workspace_folder_id.clone(),
+                dir_id: dir_id.clone(),
             });
         }
         if let Some((session_id, root, changes)) = &session_changes {
             changes.session_files_changed(
                 session_id,
                 root,
-                &FsChanged::RescanRequired {
-                    workspace_folder_id: None,
-                },
+                &FsChanged::RescanRequired { dir_id: None },
             );
         }
         if let Some(codebase_worker) = &codebase_worker {
             codebase_worker.schedule(FileWatcherEvent::RescanRequired {
-                watched_paths: vec![workspace.canonical_path().to_path_buf()],
+                watched_paths: vec![dir.canonical_path().to_path_buf()],
             });
         }
         if let Some(agent_grep_worker) = &agent_grep_worker {
             agent_grep_worker.schedule(FileWatcherEvent::RescanRequired {
-                watched_paths: vec![workspace.canonical_path().to_path_buf()],
+                watched_paths: vec![dir.canonical_path().to_path_buf()],
             });
         }
         let mut receiver = DebouncedWatchReceiver::new(receiver, FILE_SYSTEM_WATCH_DEBOUNCE);
@@ -530,11 +518,11 @@ fn watch_workspace(
                     {
                         match AgentGrepRefreshWorker::start(
                             Arc::clone(agent_grep),
-                            workspace.clone(),
+                            dir.clone(),
                         ) {
                             Ok(worker) => agent_grep_worker = Some(worker),
                             Err(error) => {
-                                agent_grep.invalidate_index(&workspace);
+                                agent_grep.invalidate_index(&dir);
                                 log::warn!("{error}; invalidated the fast regex index");
                             }
                         }
@@ -542,7 +530,7 @@ fn watch_workspace(
                     if let Some(agent_grep_worker) = &agent_grep_worker {
                         agent_grep_worker.schedule(event.clone());
                     }
-                    if let Some(changed) = project_event(&workspace, workspace_folder_id.as_deref(), event) {
+                    if let Some(changed) = project_event(&dir, dir_id.as_deref(), event) {
                         if let Some(changes) = &changes {
                             changes.files_changed(&changed);
                         }
@@ -558,8 +546,8 @@ fn watch_workspace(
     });
 }
 
-fn watcher_backend(workspace: &WorkspaceRoot) -> FileWatcherBackend {
-    if workspace.requested_path() == workspace.canonical_path() {
+fn watcher_backend(dir: &Dir) -> FileWatcherBackend {
+    if dir.requested_path() == dir.canonical_path() {
         FileWatcherBackend::Recommended
     } else {
         FileWatcherBackend::Polling {
@@ -568,26 +556,22 @@ fn watcher_backend(workspace: &WorkspaceRoot) -> FileWatcherBackend {
     }
 }
 
-fn project_event(
-    workspace: &WorkspaceRoot,
-    workspace_folder_id: Option<&str>,
-    event: FileWatcherEvent,
-) -> Option<FsChanged> {
+fn project_event(dir: &Dir, dir_id: Option<&str>, event: FileWatcherEvent) -> Option<FsChanged> {
     match event {
         FileWatcherEvent::PathsChanged { paths } => {
             let mut paths = paths
                 .into_iter()
-                .filter_map(|path| workspace.project_observed_path(path))
+                .filter_map(|path| dir.project_observed_path(path))
                 .collect::<Vec<_>>();
             paths.sort();
             paths.dedup();
             (!paths.is_empty()).then_some(FsChanged::PathsChanged {
-                workspace_folder_id: workspace_folder_id.map(str::to_owned),
+                dir_id: dir_id.map(str::to_owned),
                 paths,
             })
         }
         FileWatcherEvent::RescanRequired { .. } => Some(FsChanged::RescanRequired {
-            workspace_folder_id: workspace_folder_id.map(str::to_owned),
+            dir_id: dir_id.map(str::to_owned),
         }),
     }
 }

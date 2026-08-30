@@ -1,5 +1,6 @@
 import { shell } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import type { DirGrantDto } from "../../../../generated/app-server/types.js";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
@@ -40,7 +41,7 @@ import { connectorIpcRoutes } from "../../platform/connectors/electron-main/conn
 import { pluginIpcRoutes } from "../../platform/plugins/electron-main/pluginIpcRoutes.js";
 import { marketplaceIpcRoutes } from "../../platform/marketplace/electron-main/marketplaceIpcRoutes.js";
 import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
-import { workspaceTrustIpcRoutes } from "../../platform/workspaceTrust/electron-main/workspaceTrustIpcRoutes.js";
+import { dirPermissionsIpcRoutes } from "../../platform/dirPermissions/electron-main/dirPermissionsIpcRoutes.js";
 import { accountIpcRoutes } from "../../platform/accounts/electron-main/accountIpcRoutes.js";
 import { ElectronClipboardService } from "../../platform/clipboard/electron-main/electronClipboardService.js";
 import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
@@ -84,8 +85,8 @@ import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electr
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter, readAppServerWorkspaceTrust, setAppServerWorkspaceFolders, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
-import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus, WorkspaceTrustChoice } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { createAppServerWorkspaceTransitionAdapter, createUserDirGrant, DEVELOPMENT_DIR_PERMISSIONS, readAppServerDirPermissions, READ_DIR_PERMISSIONS, setAppServerWorkspaceFolders, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspaceContextMainService, WorkspacesMainService, parseWorkspaceLaunchArguments, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
@@ -361,12 +362,12 @@ export class ZetaApplication extends Disposable {
 			if (this.appServerStartupMode === "required" && resolvedWorkspace.folders.length > 0 && resolvedWorkspace.folders.every(folder => !isRemoteResource(folder.uri))) {
 				const folders = [];
 				for (const folder of resolvedWorkspace.folders) {
-					const trust = await this.resolveLocalWorkspaceTrust(supervisor, folder.uri.fsPath);
-					if (trust === undefined) {
+					const grant = await this.resolveDirGrant(supervisor, folder.uri.fsPath);
+					if (grant === undefined) {
 						resources.dispose();
 						return undefined;
 					}
-					folders.push({ id: folder.id, root: folder.uri.fsPath, trust });
+					folders.push({ id: folder.id, path: folder.uri.fsPath, grant });
 				}
 				await setAppServerWorkspaceFolders(supervisor, folders);
 			}
@@ -424,7 +425,7 @@ export class ZetaApplication extends Disposable {
 				expectedServerName: "zeta-app-server",
 				capabilities: {
 					browser: { version: 1, observe: true, input: true },
-					workspaceTrustHost: { version: 1 },
+					dirPermissionsHost: { version: 1 },
 				},
 			},
 		});
@@ -643,22 +644,22 @@ export class ZetaApplication extends Disposable {
 			host: electronRemoteWindowMainHost(window),
 			...(reconnectableTerminals ? { prepareForRuntimeReplacement: () => reconnectableTerminals.prepareForServerReplacement() } : {}),
 		}));
-		const transitionToFolder = async (folderPath: string, trustRequired: boolean): Promise<void> => {
+		const transitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
 			const currentWorkspace = workspaceContext.getWorkspace();
 			const nextWorkspace = isRemoteWorkspaceIdentifier(currentWorkspace)
 				? await this.resolveRemoteFolderWorkspace(currentWorkspace, folderPath, workspaces)
 				: await workspaces.resolveFolder(folderPath);
 			if (nextWorkspace.id === currentWorkspace.id) return;
-			const trust = await this.resolveLocalWorkspaceTrust(supervisor, folderPath, window);
-			if (trust === undefined) {
-				if (trustRequired) throw new Error(`Workspace trust was not selected for '${folderPath}'`);
+			const grant = await this.resolveDirGrant(supervisor, folderPath, window);
+			if (grant === undefined) {
+				if (selectionRequired) throw new Error(`Directory permissions were not selected for '${folderPath}'`);
 				return;
 			}
 			await record.windowsStateHandler.saveWindowState(window);
 			reconnectableTerminals?.prepareForServerReplacement();
 			const transition = isRemoteWorkspaceIdentifier(nextWorkspace)
-				? await workspaceTransitions.transitionToWorkspace({ workspace: nextWorkspace, root: folderPath }, trust)
-				: await workspaceTransitions.transitionToFolder(folderPath, trust);
+				? await workspaceTransitions.transitionToWorkspace({ workspace: nextWorkspace, root: folderPath }, grant)
+				: await workspaceTransitions.transitionToFolder(folderPath, grant);
 			if (transition.status === WorkspaceTransitionStatus.Blocked) {
 				throw new Error("Finish the active request before opening another Workspace");
 			}
@@ -691,7 +692,7 @@ export class ZetaApplication extends Disposable {
 			...pluginIpcRoutes(supervisor),
 			...marketplaceIpcRoutes(supervisor),
 			...toolSearchIpcRoutes(supervisor),
-			...workspaceTrustIpcRoutes(supervisor),
+			...dirPermissionsIpcRoutes(supervisor),
 			...searchIpcRoutes(supervisor),
 			...terminalIpcRoutes(supervisor, reconnectableTerminals),
 			...this.ipcRouteContributions.flatMap(contribution => contribution(supervisor)),
@@ -724,7 +725,7 @@ export class ZetaApplication extends Disposable {
 				},
 				pickFolder: async () => {
 					const result = await dialog.showOpenDialog(window, {
-						title: "Add Trusted Folder",
+						title: "Add Directory",
 						properties: ["openDirectory"],
 					});
 					return result.canceled || !result.filePaths[0] ? undefined : result.filePaths[0];
@@ -752,7 +753,6 @@ export class ZetaApplication extends Disposable {
 		ipcRoutes.push(...sessionsWindowIpcRoutes({
 			openSessionsWindow: () => this.openSessionsWindow(record),
 			returnToWorkbench: () => record.focus(),
-			openWorkspace: (root) => record.openWorkspace?.(root) ?? Promise.reject(new Error("Workspace routing is unavailable")),
 		}));
 		if (this.nativeMenubar) {
 			const nativeContextMenu = windowDisposables.add(
@@ -846,7 +846,6 @@ export class ZetaApplication extends Disposable {
 				...sessionsWindowIpcRoutes({
 					openSessionsWindow: () => this.openSessionsWindow(record),
 					returnToWorkbench: () => this.returnToMainWindow(record, window),
-					openWorkspace: (root) => record.openWorkspace?.(root) ?? Promise.reject(new Error("Workspace routing is unavailable")),
 				}),
 			],
 		));
@@ -1024,9 +1023,9 @@ export class ZetaApplication extends Disposable {
 		const appServerWorkspace = createAppServerWorkspaceTransitionAdapter(
 			supervisor,
 			launcher instanceof LocalAppServerProcessLauncher
-				? (root, trust) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, trust)
+				? (root, grant) => this.reconnectLocalAppServerWorkspace(supervisor, launcher, root, grant)
 				: launcher instanceof SshAppServerProcessLauncher
-					? (root, trust) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, trust)
+					? (root, grant) => this.reconnectRemoteAppServerWorkspace(supervisor, launcher, root, grant)
 				: undefined,
 		);
 		return {
@@ -1040,19 +1039,19 @@ export class ZetaApplication extends Disposable {
 		supervisor: AppServerSupervisor,
 		launcher: LocalAppServerProcessLauncher,
 		root: string,
-		trust: WorkspaceTrustChoice,
+		grant: DirGrantDto,
 	): Promise<void> {
 		const previousEnvironment = launcher.environment;
 		const nextEnvironment = {
 			...previousEnvironment,
 			ZETA_WORKSPACE_ROOT: root,
-			ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+			ZETA_DIR_GRANT_SOURCE: "userConfig",
 		};
 		await supervisor.stop();
 		launcher.replaceEnvironment(nextEnvironment);
 		try {
 			await supervisor.start();
-			await switchAppServerWorkspace(supervisor, root, trust);
+			await switchAppServerWorkspace(supervisor, root, grant);
 		} catch (error) {
 			await supervisor.stop();
 			launcher.replaceEnvironment(previousEnvironment);
@@ -1069,14 +1068,14 @@ export class ZetaApplication extends Disposable {
 		supervisor: AppServerSupervisor,
 		launcher: SshAppServerProcessLauncher,
 		root: string,
-		trust: WorkspaceTrustChoice,
+		grant: DirGrantDto,
 	): Promise<void> {
 		const previousRoot = launcher.workspaceRoot;
 		await supervisor.stop();
 		launcher.replaceWorkspaceRoot(root);
 		try {
 			await supervisor.start();
-			await switchAppServerWorkspace(supervisor, root, trust);
+			await switchAppServerWorkspace(supervisor, root, grant);
 		} catch (error) {
 			await supervisor.stop();
 			launcher.replaceWorkspaceRoot(previousRoot);
@@ -1192,23 +1191,23 @@ export class ZetaApplication extends Disposable {
 		return this.closePersistentServicesPromise;
 	}
 
-	private async resolveLocalWorkspaceTrust(supervisor: AppServerSupervisor, root: string, window?: BrowserWindow): Promise<WorkspaceTrustChoice | undefined> {
-		const persisted = await readAppServerWorkspaceTrust(supervisor, root);
-		if (persisted !== undefined) return WorkspaceTrustChoice.UserConfig;
+	private async resolveDirGrant(supervisor: AppServerSupervisor, path: string, window?: BrowserWindow): Promise<DirGrantDto | undefined> {
+		const persisted = await readAppServerDirPermissions(supervisor, path);
+		if (persisted !== undefined) return { type: "config" };
 		const options = {
 			type: "question" as const,
-			buttons: ["Trust Folder", "Open in Restricted Mode", "Cancel"],
+			buttons: ["Allow Development Features", "Read Only", "Cancel"],
 			defaultId: 0,
 			cancelId: 2,
 			noLink: true,
-			message: "Do you trust the authors of the files in this folder?",
-			detail: "Trust enables terminals, Git mutations, tasks, and executable workspace configuration. Restricted Mode keeps file access available without running workspace code.",
+			message: "Which capabilities should this directory receive?",
+			detail: "Development features allow file changes, commands, repository mutations, language services, and directory-provided configuration. Read Only allows browsing, searching, watching, and repository inspection.",
 		};
 		const prompt = window
 			? await dialog.showMessageBox(window, options)
 			: await dialog.showMessageBox(options);
 		if (prompt.response === 2) return undefined;
-		return prompt.response === 0 ? WorkspaceTrustChoice.Trusted : WorkspaceTrustChoice.Restricted;
+		return createUserDirGrant(supervisor, prompt.response === 0 ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
 	}
 
 	private appServerEnvironment(workspace: IAnyWorkspaceIdentifier): Readonly<Record<string, string>> {
@@ -1231,7 +1230,7 @@ export class ZetaApplication extends Disposable {
 			...(isSingleFolderWorkspaceIdentifier(workspace)
 				? {
 					ZETA_WORKSPACE_ROOT: workspace.uri.fsPath,
-					ZETA_WORKSPACE_TRUST_SOURCE: "userConfig",
+					ZETA_DIR_GRANT_SOURCE: "userConfig",
 				}
 				: {}),
 		});

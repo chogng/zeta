@@ -4,7 +4,7 @@ use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_protocol::AgentRequestEnvelope;
-use zeta_protocol::SessionUpdateEnvelope;
+use zeta_protocol::SessionId;
 use zeta_protocol::ThreadUpdateEnvelope;
 
 /// A connection-layer fact understood by the TUI event loop.
@@ -16,7 +16,7 @@ pub(crate) enum ClientEvent {
     ConnectorsChanged,
     PackageSourcesChanged,
     SkillsChanged,
-    SessionUpdated(Box<SessionUpdateEnvelope>),
+    SessionChanged(SessionId),
     ThreadUpdated(Box<ThreadUpdateEnvelope>),
     ThreadTranscriptUpdated(Box<ThreadTranscriptUpdateEnvelope>),
 }
@@ -42,8 +42,8 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
             Some(ClientEvent::GitStatusChanged(changed.status))
         }
         ServerNotification::SessionThreadUpdate(update) => Some(ClientEvent::ThreadUpdated(update)),
-        ServerNotification::SessionUpdate(update) => {
-            Some(ClientEvent::SessionUpdated(Box::new(update)))
+        ServerNotification::SessionChanged(changed) => {
+            Some(ClientEvent::SessionChanged(changed.session_id))
         }
         ServerNotification::SessionThreadTranscriptUpdate(update) => {
             Some(ClientEvent::ThreadTranscriptUpdated(Box::new(update)))

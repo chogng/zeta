@@ -23,18 +23,18 @@ struct InstructionFrontmatter {
     patterns: Vec<String>,
 }
 
-/// Refreshable catalog for one Workspace's native Instruction directory.
+/// Refreshable catalog for one directory's native Instruction directory.
 pub struct InstructionCatalog {
-    workspace_root: PathBuf,
+    dir_root: PathBuf,
     snapshot: Arc<InstructionCatalogSnapshot>,
 }
 
 impl InstructionCatalog {
-    pub fn discover(workspace_root: impl AsRef<Path>) -> Self {
-        let workspace_root = workspace_root.as_ref().to_path_buf();
-        let (entries, diagnostics) = scan(&workspace_root);
+    pub fn discover(dir_root: impl AsRef<Path>) -> Self {
+        let dir_root = dir_root.as_ref().to_path_buf();
+        let (entries, diagnostics) = scan(&dir_root);
         Self {
-            workspace_root,
+            dir_root,
             snapshot: Arc::new(InstructionCatalogSnapshot::new(1, entries, diagnostics)),
         }
     }
@@ -44,7 +44,7 @@ impl InstructionCatalog {
     }
 
     pub fn refresh(&mut self) -> Arc<InstructionCatalogSnapshot> {
-        let (entries, diagnostics) = scan(&self.workspace_root);
+        let (entries, diagnostics) = scan(&self.dir_root);
         if self.snapshot.entries() == entries && self.snapshot.diagnostics() == diagnostics {
             return Arc::clone(&self.snapshot);
         }
@@ -60,8 +60,8 @@ impl InstructionCatalog {
     }
 }
 
-fn scan(workspace_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiagnostic>) {
-    let source_root = workspace_root.join(INSTRUCTION_DIRECTORY);
+fn scan(dir_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiagnostic>) {
+    let source_root = dir_root.join(INSTRUCTION_DIRECTORY);
     let metadata = match fs::symlink_metadata(&source_root) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == ErrorKind::NotFound => return (Vec::new(), Vec::new()),
@@ -71,7 +71,7 @@ fn scan(workspace_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiag
                 vec![diagnostic(
                     None,
                     InstructionDiagnosticCode::SourceUnavailable,
-                    "Workspace Instruction directory metadata is unavailable",
+                    "Directory Instruction directory metadata is unavailable",
                 )],
             );
         }
@@ -82,7 +82,7 @@ fn scan(workspace_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiag
             vec![diagnostic(
                 None,
                 InstructionDiagnosticCode::SourceUnavailable,
-                "Workspace Instruction path must be a real directory",
+                "Directory Instruction path must be a real directory",
             )],
         );
     }
@@ -97,7 +97,7 @@ fn scan(workspace_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiag
                 vec![diagnostic(
                     None,
                     InstructionDiagnosticCode::SourceUnavailable,
-                    "Workspace Instruction directory cannot be read",
+                    "Directory Instruction directory cannot be read",
                 )],
             );
         }

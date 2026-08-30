@@ -6,7 +6,7 @@ use zeta_editor_extension_host::ActivationLease;
 use zeta_editor_extension_host::ExtensionActivationSpec;
 use zeta_editor_extension_host::ExtensionHostError;
 use zeta_editor_extension_host::ExtensionLaunchCommand;
-use zeta_workspace::TrustedWorkspace;
+use zeta_file_access::Authorization;
 
 use super::source::EditorExtensionDeployment;
 
@@ -16,19 +16,19 @@ pub(super) struct PreparedExtension {
 }
 
 pub(super) fn prepare_extension(
-    workspace: &TrustedWorkspace,
+    authorization: &Authorization,
     deployment: &EditorExtensionDeployment,
     activation_generation: NonZeroU64,
 ) -> Result<PreparedExtension, ExtensionHostError> {
-    workspace
+    authorization
         .ensure_active()
         .map_err(|_| ExtensionHostError::AuthorityDenied)?;
     if !deployment.authority.authorizes() {
         return Err(ExtensionHostError::AuthorityDenied);
     }
-    let authority: Arc<dyn ActivationAuthority> = Arc::new(WorkspaceActivationAuthority {
+    let authority: Arc<dyn ActivationAuthority> = Arc::new(DirActivationAuthority {
         source: Arc::clone(&deployment.authority),
-        workspace: workspace.clone(),
+        authorization: authorization.clone(),
     });
     Ok(PreparedExtension {
         command: deployment.command.clone(),
@@ -40,33 +40,33 @@ pub(super) fn prepare_extension(
     })
 }
 
-struct WorkspaceActivationAuthority {
+struct DirActivationAuthority {
     source: Arc<dyn ActivationAuthority>,
-    workspace: TrustedWorkspace,
+    authorization: Authorization,
 }
 
-impl ActivationAuthority for WorkspaceActivationAuthority {
+impl ActivationAuthority for DirActivationAuthority {
     fn authorizes(&self) -> bool {
-        self.workspace.ensure_active().is_ok() && self.source.authorizes()
+        self.authorization.ensure_active().is_ok() && self.source.authorizes()
     }
 
     fn acquire(&self) -> Option<Box<dyn ActivationLease>> {
-        self.workspace.ensure_active().ok()?;
+        self.authorization.ensure_active().ok()?;
         let source = self.source.acquire()?;
-        if self.workspace.ensure_active().is_err() {
+        if self.authorization.ensure_active().is_err() {
             drop(source);
             return None;
         }
-        Some(Box::new(WorkspaceActivationLease {
+        Some(Box::new(DirActivationLease {
             _source: source,
-            _workspace: self.workspace.clone(),
+            _authorization: self.authorization.clone(),
         }))
     }
 }
 
-struct WorkspaceActivationLease {
+struct DirActivationLease {
     _source: Box<dyn ActivationLease>,
-    _workspace: TrustedWorkspace,
+    _authorization: Authorization,
 }
 
-impl ActivationLease for WorkspaceActivationLease {}
+impl ActivationLease for DirActivationLease {}

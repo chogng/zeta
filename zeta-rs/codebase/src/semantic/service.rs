@@ -81,7 +81,7 @@ impl CodebaseSemanticService {
         self
     }
 
-    /// Returns the Workspace identity bound to this semantic projection.
+    /// Returns the Directory identity bound to this semantic projection.
     pub fn root_id(&self) -> &crate::IndexRootId {
         self.index.root_id()
     }

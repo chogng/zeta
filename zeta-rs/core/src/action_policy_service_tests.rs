@@ -97,7 +97,7 @@ fn durable_approval_rejects_a_capability_set_from_another_action() {
     let request = review_request();
     let approval = ApprovalRequest::new(
         request.action().digest().clone(),
-        CapabilitySet::new([Capability::new(CapabilityKind::FileWrite, "workspace")]),
+        CapabilitySet::new([Capability::new(CapabilityKind::FileWrite, "dir")]),
         "wrong capabilities",
     );
 

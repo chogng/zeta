@@ -4,9 +4,9 @@
 > 命名空间与外部导入边界由
 > [`docs/agent-customizations.md`](../../docs/agent-customizations.md) 维护。
 
-`zeta-instructions` 对一个 Workspace 的 `.zeta/instructions/*.md` 执行有界、非递归发现，校验
+`zeta-instructions` 对一个目录的 `.zeta/instructions/*.md` 执行有界、非递归发现，校验
 YAML frontmatter、三态加载策略和 UTF-8 Markdown 正文，并发布不可变 catalog snapshot。它不解析
-Codex/Claude 格式，不组装模型请求，也不拥有 watcher、Workspace trust 或 UI。
+Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授权或 UI。
 
 ## 快速理解
 
@@ -20,7 +20,7 @@ Codex/Claude 格式，不组装模型请求，也不拥有 watcher、Workspace t
 
 ## 边界与公共契约
 
-`InstructionCatalog::discover` 固定原生 Workspace 相对路径；`refresh` 只在 entries 或 diagnostics
+`InstructionCatalog::discover` 固定目录相对路径；`refresh` 只在 entries 或 diagnostics
 变化时推进 generation。`InstructionCatalogSnapshot::global_content` 只渲染 `Global` 条目，并带
 artifact name 与相对路径 provenance。
 
@@ -68,8 +68,8 @@ cargo test -p zeta-instructions
 cargo clippy -p zeta-instructions --all-targets --no-deps -- -D warnings
 ```
 
-当前已实现原生 Workspace 发现、格式校验、不可变 snapshot 与 Global 内容渲染；App Server 的
-`WorkspaceCustomizations` 在 Workspace 激活时发现 catalog，由 filesystem invalidation refresh，并在
+当前已实现目录发现、格式校验、不可变 snapshot 与 Global 内容渲染；App Server 的
+`DirContributions` 在目录加入 Env 时发现 catalog，由 filesystem invalidation refresh，并在
 下一次 model invocation 通过 `HarnessContextProvider` 提供 Global 内容。
 当前限制是 contextual pattern matching、显式 on-demand selection、user/built-in/Plugin source
 composition，以及 catalog/diagnostic list API 尚未实现。

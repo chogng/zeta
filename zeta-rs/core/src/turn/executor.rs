@@ -236,7 +236,7 @@ impl TurnExecutor {
         self
     }
 
-    /// Uses immutable prompt additions captured by the host for this Workspace runtime.
+    /// Uses immutable prompt additions captured by the host for this environment runtime.
     pub fn with_instructions(mut self, instructions: Arc<HarnessInstructions>) -> Self {
         self.harness_context = Arc::new(FixedHarnessContext {
             snapshot: Arc::new(HarnessContext::new(instructions.as_ref().clone())),
@@ -274,7 +274,7 @@ impl TurnExecutor {
         self
     }
 
-    /// Installs the host-owned durable workspace checkpoint observer.
+    /// Installs the host-owned durable change checkpoint observer.
     pub fn with_execution_observer(mut self, observer: Arc<dyn TurnExecutionObserver>) -> Self {
         self.execution_observer = observer;
         self
@@ -446,11 +446,8 @@ impl TurnExecutor {
             .unwrap_or(0);
         let execution = self.execution_started(thread_id, turn_id, TurnExecutionKind::Shell)?;
         if let Err(error) = self.execution_observer.will_execute(&execution) {
-            self.threads.fail_turn(
-                thread_id,
-                turn_id,
-                StableTurnError::workspace_capture_failed(),
-            )?;
+            self.threads
+                .fail_turn(thread_id, turn_id, StableTurnError::change_capture_failed())?;
             self.publish_committed_after(thread_id, sequence_before_execution);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,
@@ -585,11 +582,8 @@ impl TurnExecutor {
         };
         let execution = self.execution_started(thread_id, turn_id, execution_kind)?;
         if let Err(error) = self.execution_observer.will_execute(&execution) {
-            self.threads.fail_turn(
-                thread_id,
-                turn_id,
-                StableTurnError::workspace_capture_failed(),
-            )?;
+            self.threads
+                .fail_turn(thread_id, turn_id, StableTurnError::change_capture_failed())?;
             self.publish_committed_after(thread_id, sequence_before_execution);
             self.execution_observer.did_finish(&TurnExecutionFinished {
                 session_id: execution.session_id,

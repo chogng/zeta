@@ -1,0 +1,20 @@
+[package]
+name = "zeta-content-search"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_content_search"
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-shell-command = { workspace = true }
+zeta-file-access = { workspace = true }
+
+[lints]
+workspace = true

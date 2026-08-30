@@ -280,13 +280,13 @@ pub struct DeclarativeExtensionContribution {
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Permission {
     Process { executable: PluginPath },
-    Workspace { access: WorkspaceAccess },
+    Directory { access: DirectoryAccess },
     Network { hosts: Vec<NetworkHost> },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum WorkspaceAccess {
+pub enum DirectoryAccess {
     Read,
     Write,
 }

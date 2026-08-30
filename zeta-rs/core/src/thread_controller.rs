@@ -1,11 +1,12 @@
 use crate::ContextBudget;
 use crate::CoreError;
 use crate::HarnessContext;
-use crate::SequenceExpectation;
 use crate::ThreadCommandResult;
 use crate::ThreadEventBatch;
 use crate::ThreadSnapshot;
 use crate::ThreadStore;
+use crate::ThreadWorktreeBinder;
+use crate::ThreadWorktreeBindingRequest;
 use crate::WriterLease;
 use crate::reduce_thread_event;
 use crate::thread_reducer::validate_agent_request;
@@ -45,6 +46,7 @@ use zeta_protocol::ThreadGoal;
 use zeta_protocol::ThreadGoalStatus;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
+use zeta_protocol::ThreadOrigin;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_protocol::ToolCallBinding;
@@ -72,6 +74,12 @@ mod user_input;
 
 pub use agent::CreateAgentThreadRequest;
 pub use mailbox::ThreadExecutionContext;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SequenceExpectation {
+    Any,
+    Exact(u64),
+}
 
 pub struct StartTurnRequest {
     pub command_id: CommandId,
@@ -155,6 +163,30 @@ pub struct StartContextCompactionRequest {
 pub struct CreateThreadRequest {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
+    pub title: String,
+}
+
+pub struct StartThreadRequest {
+    pub command_id: CommandId,
+    pub title: String,
+}
+
+pub struct CreateBranchRequest {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub title: String,
+}
+
+pub struct ForkThreadRequest {
+    pub command_id: CommandId,
+    pub source_thread_id: ThreadId,
+    pub title: String,
+}
+
+pub struct RewindThreadRequest {
+    pub command_id: CommandId,
+    pub source_thread_id: ThreadId,
+    pub before_turn_id: TurnId,
     pub title: String,
 }
 
@@ -391,6 +423,7 @@ pub struct ThreadController {
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
     pub(crate) live_interactions: live_interaction::LiveInteractionWaiters,
     extensions: RwLock<ExtensionRegistries>,
+    thread_worktree_binder: RwLock<Arc<dyn ThreadWorktreeBinder>>,
     image_attachments: Arc<ImageAttachments>,
     next_id: AtomicU64,
 }
@@ -412,6 +445,7 @@ impl ThreadController {
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(ExtensionRegistries::default()),
+            thread_worktree_binder: RwLock::new(Arc::new(crate::NoThreadWorktreeBinder)),
             image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
@@ -444,6 +478,7 @@ impl ThreadController {
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(ExtensionRegistries::default()),
+            thread_worktree_binder: RwLock::new(Arc::new(crate::NoThreadWorktreeBinder)),
             image_attachments,
             loaded_threads,
             next_id: AtomicU64::new(1),
@@ -453,6 +488,19 @@ impl ThreadController {
     /// Returns the canonical service used by this Thread authority and its model executors.
     pub fn image_attachments(&self) -> Arc<ImageAttachments> {
         Arc::clone(&self.image_attachments)
+    }
+
+    /// Installs the host authority that binds a Worktree before a Thread is created.
+    pub fn install_thread_worktree_binder(
+        &self,
+        binder: Arc<dyn ThreadWorktreeBinder>,
+    ) -> Result<(), CoreError> {
+        *self
+            .thread_worktree_binder
+            .write()
+            .map_err(|_| CoreError::Journal("Thread Worktree binder lock poisoned".into()))? =
+            binder;
+        Ok(())
     }
 
     /// Installs the shared agent extension registry before product Turns are accepted.
@@ -469,7 +517,7 @@ impl ThreadController {
 
     /// Installs the extension registry used when starting Turns in one Session.
     ///
-    /// Profile daemons call this for each durable Session so concurrently open Workspaces cannot
+    /// Profile daemons call this for each durable Session so concurrently open environments cannot
     /// replace one another's automatic Skill activation authority.
     pub fn install_session_extensions(
         &self,
@@ -519,6 +567,91 @@ impl ThreadController {
         self.commit_batch(&batch)?;
         *loaded = Some(self.loaded_threads.install(snapshot.clone()));
         Ok(snapshot)
+    }
+
+    /// Starts one root Thread. Its Thread ID is also the Session tree identity.
+    pub fn start_thread(&self, request: StartThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+        validate_thread_title(&request.command_id, &request.title)?;
+        let thread_id = command_thread_id("thread", &request.command_id)?;
+        let session_id = SessionId::new(thread_id.as_str().to_owned())
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        self.bind_thread_worktree(session_id.clone(), thread_id.clone(), ThreadOrigin::Root)?;
+        self.create_thread(CreateThreadRequest {
+            session_id,
+            thread_id,
+            title: request.title,
+        })
+    }
+
+    /// Creates an empty branch in an existing Session tree.
+    pub fn create_branch(&self, request: CreateBranchRequest) -> Result<ThreadSnapshot, CoreError> {
+        validate_thread_title(&request.command_id, &request.title)?;
+        if self.list_session_threads(&request.session_id)?.is_empty() {
+            return Err(CoreError::NotFound(request.session_id.to_string()));
+        }
+        let thread_id = command_thread_id("branch", &request.command_id)?;
+        self.bind_thread_worktree(
+            request.session_id.clone(),
+            thread_id.clone(),
+            ThreadOrigin::Root,
+        )?;
+        self.create_thread(CreateThreadRequest {
+            session_id: request.session_id,
+            thread_id,
+            title: request.title,
+        })
+    }
+
+    /// Forks one durable Thread at its current sequence while preserving its Session tree ID.
+    pub fn fork_thread(&self, request: ForkThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+        validate_thread_title(&request.command_id, &request.title)?;
+        let source = self.read_thread(&request.source_thread_id)?;
+        let thread_id = command_thread_id("fork", &request.command_id)?;
+        self.bind_thread_worktree(
+            source.session_id.clone(),
+            thread_id.clone(),
+            ThreadOrigin::Fork {
+                parent_thread_id: source.thread_id.clone(),
+                parent_sequence: source.sequence,
+            },
+        )?;
+        self.create_forked_thread(CreateForkedThreadRequest {
+            session_id: source.session_id,
+            thread_id,
+            title: request.title,
+            source_thread_id: source.thread_id,
+            source_sequence: source.sequence,
+        })
+    }
+
+    /// Rewinds one durable Thread into a new branch before the selected Turn.
+    pub fn rewind_thread(&self, request: RewindThreadRequest) -> Result<ThreadSnapshot, CoreError> {
+        validate_thread_title(&request.command_id, &request.title)?;
+        let source = self.read_thread(&request.source_thread_id)?;
+        if !source
+            .turns
+            .iter()
+            .any(|turn| turn.turn_id == request.before_turn_id)
+        {
+            return Err(CoreError::NotFound(request.before_turn_id.to_string()));
+        }
+        let thread_id = command_thread_id("rewind", &request.command_id)?;
+        self.bind_thread_worktree(
+            source.session_id.clone(),
+            thread_id.clone(),
+            ThreadOrigin::Rewind {
+                parent_thread_id: source.thread_id.clone(),
+                parent_sequence: source.sequence,
+                before_turn_id: request.before_turn_id.clone(),
+            },
+        )?;
+        self.create_rewound_thread(CreateRewoundThreadRequest {
+            session_id: source.session_id,
+            thread_id,
+            title: request.title,
+            source_thread_id: source.thread_id,
+            before_turn_id: request.before_turn_id,
+        })
     }
 
     /// Creates a child Thread containing the source's terminal Turns before one checkpoint.
@@ -1669,9 +1802,82 @@ impl ThreadController {
         self.with_loaded_thread(thread_id, |loaded| Ok(loaded.snapshot.clone()))
     }
 
-    /// Returns the in-memory projections currently loaded by this manager.
+    /// Reads every durable Thread known to this authority.
     pub fn list_threads(&self) -> Result<Vec<ThreadSnapshot>, CoreError> {
-        self.loaded_threads.loaded_snapshots()
+        self.store
+            .list_thread_ids()?
+            .into_iter()
+            .map(|thread_id| self.read_thread(&thread_id))
+            .collect()
+    }
+
+    /// Reads the Threads that currently share one Session tree identity.
+    pub fn list_session_threads(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<ThreadSnapshot>, CoreError> {
+        Ok(self
+            .list_threads()?
+            .into_iter()
+            .filter(|thread| &thread.session_id == session_id)
+            .collect())
+    }
+
+    /// Interrupts every active Turn in a Session tree and archives each Thread.
+    pub fn archive_session_threads(
+        &self,
+        session_id: &SessionId,
+        command_id: &CommandId,
+    ) -> Result<Vec<ThreadSnapshot>, CoreError> {
+        let threads = self.list_session_threads(session_id)?;
+        if threads.is_empty() {
+            return Err(CoreError::NotFound(session_id.to_string()));
+        }
+        for thread in threads {
+            loop {
+                let snapshot = self.read_thread(&thread.thread_id)?;
+                let active_turns = snapshot
+                    .turns
+                    .iter()
+                    .filter(|turn| is_interruptible_turn(turn.status))
+                    .map(|turn| turn.turn_id.clone())
+                    .collect::<Vec<_>>();
+                if active_turns.is_empty() {
+                    break;
+                }
+                for turn_id in active_turns {
+                    let interrupt_command = CommandId::new(format!(
+                        "thread-archive/{}/{}/{}",
+                        command_id, thread.thread_id, turn_id
+                    ))
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+                    self.interrupt_turn(
+                        &thread.thread_id,
+                        InterruptTurnRequest {
+                            command_id: interrupt_command,
+                            expected_sequence: SequenceExpectation::Any,
+                            turn_id,
+                        },
+                    )?;
+                }
+            }
+            self.archive_thread(&thread.thread_id)?;
+        }
+        self.list_session_threads(session_id)
+    }
+
+    pub fn archive_thread(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            if snapshot.status == zeta_protocol::ThreadStatus::Active {
+                self.record_batch(
+                    snapshot,
+                    vec![ThreadEvent::ThreadArchived {
+                        thread_id: thread_id.clone(),
+                    }],
+                )?;
+            }
+            Ok(snapshot.clone())
+        })
     }
 
     /// Replays committed updates after a durable Thread sequence for reconnecting consumers.
@@ -1955,6 +2161,22 @@ impl ThreadController {
             .transpose()
     }
 
+    fn bind_thread_worktree(
+        &self,
+        session_id: SessionId,
+        thread_id: ThreadId,
+        origin: ThreadOrigin,
+    ) -> Result<(), CoreError> {
+        self.thread_worktree_binder
+            .read()
+            .map_err(|_| CoreError::Journal("Thread Worktree binder lock poisoned".into()))?
+            .provision(&ThreadWorktreeBindingRequest {
+                session_id,
+                thread_id,
+                origin,
+            })
+    }
+
     fn next_identifier(&self, prefix: &str) -> String {
         let ordinal = self.next_id.fetch_add(1, Ordering::Relaxed);
         let timestamp = SystemTime::now()
@@ -2049,6 +2271,33 @@ fn validate_command_id(command_id: &CommandId) -> Result<(), CoreError> {
     } else {
         Ok(())
     }
+}
+
+fn validate_thread_title(command_id: &CommandId, title: &str) -> Result<(), CoreError> {
+    validate_command_id(command_id)?;
+    if title.trim().is_empty() {
+        return Err(CoreError::InvalidInput(
+            "Thread title must be non-empty".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_interruptible_turn(status: TurnStatus) -> bool {
+    matches!(
+        status,
+        TurnStatus::Created
+            | TurnStatus::Running
+            | TurnStatus::WaitingForApproval
+            | TurnStatus::WaitingForUserInput
+            | TurnStatus::WaitingForCapability
+            | TurnStatus::Cancelling
+    )
+}
+
+fn command_thread_id(prefix: &str, command_id: &CommandId) -> Result<ThreadId, CoreError> {
+    ThreadId::new(format!("{prefix}:{}", command_id.as_str()))
+        .map_err(|error| CoreError::InvalidInput(error.to_string()))
 }
 
 fn validate_policy_revision(policy_revision: &str) -> Result<(), CoreError> {

@@ -27,6 +27,7 @@ use zeta_app_server_protocol::protocol::fs::FsRenameParams;
 use zeta_app_server_protocol::protocol::fs::FsWriteFileParams;
 use zeta_app_server_protocol::protocol::fs::FsWriteFileResult;
 use zeta_app_server_protocol::protocol::resources::ResourceMetadataResult;
+use zeta_file_access::Permission;
 use zeta_file_system::ExistingTargetBehavior;
 use zeta_file_system::FileDeleteMode;
 use zeta_file_system::FileMetadata;
@@ -35,7 +36,6 @@ use zeta_file_system::FileType;
 use zeta_file_system::FileWriteCondition;
 use zeta_file_system::MissingTargetBehavior;
 use zeta_file_system::file_revision;
-use zeta_workspace::WorkspaceCapability;
 
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
@@ -45,9 +45,9 @@ impl AppServer {
         let params: FsGetMetadataParams = decode(params)?;
         let metadata = self
             .file_system_for_request(
-                params.workspace_folder_id.as_deref(),
+                params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                WorkspaceCapability::BrowseProductFiles,
+                Permission::BrowseFiles,
             )?
             .get_metadata(&params.path)
             .map_err(file_system_error)?;
@@ -58,9 +58,9 @@ impl AppServer {
         let params: FsReadDirectoryParams = decode(params)?;
         let entries = self
             .file_system_for_request(
-                params.workspace_folder_id.as_deref(),
+                params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                WorkspaceCapability::BrowseProductFiles,
+                Permission::BrowseFiles,
             )?
             .read_directory(&params.path)
             .map_err(file_system_error)?
@@ -77,9 +77,9 @@ impl AppServer {
         let params: FsReadFileParams = decode(params)?;
         let content = self
             .file_system_for_request(
-                params.workspace_folder_id.as_deref(),
+                params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                WorkspaceCapability::BrowseProductFiles,
+                Permission::BrowseFiles,
             )?
             .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
@@ -100,9 +100,9 @@ impl AppServer {
         let params: FsReadBinaryFileParams = decode(params)?;
         let content = self
             .file_system_for_request(
-                params.workspace_folder_id.as_deref(),
+                params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                WorkspaceCapability::BrowseProductFiles,
+                Permission::BrowseFiles,
             )?
             .read_file_with_revision(&params.path, MAX_RESOURCE_BYTES)
             .map_err(file_system_error)?;
@@ -136,9 +136,9 @@ impl AppServer {
         };
         let metadata = self
             .file_system_for_request(
-                params.workspace_folder_id.as_deref(),
+                params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                WorkspaceCapability::MutateRepository,
+                Permission::MutateRepository,
             )?
             .write_file_with_condition(
                 &params.path,
@@ -157,9 +157,9 @@ impl AppServer {
         let params: FsCreateFileParams = decode(params)?;
         let metadata = self
             .file_system_for_request(
-                params.workspace_folder_id.as_deref(),
+                params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                WorkspaceCapability::MutateRepository,
+                Permission::MutateRepository,
             )?
             .create_file(&params.path, existing_behavior(params.existing))
             .map_err(file_system_error)?;
@@ -169,9 +169,9 @@ impl AppServer {
     pub(super) fn fs_rename(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsRenameParams = decode(params)?;
         self.file_system_for_request(
-            params.workspace_folder_id.as_deref(),
+            params.dir_id.as_deref(),
             params.session_directory.as_ref(),
-            WorkspaceCapability::MutateRepository,
+            Permission::MutateRepository,
         )?
         .rename(
             &params.source,
@@ -193,9 +193,9 @@ impl AppServer {
             FsDeleteMode::Recursive => FileDeleteMode::Recursive,
         };
         self.file_system_for_request(
-            params.workspace_folder_id.as_deref(),
+            params.dir_id.as_deref(),
             params.session_directory.as_ref(),
-            WorkspaceCapability::MutateRepository,
+            Permission::MutateRepository,
         )?
         .delete(&params.path, missing, mode)
         .map_err(file_system_error)?;
@@ -204,18 +204,18 @@ impl AppServer {
 
     fn file_system_for_request(
         &self,
-        workspace_folder_id: Option<&str>,
+        dir_id: Option<&str>,
         session_directory: Option<
-            &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
+            &zeta_app_server_protocol::protocol::environment::SessionDirSelector,
         >,
-        capability: WorkspaceCapability,
-    ) -> Result<std::sync::Arc<dyn zeta_file_system::WorkspaceFileSystem>, RpcError> {
-        match (workspace_folder_id, session_directory) {
+        permission: Permission,
+    ) -> Result<std::sync::Arc<dyn zeta_file_system::FileSystem>, RpcError> {
+        match (dir_id, session_directory) {
             (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
             (_, Some(selector)) => {
-                self.file_system_service_for_session_directory(selector, capability)
+                self.file_system_service_for_session_directory(selector, permission)
             }
-            (_, None) => self.file_system_service_for(workspace_folder_id),
+            (_, None) => self.file_system_service_for(dir_id),
         }
     }
 }

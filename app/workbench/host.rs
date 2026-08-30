@@ -283,7 +283,7 @@ impl<B> WorkbenchHost<B> {
             | AppCommandId::ToggleTerminalSurface
             | AppCommandId::OpenKeyboardShortcuts
             | AppCommandId::ManageRemoteTunnels
-            | AppCommandId::ToggleWorkspacePane
+            | AppCommandId::ToggleFilesPane
             | AppCommandId::AddSession
             | AppCommandId::ShowAgentChanges
             | AppCommandId::ShowAgentFiles
@@ -297,7 +297,7 @@ impl<B> WorkbenchHost<B> {
             | AppCommandId::PickExecutionLocation
             | AppCommandId::PickWorkingDirectory
             | AppCommandId::PickGitBranch
-            | AppCommandId::ShowWorkspaceDiff
+            | AppCommandId::ShowGitDiff
             | AppCommandId::SplitTerminalHorizontal
             | AppCommandId::SplitTerminalVertical
             | AppCommandId::FocusNextPane

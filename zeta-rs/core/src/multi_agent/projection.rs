@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use crate::SessionSnapshot;
 use crate::ThreadSnapshot;
 use zeta_protocol::AgentTreeExecutionStatus;
 use zeta_protocol::AgentTreeNodeProjection;
@@ -10,29 +9,20 @@ use zeta_protocol::AgentTreeWaitingReason;
 use zeta_protocol::DelegationResult;
 use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::ThreadId;
-use zeta_protocol::ThreadOrigin;
 use zeta_protocol::TurnStatus;
 
-/// Derives the complete Agent observability tree from one consistent Session/Thread read set.
-pub fn project_agent_tree(
-    session: &SessionSnapshot,
-    threads: &[ThreadSnapshot],
-) -> AgentTreeProjection {
+/// Derives the complete Agent observability tree from one consistent Thread read set.
+pub fn project_agent_tree(threads: &[ThreadSnapshot]) -> AgentTreeProjection {
     let by_id = threads
         .iter()
         .map(|thread| (thread.thread_id.clone(), thread))
         .collect::<BTreeMap<_, _>>();
-    let memberships = session
-        .threads
-        .iter()
-        .map(|thread| (thread.membership.thread_id.clone(), &thread.membership))
-        .collect::<BTreeMap<_, _>>();
     let mut children = BTreeMap::<ThreadId, Vec<ThreadId>>::new();
     let mut roots = Vec::new();
-    for membership in &session.threads {
-        let thread_id = membership.membership.thread_id.clone();
-        match parent_thread_id(&membership.membership.origin) {
-            Some(parent) if parent != &thread_id && memberships.contains_key(parent) => {
+    for thread in threads {
+        let thread_id = thread.thread_id.clone();
+        match thread.parent_thread_id.as_ref() {
+            Some(parent) if parent != &thread_id && by_id.contains_key(parent) => {
                 children.entry(parent.clone()).or_default().push(thread_id);
             }
             _ => roots.push(thread_id),
@@ -46,23 +36,13 @@ pub fn project_agent_tree(
     let mut projected = BTreeSet::new();
     let mut nodes = roots
         .iter()
-        .filter_map(|thread_id| {
-            build_node(
-                thread_id,
-                &by_id,
-                &memberships,
-                &children,
-                &results,
-                &mut projected,
-            )
-        })
+        .filter_map(|thread_id| build_node(thread_id, &by_id, &children, &results, &mut projected))
         .collect::<Vec<_>>();
-    for membership in &session.threads {
-        if !projected.contains(&membership.membership.thread_id)
+    for thread in threads {
+        if !projected.contains(&thread.thread_id)
             && let Some(node) = build_node(
-                &membership.membership.thread_id,
+                &thread.thread_id,
                 &by_id,
-                &memberships,
                 &children,
                 &results,
                 &mut projected,
@@ -77,13 +57,11 @@ pub fn project_agent_tree(
 fn build_node(
     thread_id: &ThreadId,
     threads: &BTreeMap<ThreadId, &ThreadSnapshot>,
-    memberships: &BTreeMap<ThreadId, &zeta_protocol::SessionThread>,
     children: &BTreeMap<ThreadId, Vec<ThreadId>>,
     results: &BTreeMap<ThreadId, DelegationResult>,
     projected: &mut BTreeSet<ThreadId>,
 ) -> Option<AgentTreeNodeProjection> {
     let thread = threads.get(thread_id)?;
-    let membership = memberships.get(thread_id)?;
     if !projected.insert(thread_id.clone()) {
         return None;
     }
@@ -92,8 +70,8 @@ fn build_node(
         thread_id: thread_id.clone(),
         thread_sequence: thread.sequence,
         title: thread.title.clone(),
-        origin: membership.origin.clone(),
-        membership_status: membership.status,
+        parent_thread_id: thread.parent_thread_id.clone(),
+        forked_from_id: thread.forked_from_id.clone(),
         execution_status: turn
             .map(|turn| execution_status(turn.status))
             .unwrap_or(AgentTreeExecutionStatus::Idle),
@@ -113,26 +91,9 @@ fn build_node(
             .get(thread_id)
             .into_iter()
             .flatten()
-            .filter_map(|child| {
-                build_node(child, threads, memberships, children, results, projected)
-            })
+            .filter_map(|child| build_node(child, threads, children, results, projected))
             .collect(),
     })
-}
-
-fn parent_thread_id(origin: &ThreadOrigin) -> Option<&ThreadId> {
-    match origin {
-        ThreadOrigin::Root => None,
-        ThreadOrigin::Fork {
-            parent_thread_id, ..
-        }
-        | ThreadOrigin::Rewind {
-            parent_thread_id, ..
-        }
-        | ThreadOrigin::AgentSpawn {
-            parent_thread_id, ..
-        } => Some(parent_thread_id),
-    }
 }
 
 fn execution_status(status: TurnStatus) -> AgentTreeExecutionStatus {

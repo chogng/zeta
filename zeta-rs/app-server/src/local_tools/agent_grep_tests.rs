@@ -3,10 +3,10 @@ use std::ffi::OsString;
 use std::fs;
 use std::sync::Arc;
 
-fn workspace() -> (tempfile::TempDir, WorkspaceRoot, ResolvedFilePath) {
+fn dir_fixture() -> (tempfile::TempDir, Dir, ResolvedFilePath) {
     let directory = tempfile::tempdir().unwrap();
     fs::create_dir(directory.path().join(".git")).unwrap();
-    let root = WorkspaceRoot::open(directory.path()).unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
     let resolved = ResolvedFilePath {
         root: root.clone(),
         relative: PathBuf::new(),
@@ -17,7 +17,7 @@ fn workspace() -> (tempfile::TempDir, WorkspaceRoot, ResolvedFilePath) {
 
 #[test]
 fn fast_regex_backend_is_agent_scoped_and_tracks_watcher_changes() {
-    let (directory, root, resolved) = workspace();
+    let (directory, root, resolved) = dir_fixture();
     let source = directory.path().join("source.rs");
     fs::write(&source, "before_marker\n").unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
@@ -65,7 +65,7 @@ fn fast_regex_backend_is_agent_scoped_and_tracks_watcher_changes() {
 
 #[test]
 fn fast_regex_backend_uses_the_private_worker_client() {
-    let (directory, root, resolved) = workspace();
+    let (directory, root, resolved) = dir_fixture();
     let storage = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("source.rs"), "worker_marker\n").unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
@@ -100,7 +100,7 @@ fn fast_regex_backend_uses_the_private_worker_client() {
 
 #[test]
 fn disabling_fast_regex_releases_but_preserves_its_project_index() {
-    let (directory, root, resolved) = workspace();
+    let (directory, root, resolved) = dir_fixture();
     let profile = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("source.rs"), "disable_marker\n").unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
@@ -119,7 +119,7 @@ fn disabling_fast_regex_releases_but_preserves_its_project_index() {
             &zeta_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
-    let index_directory = storage.index_directory(&root.trust_id(), WorkspaceIndexKind::AgentGrep);
+    let index_directory = storage.index_directory(&root.id(), DirIndexKind::AgentGrep);
     assert!(index_directory.join("manifests").is_dir());
 
     let disabled = service.reconfigured(AgentGrepBackend::Ripgrep, ripgrep);
@@ -129,7 +129,7 @@ fn disabling_fast_regex_releases_but_preserves_its_project_index() {
     assert!(index_directory.is_dir());
     assert_eq!(
         storage
-            .clear_index(&root.trust_id(), WorkspaceIndexKind::AgentGrep)
+            .clear_index(&root.id(), DirIndexKind::AgentGrep)
             .unwrap(),
         zeta_state::ClearOutcome::Cleared
     );
@@ -145,7 +145,7 @@ fn fast_regex_worker_child() {
 
 #[test]
 fn fast_regex_backend_applies_regex_glob_case_and_result_limit_semantics() {
-    let (directory, _, resolved) = workspace();
+    let (directory, _, resolved) = dir_fixture();
     fs::write(
         directory.path().join("source.rs"),
         (0..101)
@@ -183,7 +183,7 @@ fn fast_regex_backend_applies_regex_glob_case_and_result_limit_semantics() {
 
 #[test]
 fn fast_regex_backend_returns_validation_failures_and_honors_pre_cancellation() {
-    let (directory, _, resolved) = workspace();
+    let (directory, _, resolved) = dir_fixture();
     fs::write(directory.path().join("source.rs"), "marker\n").unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
     let service = AgentGrepService::new(AgentGrepBackend::FastRegex, ripgrep, None);
@@ -217,7 +217,7 @@ fn fast_regex_backend_returns_validation_failures_and_honors_pre_cancellation() 
 fn ripgrep_backend_executes_the_frozen_binary_without_creating_an_index() {
     use std::os::unix::fs::PermissionsExt;
 
-    let (directory, root, resolved) = workspace();
+    let (directory, root, resolved) = dir_fixture();
     let executable = directory.path().join("rg-test");
     fs::write(&executable, "#!/bin/sh\nprintf '%s' \"$*\"\n").unwrap();
     let mut permissions = fs::metadata(&executable).unwrap().permissions();

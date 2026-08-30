@@ -11,7 +11,7 @@ const serverCapabilityFields = [
 	'attachments',
 	'fileSystem',
 	'git',
-	'workspaceSearch',
+	'contentSearch',
 	'codebase',
 	'cloudCodebase',
 	'terminal',

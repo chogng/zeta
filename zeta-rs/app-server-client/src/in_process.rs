@@ -22,7 +22,7 @@ use zeta_client::OperationClient;
 #[derive(Clone)]
 pub struct InProcessClientOptions {
     pub profile_root: PathBuf,
-    pub workspace_root: Option<PathBuf>,
+    pub dir_root: Option<PathBuf>,
     pub client_info: ClientInfo,
     pub capabilities: ClientCapabilities,
     pub slash_commands: SlashCommandCatalog,
@@ -36,7 +36,7 @@ impl InProcessClientOptions {
     pub fn new(profile_root: impl Into<PathBuf>, client_info: ClientInfo) -> Self {
         Self {
             profile_root: profile_root.into(),
-            workspace_root: None,
+            dir_root: None,
             client_info,
             capabilities: ClientCapabilities::default(),
             slash_commands: SlashCommandCatalog::default(),
@@ -57,9 +57,9 @@ impl InProcessClientOptions {
         self
     }
 
-    /// Enables local filesystem and shell tools under one Workspace root.
-    pub fn with_workspace_root(mut self, workspace: impl Into<PathBuf>) -> Self {
-        self.workspace_root = Some(workspace.into());
+    /// Enables local filesystem and shell tools under one directory root.
+    pub fn with_dir_root(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.dir_root = Some(dir.into());
         self
     }
 
@@ -110,7 +110,7 @@ impl fmt::Debug for InProcessClientOptions {
         formatter
             .debug_struct("InProcessClientOptions")
             .field("profile_root", &self.profile_root)
-            .field("workspace_root", &self.workspace_root)
+            .field("dir_root", &self.dir_root)
             .field("client_info", &self.client_info)
             .field("capabilities", &self.capabilities)
             .field("slash_commands", &self.slash_commands)
@@ -131,7 +131,7 @@ impl fmt::Debug for InProcessClientOptions {
 impl PartialEq for InProcessClientOptions {
     fn eq(&self, other: &Self) -> bool {
         self.profile_root == other.profile_root
-            && self.workspace_root == other.workspace_root
+            && self.dir_root == other.dir_root
             && self.client_info == other.client_info
             && self.capabilities == other.capabilities
             && self.slash_commands == other.slash_commands
@@ -224,8 +224,8 @@ pub fn open_in_process_app_server(
         .with_session_state_mode(options.session_state_mode)
         .with_slash_command_catalog(options.slash_commands);
     server_options.built_in_skills = options.built_in_skills;
-    if let Some(workspace_root) = options.workspace_root {
-        server_options = server_options.with_workspace_root(workspace_root);
+    if let Some(dir_root) = options.dir_root {
+        server_options = server_options.with_dir_root(dir_root);
     }
     if let Some(client) = options.model_operation_client {
         server_options = server_options.with_model_operation_client(client);

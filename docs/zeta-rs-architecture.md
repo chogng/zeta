@@ -16,10 +16,10 @@
 | 哪些状态由 Rust 权威拥有？ | Session、Thread、Turn、工具生命周期、配置与持久化事实 | [核心](#4-核心) |
 | Desktop、`zeta-code` 和其他 Agent 客户端如何调用？ | 统一经过 App Server API，不链接 Core、Store 或 Provider | [对外接口](#8-app-server) |
 | protocol、history、Core 和 storage 有什么区别？ | 分别拥有共享事实、持久化记录形状、状态协调和物理读写 | [Protocol 边界](#3-protocol-边界)、[存储](#5-存储端口与物理存储) |
-| 为什么有这么多 crate？ | 按可独立验证的责任拆分，不按功能名称堆成通用 service | [Workspace 边界](#2-workspace-边界) |
+| 为什么有这么多 crate？ | 按可独立验证的责任拆分，不按功能名称堆成通用 service | [crate 边界](#2-crate-边界) |
 | 具体函数和修改路径在哪里？ | 进入对应 crate README，系统文档不复制私有实现 | [文档规范](documentation-guidelines.md) |
 
-## 1. Workspace 职责
+## 1. 共享后端职责
 
 `zeta-rs/` 是共享 Rust 后端，`zeta-rs/core/` 是领域运行时。它负责：
 
@@ -32,7 +32,7 @@
 
 Desktop UI、Electron IPC、`zeta-code` 的 TUI 宿主和第三方网页 UI 不属于共享后端。
 
-## 2. Workspace 边界
+## 2. crate 边界
 
 ```text
 zeta-rs/
@@ -41,14 +41,14 @@ zeta-rs/
 ├── tools/                # target host-side tool types, interfaces and pure adapters
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor
-├── file-search/          # workspace path fuzzy search + CLI
-├── codebase/             # Workspace 代码事实、存储接口、检索融合与复核
+├── file-search/          # directory path fuzzy search + CLI
+├── codebase/             # 目录代码事实、存储接口、检索融合与复核
 ├── codebase-store/       # Codebase SQLite 表、迁移、查询与记录映射
 ├── cloud-codebase/       # 可选云端语义增强、授权、同步与删除恢复
 ├── slash-commands/       # headless catalog, input grammar and interaction state
 ├── slash-launcher/       # product-selected list composition, slash query and selection state
 ├── file-watcher/         # shared filesystem invalidation hints
-├── state/                # Profile DB 运行时、路径、权限、迁移与跨进程锁
+├── state/                # Profile DB、SQLite Thread authority、迁移、目录索引与跨进程锁
 ├── git/                  # bounded Git repository operations and structured parsing
 ├── diff/                 # shared bounded line/inline diff mapping for Desktop and TUI
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation
@@ -62,12 +62,10 @@ zeta-rs/
 ├── lsp-manager/          # 产品级 LSP 启停、文档路由、请求 facade 与 stale-result gate
 ├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor
-├── session-store/        # Session persistence port + envelope
 ├── history/              # model-history + persisted Thread record domain types
 ├── thread-store/         # Thread persistence port + append/page validation
 ├── context-engine/       # provider-neutral context budget、token measurement 与边界判定
 ├── core/                 # reducers, coordinators, execution policy and recovery
-├── storage/              # SQLite Session/Thread authority adapters
 ├── rollout/              # local state repository + recovery composition（crate 名待清理）
 ├── rollout-trace/        # read-only export, diagnostics and evaluation artifact
 ├── app-server-protocol/  # external RPC wire contract + generators
@@ -126,18 +124,18 @@ dismiss 状态。它不认识 Slash Command、Skill、业务 target、handler、
 
 `zeta-syntax` 当前拥有 Rust、JSON、JSONC 与 Shell 文档的有界增量 tree-sitter parse、revision binding，以及
 syntax token、folding range、document symbol 和 parse diagnostic snapshot。它不读取文件、
-不监听 workspace、不保存符号索引，也不依赖 legacy editor runtime、`zeta-editor` 或 `zeta-lsp`。它是
+不监听目录、不保存符号索引，也不依赖 legacy editor runtime、`zeta-editor` 或 `zeta-lsp`。它是
 Rust `zeta-editor` 内部组合的底层分析 crate，不是 App Server 产品 API。跨编辑器
 所有权与演进阶段见 [`syntax-analysis.md`](syntax-analysis.md)，当前 API 和修改路径见
 [`syntax/README.md`](../zeta-rs/syntax/README.md)。
 
-`zeta-codebase` 当前拥有授权 `WorkspaceRoot` 内的 ignore-aware scan、syntax-assisted/fallback
+`zeta-codebase` 当前拥有获准 `Dir` 内的 ignore-aware scan、syntax-assisted/fallback
 chunking、stable revision/chunk identity、local SQLite generation 与 FTS5 retrieval。它消费
-`zeta-syntax` declaration facts，但不把 workspace lifecycle 下沉给 parser；App Server 拥有 watcher、
+`zeta-syntax` declaration facts，但不把 directory lifecycle 下沉给 parser；App Server 拥有 watcher、
 profile placement 和 RPC state。跨层隐私与云端边界见 [`codebase.md`](codebase.md)，实现契约见
 [`codebase/README.md`](../zeta-rs/codebase/README.md)。
 
-`zeta-codebase` 当前拥有 Workspace 扫描、切分、revision/identity、本地全文与符号数据、可选设备内模型
+`zeta-codebase` 当前拥有目录扫描、切分、revision/identity、本地全文与符号数据、可选设备内模型
 向量、候选融合、当前源码复核和 byte budget。`zeta-cloud-codebase` 只消费它复核后的 exact chunks，
 完成可选云端语义索引与查询，并持久化 grant、远端身份、generation 和删除恢复状态。具体 contract 见
 [`codebase/README.md`](../zeta-rs/codebase/README.md) 与
@@ -182,7 +180,7 @@ block layout 和 app presentation，并消费 `zeta-ui-components::ScrollState`�
 pairing、deadline cancellation、文档同步版本、push diagnostics 与规范关闭；宿主路由层另外
 把一个 language ID 绑定到一个 initialized client，保存 editor revision / server incarnation /
 document version，并在显式 replacement 时重放当前全文。它不依赖 `zeta-editor` 或 app host，也不拥有
-server discovery、安装、workspace 配置、restart policy 或 UI projection。
+server discovery、安装、directory 配置、restart policy 或 UI projection。
 它会上报规范关闭之外的 transport-close 事实；`zeta-lsp-manager` 用 generation/server epoch
 隔离旧实例，拥有断连 route retirement、有限指数退避、crash-loop gate 和 authoritative snapshot
 重放。跨层所有权与当前阶段见 [`lsp.md`](lsp.md)，当前 API 和修改路径见
@@ -197,7 +195,7 @@ crate，或 app 重新计算波浪线 geometry，都表示该边界发生漂移�
 Automatic/Enabled/Disabled preference、execution policy gate、冻结 PATH candidate 校验、canonical
 executable 和 availability；App Server Config authority 分别持久化 mode/path，Desktop Settings UI 为三个
 server 保留独立 draft，并只提交 revision-safe typed command，
-再把权威 snapshot 映射进 resolver，并将 definition 交给 `zeta-lsp-manager`。它不启动进程、不决定 workspace trust，也不
+再把权威 snapshot 映射进 resolver，并将 definition 交给 `zeta-lsp-manager`。它不启动进程、不决定目录 capability，也不
 读取编辑器文档。crate contract 见
 [`lsp-server-provider/README.md`](../zeta-rs/lsp-server-provider/README.md)。
 
@@ -208,8 +206,8 @@ catalog 和 `LspServerProviders` provider collection，下载、安装与激活�
 
 `zeta-lsp-manager` 当前位于产品宿主与 `zeta-lsp` 之间，拥有显式 enablement、resolved
 definition 消费、非阻塞文档/request API、editor revision / LSP version freshness、位置编码转换、
-server generation 和 supervisor thread 生命周期。`app` 已把文件 open/change/save/close、workspace
-replacement、hover/completion/definition 和事件循环接到该层；PATH 中存在有效内置 server 时启用
+server generation 和 supervisor thread 生命周期。`app` 已把文件 open/change/save/close、directory
+change、hover/completion/definition 和事件循环接到该层；PATH 中存在有效内置 server 时启用
 对应 route；config generation 变化时 app 重建服务并重放全部打开文档。它不读取文件、不依赖
 `zeta-editor`、不发现 executable，也不绘制 UI。crate contract 见
 [`lsp-manager/README.md`](../zeta-rs/lsp-manager/README.md)。
@@ -229,7 +227,7 @@ accessibility frame 不进入 renderer。完整所有权、后端替换路径和
 
 Direct-provider credential ownership 由 [`model-provider.md`](model-provider.md) 维护；通用 secret
 persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control plane 由
-[`login.md`](login.md) 维护。Workspace 不创建统一 credential/OAuth crate，也不让 Core、API 或
+[`login.md`](login.md) 维护。目录模型不创建统一 credential/OAuth crate，也不让 Core、API 或
 network client 读取 secret store。
 
 ChatGPT 订阅通过 [`chatgpt-subscription.md`](chatgpt-subscription.md) 接入：`zeta-chatgpt` 在本机执行 device OAuth、refresh 与 SecretStore persistence，并向 `zeta-model-provider` 提供 fresh authenticated target。完整 Agent loop 继续由 Zeta Core `TurnExecutor` 持有。产品 composition 使用 exact ModelRef 对应静态 row 的 `runtime = chatgpt_subscription` 选择 target，不会由“已登录”隐式切换模型。
@@ -237,7 +235,7 @@ ChatGPT 订阅通过 [`chatgpt-subscription.md`](chatgpt-subscription.md) 接入
 ## 3. Protocol 边界
 
 Canonical 产品模型、command/event/update/request 的分类、ID/cursor 语义、当前缺口和后续迁移
-统一由 [`protocol.md`](protocol.md) 维护。本文件只规定 workspace 依赖关系：
+统一由 [`protocol.md`](protocol.md) 维护。本文件只规定 crate 依赖关系：
 `zeta-protocol` 是纯共享值层，Core、store、provider adapter 与 App Server wire 可以依赖它，
 它不能反向依赖这些执行或 I/O crate。
 
@@ -248,9 +246,9 @@ identity/content，不拥有 Core 调度、MCP session、Plugin authority 或 pr
 ## 4. 核心
 
 Core 的完整 ownership、执行组件、ports、并发与恢复规则统一由
-[`core.md`](core.md) 维护。本节只保留 workspace 级约束。
+[`core.md`](core.md) 维护。本节只保留共享运行时约束。
 
-SessionCoordinator 与 ThreadController 都通过纯 reducer 维护可重建 projection：
+ThreadController 通过纯 reducer 维护可重建 Thread 状态：
 
 ```text
 stored event + previous snapshot → next snapshot
@@ -268,8 +266,8 @@ validate command
 
 append 失败时不能暴露未提交状态。
 
-SessionCoordinator 只序列化 membership、lineage 与 lifecycle。ThreadController 只序列化一个
-Thread 的执行历史。不同 Thread 可并行，不受 Session sequence 阻塞。
+ThreadController 只序列化一个 Thread 的执行历史。membership、lineage 与 lifecycle 都由 Thread
+事实表达；不同 Thread 可并行，不存在 Session sequence。
 
 ## 5. 存储端口与物理存储
 
@@ -278,14 +276,11 @@ Thread 的执行历史。不同 Thread 可并行，不受 Session sequence 阻�
 也不建立第二份 history authority。具体契约见
 [`history/README.md`](../zeta-rs/history/README.md)。
 
-`zeta-session-store` 仍拥有 Session envelope；`zeta-thread-store` 拥有 storage-neutral Thread
-Store trait、完整恢复/追加请求、atomic batch validator 与错误。Core 依赖 history 类型和这些 port，
-不依赖本地文件实现。Store 细节分别见
-[`session-store/README.md`](../zeta-rs/session-store/README.md) 与
+`zeta-thread-store` 拥有 storage-neutral Thread Store trait、完整恢复/追加请求、atomic batch
+validator 与错误。Core 依赖 history 类型和该 port，不依赖本地文件实现。Store 细节见
 [`thread-store/README.md`](../zeta-rs/thread-store/README.md)。
 
-`zeta-state` 当前提供 `SqliteSessionStore` 与 `SqliteThreadStore`。两者打开同一
-`state.sqlite3`，并统一负责：
+`zeta-state` 提供 `SqliteThreadStore`，打开 `state.sqlite3` 并负责：
 
 - `BEGIN IMMEDIATE` 下的 sequence compare-and-set；
 - batch/event identity 唯一性；
@@ -293,35 +288,34 @@ Store trait、完整恢复/追加请求、atomic batch validator 与错误。Cor
 - foreign key、WAL、`synchronous=FULL` 和 bounded busy timeout；
 - component-scoped schema version gate。
 
-SQLite 是 Session/Thread 的物理 authority，不是 JSONL 的 projection。旧 JSONL stream、
+SQLite 中的 Thread stream 是物理 authority。旧 JSONL stream、
 tail-recovery 和 rollout adapter 已退出执行路径；开发期不保留双写或自动 import。
 
-`zeta-rollout` 中公开的 `LocalStateRepository` 组合 SQLite stores 与 writer lease，负责从一个
-profile root 恢复可运行的 SessionCoordinator；它先恢复 Thread，再恢复 Session 以便继续
-create/fork saga。crate 名仍是历史命名，不能据此重新引入 rollout 文件格式。App Server 的本地
-composition root 只依赖该 repository，不重复恢复流程。
+`zeta-rollout` 中公开的 `LocalStateRepository` 组合 SQLite Thread store 与 writer lease，负责从
+一个 profile root 恢复可运行的 `ThreadController`。crate 名仍是历史命名，不能据此重新引入
+rollout 文件格式。App Server 的本地 composition root 只依赖该 repository，不重复恢复流程。
 具体打开与恢复顺序见 [`rollout/README.md`](../zeta-rs/rollout/README.md)。
 
-`zeta-rollout-trace` 以两个 store port 为输入，生成只读、可序列化的 Session trace。它适合
-诊断、导出和评测，但不是 authority，也不能成为执行输入。它保留独立 Session/Thread
-sequence，而不把并发 aggregate 拼成伪全局顺序。trace 可能携带用户输入、工具参数和结果，因此
+`zeta-rollout-trace` 枚举 Thread store 并按 `session_id` 生成只读、可序列化的 Session tree
+trace。它适合诊断、导出和评测，但不是 authority，也不能成为执行输入。它保留各 Thread 的
+sequence，不制造 Session 全局顺序。trace 可能携带用户输入、工具参数和结果，因此
 crate 不提供默认文件写入；持久化或上传必须由调用方显式施加脱敏、访问控制和保留期策略。
 实现与 privacy obligation 见
 [`rollout-trace/README.md`](../zeta-rs/rollout-trace/README.md)。
 
-当前开发期只读当前 Session/Thread SQLite schema。旧 JSONL、implicit Session、kind/payload
+当前开发期只读当前 Thread SQLite schema。旧 JSONL、独立 Session event、kind/payload
 upcast 和 sidecar ledger 不进入执行路径。旧 Config DB 正文只在 component v1→v2 时一次性迁出
 为 TOML，迁移后不再读取。
 
 Config transaction metadata 也在同一 profile 数据库中，通过独立 component migration 与表维护
 revision/generation/receipt contract；desired document 的唯一 authority 是 profile
-`config.toml`，SQLite 只保存 digest 与事务元数据。Workspace 的 `.zeta/config.toml` 是严格、
+`config.toml`，SQLite 只保存 digest 与事务元数据。目录中的 `.zeta/config.toml` 是严格、
 只读的 scoped intent，不是用户级数据库的替代 writer。
 
 ## 6. Sequence 与并发
 
 Sequence、cursor、ID 和 optimistic concurrency 的领域语义统一见
-[`protocol.md`](protocol.md#5-sequencecursor-与-id)。Workspace 实现必须为每个 aggregate
+[`protocol.md`](protocol.md#5-sequencecursor-与-id)。存储实现必须为每个 aggregate
 提供独立 writer lease，使不同 Thread 可以并发且不会占用 Session revision。
 
 Fork 在 Session lineage 中保存 `parentThreadId + parentSequence`。该 parent sequence 是一个
@@ -338,7 +332,7 @@ Session plan(creating)
 ## 7. 类型化命令重放
 
 Command identity、receipt 和 replay 规则统一见
-[`protocol.md`](protocol.md#41-command请求改变状态)。在 Workspace 内，store adapter 负责把
+[`protocol.md`](protocol.md#41-command请求改变状态)。store adapter 负责把
 typed receipt 与首个业务 event 原子提交，reducer recovery 恢复稳定结果；Config authority
 沿用相同模式。Config、Plugin、MCP 与 Skill 的 authority 分布、snapshot reconcile 和 safe-point
 组合由 [`config.md`](config.md) 统一规定。
@@ -356,7 +350,7 @@ Registry/generator 实现见
 - method dispatch；registry 解析 global/Session/connection-resource serialization scope，App Server
   通过跨 connection FIFO/shared-read scheduler 执行；
 - connection subscription cursor；
-- `session/update` / `session/thread/update`；
+- `session/changed` / `session/thread/update`；前者只提示重新读取派生树，不携带 durable sequence；
 - Resource ownership；
 - Core error 到 stable RPC error 的映射。
 

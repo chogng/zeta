@@ -100,7 +100,7 @@ impl AppServer {
     pub(super) fn git_commit_file(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitCommitFileParams = decode(value)?;
         validate_object_id(&params.object_id)?;
-        let path = workspace_paths(vec![params.path])?
+        let path = paths(vec![params.path])?
             .pop()
             .expect("validated commit file path");
         result(
@@ -113,7 +113,7 @@ impl AppServer {
 
     pub(super) fn git_change_file(&self, value: &Value) -> Result<Value, RpcError> {
         let params: GitChangeFileParams = decode(value)?;
-        let path = workspace_paths(vec![params.path])?
+        let path = paths(vec![params.path])?
             .pop()
             .expect("validated change file path");
         result(
@@ -140,10 +140,7 @@ impl AppServer {
         let params: GitPathsParams = decode(params)?;
         let status = self
             .git_runtime_service()?
-            .stage_for(
-                params.repository_id.as_deref(),
-                workspace_paths(params.paths)?,
-            )
+            .stage_for(params.repository_id.as_deref(), paths(params.paths)?)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -152,10 +149,7 @@ impl AppServer {
         let params: GitPathsParams = decode(params)?;
         let status = self
             .git_runtime_service()?
-            .unstage_for(
-                params.repository_id.as_deref(),
-                workspace_paths(params.paths)?,
-            )
+            .unstage_for(params.repository_id.as_deref(), paths(params.paths)?)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -164,10 +158,7 @@ impl AppServer {
         let params: GitPathsParams = decode(params)?;
         let status = self
             .git_runtime_service()?
-            .discard_worktree_for(
-                params.repository_id.as_deref(),
-                workspace_paths(params.paths)?,
-            )
+            .discard_worktree_for(params.repository_id.as_deref(), paths(params.paths)?)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -218,7 +209,7 @@ impl AppServer {
     }
 }
 
-fn workspace_paths(paths: Vec<String>) -> Result<Vec<PathBuf>, RpcError> {
+fn paths(paths: Vec<String>) -> Result<Vec<PathBuf>, RpcError> {
     if paths.is_empty() || paths.len() > 5_000 {
         return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
     }
@@ -268,7 +259,7 @@ fn git_error(error: GitRuntimeError) -> RpcError {
         GitRuntimeError::Service(GitServiceError::Runtime) => {
             RpcError::new(-32000, AppServerErrorName::ServerOverloaded)
         }
-        GitRuntimeError::Service(GitServiceError::Trust) => {
+        GitRuntimeError::Service(GitServiceError::Permission) => {
             RpcError::new(-32060, AppServerErrorName::GitUnavailable)
         }
     }

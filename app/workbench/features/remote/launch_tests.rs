@@ -7,9 +7,9 @@ use crate::launch_test_support::make_executable;
 use crate::launch_test_support::{incompatible_initialize_response, initialize_response};
 #[cfg(unix)]
 use zeta_app_server_protocol::schema_hash;
+use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
-use zeta_remote::RemoteWorkspacePath;
 use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 
@@ -51,7 +51,7 @@ fn remote_arguments_build_one_credential_free_profile() {
     let launch = AppLaunch::parse([
         "--remote".to_owned(),
         "build.example".to_owned(),
-        "--workspace".to_owned(),
+        "--dir".to_owned(),
         "/srv/project".to_owned(),
         "--runtime".to_owned(),
         "/opt/zeta/bin/zeta-server".to_owned(),
@@ -65,7 +65,7 @@ fn remote_arguments_build_one_credential_free_profile() {
             profile: RemoteProfile::new(
                 SshTarget::new(
                     SshHost::parse("build.example").unwrap(),
-                    RemoteWorkspacePath::parse("/srv/project").unwrap(),
+                    RemoteDirPath::parse("/srv/project").unwrap(),
                 ),
                 RemoteRuntime::new("/opt/zeta/bin/zeta-server").unwrap(),
             ),
@@ -80,7 +80,7 @@ fn remote_arguments_default_to_the_product_neutral_server_host() {
     let launch = AppLaunch::parse([
         "--remote".to_owned(),
         "build.example".to_owned(),
-        "--workspace".to_owned(),
+        "--dir".to_owned(),
         "/srv/project".to_owned(),
     ])
     .unwrap();
@@ -100,20 +100,20 @@ fn remote_arguments_default_to_the_product_neutral_server_host() {
 }
 
 #[test]
-fn remote_workspace_requires_a_remote_host() {
+fn remote_dir_requires_a_remote_host() {
     assert_eq!(
-        AppLaunch::parse(["--workspace".to_owned(), "/srv/project".to_owned()]),
+        AppLaunch::parse(["--dir".to_owned(), "/srv/project".to_owned()]),
         Err(LaunchParseError::RemoteFlagRequired)
     );
 }
 
 #[test]
-fn remote_launch_requires_an_absolute_workspace_path() {
+fn remote_launch_requires_an_absolute_path() {
     assert!(matches!(
         AppLaunch::parse([
             "--remote".to_owned(),
             "build".to_owned(),
-            "--workspace".to_owned(),
+            "--dir".to_owned(),
             "project".to_owned(),
         ]),
         Err(LaunchParseError::Address(_))
@@ -138,7 +138,7 @@ fn remote_launch_checks_runtime_readiness_before_starting_the_ui() {
     let mut ready = AppLaunch::parse([
         "--remote".to_owned(),
         "build".to_owned(),
-        "--workspace".to_owned(),
+        "--dir".to_owned(),
         "/srv/project".to_owned(),
         "--ssh".to_owned(),
         fake_ssh.to_string_lossy().into_owned(),
@@ -153,7 +153,7 @@ fn remote_launch_checks_runtime_readiness_before_starting_the_ui() {
     let mut missing = AppLaunch::parse([
         "--remote".to_owned(),
         "build".to_owned(),
-        "--workspace".to_owned(),
+        "--dir".to_owned(),
         "/srv/project".to_owned(),
         "--runtime".to_owned(),
         "missing".to_owned(),
@@ -185,7 +185,7 @@ fn explicit_incompatible_runtime_is_not_replaced_and_transport_failure_never_ins
     let mut explicit = AppLaunch::parse([
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--runtime".into(),
         "/opt/zeta/bin/zeta-server".into(),
@@ -209,7 +209,7 @@ fn explicit_incompatible_runtime_is_not_replaced_and_transport_failure_never_ins
     let mut transport = AppLaunch::parse([
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--ssh".into(),
         transport_ssh.to_string_lossy().into_owned(),
@@ -265,7 +265,7 @@ fn missing_default_runtime_is_installed_from_the_authenticated_catalog() {
     let mut launch = AppLaunch::parse([
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--ssh".into(),
         fake_ssh.to_string_lossy().into_owned(),
@@ -295,7 +295,7 @@ fn missing_default_runtime_is_installed_from_the_authenticated_catalog() {
     let mut reconnect = AppLaunch::parse([
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--ssh".into(),
         fake_ssh.to_string_lossy().into_owned(),
@@ -348,7 +348,7 @@ fn incompatible_default_runtime_is_replaced_from_the_authenticated_catalog() {
     let mut launch = AppLaunch::parse([
         "--remote".into(),
         "build".into(),
-        "--workspace".into(),
+        "--dir".into(),
         "/srv/project".into(),
         "--ssh".into(),
         fake_ssh.to_string_lossy().into_owned(),

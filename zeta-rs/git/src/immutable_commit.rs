@@ -228,7 +228,7 @@ impl GitClient {
 
     /// Applies only the paths changed by `before -> after` to `current`.
     ///
-    /// This is used to rebuild a Thread workspace from the subset of its Turns that were
+    /// This is used to rebuild a Thread worktree from the subset of its Turns that were
     /// committed; dependency validation has already excluded overlapping skipped Turns.
     pub async fn compose_tree_delta(
         &self,

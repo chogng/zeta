@@ -17,13 +17,13 @@ pub(super) fn with_shell_presentation_model<R>(
         retained_runtime,
         workbench,
         terminal_pane_views,
-        workspace_surface,
+        main_surface,
         session_pane,
-        workspace_context,
+        env,
         session_search,
         caret_blink,
         ui_dispatch,
-        terminal_workspace,
+        terminal_runtime,
         files,
         scm,
         file_editor_host,
@@ -32,7 +32,7 @@ pub(super) fn with_shell_presentation_model<R>(
         language_service,
         code_editor_style,
         git_branch_context_menu,
-        workspace_path_picker,
+        path_picker,
         remote_connection_picker,
         remote_connection_manager,
         remote_tunnel_manager,
@@ -50,7 +50,7 @@ pub(super) fn with_shell_presentation_model<R>(
     let file_editor_diagnostics = language_service.active_editor_diagnostics(file_editor_host);
     let language_hover = language_service.active_hover(file_editor_host);
     let language_completions = language_service.active_completions(file_editor_host);
-    let workspace_diff_summary = workspace_context.diff_summary_label();
+    let git_diff_summary = env.diff_summary_label();
     let active_tab_input = workbench_model.tab_part().active_tab_key();
     let pane_group = active_tab_input.and_then(|key| workbench_model.pane_part(key));
     let active_pane = active_tab_input.and_then(|tab_key| {
@@ -93,7 +93,7 @@ pub(super) fn with_shell_presentation_model<R>(
                         pane_id: Some(pane_id),
                         kind,
                         core: terminal_key.and_then(|key| {
-                            terminal_workspace.terminal(key).map(TerminalSession::core)
+                            terminal_runtime.terminal(key).map(TerminalSession::core)
                         }),
                         scroll_offset,
                         scrollbar_presentation,
@@ -105,13 +105,13 @@ pub(super) fn with_shell_presentation_model<R>(
         .unwrap_or_default();
     let terminal_key = active_pane
         .and_then(|mount| mount.binding().terminal_key())
-        .or_else(|| terminal_workspace.active_key());
+        .or_else(|| terminal_runtime.active_key());
     operation(
         WorkbenchPresentationModel {
             product_name: PRODUCT_DISPLAY_NAME,
             palette: *palette,
             terminal: terminal_key
-                .and_then(|key| terminal_workspace.terminal(key))
+                .and_then(|key| terminal_runtime.terminal(key))
                 .map(TerminalSession::core),
             terminal_panes: &terminal_panes,
             pane_group,
@@ -120,7 +120,7 @@ pub(super) fn with_shell_presentation_model<R>(
             terminal_scroll_offset: terminal_view.scroll.offset(),
             terminal_scrollbar_presentation: terminal_view.scroll.scrollbar_presentation(),
             terminal_selection: terminal_view.selection.range(),
-            workspace_surface: workspace_surface.active(),
+            main_surface: main_surface.active(),
             file_editor_host,
             file_editor_prompt: file_editor_input.prompt(),
             file_editor_search,
@@ -130,12 +130,12 @@ pub(super) fn with_shell_presentation_model<R>(
             completion_selection: file_editor_input.completion_selection(),
             code_editor_style,
             session_pane,
-            workspace_context: crate::WorkspaceContextView {
-                location: workspace_context.location_label(),
-                working_directory: workspace_context.working_directory_label(),
-                git_branch: workspace_context.git_branch_label(),
-                diff_summary: workspace_diff_summary,
-                upstream_distance: workspace_context.upstream_distance(),
+            environment_context: crate::EnvironmentContextView {
+                location: env.location_label(),
+                working_directory: env.working_directory_label(),
+                git_branch: env.git_branch_label(),
+                diff_summary: git_diff_summary,
+                upstream_distance: env.upstream_distance(),
             },
             session_search,
             tab_part: workbench_model.tab_part(),
@@ -148,7 +148,7 @@ pub(super) fn with_shell_presentation_model<R>(
             scm,
             tab_context_menu: workbench.tab_context_menu().clone(),
             git_branch_context_menu,
-            workspace_path_picker,
+            path_picker,
             remote_connection_picker,
             remote_connection_manager,
             remote_tunnel_manager,

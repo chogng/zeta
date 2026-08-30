@@ -45,7 +45,7 @@ pub enum CodebaseAutomaticContextDto {
     FirstInvocation,
 }
 
-/// Current authorization state for the active Workspace and configured semantic model pair.
+/// Current authorization state for the active directory and configured semantic model pair.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CodebaseConfigDto {
@@ -393,7 +393,7 @@ pub struct ConfigReadResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub commit_message_model: Option<ModelRefDto>,
-    pub commit_message_active_workspace_authorized: bool,
+    pub commit_message_active_dir_authorized: bool,
     pub tool_mode: ToolMode,
     pub agent_grep_backend: AgentGrepBackendDto,
     pub providers: BTreeMap<String, ProviderConfigDto>,
@@ -459,7 +459,7 @@ pub struct CodebaseConfigureParams {
     pub automatic_context: CodebaseAutomaticContextDto,
 }
 
-/// Authorizes the active Workspace to send bounded context and diff to the exact summary model.
+/// Authorizes the active directory to send bounded context and diff to the exact summary model.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitMessageAuthorizeParams {
@@ -469,7 +469,7 @@ pub struct CommitMessageAuthorizeParams {
     pub expected_revision: u64,
 }
 
-/// Revokes automatic commit-message source egress for the active Workspace.
+/// Revokes automatic commit-message source egress for the active directory.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitMessageRevokeParams {

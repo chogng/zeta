@@ -64,17 +64,17 @@ impl LanguageServerProvider for NodePackageLanguageServerProvider {
 
     fn definition(
         &self,
-        workspace_root: &Path,
+        dir_root: &Path,
         launch: LspServerLaunch<'_>,
     ) -> Result<LanguageServerDefinition, LanguageServerProviderError> {
         let command = match launch {
-            LspServerLaunch::Packaged => self
-                .node
-                .command_for_script(&self.entrypoint, workspace_root)?,
+            LspServerLaunch::Packaged => {
+                self.node.command_for_script(&self.entrypoint, dir_root)?
+            }
             LspServerLaunch::ExplicitExecutable(executable) => LanguageServerCommand::new(
                 canonical_executable(executable, "explicit packaged language-server executable")?,
             )
-            .with_current_dir(workspace_root),
+            .with_current_dir(dir_root),
         };
         LanguageServerDefinition::new(&self.id, self.languages.iter().cloned(), command)
             .map_err(Into::into)

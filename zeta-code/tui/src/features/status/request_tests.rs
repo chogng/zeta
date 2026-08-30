@@ -58,6 +58,8 @@ fn thread(model: ModelRef) -> Thread {
     Thread {
         session_id: SessionId::new("session-1").unwrap(),
         thread_id: ThreadId::new("thread-1").unwrap(),
+        parent_thread_id: None,
+        forked_from_id: None,
         title: "test".into(),
         status: ThreadStatus::Active,
         sequence: 4,

@@ -69,7 +69,7 @@ pub struct FileEditorLanguageService {
     catalog: LanguageServerCatalog,
     install_context: InstallContext,
     config_generation: Option<u64>,
-    workspace_root: PathBuf,
+    dir_root: PathBuf,
     diagnostics: HashMap<PathBuf, FileEditorDocumentDiagnostics>,
     server_states: HashMap<String, LanguageServerState>,
     hover: Option<LanguageHover>,
@@ -84,7 +84,7 @@ impl FileEditorLanguageService {
     /// Creates the host adapter without starting a local language-server process.
     ///
     /// Creates a Remote adapter before the shared Agent connection becomes available.
-    pub fn remote(workspace_root: &Path, events: Arc<dyn FileEditorLanguageEventSink>) -> Self {
+    pub fn remote(dir_root: &Path, events: Arc<dyn FileEditorLanguageEventSink>) -> Self {
         Self {
             service: None,
             remote: None,
@@ -92,7 +92,7 @@ impl FileEditorLanguageService {
             catalog: LanguageServerCatalog::default(),
             install_context: InstallContext::current(),
             config_generation: None,
-            workspace_root: workspace_root.to_path_buf(),
+            dir_root: dir_root.to_path_buf(),
             diagnostics: HashMap::new(),
             server_states: HashMap::new(),
             hover: None,
@@ -104,7 +104,7 @@ impl FileEditorLanguageService {
         }
     }
 
-    pub fn start(workspace_root: &Path, events: Arc<dyn FileEditorLanguageEventSink>) -> Self {
+    pub fn start(dir_root: &Path, events: Arc<dyn FileEditorLanguageEventSink>) -> Self {
         // Persisted configuration is the canonical owner of language-server enablement. Keep the
         // local service disabled until that configuration arrives instead of briefly launching
         // every executable discovered on PATH.
@@ -114,7 +114,7 @@ impl FileEditorLanguageService {
             events: Arc::clone(&events),
         });
         let service = LanguageService::start(
-            resolve_configuration(&catalog, &install_context, workspace_root),
+            resolve_configuration(&catalog, &install_context, dir_root),
             service_events,
         )
         .map_err(|error| eprintln!("could not start language service: {error}"))
@@ -126,7 +126,7 @@ impl FileEditorLanguageService {
             catalog,
             install_context,
             config_generation: None,
-            workspace_root: workspace_root.to_path_buf(),
+            dir_root: dir_root.to_path_buf(),
             diagnostics: HashMap::new(),
             server_states: HashMap::new(),
             hover: None,
@@ -153,10 +153,10 @@ impl FileEditorLanguageService {
         Ok(())
     }
 
-    pub fn replace_workspace(&mut self, workspace_root: &Path) {
+    pub fn set_dir_root(&mut self, dir_root: &Path) {
         self.shutdown_service();
         if self.is_remote {
-            self.workspace_root = workspace_root.to_path_buf();
+            self.dir_root = dir_root.to_path_buf();
             self.diagnostics.clear();
             self.server_states.clear();
             self.clear_requests();
@@ -166,12 +166,12 @@ impl FileEditorLanguageService {
             events: Arc::clone(&self.events),
         });
         self.service = LanguageService::start(
-            resolve_configuration(&self.catalog, &self.install_context, workspace_root),
+            resolve_configuration(&self.catalog, &self.install_context, dir_root),
             service_events,
         )
         .map_err(|error| eprintln!("could not restart language service: {error}"))
         .ok();
-        self.workspace_root = workspace_root.to_path_buf();
+        self.dir_root = dir_root.to_path_buf();
         self.diagnostics.clear();
         self.server_states.clear();
         self.clear_requests();
@@ -201,7 +201,7 @@ impl FileEditorLanguageService {
             events: Arc::clone(&self.events),
         });
         self.service = LanguageService::start(
-            resolve_configuration(&self.catalog, &self.install_context, &self.workspace_root),
+            resolve_configuration(&self.catalog, &self.install_context, &self.dir_root),
             service_events,
         )
         .map_err(|error| eprintln!("could not reconfigure language service: {error}"))
@@ -225,7 +225,7 @@ impl FileEditorLanguageService {
         let Some(tab) = host.active() else {
             return;
         };
-        let Ok(document) = language_document(&self.workspace_root, tab) else {
+        let Ok(document) = language_document(&self.dir_root, tab) else {
             return;
         };
         if let Some(remote) = self.remote.as_ref() {
@@ -310,7 +310,7 @@ impl FileEditorLanguageService {
         self.request_error = None;
         self.pending_requests.clear(kind);
         if let Some(remote) = self.remote.as_ref() {
-            let Ok(document) = language_document(&self.workspace_root, tab) else {
+            let Ok(document) = language_document(&self.dir_root, tab) else {
                 return;
             };
             let Some(protocol_position) = protocol_position(document.text(), position) else {
@@ -411,7 +411,7 @@ impl FileEditorLanguageService {
     fn synchronize_all(&self, host: &FileEditorHost) {
         if let Some(remote) = self.remote.as_ref() {
             for tab in host.tabs() {
-                let Ok(document) = language_document(&self.workspace_root, tab) else {
+                let Ok(document) = language_document(&self.dir_root, tab) else {
                     continue;
                 };
                 if let Err(error) = remote.synchronize(protocol_document(document)) {
@@ -424,7 +424,7 @@ impl FileEditorLanguageService {
             return;
         };
         for tab in host.tabs() {
-            let Ok(document) = language_document(&self.workspace_root, tab) else {
+            let Ok(document) = language_document(&self.dir_root, tab) else {
                 continue;
             };
             if let Err(error) = service.synchronize_document(document) {
@@ -597,7 +597,7 @@ impl FileEditorLanguageService {
         if path.is_absolute() {
             path.to_path_buf()
         } else {
-            self.workspace_root.join(path)
+            self.dir_root.join(path)
         }
     }
 }
@@ -714,37 +714,37 @@ fn server_preference(
 fn resolve_configuration(
     catalog: &LanguageServerCatalog,
     install_context: &InstallContext,
-    workspace_root: &Path,
+    dir_root: &Path,
 ) -> LanguageServiceConfiguration {
     let resolution = match catalog.resolve(
         install_context,
         // Initial roots are fixed by the trusted host; replacement roots reach this point only
-        // after the App Server accepts the workspace switch.
+        // after the App Server accepts the directory change.
         LanguageServerExecutionPolicy::Allowed,
-        workspace_root,
+        dir_root,
     ) {
         Ok(resolution) => resolution,
         Err(error) => {
             eprintln!("could not resolve language server catalog: {error}");
-            return LanguageServiceConfiguration::disabled(workspace_root);
+            return LanguageServiceConfiguration::disabled(dir_root);
         }
     };
     let definitions = resolution.into_definitions();
     if definitions.is_empty() {
-        LanguageServiceConfiguration::disabled(workspace_root)
+        LanguageServiceConfiguration::disabled(dir_root)
     } else {
-        LanguageServiceConfiguration::enabled(workspace_root, definitions)
+        LanguageServiceConfiguration::enabled(dir_root, definitions)
     }
 }
 
 fn language_document(
-    workspace_root: &Path,
+    dir_root: &Path,
     tab: &FileEditorTab,
 ) -> Result<LanguageServiceDocument, zeta_lsp_manager::LanguageServiceError> {
     let path = if tab.path().is_absolute() {
         tab.path().to_path_buf()
     } else {
-        workspace_root.join(tab.path())
+        dir_root.join(tab.path())
     };
     LanguageServiceDocument::new(
         path,

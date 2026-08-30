@@ -1,12 +1,12 @@
 use crate::AgentEnvironmentError;
-use crate::WorkspaceRoots;
+use crate::Dirs;
 use crate::error::absolute_path;
 use crate::error::validate_text;
 use std::path::Path;
 use std::path::PathBuf;
 use zeta_utils_absolute_path::AbsolutePathBuf;
 
-/// Host facts captured for one Workspace lifecycle.
+/// Host facts captured for one environment connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostEnvironment {
     cwd: AbsolutePathBuf,
@@ -65,7 +65,7 @@ impl HostEnvironment {
     }
 }
 
-/// Repository facts captured for one Workspace lifecycle.
+/// Repository facts captured for one environment connection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RepositoryEnvironment {
     NotDetected,
@@ -107,20 +107,16 @@ impl RepositoryEnvironment {
 pub struct AgentEnvironmentSnapshot {
     host: HostEnvironment,
     repository: RepositoryEnvironment,
-    workspace_roots: WorkspaceRoots,
+    dirs: Dirs,
 }
 
 impl AgentEnvironmentSnapshot {
-    /// Combines host, repository, and authorized Workspace-root facts.
-    pub fn new(
-        host: HostEnvironment,
-        repository: RepositoryEnvironment,
-        workspace_roots: WorkspaceRoots,
-    ) -> Self {
+    /// Combines host, repository, and authorized directory facts.
+    pub fn new(host: HostEnvironment, repository: RepositoryEnvironment, dirs: Dirs) -> Self {
         Self {
             host,
             repository,
-            workspace_roots,
+            dirs,
         }
     }
 
@@ -134,8 +130,8 @@ impl AgentEnvironmentSnapshot {
         &self.repository
     }
 
-    /// Returns the exact ordered Workspace roots visible for this invocation.
-    pub fn workspace_roots(&self) -> &WorkspaceRoots {
-        &self.workspace_roots
+    /// Returns the exact accessible directories visible for this invocation.
+    pub fn dirs(&self) -> &Dirs {
+        &self.dirs
     }
 }

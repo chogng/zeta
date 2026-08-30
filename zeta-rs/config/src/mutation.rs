@@ -176,47 +176,38 @@ pub(crate) fn apply_command(
         UserConfigCommand::ConfigureToolSearch { config } => {
             document.tool_search = config.clone();
         }
-        UserConfigCommand::AuthorizeCommitMessageEgress { workspace } => {
+        UserConfigCommand::AuthorizeCommitMessageEgress { dir } => {
             document
                 .commit_messages
                 .authorize(
-                    workspace.clone(),
+                    dir.clone(),
                     document.agent.commit_message_model.as_ref(),
                     &document.providers,
                 )
                 .map_err(|message| ConfigError(message.into()))?;
         }
-        UserConfigCommand::RevokeCommitMessageEgress { workspace } => {
-            document.commit_messages.revoke(workspace);
+        UserConfigCommand::RevokeCommitMessageEgress { dir } => {
+            document.commit_messages.revoke(dir);
         }
-        UserConfigCommand::SetWorkspaceTrust {
-            workspace,
-            setting,
-            display_root,
+        UserConfigCommand::SetDirPermissions {
+            dir,
+            permissions,
+            display_path,
         } => {
-            match setting {
-                crate::WorkspaceTrustSetting::Trusted => {
-                    document
-                        .workspace_trust
-                        .roots
-                        .insert(workspace.clone(), *setting);
-                    if let Some(display_root) = display_root {
-                        document
-                            .workspace_trust
-                            .root_paths
-                            .insert(workspace.clone(), display_root.clone());
-                    }
-                }
-                crate::WorkspaceTrustSetting::Restricted => {
-                    // Restricted is represented by absence from the trusted-folder allowlist.
-                    document.workspace_trust.roots.remove(workspace);
-                    document.workspace_trust.root_paths.remove(workspace);
-                }
+            document
+                .dir_permissions
+                .entries
+                .insert(dir.clone(), permissions.clone());
+            if let Some(display_path) = display_path {
+                document
+                    .dir_permissions
+                    .paths
+                    .insert(dir.clone(), display_path.clone());
             }
         }
-        UserConfigCommand::ForgetWorkspaceTrust { workspace } => {
-            document.workspace_trust.roots.remove(workspace);
-            document.workspace_trust.root_paths.remove(workspace);
+        UserConfigCommand::ForgetDirPermissions { dir } => {
+            document.dir_permissions.entries.remove(dir);
+            document.dir_permissions.paths.remove(dir);
         }
         UserConfigCommand::UpsertExecPolicyRule { rule } => {
             document.exec_policy.upsert(rule.clone());

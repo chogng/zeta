@@ -15,11 +15,6 @@ fn resume_pane_marks_the_current_session_and_maps_enter_to_its_id() {
         session_id: SessionId::new("session-1").unwrap(),
         title: "Current work".into(),
         status: SessionStatus::Active,
-        model: None,
-        workspace: None,
-        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        current_thread_id: None,
-        sequence: 1,
         threads: Vec::new(),
     }];
 
@@ -44,33 +39,12 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
             session_id: SessionId::new("session-1").unwrap(),
             title: "Active work".into(),
             status: SessionStatus::Active,
-            model: None,
-            workspace: None,
-            next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-            current_thread_id: None,
-            sequence: 1,
             threads: Vec::new(),
         },
         Session {
             session_id: SessionId::new("session-2").unwrap(),
-            title: "Completed work".into(),
-            status: SessionStatus::Completed,
-            model: None,
-            workspace: None,
-            next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-            current_thread_id: None,
-            sequence: 2,
-            threads: Vec::new(),
-        },
-        Session {
-            session_id: SessionId::new("session-3").unwrap(),
             title: "Archived work".into(),
             status: SessionStatus::Archived,
-            model: None,
-            workspace: None,
-            next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-            current_thread_id: None,
-            sequence: 3,
             threads: Vec::new(),
         },
     ];
@@ -84,9 +58,9 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        ["All (3)", "Active (1)", "Completed (1)", "Archived (1)"]
+        ["All (2)", "Active (1)", "Archived (1)"]
     );
-    assert_eq!(state.selected_item().unwrap().label(), "Completed work ✓");
+    assert_eq!(state.selected_item().unwrap().label(), "Archived work ✓");
 
     assert_eq!(
         state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),

@@ -17,7 +17,7 @@ pub enum LspServerLaunch<'a> {
 /// Resolves one installed language-server integration into a canonical launch definition.
 ///
 /// Implementations validate their immutable package/runtime inputs when constructed. Each call
-/// must preserve the provider's stable language route and may only vary workspace-local launch
+/// must preserve the provider's stable language route and may only vary directory-local launch
 /// context or an explicit executable override selected by the configuration authority.
 pub trait LanguageServerProvider: Send + Sync {
     /// Returns the stable server identity used by Config and the process supervisor.
@@ -26,10 +26,10 @@ pub trait LanguageServerProvider: Send + Sync {
     /// Returns the complete stable language route owned by this provider.
     fn languages(&self) -> &[String];
 
-    /// Produces one workspace-rooted launch definition without starting the process.
+    /// Produces one directory-rooted launch definition without starting the process.
     fn definition(
         &self,
-        workspace_root: &Path,
+        dir_root: &Path,
         launch: LspServerLaunch<'_>,
     ) -> Result<LanguageServerDefinition, LanguageServerProviderError>;
 }
@@ -120,12 +120,12 @@ impl LspServerProviders {
     pub fn definition(
         &self,
         id: &str,
-        workspace_root: &Path,
+        dir_root: &Path,
         launch: LspServerLaunch<'_>,
     ) -> Result<Option<LanguageServerDefinition>, LanguageServerProviderError> {
         self.providers
             .get(id)
-            .map(|provider| provider.definition(workspace_root, launch))
+            .map(|provider| provider.definition(dir_root, launch))
             .transpose()
     }
 

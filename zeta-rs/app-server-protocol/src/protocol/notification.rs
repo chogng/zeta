@@ -9,7 +9,6 @@ pub use crate::protocol::marketplace::MarketplaceChanged;
 pub use crate::protocol::registry::ServerNotification;
 pub use crate::protocol::registry::decode_server_notification;
 pub use crate::protocol::skills::SkillsChanged;
-pub use zeta_protocol::SessionUpdateEnvelope;
 pub use zeta_protocol::ThreadUpdateEnvelope;
 pub use zeta_thread_transcript::ThreadTranscriptUpdateEnvelope;
 

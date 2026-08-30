@@ -13,15 +13,13 @@ use zeta_cloud_codebase::CloudCodebasePublication;
 use zeta_cloud_codebase::CloudCodebasePublicationRequest;
 use zeta_cloud_codebase::CloudCodebaseQueryRequest;
 use zeta_cloud_codebase::CloudCodebaseQueryResult;
-use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
-use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
+use zeta_file_access::GrantSource;
 use zeta_model_provider::EchoModel;
-use zeta_workspace::WorkspaceTrustSource;
 
 use crate::local::ProviderModelService;
-use crate::server::WorkspaceSwitchTrustPolicy;
+use crate::server::DirGrantPolicy;
 
 use super::*;
 
@@ -66,7 +64,7 @@ impl CloudCodebaseProvider for RecordingProvider {
             .collect();
         *self.publications.lock().expect("publication count") += 1;
         Ok(CloudCodebasePublication {
-            remote_generation: format!("workspace-projection-{}", request.local_generation),
+            remote_generation: format!("dir-projection-{}", request.local_generation),
         })
     }
 
@@ -96,11 +94,11 @@ impl CloudCodebaseProvider for RecordingProvider {
 }
 
 #[test]
-fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    std::fs::create_dir(workspace.path().join(".git")).expect("git marker");
+fn rpc_exposes_dir_index_preview_consent_sync_and_revoke() {
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::create_dir(dir.path().join(".git")).expect("git marker");
     std::fs::write(
-        workspace.path().join("lib.rs"),
+        dir.path().join("lib.rs"),
         "pub fn cloud_mode_selection() -> bool { true }\n",
     )
     .expect("source");
@@ -109,15 +107,13 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
     let providers = CloudCodebaseProviderRegistry::new([provider_trait]).expect("providers");
     let server = server()
         .with_cloud_codebase_providers(providers)
-        .with_local_workspace_host(
+        .with_local_env_host(
             None,
-            WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(
-                WorkspaceTrustSource::HostConfiguration,
-            ),
+            DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
         )
         .expect("host");
     server
-        .switch_local_workspace_root(workspace.path().to_path_buf())
+        .switch_local_dir_root(dir.path().to_path_buf())
         .expect("switch");
     let Ok(local_index) = server.codebase_service() else {
         panic!("local index should be installed");
@@ -140,7 +136,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         2,
-        "workspace/codebase/cloud/status",
+        "codebase/cloud/status",
         serde_json::json!({}),
     );
     assert_eq!(status["result"]["deploymentMode"], "localOnly");
@@ -149,7 +145,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         3,
-        "workspace/codebase/cloud/preview",
+        "codebase/cloud/preview",
         serde_json::json!({
             "selection": {"type": "entireIndex"},
             "maxEgressBytes": 1048576
@@ -166,7 +162,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         4,
-        "workspace/codebase/cloud/preview",
+        "codebase/cloud/preview",
         serde_json::json!({
             "mode": "managed",
             "selection": {"type": "entireIndex"},
@@ -180,7 +176,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         5,
-        "workspace/codebase/cloud/authorize",
+        "codebase/cloud/authorize",
         serde_json::json!({"grant": cloud_grant}),
     );
     assert_eq!(authorized["result"]["state"], "granted");
@@ -189,7 +185,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         51,
-        "workspace/codebase/cloud/authorize",
+        "codebase/cloud/authorize",
         serde_json::json!({"grant": {
             "grantId": "legacy-managed-grant",
             "codebaseId": "legacy-managed-codebase",
@@ -197,7 +193,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
             "destination": {
                 "provider": "recording",
                 "tenant": "tenant-a",
-                "collection": "workspace-index"
+                "collection": "dir-index"
             },
             "selection": {"type": "entireIndex"},
             "maxEgressBytes": 1048576
@@ -208,7 +204,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         6,
-        "workspace/codebase/cloud/sync",
+        "codebase/cloud/sync",
         serde_json::json!({}),
     );
     assert_eq!(synced["result"]["deploymentMode"], "cloud");
@@ -218,7 +214,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         7,
-        "workspace/codebase/retrieve",
+        "codebase/retrieve",
         serde_json::json!({"query": "cloud_mode_selection", "maxResults": 10}),
     );
     assert!(retrieval["result"]["hits"][0].get("origins").is_none());
@@ -228,7 +224,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         8,
-        "workspace/codebase/cloud/authorize",
+        "codebase/cloud/authorize",
         serde_json::json!({"grant": grant_json("conflicting-grant")}),
     );
     assert_eq!(conflict["error"]["message"], "CloudCodebaseConsentConflict");
@@ -237,7 +233,7 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
         &server,
         &mut connection,
         9,
-        "workspace/codebase/cloud/revoke",
+        "codebase/cloud/revoke",
         serde_json::json!({}),
     );
     assert_eq!(revoked["result"]["deploymentMode"], "localOnly");
@@ -249,12 +245,12 @@ fn rpc_exposes_workspace_projection_preview_consent_sync_and_revoke() {
 #[test]
 fn standard_local_composition_can_install_cloud_provider_registry_before_activation() {
     let profile = tempfile::tempdir().expect("profile");
-    let workspace = tempfile::tempdir().expect("workspace");
-    std::fs::write(workspace.path().join("lib.rs"), "pub fn indexed() {}\n").expect("source");
+    let dir = tempfile::tempdir().expect("dir");
+    std::fs::write(dir.path().join("lib.rs"), "pub fn indexed() {}\n").expect("source");
     let provider: Arc<dyn CloudCodebaseProvider> = Arc::new(RecordingProvider::new());
     let providers = CloudCodebaseProviderRegistry::new([provider]).expect("providers");
     let options = crate::LocalAppServerOptions::new(profile.path())
-        .with_workspace_root(workspace.path())
+        .with_dir_root(dir.path())
         .without_built_in_skills();
     let server = crate::open_local_app_server_with_cloud_providers(options, providers)
         .expect("local server");
@@ -282,7 +278,7 @@ fn grant_json(id: &str) -> serde_json::Value {
         "destination": {
             "provider": "recording",
             "tenant": "tenant-a",
-            "collection": "workspace-index"
+            "collection": "dir-index"
         },
         "selection": {"type": "entireIndex"},
         "maxEgressBytes": 1048576
@@ -293,15 +289,11 @@ fn server() -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
-    let sessions = Arc::new(SessionCoordinator::with_store(
-        Arc::new(InMemorySessionStore::default()),
-        threads,
-    ));
     AppServer::new(
-        sessions,
+        threads,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
-    .with_ephemeral_workspace_state()
+    .with_ephemeral_env_state()
 }
 
 fn call(

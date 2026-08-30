@@ -3,7 +3,7 @@ use super::TerminalSettingsEdit;
 use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use std::fs;
-use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
+use zeta_app_server_protocol::protocol::environment::PermissionDto;
 
 #[test]
 fn mouse_interaction_edit_is_persisted_and_reloaded() {
@@ -62,7 +62,7 @@ fn existing_terminal_settings_without_follow_up_mode_load_as_queue() {
         &path,
         r#"{
   "mouseInteractions": false,
-  "additionalDirectoryPermissions": {}
+  "dirPermissions": {}
 }"#,
     )
     .unwrap();
@@ -75,17 +75,14 @@ fn existing_terminal_settings_without_follow_up_mode_load_as_queue() {
 }
 
 #[test]
-fn additional_directory_defaults_are_persisted_and_reloaded() {
+fn dir_defaults_are_persisted_and_reloaded() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("terminal.json");
     let mut resource = ConfigResource::new(path.clone());
     resource.refresh().unwrap();
-    let permissions = vec![
-        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch,
-    ];
+    let permissions = vec![PermissionDto::ReadFiles, PermissionDto::SearchFiles];
     let mut settings = TerminalSettings::default();
-    settings.set_additional_directory_permissions(&permissions);
+    settings.set_dir_permissions(&permissions);
 
     resource
         .apply_edit(&TerminalSettingsEdit {
@@ -95,11 +92,5 @@ fn additional_directory_defaults_are_persisted_and_reloaded() {
         .unwrap();
 
     let mut reloaded = ConfigResource::new(path);
-    assert_eq!(
-        reloaded
-            .refresh()
-            .unwrap()
-            .additional_directory_permissions(),
-        permissions
-    );
+    assert_eq!(reloaded.refresh().unwrap().dir_permissions(), permissions);
 }

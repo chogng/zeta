@@ -20,7 +20,6 @@ use crate::rpc::JsonRpcSuccess;
 use std::collections::BTreeSet;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::Patch;
-use zeta_protocol::SessionEvent;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillName;
 use zeta_protocol::SkillRef;
@@ -91,13 +90,13 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("git/fetch"));
     assert!(methods.contains("git/pull"));
     assert!(methods.contains("git/push"));
-    assert!(methods.contains("workspace/search/start"));
-    assert!(methods.contains("workspace/search/read"));
-    assert!(methods.contains("workspace/search/cancel"));
-    assert!(methods.contains("workspace/codebase/status"));
-    assert!(methods.contains("workspace/codebase/search"));
-    assert!(methods.contains("workspace/codebase/retrieve"));
-    assert!(methods.contains("workspace/codebase/rebuild"));
+    assert!(methods.contains("content/search/start"));
+    assert!(methods.contains("content/search/read"));
+    assert!(methods.contains("content/search/cancel"));
+    assert!(methods.contains("codebase/status"));
+    assert!(methods.contains("codebase/search"));
+    assert!(methods.contains("codebase/retrieve"));
+    assert!(methods.contains("codebase/rebuild"));
     assert!(methods.contains("terminal/profile/list"));
     assert!(methods.contains("terminal/create"));
     assert!(methods.contains("terminal/attach"));
@@ -107,7 +106,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("terminal/close"));
     assert!(methods.contains("plugin/request/upsert"));
     assert!(methods.contains("hook/upsert"));
-    assert!(notifications.contains("session/update"));
+    assert!(notifications.contains("session/changed"));
     assert!(notifications.contains("session/thread/update"));
     assert!(notifications.contains("agent/request"));
     assert!(!notifications.contains("thread/update"));
@@ -179,17 +178,14 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
 fn filesystem_change_hints_are_relative_or_request_a_rescan() {
     assert_eq!(
         serde_json::to_value(FsChanged::PathsChanged {
-            workspace_folder_id: None,
+            dir_id: None,
             paths: vec!["src/lib.rs".into()],
         })
         .unwrap(),
         serde_json::json!({"type":"pathsChanged","paths":["src/lib.rs"]}),
     );
     assert_eq!(
-        serde_json::to_value(FsChanged::RescanRequired {
-            workspace_folder_id: None
-        })
-        .unwrap(),
+        serde_json::to_value(FsChanged::RescanRequired { dir_id: None }).unwrap(),
         serde_json::json!({"type":"rescanRequired"}),
     );
 }
@@ -198,7 +194,7 @@ fn filesystem_change_hints_are_relative_or_request_a_rescan() {
 fn slash_command_definition_preserves_discovery_and_argument_shape() {
     let definition = SlashCommandDefinition {
         name: "diagnose".into(),
-        description: "inspect the current workspace".into(),
+        description: "inspect the current directory".into(),
         argument_mode: SlashCommandArgumentModeDto::Optional,
     };
 
@@ -206,7 +202,7 @@ fn slash_command_definition_preserves_discovery_and_argument_shape() {
         serde_json::to_value(definition).unwrap(),
         serde_json::json!({
             "name": "diagnose",
-            "description": "inspect the current workspace",
+            "description": "inspect the current directory",
             "argumentMode": "optional"
         })
     );
@@ -375,36 +371,22 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));
     assert!(typescript.contains(r#""fs/readBinaryFile": { method: "fs/readBinaryFile" }"#));
     assert!(typescript.contains(r#""fs/writeFile": { method: "fs/writeFile" }"#));
-    assert!(typescript.contains("export type WorkspaceSessionDirectorySelector ="));
-    assert!(typescript.contains("export type WorkspaceAdditionalDirectoryContributionsDto ="));
+    assert!(typescript.contains("export type SessionDirSelector ="));
+    assert!(typescript.contains("export type DirContributionsDto ="));
     assert!(typescript.contains(r#""fs/changed": { method: "fs/changed" }"#));
+    assert!(typescript.contains(r#""content/search/start": { method: "content/search/start" }"#));
+    assert!(typescript.contains(r#""codebase/search": { method: "codebase/search" }"#));
+    assert!(typescript.contains(r#""codebase/retrieve": { method: "codebase/retrieve" }"#));
+    assert!(typescript.contains(r#""codebase/cloud/status": { method: "codebase/cloud/status" }"#));
     assert!(
-        typescript.contains(r#""workspace/search/start": { method: "workspace/search/start" }"#)
+        typescript.contains(r#""codebase/cloud/preview": { method: "codebase/cloud/preview" }"#)
     );
     assert!(
         typescript
-            .contains(r#""workspace/codebase/search": { method: "workspace/codebase/search" }"#)
+            .contains(r#""codebase/cloud/authorize": { method: "codebase/cloud/authorize" }"#)
     );
-    assert!(
-        typescript.contains(
-            r#""workspace/codebase/retrieve": { method: "workspace/codebase/retrieve" }"#
-        )
-    );
-    assert!(typescript.contains(
-        r#""workspace/codebase/cloud/status": { method: "workspace/codebase/cloud/status" }"#
-    ));
-    assert!(typescript.contains(
-        r#""workspace/codebase/cloud/preview": { method: "workspace/codebase/cloud/preview" }"#
-    ));
-    assert!(typescript.contains(
-        r#""workspace/codebase/cloud/authorize": { method: "workspace/codebase/cloud/authorize" }"#
-    ));
-    assert!(typescript.contains(
-        r#""workspace/codebase/cloud/sync": { method: "workspace/codebase/cloud/sync" }"#
-    ));
-    assert!(typescript.contains(
-        r#""workspace/codebase/cloud/revoke": { method: "workspace/codebase/cloud/revoke" }"#
-    ));
+    assert!(typescript.contains(r#""codebase/cloud/sync": { method: "codebase/cloud/sync" }"#));
+    assert!(typescript.contains(r#""codebase/cloud/revoke": { method: "codebase/cloud/revoke" }"#));
     assert!(typescript.contains(r#""terminal/profile/list": { method: "terminal/profile/list" }"#));
     assert!(typescript.contains(r#""terminal/create": { method: "terminal/create" }"#));
     assert!(typescript.contains(r#""terminal/attach": { method: "terminal/attach" }"#));
@@ -420,7 +402,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type TerminalCommandStatus ="));
     assert!(typescript.contains("export type TerminalCommandStatusEvent ="));
     assert!(typescript.contains("export type TerminalReadResult ="));
-    assert!(typescript.contains("export type WorkspaceSearchMatch ="));
+    assert!(typescript.contains("export type ContentSearchMatch ="));
     assert!(typescript.contains("export type CodebaseStatusResult ="));
     assert!(typescript.contains("export type CodebaseSearchResult ="));
     assert!(typescript.contains("export type CodebaseRetrievalResult ="));
@@ -465,8 +447,8 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("ToolMode"));
     assert!(definitions.contains_key("TypstCompileParams"));
     assert!(definitions.contains_key("TypstCompileResult"));
-    assert!(definitions.contains_key("WorkspaceSearchStartParams"));
-    assert!(definitions.contains_key("WorkspaceSearchReadResult"));
+    assert!(definitions.contains_key("ContentSearchStartParams"));
+    assert!(definitions.contains_key("ContentSearchReadResult"));
     assert!(definitions.contains_key("CodebaseStatusResult"));
     assert!(definitions.contains_key("CodebaseSearchParams"));
     assert!(definitions.contains_key("CodebaseSearchResult"));
@@ -654,13 +636,7 @@ fn exec_policy_rule_command_round_trips_recursive_typed_selectors() {
 }
 
 #[test]
-fn durable_events_without_model_snapshots_remain_readable() {
-    let session: SessionEvent = serde_json::from_value(serde_json::json!({
-        "type": "sessionCreated",
-        "sessionId": "session-1",
-        "title": "Legacy session"
-    }))
-    .unwrap();
+fn durable_thread_events_without_model_snapshots_remain_readable() {
     let turn: ThreadEvent = serde_json::from_value(serde_json::json!({
         "type": "turnAccepted",
         "threadId": "thread-1",
@@ -668,10 +644,6 @@ fn durable_events_without_model_snapshots_remain_readable() {
     }))
     .unwrap();
 
-    assert!(matches!(
-        session,
-        SessionEvent::SessionCreated { model: None, .. }
-    ));
     assert!(matches!(
         turn,
         ThreadEvent::TurnAccepted { model: None, .. }

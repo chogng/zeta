@@ -87,7 +87,7 @@ impl Default for LanguageServerPreference {
     }
 }
 
-/// Resolution state of one built-in server for the current workspace.
+/// Resolution state of one built-in server for the current directory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LspServerAvailability {
     Disabled,
@@ -118,7 +118,7 @@ impl LspServerResolutionEntry {
     }
 }
 
-/// Frozen resolved definitions and availability facts for one workspace.
+/// Frozen resolved definitions and availability facts for one directory.
 #[derive(Clone, Debug)]
 pub struct LspServerResolution {
     definitions: Vec<LanguageServerDefinition>,
@@ -185,7 +185,7 @@ impl LspServerResolver {
         &self,
         executable_candidates: &dyn LanguageServerExecutableCandidates,
         execution_policy: LanguageServerExecutionPolicy,
-        workspace_root: &Path,
+        dir_root: &Path,
     ) -> Result<LspServerResolution, LspServerResolverError> {
         let mut definitions = Vec::new();
         let rust_state = self.resolve_builtin(
@@ -193,7 +193,7 @@ impl LspServerResolver {
             &self.rust_analyzer,
             executable_candidates,
             execution_policy,
-            workspace_root,
+            dir_root,
             &mut definitions,
         )?;
         let json_state = self.resolve_builtin(
@@ -201,7 +201,7 @@ impl LspServerResolver {
             &self.json_language_server,
             executable_candidates,
             execution_policy,
-            workspace_root,
+            dir_root,
             &mut definitions,
         )?;
         let bash_state = self.resolve_builtin(
@@ -209,7 +209,7 @@ impl LspServerResolver {
             &self.bash_language_server,
             executable_candidates,
             execution_policy,
-            workspace_root,
+            dir_root,
             &mut definitions,
         )?;
         let typescript_state = self.resolve_builtin(
@@ -217,7 +217,7 @@ impl LspServerResolver {
             &self.typescript_language_server,
             executable_candidates,
             execution_policy,
-            workspace_root,
+            dir_root,
             &mut definitions,
         )?;
         Ok(LspServerResolution {
@@ -253,7 +253,7 @@ impl LspServerResolver {
         preference: &LanguageServerPreference,
         executable_candidates: &dyn LanguageServerExecutableCandidates,
         execution_policy: LanguageServerExecutionPolicy,
-        workspace_root: &Path,
+        dir_root: &Path,
         definitions: &mut Vec<LanguageServerDefinition>,
     ) -> Result<LspServerAvailability, LspServerResolverError> {
         if preference.mode == LanguageServerMode::Disabled {
@@ -275,7 +275,7 @@ impl LspServerResolver {
         };
         let command = LanguageServerCommand::new(executable.canonical.clone())
             .with_arguments(builtin.arguments)
-            .with_current_dir(workspace_root.to_path_buf());
+            .with_current_dir(dir_root.to_path_buf());
         #[cfg(unix)]
         let command = command.with_argv0(executable.argv0);
         definitions.push(LanguageServerDefinition::new(

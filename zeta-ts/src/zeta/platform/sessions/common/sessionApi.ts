@@ -1,4 +1,4 @@
-import type { ModelListResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../generated/app-server/types.js";
+import type { ModelListResult, ModelRef, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../generated/app-server/types.js";
 
 export type { SessionRequestResult };
 
@@ -47,15 +47,14 @@ export interface ISessionApi {
 	unsubscribe(params: SessionUnsubscribeParams): Promise<void>;
 	createThread(params: SessionOperationInput<"createThread">): Promise<SessionThreadResult>;
 	forkThread(params: SessionOperationInput<"forkThread">): Promise<SessionThreadResult>;
-	complete(params: SessionOperationInput<"complete">): Promise<SessionResult>;
 	archive(params: SessionOperationInput<"archive">): Promise<SessionResult>;
 	stop(params: SessionOperationInput<"stop">): Promise<SessionResult>;
-	setModel(params: SessionOperationInput<"setModel">): Promise<SessionResult>;
-	setNextApprovalMode(params: SessionOperationInput<"setNextApprovalMode">): Promise<SessionResult>;
 }
 
 export interface IModelApi {
 	list(): Promise<ModelListResult>;
+	readPreferred(): Promise<ModelRef | null>;
+	setPreferred(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
 }
 
 export interface IThreadApi {

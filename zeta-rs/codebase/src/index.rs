@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use sha2::Digest;
 use sha2::Sha256;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 use crate::ChunkContentHash;
 use crate::ChunkKey;
@@ -40,14 +40,14 @@ use crate::error::io_error;
 use crate::memory_store::InMemoryCodebaseIndexStore;
 use crate::overlay::CodebaseOverlay;
 use crate::scanner::prepare_relative_file;
-use crate::scanner::scan_workspace;
+use crate::scanner::scan_dir;
 use crate::store::CodebaseIndexStore;
 use crate::store::FileUpdate;
 use crate::store::StoredSource;
 
-/// One workspace Codebase backed by rebuildable local data.
+/// One directory Codebase backed by rebuildable local data.
 pub struct Codebase {
-    root: WorkspaceRoot,
+    root: Dir,
     root_id: IndexRootId,
     limits: CodebaseLimits,
     store: Arc<dyn CodebaseIndexStore>,
@@ -56,7 +56,7 @@ pub struct Codebase {
 
 impl Codebase {
     /// Opens a process-local Codebase for tests and explicitly ephemeral product sessions.
-    pub fn open_memory(root: WorkspaceRoot, limits: CodebaseLimits) -> Result<Self, CodebaseError> {
+    pub fn open_memory(root: Dir, limits: CodebaseLimits) -> Result<Self, CodebaseError> {
         Self::open(
             root,
             Arc::new(InMemoryCodebaseIndexStore::default()),
@@ -64,12 +64,12 @@ impl Codebase {
         )
     }
 
-    /// Opens a local index projection for one already-authorized workspace root.
+    /// Opens a local index projection for one already-authorized directory root.
     ///
-    /// Opening does not scan the workspace. Call [`Self::rebuild`] after watcher registration so
+    /// Opening does not scan the directory. Call [`Self::rebuild`] after watcher registration so
     /// filesystem mutations during the initial scan remain observable to the host.
     pub fn open(
-        root: WorkspaceRoot,
+        root: Dir,
         store: Arc<dyn CodebaseIndexStore>,
         limits: CodebaseLimits,
     ) -> Result<Self, CodebaseError> {
@@ -84,12 +84,12 @@ impl Codebase {
         })
     }
 
-    /// Returns the canonical workspace boundary indexed by this instance.
-    pub fn root(&self) -> &WorkspaceRoot {
+    /// Returns the canonical directory boundary indexed by this instance.
+    pub fn root(&self) -> &Dir {
         &self.root
     }
 
-    /// Returns the stable canonical identity of the indexed workspace root.
+    /// Returns the stable canonical identity of the indexed directory root.
     pub fn root_id(&self) -> &IndexRootId {
         &self.root_id
     }
@@ -106,8 +106,8 @@ impl Codebase {
 
     /// Performs a deterministic full scan and atomically replaces the published projection.
     pub fn rebuild(&self) -> Result<CodebaseSnapshot, CodebaseError> {
-        let scan = scan_workspace(&self.root, &self.limits)?;
-        self.store.replace_workspace(&self.root_id, scan)
+        let scan = scan_dir(&self.root, &self.limits)?;
+        self.store.replace_sources(&self.root_id, scan)
     }
 
     /// Applies coarse watcher hints, rebuilding when a directory-level change cannot be safely
@@ -241,7 +241,7 @@ impl Codebase {
     }
 
     /// Rereads one search result and proves that its revision, range, and chunk identities still
-    /// match the current workspace file before the content is used as Agent context.
+    /// match the current directory file before the content is used as Agent context.
     pub fn materialize(
         &self,
         reference: &ChunkReference,
@@ -283,7 +283,7 @@ impl Codebase {
     }
 
     /// Verifies an exact source revision and creates a content-addressed excerpt reference for a
-    /// Workspace-owned range such as a syntax declaration.
+    /// Directory-owned range such as a syntax declaration.
     pub fn materialize_verified_excerpt(
         &self,
         source: &IndexedSourceReference,

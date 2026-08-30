@@ -7,11 +7,11 @@ use super::runtime::RemoteConnectRuntimeSelection;
 use super::runtime::RemoteRuntimeCatalogSelection;
 
 #[test]
-fn direct_connect_requires_a_credential_free_host_and_absolute_workspace() {
+fn direct_connect_requires_a_credential_free_host_and_absolute_dir() {
     let options = parse(&strings([
         "--host",
         "build-linux",
-        "--workspace",
+        "--dir",
         "/srv/project",
         "--runtime",
         "zeta-remote-server",
@@ -25,7 +25,7 @@ fn direct_connect_requires_a_credential_free_host_and_absolute_workspace() {
         panic!("expected direct target");
     };
     assert_eq!(target.host().as_str(), "build-linux");
-    assert_eq!(target.workspace().as_str(), "/srv/project");
+    assert_eq!(target.dir().as_str(), "/srv/project");
     let RemoteConnectRuntimeSelection::Explicit(runtime) = options.runtime else {
         panic!("expected explicit runtime");
     };
@@ -40,20 +40,12 @@ fn direct_connect_requires_a_credential_free_host_and_absolute_workspace() {
         parse(&strings([
             "--host",
             "user@build-linux",
-            "--workspace",
+            "--dir",
             "/srv/project"
         ]))
         .is_err()
     );
-    assert!(
-        parse(&strings([
-            "--host",
-            "build-linux",
-            "--workspace",
-            "relative"
-        ]))
-        .is_err()
-    );
+    assert!(parse(&strings(["--host", "build-linux", "--dir", "relative"])).is_err());
 }
 
 #[test]
@@ -75,7 +67,7 @@ fn named_connect_is_exclusive_and_interactive_by_default() {
             "production",
             "--host",
             "build-linux",
-            "--workspace",
+            "--dir",
             "/srv/project"
         ]))
         .unwrap_err()
@@ -94,7 +86,7 @@ fn runtime_catalog_options_are_authenticated_complete_and_mutually_exclusive() {
     let options = parse(&strings([
         "--host",
         "build-linux",
-        "--workspace",
+        "--dir",
         "/srv/project",
         "--runtime-catalog-url",
         "https://releases.example/zeta/catalog.json",

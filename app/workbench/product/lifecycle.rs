@@ -52,7 +52,7 @@ impl App<ProductEvent> for ProductApp {
             self.workbench.tab_container_state(),
             self.workbench.inspector_state(),
         );
-        if let Err(error) = self.terminal_workspace.spawn_initial(terminal_size) {
+        if let Err(error) = self.terminal_runtime.spawn_initial(terminal_size) {
             self.fail(error);
             context.exit();
             return;
@@ -145,7 +145,7 @@ impl App<ProductEvent> for ProductApp {
                 self.terminal_view_mut().scroll.cancel_scrollbar();
                 self.workbench.dismiss_tab_context_menu();
                 self.git_branch_context_menu.dismiss();
-                self.workspace_path_picker.dismiss();
+                self.path_picker.dismiss();
                 self.ui_dispatch.window_blurred();
                 self.sync_input_focus();
                 self.rebuild_presentation();
@@ -231,7 +231,7 @@ impl App<ProductEvent> for ProductApp {
                 return;
             }
             ProductEvent::TerminalReady(ready) => {
-                match self.terminal_workspace.handle_ready(ready) {
+                match self.terminal_runtime.handle_ready(ready) {
                     TerminalReadyOutcome::Active {
                         key,
                         buffered_events,

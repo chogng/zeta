@@ -6,7 +6,7 @@ import { createViteDevDiffApi } from "../../diff/browser/diffApi.js";
 import { createViteDevSyntaxApi } from "../../syntax/browser/syntaxApi.js";
 import { createViteDevGitApi } from "../../git/browser/gitApi.js";
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
-import { createViteDevWorkspaceSearchApi } from "../../search/browser/searchApi.js";
+import { createViteDevContentSearchApi } from "../../search/browser/searchApi.js";
 import { createViteDevModelApi, createViteDevSessionApi, createViteDevThreadApi, createViteDevTurnApi } from "../../sessions/browser/sessionApi.js";
 import { createViteDevSkillApi } from "../../skills/browser/skillApi.js";
 import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTerminalProcessService.js";
@@ -20,7 +20,7 @@ import { createViteDevLanguageApi } from "../../language/browser/languageApi.js"
 import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
 import { createViteDevExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
 import { createViteDevMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
-import { createViteDevWorkspaceTrustApi } from "../../workspaceTrust/browser/workspaceTrustApi.js";
+import { createViteDevDirPermissionsApi } from "../../dirPermissions/browser/dirPermissionsApi.js";
 import { createViteDevAccountApi } from "../../accounts/browser/accountApi.js";
 import { createViteDevTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 
@@ -71,7 +71,7 @@ function createRendererHost(connection: ViteDevAppServerConnection, connectorHos
 		syntax: createViteDevSyntaxApi(connection),
 		language: createViteDevLanguageApi(connection),
 		git: createViteDevGitApi(connection),
-		workspaceSearch: createViteDevWorkspaceSearchApi(connection),
+		contentSearch: createViteDevContentSearchApi(connection),
 		terminal: new ViteDevTerminalProcessService(connection, appServer),
 		...capabilities,
 		events: createViteDevServerEventApi(connection),
@@ -81,6 +81,6 @@ function createRendererHost(connection: ViteDevAppServerConnection, connectorHos
 		plugins: createViteDevPluginApi(connection),
 		marketplace: createViteDevMarketplaceApi(connection),
 		toolSearch: createViteDevToolSearchApi(connection),
-		workspaceTrust: createViteDevWorkspaceTrustApi(connection),
+		dirPermissions: createViteDevDirPermissionsApi(connection),
 	};
 }

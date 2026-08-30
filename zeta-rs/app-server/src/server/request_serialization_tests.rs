@@ -45,21 +45,21 @@ fn exclusive_requests_with_the_same_key_run_fifo() {
     let second_scheduler = scheduler.clone();
     let second_sender = sender.clone();
     let second = thread::spawn(move || {
-        let permit = second_scheduler
+        let authorization = second_scheduler
             .acquire(2, session("same", SerializationAccess::Exclusive))
             .unwrap();
         second_sender.send(2).unwrap();
-        drop(permit);
+        drop(authorization);
     });
     wait_until_waiting(&scheduler, 1);
 
     let third_scheduler = scheduler.clone();
     let third = thread::spawn(move || {
-        let permit = third_scheduler
+        let authorization = third_scheduler
             .acquire(3, session("same", SerializationAccess::Exclusive))
             .unwrap();
         sender.send(3).unwrap();
-        drop(permit);
+        drop(authorization);
     });
     wait_until_waiting(&scheduler, 2);
 
@@ -104,11 +104,11 @@ fn adjacent_shared_reads_run_together_before_a_waiting_writer() {
     let (sender, receiver) = mpsc::channel();
     let writer_scheduler = Arc::clone(&scheduler);
     let writer = thread::spawn(move || {
-        let permit = writer_scheduler
+        let authorization = writer_scheduler
             .acquire(3, session("same", SerializationAccess::Exclusive))
             .unwrap();
         sender.send(()).unwrap();
-        drop(permit);
+        drop(authorization);
     });
     wait_until_waiting(&scheduler, 1);
 

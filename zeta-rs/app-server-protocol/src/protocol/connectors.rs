@@ -35,7 +35,7 @@ pub enum ConnectorConnectionStateDto {
     },
 }
 
-/// Mutation the current Connector state permits a client to offer.
+/// Mutation the current Connector state authorizations a client to offer.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ConnectorAvailableActionDto {

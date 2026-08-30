@@ -2,7 +2,7 @@ use crate::matcher::matches_event;
 use crate::outcome::HookDecision;
 use crate::policy::execution_authority;
 use crate::process::HookProcessExecutor;
-use crate::process::NativeHookProcessExecutor;
+use crate::process::LocalHookProcessExecutor;
 use crate::protocol::HookInvocation;
 use crate::protocol::encode_input;
 use crate::records::HookRunLog;
@@ -23,33 +23,33 @@ use zeta_core::HookExecutionObserver;
 use zeta_core::HookService;
 use zeta_core::NoHookExecutionObserver;
 use zeta_core::TurnCompletedHookRequest;
+use zeta_file_access::Authorization;
+use zeta_file_access::Dir;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
-use zeta_workspace::TrustedWorkspace;
-use zeta_workspace::WorkspaceRoot;
 
 struct SessionHookBinding {
     config: HooksConfig,
-    discovery: TrustedWorkspace,
-    execution: TrustedWorkspace,
+    discovery: Authorization,
+    execution: Authorization,
     process: Arc<dyn HookProcessExecutor>,
 }
 
-struct ThreadHookBinding {
-    workspace: WorkspaceRoot,
+struct ThreadDirHookBinding {
+    dir: Dir,
     process: Option<Arc<dyn HookProcessExecutor>>,
 }
 
 /// Shared host runtime for declarative Hooks.
 ///
-/// The runtime keeps configuration separate from the current trusted Workspace executor. A
-/// restricted Workspace therefore has no process runner at all, while a configuration update can
+/// The runtime keeps configuration separate from the current directory executor. A directory
+/// without execution permission has no process runner, while a configuration update can
 /// replace the immutable Hook snapshot without rebuilding Core's Turn executor.
 pub struct DeclarativeHookRuntime {
     config: RwLock<HooksConfig>,
     policy: Arc<dyn ActionPolicyService>,
     process: RwLock<Option<Arc<dyn HookProcessExecutor>>>,
-    thread_bindings: RwLock<BTreeMap<ThreadId, ThreadHookBinding>>,
+    thread_dir_bindings: RwLock<BTreeMap<ThreadId, ThreadDirHookBinding>>,
     session_bindings: RwLock<BTreeMap<SessionId, Vec<SessionHookBinding>>>,
     execution_observer: RwLock<Arc<dyn HookExecutionObserver>>,
     runs: HookRunLog,
@@ -62,7 +62,7 @@ impl DeclarativeHookRuntime {
             config: RwLock::new(config),
             policy,
             process: RwLock::new(None),
-            thread_bindings: RwLock::new(BTreeMap::new()),
+            thread_dir_bindings: RwLock::new(BTreeMap::new()),
             session_bindings: RwLock::new(BTreeMap::new()),
             execution_observer: RwLock::new(Arc::new(NoHookExecutionObserver)),
             runs: HookRunLog::new(),
@@ -77,11 +77,8 @@ impl DeclarativeHookRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = config;
     }
 
-    /// Binds process execution to an active Workspace that the host has already trusted.
-    pub fn bind_workspace(
-        &self,
-        workspace: WorkspaceRoot,
-    ) -> Result<(), HookWorkspaceBindingError> {
+    /// Binds process execution to an explicitly authorized directory.
+    pub fn bind_dir(&self, dir: Dir) -> Result<(), HookDirBindingError> {
         let has_enabled_hooks = self
             .config
             .read()
@@ -90,11 +87,11 @@ impl DeclarativeHookRuntime {
             .values()
             .any(|hook| hook.enablement == HookEnablement::Enabled);
         if !has_enabled_hooks {
-            self.unbind_workspace();
+            self.unbind_dir();
             return Ok(());
         }
-        let process = NativeHookProcessExecutor::new(workspace)
-            .map_err(|message| HookWorkspaceBindingError { message })?;
+        let process = LocalHookProcessExecutor::new(dir)
+            .map_err(|message| HookDirBindingError { message })?;
         *self
             .process
             .write()
@@ -102,20 +99,20 @@ impl DeclarativeHookRuntime {
         Ok(())
     }
 
-    /// Removes the active Workspace executor so future Hook invocations cannot spawn processes.
-    pub fn unbind_workspace(&self) {
+    /// Removes the active directory executor so future Hook invocations cannot spawn processes.
+    pub fn unbind_dir(&self) {
         *self
             .process
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
-    /// Binds primary Hook execution for one Thread to its managed workspace.
-    pub fn bind_thread_workspace(
+    /// Binds Hook execution for one Thread to its managed directory.
+    pub fn bind_thread_dir(
         &self,
         thread_id: ThreadId,
-        workspace: WorkspaceRoot,
-    ) -> Result<(), HookWorkspaceBindingError> {
+        dir: Dir,
+    ) -> Result<(), HookDirBindingError> {
         let process = if has_enabled_hooks(
             &self
                 .config
@@ -123,21 +120,21 @@ impl DeclarativeHookRuntime {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         ) {
             Some(Arc::new(
-                NativeHookProcessExecutor::new(workspace.clone())
-                    .map_err(|message| HookWorkspaceBindingError { message })?,
+                LocalHookProcessExecutor::new(dir.clone())
+                    .map_err(|message| HookDirBindingError { message })?,
             ) as Arc<dyn HookProcessExecutor>)
         } else {
             None
         };
-        self.thread_bindings
+        self.thread_dir_bindings
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(thread_id, ThreadHookBinding { workspace, process });
+            .insert(thread_id, ThreadDirHookBinding { dir, process });
         Ok(())
     }
 
-    pub fn unbind_thread_workspace(&self, thread_id: &ThreadId) {
-        self.thread_bindings
+    pub fn unbind_thread_dir(&self, thread_id: &ThreadId) {
+        self.thread_dir_bindings
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(thread_id);
@@ -150,27 +147,27 @@ impl DeclarativeHookRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = observer;
     }
 
-    /// Replaces additional-directory Hook bindings for one Session.
-    pub fn replace_session_workspaces(
+    /// Replaces session-dir Hook bindings for one Session.
+    pub fn replace_session_dirs(
         &self,
         session_id: SessionId,
-        workspaces: Vec<(HooksConfig, TrustedWorkspace, TrustedWorkspace)>,
-    ) -> Result<(), HookWorkspaceBindingError> {
+        workspaces: Vec<(HooksConfig, Authorization, Authorization)>,
+    ) -> Result<(), HookDirBindingError> {
         let mut bindings = Vec::new();
         for (config, discovery, execution) in workspaces {
             discovery
                 .ensure_active()
-                .map_err(|error| HookWorkspaceBindingError {
+                .map_err(|error| HookDirBindingError {
                     message: error.to_string(),
                 })?;
             execution
                 .ensure_active()
-                .map_err(|error| HookWorkspaceBindingError {
+                .map_err(|error| HookDirBindingError {
                     message: error.to_string(),
                 })?;
             let process = Arc::new(
-                NativeHookProcessExecutor::new(execution.root().clone())
-                    .map_err(|message| HookWorkspaceBindingError { message })?,
+                LocalHookProcessExecutor::new(execution.dir().clone())
+                    .map_err(|message| HookDirBindingError { message })?,
             );
             bindings.push(SessionHookBinding {
                 config,
@@ -213,7 +210,7 @@ impl DeclarativeHookRuntime {
             config: RwLock::new(config),
             policy,
             process: RwLock::new(Some(process)),
-            thread_bindings: RwLock::new(BTreeMap::new()),
+            thread_dir_bindings: RwLock::new(BTreeMap::new()),
             session_bindings: RwLock::new(BTreeMap::new()),
             execution_observer: RwLock::new(Arc::new(NoHookExecutionObserver)),
             runs: HookRunLog::new(),
@@ -226,13 +223,13 @@ impl DeclarativeHookRuntime {
         thread_id: ThreadId,
         process: Arc<dyn HookProcessExecutor>,
     ) {
-        self.thread_bindings
+        self.thread_dir_bindings
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
                 thread_id,
-                ThreadHookBinding {
-                    workspace: process.workspace().clone(),
+                ThreadDirHookBinding {
+                    dir: process.dir().clone(),
                     process: Some(process),
                 },
             );
@@ -307,19 +304,15 @@ impl DeclarativeHookRuntime {
             }
             let started = self.runs.start(hook, invocation);
             let result = (|| {
-                let authority = execution_authority(
-                    hook,
-                    process.workspace(),
-                    self.policy.as_ref(),
-                    cancellation,
-                )?;
-                let input = encode_input(hook, invocation, process.workspace().canonical_path())?;
+                let authority =
+                    execution_authority(hook, process.dir(), self.policy.as_ref(), cancellation)?;
+                let input = encode_input(hook, invocation, process.dir().canonical_path())?;
                 let event = HookExecutionEvent {
                     session_id: invocation.session_id().clone(),
                     thread_id: invocation.thread_id().clone(),
                     turn_id: invocation.turn_id().clone(),
                     hook_id: hook.id.to_string(),
-                    workspace: process.workspace().canonical_path().to_path_buf(),
+                    dir: process.dir().canonical_path().to_path_buf(),
                 };
                 let observer = self
                     .execution_observer
@@ -346,7 +339,7 @@ impl DeclarativeHookRuntime {
         config: &HooksConfig,
     ) -> Result<Option<Arc<dyn HookProcessExecutor>>, CoreError> {
         let mut bindings = self
-            .thread_bindings
+            .thread_dir_bindings
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some(binding) = bindings.get_mut(thread_id) else {
@@ -354,8 +347,7 @@ impl DeclarativeHookRuntime {
         };
         if binding.process.is_none() && has_enabled_hooks(config) {
             binding.process = Some(Arc::new(
-                NativeHookProcessExecutor::new(binding.workspace.clone())
-                    .map_err(CoreError::Execution)?,
+                LocalHookProcessExecutor::new(binding.dir.clone()).map_err(CoreError::Execution)?,
             ));
         }
         Ok(binding.process.clone())
@@ -425,23 +417,23 @@ fn require_observational_result(decision: HookDecision, event_name: &str) -> Res
     }
 }
 
-/// Failure to construct the sandboxed process executor for a trusted Workspace.
+/// Failure to construct the sandboxed process executor for a authorized directory.
 #[derive(Debug)]
-pub struct HookWorkspaceBindingError {
+pub struct HookDirBindingError {
     message: String,
 }
 
-impl std::fmt::Display for HookWorkspaceBindingError {
+impl std::fmt::Display for HookDirBindingError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "could not bind declarative Hooks to the Workspace: {}",
+            "could not bind declarative Hooks to the directory: {}",
             self.message
         )
     }
 }
 
-impl std::error::Error for HookWorkspaceBindingError {}
+impl std::error::Error for HookDirBindingError {}
 
 #[cfg(test)]
 #[path = "runtime_tests.rs"]

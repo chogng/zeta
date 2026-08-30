@@ -13,7 +13,7 @@ export type TerminalProcessProfileSelection =
 	| { readonly type: "profile"; readonly profileId: string };
 
 export interface ITerminalProcessCreateOptions {
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly rows: number;
 	readonly cols: number;
 	readonly profile: TerminalProcessProfileSelection;
@@ -29,20 +29,20 @@ export interface ITerminalProcessCreation {
 }
 
 export interface ITerminalProcessWriteOptions {
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly terminalId: string;
 	readonly data: string;
 }
 
 export interface ITerminalProcessResizeOptions {
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly terminalId: string;
 	readonly rows: number;
 	readonly cols: number;
 }
 
 export interface ITerminalProcessReadOptions {
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly terminalId: string;
 	readonly afterSequence: number;
 	readonly afterCommandSequence: number;
@@ -77,7 +77,7 @@ export interface ITerminalProcessReadResult {
 }
 
 export interface ITerminalProcessCloseOptions {
-	readonly workspaceFolderId?: string;
+	readonly dirId?: string;
 	readonly terminalId: string;
 }
 

@@ -76,7 +76,7 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 		quickPick.placeholder = "Select a chat";
 		quickPick.items = sessions.sessions.flatMap((session) => {
 			if (session.status !== "active") return [];
-			const threads = session.threads.filter((thread) => thread.status === "active");
+			const threads = session.chats.filter((thread) => thread.status === "active");
 			return threads.map((thread, index) => ({
 				sessionId: session.sessionId,
 				threadId: thread.threadId,

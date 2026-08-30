@@ -3,29 +3,29 @@ use super::InstructionLayer;
 use super::InstructionRetention;
 use super::InstructionSource;
 
-/// Immutable system and Workspace instructions supplied by the host.
+/// Immutable system and directory instructions supplied by the host.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HarnessInstructions {
     system_body: String,
     system_revision: String,
-    workspace_instructions: Option<String>,
-    workspace_revision: String,
+    directory_instructions: Option<String>,
+    directory_revision: String,
 }
 
 impl HarnessInstructions {
-    /// Creates prompt additions from a system body and optional Workspace instructions.
-    pub fn new(system_body: impl Into<String>, workspace_instructions: Option<String>) -> Self {
+    /// Creates prompt additions from a system body and optional directory instructions.
+    pub fn new(system_body: impl Into<String>, directory_instructions: Option<String>) -> Self {
         Self {
             system_body: system_body.into(),
             system_revision: "unversioned-system".into(),
-            workspace_instructions,
-            workspace_revision: "unversioned-workspace".into(),
+            directory_instructions,
+            directory_revision: "unversioned-directory".into(),
         }
     }
 
-    /// Creates host additions containing only optional Workspace instructions.
-    pub fn workspace(workspace_instructions: Option<String>) -> Self {
-        Self::new(String::new(), workspace_instructions)
+    /// Creates host additions containing only optional directory instructions.
+    pub fn directory(directory_instructions: Option<String>) -> Self {
+        Self::new(String::new(), directory_instructions)
     }
 
     pub fn with_system_revision(mut self, revision: impl Into<String>) -> Self {
@@ -33,8 +33,8 @@ impl HarnessInstructions {
         self
     }
 
-    pub fn with_workspace_revision(mut self, revision: impl Into<String>) -> Self {
-        self.workspace_revision = revision.into();
+    pub fn with_directory_revision(mut self, revision: impl Into<String>) -> Self {
+        self.directory_revision = revision.into();
         self
     }
 
@@ -42,8 +42,8 @@ impl HarnessInstructions {
         &self.system_body
     }
 
-    pub fn workspace_instructions(&self) -> Option<&str> {
-        self.workspace_instructions.as_deref()
+    pub fn directory_instructions(&self) -> Option<&str> {
+        self.directory_instructions.as_deref()
     }
 
     pub(crate) fn context_fragments(&self) -> Vec<InstructionFragment> {
@@ -61,20 +61,20 @@ impl HarnessInstructions {
             ));
         }
         if let Some(instructions) = self
-            .workspace_instructions
+            .directory_instructions
             .as_ref()
             .filter(|instructions| !instructions.trim().is_empty())
         {
             fragments.push(InstructionFragment::new(
                 InstructionSource::new(
-                    "workspace",
-                    "global-workspace-instructions",
-                    self.workspace_revision.clone(),
+                    "directory",
+                    "directory-instructions",
+                    self.directory_revision.clone(),
                 ),
-                InstructionLayer::Workspace,
+                InstructionLayer::Directory,
                 InstructionRetention::Required,
                 format!(
-                    "<workspace-instructions>\nGlobal Workspace Instructions from .zeta/instructions. They rank below system and safety policy.\n{}\n</workspace-instructions>",
+                    "<directory-instructions>\nDirectory Instructions from .zeta/instructions. They rank below system and safety policy.\n{}\n</directory-instructions>",
                     instructions
                 ),
             ));

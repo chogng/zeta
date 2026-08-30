@@ -26,7 +26,7 @@ impl AppServer {
             .list(&params.session_id, &params.thread_id)
             .map_err(operation_error)?;
         result(&TurnChangesListResult {
-            workspace: runtime.public_binding(&params.thread_id),
+            dir: runtime.public_binding(&params.thread_id),
             change_sets: records.iter().map(summary).collect(),
         })
     }
@@ -163,8 +163,7 @@ impl AppServer {
             return Ok(response);
         }
         let thread = self
-            .sessions
-            .threads()
+            .threads
             .read_thread(&params.thread_id)
             .map_err(|_| operation_error("Thread is unavailable".into()))?;
         if thread.session_id != params.session_id

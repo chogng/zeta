@@ -28,17 +28,17 @@ impl RemoteProfile {
     }
 }
 
-/// An OpenSSH target and its authoritative POSIX Workspace root.
+/// An OpenSSH target and its authoritative POSIX Directory root.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SshTarget {
     host: SshHost,
-    workspace: RemoteWorkspacePath,
+    dir: RemoteDirPath,
 }
 
 impl SshTarget {
-    /// Creates a target from a validated OpenSSH host alias and an absolute POSIX Workspace path.
-    pub fn new(host: SshHost, workspace: RemoteWorkspacePath) -> Self {
-        Self { host, workspace }
+    /// Creates a target from a validated OpenSSH host alias and an absolute POSIX Directory path.
+    pub fn new(host: SshHost, dir: RemoteDirPath) -> Self {
+        Self { host, dir }
     }
 
     /// Returns the host alias passed to the local OpenSSH client.
@@ -46,9 +46,9 @@ impl SshTarget {
         &self.host
     }
 
-    /// Returns the remote Workspace root supplied to the App Server.
-    pub const fn workspace(&self) -> &RemoteWorkspacePath {
-        &self.workspace
+    /// Returns the remote Directory root supplied to the App Server.
+    pub const fn dir(&self) -> &RemoteDirPath {
+        &self.dir
     }
 }
 
@@ -85,16 +85,16 @@ impl SshHost {
     }
 }
 
-/// A canonical absolute POSIX Workspace path owned by one Remote host.
+/// A canonical absolute POSIX Directory path owned by one Remote host.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RemoteWorkspacePath(String);
+pub struct RemoteDirPath(String);
 
-impl RemoteWorkspacePath {
-    /// Parses an absolute canonical POSIX Workspace path.
+impl RemoteDirPath {
+    /// Parses an absolute canonical POSIX Directory path.
     pub fn parse(value: impl AsRef<str>) -> Result<Self, RemoteAddressError> {
         let value = value.as_ref().trim();
         if value.is_empty() || !value.starts_with('/') || value.contains('\0') {
-            return Err(RemoteAddressError::InvalidWorkspacePath);
+            return Err(RemoteAddressError::InvalidDirPath);
         }
         if value != "/"
             && (value.ends_with('/')
@@ -103,7 +103,7 @@ impl RemoteWorkspacePath {
                     .skip(1)
                     .any(|segment| segment.is_empty() || matches!(segment, "." | "..")))
         {
-            return Err(RemoteAddressError::InvalidWorkspacePath);
+            return Err(RemoteAddressError::InvalidDirPath);
         }
         Ok(Self(value.to_owned()))
     }
@@ -161,7 +161,7 @@ impl RemoteRuntime {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RemoteAddressError {
     InvalidSshHost,
-    InvalidWorkspacePath,
+    InvalidDirPath,
     InvalidRuntime,
 }
 
@@ -169,8 +169,8 @@ impl fmt::Display for RemoteAddressError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidSshHost => formatter.write_str("Remote SSH host is invalid"),
-            Self::InvalidWorkspacePath => {
-                formatter.write_str("Remote Workspace path must be canonical and absolute")
+            Self::InvalidDirPath => {
+                formatter.write_str("Remote Directory path must be canonical and absolute")
             }
             Self::InvalidRuntime => formatter.write_str("Remote runtime executable is invalid"),
         }

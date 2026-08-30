@@ -3,7 +3,7 @@ use std::fs;
 use super::ShellContext;
 
 #[test]
-fn workspace_commands_and_described_arguments_cross_the_strict_threshold() {
+fn cargo_workspace_commands_and_described_arguments_cross_the_strict_threshold() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join("Cargo.toml"), "[workspace]\n").unwrap();
     let context = ShellContext::new(root.path());

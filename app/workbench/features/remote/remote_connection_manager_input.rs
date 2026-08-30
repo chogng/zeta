@@ -7,11 +7,11 @@ use zeta_settings::REMOTE_CONNECTION_MANAGER;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_CLOSE;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_CONNECT;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_DELETE;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_DIRECTORY;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_HOST;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_NAME;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_NEW;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_SAVE;
-use zeta_settings::REMOTE_CONNECTION_MANAGER_WORKSPACE;
 use zeta_settings::RemoteConnectionManagerField;
 use zeta_settings::RemoteConnectionSaveRequest;
 use zeta_settings::remote_connection_manager_item_id;
@@ -151,7 +151,7 @@ impl ProductApp {
             REMOTE_CONNECTION_MANAGER
             | REMOTE_CONNECTION_MANAGER_NAME
             | REMOTE_CONNECTION_MANAGER_HOST
-            | REMOTE_CONNECTION_MANAGER_WORKSPACE => {}
+            | REMOTE_CONNECTION_MANAGER_DIRECTORY => {}
             _ => return false,
         }
         true
@@ -401,7 +401,7 @@ impl ProductApp {
         [
             RemoteConnectionManagerField::Name,
             RemoteConnectionManagerField::Host,
-            RemoteConnectionManagerField::Workspace,
+            RemoteConnectionManagerField::Directory,
         ]
         .into_iter()
         .find(|field| self.ui_dispatch.is_focused(field.element_id()))

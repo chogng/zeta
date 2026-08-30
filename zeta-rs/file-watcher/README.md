@@ -2,7 +2,7 @@
 
 > 本 README 是共享 filesystem invalidation hint 的实现契约。Skill catalog 的扫描、校验与
 > snapshot 发布语义由 [`docs/skills.md`](../../docs/skills.md) 维护；Git status 的重新查询、
-> revision 与 notification 语义由 [`docs/git.md`](../../docs/git.md) 维护；workspace
+> revision 与 notification 语义由 [`docs/git.md`](../../docs/git.md) 维护；directory
 > `fs/changed` 的 root-relative 投影由
 > [`docs/zeta-app-server-api.md`](../../docs/zeta-app-server-api.md#文件系统) 维护。
 
@@ -10,10 +10,10 @@
 缺失路径回退、RAII 注销和异步事件合并。它只报告“可能发生了变化”；消费者必须重新读取并验证
 自己拥有的状态，不能把 backend event 当作文件或 catalog 事实。
 
-macOS 默认使用 `notify` 的 FSEvents backend。workspace watcher 会递归覆盖整棵工作区；不能改用
+macOS 默认使用 `notify` 的 FSEvents backend。directory watcher 会递归覆盖整棵目录；不能改用
 kqueue，因为它会为大量 watched entry 持有 file descriptor，并在大型工作区耗尽进程资源。
 当宿主确认 requested/canonical namespace 不同（例如 `/var` 与 `/private/var`）时，可显式选择
-`FileWatcherBackend::Polling`；该 fallback 只用于 alias root，不是所有 Workspace 的默认策略。
+`FileWatcherBackend::Polling`；该 fallback 只用于 alias root，不是所有目录的默认策略。
 hermetic Bazel toolchain 必须提供 FSEvents 所需的 `CoreServices` framework 链接边界；
 Linux/Windows 继续使用 `notify` 的推荐平台 backend。
 
@@ -112,7 +112,7 @@ Backend 只转发 create、modify 和 remove；access/open 事件被过滤。所
 | Symbol | 拥有 | 架构漂移信号 |
 | --- | --- | --- |
 | `WatchState` / `PathWatchCounts` | subscriber state 与共享 backend scope ref-count | 开始保存 consumer snapshot/content |
-| `actual_watch_path` / `changed_path_for_event` | fallback、canonical matching 与请求 namespace 恢复 | 开始解释 catalog 或 workspace 业务语义 |
+| `actual_watch_path` / `changed_path_for_event` | fallback、canonical matching 与请求 namespace 恢复 | 开始解释 catalog 或 directory 业务语义 |
 | `FileWatcher::notify_subscribers` | raw mutation 到 subscriber hint 的 routing | 直接发布 App Server/product event |
 | `WatchSender` / `PendingEvent` | 每个 subscriber 的去重 pending 状态 | 引入 durable queue/replay contract |
 | throttle/debounce wrappers | delivery cadence | 决定 manager 的扫描或 snapshot generation |

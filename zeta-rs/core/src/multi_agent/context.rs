@@ -31,7 +31,7 @@ pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<Instruct
                     format!("{source_thread_id}:{source_id}"),
                     format!("{source_sequence}:{}", materialized.content_digest.as_str()),
                 ),
-                InstructionLayer::Workspace,
+                InstructionLayer::Directory,
                 InstructionRetention::Required,
                 format!(
                     "<inherited-agent-context source-thread=\"{}\" source-sequence=\"{}\" kind=\"{}\">\n{}\n</inherited-agent-context>",
@@ -68,7 +68,7 @@ pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<Instruct
                 message.message_id.to_string(),
                 message.sender_sequence.to_string(),
             ),
-            InstructionLayer::Workspace,
+            InstructionLayer::Directory,
             InstructionRetention::BestEffort,
             format!(
                 "<agent-message sender=\"{}\" provenance=\"{:?}\">\n{}\n</agent-message>",

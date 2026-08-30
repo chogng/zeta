@@ -4,7 +4,7 @@ import type { IFileApi } from "../../files/common/fileApi.js";
 import type { IDiffApi } from "../../diff/common/diffApi.js";
 import type { ISyntaxApi } from "../../syntax/common/syntaxApi.js";
 import type { IGitApi } from "../../git/common/gitApi.js";
-import type { IWorkspaceSearchApi } from "../../search/common/searchApi.js";
+import type { IContentSearchApi } from "../../search/common/searchApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../../sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../skills/common/skillApi.js";
 import type { ITerminalProcessService } from "../../terminal/common/terminalProcessService.js";
@@ -22,7 +22,7 @@ import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionService } from "../../remote/common/remoteConnectionService.js";
 import type { IRemoteTunnelService } from "../../remote/common/remoteTunnelService.js";
 import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js";
-import type { IWorkspaceTrustApi } from "../../workspaceTrust/common/workspaceTrustApi.js";
+import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissionsApi.js";
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
 
@@ -69,7 +69,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly syntax: ISyntaxApi;
 	readonly language: ILanguageApi;
 	readonly git: IGitApi;
-	readonly workspaceSearch: IWorkspaceSearchApi;
+	readonly contentSearch: IContentSearchApi;
 	readonly terminal: ITerminalProcessService;
 	readonly events: IServerEventApi;
 	readonly codebase: ICodebaseApi;
@@ -78,5 +78,5 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly plugins: IPluginApi;
 	readonly marketplace: IMarketplaceApi;
 	readonly toolSearch: IToolSearchApi;
-	readonly workspaceTrust: IWorkspaceTrustApi;
+	readonly dirPermissions: IDirPermissionsApi;
 }

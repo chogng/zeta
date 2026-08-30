@@ -2,7 +2,7 @@ use std::fs;
 use std::num::NonZeroUsize;
 
 use tempfile::TempDir;
-use zeta_workspace::WorkspaceRoot;
+use zeta_file_access::Dir;
 
 use crate::Codebase;
 use crate::CodebaseError;
@@ -13,15 +13,15 @@ use crate::IndexedLanguage;
 use crate::RefreshOutcome;
 use crate::SourceExcerptReference;
 
-fn workspace() -> TempDir {
-    let directory = tempfile::tempdir().expect("workspace");
+fn dir() -> TempDir {
+    let directory = tempfile::tempdir().expect("dir");
     fs::create_dir(directory.path().join(".git")).expect("git marker");
     directory
 }
 
 fn memory_index(directory: &TempDir) -> Codebase {
     Codebase::open_memory(
-        WorkspaceRoot::open(directory.path()).expect("root"),
+        Dir::open_local(directory.path()).expect("root"),
         CodebaseLimits::default(),
     )
     .expect("index")
@@ -29,7 +29,7 @@ fn memory_index(directory: &TempDir) -> Codebase {
 
 #[test]
 fn rebuild_indexes_structural_chunks_and_searches_literal_text() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("math.rs"),
         "pub fn add(left: i32, right: i32) -> i32 { left + right }\n\
@@ -64,7 +64,7 @@ fn rebuild_indexes_structural_chunks_and_searches_literal_text() {
 
 #[test]
 fn materializes_revision_bound_excerpt_without_a_local_chunk_key() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("excerpt.rs"),
         "fn first() {}\nfn cloud_boundary() {}\n",
@@ -96,7 +96,7 @@ fn materializes_revision_bound_excerpt_without_a_local_chunk_key() {
 
 #[test]
 fn rebuild_honors_ignore_binary_and_file_limits() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("visible.rs"), "fn visible() {}\n").expect("visible");
     fs::write(directory.path().join("binary.rs"), b"fn before() {}\0after").expect("binary");
     fs::write(
@@ -111,7 +111,7 @@ fn rebuild_honors_ignore_binary_and_file_limits() {
     )
     .expect("hidden");
     let limits = CodebaseLimits::default().with_max_files(NonZeroUsize::new(2).expect("non-zero"));
-    let index = Codebase::open_memory(WorkspaceRoot::open(directory.path()).expect("root"), limits)
+    let index = Codebase::open_memory(Dir::open_local(directory.path()).expect("root"), limits)
         .expect("index");
 
     let snapshot = index.rebuild().expect("rebuild");
@@ -133,7 +133,7 @@ fn rebuild_honors_ignore_binary_and_file_limits() {
 
 #[test]
 fn exact_file_refresh_publishes_and_stale_reference_is_rejected() {
-    let directory = workspace();
+    let directory = dir();
     let source_path = directory.path().join("main.ts");
     fs::write(&source_path, "export function before() { return 1; }\n").expect("source");
     let index = memory_index(&directory);
@@ -172,7 +172,7 @@ fn exact_file_refresh_publishes_and_stale_reference_is_rejected() {
 
 #[test]
 fn materialization_does_not_read_past_the_configured_file_limit() {
-    let directory = workspace();
+    let directory = dir();
     let source_path = directory.path().join("bounded.txt");
     fs::write(&source_path, "bounded_marker\n").expect("source");
     let limits = CodebaseLimits::default()
@@ -180,7 +180,7 @@ fn materialization_does_not_read_past_the_configured_file_limit() {
         .with_max_total_source_bytes(NonZeroUsize::new(128).expect("non-zero"))
         .with_target_chunk_bytes(NonZeroUsize::new(32).expect("non-zero"))
         .with_max_chunk_bytes(NonZeroUsize::new(64).expect("non-zero"));
-    let index = Codebase::open_memory(WorkspaceRoot::open(directory.path()).expect("root"), limits)
+    let index = Codebase::open_memory(Dir::open_local(directory.path()).expect("root"), limits)
         .expect("index");
     index.rebuild().expect("rebuild");
     let hit = index
@@ -198,7 +198,7 @@ fn materialization_does_not_read_past_the_configured_file_limit() {
 
 #[test]
 fn new_files_and_ignore_rule_changes_rebuild_instead_of_bypassing_scan_policy() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join(".gitignore"), "ignored.rs\n").expect("ignore");
     fs::write(directory.path().join("visible.rs"), "fn visible() {}\n").expect("visible");
     let index = memory_index(&directory);
@@ -237,7 +237,7 @@ fn new_files_and_ignore_rule_changes_rebuild_instead_of_bypassing_scan_policy() 
 
 #[test]
 fn hard_excluded_runtime_paths_do_not_force_rebuilds() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("visible.rs"), "fn visible() {}\n").expect("visible");
     fs::create_dir(directory.path().join(".zeta")).expect("runtime directory");
     let runtime_path = directory.path().join(".zeta/runtime.json");
@@ -259,7 +259,7 @@ fn hard_excluded_runtime_paths_do_not_force_rebuilds() {
 
 #[test]
 fn query_is_literal_bounded_and_empty_query_is_rejected() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("quoted.txt"),
         "literal OR operator and quote\n",
@@ -282,7 +282,7 @@ fn query_is_literal_bounded_and_empty_query_is_rejected() {
 
 #[test]
 fn chunk_limit_is_bounded_and_visible_in_the_snapshot() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(
         directory.path().join("large.txt"),
         "first_marker_000\nsecond_marker_111\nlast_marker_222\n",
@@ -292,7 +292,7 @@ fn chunk_limit_is_bounded_and_visible_in_the_snapshot() {
         .with_target_chunk_bytes(NonZeroUsize::new(16).expect("non-zero"))
         .with_max_chunk_bytes(NonZeroUsize::new(16).expect("non-zero"))
         .with_max_chunks_per_file(NonZeroUsize::new(1).expect("non-zero"));
-    let index = Codebase::open_memory(WorkspaceRoot::open(directory.path()).expect("root"), limits)
+    let index = Codebase::open_memory(Dir::open_local(directory.path()).expect("root"), limits)
         .expect("index");
 
     let snapshot = index.rebuild().expect("rebuild");
@@ -308,7 +308,7 @@ fn chunk_limit_is_bounded_and_visible_in_the_snapshot() {
 
 #[test]
 fn dirty_overlay_replaces_disk_search_and_materialization() {
-    let directory = workspace();
+    let directory = dir();
     fs::write(directory.path().join("service.rs"), "fn disk_name() {}\n").expect("source");
     let index = memory_index(&directory);
     index.rebuild().expect("rebuild");
@@ -346,7 +346,7 @@ fn dirty_overlay_replaces_disk_search_and_materialization() {
 
 #[test]
 fn overlay_hands_back_to_matching_persistent_revision_after_save() {
-    let directory = workspace();
+    let directory = dir();
     let source = directory.path().join("service.rs");
     fs::write(&source, "fn before() {}\n").expect("source");
     let index = memory_index(&directory);
@@ -373,7 +373,7 @@ fn overlay_hands_back_to_matching_persistent_revision_after_save() {
 
 #[test]
 fn older_editor_revision_cannot_replace_a_newer_overlay() {
-    let directory = workspace();
+    let directory = dir();
     let index = memory_index(&directory);
     index.rebuild().expect("rebuild");
     for (revision, content) in [(3, "fn newest() {}\n"), (2, "fn stale() {}\n")] {
@@ -396,7 +396,7 @@ fn older_editor_revision_cannot_replace_a_newer_overlay() {
 
 #[test]
 fn equal_editor_revision_cannot_identify_two_different_snapshots() {
-    let directory = workspace();
+    let directory = dir();
     let index = memory_index(&directory);
     index.rebuild().expect("rebuild");
     index

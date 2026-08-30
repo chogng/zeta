@@ -4,11 +4,11 @@ This crate owns the backend-neutral runtime for trusted Debug Adapter Protocol (
 
 ## Ownership
 
-`DebugAdapterService` owns process lifetime, bounded output, DAP `Content-Length` framing, session identity, and cleanup. It requires both `LoadExecutableConfiguration` and `ExecuteProcess` capabilities for the same workspace root. It does not parse `.vscode/launch.json`, own breakpoints, implement DAP client state, authorize App Server connections, or render UI.
+`DebugAdapterService` owns process lifetime, bounded output, DAP `Content-Length` framing, session identity, and cleanup. It requires both `LoadExecutableConfiguration` and `ExecuteProcess` capabilities for the same directory root. It does not parse `.vscode/launch.json`, own breakpoints, implement DAP client state, authorize App Server connections, or render UI.
 
 | Symbol | Responsibility | Must not own |
 | --- | --- | --- |
-| `DebugAdapterService` | Validate active workspace capabilities and own at most eight adapter processes | Product configuration or connection identity |
+| `DebugAdapterService` | Validate active directory capabilities and own at most eight adapter processes | Product configuration or connection identity |
 | `DebugAdapterCommand::new` | Bound program and arguments and reject NUL input | Executable discovery |
 | `read_message` / `encode_message` | Parse and create bounded DAP frames | Request pairing or DAP semantics |
 | `DebugAdapterState` | Retain at most 512 messages plus bounded stderr and exit state | Durable history |
@@ -21,7 +21,7 @@ The call path is `DebugAdapterService::start` → `tokio::process::Command` → 
 
 Invalid commands and reads fail before mutation. Process launch, framing failure, broken pipes, and poisoned locks are explicit errors. `close` removes exactly one session and reaps its process; `terminate_all` is the fail-safe for trust retirement and drop. App Server connection ownership is deliberately implemented by its `debug_service::DebugAdapterService` wrapper rather than this crate.
 
-The process environment is supplied by the caller and the runtime clears inherited variables before applying it. Expanding workspace variables and handling DAP reverse requests remain caller obligations.
+The process environment is supplied by the caller and the runtime clears inherited variables before applying it. Expanding directory variables and handling DAP reverse requests remain caller obligations.
 
 ## Tests and modification impact
 

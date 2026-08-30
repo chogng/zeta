@@ -2,7 +2,7 @@
 //!
 //! The host owns HTTP authentication, origin policy, long-poll delivery and
 //! SQLite lifecycle. Ordered room semantics remain in `zeta-collaboration`.
-//! It intentionally has no App Server, workspace, tool, or session authority.
+//! It intentionally has no App Server, directory, tool, or session authority.
 
 mod http;
 mod options;

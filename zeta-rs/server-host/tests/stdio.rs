@@ -6,16 +6,16 @@ use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 
 #[test]
-fn server_host_serves_an_explicit_workspace_over_stdio() {
+fn server_host_serves_an_explicit_dir_over_stdio() {
     let root = tempdir().unwrap();
-    let workspace = root.path().join("workspace");
+    let dir = root.path().join("dir");
     let profile = root.path().join("profile");
-    std::fs::create_dir(&workspace).unwrap();
+    std::fs::create_dir(&dir).unwrap();
     let command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta-server"))
         .with_argument("app-server")
         .with_argument("--listen")
         .with_argument("stdio://")
-        .with_environment_variable("ZETA_WORKSPACE_ROOT", workspace.into_os_string())
+        .with_environment_variable("ZETA_WORKSPACE_ROOT", dir.into_os_string())
         .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string());
     let session = AppServerSession::start_stdio(
         command,
@@ -33,7 +33,7 @@ fn server_host_serves_an_explicit_workspace_over_stdio() {
 }
 
 #[test]
-fn server_host_without_workspace_does_not_inherit_its_current_directory() {
+fn server_host_without_dir_does_not_inherit_its_current_directory() {
     let root = tempdir().unwrap();
     let profile = root.path().join("profile");
     let command = StdioAppServerCommand::new(env!("CARGO_BIN_EXE_zeta-server"))
@@ -45,7 +45,7 @@ fn server_host_without_workspace_does_not_inherit_its_current_directory() {
     let session = AppServerSession::start_stdio(
         command,
         ClientInfo {
-            name: "zeta-server-host-empty-workspace-test".into(),
+            name: "zeta-server-host-empty-dir-test".into(),
             version: "1".into(),
         },
         ClientCapabilities::default(),

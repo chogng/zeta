@@ -37,8 +37,8 @@ pub(crate) use panepart::PaneResizeState;
 pub(crate) use panepart::pane_group_element_id;
 pub(crate) use panepart::pane_sash_element_id;
 pub(crate) use presentation::{
-    INSPECTOR_RESIZE_HANDLE, PaneView, TAB_CONTAINER_RESIZE_HANDLE, WorkbenchPresentation,
-    WorkbenchPresentationModel, WorkspaceContextView,
+    EnvironmentContextView, INSPECTOR_RESIZE_HANDLE, PaneView, TAB_CONTAINER_RESIZE_HANDLE,
+    WorkbenchPresentation, WorkbenchPresentationModel,
     build_workbench_presentation_with_animation_bindings, inspector_resize_snapshot_for_viewport,
     rebuild_workbench_overlays, terminal_grid_size_for_bounds, terminal_grid_size_for_viewport,
     terminal_mouse_position_for_viewport, terminal_pane_bounds_for_viewport,
@@ -49,20 +49,20 @@ pub(crate) use presentation::{
     WorkbenchKeybindings, WorkbenchSceneLayout, build_workbench_presentation, draw_inspector_border,
 };
 pub use product::run;
-pub(crate) use surface::{WorkspaceSurface, WorkspaceSurfaceKind};
+pub(crate) use surface::{MainSurface, MainSurfaceKind};
 pub(crate) use tabpart::*;
 
 #[allow(unused_imports)]
 pub(crate) use product::{
-    PRODUCT_DISPLAY_NAME, ProductApp, app_server, command_dispatch, file_editor_input,
-    file_editor_pane, git_branch_context_menu, git_branch_context_menu_input, input_method,
-    keybindings, language_service_adapter, launch, launch_progress, mouse_wheel, product_event,
-    remote_connection_cli, remote_connection_launch_input, remote_connection_manager_input,
+    PRODUCT_DISPLAY_NAME, ProductApp, app_server, command_dispatch, environment_context,
+    file_editor_input, file_editor_pane, git_branch_context_menu, git_branch_context_menu_input,
+    input_method, keybindings, language_service_adapter, launch, launch_progress, mouse_wheel,
+    path_picker, path_picker_input, product_event, remote_connection_cli,
+    remote_connection_launch_input, remote_connection_manager_input,
     remote_connection_picker_input, remote_connection_process, remote_connection_tunnel,
     remote_tunnel_manager_input, remote_tunnel_process, session_host, tab_context_menu,
     terminal_blocks, terminal_history, terminal_input, terminal_output_scroll_view,
     terminal_pointer, terminal_selection, terminal_session, thread_timeline_scroll,
-    workspace_context, workspace_path_picker, workspace_path_picker_input,
 };
 
 #[cfg(test)]

@@ -137,7 +137,7 @@ pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
                         let server = match registry.server_for(connection) {
                             Ok(server) => server,
                             Err(error) => {
-                                eprintln!("local App Server Workspace runtime failed: {error}");
+                                eprintln!("local App Server directory runtime failed: {error}");
                                 continue;
                             }
                         };
@@ -210,7 +210,7 @@ fn exit_after_stop(
 ) -> ! {
     eprintln!("local App Server daemon stopped");
     let _ = io::stderr().flush();
-    // Workspace runtimes can own worker threads whose destructors outlive the lifecycle deadline.
+    // Directory runtimes can own worker threads whose destructors outlive the lifecycle deadline.
     // Remove the endpoint identity first, then terminate this dedicated daemon process without
     // waiting indefinitely for those runtime destructors.
     drop(listener);

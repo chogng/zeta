@@ -190,8 +190,8 @@ impl ChatInput {
         self.refresh_classification();
     }
 
-    pub fn refresh_shell_workspace(&mut self) {
-        self.classifier.refresh_shell_workspace();
+    pub fn refresh_dir_catalog(&mut self) {
+        self.classifier.refresh_dir_catalog();
         self.refresh_classification();
     }
 

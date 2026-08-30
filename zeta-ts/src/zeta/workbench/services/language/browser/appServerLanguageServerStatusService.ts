@@ -38,13 +38,13 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 	private acceptMessage(message: LanguageServerMessageNotification): void {
 		const text = message.message.trim();
 		if (!text) return;
-		const server = this.serverLabel(message.server, message.workspaceFolderId);
+		const server = this.serverLabel(message.server, message.dirId);
 		this.ensureChannel(server).appendLine({ severity: message.severity, category: message.source, text });
 		if (message.show) void this.dialogs.showMessage({ title: server, severity: dialogSeverity(message.severity), message: text });
 	}
 
 	private acceptState(update: LanguageServerStateNotification): void {
-		const server = this.serverLabel(update.server, update.workspaceFolderId);
+		const server = this.serverLabel(update.server, update.dirId);
 		const state = lifecycleState(server, update.state);
 		this.states.set(server, state);
 		const presentation = lifecyclePresentation(state);
@@ -54,7 +54,7 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 	}
 
 	private acceptProgress(update: LanguageServerProgressNotification): void {
-		const server = this.serverLabel(update.server, update.workspaceFolderId);
+		const server = this.serverLabel(update.server, update.dirId);
 		this.ensureChannel(server);
 		const key = `${server}\0${update.token}`;
 		const current = this.progress.get(key);
@@ -87,10 +87,10 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 		return channel;
 	}
 
-	private serverLabel(server: string, workspaceFolderId: string | undefined): string {
-		if (!workspaceFolderId) return server;
-		const folder = this.workspace?.getWorkspace().folders.find(folder => folder.id === workspaceFolderId);
-		return `${server} — ${folder?.name || workspaceFolderId}`;
+	private serverLabel(server: string, dirId: string | undefined): string {
+		if (!dirId) return server;
+		const folder = this.workspace?.getWorkspace().folders.find(folder => folder.id === dirId);
+		return `${server} — ${folder?.name || dirId}`;
 	}
 }
 

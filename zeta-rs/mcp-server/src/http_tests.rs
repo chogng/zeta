@@ -23,7 +23,7 @@ fn streamable_http_enforces_auth_session_origin_and_protocol() {
                 version: "1".into(),
             },
         )
-        .with_workspace_root(std::env::current_dir().unwrap()),
+        .with_dir_root(std::env::current_dir().unwrap()),
     )
     .unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

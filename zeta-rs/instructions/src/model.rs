@@ -9,7 +9,7 @@ pub enum InstructionLoadPolicy {
     OnDemand,
 }
 
-/// One validated native Workspace Instruction.
+/// One validated native Directory Instruction.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstructionArtifact {
     name: String,

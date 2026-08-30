@@ -25,9 +25,9 @@ use zeta_protocol::SkillSourceId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 use zeta_protocol::UserInput;
+use zeta_tools::EnvId;
 use zeta_tools::ToolBinding;
 use zeta_tools::ToolBindingId;
-use zeta_tools::ToolEnvironmentId;
 use zeta_tools::ToolExecutionContext;
 use zeta_tools::ToolExecutionOutcome;
 use zeta_tools::ToolOperationId;
@@ -284,7 +284,7 @@ fn skills_read_tool_loads_exact_enabled_skill_body_for_the_model() {
             "target": {"type": "instructions"}
         })),
         ToolExecutionContext::new(
-            ToolEnvironmentId::new("agent-extension").unwrap(),
+            EnvId::new("agent-extension").unwrap(),
             zeta_async_utils::CancellationSource::new().token(),
             ToolRuntimeAuthority::Unrestricted,
         ),
@@ -379,7 +379,7 @@ fn skills_read_tool_uses_pinned_identity_for_text_package_resources() {
             }
         })),
         ToolExecutionContext::new(
-            ToolEnvironmentId::new("agent-extension").unwrap(),
+            EnvId::new("agent-extension").unwrap(),
             zeta_async_utils::CancellationSource::new().token(),
             ToolRuntimeAuthority::Unrestricted,
         ),
@@ -443,7 +443,7 @@ fn skills_read_tool_rejects_binary_resources_without_exposing_bytes_as_text() {
             }
         })),
         ToolExecutionContext::new(
-            ToolEnvironmentId::new("agent-extension").unwrap(),
+            EnvId::new("agent-extension").unwrap(),
             zeta_async_utils::CancellationSource::new().token(),
             ToolRuntimeAuthority::Unrestricted,
         ),
@@ -504,7 +504,7 @@ fn skills_read_tool_keeps_skill_md_on_the_instruction_target() {
             }
         })),
         ToolExecutionContext::new(
-            ToolEnvironmentId::new("agent-extension").unwrap(),
+            EnvId::new("agent-extension").unwrap(),
             zeta_async_utils::CancellationSource::new().token(),
             ToolRuntimeAuthority::Unrestricted,
         ),
@@ -520,28 +520,28 @@ fn skills_read_tool_keeps_skill_md_on_the_instruction_target() {
 }
 
 #[test]
-fn workspace_source_and_watcher_filter_are_runtime_owned() {
-    let workspace = test_directory("workspace-source");
-    let root = workspace.join(".zeta/skills");
-    write_skill(&root, "workspace-review", "Reviews Workspace code");
+fn dir_source_and_watcher_filter_are_runtime_owned() {
+    let dir = test_directory("dir-source");
+    let root = dir.join(".zeta/skills");
+    write_skill(&root, "dir-review", "Reviews Directory code");
     let runtime = runtime(BuiltInSkillSource::Omitted, Arc::new(TestConfig::new()));
 
-    let snapshot = runtime.bind_workspace_root(workspace.clone()).unwrap();
+    let snapshot = runtime.bind_dir_root(dir.clone()).unwrap();
 
     assert_eq!(snapshot.entries.len(), 1);
     assert!(!event_affects_catalog(
         &runtime,
         &zeta_file_watcher::FileWatcherEvent::PathsChanged {
-            paths: vec![workspace.join(".zeta/streams/thread/runtime.rollout")],
+            paths: vec![dir.join(".zeta/streams/thread/runtime.rollout")],
         },
     ));
     assert!(event_affects_catalog(
         &runtime,
         &zeta_file_watcher::FileWatcherEvent::PathsChanged {
-            paths: vec![workspace.join(".zeta/skills/workspace-review/SKILL.md")],
+            paths: vec![dir.join(".zeta/skills/dir-review/SKILL.md")],
         },
     ));
-    let _ = fs::remove_dir_all(workspace);
+    let _ = fs::remove_dir_all(dir);
 }
 
 fn runtime(source: BuiltInSkillSource, config: Arc<TestConfig>) -> Arc<SkillRuntime> {
@@ -598,7 +598,7 @@ fn execute_skill_read(executor: &dyn zeta_tools::ToolExecutor, name: &str) -> To
             "target": {"type": "instructions"}
         })),
         ToolExecutionContext::new(
-            ToolEnvironmentId::new("agent-extension").unwrap(),
+            EnvId::new("agent-extension").unwrap(),
             zeta_async_utils::CancellationSource::new().token(),
             ToolRuntimeAuthority::Unrestricted,
         ),

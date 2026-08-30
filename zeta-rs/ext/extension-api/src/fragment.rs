@@ -3,7 +3,7 @@
 pub enum PromptFragmentLayer {
     System,
     Product,
-    Workspace,
+    Directory,
     Skill,
 }
 

@@ -59,23 +59,18 @@ use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_app_server_protocol::schema_hash;
-use zeta_core::CreateSessionRequest;
-use zeta_core::CreateSessionThreadRequest;
-use zeta_core::ForkSessionThreadRequest;
+use zeta_core::CreateBranchRequest;
+use zeta_core::ForkThreadRequest;
 use zeta_core::InterruptTurnRequest;
 use zeta_core::ResolveTurnInteractionRequest;
-use zeta_core::RewindSessionThreadRequest;
-use zeta_core::RewriteSessionThreadRequest;
+use zeta_core::RewindThreadRequest;
 use zeta_core::SequenceExpectation;
-use zeta_core::SessionLifecycleRequest;
-use zeta_core::SetSessionCurrentThreadRequest;
-use zeta_core::SetSessionModelRequest;
-use zeta_core::SetSessionNextApprovalModeRequest;
 use zeta_core::ShellTurnInvocation;
 use zeta_core::StartContextCompactionRequest;
-use zeta_core::StartSessionShellTurnRequest;
-use zeta_core::StartSessionTurnRequest;
+use zeta_core::StartShellTurnRequest;
+use zeta_core::StartThreadRequest;
 use zeta_core::StartTurnDisposition;
+use zeta_core::StartTurnRequest;
 use zeta_core::SteerTurnDisposition;
 use zeta_core::SteerTurnRequest;
 use zeta_core::ThreadSnapshot;
@@ -83,9 +78,11 @@ use zeta_core::TurnExecutionBackend;
 use zeta_core::TurnStatus;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelAccess;
-use zeta_protocol::ModelRef;
+use zeta_protocol::Session;
 use zeta_protocol::SessionStatus;
+use zeta_protocol::SessionThread;
 use zeta_protocol::StableTurnError;
+use zeta_protocol::ThreadStatus;
 use zeta_protocol::UserInput;
 use zeta_typst::TypstCompileError;
 use zeta_typst::TypstCompileOutcome;
@@ -93,6 +90,11 @@ use zeta_typst::TypstDiagnostic;
 use zeta_typst::TypstDiagnosticSeverity;
 
 struct SessionMutation {
+    command_id: zeta_protocol::CommandId,
+    session_id: zeta_protocol::SessionId,
+}
+
+struct ThreadMutation {
     command_id: zeta_protocol::CommandId,
     session_id: zeta_protocol::SessionId,
     expected_sequence: u64,
@@ -123,11 +125,6 @@ impl RewritePhase {
             Self::Start => "start",
         }
     }
-}
-
-enum SessionLifecycleAction {
-    Complete,
-    Archive,
 }
 
 impl AppServer {
@@ -181,13 +178,13 @@ impl AppServer {
         }
         if params
             .capabilities
-            .workspace_trust_host
+            .dir_permissions_host
             .as_ref()
             .is_some_and(|capability| capability.version != 1)
         {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        connection.set_workspace_trust_host(params.capabilities.workspace_trust_host.is_some());
+        connection.set_dir_permissions_host(params.capabilities.dir_permissions_host.is_some());
         self.updates.set_agent_interaction_capability(
             connection.connection_id,
             params.capabilities.agent_interactions,
@@ -204,8 +201,8 @@ impl AppServer {
             }
         }
         connection.set_initialized();
-        let (file_system, git, workspace_search, codebase, cloud_codebase, terminal, debug_adapter) =
-            self.workspace_features();
+        let (file_system, git, content_search, codebase, cloud_codebase, terminal, debug_adapter) =
+            self.env_features();
         let extensions = self
             .extensions
             .lock()
@@ -221,7 +218,7 @@ impl AppServer {
             attachments: true,
             file_system,
             git,
-            workspace_search,
+            content_search,
             codebase,
             cloud_codebase,
             terminal,
@@ -257,59 +254,36 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
         let created = self
-            .sessions
-            .create_session(CreateSessionRequest {
+            .threads
+            .start_thread(StartThreadRequest {
                 command_id: params.command_id,
                 title: params.title,
-                model: self
-                    .model_catalog
-                    .configured_default()
-                    .map_err(core_error)?,
-                workspace: self.active_workspace_binding(),
             })
             .map_err(core_error)?;
         self.updates.bind_session_scope(created.session_id.clone());
-        self.sessions
-            .threads()
+        self.threads
             .install_session_extensions(
                 created.session_id.clone(),
                 Arc::clone(&self.agent_extensions),
             )
             .map_err(core_error)?;
-        self.updates.subscribe_session(
-            connection.connection_id,
-            created.session_id.clone(),
-            created.sequence,
-        );
+        self.updates
+            .subscribe_session(connection.connection_id, created.session_id.clone());
         result(&SessionResult {
-            session: self
-                .sessions
-                .read_session(&created.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&created.session_id)?,
         })
     }
 
     pub(super) fn session_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionReadParams = decode(params)?;
         result(&SessionResult {
-            session: self
-                .sessions
-                .read_session(&params.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&params.session_id)?,
         })
     }
 
     pub(super) fn session_list(&self) -> Result<Value, RpcError> {
         result(&SessionListResult {
-            sessions: self
-                .sessions
-                .list_sessions()
-                .map_err(core_error)?
-                .into_iter()
-                .map(|session| session.public_session())
-                .collect(),
+            sessions: self.session_views()?,
         })
     }
 
@@ -319,107 +293,23 @@ impl AppServer {
         })
     }
 
-    fn set_session_model_request(
-        &self,
-        mutation: SessionMutation,
-        model: ModelRef,
-    ) -> Result<SessionResult, RpcError> {
-        self.model_catalog.validate(&model).map_err(core_error)?;
-        self.sessions
-            .set_model(SetSessionModelRequest {
-                command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                model,
-            })
-            .map_err(core_error)?;
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
-        Ok(SessionResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
-        })
-    }
-
-    fn set_session_next_approval_mode_request(
-        &self,
-        mutation: SessionMutation,
-        approval_mode: zeta_protocol::ApprovalMode,
-    ) -> Result<SessionResult, RpcError> {
-        self.sessions
-            .set_next_approval_mode(SetSessionNextApprovalModeRequest {
-                command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                approval_mode,
-            })
-            .map_err(core_error)?;
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
-        Ok(SessionResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
-        })
-    }
-
-    fn set_session_current_thread_request(
-        &self,
-        mutation: SessionMutation,
-        thread_id: zeta_protocol::ThreadId,
-    ) -> Result<SessionResult, RpcError> {
-        self.sessions
-            .set_current_thread(SetSessionCurrentThreadRequest {
-                command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                thread_id,
-            })
-            .map_err(core_error)?;
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
-        Ok(SessionResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
-        })
-    }
-
     pub(super) fn session_subscribe(
         &self,
         connection: &mut ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionSubscribeParams = decode(params)?;
-        let session = self
-            .sessions
-            .read_session(&params.session_id)
-            .map_err(core_error)?;
-        let updates = self
-            .sessions
-            .session_updates_after(&params.session_id, params.after_sequence)
-            .map_err(core_error)?;
-        let thread_snapshots = session
+        let session = self.session_view(&params.session_id)?;
+        let thread_snapshots = self
             .threads
-            .iter()
-            .map(|membership| {
-                self.sessions
-                    .threads()
-                    .read_thread(&membership.membership.thread_id)
-                    .map_err(core_error)
-            })
-            .collect::<Result<Vec<_>, RpcError>>()?;
+            .list_session_threads(&params.session_id)
+            .map_err(core_error)?;
         let thread_projections = thread_snapshots
             .iter()
             .map(|thread| {
                 let thread = thread.public_thread();
                 let updates = self
-                    .sessions
-                    .threads()
+                    .threads
                     .thread_updates_after(&thread.thread_id, 0)
                     .map_err(core_error)?;
                 Ok(SessionThreadProjection {
@@ -429,11 +319,8 @@ impl AppServer {
                 })
             })
             .collect::<Result<Vec<_>, RpcError>>()?;
-        self.updates.subscribe_session(
-            connection.connection_id,
-            params.session_id.clone(),
-            session.sequence,
-        );
+        self.updates
+            .subscribe_session(connection.connection_id, params.session_id.clone());
         for projection in &thread_projections {
             self.updates.subscribe_session_thread(
                 connection.connection_id,
@@ -446,9 +333,8 @@ impl AppServer {
             self.offer_pending_interactions(snapshot);
         }
         result(&SessionSubscribeResult {
-            agent_tree: zeta_core::project_agent_tree(&session, &thread_snapshots),
-            session: session.public_session(),
-            updates,
+            agent_tree: zeta_core::project_agent_tree(&thread_snapshots),
+            session,
             thread_projections,
         })
     }
@@ -475,50 +361,21 @@ impl AppServer {
         let SessionRequestParams {
             command_id,
             session_id,
-            expected_sequence,
             request,
         } = decode(params)?;
-        let session = self
-            .sessions
-            .read_session(&session_id)
-            .map_err(core_error)?;
-        if session.workspace_binding_is_legacy
-            || session.workspace != self.active_workspace_binding()
-        {
-            return Err(RpcError::new(
-                -32053,
-                AppServerErrorName::WorkspaceAuthorityMismatch,
-            ));
-        }
+        self.session_view(&session_id)?;
         let mutation = SessionMutation {
             command_id: command_id.clone(),
             session_id: session_id.clone(),
-            expected_sequence,
         };
 
         match request {
-            SessionRequest::Complete => result(&SessionRequestResult::Session(
-                self.complete_session_request(mutation)?,
-            )),
             SessionRequest::Archive => result(&SessionRequestResult::Session(
                 self.archive_session_request(mutation)?,
             )),
             SessionRequest::Stop => result(&SessionRequestResult::Session(
                 self.stop_session_request(mutation)?,
             )),
-            SessionRequest::SetModel { model } => result(&SessionRequestResult::Session(
-                self.set_session_model_request(mutation, model)?,
-            )),
-            SessionRequest::SetNextApprovalMode { approval_mode } => {
-                result(&SessionRequestResult::Session(
-                    self.set_session_next_approval_mode_request(mutation, approval_mode)?,
-                ))
-            }
-            SessionRequest::SetCurrentThread { thread_id } => {
-                result(&SessionRequestResult::Session(
-                    self.set_session_current_thread_request(mutation, thread_id)?,
-                ))
-            }
             SessionRequest::CreateThread { title } => result(&SessionRequestResult::Thread(
                 self.create_session_thread_request(connection.connection_id, mutation, title)?,
             )),
@@ -567,53 +424,82 @@ impl AppServer {
             )),
             SessionRequest::StartTurn {
                 thread_id,
+                expected_sequence,
+                approval_mode,
                 tool_mode,
                 input,
-            } => result(&SessionRequestResult::Turn(
-                self.start_turn_request(mutation, thread_id, tool_mode, input)?,
-            )),
-            SessionRequest::StartReview { thread_id, target } => {
-                result(&SessionRequestResult::Turn(
-                    self.start_review_request(mutation, thread_id, target)?,
-                ))
-            }
+            } => result(&SessionRequestResult::Turn(self.start_turn_request(
+                thread_mutation(mutation, expected_sequence),
+                thread_id,
+                approval_mode,
+                tool_mode,
+                input,
+            )?)),
+            SessionRequest::StartReview {
+                thread_id,
+                expected_sequence,
+                target,
+            } => result(&SessionRequestResult::Turn(self.start_review_request(
+                thread_mutation(mutation, expected_sequence),
+                thread_id,
+                target,
+            )?)),
             SessionRequest::StartShellTurn {
                 thread_id,
+                expected_sequence,
+                approval_mode,
                 command,
                 working_directory,
             } => result(&SessionRequestResult::Turn(self.start_shell_turn_request(
-                mutation,
+                thread_mutation(mutation, expected_sequence),
                 thread_id,
+                approval_mode,
                 command,
                 working_directory,
             )?)),
             SessionRequest::CompactContext {
                 thread_id,
+                expected_sequence,
                 retention_prompt,
             } => result(&SessionRequestResult::Turn(
-                self.start_context_compaction_request(mutation, thread_id, retention_prompt)?,
+                self.start_context_compaction_request(
+                    thread_mutation(mutation, expected_sequence),
+                    thread_id,
+                    retention_prompt,
+                )?,
             )),
             SessionRequest::SteerTurn {
                 thread_id,
+                expected_sequence,
                 turn_id,
                 input,
-            } => result(&SessionRequestResult::TurnSteer(
-                self.steer_turn_request(mutation, thread_id, turn_id, input)?,
+            } => result(&SessionRequestResult::TurnSteer(self.steer_turn_request(
+                thread_mutation(mutation, expected_sequence),
+                thread_id,
+                turn_id,
+                input,
+            )?)),
+            SessionRequest::InterruptTurn {
+                thread_id,
+                expected_sequence,
+                turn_id,
+            } => result(&SessionRequestResult::TurnInterrupt(
+                self.interrupt_turn_request(
+                    thread_mutation(mutation, expected_sequence),
+                    thread_id,
+                    turn_id,
+                )?,
             )),
-            SessionRequest::InterruptTurn { thread_id, turn_id } => {
-                result(&SessionRequestResult::TurnInterrupt(
-                    self.interrupt_turn_request(mutation, thread_id, turn_id)?,
-                ))
-            }
             SessionRequest::ResolveInteraction {
                 thread_id,
+                expected_sequence,
                 turn_id,
                 request_id,
                 response,
             } => result(&SessionRequestResult::Interaction(
                 self.resolve_turn_interaction_request(
                     connection.connection_id,
-                    mutation,
+                    thread_mutation(mutation, expected_sequence),
                     thread_id,
                     turn_id,
                     request_id,
@@ -630,11 +516,10 @@ impl AppServer {
         title: String,
     ) -> Result<SessionThreadResult, RpcError> {
         let created = self
-            .sessions
-            .create_thread(CreateSessionThreadRequest {
+            .threads
+            .create_branch(CreateBranchRequest {
                 command_id: mutation.command_id,
                 session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                 title,
             })
             .map_err(core_error)?;
@@ -644,14 +529,10 @@ impl AppServer {
             created.thread_id.clone(),
             0,
         );
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
         self.notify_thread_updates(&created.thread_id, 0)?;
+        self.updates.publish_session_changed(&mutation.session_id);
         Ok(SessionThreadResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&mutation.session_id)?,
             thread_id: created.thread_id,
         })
     }
@@ -664,12 +545,10 @@ impl AppServer {
         title: String,
     ) -> Result<SessionThreadResult, RpcError> {
         let forked = self
-            .sessions
-            .fork_thread(ForkSessionThreadRequest {
+            .threads
+            .fork_thread(ForkThreadRequest {
                 command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                parent_thread_id,
+                source_thread_id: parent_thread_id,
                 title,
             })
             .map_err(core_error)?;
@@ -679,14 +558,10 @@ impl AppServer {
             forked.thread_id.clone(),
             0,
         );
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
         self.notify_thread_updates(&forked.thread_id, 0)?;
+        self.updates.publish_session_changed(&mutation.session_id);
         Ok(SessionThreadResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&mutation.session_id)?,
             thread_id: forked.thread_id,
         })
     }
@@ -700,12 +575,10 @@ impl AppServer {
         title: String,
     ) -> Result<SessionThreadResult, RpcError> {
         let rewound = self
-            .sessions
-            .rewind_thread(RewindSessionThreadRequest {
+            .threads
+            .rewind_thread(RewindThreadRequest {
                 command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                parent_thread_id,
+                source_thread_id: parent_thread_id,
                 before_turn_id,
                 title,
             })
@@ -716,14 +589,10 @@ impl AppServer {
             rewound.thread_id.clone(),
             0,
         );
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
         self.notify_thread_updates(&rewound.thread_id, 0)?;
+        self.updates.publish_session_changed(&mutation.session_id);
         Ok(SessionThreadResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&mutation.session_id)?,
             thread_id: rewound.thread_id,
         })
     }
@@ -736,24 +605,16 @@ impl AppServer {
     ) -> Result<SessionRewriteResult, RpcError> {
         let normalized_input = normalize_input(rewrite.input.clone());
         let rewound = self
-            .sessions
-            .rewrite_thread(RewriteSessionThreadRequest {
+            .threads
+            .rewind_thread(RewindThreadRequest {
                 command_id: rewrite_phase_command_id(&mutation.command_id, RewritePhase::Rewind)?,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                parent_thread_id: rewrite.parent_thread_id,
+                source_thread_id: rewrite.parent_thread_id,
                 before_turn_id: rewrite.before_turn_id,
                 title: rewrite.title,
-                tool_mode: rewrite.tool_mode,
-                input: normalized_input.clone(),
             })
             .map_err(core_error)?;
         let thread_id = rewound.thread_id;
-        let thread_before = self
-            .sessions
-            .threads()
-            .read_thread(&thread_id)
-            .map_err(core_error)?;
+        let thread_before = self.threads.read_thread(&thread_id).map_err(core_error)?;
         let start_command_id = rewrite_phase_command_id(&mutation.command_id, RewritePhase::Start)?;
         let turn = match super::start_turn::replayed_rewrite_result(
             &thread_before,
@@ -762,12 +623,13 @@ impl AppServer {
         )? {
             Some(replayed) => replayed,
             None => self.start_turn_request(
-                SessionMutation {
+                ThreadMutation {
                     command_id: start_command_id,
                     session_id: mutation.session_id.clone(),
                     expected_sequence: thread_before.sequence,
                 },
                 thread_id.clone(),
+                zeta_protocol::ApprovalMode::default(),
                 rewrite.tool_mode,
                 rewrite.input,
             )?,
@@ -778,24 +640,13 @@ impl AppServer {
             thread_id.clone(),
             0,
         );
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
         self.notify_thread_updates(&thread_id, 0)?;
+        self.updates.publish_session_changed(&mutation.session_id);
         Ok(SessionRewriteResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&mutation.session_id)?,
             thread_id,
             turn,
         })
-    }
-
-    fn complete_session_request(
-        &self,
-        mutation: SessionMutation,
-    ) -> Result<SessionResult, RpcError> {
-        self.lifecycle_request(mutation, SessionLifecycleAction::Complete)
     }
 
     fn archive_session_request(
@@ -803,85 +654,54 @@ impl AppServer {
         mutation: SessionMutation,
     ) -> Result<SessionResult, RpcError> {
         let session_id = mutation.session_id.clone();
-        let result = self.lifecycle_request(mutation, SessionLifecycleAction::Archive)?;
-        self.clear_session_additional_directories(&session_id);
+        let result = self.lifecycle_request(mutation)?;
+        self.clear_session_dirs(&session_id);
         Ok(result)
     }
 
     fn stop_session_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {
-        let session_before = self
-            .sessions
-            .read_session(&mutation.session_id)
-            .map_err(core_error)?;
-        let thread_sequences = session_before
+        let thread_sequences = self
             .threads
-            .iter()
-            .map(|thread| {
-                self.sessions
-                    .threads()
-                    .read_thread(&thread.membership.thread_id)
-                    .map(|snapshot| (thread.membership.thread_id.clone(), snapshot.sequence))
-                    .map_err(core_error)
-            })
-            .collect::<Result<Vec<_>, RpcError>>()?;
-        self.sessions
-            .stop(SessionLifecycleRequest {
-                command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-            })
+            .list_session_threads(&mutation.session_id)
+            .map_err(core_error)?
+            .into_iter()
+            .map(|thread| (thread.thread_id, thread.sequence))
+            .collect::<Vec<_>>();
+        self.threads
+            .archive_session_threads(&mutation.session_id, &mutation.command_id)
             .map_err(core_error)?;
-        self.clear_session_additional_directories(&mutation.session_id);
+        self.clear_session_dirs(&mutation.session_id);
         for (thread_id, _) in &thread_sequences {
             self.multi_agent
                 .cancel_descendants(thread_id)
                 .map_err(core_error)?;
         }
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
         for (thread_id, sequence) in thread_sequences {
             self.notify_thread_updates(&thread_id, sequence)?;
         }
+        self.updates.publish_session_changed(&mutation.session_id);
         if let Some(runtime) = &self.turn_changes
             && let Err(error) = runtime.enforce_cleanup_policy()
         {
             log::warn!("Thread worktree cleanup policy failed: {error}");
         }
         Ok(SessionResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&mutation.session_id)?,
         })
     }
 
-    fn lifecycle_request(
-        &self,
-        mutation: SessionMutation,
-        action: SessionLifecycleAction,
-    ) -> Result<SessionResult, RpcError> {
-        let request = SessionLifecycleRequest {
-            command_id: mutation.command_id,
-            session_id: mutation.session_id.clone(),
-            expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-        };
-        match action {
-            SessionLifecycleAction::Complete => self.sessions.complete(request),
-            SessionLifecycleAction::Archive => self.sessions.archive(request),
-        }
-        .map_err(core_error)?;
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
+    fn lifecycle_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {
+        self.threads
+            .archive_session_threads(&mutation.session_id, &mutation.command_id)
+            .map_err(core_error)?;
+        self.updates.publish_session_changed(&mutation.session_id);
         if let Some(runtime) = &self.turn_changes
             && let Err(error) = runtime.enforce_cleanup_policy()
         {
             log::warn!("Thread worktree cleanup policy failed: {error}");
         }
         Ok(SessionResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
+            session: self.session_view(&mutation.session_id)?,
         })
     }
 
@@ -913,8 +733,7 @@ impl AppServer {
         let params: ThreadGoalSetParams = decode(params)?;
         self.read_goal_thread(&params.thread_id)?;
         let result_goal = self
-            .sessions
-            .threads()
+            .threads
             .set_goal(
                 &params.thread_id,
                 zeta_core::SetGoalRequest {
@@ -947,8 +766,7 @@ impl AppServer {
         let params: ThreadGoalClearParams = decode(params)?;
         self.read_goal_thread(&params.thread_id)?;
         let cleared = self
-            .sessions
-            .threads()
+            .threads
             .clear_goal(&params.thread_id)
             .map_err(core_error)?;
         if cleared {
@@ -1006,8 +824,7 @@ impl AppServer {
             params.after_sequence
         };
         let updates = self
-            .sessions
-            .threads()
+            .threads
             .thread_updates_after(&params.thread_id, replay_after)
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
@@ -1054,11 +871,7 @@ impl AppServer {
         session_id: &zeta_protocol::SessionId,
         thread_id: &zeta_protocol::ThreadId,
     ) -> Result<ThreadSnapshot, RpcError> {
-        let thread = self
-            .sessions
-            .threads()
-            .read_thread(thread_id)
-            .map_err(core_error)?;
+        let thread = self.threads.read_thread(thread_id).map_err(core_error)?;
         if thread.session_id != *session_id {
             return Err(RpcError::new(
                 -32010,
@@ -1072,23 +885,7 @@ impl AppServer {
         &self,
         thread_id: &zeta_protocol::ThreadId,
     ) -> Result<ThreadSnapshot, RpcError> {
-        let thread = self
-            .sessions
-            .threads()
-            .read_thread(thread_id)
-            .map_err(core_error)?;
-        let session = self
-            .sessions
-            .read_session(&thread.session_id)
-            .map_err(core_error)?;
-        if session.workspace_binding_is_legacy
-            || session.workspace != self.active_workspace_binding()
-        {
-            return Err(RpcError::new(
-                -32053,
-                AppServerErrorName::WorkspaceAuthorityMismatch,
-            ));
-        }
+        let thread = self.threads.read_thread(thread_id).map_err(core_error)?;
         Ok(thread)
     }
 
@@ -1107,8 +904,9 @@ impl AppServer {
 
     fn start_turn_request(
         &self,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
+        approval_mode: zeta_protocol::ApprovalMode,
         requested_tool_mode: Option<zeta_protocol::ToolMode>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
@@ -1119,6 +917,7 @@ impl AppServer {
         self.start_agent_turn_request(
             mutation,
             thread_id,
+            approval_mode,
             tool_mode,
             normalize_input(input),
             zeta_protocol::TurnKind::Coding,
@@ -1128,7 +927,7 @@ impl AppServer {
 
     fn start_review_request(
         &self,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
         target: zeta_protocol::ReviewTarget,
     ) -> Result<TurnStartResult, RpcError> {
@@ -1137,6 +936,7 @@ impl AppServer {
         self.start_agent_turn_request(
             mutation,
             thread_id,
+            zeta_protocol::ApprovalMode::default(),
             TurnToolModeSelection::Explicit(zeta_protocol::ToolMode::Direct),
             vec![UserInput::Text { text: prompt }],
             zeta_protocol::TurnKind::Review,
@@ -1146,29 +946,22 @@ impl AppServer {
 
     fn start_agent_turn_request(
         &self,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
+        approval_mode: zeta_protocol::ApprovalMode,
         tool_mode_selection: TurnToolModeSelection,
         input: Vec<UserInput>,
         kind: zeta_protocol::TurnKind,
         instructions: zeta_protocol::TurnInstructions,
     ) -> Result<TurnStartResult, RpcError> {
-        let thread_before = self
-            .sessions
-            .threads()
-            .read_thread(&thread_id)
-            .map_err(core_error)?;
+        let thread_before = self.threads.read_thread(&thread_id).map_err(core_error)?;
         if thread_before.session_id != mutation.session_id {
             return Err(RpcError::new(
                 -32010,
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let session = self
-            .sessions
-            .read_session(&mutation.session_id)
-            .map_err(core_error)?;
-        if session.status != SessionStatus::Active {
+        if thread_before.status != ThreadStatus::Active {
             return Err(RpcError::new(
                 -32010,
                 AppServerErrorName::CoreOperationFailed,
@@ -1195,15 +988,12 @@ impl AppServer {
         )? {
             return Ok(replayed);
         }
-        let model = match session.model {
-            Some(model) => Some(model),
-            None => self
-                .model_catalog
-                .configured_default()
-                .map_err(core_error)?,
-        };
-        let _workspace_authority = self
-            .workspace_authority_gate
+        let model = self
+            .model_catalog
+            .configured_default()
+            .map_err(core_error)?;
+        let _env_runtime = self
+            .env_runtime_gate
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let turn_executor = self.turn_executor_snapshot();
@@ -1212,17 +1002,17 @@ impl AppServer {
         let command_id = mutation.command_id.clone();
         let replay_input = input.clone();
         let start = self
-            .sessions
+            .threads
             .start_turn(
-                &mutation.session_id,
                 &thread_id,
-                StartSessionTurnRequest {
+                StartTurnRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
                     kind,
                     instructions,
                     policy_revision,
+                    approval_mode,
                     tool_mode,
                     tool_profile: Some(tool_profile),
                     activated_skills: Vec::new(),
@@ -1232,11 +1022,7 @@ impl AppServer {
             .map_err(core_error)?;
         let turn_id = start.turn_id;
         if start.disposition == StartTurnDisposition::Replayed {
-            let snapshot = self
-                .sessions
-                .threads()
-                .read_thread(&thread_id)
-                .map_err(core_error)?;
+            let snapshot = self.threads.read_thread(&thread_id).map_err(core_error)?;
             return super::start_turn::replayed_result(
                 &snapshot,
                 &command_id,
@@ -1257,19 +1043,14 @@ impl AppServer {
 
     fn start_shell_turn_request(
         &self,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
+        approval_mode: zeta_protocol::ApprovalMode,
         command: String,
         working_directory: String,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self.read_session_thread(&mutation.session_id, &thread_id)?;
-        if self
-            .sessions
-            .read_session(&mutation.session_id)
-            .map_err(core_error)?
-            .status
-            != SessionStatus::Active
-        {
+        if thread_before.status != ThreadStatus::Active {
             return Err(RpcError::new(
                 -32010,
                 AppServerErrorName::CoreOperationFailed,
@@ -1294,14 +1075,14 @@ impl AppServer {
             .bind_tool_call(&shell_call, zeta_protocol::ToolCallCaller::Direct)
             .map_err(core_error)?;
         let start = self
-            .sessions
+            .threads
             .start_shell_turn(
-                &mutation.session_id,
                 &thread_id,
-                StartSessionShellTurnRequest {
+                StartShellTurnRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     policy_revision,
+                    approval_mode,
                     tool_call_id,
                     binding,
                     invocation: ShellTurnInvocation {
@@ -1350,33 +1131,25 @@ impl AppServer {
 
     fn start_context_compaction_request(
         &self,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
         retention_prompt: Option<String>,
     ) -> Result<TurnStartResult, RpcError> {
         let thread = self.read_session_thread(&mutation.session_id, &thread_id)?;
-        let session = self
-            .sessions
-            .read_session(&mutation.session_id)
-            .map_err(core_error)?;
-        if session.status != SessionStatus::Active {
+        if thread.status != ThreadStatus::Active {
             return Err(RpcError::new(
                 -32010,
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let model = match session.model {
-            Some(model) => Some(model),
-            None => self
-                .model_catalog
-                .configured_default()
-                .map_err(core_error)?,
-        };
+        let model = self
+            .model_catalog
+            .configured_default()
+            .map_err(core_error)?;
         let turn_executor = self.turn_executor_snapshot();
         let start = self
-            .sessions
+            .threads
             .start_context_compaction(
-                &mutation.session_id,
                 &thread_id,
                 StartContextCompactionRequest {
                     command_id: mutation.command_id,
@@ -1405,30 +1178,21 @@ impl AppServer {
 
     fn interrupt_turn_request(
         &self,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
         turn_id: zeta_protocol::TurnId,
     ) -> Result<TurnInterruptResult, RpcError> {
         self.read_session_thread(&mutation.session_id, &thread_id)?;
         let descendant_sequences = self
-            .sessions
-            .read_session(&mutation.session_id)
-            .map_err(core_error)?
             .threads
+            .list_session_threads(&mutation.session_id)
+            .map_err(core_error)?
             .into_iter()
-            .filter(|membership| membership.membership.thread_id != thread_id)
-            .map(|membership| {
-                let descendant_id = membership.membership.thread_id;
-                self.sessions
-                    .threads()
-                    .read_thread(&descendant_id)
-                    .map(|snapshot| (descendant_id, snapshot.sequence))
-                    .map_err(core_error)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .filter(|descendant| descendant.thread_id != thread_id)
+            .map(|descendant| (descendant.thread_id, descendant.sequence))
+            .collect::<Vec<_>>();
         let interrupted = self
-            .sessions
-            .threads()
+            .threads
             .interrupt_turn(
                 &thread_id,
                 InterruptTurnRequest {
@@ -1452,7 +1216,7 @@ impl AppServer {
 
     fn steer_turn_request(
         &self,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
         turn_id: zeta_protocol::TurnId,
         input: Vec<InputItem>,
@@ -1491,9 +1255,8 @@ impl AppServer {
             .collect::<Vec<_>>();
         let command_id = mutation.command_id.clone();
         let steered = self
-            .sessions
+            .threads
             .steer_turn(
-                &mutation.session_id,
                 &thread_id,
                 SteerTurnRequest {
                     command_id: mutation.command_id,
@@ -1509,7 +1272,7 @@ impl AppServer {
                     self.turn_backend
                         .steer(&thread_id, &turn_id, &command_id, &input)
                 {
-                    let _ = self.sessions.threads().fail_turn(
+                    let _ = self.threads.fail_turn(
                         &thread_id,
                         &turn_id,
                         StableTurnError::model_invocation_failed(),
@@ -1517,14 +1280,12 @@ impl AppServer {
                     let _ = self.notify_thread_updates(&thread_id, mutation.expected_sequence);
                     return Err(core_error(error));
                 }
-                self.sessions
-                    .threads()
+                self.threads
                     .mark_turn_steer_delivered(&thread_id, &turn_id, &command_id)
                     .map_err(core_error)?
             }
             SteerTurnDisposition::Replayed => self
-                .sessions
-                .threads()
+                .threads
                 .read_thread(&thread_id)
                 .map_err(core_error)?
                 .steer_deliveries
@@ -1539,7 +1300,7 @@ impl AppServer {
     fn resolve_turn_interaction_request(
         &self,
         connection_id: u64,
-        mutation: SessionMutation,
+        mutation: ThreadMutation,
         thread_id: zeta_protocol::ThreadId,
         turn_id: zeta_protocol::TurnId,
         request_id: zeta_protocol::RequestId,
@@ -1554,8 +1315,8 @@ impl AppServer {
                 AppServerErrorName::AgentInteractionNotOwner,
             ));
         }
-        let _workspace_authority = self
-            .workspace_authority_gate
+        let _env_runtime = self
+            .env_runtime_gate
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         if self
@@ -1567,11 +1328,7 @@ impl AppServer {
                 AppServerErrorName::AgentInteractionExpired,
             ));
         }
-        let before = self
-            .sessions
-            .threads()
-            .read_thread(&thread_id)
-            .map_err(core_error)?;
+        let before = self.threads.read_thread(&thread_id).map_err(core_error)?;
         if before.session_id != mutation.session_id {
             return Err(RpcError::new(
                 -32010,
@@ -1580,8 +1337,7 @@ impl AppServer {
         }
         let turn_id_for_resume = turn_id.clone();
         let resolved = self
-            .sessions
-            .threads()
+            .threads
             .resolve_turn_interaction(
                 &thread_id,
                 ResolveTurnInteractionRequest {
@@ -1714,17 +1470,57 @@ impl AppServer {
         Ok(Value::Null)
     }
 
-    fn notify_session_updates(
-        &self,
-        session_id: &zeta_protocol::SessionId,
-        after_sequence: u64,
-    ) -> Result<(), RpcError> {
-        let updates = self
-            .sessions
-            .session_updates_after(session_id, after_sequence)
+    fn session_view(&self, session_id: &zeta_protocol::SessionId) -> Result<Session, RpcError> {
+        let mut snapshots = self
+            .threads
+            .list_session_threads(session_id)
             .map_err(core_error)?;
-        self.updates.publish_session(session_id, &updates);
-        Ok(())
+        if snapshots.is_empty() {
+            return Err(core_error(zeta_core::CoreError::NotFound(
+                session_id.to_string(),
+            )));
+        }
+        snapshots.sort_by(|left, right| left.thread_id.cmp(&right.thread_id));
+        let root = snapshots
+            .iter()
+            .find(|thread| thread.thread_id.as_str() == session_id.as_str())
+            .unwrap_or(&snapshots[0]);
+        let status = if snapshots
+            .iter()
+            .all(|thread| thread.status == ThreadStatus::Archived)
+        {
+            SessionStatus::Archived
+        } else {
+            SessionStatus::Active
+        };
+        Ok(Session {
+            session_id: session_id.clone(),
+            title: root.title.clone(),
+            status,
+            threads: snapshots
+                .into_iter()
+                .map(|thread| SessionThread {
+                    thread_id: thread.thread_id,
+                    parent_thread_id: thread.parent_thread_id,
+                    forked_from_id: thread.forked_from_id,
+                    status: thread.status,
+                })
+                .collect(),
+        })
+    }
+
+    fn session_views(&self) -> Result<Vec<Session>, RpcError> {
+        let session_ids = self
+            .threads
+            .list_threads()
+            .map_err(core_error)?
+            .into_iter()
+            .map(|thread| thread.session_id)
+            .collect::<std::collections::BTreeSet<_>>();
+        session_ids
+            .into_iter()
+            .map(|session_id| self.session_view(&session_id))
+            .collect()
     }
 
     fn notify_thread_updates(
@@ -1733,12 +1529,19 @@ impl AppServer {
         after_sequence: u64,
     ) -> Result<(), RpcError> {
         let updates = self
-            .sessions
-            .threads()
+            .threads
             .thread_updates_after(thread_id, after_sequence)
             .map_err(core_error)?;
         self.updates.publish_thread(thread_id, &updates);
         Ok(())
+    }
+}
+
+fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadMutation {
+    ThreadMutation {
+        command_id: mutation.command_id,
+        session_id: mutation.session_id,
+        expected_sequence,
     }
 }
 

@@ -1,7 +1,7 @@
 use std::num::NonZeroU8;
 use std::time::Duration;
 
-/// Evidence that permits an HTTP request to be replayed.
+/// Evidence that authorizations an HTTP request to be replayed.
 ///
 /// The client owns the attempt loop, but the runtime/API layer must choose
 /// this value from the operation's documented semantics. Model inference POSTs
@@ -50,7 +50,7 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    /// Disables replay and permits exactly one request attempt.
+    /// Disables replay and authorizations exactly one request attempt.
     pub fn never() -> Self {
         Self {
             safety: RetrySafety::Never,

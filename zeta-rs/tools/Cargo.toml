@@ -19,6 +19,7 @@ zeta-async-utils = { workspace = true }
 zeta-utils-output-truncation = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
+zeta-environment = { workspace = true }
 
 [lints]
 workspace = true
