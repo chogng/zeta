@@ -185,6 +185,48 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 	dom.window.close();
 });
 
+test("Stanza editor pane trims trailing whitespace before saving", async () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
+	const textFiles = new ImmediateTextFiles("alpha  \n beta\t\n");
+	const resourceStore = new BrowserTextResourceStore(textFiles);
+	using models = new BrowserTextModelService(resourceStore);
+	const pane = new EditorPane(resourceStore, {
+		modelService: models,
+		trimTrailingWhitespace: true,
+		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} }),
+	});
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file("C:\\project\\trim.ts") }, new AbortController().signal);
+
+	await pane.save();
+
+	assert.deepEqual(textFiles.savedTexts, ["alpha\n beta\n"]);
+	pane.dispose();
+	dom.window.close();
+});
+
+test("Stanza editor pane inserts the configured final newline before saving", async () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
+	const textFiles = new ImmediateTextFiles("alpha");
+	const resourceStore = new BrowserTextResourceStore(textFiles);
+	using models = new BrowserTextModelService(resourceStore);
+	const pane = new EditorPane(resourceStore, {
+		modelService: models,
+		insertFinalNewLine: true,
+		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} }),
+	});
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file("C:\\project\\final-newline.ts") }, new AbortController().signal);
+
+	await pane.save();
+
+	assert.deepEqual(textFiles.savedTexts, ["alpha\n"]);
+	pane.dispose();
+	dom.window.close();
+});
+
 test("Stanza editor pane resolves extension first-line languages after loading an unknown file", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -310,7 +352,6 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	});
 	assert.deepEqual(received?.indentation, { kind: EditorIndentationKind.Tabs, tabSize: 2 });
 	assert.equal(received?.showUnicodeHighlights, false);
-	assert.equal(received?.insertFinalNewLine, true);
 	pane.dispose();
 	dom.window.close();
 });

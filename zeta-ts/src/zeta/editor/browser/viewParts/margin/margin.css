@@ -1,16 +1,8 @@
-.glyph-margin {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 0;
-  box-sizing: border-box;
-  min-height: 100%;
-  pointer-events: none;
-  background: var(--zeta-editor-background);
-}
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-@media (forced-colors: active) {
-  .glyph-margin {
-    background: Canvas;
-  }
+.monaco-editor .margin {
+	background-color: var(--vscode-editorGutter-background);
 }

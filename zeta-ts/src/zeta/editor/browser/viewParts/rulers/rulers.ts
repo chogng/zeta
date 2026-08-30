@@ -1,83 +1,99 @@
-import "./rulers.css";
-import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
-import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { type TextMeasurer } from "../../config/fontMeasurements.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-/** One 1-based editor column at which a vertical guide is rendered. */
-export interface EditorRuler {
-	readonly column: number;
-	readonly color?: string;
-}
+import './rulers.css';
+import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { ViewPart } from '../../view/viewPart.js';
+import { RenderingContext, RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewContext } from '../../../common/viewModel/viewContext.js';
+import * as viewEvents from '../../../common/viewEvents.js';
+import { EditorOption, IRulerOption } from '../../../common/config/editorOptions.js';
 
-export interface RulersOptions {
-	readonly host: HTMLElement;
-	readonly textMeasurer: TextMeasurer;
-	readonly readTextLeft: () => number;
-	readonly rulers?: readonly EditorRuler[];
-}
+/**
+ * Rulers are vertical lines that appear at certain columns in the editor. There can be >= 0 rulers
+ * at a time.
+ */
+export class Rulers extends ViewPart {
 
-/** Projects configured column guides into the scrollable editor content. */
-export class EditorRulers extends EditorViewPart {
-	readonly domNode: HTMLDivElement;
-	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly textMeasurer: TextMeasurer;
-	private readonly readTextLeft: () => number;
-	private readonly rulers: readonly EditorRuler[];
-	private readonly renderedRulers: FastDomNode<HTMLDivElement>[] = [];
+	public domNode: FastDomNode<HTMLElement>;
+	private readonly _renderedRulers: FastDomNode<HTMLElement>[];
+	private _rulers: IRulerOption[];
+	private _typicalHalfwidthCharacterWidth: number;
 
-	constructor(options: RulersOptions) {
-		super();
-		this.textMeasurer = options.textMeasurer;
-		this.readTextLeft = options.readTextLeft;
-		this.rulers = Object.freeze([...(options.rulers ?? [])].map(validateRuler));
-		const domNode = h(options.host.ownerDocument, "div");
-		this._register(toDisposable(() => domNode.remove()));
-		this.domNode = domNode;
-		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName("stanza-editor-rulers");
-		this.domNode.setAttribute("role", "presentation");
-		this.domNode.setAttribute("aria-hidden", "true");
+	constructor(context: ViewContext) {
+		super(context);
+		this.domNode = createFastDomNode<HTMLElement>(document.createElement('div'));
+		this.domNode.setAttribute('role', 'presentation');
+		this.domNode.setAttribute('aria-hidden', 'true');
+		this.domNode.setClassName('view-rulers');
+		this._renderedRulers = [];
+		const options = this._context.configuration.options;
+		this._rulers = options.get(EditorOption.rulers);
+		this._typicalHalfwidthCharacterWidth = options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
 	}
 
-	render(context: EditorRenderingContext): void {
-		const layout = context.layout;
-		const height = Math.min(layout.contentSize.height, 1_000_000);
-		this.root.setWidth(layout.contentSize.width);
-		this.root.setHeight(height);
-		if (this.renderedRulers.length !== this.rulers.length) {
-			const fragment = createFragment(this.domNode.ownerDocument);
-			this.renderedRulers.length = 0;
-			for (const ruler of this.rulers) {
-				const element = new FastDomNode(h(this.domNode.ownerDocument, "div"));
-				element.setClassName("stanza-editor-ruler");
-				fragment.append(element.domNode);
-				this.renderedRulers.push(element);
+
+	// --- begin event handlers
+
+	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const options = this._context.configuration.options;
+		this._rulers = options.get(EditorOption.rulers);
+		this._typicalHalfwidthCharacterWidth = options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
+		return true;
+	}
+	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
+		return e.scrollHeightChanged;
+	}
+
+	// --- end event handlers
+
+	public prepareRender(ctx: RenderingContext): void {
+		// Nothing to read
+	}
+
+	private _ensureRulersCount(): void {
+		const currentCount = this._renderedRulers.length;
+		const desiredCount = this._rulers.length;
+
+		if (currentCount === desiredCount) {
+			// Nothing to do
+			return;
+		}
+
+		if (currentCount < desiredCount) {
+			let addCount = desiredCount - currentCount;
+			while (addCount > 0) {
+				const node = createFastDomNode(document.createElement('div'));
+				node.setClassName('view-ruler');
+				node.setWidth('1ch');
+				this.domNode.appendChild(node);
+				this._renderedRulers.push(node);
+				addCount--;
 			}
-			reset(this.domNode, fragment);
+			return;
 		}
-		for (let index = 0; index < this.rulers.length; index += 1) {
-			const ruler = this.rulers[index]!;
-			const element = this.renderedRulers[index]!;
-			element.setLeft(this.readTextLeft() + this.textMeasurer.measureLineWidth("0".repeat(ruler.column)));
-			element.setHeight(height);
-			element.setBoxShadow(ruler.color
-				? `1px 0 0 0 ${ruler.color} inset`
-				: "");
-		}
-	}
-}
 
-export function validateRuler(ruler: EditorRuler): EditorRuler {
-	if (!ruler || !Number.isSafeInteger(ruler.column) || ruler.column < 1) {
-		throw new RangeError("Stanza ruler columns must be positive safe integers");
+		let removeCount = currentCount - desiredCount;
+		while (removeCount > 0) {
+			const node = this._renderedRulers.pop()!;
+			this.domNode.removeChild(node);
+			removeCount--;
+		}
 	}
-	if (ruler.color !== undefined && (typeof ruler.color !== "string" || ruler.color.trim().length === 0)) {
-		throw new TypeError("Stanza ruler colors must be non-empty strings");
+
+	public render(ctx: RestrictedRenderingContext): void {
+
+		this._ensureRulersCount();
+
+		for (let i = 0, len = this._rulers.length; i < len; i++) {
+			const node = this._renderedRulers[i];
+			const ruler = this._rulers[i];
+
+			node.setBoxShadow(ruler.color ? `1px 0 0 0 ${ruler.color} inset` : ``);
+			node.setHeight(Math.min(ctx.scrollHeight, 1000000));
+			node.setLeft(ruler.column * this._typicalHalfwidthCharacterWidth);
+		}
 	}
-	return Object.freeze({
-		column: ruler.column,
-		...(ruler.color === undefined ? {} : { color: ruler.color }),
-	});
 }

@@ -1,36 +1,12 @@
-.stanza-editor-scroll-decoration {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 7;
-  pointer-events: none;
-}
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-.stanza-editor-scroll-decoration-shadow {
-  position: absolute;
-  right: 0;
-  left: 0;
-  height: 12px;
-  opacity: 0;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--zeta-editor-foreground) 18%, transparent), transparent);
-  transition: opacity 100ms linear;
-}
-
-.stanza-editor-scroll-decoration-shadow.top {
-  top: 0;
-}
-
-.stanza-editor-scroll-decoration-shadow.bottom {
-  bottom: 0;
-  transform: rotate(180deg);
-}
-
-.stanza-editor-scroll-decoration-shadow.visible {
-  opacity: 1;
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-scroll-decoration-shadow {
-    background: linear-gradient(to bottom, CanvasText, transparent);
-  }
+.monaco-editor .scroll-decoration {
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 6px;
+	box-shadow: var(--vscode-scrollbar-shadow) 0 6px 6px -6px inset;
 }

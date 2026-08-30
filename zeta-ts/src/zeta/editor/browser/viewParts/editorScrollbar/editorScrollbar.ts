@@ -1,161 +1,189 @@
-import { RunOnceScheduler } from "../../../../base/common/async.js";
-import { isFiniteNumber } from "../../../../base/common/numbers.js";
-import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
-import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
-import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
-import { EditorOptions } from "../../../common/config/editorOptions.js";
-import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-export type EditorScrollbarVisibility = "auto" | "visible" | "hidden";
-
-export interface EditorScrollbarOptions {
-	readonly container: HTMLElement;
-	readonly viewport: HTMLElement;
-	readonly scrollTo: (position: EditorScrollPosition) => void;
-	readonly horizontalScrollbarSize?: number;
-	readonly verticalScrollbarSize?: number;
-	readonly minimumThumbSize?: number;
-	readonly horizontal?: EditorScrollbarVisibility;
-	readonly vertical?: EditorScrollbarVisibility;
-}
+import * as dom from '../../../../base/browser/dom.js';
+import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { IOverviewRulerLayoutInfo, SmoothScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { ScrollableElementChangeOptions, ScrollableElementCreationOptions } from '../../../../base/browser/ui/scrollbar/scrollableElementOptions.js';
+import { PartFingerprint, PartFingerprints, ViewPart } from '../../view/viewPart.js';
+import { INewScrollPosition, ScrollType } from '../../../common/editorCommon.js';
+import { RenderingContext, RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewContext } from '../../../common/viewModel/viewContext.js';
+import * as viewEvents from '../../../common/viewEvents.js';
+import { getThemeTypeSelector } from '../../../../platform/theme/common/themeService.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 
 /**
- * Projects the editor viewport's canonical scroll state into two themed
- * scrollbar axes. Native scrolling remains the editor's input and
- * accessibility fallback; this part owns only the visible custom tracks.
+ * The editor scrollbar built on VS Code's scrollable element that sits beside
+ * the minimap.
  */
-export class EditorViewportScrollbar extends EditorViewPart {
-	private static nextViewportId = 1;
-	private readonly container: HTMLElement;
-	private readonly horizontal: HorizontalScrollbar;
-	private readonly vertical: VerticalScrollbar;
-	private readonly horizontalScrollbarSize: number;
-	private readonly verticalScrollbarSize: number;
-	private readonly minimumThumbSize: number;
-	private readonly horizontalVisibility: EditorScrollbarVisibility;
-	private readonly verticalVisibility: EditorScrollbarVisibility;
-	private horizontalMetrics: ScrollbarAxisMetrics;
-	private verticalMetrics: ScrollbarAxisMetrics;
-	private lastScrollPosition: EditorScrollPosition | undefined;
-	private readonly scrollActivityScheduler: RunOnceScheduler;
+export class EditorScrollbar extends ViewPart {
 
-	constructor(options: EditorScrollbarOptions) {
-		super();
-		if (!options.container || !options.viewport) {
-			throw new TypeError("Editor scrollbar part requires a container and viewport");
-		}
-		if (typeof options.scrollTo !== "function") {
-			throw new TypeError("Editor scrollbar part requires a scroll callback");
-		}
-		this.container = options.container;
-		this.horizontalScrollbarSize = positiveFinite(options.horizontalScrollbarSize ?? EditorOptions.scrollbar.defaultValue.horizontalScrollbarSize, "horizontalScrollbarSize");
-		this.verticalScrollbarSize = positiveFinite(options.verticalScrollbarSize ?? EditorOptions.scrollbar.defaultValue.verticalScrollbarSize, "verticalScrollbarSize");
-		this.minimumThumbSize = positiveFinite(options.minimumThumbSize ?? 20, "minimumThumbSize");
-		this.horizontalVisibility = options.horizontal ?? "auto";
-		this.verticalVisibility = options.vertical ?? "auto";
-		if (!options.viewport.id) {
-			options.viewport.id = `stanza-editor-scroll-viewport-${EditorViewportScrollbar.nextViewportId++}`;
-		}
-		options.container.style.setProperty("--stanza-editor-horizontal-scrollbar-size", `${this.horizontalScrollbarSize}px`);
-		options.container.style.setProperty("--stanza-editor-vertical-scrollbar-size", `${this.verticalScrollbarSize}px`);
-		this.horizontalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
-		this.verticalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
-		this.horizontal = this._register(new HorizontalScrollbar(options.container, {
-			viewport: options.viewport,
-			trackClickBehavior: "jump",
-			getMetrics: () => this.horizontalMetrics,
-			setPosition: position => options.scrollTo({
-				left: position,
-				top: this.verticalMetrics.position,
-			}),
-		}));
-		this.vertical = this._register(new VerticalScrollbar(options.container, {
-			viewport: options.viewport,
-			trackClickBehavior: "jump",
-			getMetrics: () => this.verticalMetrics,
-			setPosition: position => options.scrollTo({
-				left: this.horizontalMetrics.position,
-				top: position,
-			}),
-		}));
-		this.configureTrack(this.horizontal, "horizontal", this.horizontalVisibility);
-		this.configureTrack(this.vertical, "vertical", this.verticalVisibility);
-		this.scrollActivityScheduler = this._register(new RunOnceScheduler(() => {
-			this.container.classList.remove("stanza-editor-scrolling");
-		}, 700));
+	private readonly scrollbar: SmoothScrollableElement;
+	private readonly scrollbarDomNode: FastDomNode<HTMLElement>;
+
+	constructor(
+		context: ViewContext,
+		linesContent: FastDomNode<HTMLElement>,
+		viewDomNode: FastDomNode<HTMLElement>,
+		overflowGuardDomNode: FastDomNode<HTMLElement>
+	) {
+		super(context);
+
+
+		const options = this._context.configuration.options;
+		const scrollbar = options.get(EditorOption.scrollbar);
+		const mouseWheelScrollSensitivity = options.get(EditorOption.mouseWheelScrollSensitivity);
+		const fastScrollSensitivity = options.get(EditorOption.fastScrollSensitivity);
+		const scrollPredominantAxis = options.get(EditorOption.scrollPredominantAxis);
+		const inertialScroll = options.get(EditorOption.inertialScroll);
+
+		const scrollbarOptions: ScrollableElementCreationOptions = {
+			listenOnDomNode: viewDomNode.domNode,
+			className: 'editor-scrollable' + ' ' + getThemeTypeSelector(context.theme.type),
+			useShadows: false,
+			lazyRender: true,
+
+			vertical: scrollbar.vertical,
+			horizontal: scrollbar.horizontal,
+			verticalHasArrows: scrollbar.verticalHasArrows,
+			horizontalHasArrows: scrollbar.horizontalHasArrows,
+			verticalScrollbarSize: scrollbar.verticalScrollbarSize,
+			verticalSliderSize: scrollbar.verticalSliderSize,
+			horizontalScrollbarSize: scrollbar.horizontalScrollbarSize,
+			horizontalSliderSize: scrollbar.horizontalSliderSize,
+			handleMouseWheel: scrollbar.handleMouseWheel,
+			alwaysConsumeMouseWheel: scrollbar.alwaysConsumeMouseWheel,
+			arrowSize: scrollbar.arrowSize,
+			mouseWheelScrollSensitivity: mouseWheelScrollSensitivity,
+			fastScrollSensitivity: fastScrollSensitivity,
+			scrollPredominantAxis: scrollPredominantAxis,
+			scrollByPage: scrollbar.scrollByPage,
+			inertialScroll: inertialScroll,
+		};
+
+		this.scrollbar = this._register(new SmoothScrollableElement(linesContent.domNode, scrollbarOptions, this._context.viewLayout.getScrollable()));
+		PartFingerprints.write(this.scrollbar.getDomNode(), PartFingerprint.ScrollableElement);
+
+		this.scrollbarDomNode = createFastDomNode(this.scrollbar.getDomNode());
+		this.scrollbarDomNode.setPosition('absolute');
+		this._setLayout();
+
+		// When having a zone widget that calls .focus() on one of its dom elements,
+		// the browser will try desperately to reveal that dom node, unexpectedly
+		// changing the .scrollTop of this.linesContent
+
+		const onBrowserDesperateReveal = (domNode: HTMLElement, lookAtScrollTop: boolean, lookAtScrollLeft: boolean) => {
+			const newScrollPosition: INewScrollPosition = {};
+
+			if (lookAtScrollTop) {
+				const deltaTop = domNode.scrollTop;
+				if (deltaTop) {
+					newScrollPosition.scrollTop = this._context.viewLayout.getCurrentScrollTop() + deltaTop;
+					domNode.scrollTop = 0;
+				}
+			}
+
+			if (lookAtScrollLeft) {
+				const deltaLeft = domNode.scrollLeft;
+				if (deltaLeft) {
+					newScrollPosition.scrollLeft = this._context.viewLayout.getCurrentScrollLeft() + deltaLeft;
+					domNode.scrollLeft = 0;
+				}
+			}
+
+			this._context.viewModel.viewLayout.setScrollPosition(newScrollPosition, ScrollType.Immediate);
+		};
+
+		// I've seen this happen both on the view dom node & on the lines content dom node.
+		this._register(dom.addDisposableListener(viewDomNode.domNode, 'scroll', (e: Event) => onBrowserDesperateReveal(viewDomNode.domNode, true, true)));
+		this._register(dom.addDisposableListener(linesContent.domNode, 'scroll', (e: Event) => onBrowserDesperateReveal(linesContent.domNode, true, false)));
+		this._register(dom.addDisposableListener(overflowGuardDomNode.domNode, 'scroll', (e: Event) => onBrowserDesperateReveal(overflowGuardDomNode.domNode, true, false)));
+		this._register(dom.addDisposableListener(this.scrollbarDomNode.domNode, 'scroll', (e: Event) => onBrowserDesperateReveal(this.scrollbarDomNode.domNode, true, false)));
 	}
 
-	render(context: EditorRenderingContext): void {
-		const layout = context.layout;
+
+	private _setLayout(): void {
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+
+		this.scrollbarDomNode.setLeft(layoutInfo.contentLeft);
+
+		const minimap = options.get(EditorOption.minimap);
+		const side = minimap.side;
+		if (side === 'right') {
+			this.scrollbarDomNode.setWidth(layoutInfo.contentWidth + layoutInfo.minimap.minimapWidth);
+		} else {
+			this.scrollbarDomNode.setWidth(layoutInfo.contentWidth);
+		}
+		this.scrollbarDomNode.setHeight(layoutInfo.height);
+	}
+
+	public getOverviewRulerLayoutInfo(): IOverviewRulerLayoutInfo {
+		return this.scrollbar.getOverviewRulerLayoutInfo();
+	}
+
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this.scrollbarDomNode;
+	}
+
+	public delegateVerticalScrollbarPointerDown(browserEvent: PointerEvent): void {
+		this.scrollbar.delegateVerticalScrollbarPointerDown(browserEvent);
+	}
+
+	public delegateScrollFromMouseWheelEvent(browserEvent: IMouseWheelEvent) {
+		this.scrollbar.delegateScrollFromMouseWheelEvent(browserEvent);
+	}
+
+	// --- begin event handlers
+
+	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
 		if (
-			this.lastScrollPosition !== undefined &&
-			(this.lastScrollPosition.left !== layout.scrollPosition.left ||
-				this.lastScrollPosition.top !== layout.scrollPosition.top)
+			e.hasChanged(EditorOption.scrollbar)
+			|| e.hasChanged(EditorOption.mouseWheelScrollSensitivity)
+			|| e.hasChanged(EditorOption.fastScrollSensitivity)
 		) {
-			this.showScrollbars();
+			const options = this._context.configuration.options;
+			const scrollbar = options.get(EditorOption.scrollbar);
+			const mouseWheelScrollSensitivity = options.get(EditorOption.mouseWheelScrollSensitivity);
+			const fastScrollSensitivity = options.get(EditorOption.fastScrollSensitivity);
+			const scrollPredominantAxis = options.get(EditorOption.scrollPredominantAxis);
+			const newOpts: ScrollableElementChangeOptions = {
+				vertical: scrollbar.vertical,
+				horizontal: scrollbar.horizontal,
+				verticalScrollbarSize: scrollbar.verticalScrollbarSize,
+				horizontalScrollbarSize: scrollbar.horizontalScrollbarSize,
+				scrollByPage: scrollbar.scrollByPage,
+				handleMouseWheel: scrollbar.handleMouseWheel,
+				mouseWheelScrollSensitivity: mouseWheelScrollSensitivity,
+				fastScrollSensitivity: fastScrollSensitivity,
+				scrollPredominantAxis: scrollPredominantAxis
+			};
+			this.scrollbar.updateOptions(newOpts);
 		}
-		this.lastScrollPosition = layout.scrollPosition;
-		const horizontalRendered = isRendered(
-			this.horizontalVisibility,
-			layout.maximumScrollPosition.left > 0,
-		);
-		const verticalRendered = isRendered(
-			this.verticalVisibility,
-			layout.maximumScrollPosition.top > 0,
-		);
-		const horizontalTrackSize = Math.max(
-			0,
-			layout.viewportSize.width - (verticalRendered ? this.verticalScrollbarSize : 0),
-		);
-		const verticalTrackSize = Math.max(
-			0,
-			layout.viewportSize.height - (horizontalRendered ? this.horizontalScrollbarSize : 0),
-		);
-		this.horizontal.trackNode.setRight(verticalRendered ? this.verticalScrollbarSize : 0);
-		this.vertical.trackNode.setBottom(horizontalRendered ? this.horizontalScrollbarSize : 0);
-		const scrollTransform = `translate3d(${layout.scrollPosition.left}px, ${layout.scrollPosition.top}px, 0)`;
-		this.horizontal.trackNode.setTransform(scrollTransform);
-		this.vertical.trackNode.setTransform(scrollTransform);
-		this.horizontalMetrics = createScrollbarAxisMetrics(
-			layout.viewportSize.width,
-			layout.contentSize.width,
-			layout.scrollPosition.left,
-			horizontalTrackSize,
-			this.minimumThumbSize,
-		);
-		this.verticalMetrics = createScrollbarAxisMetrics(
-			layout.viewportSize.height,
-			layout.contentSize.height,
-			layout.scrollPosition.top,
-			verticalTrackSize,
-			this.minimumThumbSize,
-		);
-		this.horizontal.render(this.horizontalMetrics, horizontalRendered);
-		this.vertical.render(this.verticalMetrics, verticalRendered);
+		if (e.hasChanged(EditorOption.layoutInfo)) {
+			this._setLayout();
+		}
+		return true;
+	}
+	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
+		return true;
+	}
+	public override onThemeChanged(e: viewEvents.ViewThemeChangedEvent): boolean {
+		this.scrollbar.updateClassName('editor-scrollable' + ' ' + getThemeTypeSelector(this._context.theme.type));
+		return true;
 	}
 
-	private configureTrack(
-		scrollbar: HorizontalScrollbar | VerticalScrollbar,
-		axis: "horizontal" | "vertical",
-		visibility: EditorScrollbarVisibility,
-	): void {
-		scrollbar.trackNode.toggleClassName("stanza-editor-scrollbar-track", true);
-		scrollbar.trackNode.toggleClassName(`stanza-editor-scrollbar-track-${axis}`, true);
-		scrollbar.track.dataset.visibility = visibility;
+	// --- end event handlers
+
+	public prepareRender(ctx: RenderingContext): void {
+		// Nothing to do
 	}
 
-	private showScrollbars(): void {
-		this.container.classList.add("stanza-editor-scrolling");
-		this.scrollActivityScheduler.schedule();
+	public render(ctx: RestrictedRenderingContext): void {
+		this.scrollbar.renderNow();
 	}
-}
-
-function isRendered(visibility: EditorScrollbarVisibility, needed: boolean): boolean {
-	return visibility === "visible" || (visibility === "auto" && needed);
-}
-
-function positiveFinite(value: number, name: string): number {
-	if (!isFiniteNumber(value) || value <= 0) throw new RangeError(`${name} must be positive and finite`);
-	return value;
 }

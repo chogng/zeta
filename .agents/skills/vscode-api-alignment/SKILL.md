@@ -3,6 +3,13 @@ name: vscode-api-alignment
 description: Align Zeta TypeScript editor source files, APIs, and debuggable call paths with the checked-out VS Code source by preserving corresponding paths, file decomposition, public names, responsibilities, ownership, lifecycle, and caller contracts. Use when adding, renaming, refactoring, or reviewing Zeta editor APIs against VS Code; do not use for Rust or generic TypeScript naming.
 ---
 
+## 同路径批量查询
+
+- 用户指定一个目录，或一次点名同一目录下的多个文件时，把该目录视为一个查询批次。首次只读检查应直接批量取得本地与 VS Code 的文件集合、同路径文件、imports、exports、生产调用方、上游直接调用方和测试，不要逐文件重复 query。
+- 优先使用一次目录审计、带多个模式的 `rg`、循环读取或等价的批量工具调用。需要比较文件内容时，在同一批次中读取全部对应文件；不要每读一个文件就暂停、汇报或等待确认。
+- 输出量超限时，按“文件集合与路径”“符号及调用方”“测试”这类结果维度拆批，不能退化为默认逐文件查询。只有某个文件出现独立依赖分支、来源不明或修改冲突时，才单独深入该文件。
+- 批量 query 只改变只读调查方式，不扩大修改或删除权限。文件修改仍按 owner 和调用链分支闭环；删除仍执行本 skill 的精确路径确认停点。
+
 # VS Code API 对齐
 
 当 Zeta 的 TypeScript 编辑器实现对应 VS Code 的模块、视图部件或公共契约时，以 `../vscode` 为源码依据，以 `zeta-ts/src/zeta/editor` 及其必要调用方为主要修改范围。目标是建立可以沿调用链定位问题的真实对应关系，不是复制上游，也不是只让类型检查通过。对齐过程必须让生产文件图单调收敛：仅本地文件只能减少，新增生产文件必须能在 VS Code 中找到大小写一致的同相对路径文件。

@@ -1,5 +1,14 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { binarySearch2 } from '../../../base/common/arrays.js';
 import { intersection } from '../../../base/common/collections.js';
+import { IEditorConfiguration } from '../config/editorConfiguration.js';
+import { EditorOption } from '../config/editorOptions.js';
+import { ICoordinatesConverter } from '../coordinatesConverter.js';
+import { IModelDecoration } from '../model.js';
 
 const enum PendingChangeKind {
 	InsertOrChange,
@@ -70,7 +79,7 @@ export class LineHeightsManager {
 	private _defaultLineHeight: number;
 	private _hasPending: boolean = false;
 
-	constructor(defaultLineHeight: number, customLineHeightData: EditorCustomLineHeightData[]) {
+	constructor(defaultLineHeight: number, customLineHeightData: CustomLineHeightData[]) {
 		this._defaultLineHeight = defaultLineHeight;
 		for (const data of customLineHeightData) {
 			this.insertOrChangeCustomLineHeight(data.decorationId, data.startLineNumber, data.endLineNumber, data.lineHeight);
@@ -376,7 +385,7 @@ export class LineHeightsManager {
 		} else {
 			startIndexOfInsertion = -(candidateStartIndexOfInsertion + 1);
 		}
-		const toReAdd: EditorCustomLineHeightData[] = [];
+		const toReAdd: CustomLineHeightData[] = [];
 		const decorationsImmediatelyAfter = new Set<string>();
 		for (let i = startIndexOfInsertion; i < this._orderedCustomLines.length; i++) {
 			if (this._orderedCustomLines[i].lineNumber === fromLineNumber) {
@@ -432,7 +441,7 @@ export class LineHeightsManager {
 	}
 }
 
-export class EditorCustomLineHeightData {
+export class CustomLineHeightData {
 
 	constructor(
 		readonly decorationId: string,
@@ -440,6 +449,19 @@ export class EditorCustomLineHeightData {
 		readonly endLineNumber: number,
 		readonly lineHeight: number
 	) { }
+
+	public static fromDecorations(decorations: IModelDecoration[], coordinatesConverter: ICoordinatesConverter, configuration: IEditorConfiguration): CustomLineHeightData[] {
+		const defaultLineHeight = configuration.options.get(EditorOption.lineHeight);
+		return decorations.map((d) => {
+			const viewRange = coordinatesConverter.convertModelRangeToViewRange(d.range);
+			return new CustomLineHeightData(
+				d.id,
+				viewRange.startLineNumber,
+				viewRange.endLineNumber,
+				d.options.lineHeight ? d.options.lineHeight * defaultLineHeight : 0
+			);
+		});
+	}
 }
 
 class ArrayMap<K, T> {

@@ -1,35 +1,34 @@
-import { type FastDomNode } from '../../../base/browser/fastDomNode.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
-import { type EditorRenderingContext } from './renderingContext.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-export type { EditorRenderingContext } from './renderingContext.js';
+import { FastDomNode } from '../../../base/browser/fastDomNode.js';
+import { RenderingContext, RestrictedRenderingContext } from './renderingContext.js';
+import { ViewContext } from '../../common/viewModel/viewContext.js';
+import { ViewEventHandler } from '../../common/viewEventHandler.js';
+import { ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 
-export class EditorViewContext {
-	constructor(
-		private readonly readLayout: () => EditorViewportLayout,
-		private readonly createRenderingContext: (layout: EditorViewportLayout) => EditorRenderingContext,
-	) { }
+export abstract class ViewPart extends ViewEventHandler {
 
-	public get layout(): EditorViewportLayout {
-		return this.readLayout();
+	_context: ViewContext;
+
+	constructor(context: ViewContext) {
+		super();
+		this._context = context;
+		this._context.addEventHandler(this);
 	}
 
-	public get renderingContext(): EditorRenderingContext {
-		return this.createRenderingContext(this.layout);
-	}
-}
-
-export abstract class EditorViewPart extends Disposable {
-	public prepareRender(_context: EditorRenderingContext): void {
+	public override dispose(): void {
+		this._context.removeEventHandler(this);
+		super.dispose();
 	}
 
-	public renderNow(context: EditorRenderingContext): void {
-		this.prepareRender(context);
-		this.render(context);
+	public onBeforeRender(viewportData: ViewportData): void {
 	}
 
-	public abstract render(context: EditorRenderingContext): void;
+	public abstract prepareRender(ctx: RenderingContext): void;
+	public abstract render(ctx: RestrictedRenderingContext): void;
 }
 
 export const enum PartFingerprint {
@@ -41,50 +40,43 @@ export const enum PartFingerprint {
 	OverflowingOverlayWidgets,
 	ScrollableElement,
 	TextArea,
-	EditorViewLines,
+	ViewLines,
 	Minimap,
-	StyledViewLinesGpu,
+	ViewLinesGpu
 }
 
 export class PartFingerprints {
-	public static write(target: Element | FastDomNode<HTMLElement>, fingerprint: PartFingerprint) {
-		target.setAttribute('data-mprt', String(fingerprint));
+
+	public static write(target: Element | FastDomNode<HTMLElement>, partId: PartFingerprint) {
+		target.setAttribute('data-mprt', String(partId));
 	}
 
 	public static read(target: Element): PartFingerprint {
-		const value = target.getAttribute('data-mprt');
-		return value === null ? PartFingerprint.None : Number.parseInt(value, 10);
+		const r = target.getAttribute('data-mprt');
+		if (r === null) {
+			return PartFingerprint.None;
+		}
+		return parseInt(r, 10);
 	}
 
 	public static collect(child: Element | null, stopAt: Element): Uint8Array {
-		const fingerprints: PartFingerprint[] = [];
+		const result: PartFingerprint[] = [];
+		let resultLen = 0;
+
 		while (child && child !== child.ownerDocument.body) {
-			if (child === stopAt) break;
-			fingerprints.push(this.read(child));
+			if (child === stopAt) {
+				break;
+			}
+			if (child.nodeType === child.ELEMENT_NODE) {
+				result[resultLen++] = this.read(child);
+			}
 			child = child.parentElement;
 		}
-		return Uint8Array.from(fingerprints.reverse());
-	}
-}
 
-export class EditorViewPartCollection extends Disposable {
-	private readonly parts: EditorViewPart[] = [];
-
-	public register<TPart extends EditorViewPart>(part: TPart): TPart {
-		this.parts.push(part);
-		this._register(part);
-		return part;
-	}
-
-	public prepareRender(context: EditorRenderingContext): void {
-		for (const part of this.parts) {
-			part.prepareRender(context);
+		const r = new Uint8Array(resultLen);
+		for (let i = 0; i < resultLen; i++) {
+			r[i] = result[resultLen - i - 1];
 		}
-	}
-
-	public render(context: EditorRenderingContext): void {
-		for (const part of this.parts) {
-			part.render(context);
-		}
+		return r;
 	}
 }

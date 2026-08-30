@@ -1,23 +1,38 @@
-.stanza-editor-input {
-	position: absolute;
-	top: 0;
-	left: 0;
-	z-index: 5;
-	box-sizing: border-box;
-	width: 1px;
-	height: 1px;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.monaco-editor .inputarea {
+	min-width: 0;
+	min-height: 0;
+	margin: 0;
 	padding: 0;
+	position: absolute;
+	outline: none !important;
+	resize: none;
+	border: none;
 	overflow: hidden;
 	color: transparent;
-	caret-color: transparent;
-	resize: none;
-	pointer-events: none;
-	opacity: 0;
-	background: transparent;
-	border: 0;
-	outline: none;
+	background-color: transparent;
+	z-index: -10;
 }
-
-.stanza-editor-input.ime-input {
-	width: 2px;
+/*.monaco-editor .inputarea {
+	position: fixed !important;
+	width: 800px !important;
+	height: 500px !important;
+	top: initial !important;
+	left: initial !important;
+	bottom: 0 !important;
+	right: 0 !important;
+	color: black !important;
+	background: white !important;
+	line-height: 15px !important;
+	font-size: 14px !important;
+	z-index: 10 !important;
+}*/
+.monaco-editor .inputarea.ime-input {
+	z-index: 10;
+	caret-color: var(--vscode-editorCursor-foreground);
+	color: var(--vscode-editor-foreground);
 }

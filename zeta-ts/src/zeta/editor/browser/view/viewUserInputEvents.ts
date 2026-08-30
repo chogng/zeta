@@ -1,110 +1,119 @@
-import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
-import { type Position } from '../../common/core/position.js';
-import { type Range } from '../../common/core/range.js';
-import { EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-/** Callback shape used by the view/input bridge, matching VS Code's boundary. */
+import { IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
+import { IEditorMouseEvent, IMouseTarget, IMouseTargetViewZoneData, IPartialEditorMouseEvent, MouseTargetType } from '../editorBrowser.js';
+import { IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
+import { Position } from '../../common/core/position.js';
+import { ICoordinatesConverter } from '../../common/coordinatesConverter.js';
+
 export interface EventCallback<T> {
 	(event: T): void;
 }
 
-/** Browser-owned regions are kept distinct from common-layer hit-test targets. */
-export type EditorViewMouseTargetKind =
-	| EditorHitTargetKind
-	| 'lineNumber'
-	| 'gutterDecoration'
-	| 'widget'
-	| 'scrollbar'
-	| 'viewZone';
+export class ViewUserInputEvents {
 
-/** Mouse target exposed by the browser view without depending on controller policy. */
-export interface EditorViewMouseTarget {
-	readonly kind: EditorViewMouseTargetKind;
-	readonly position?: Position;
-	readonly range?: Range;
-	readonly element?: Element;
-	readonly detail?: unknown;
-}
-
-/** A mouse event whose target has already been resolved by the browser view. */
-export interface EditorViewMouseEvent {
-	readonly event: MouseEvent | PointerEvent;
-	readonly target?: EditorViewMouseTarget;
-}
-
-/** Events such as leave/drop may omit a semantic target. */
-export type EditorViewPartialMouseEvent = EditorViewMouseEvent;
-
-/**
- * Transport between browser view input producers and editor-facing consumers.
- *
- * VS Code performs view-to-model coordinate conversion here. Stanza's hit-test
- * contract already returns model-relative Position values, so this class
- * preserves that contract and only isolates the target object at the boundary.
- * It does not own pointer gestures, selection, editing, or drag/drop policy.
- */
-export class EditorViewUserInputEvents {
 	public onKeyDown: EventCallback<IKeyboardEvent> | null = null;
-	public onKeyUp: EventCallback<KeyboardEvent> | null = null;
-	public onContextMenu: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseMove: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseLeave: EventCallback<EditorViewPartialMouseEvent> | null = null;
-	public onMouseDown: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseUp: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseDrag: EventCallback<EditorViewMouseEvent> | null = null;
-	public onMouseDrop: EventCallback<EditorViewPartialMouseEvent> | null = null;
+	public onKeyUp: EventCallback<IKeyboardEvent> | null = null;
+	public onContextMenu: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseMove: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseLeave: EventCallback<IPartialEditorMouseEvent> | null = null;
+	public onMouseDown: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseUp: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseDrag: EventCallback<IEditorMouseEvent> | null = null;
+	public onMouseDrop: EventCallback<IPartialEditorMouseEvent> | null = null;
 	public onMouseDropCanceled: EventCallback<void> | null = null;
-	public onMouseWheel: EventCallback<WheelEvent> | null = null;
+	public onMouseWheel: EventCallback<IMouseWheelEvent> | null = null;
 
-	public emitKeyDown(event: IKeyboardEvent): void {
-		this.onKeyDown?.(event);
+	private readonly _coordinatesConverter: ICoordinatesConverter;
+
+	constructor(coordinatesConverter: ICoordinatesConverter) {
+		this._coordinatesConverter = coordinatesConverter;
 	}
 
-	public emitKeyUp(event: KeyboardEvent): void {
-		this.onKeyUp?.(event);
+	public emitKeyDown(e: IKeyboardEvent): void {
+		this.onKeyDown?.(e);
 	}
 
-	public emitContextMenu(event: EditorViewMouseEvent): void {
-		this.onContextMenu?.(this.convertViewToModelMouseEvent(event));
+	public emitKeyUp(e: IKeyboardEvent): void {
+		this.onKeyUp?.(e);
 	}
 
-	public emitMouseMove(event: EditorViewMouseEvent): void {
-		this.onMouseMove?.(this.convertViewToModelMouseEvent(event));
+	public emitContextMenu(e: IEditorMouseEvent): void {
+		this.onContextMenu?.(this._convertViewToModelMouseEvent(e));
 	}
 
-	public emitMouseLeave(event: EditorViewPartialMouseEvent): void {
-		this.onMouseLeave?.(this.convertViewToModelMouseEvent(event));
+	public emitMouseMove(e: IEditorMouseEvent): void {
+		this.onMouseMove?.(this._convertViewToModelMouseEvent(e));
 	}
 
-	public emitMouseDown(event: EditorViewMouseEvent): void {
-		this.onMouseDown?.(this.convertViewToModelMouseEvent(event));
+	public emitMouseLeave(e: IPartialEditorMouseEvent): void {
+		this.onMouseLeave?.(this._convertViewToModelMouseEvent(e));
 	}
 
-	public emitMouseUp(event: EditorViewMouseEvent): void {
-		this.onMouseUp?.(this.convertViewToModelMouseEvent(event));
+	public emitMouseDown(e: IEditorMouseEvent): void {
+		this.onMouseDown?.(this._convertViewToModelMouseEvent(e));
 	}
 
-	public emitMouseDrag(event: EditorViewMouseEvent): void {
-		this.onMouseDrag?.(this.convertViewToModelMouseEvent(event));
+	public emitMouseUp(e: IEditorMouseEvent): void {
+		this.onMouseUp?.(this._convertViewToModelMouseEvent(e));
 	}
 
-	public emitMouseDrop(event: EditorViewPartialMouseEvent): void {
-		this.onMouseDrop?.(this.convertViewToModelMouseEvent(event));
+	public emitMouseDrag(e: IEditorMouseEvent): void {
+		this.onMouseDrag?.(this._convertViewToModelMouseEvent(e));
+	}
+
+	public emitMouseDrop(e: IPartialEditorMouseEvent): void {
+		this.onMouseDrop?.(this._convertViewToModelMouseEvent(e));
 	}
 
 	public emitMouseDropCanceled(): void {
 		this.onMouseDropCanceled?.();
 	}
 
-	public emitMouseWheel(event: WheelEvent): void {
-		this.onMouseWheel?.(event);
+	public emitMouseWheel(e: IMouseWheelEvent): void {
+		this.onMouseWheel?.(e);
 	}
 
-	private convertViewToModelMouseEvent<T extends EditorViewMouseEvent>(event: T): T {
-		if (!event.target) return event;
-		return Object.freeze({
-			...event,
-			target: Object.freeze({ ...event.target }),
-		}) as T;
+	private _convertViewToModelMouseEvent(e: IEditorMouseEvent): IEditorMouseEvent;
+	private _convertViewToModelMouseEvent(e: IPartialEditorMouseEvent): IPartialEditorMouseEvent;
+	private _convertViewToModelMouseEvent(e: IEditorMouseEvent | IPartialEditorMouseEvent): IEditorMouseEvent | IPartialEditorMouseEvent {
+		if (e.target) {
+			return {
+				event: e.event,
+				target: this._convertViewToModelMouseTarget(e.target)
+			};
+		}
+		return e;
+	}
+
+	private _convertViewToModelMouseTarget(target: IMouseTarget): IMouseTarget {
+		return ViewUserInputEvents.convertViewToModelMouseTarget(target, this._coordinatesConverter);
+	}
+
+	public static convertViewToModelMouseTarget(target: IMouseTarget, coordinatesConverter: ICoordinatesConverter): IMouseTarget {
+		const result = { ...target };
+		if (result.position) {
+			result.position = coordinatesConverter.convertViewPositionToModelPosition(result.position);
+		}
+		if (result.range) {
+			result.range = coordinatesConverter.convertViewRangeToModelRange(result.range);
+		}
+		if (result.type === MouseTargetType.GUTTER_VIEW_ZONE || result.type === MouseTargetType.CONTENT_VIEW_ZONE) {
+			result.detail = this.convertViewToModelViewZoneData(result.detail, coordinatesConverter);
+		}
+		return result;
+	}
+
+	private static convertViewToModelViewZoneData(data: IMouseTargetViewZoneData, coordinatesConverter: ICoordinatesConverter): IMouseTargetViewZoneData {
+		return {
+			viewZoneId: data.viewZoneId,
+			positionBefore: data.positionBefore ? coordinatesConverter.convertViewPositionToModelPosition(data.positionBefore) : data.positionBefore,
+			positionAfter: data.positionAfter ? coordinatesConverter.convertViewPositionToModelPosition(data.positionAfter) : data.positionAfter,
+			position: coordinatesConverter.convertViewPositionToModelPosition(data.position),
+			afterLineNumber: coordinatesConverter.convertViewPositionToModelPosition(new Position(data.afterLineNumber, 1)).lineNumber,
+		};
 	}
 }

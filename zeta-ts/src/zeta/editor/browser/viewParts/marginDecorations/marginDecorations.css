@@ -1,36 +1,15 @@
-.stanza-editor-diagnostic-marker {
-	position: relative;
-	box-sizing: border-box;
-	left: max(20px, var(--stanza-editor-glyph-margin-width, 0px));
-  z-index: 5;
-  width: 20px;
-  height: 100%;
-  font-size: 10px;
-  line-height: inherit;
-  text-align: center;
-  pointer-events: auto;
-  cursor: help;
-}
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-.stanza-editor-diagnostic-marker.error {
-  color: var(--zeta-error-foreground);
-}
-
-.stanza-editor-diagnostic-marker.warning {
-  color: var(--zeta-warning-foreground);
-}
-
-.stanza-editor-diagnostic-marker.information {
-  color: var(--zeta-focus-border);
-}
-
-.stanza-editor-diagnostic-marker.hint {
-  color: var(--zeta-description-foreground);
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-diagnostic-marker {
-    background: CanvasText;
-    color: CanvasText;
-  }
+/*
+	Keeping name short for faster parsing.
+	cmdr = core margin decorations rendering (div)
+*/
+.monaco-editor .margin-view-overlays .cmdr {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	height: 100%;
 }

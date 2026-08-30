@@ -1,107 +1,67 @@
-.stanza-editor-minimap {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 6;
-  box-sizing: border-box;
-  overflow: hidden;
-  color: var(--zeta-description-foreground);
-  cursor: pointer;
-  background: var(--zeta-editor-background);
-  border-left: 1px solid color-mix(in srgb, var(--zeta-editor-foreground) 6%, transparent);
-  will-change: transform;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* START cover the case that slider is visible on mouseover */
+.monaco-editor .minimap.slider-mouseover .minimap-slider {
+	opacity: 0;
+	transition: opacity 100ms linear;
+}
+.monaco-editor .minimap.slider-mouseover:hover .minimap-slider {
+	opacity: 1;
+}
+.monaco-editor .minimap.slider-mouseover .minimap-slider.active {
+	opacity: 1;
+}
+/* END cover the case that slider is visible on mouseover */
+.monaco-editor .minimap-slider .minimap-slider-horizontal {
+	background: var(--vscode-minimapSlider-background);
+}
+.monaco-editor .minimap-slider:hover .minimap-slider-horizontal {
+	background: var(--vscode-minimapSlider-hoverBackground);
+}
+.monaco-editor .minimap-slider.active .minimap-slider-horizontal {
+	background: var(--vscode-minimapSlider-activeBackground);
+}
+.monaco-editor .minimap-shadow-visible {
+	box-shadow: var(--vscode-shadow-md);
+}
+.monaco-editor .minimap-shadow-hidden {
+	position: absolute;
+	width: 0;
+}
+.monaco-editor .minimap-shadow-visible {
+	position: absolute;
+	left: -6px;
+	width: 6px;
+	pointer-events: none;
+}
+.monaco-editor.no-minimap-shadow .minimap-shadow-visible {
+	position: absolute;
+	left: -1px;
+	width: 1px;
 }
 
-.stanza-editor-minimap.dragging {
-  cursor: grabbing;
+/* 0.5s fade in/out for the minimap */
+.minimap.minimap-autohide-mouseover,
+.minimap.minimap-autohide-scroll {
+	opacity: 0;
+	transition: opacity 0.5s;
+}
+.minimap.minimap-autohide-scroll{
+	pointer-events: none;
+}
+.minimap.minimap-autohide-mouseover:hover,
+.minimap.minimap-autohide-scroll.active {
+	opacity: 1;
+	pointer-events: auto;
 }
 
-.stanza-editor-minimap.side-left {
-  border-right: 1px solid color-mix(in srgb, var(--zeta-editor-foreground) 6%, transparent);
-  border-left: 0;
+.monaco-editor .minimap {
+	z-index: 5;
 }
 
-.stanza-editor-minimap-canvas,
-.stanza-editor-minimap-markers,
-.stanza-editor-minimap-slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-.stanza-editor-minimap-canvas {
-  display: block;
-}
-
-.stanza-editor-minimap-markers {
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.stanza-editor-minimap-diagnostic-marker {
-  position: absolute;
-  right: 0;
-  z-index: 2;
-  width: 3px;
-  min-height: 2px;
-}
-
-.stanza-editor-minimap-diagnostic-marker.error-underline {
-  background: var(--zeta-error-foreground);
-}
-
-.stanza-editor-minimap-diagnostic-marker.warning-underline {
-  background: var(--zeta-warning-foreground);
-}
-
-.stanza-editor-minimap-diagnostic-marker.information-underline {
-  background: var(--zeta-focus-border);
-}
-
-.stanza-editor-minimap-diagnostic-marker.hint-underline {
-  background: var(--zeta-description-foreground);
-}
-
-.stanza-editor-minimap-diagnostic-marker.diff-added {
-  background: var(--zeta-diff-editor-inserted-line-marker);
-}
-
-.stanza-editor-minimap-diagnostic-marker.diff-modified {
-  background: var(--zeta-focus-border);
-}
-
-.stanza-editor-minimap-diagnostic-marker.diff-deleted {
-  background: var(--zeta-diff-editor-removed-line-marker);
-}
-
-.stanza-editor-minimap-slider {
-  right: 0;
-  z-index: 1;
-  box-sizing: border-box;
-  min-height: 2px;
-  opacity: 0;
-  pointer-events: none;
-  background: color-mix(in srgb, var(--zeta-scrollbar-slider-background, color-mix(in srgb, currentColor 24%, transparent)) 50%, transparent);
-  transition: opacity 100ms linear, background-color 100ms linear;
-  will-change: transform;
-}
-
-.stanza-editor-minimap:hover .stanza-editor-minimap-slider,
-.stanza-editor-minimap.show-slider-always .stanza-editor-minimap-slider,
-.stanza-editor-minimap.dragging .stanza-editor-minimap-slider {
-  opacity: 1;
-}
-
-.stanza-editor-minimap:hover .stanza-editor-minimap-slider {
-  background: color-mix(in srgb, var(--zeta-scrollbar-slider-hover-background, color-mix(in srgb, currentColor 36%, transparent)) 50%, transparent);
-}
-
-.stanza-editor-minimap.dragging .stanza-editor-minimap-slider {
-  background: color-mix(in srgb, var(--zeta-scrollbar-slider-active-background, color-mix(in srgb, currentColor 48%, transparent)) 50%, transparent);
-}
-
-.stanza-editor-minimap.autohide-mouseover:not(:hover, .dragging),
-.stanza-editor-minimap.autohide-scroll:not(:hover, .dragging, .scrolling) {
-  opacity: 0;
+.monaco-editor .minimap canvas {
+	opacity: 0.9;
 }

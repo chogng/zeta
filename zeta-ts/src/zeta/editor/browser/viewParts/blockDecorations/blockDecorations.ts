@@ -1,161 +1,120 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { createFastDomNode, FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import './blockDecorations.css';
-import { h } from '../../../../base/browser/dom.js';
-import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { EditorDecorationsOverlay } from '../decorations/decorations.js';
-import { type ResolvedDecoration } from '../decorations/decorations.js';
-import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
-import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
+import { RenderingContext, RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import * as viewEvents from '../../../common/viewEvents.js';
+import { ViewContext } from '../../../common/viewModel/viewContext.js';
 
-export class EditorBlockDecorations extends EditorDynamicViewOverlay {
-	public readonly domNode: HTMLDivElement;
+export class BlockDecorations extends ViewPart {
 
-	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly decorations: EditorDecorationsOverlay;
-	private readonly blocks: FastDomNode<HTMLDivElement>[] = [];
+	public domNode: FastDomNode<HTMLElement>;
 
-	constructor(context: EditorViewContext, decorations: EditorDecorationsOverlay, host: HTMLElement) {
+	private readonly blocks: FastDomNode<HTMLElement>[] = [];
+
+	private contentWidth: number = -1;
+	private contentLeft: number = 0;
+
+	constructor(context: ViewContext) {
 		super(context);
 
-		this.decorations = decorations;
-		const domNode = h(host.ownerDocument, 'div');
-		this._register(toDisposable(() => domNode.remove()));
-		this.domNode = domNode;
-		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName('stanza-editor-block-decorations');
+		this.domNode = createFastDomNode<HTMLElement>(document.createElement('div'));
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
+		this.domNode.setClassName('blockDecorations-container');
+
+		this.update();
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
+	private update(): boolean {
+		let didChange = false;
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+		const newContentWidth = layoutInfo.contentWidth - layoutInfo.verticalScrollbarWidth;
+
+		if (this.contentWidth !== newContentWidth) {
+			this.contentWidth = newContentWidth;
+			didChange = true;
 		}
-		const layout = context.layout;
 
-		this.root.setWidth(layout.contentSize.width);
-		this.root.setHeight(layout.contentSize.height);
+		const newContentLeft = layoutInfo.contentLeft;
+		if (this.contentLeft !== newContentLeft) {
+			this.contentLeft = newContentLeft;
+			didChange = true;
+		}
 
+		return didChange;
+	}
+
+
+	// --- begin event handlers
+
+	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
+		return this.update();
+	}
+	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
+		return e.scrollTopChanged || e.scrollLeftChanged;
+	}
+	public override onDecorationsChanged(e: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+
+	public override onZonesChanged(e: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
+
+	// --- end event handlers
+	public prepareRender(ctx: RenderingContext): void {
+		// Nothing to read
+	}
+
+	public render(ctx: RestrictedRenderingContext): void {
 		let count = 0;
-		const decorations = this.decorations.visibleDecorations(overlay);
+		const decorations = ctx.getDecorationsInViewport();
 		for (const decoration of decorations) {
-			const presentation = decoration.blockDecoration;
-			if (!presentation) {
-				continue;
-			}
-
-			const geometry = resolveStanzaBlockDecorationGeometry(overlay, layout, decoration);
-			if (!geometry) {
+			if (!decoration.options.blockClassName) {
 				continue;
 			}
 
 			let block = this.blocks[count];
 			if (!block) {
-				block = new FastDomNode(h(this.domNode.ownerDocument, 'div'));
-				this.domNode.append(block.domNode);
-				this.blocks.push(block);
+				block = this.blocks[count] = createFastDomNode(document.createElement('div'));
+				this.domNode.appendChild(block);
 			}
 
-			const [paddingTop, , paddingBottom] = geometry.padding;
-			block.setClassName(`stanza-editor-block-decoration ${presentation.className}`);
-			block.domNode.dataset.decorationId = String(decoration.id);
-			block.setLeft(geometry.left);
-			block.setWidth(geometry.width);
-			block.setTop(geometry.top - paddingTop);
-			block.setHeight(geometry.bottom - geometry.top + paddingTop + paddingBottom);
+			let top: number;
+			let bottom: number;
+
+			if (decoration.options.blockIsAfterEnd) {
+				// range must be empty
+				top = ctx.getVerticalOffsetAfterLineNumber(decoration.range.endLineNumber, false);
+				bottom = ctx.getVerticalOffsetAfterLineNumber(decoration.range.endLineNumber, true);
+			} else {
+				top = ctx.getVerticalOffsetForLineNumber(decoration.range.startLineNumber, true);
+				bottom = decoration.range.isEmpty() && !decoration.options.blockDoesNotCollapse
+					? ctx.getVerticalOffsetForLineNumber(decoration.range.startLineNumber, false)
+					: ctx.getVerticalOffsetAfterLineNumber(decoration.range.endLineNumber, true);
+			}
+
+			const [paddingTop, paddingRight, paddingBottom, paddingLeft] = decoration.options.blockPadding ?? [0, 0, 0, 0];
+
+			block.setClassName('blockDecorations-block ' + decoration.options.blockClassName);
+			block.setLeft(this.contentLeft - paddingLeft);
+			block.setWidth(this.contentWidth + paddingLeft + paddingRight);
+			block.setTop(top - ctx.scrollTop - paddingTop);
+			block.setHeight(bottom - top + paddingTop + paddingBottom);
 
 			count++;
 		}
 
-		for (let index = count; index < this.blocks.length; index++) {
-			this.blocks[index]!.domNode.remove();
+		for (let i = count; i < this.blocks.length; i++) {
+			this.blocks[i].domNode.remove();
 		}
 		this.blocks.length = count;
 	}
-}
-
-interface BlockDecorationGeometry {
-	readonly top: number;
-	readonly bottom: number;
-	readonly left: number;
-	readonly width: number;
-	readonly padding: readonly [number, number, number, number];
-}
-
-function resolveStanzaBlockDecorationGeometry(
-	context: EditorOverlayContext,
-	layout: EditorViewportLayout,
-	decoration: ResolvedDecoration,
-): BlockDecorationGeometry | undefined {
-	const presentation = decoration.blockDecoration;
-	if (!presentation) return undefined;
-	const projection = context.visualLineProjection;
-	const startVisualLineIndex = firstVisualLineIndex(projection, decoration.range.startLineNumber - 1);
-	if (startVisualLineIndex === undefined) return undefined;
-
-	const lineTop = createLineTopReader(layout);
-	let top: number;
-	let bottom: number;
-	if (presentation.isAfterEnd) {
-		const endVisualLineIndex = lastVisualLineIndex(projection, decoration.range.endLineNumber - 1);
-		if (endVisualLineIndex === undefined) return undefined;
-		top = lineTop(endVisualLineIndex + 1);
-		bottom = top;
-	} else {
-		const endLogicalLineIndex = lastLogicalLineIndex(decoration);
-		const endVisualLineIndex = lastVisualLineIndex(projection, endLogicalLineIndex);
-		if (endVisualLineIndex === undefined) return undefined;
-		top = lineTop(startVisualLineIndex);
-		bottom = decoration.range.isEmpty() && !presentation.doesNotCollapse ? top : lineTop(endVisualLineIndex + 1);
-	}
-
-	const padding = presentation.padding ?? [0, 0, 0, 0];
-	const contentLeft = context.textLeft;
-	return Object.freeze({
-		top,
-		bottom,
-		left: contentLeft - padding[3],
-		width: Math.max(0, layout.contentSize.width - contentLeft) + padding[1] + padding[3],
-		padding,
-	});
-}
-
-function lastLogicalLineIndex(decoration: ResolvedDecoration): number {
-	const { startLineNumber, endLineNumber, endColumn } = decoration.range;
-	return endColumn === 1 && endLineNumber > startLineNumber ? endLineNumber - 2 : endLineNumber - 1;
-}
-
-function firstVisualLineIndex(projection: EditorVisualLineProjection, logicalLineIndex: number): number | undefined {
-	if (logicalLineIndex < 0 || logicalLineIndex >= projection.logicalLineCount) return undefined;
-	const visualLineIndex = projection.firstVisualLineIndex(logicalLineIndex);
-	return projection.lineAt(visualLineIndex)?.logicalLineIndex === logicalLineIndex ? visualLineIndex : undefined;
-}
-
-function lastVisualLineIndex(projection: EditorVisualLineProjection, logicalLineIndex: number): number | undefined {
-	const first = firstVisualLineIndex(projection, logicalLineIndex);
-	if (first === undefined) return undefined;
-	let last = first;
-	for (let visualLineIndex = first + 1; visualLineIndex < projection.visualLineCount; visualLineIndex += 1) {
-		if (projection.lineAt(visualLineIndex)?.logicalLineIndex !== logicalLineIndex) break;
-		last = visualLineIndex;
-	}
-	return last;
-}
-
-function createLineTopReader(layout: EditorViewportLayout): (visualLineIndex: number) => number {
-	const offsets = layout.relativeVerticalOffset;
-	if (offsets) {
-		return visualLineIndex => {
-			const offsetIndex = visualLineIndex - layout.renderLines.startLineIndex;
-			if (offsetIndex >= 0 && offsetIndex < offsets.length) return offsets[offsetIndex]!;
-			if (offsetIndex === offsets.length && offsets.length > 0) return offsets[offsets.length - 1]! + layout.lineHeight;
-			return layout.renderTop + offsetIndex * layout.lineHeight;
-		};
-	}
-	const paddingTop = layout.renderTop - layout.renderLines.startLineIndex * layout.lineHeight;
-	return visualLineIndex => paddingTop + visualLineIndex * layout.lineHeight;
 }

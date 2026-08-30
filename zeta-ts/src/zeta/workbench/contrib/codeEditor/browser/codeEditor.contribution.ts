@@ -72,6 +72,8 @@ registerEditorPane({
 			colorDecoratorsLimit: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsLimit),
 			defaultColorDecorators: configuration?.getValue(CodeEditorConfiguration.defaultColorDecorators),
 			formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
+			trimTrailingWhitespace: configuration?.getValue(CodeEditorConfiguration.trimTrailingWhitespace),
+			trimTrailingWhitespaceInRegexAndStrings: configuration?.getValue(CodeEditorConfiguration.trimTrailingWhitespaceInRegexAndStrings),
 			find: configuration ? {
 				seedSearchStringFromSelection: configuration.getValue(CodeEditorConfiguration.findSeedFromSelection),
 				autoFindInSelection: configuration.getValue(CodeEditorConfiguration.findAutoFindInSelection),

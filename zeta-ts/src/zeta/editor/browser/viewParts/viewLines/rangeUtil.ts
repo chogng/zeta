@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { Constants } from '../../../../base/common/uint.js';
 import { FloatHorizontalRange } from '../../view/renderingContext.js';
 import { DomReadingContext } from './domReadingContext.js';
@@ -9,15 +14,13 @@ export class RangeUtil {
 	 * because IE is buggy and constantly freezes when using a large number
 	 * of ranges and calling .detach on them
 	 */
-	private static readonly _handyReadyRanges = new WeakMap<Document, Range>();
+	private static _handyReadyRange: Range;
 
-	private static _createRange(ownerDocument: Document): Range {
-		let range = this._handyReadyRanges.get(ownerDocument);
-		if (!range) {
-			range = ownerDocument.createRange();
-			this._handyReadyRanges.set(ownerDocument, range);
+	private static _createRange(): Range {
+		if (!this._handyReadyRange) {
+			this._handyReadyRange = document.createRange();
 		}
-		return range;
+		return this._handyReadyRange;
 	}
 
 	private static _detachRange(range: Range, endNode: HTMLElement): void {
@@ -27,7 +30,7 @@ export class RangeUtil {
 	}
 
 	private static _readClientRects(startElement: Node, startOffset: number, endElement: Node, endOffset: number, endNode: HTMLElement): DOMRectList | null {
-		const range = this._createRange(endNode.ownerDocument);
+		const range = this._createRange();
 		try {
 			range.setStart(startElement, startOffset);
 			range.setEnd(endElement, endOffset);

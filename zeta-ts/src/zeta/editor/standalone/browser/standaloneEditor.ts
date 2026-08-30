@@ -11,7 +11,7 @@ import { StandaloneServices, type StandaloneServiceOverrides } from "./standalon
 type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
 	"container" | "input" | "languageId" | "model" | "languageFeaturesService" |
 	"languageConfigurationService" | "editorWorkerFactory" | "completionWorkerFactory" | "instantiationService" | "codeEditorService" |
-	"registerBeforeSave" | "formatOnSave" | "insertFinalNewLine"
+	"registerBeforeSave" | "formatOnSave"
 >;
 
 export interface IStandaloneEditorConstructionOptions extends StandaloneCodeEditorOptions {

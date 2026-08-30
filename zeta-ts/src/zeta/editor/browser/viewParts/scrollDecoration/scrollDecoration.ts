@@ -1,42 +1,88 @@
-import "./scrollDecoration.css";
-import { h } from "../../../../base/browser/dom.js";
-import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-/** Projects scroll shadows without owning the editor's scroll state. */
-export class EditorScrollDecorationViewPart extends EditorViewPart {
-	readonly domNode: HTMLDivElement;
-	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly topShadow: FastDomNode<HTMLDivElement>;
-	private readonly bottomShadow: FastDomNode<HTMLDivElement>;
+import './scrollDecoration.css';
+import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { ViewPart } from '../../view/viewPart.js';
+import { RenderingContext, RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewContext } from '../../../common/viewModel/viewContext.js';
+import * as viewEvents from '../../../common/viewEvents.js';
+import { EditorOption, RenderMinimap } from '../../../common/config/editorOptions.js';
 
-	constructor(host: HTMLElement) {
-		super();
-		const ownerDocument = host.ownerDocument;
-		const domNode = h(ownerDocument, "div");
-		this._register(toDisposable(() => domNode.remove()));
-		this.domNode = domNode;
-		this.root = new FastDomNode(this.domNode);
-		this.topShadow = new FastDomNode(h(ownerDocument, "div"));
-		this.bottomShadow = new FastDomNode(h(ownerDocument, "div"));
-		this.root.setClassName("stanza-editor-scroll-decoration");
-		this.domNode.setAttribute("aria-hidden", "true");
-		this.topShadow.setClassName("stanza-editor-scroll-decoration-shadow top");
-		this.bottomShadow.setClassName("stanza-editor-scroll-decoration-shadow bottom");
-		this.domNode.append(this.topShadow.domNode, this.bottomShadow.domNode);
+
+export class ScrollDecorationViewPart extends ViewPart {
+
+	private readonly _domNode: FastDomNode<HTMLElement>;
+	private _scrollTop: number;
+	private _width: number;
+	private _shouldShow: boolean;
+	private _useShadows: boolean;
+
+	constructor(context: ViewContext) {
+		super(context);
+
+		this._scrollTop = 0;
+		this._width = 0;
+		this._updateWidth();
+		this._shouldShow = false;
+		const options = this._context.configuration.options;
+		const scrollbar = options.get(EditorOption.scrollbar);
+		this._useShadows = scrollbar.useShadows;
+		this._domNode = createFastDomNode(document.createElement('div'));
+		this._domNode.setAttribute('role', 'presentation');
+		this._domNode.setAttribute('aria-hidden', 'true');
 	}
 
-	render(context: EditorRenderingContext): void {
-		const layout = context.layout;
-		this.root.setWidth(layout.viewportSize.width);
-		this.root.setHeight(layout.viewportSize.height);
-		this.root.setTransform(`translate3d(${layout.scrollPosition.left}px, ${layout.scrollPosition.top}px, 0)`);
-		this.topShadow.setClassName(layout.scrollPosition.top > 0
-			? "stanza-editor-scroll-decoration-shadow top visible"
-			: "stanza-editor-scroll-decoration-shadow top");
-		this.bottomShadow.setClassName(layout.scrollPosition.top < layout.maximumScrollPosition.top
-			? "stanza-editor-scroll-decoration-shadow bottom visible"
-			: "stanza-editor-scroll-decoration-shadow bottom");
+
+	private _updateShouldShow(): boolean {
+		const newShouldShow = (this._useShadows && this._scrollTop > 0);
+		if (this._shouldShow !== newShouldShow) {
+			this._shouldShow = newShouldShow;
+			return true;
+		}
+		return false;
+	}
+
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this._domNode;
+	}
+
+	private _updateWidth(): void {
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+
+		if (layoutInfo.minimap.renderMinimap === RenderMinimap.None || (layoutInfo.minimap.minimapWidth > 0 && layoutInfo.minimap.minimapLeft === 0)) {
+			this._width = layoutInfo.width;
+		} else {
+			this._width = layoutInfo.width - layoutInfo.verticalScrollbarWidth;
+		}
+	}
+
+	// --- begin event handlers
+
+	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const options = this._context.configuration.options;
+		const scrollbar = options.get(EditorOption.scrollbar);
+		this._useShadows = scrollbar.useShadows;
+		this._updateWidth();
+		this._updateShouldShow();
+		return true;
+	}
+	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
+		this._scrollTop = e.scrollTop;
+		return this._updateShouldShow();
+	}
+
+	// --- end event handlers
+
+	public prepareRender(ctx: RenderingContext): void {
+		// Nothing to read
+	}
+
+	public render(ctx: RestrictedRenderingContext): void {
+		this._domNode.setWidth(this._width);
+		this._domNode.setClassName(this._shouldShow ? 'scroll-decoration' : '');
 	}
 }

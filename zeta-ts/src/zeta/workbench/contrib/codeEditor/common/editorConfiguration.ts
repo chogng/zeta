@@ -236,6 +236,18 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, "editor.formatOnSave"),
 		setting: booleanSetting("Format on save", "Run the active language formatter before saving a file."),
 	}),
+	trimTrailingWhitespace: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: "files.trimTrailingWhitespace",
+		defaultValue: false,
+		parse: value => parseBoolean(value, "files.trimTrailingWhitespace"),
+		setting: booleanSetting("Trim trailing whitespace", "Remove trailing whitespace when saving a file."),
+	}),
+	trimTrailingWhitespaceInRegexAndStrings: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: "files.trimTrailingWhitespaceInRegexAndStrings",
+		defaultValue: true,
+		parse: value => parseBoolean(value, "files.trimTrailingWhitespaceInRegexAndStrings"),
+		setting: booleanSetting("Trim trailing whitespace in regexes and strings", "Remove trailing whitespace from multiline strings and regular expressions when saving a file."),
+	}),
 	findSeedFromSelection: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "editor.find.seedSearchStringFromSelection",
 		defaultValue: true,

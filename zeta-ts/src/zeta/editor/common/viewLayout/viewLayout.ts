@@ -1,319 +1,490 @@
-import { Emitter, type Event } from '../../../base/common/event.js';
-import { type ISize } from '../../../base/common/layout.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
-import { type TextModelChange } from '../core/textChange.js';
-import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewZoneLayout, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
-import { EditorViewportLinesLayout, type EditorViewportVerticalPadding } from './editorViewportLinesLayout.js';
-import { type EditorCustomLineHeightData } from './lineHeights.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition, EditorViewportLineSource, EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
-export type { EditorViewportVerticalPadding } from './editorViewportLinesLayout.js';
+import { Event, Emitter } from '../../../base/common/event.js';
+import { Disposable, IDisposable } from '../../../base/common/lifecycle.js';
+import { IScrollPosition, ScrollEvent, Scrollable, ScrollbarVisibility, INewScrollPosition } from '../../../base/common/scrollable.js';
+import { ConfigurationChangedEvent, EditorOption } from '../config/editorOptions.js';
+import { ScrollType } from '../editorCommon.js';
+import { IEditorConfiguration } from '../config/editorConfiguration.js';
+import { LinesLayout } from './linesLayout.js';
+import { IEditorWhitespace, IPartialViewLinesViewportData, ILineHeightChangeAccessor, IViewLayout, IViewWhitespaceViewportData, IWhitespaceChangeAccessor, Viewport } from '../viewModel.js';
+import { ContentSizeChangedEvent } from '../viewModelEventDispatcher.js';
+import { CustomLineHeightData } from './lineHeights.js';
 
-export interface EditorViewportLayout {
-	readonly modelVersion: number;
-	readonly lineHeight: number;
-	readonly viewportSize: ISize;
-	readonly contentSize: ISize;
-	readonly scrollPosition: EditorScrollPosition;
-	readonly maximumScrollPosition: EditorScrollPosition;
-	readonly visibleLines: EditorLineRange;
-	readonly renderLines: EditorLineRange;
-	readonly renderTop: number;
-	readonly relativeVerticalOffset?: readonly number[];
-	readonly viewZones?: readonly EditorViewZoneLayout[];
-}
+const SMOOTH_SCROLLING_TIME = 125;
 
-export enum EditorViewportChangeReason {
-	Model = 'model',
-	LineProjection = 'lineProjection',
-	ViewportSize = 'viewportSize',
-	ContentWidth = 'contentWidth',
-	LineHeight = 'lineHeight',
-	Scroll = 'scroll',
-	EditorViewZones = 'viewZones',
-}
+class EditorScrollDimensions {
 
-export interface EditorViewportChange {
-	readonly reason: EditorViewportChangeReason;
-	readonly layout: EditorViewportLayout;
-	readonly modelChange?: TextModelChange;
-}
+	public readonly width: number;
+	public readonly contentWidth: number;
+	public readonly scrollWidth: number;
 
-export interface EditorViewportOptions {
-	readonly lineHeight: number;
-	readonly overscanLineCount?: number;
-	readonly lineSource?: EditorViewportLineSource;
-	readonly padding?: EditorViewportVerticalPadding;
-	readonly customLineHeightData?: readonly EditorCustomLineHeightData[];
-}
+	public readonly height: number;
+	public readonly contentHeight: number;
+	public readonly scrollHeight: number;
 
-/**
- * Owns the immutable layout snapshot shared by the browser view and view-model.
- *
- * Horizontal measurement and scroll state stay here, while
- * `EditorViewportLinesLayout` owns line heights, padding, and visible/render
- * line projection for Zeta's immutable viewport snapshots.
- */
-export class EditorViewportLayoutManager extends Disposable {
-	private readonly changeEmitter = this._register(new Emitter<EditorViewportChange>());
-	private readonly lineSource: EditorViewportLineSource;
-	private readonly linesLayout: EditorViewportLinesLayout;
-	private viewportSize: ISize = Object.freeze({ width: 0, height: 0 });
-	private measuredContentWidth = 0;
-	private requestedScrollPosition: EditorScrollPosition = Object.freeze({ left: 0, top: 0 });
-	private currentLayout: EditorViewportLayout;
+	constructor(
+		width: number,
+		contentWidth: number,
+		height: number,
+		contentHeight: number,
+	) {
+		width = width | 0;
+		contentWidth = contentWidth | 0;
+		height = height | 0;
+		contentHeight = contentHeight | 0;
 
-	public readonly onDidChange: Event<EditorViewportChange> = this.changeEmitter.event;
+		if (width < 0) {
+			width = 0;
+		}
+		if (contentWidth < 0) {
+			contentWidth = 0;
+		}
 
-	public constructor(private readonly model: EditorViewportModelSource, options: EditorViewportOptions) {
-		super();
-		validateModelSource(model);
-		if (!options || typeof options !== 'object') throw new TypeError('View layout requires options');
-		const lineHeight = positiveFinite(options.lineHeight, 'lineHeight');
-		const overscanLineCount = nonNegativeSafeInteger(options.overscanLineCount ?? 2, 'overscanLineCount');
-		this.lineSource = options.lineSource ?? createTextModelLineSource(model);
-		const padding = readPadding(options.padding);
-		this.linesLayout = new EditorViewportLinesLayout(
-			this.lineSource,
-			lineHeight,
-			padding.top,
-			padding.bottom,
-			overscanLineCount,
-			options.customLineHeightData,
+		if (height < 0) {
+			height = 0;
+		}
+		if (contentHeight < 0) {
+			contentHeight = 0;
+		}
+
+		this.width = width;
+		this.contentWidth = contentWidth;
+		this.scrollWidth = Math.max(width, contentWidth);
+
+		this.height = height;
+		this.contentHeight = contentHeight;
+		this.scrollHeight = Math.max(height, contentHeight);
+	}
+
+	public equals(other: EditorScrollDimensions): boolean {
+		return (
+			this.width === other.width
+			&& this.contentWidth === other.contentWidth
+			&& this.height === other.height
+			&& this.contentHeight === other.contentHeight
 		);
-		this.currentLayout = this.createLayout();
-		this._register(model.onDidChangeContent(change => this.publish(EditorViewportChangeReason.Model, change)));
-		if (options.lineSource) {
-			this._register(this.lineSource.onDidChange(() => this.publish(EditorViewportChangeReason.LineProjection)));
+	}
+}
+
+class EditorScrollable extends Disposable {
+
+	private readonly _scrollable: Scrollable;
+	private _dimensions: EditorScrollDimensions;
+
+	public readonly onDidScroll: Event<ScrollEvent>;
+
+	private readonly _onDidContentSizeChange = this._register(new Emitter<ContentSizeChangedEvent>());
+	public readonly onDidContentSizeChange: Event<ContentSizeChangedEvent> = this._onDidContentSizeChange.event;
+
+	constructor(smoothScrollDuration: number, scheduleAtNextAnimationFrame: (callback: () => void) => IDisposable) {
+		super();
+		this._dimensions = new EditorScrollDimensions(0, 0, 0, 0);
+		this._scrollable = this._register(new Scrollable({
+			forceIntegerValues: true,
+			smoothScrollDuration,
+			scheduleAtNextAnimationFrame
+		}));
+		this.onDidScroll = this._scrollable.onScroll;
+	}
+
+	public getScrollable(): Scrollable {
+		return this._scrollable;
+	}
+
+	public setSmoothScrollDuration(smoothScrollDuration: number): void {
+		this._scrollable.setSmoothScrollDuration(smoothScrollDuration);
+	}
+
+	public validateScrollPosition(scrollPosition: INewScrollPosition): IScrollPosition {
+		return this._scrollable.validateScrollPosition(scrollPosition);
+	}
+
+	public getScrollDimensions(): EditorScrollDimensions {
+		return this._dimensions;
+	}
+
+	public setScrollDimensions(dimensions: EditorScrollDimensions): void {
+		if (this._dimensions.equals(dimensions)) {
+			return;
+		}
+
+		const oldDimensions = this._dimensions;
+		this._dimensions = dimensions;
+
+		this._scrollable.setScrollDimensions({
+			width: dimensions.width,
+			scrollWidth: dimensions.scrollWidth,
+			height: dimensions.height,
+			scrollHeight: dimensions.scrollHeight
+		}, true);
+
+		const contentWidthChanged = (oldDimensions.contentWidth !== dimensions.contentWidth);
+		const contentHeightChanged = (oldDimensions.contentHeight !== dimensions.contentHeight);
+		if (contentWidthChanged || contentHeightChanged) {
+			this._onDidContentSizeChange.fire(new ContentSizeChangedEvent(
+				oldDimensions.contentWidth, oldDimensions.contentHeight,
+				dimensions.contentWidth, dimensions.contentHeight
+			));
 		}
 	}
 
-	public get layout(): EditorViewportLayout {
-		return this.currentLayout;
+	public getFutureScrollPosition(): IScrollPosition {
+		return this._scrollable.getFutureScrollPosition();
 	}
 
-	public get lineCount(): number {
-		return this.linesLayout.lineCount;
+	public getCurrentScrollPosition(): IScrollPosition {
+		return this._scrollable.getCurrentScrollPosition();
 	}
 
-	public setViewportSize(size: ISize): EditorViewportLayout {
-		const next = readSize(size, 'viewportSize');
-		if (sizesEqual(this.viewportSize, next)) return this.currentLayout;
-		this.viewportSize = next;
-		this.publish(EditorViewportChangeReason.ViewportSize);
-		return this.currentLayout;
+	public setScrollPositionNow(update: INewScrollPosition): void {
+		this._scrollable.setScrollPositionNow(update);
 	}
 
-	public setContentWidth(width: number): EditorViewportLayout {
-		const next = nonNegativeFinite(width, 'contentWidth');
-		if (this.measuredContentWidth === next) return this.currentLayout;
-		this.measuredContentWidth = next;
-		this.publish(EditorViewportChangeReason.ContentWidth);
-		return this.currentLayout;
+	public setScrollPositionSmooth(update: INewScrollPosition): void {
+		this._scrollable.setScrollPositionSmooth(update);
 	}
 
-	public setLineHeight(lineHeight: number): EditorViewportLayout {
-		const next = positiveFinite(lineHeight, 'lineHeight');
-		if (this.linesLayout.lineHeight === next) return this.currentLayout;
-		const currentTop = this.currentLayout.scrollPosition.top;
-		const paddingTop = this.linesLayout.padding.top;
-		const nextTop = currentTop <= paddingTop
-			? currentTop
-			: paddingTop + (currentTop - paddingTop) / this.linesLayout.lineHeight * next;
-		this.linesLayout.setDefaultLineHeight(next);
-		this.requestedScrollPosition = Object.freeze({
-			left: this.currentLayout.scrollPosition.left,
-			top: nextTop,
+	public hasPendingScrollAnimation(): boolean {
+		return this._scrollable.hasPendingScrollAnimation();
+	}
+}
+
+export class ViewLayout extends Disposable implements IViewLayout {
+
+	private readonly _configuration: IEditorConfiguration;
+	private readonly _linesLayout: LinesLayout;
+	private _maxLineWidth: number;
+	private _overlayWidgetsMinWidth: number;
+
+	private readonly _scrollable: EditorScrollable;
+	public readonly onDidScroll: Event<ScrollEvent>;
+	public readonly onDidContentSizeChange: Event<ContentSizeChangedEvent>;
+
+	constructor(configuration: IEditorConfiguration, lineCount: number, customLineHeightData: CustomLineHeightData[], scheduleAtNextAnimationFrame: (callback: () => void) => IDisposable) {
+		super();
+
+		this._configuration = configuration;
+		const options = this._configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+		const padding = options.get(EditorOption.padding);
+
+		this._linesLayout = new LinesLayout(lineCount, options.get(EditorOption.lineHeight), padding.top, padding.bottom, customLineHeightData);
+		this._maxLineWidth = 0;
+		this._overlayWidgetsMinWidth = 0;
+
+		this._scrollable = this._register(new EditorScrollable(0, scheduleAtNextAnimationFrame));
+		this._configureSmoothScrollDuration();
+
+		this._scrollable.setScrollDimensions(new EditorScrollDimensions(
+			layoutInfo.contentWidth,
+			0,
+			layoutInfo.height,
+			0
+		));
+		this.onDidScroll = this._scrollable.onDidScroll;
+		this.onDidContentSizeChange = this._scrollable.onDidContentSizeChange;
+
+		this._updateHeight();
+	}
+
+
+	public getScrollable(): Scrollable {
+		return this._scrollable.getScrollable();
+	}
+
+	public onHeightMaybeChanged(): void {
+		this._updateHeight();
+	}
+
+	private _configureSmoothScrollDuration(): void {
+		this._scrollable.setSmoothScrollDuration(this._configuration.options.get(EditorOption.smoothScrolling) ? SMOOTH_SCROLLING_TIME : 0);
+	}
+
+	// ---- begin view event handlers
+
+	public onConfigurationChanged(e: ConfigurationChangedEvent): void {
+		const options = this._configuration.options;
+		if (e.hasChanged(EditorOption.lineHeight)) {
+			this._linesLayout.setDefaultLineHeight(options.get(EditorOption.lineHeight));
+		}
+		if (e.hasChanged(EditorOption.padding)) {
+			const padding = options.get(EditorOption.padding);
+			this._linesLayout.setPadding(padding.top, padding.bottom);
+		}
+		if (e.hasChanged(EditorOption.layoutInfo)) {
+			const layoutInfo = options.get(EditorOption.layoutInfo);
+			const width = layoutInfo.contentWidth;
+			const height = layoutInfo.height;
+			const scrollDimensions = this._scrollable.getScrollDimensions();
+			const contentWidth = scrollDimensions.contentWidth;
+			this._scrollable.setScrollDimensions(new EditorScrollDimensions(
+				width,
+				scrollDimensions.contentWidth,
+				height,
+				this._getContentHeight(width, height, contentWidth)
+			));
+		} else {
+			this._updateHeight();
+		}
+		if (e.hasChanged(EditorOption.smoothScrolling)) {
+			this._configureSmoothScrollDuration();
+		}
+	}
+	public onFlushed(lineCount: number, customLineHeightData: CustomLineHeightData[]): void {
+		this._linesLayout.onFlushed(lineCount, customLineHeightData);
+	}
+	public onLinesDeleted(fromLineNumber: number, toLineNumber: number): void {
+		this._linesLayout.onLinesDeleted(fromLineNumber, toLineNumber);
+	}
+	public onLinesInserted(fromLineNumber: number, toLineNumber: number): void {
+		this._linesLayout.onLinesInserted(fromLineNumber, toLineNumber);
+	}
+
+	// ---- end view event handlers
+
+	private _getHorizontalScrollbarHeight(width: number, scrollWidth: number): number {
+		const options = this._configuration.options;
+		const scrollbar = options.get(EditorOption.scrollbar);
+		if (scrollbar.horizontal === ScrollbarVisibility.Hidden) {
+			// horizontal scrollbar not visible
+			return 0;
+		}
+		if (width >= scrollWidth) {
+			// horizontal scrollbar not visible
+			return 0;
+		}
+		return scrollbar.horizontalScrollbarSize;
+	}
+
+	private _getContentHeight(width: number, height: number, contentWidth: number): number {
+		const options = this._configuration.options;
+
+		let result = this._linesLayout.getLinesTotalHeight();
+		if (options.get(EditorOption.scrollBeyondLastLine)) {
+			result += Math.max(0, height - options.get(EditorOption.lineHeight) - options.get(EditorOption.padding).bottom);
+		} else if (!options.get(EditorOption.scrollbar).ignoreHorizontalScrollbarInContentHeight) {
+			result += this._getHorizontalScrollbarHeight(width, contentWidth);
+		}
+
+		return result;
+	}
+
+	private _updateHeight(): void {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		const width = scrollDimensions.width;
+		const height = scrollDimensions.height;
+		const contentWidth = scrollDimensions.contentWidth;
+		this._scrollable.setScrollDimensions(new EditorScrollDimensions(
+			width,
+			scrollDimensions.contentWidth,
+			height,
+			this._getContentHeight(width, height, contentWidth)
+		));
+	}
+
+	// ---- Layouting logic
+
+	public getCurrentViewport(): Viewport {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		const currentScrollPosition = this._scrollable.getCurrentScrollPosition();
+		return new Viewport(
+			currentScrollPosition.scrollTop,
+			currentScrollPosition.scrollLeft,
+			scrollDimensions.width,
+			scrollDimensions.height
+		);
+	}
+
+	public getFutureViewport(): Viewport {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		const currentScrollPosition = this._scrollable.getFutureScrollPosition();
+		return new Viewport(
+			currentScrollPosition.scrollTop,
+			currentScrollPosition.scrollLeft,
+			scrollDimensions.width,
+			scrollDimensions.height
+		);
+	}
+
+	private _computeContentWidth(): number {
+		const options = this._configuration.options;
+		const maxLineWidth = this._maxLineWidth;
+		const wrappingInfo = options.get(EditorOption.wrappingInfo);
+		const fontInfo = options.get(EditorOption.fontInfo);
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+		if (wrappingInfo.isViewportWrapping) {
+			const minimap = options.get(EditorOption.minimap);
+			if (maxLineWidth > layoutInfo.contentWidth + fontInfo.typicalHalfwidthCharacterWidth) {
+				// This is a case where viewport wrapping is on, but the line extends above the viewport
+				if (minimap.enabled && minimap.side === 'right') {
+					// We need to accommodate the scrollbar width
+					return maxLineWidth + layoutInfo.verticalScrollbarWidth;
+				}
+			}
+			return maxLineWidth;
+		} else {
+			const extraHorizontalSpace = options.get(EditorOption.scrollBeyondLastColumn) * fontInfo.typicalHalfwidthCharacterWidth;
+			const whitespaceMinWidth = this._linesLayout.getWhitespaceMinWidth();
+			return Math.max(maxLineWidth + extraHorizontalSpace + layoutInfo.verticalScrollbarWidth, whitespaceMinWidth, this._overlayWidgetsMinWidth);
+		}
+	}
+
+	public setMaxLineWidth(maxLineWidth: number): void {
+		this._maxLineWidth = maxLineWidth;
+		this._updateContentWidth();
+	}
+
+	public setOverlayWidgetsMinWidth(maxMinWidth: number): void {
+		this._overlayWidgetsMinWidth = maxMinWidth;
+		this._updateContentWidth();
+	}
+
+	private _updateContentWidth(): void {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		this._scrollable.setScrollDimensions(new EditorScrollDimensions(
+			scrollDimensions.width,
+			this._computeContentWidth(),
+			scrollDimensions.height,
+			scrollDimensions.contentHeight
+		));
+
+		// The height might depend on the fact that there is a horizontal scrollbar or not
+		this._updateHeight();
+	}
+
+	// ---- view state
+
+	public saveState(): { scrollTop: number; scrollTopWithoutViewZones: number; scrollLeft: number } {
+		const currentScrollPosition = this._scrollable.getFutureScrollPosition();
+		const scrollTop = currentScrollPosition.scrollTop;
+		const firstLineNumberInViewport = this._linesLayout.getLineNumberAtOrAfterVerticalOffset(scrollTop);
+		const whitespaceAboveFirstLine = this._linesLayout.getWhitespaceAccumulatedHeightBeforeLineNumber(firstLineNumberInViewport);
+		return {
+			scrollTop: scrollTop,
+			scrollTopWithoutViewZones: scrollTop - whitespaceAboveFirstLine,
+			scrollLeft: currentScrollPosition.scrollLeft
+		};
+	}
+
+	// ----
+	public changeWhitespace(callback: (accessor: IWhitespaceChangeAccessor) => void): boolean {
+		const hadAChange = this._linesLayout.changeWhitespace(callback);
+		if (hadAChange) {
+			this.onHeightMaybeChanged();
+		}
+		return hadAChange;
+	}
+
+	public changeSpecialLineHeights(callback: (accessor: ILineHeightChangeAccessor) => void): boolean {
+		const hadAChange = this._linesLayout.changeLineHeights(callback);
+		if (hadAChange) {
+			this.onHeightMaybeChanged();
+		}
+		return hadAChange;
+	}
+
+	public getVerticalOffsetForLineNumber(lineNumber: number, includeViewZones: boolean = false): number {
+		return this._linesLayout.getVerticalOffsetForLineNumber(lineNumber, includeViewZones);
+	}
+	public getVerticalOffsetAfterLineNumber(lineNumber: number, includeViewZones: boolean = false): number {
+		return this._linesLayout.getVerticalOffsetAfterLineNumber(lineNumber, includeViewZones);
+	}
+	public getLineHeightForLineNumber(lineNumber: number): number {
+		return this._linesLayout.getLineHeightForLineNumber(lineNumber);
+	}
+	public isAfterLines(verticalOffset: number): boolean {
+		return this._linesLayout.isAfterLines(verticalOffset);
+	}
+	public isInTopPadding(verticalOffset: number): boolean {
+		return this._linesLayout.isInTopPadding(verticalOffset);
+	}
+	public isInBottomPadding(verticalOffset: number): boolean {
+		return this._linesLayout.isInBottomPadding(verticalOffset);
+	}
+
+	public getLineNumberAtVerticalOffset(verticalOffset: number): number {
+		return this._linesLayout.getLineNumberAtOrAfterVerticalOffset(verticalOffset);
+	}
+
+	public getWhitespaceAtVerticalOffset(verticalOffset: number): IViewWhitespaceViewportData | null {
+		return this._linesLayout.getWhitespaceAtVerticalOffset(verticalOffset);
+	}
+	public getLinesViewportData(): IPartialViewLinesViewportData {
+		const visibleBox = this.getCurrentViewport();
+		return this._linesLayout.getLinesViewportData(visibleBox.top, visibleBox.top + visibleBox.height);
+	}
+	public getLinesViewportDataAtScrollTop(scrollTop: number): IPartialViewLinesViewportData {
+		// do some minimal validations on scrollTop
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		if (scrollTop + scrollDimensions.height > scrollDimensions.scrollHeight) {
+			scrollTop = scrollDimensions.scrollHeight - scrollDimensions.height;
+		}
+		if (scrollTop < 0) {
+			scrollTop = 0;
+		}
+		return this._linesLayout.getLinesViewportData(scrollTop, scrollTop + scrollDimensions.height);
+	}
+	public getWhitespaceViewportData(): IViewWhitespaceViewportData[] {
+		const visibleBox = this.getCurrentViewport();
+		return this._linesLayout.getWhitespaceViewportData(visibleBox.top, visibleBox.top + visibleBox.height);
+	}
+	public getWhitespaces(): IEditorWhitespace[] {
+		return this._linesLayout.getWhitespaces();
+	}
+
+	// ----
+
+	public getContentWidth(): number {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		return scrollDimensions.contentWidth;
+	}
+	public getScrollWidth(): number {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		return scrollDimensions.scrollWidth;
+	}
+	public getContentHeight(): number {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		return scrollDimensions.contentHeight;
+	}
+	public getScrollHeight(): number {
+		const scrollDimensions = this._scrollable.getScrollDimensions();
+		return scrollDimensions.scrollHeight;
+	}
+
+	public getCurrentScrollLeft(): number {
+		const currentScrollPosition = this._scrollable.getCurrentScrollPosition();
+		return currentScrollPosition.scrollLeft;
+	}
+	public getCurrentScrollTop(): number {
+		const currentScrollPosition = this._scrollable.getCurrentScrollPosition();
+		return currentScrollPosition.scrollTop;
+	}
+
+	public validateScrollPosition(scrollPosition: INewScrollPosition): IScrollPosition {
+		return this._scrollable.validateScrollPosition(scrollPosition);
+	}
+
+	public setScrollPosition(position: INewScrollPosition, type: ScrollType): void {
+		if (type === ScrollType.Immediate) {
+			this._scrollable.setScrollPositionNow(position);
+		} else {
+			this._scrollable.setScrollPositionSmooth(position);
+		}
+	}
+
+	public hasPendingScrollAnimation(): boolean {
+		return this._scrollable.hasPendingScrollAnimation();
+	}
+
+	public deltaScrollNow(deltaScrollLeft: number, deltaScrollTop: number): void {
+		const currentScrollPosition = this._scrollable.getCurrentScrollPosition();
+		this._scrollable.setScrollPositionNow({
+			scrollLeft: currentScrollPosition.scrollLeft + deltaScrollLeft,
+			scrollTop: currentScrollPosition.scrollTop + deltaScrollTop
 		});
-		this.publish(EditorViewportChangeReason.LineHeight);
-		return this.currentLayout;
 	}
-
-	public changeLineHeights(callback: (accessor: EditorLineHeightChangeAccessor) => void): EditorViewportLayout {
-		if (!this.linesLayout.changeLineHeights(callback)) return this.currentLayout;
-		this.publish(EditorViewportChangeReason.LineHeight);
-		return this.currentLayout;
-	}
-
-	public addViewZone(afterLineIndex: number, heightInPixels: number, ordinal?: number): string {
-		const id = this.linesLayout.addViewZone(afterLineIndex, heightInPixels, ordinal);
-		this.publish(EditorViewportChangeReason.EditorViewZones);
-		return id;
-	}
-
-	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number, ordinal?: number): EditorViewportLayout {
-		if (!this.linesLayout.changeViewZone(id, afterLineIndex, heightInPixels, ordinal)) return this.currentLayout;
-		this.publish(EditorViewportChangeReason.EditorViewZones);
-		return this.currentLayout;
-	}
-
-	public removeViewZone(id: string): EditorViewportLayout {
-		if (!this.linesLayout.removeViewZone(id)) return this.currentLayout;
-		this.publish(EditorViewportChangeReason.EditorViewZones);
-		return this.currentLayout;
-	}
-
-	public getVerticalOffsetForLineIndex(lineIndex: number): number {
-		return this.linesLayout.getVerticalOffsetForLineIndex(lineIndex);
-	}
-
-	public getLineIndexAtVerticalOffset(verticalOffset: number): number {
-		return this.linesLayout.getLineNumberAtVerticalOffset(verticalOffset);
-	}
-
-	public getViewZoneLayout(id: string): EditorViewZoneLayout | undefined {
-		return this.linesLayout.getViewZoneLayout(id);
-	}
-
-	public setScrollPosition(position: EditorScrollPosition): EditorViewportLayout {
-		const next = readScrollPosition(position);
-		if (scrollPositionsEqual(this.requestedScrollPosition, next)) return this.currentLayout;
-		this.requestedScrollPosition = next;
-		this.publish(EditorViewportChangeReason.Scroll);
-		return this.currentLayout;
-	}
-
-	private publish(reason: EditorViewportChangeReason, modelChange?: TextModelChange): void {
-		const next = this.createLayout();
-		this.requestedScrollPosition = next.scrollPosition;
-		if (layoutsEqual(this.currentLayout, next)) return;
-		this.currentLayout = next;
-		this.changeEmitter.fire(Object.freeze({ reason, layout: next, modelChange }));
-	}
-
-	private createLayout(): EditorViewportLayout {
-		const contentSize = Object.freeze({
-			width: Math.max(this.viewportSize.width, this.measuredContentWidth),
-			height: Math.max(this.viewportSize.height, this.linesLayout.getLinesTotalHeight()),
-		});
-		const maximumScrollPosition = Object.freeze({
-			left: Math.max(0, contentSize.width - this.viewportSize.width),
-			top: Math.max(0, contentSize.height - this.viewportSize.height),
-		});
-		const scrollPosition = Object.freeze({
-			left: clamp(this.requestedScrollPosition.left, 0, maximumScrollPosition.left),
-			top: clamp(this.requestedScrollPosition.top, 0, maximumScrollPosition.top),
-		});
-		const viewportData = this.linesLayout.getLinesViewportData(scrollPosition.top, this.viewportSize.height);
-		const viewZones = this.linesLayout.getViewZoneLayouts();
-		return Object.freeze({
-			modelVersion: this.model.version,
-			lineHeight: this.linesLayout.lineHeight,
-			viewportSize: this.viewportSize,
-			contentSize,
-			scrollPosition,
-			maximumScrollPosition,
-			visibleLines: viewportData.visibleLines,
-			renderLines: viewportData.renderLines,
-			renderTop: viewportData.renderTop,
-			...(viewZones.length > 0 ? {
-				relativeVerticalOffset: viewportData.relativeVerticalOffset,
-				viewZones,
-			} : {}),
-		});
-	}
-}
-
-/** Creates the default one-row-per-model-line source used by an unwrapped view. */
-function createTextModelLineSource(model: EditorViewportModelSource): EditorViewportLineSource {
-	validateModelSource(model);
-	return Object.freeze({
-		get lineCount(): number {
-			return model.lineCount;
-		},
-		onDidChange: (listener: () => void) => model.onDidChangeContent(() => listener()),
-	});
-}
-
-function validateModelSource(model: EditorViewportModelSource): void {
-	if (!model || typeof model !== 'object' || typeof model.onDidChangeContent !== 'function') throw new TypeError('View layout requires a model source');
-	if (!isPositiveSafeInteger(model.lineCount)) throw new RangeError('View layout model line count must be a positive safe integer');
-	if (!isNonNegativeSafeInteger(model.version)) throw new RangeError('View layout model version must be a non-negative safe integer');
-}
-
-function readPadding(padding: EditorViewportVerticalPadding | undefined): EditorViewportVerticalPadding {
-	return Object.freeze({
-		top: nonNegativeFinite(padding?.top ?? 0, 'padding.top'),
-		bottom: nonNegativeFinite(padding?.bottom ?? 0, 'padding.bottom'),
-	});
-}
-
-function readSize(size: ISize, name: string): ISize {
-	if (!size || typeof size !== 'object') throw new TypeError(`${name} must be a size`);
-	return Object.freeze({
-		width: nonNegativeFinite(size.width, `${name}.width`),
-		height: nonNegativeFinite(size.height, `${name}.height`),
-	});
-}
-
-function readScrollPosition(position: EditorScrollPosition): EditorScrollPosition {
-	if (!position || typeof position !== 'object') throw new TypeError('scrollPosition must be an object');
-	return Object.freeze({
-		left: finite(position.left, 'scrollPosition.left'),
-		top: finite(position.top, 'scrollPosition.top'),
-	});
-}
-
-function positiveFinite(value: number, name: string): number {
-	const result = finite(value, name);
-	if (result <= 0) throw new RangeError(`${name} must be positive`);
-	return result;
-}
-
-function nonNegativeFinite(value: number, name: string): number {
-	const result = finite(value, name);
-	if (result < 0) throw new RangeError(`${name} must be non-negative`);
-	return result;
-}
-
-function finite(value: number, name: string): number {
-	if (!isFiniteNumber(value)) throw new RangeError(`${name} must be finite`);
-	return value;
-}
-
-function nonNegativeSafeInteger(value: number, name: string): number {
-	if (!isNonNegativeSafeInteger(value)) throw new RangeError(`${name} must be a non-negative safe integer`);
-	return value;
-}
-
-function sizesEqual(left: ISize, right: ISize): boolean {
-	return left.width === right.width && left.height === right.height;
-}
-
-function scrollPositionsEqual(left: EditorScrollPosition, right: EditorScrollPosition): boolean {
-	return left.left === right.left && left.top === right.top;
-}
-
-function layoutsEqual(left: EditorViewportLayout, right: EditorViewportLayout): boolean {
-	return left.modelVersion === right.modelVersion &&
-		left.lineHeight === right.lineHeight &&
-		sizesEqual(left.viewportSize, right.viewportSize) &&
-		sizesEqual(left.contentSize, right.contentSize) &&
-		scrollPositionsEqual(left.scrollPosition, right.scrollPosition) &&
-		scrollPositionsEqual(left.maximumScrollPosition, right.maximumScrollPosition) &&
-		lineRangesEqual(left.visibleLines, right.visibleLines) &&
-		lineRangesEqual(left.renderLines, right.renderLines) &&
-		left.renderTop === right.renderTop &&
-		numberArraysEqual(left.relativeVerticalOffset, right.relativeVerticalOffset) &&
-		viewZonesEqual(left.viewZones, right.viewZones);
-}
-
-function numberArraysEqual(left: readonly number[] | undefined, right: readonly number[] | undefined): boolean {
-	if (left === right) return true;
-	if (!left || !right || left.length !== right.length) return false;
-	return left.every((value, index) => value === right[index]);
-}
-
-function viewZonesEqual(left: readonly EditorViewZoneLayout[] | undefined, right: readonly EditorViewZoneLayout[] | undefined): boolean {
-	if (left === right) return true;
-	if (!left || !right || left.length !== right.length) return false;
-	return left.every((zone, index) => {
-		const candidate = right[index];
-		return candidate !== undefined && zone.id === candidate.id && zone.afterLineIndex === candidate.afterLineIndex && zone.top === candidate.top && zone.heightInPixels === candidate.heightInPixels;
-	});
-}
-
-function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean {
-	return left.startLineIndex === right.startLineIndex && left.endLineIndexExclusive === right.endLineIndexExclusive;
 }

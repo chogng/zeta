@@ -1,126 +1,125 @@
-import "./linesDecorations.css";
-import { h, reset } from '../../../../base/browser/dom.js';
-import { appendIcon } from '../../../../base/browser/ui/icon/icon.js';
-import { EditorDecorationsOverlay } from "../decorations/decorations.js";
-import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
-import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorations.js";
-import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { ViewPartRows } from '../../view/viewLayer.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-export interface LinesDecorationLaneLayout {
-	readonly owner: string;
-	readonly left: number;
-	readonly width: number;
-}
+import './linesDecorations.css';
+import { DecorationToRender, DedupOverlay } from '../glyphMargin/glyphMargin.js';
+import { RenderingContext } from '../../view/renderingContext.js';
+import { ViewContext } from '../../../common/viewModel/viewContext.js';
+import * as viewEvents from '../../../common/viewEvents.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 
-/** Owns line-side decoration classes and tooltips for rendered logical lines. */
-export class EditorLinesDecorationsOverlay extends EditorDynamicViewOverlay {
-	public readonly domNode: HTMLElement;
-	private readonly decorations: EditorDecorationsOverlay;
-	private readonly lanes: ReadonlyMap<string, LinesDecorationLaneLayout>;
-	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, decorations: EditorDecorationsOverlay, sources: readonly DecorationSource[]) {
-		super(context);
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-lines-decorations-layer', 'stanza-editor-line-lines-decorations'));
-		this.domNode = this.rows.domNode;
-		this.decorations = decorations;
-		this.lanes = new Map(collectLinesDecorationLanes(sources).map(lane => [lane.owner, lane]));
+export class LinesDecorationsOverlay extends DedupOverlay {
+
+	private readonly _context: ViewContext;
+
+	private _decorationsLeft: number;
+	private _decorationsWidth: number;
+	private _renderResult: string[] | null;
+
+	constructor(context: ViewContext) {
+		super();
+		this._context = context;
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+		this._decorationsLeft = layoutInfo.decorationsLeft;
+		this._decorationsWidth = layoutInfo.decorationsWidth;
+		this._renderResult = null;
+		this._context.addEventHandler(this);
 	}
 
-	public render(context: EditorRenderingContext): void {
-		const overlay = context.overlay;
-		if (!overlay) {
-			return;
-		}
-		projectStanzaLinesDecorations(
-			overlay,
-			this.decorations.visibleDecorations(overlay),
-			this.lanes,
-			context.layout.scrollPosition.left,
-			this.rows.render(context),
-		);
-	}
-}
-
-/** Projects line-side decoration classes into the currently rendered rows. */
-function projectStanzaLinesDecorations(
-	context: EditorOverlayContext,
-	decorations: readonly ResolvedDecoration[],
-	lanes: ReadonlyMap<string, LinesDecorationLaneLayout>,
-	scrollLeft: number,
-	rows: ReadonlyMap<number, HTMLElement>,
-): void {
-	const decorationsByLogicalLine = new Map<number, ResolvedDecoration[]>();
-	for (const decoration of decorations) {
-		if (!decoration.linesDecoration) continue;
-		const startLineIndex = decoration.range.startLineNumber - 1;
-		const endLineIndex = decoration.range.endColumn === 1 && decoration.range.endLineNumber - 1 > startLineIndex
-			? decoration.range.endLineNumber - 2
-			: decoration.range.endLineNumber - 1;
-		for (let lineIndex = startLineIndex; lineIndex <= endLineIndex; lineIndex += 1) {
-			const lineDecorations = decorationsByLogicalLine.get(lineIndex) ?? [];
-			lineDecorations.push(decoration);
-			decorationsByLogicalLine.set(lineIndex, lineDecorations);
-		}
+	public override dispose(): void {
+		this._context.removeEventHandler(this);
+		this._renderResult = null;
+		super.dispose();
 	}
 
-	for (const row of rows.values()) reset(row);
-	for (const [visualLineIndex, row] of rows) {
-		const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
-		if (!visualLine || !visualLine.firstForLogicalLine) continue;
-		for (const decoration of decorationsByLogicalLine.get(visualLine.logicalLineIndex) ?? []) {
-			const presentation = decoration.linesDecoration!;
-			const lane = lanes.get(presentation.owner);
-			if (!lane) throw new RangeError(`Lines decoration owner '${presentation.owner}' has no layout lane`);
-			const classes = [
-				presentation.className,
-				visualLine.logicalLineIndex === decoration.range.startLineNumber - 1 ? presentation.firstLineClassName : undefined,
-			].filter((className): className is string => className !== undefined);
-			const element = presentation.icon ? h(context.ownerDocument, 'button') : h(context.ownerDocument, 'div');
-			if (presentation.icon) {
-				const button = element as HTMLButtonElement;
-				button.type = 'button';
-				button.setAttribute('aria-label', presentation.ariaLabel!);
-				if (presentation.expanded === undefined) button.removeAttribute('aria-expanded');
-				else button.setAttribute('aria-expanded', String(presentation.expanded));
-			} else {
-				element.setAttribute('aria-hidden', 'true');
+	// --- begin event handlers
+
+	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+		this._decorationsLeft = layoutInfo.decorationsLeft;
+		this._decorationsWidth = layoutInfo.decorationsWidth;
+		return true;
+	}
+	public override onDecorationsChanged(e: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+	public override onFlushed(e: viewEvents.ViewFlushedEvent): boolean {
+		return true;
+	}
+	public override onLinesChanged(e: viewEvents.ViewLinesChangedEvent): boolean {
+		return true;
+	}
+	public override onLinesDeleted(e: viewEvents.ViewLinesDeletedEvent): boolean {
+		return true;
+	}
+	public override onLinesInserted(e: viewEvents.ViewLinesInsertedEvent): boolean {
+		return true;
+	}
+	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
+		return e.scrollTopChanged;
+	}
+	public override onZonesChanged(e: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
+
+	// --- end event handlers
+
+	protected _getDecorations(ctx: RenderingContext): DecorationToRender[] {
+		const decorations = ctx.getDecorationsInViewport();
+		const r: DecorationToRender[] = [];
+		let rLen = 0;
+		for (let i = 0, len = decorations.length; i < len; i++) {
+			const d = decorations[i];
+			const linesDecorationsClassName = d.options.linesDecorationsClassName;
+			const zIndex = d.options.zIndex;
+			if (linesDecorationsClassName) {
+				r[rLen++] = new DecorationToRender(d.range.startLineNumber, d.range.endLineNumber, linesDecorationsClassName, d.options.linesDecorationsTooltip ?? null, zIndex);
 			}
-			element.className = 'stanza-editor-line-decoration';
-			for (const className of classes.flatMap(value => value.trim().split(/\s+/u))) element.classList.add(className);
-			element.dataset.decorationId = String(decoration.id);
-			element.dataset.decorationOwner = presentation.owner;
-			element.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
-			element.style.setProperty('--stanza-editor-line-decoration-offset', `${scrollLeft + lane.left}px`);
-			element.style.setProperty('--stanza-editor-line-decoration-width', `${lane.width}px`);
-			const tooltip = presentation.tooltip ?? decoration.hoverText;
-			if (tooltip !== undefined) element.title = tooltip;
-			if (presentation.icon) {
-				appendIcon(presentation.icon, element);
-				element.dataset.iconId = presentation.icon.id;
+			const firstLineDecorationClassName = d.options.firstLineDecorationClassName;
+			if (firstLineDecorationClassName) {
+				r[rLen++] = new DecorationToRender(d.range.startLineNumber, d.range.startLineNumber, firstLineDecorationClassName, d.options.linesDecorationsTooltip ?? null, zIndex);
 			}
-			row.append(element);
 		}
+		return r;
 	}
-}
 
-export function collectLinesDecorationLanes(sources: readonly DecorationSource[]): readonly LinesDecorationLaneLayout[] {
-	const owners = new Set<string>();
-	const lanes: LinesDecorationLaneLayout[] = [];
-	let left = 0;
-	for (const source of sources) {
-		for (const definition of source.linesDecorationLanes) {
-			if (owners.has(definition.owner)) throw new RangeError(`Duplicate lines decoration owner '${definition.owner}'`);
-			owners.add(definition.owner);
-			lanes.push(Object.freeze({ owner: definition.owner, left, width: definition.width }));
-			left += definition.width;
+	public prepareRender(ctx: RenderingContext): void {
+		const visibleStartLineNumber = ctx.visibleRange.startLineNumber;
+		const visibleEndLineNumber = ctx.visibleRange.endLineNumber;
+		const toRender = this._render(visibleStartLineNumber, visibleEndLineNumber, this._getDecorations(ctx));
+
+		const left = this._decorationsLeft.toString();
+		const width = this._decorationsWidth.toString();
+		const common = '" style="left:' + left + 'px;width:' + width + 'px;"></div>';
+
+		const output: string[] = [];
+		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber++) {
+			const lineIndex = lineNumber - visibleStartLineNumber;
+			const decorations = toRender[lineIndex].getDecorations();
+			let lineOutput = '';
+			for (const decoration of decorations) {
+				let addition = '<div class="cldr ' + decoration.className;
+				if (decoration.tooltip !== null) {
+					addition += '" title="' + decoration.tooltip; // The tooltip is already escaped.
+				}
+				addition += common;
+				lineOutput += addition;
+			}
+			output[lineIndex] = lineOutput;
 		}
-	}
-	return Object.freeze(lanes);
-}
 
-export function linesDecorationsWidth(sources: readonly DecorationSource[]): number {
-	return collectLinesDecorationLanes(sources).reduce((width, lane) => width + lane.width, 0);
+		this._renderResult = output;
+	}
+
+	public render(startLineNumber: number, lineNumber: number): string {
+		if (!this._renderResult) {
+			return '';
+		}
+		return this._renderResult[lineNumber - startLineNumber];
+	}
 }

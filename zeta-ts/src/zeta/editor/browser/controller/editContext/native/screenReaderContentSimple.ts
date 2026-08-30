@@ -1,94 +1,215 @@
-import { addDisposableListener, h, text as createText } from "../../../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { clampScreenReaderOffset, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, type NativeScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-/** Plain-text screen-reader projection used by the native EditContext. */
-export class EditorSimpleScreenReaderContent extends Disposable implements NativeScreenReaderContent {
-	readonly element: HTMLDivElement;
-	protected state: ScreenReaderContentState | undefined;
+import { addDisposableListener, getActiveWindow } from '../../../../../base/browser/dom.js';
+import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { EditorOption, IComputedEditorOptions } from '../../../../common/config/editorOptions.js';
+import { EndOfLineSequence } from '../../../../common/model.js';
+import { ViewContext } from '../../../../common/viewModel/viewContext.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { SimplePagedScreenReaderStrategy, ISimpleScreenReaderContentState } from '../screenReaderUtils.js';
+import { PositionOffsetTransformer } from '../../../../common/core/text/positionToOffset.js';
+import { Disposable, IDisposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
+import { IME } from '../../../../../base/common/ime.js';
+import { ViewController } from '../../../view/viewController.js';
+import { IScreenReaderContent } from './screenReaderUtils.js';
 
-	constructor(private readonly host: HTMLElement) {
+export class SimpleScreenReaderContent extends Disposable implements IScreenReaderContent {
+
+	private readonly _selectionChangeListener = this._register(new MutableDisposable());
+
+	private _accessibilityPageSize: number = 1;
+	private _ignoreSelectionChangeTime: number = 0;
+
+	private _state: ISimpleScreenReaderContentState | undefined;
+	private _strategy: SimplePagedScreenReaderStrategy = new SimplePagedScreenReaderStrategy();
+
+	constructor(
+		private readonly _domNode: FastDomNode<HTMLElement>,
+		private readonly _context: ViewContext,
+		private readonly _viewController: ViewController,
+		@IAccessibilityService private readonly _accessibilityService: IAccessibilityService
+	) {
 		super();
-		this.element = h(host.ownerDocument, "div");
-		this.element.className = "stanza-native-screen-reader-content";
-		this.element.setAttribute("aria-hidden", "true");
-		host.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
-		this._register(addDisposableListener(this.element, "mousedown", event => event.preventDefault()));
+		this.onConfigurationChanged(this._context.configuration.options);
 	}
 
-	getState(): ScreenReaderContentState | undefined {
-		return this.state;
+	public updateScreenReaderContent(primarySelection: Selection): void {
+		const domNode = this._domNode.domNode;
+		const focusedElement = getActiveWindow().document.activeElement;
+		if (!focusedElement || focusedElement !== domNode) {
+			return;
+		}
+		const isScreenReaderOptimized = this._accessibilityService.isScreenReaderOptimized();
+		if (isScreenReaderOptimized) {
+			this._state = this._getScreenReaderContentState(primarySelection);
+			if (domNode.textContent !== this._state.value) {
+				this._setIgnoreSelectionChangeTime('setValue');
+				domNode.textContent = this._state.value;
+			}
+			const selection = getActiveWindow().document.getSelection();
+			if (!selection) {
+				return;
+			}
+			const data = this._getScreenReaderRange(this._state.selectionStart, this._state.selectionEnd);
+			if (!data) {
+				return;
+			}
+			this._setIgnoreSelectionChangeTime('setRange');
+			selection.setBaseAndExtent(
+				data.anchorNode,
+				data.anchorOffset,
+				data.focusNode,
+				data.focusOffset
+			);
+		} else {
+			this._state = undefined;
+			this._setIgnoreSelectionChangeTime('setValue');
+			this._domNode.domNode.textContent = '';
+		}
 	}
 
-	sync(state: ScreenReaderContentState): void {
-		this.state = state;
-		this.renderText(state.text, state);
-		this.element.setAttribute("aria-hidden", "false");
-		this.setDomSelection(state);
+	public updateScrollTop(primarySelection: Selection): void {
+		if (!this._state) {
+			return;
+		}
+		const viewLayout = this._context.viewModel.viewLayout;
+		const stateStartLineNumber = this._state.startPositionWithinEditor.lineNumber;
+		const verticalOffsetOfStateStartLineNumber = viewLayout.getVerticalOffsetForLineNumber(stateStartLineNumber);
+		const verticalOffsetOfPositionLineNumber = viewLayout.getVerticalOffsetForLineNumber(primarySelection.positionLineNumber);
+		this._domNode.domNode.scrollTop = verticalOffsetOfPositionLineNumber - verticalOffsetOfStateStartLineNumber;
 	}
 
-	clear(): void {
-		this.state = undefined;
-		this.element.replaceChildren();
-		this.element.scrollTop = 0;
-		this.resetLayout();
-		this.element.setAttribute("aria-hidden", "true");
+	public onFocusChange(newFocusValue: boolean): void {
+		if (newFocusValue) {
+			this._selectionChangeListener.value = this._setSelectionChangeListener();
+		} else {
+			this._selectionChangeListener.value = undefined;
+		}
 	}
 
-	layout(layout: ScreenReaderContentLayout): void {
-		this.element.style.left = `${layout.left}px`;
-		this.element.style.top = `${layout.top}px`;
-		this.element.style.width = `${layout.width}px`;
-		this.element.style.height = `${layout.height}px`;
-		this.element.style.lineHeight = `${layout.lineHeight}px`;
-		this.element.scrollTop = Math.max(0, layout.scrollTop);
+	public onConfigurationChanged(options: IComputedEditorOptions): void {
+		this._accessibilityPageSize = options.get(EditorOption.accessibilityPageSize);
 	}
 
-	readSelection(): { readonly anchorOffset: number; readonly activeOffset: number } | undefined {
-		const state = this.state;
-		if (!state) return undefined;
-		const selection = this.host.ownerDocument.getSelection();
-		if (!selection) return undefined;
-		const anchorOffset = domOffsetAtPoint(this.element, selection.anchorNode, selection.anchorOffset);
-		const activeOffset = domOffsetAtPoint(this.element, selection.focusNode, selection.focusOffset);
-		if (anchorOffset === undefined || activeOffset === undefined) return undefined;
-		const backward = selection.direction === "backward";
+	public onWillCut(): void {
+		this._setIgnoreSelectionChangeTime('onCut');
+	}
+
+	public onWillPaste(): void {
+		this._setIgnoreSelectionChangeTime('onWillPaste');
+	}
+
+	// --- private methods
+
+	public _setIgnoreSelectionChangeTime(reason: string): void {
+		this._ignoreSelectionChangeTime = Date.now();
+	}
+
+	private _setSelectionChangeListener(): IDisposable {
+		// See https://github.com/microsoft/vscode/issues/27216 and https://github.com/microsoft/vscode/issues/98256
+		// When using a Braille display or NVDA for example, it is possible for users to reposition the
+		// system caret. This is reflected in Chrome as a `selectionchange` event and needs to be reflected within the editor.
+
+		// `selectionchange` events often come multiple times for a single logical change
+		// so throttle multiple `selectionchange` events that burst in a short period of time.
+		let previousSelectionChangeEventTime = 0;
+		return addDisposableListener(this._domNode.domNode.ownerDocument, 'selectionchange', () => {
+			const isScreenReaderOptimized = this._accessibilityService.isScreenReaderOptimized();
+			if (!this._state || !isScreenReaderOptimized || !IME.enabled) {
+				return;
+			}
+			const activeElement = getActiveWindow().document.activeElement;
+			const isFocused = activeElement === this._domNode.domNode;
+			if (!isFocused) {
+				return;
+			}
+			const selection = getActiveWindow().document.getSelection();
+			if (!selection) {
+				return;
+			}
+			const rangeCount = selection.rangeCount;
+			if (rangeCount === 0) {
+				return;
+			}
+			const range = selection.getRangeAt(0);
+
+			const now = Date.now();
+			const delta1 = now - previousSelectionChangeEventTime;
+			previousSelectionChangeEventTime = now;
+			if (delta1 < 5) {
+				// received another `selectionchange` event within 5ms of the previous `selectionchange` event
+				// => ignore it
+				return;
+			}
+			const delta2 = now - this._ignoreSelectionChangeTime;
+			this._ignoreSelectionChangeTime = 0;
+			if (delta2 < 100) {
+				// received a `selectionchange` event within 100ms since we touched the hidden div
+				// => ignore it, since we caused it
+				return;
+			}
+
+			this._viewController.setSelection(this._getEditorSelectionFromDomRange(this._context, this._state, selection.direction, range));
+		});
+	}
+
+	private _getScreenReaderContentState(primarySelection: Selection): ISimpleScreenReaderContentState {
+		const state = this._strategy.fromEditorSelection(
+			this._context.viewModel,
+			primarySelection,
+			this._accessibilityPageSize,
+			this._accessibilityService.getAccessibilitySupport() === AccessibilitySupport.Unknown
+		);
+		const endPosition = this._context.viewModel.model.getPositionAt(Infinity);
+		let value = state.value;
+		if (endPosition.column === 1 && primarySelection.getEndPosition().equals(endPosition)) {
+			value += '\n';
+		}
+		state.value = value;
+		return state;
+	}
+
+	private _getScreenReaderRange(selectionOffsetStart: number, selectionOffsetEnd: number): { anchorNode: Node; anchorOffset: number; focusNode: Node; focusOffset: number } | undefined {
+		const textContent = this._domNode.domNode.firstChild;
+		if (!textContent) {
+			return;
+		}
+		const range = new globalThis.Range();
+		range.setStart(textContent, selectionOffsetStart);
+		range.setEnd(textContent, selectionOffsetEnd);
 		return {
-			anchorOffset: modelOffsetAtContentOffset(state, clampScreenReaderOffset(anchorOffset, state.text.length), backward ? "end" : "start"),
-			activeOffset: modelOffsetAtContentOffset(state, clampScreenReaderOffset(activeOffset, state.text.length), backward ? "start" : "end"),
+			anchorNode: textContent,
+			anchorOffset: selectionOffsetStart,
+			focusNode: textContent,
+			focusOffset: selectionOffsetEnd
 		};
 	}
 
-	setIgnoreSelectionChange(): void {
-		this.selectionChangeIgnoreUntil = Date.now() + 100;
+	private _getEditorSelectionFromDomRange(context: ViewContext, state: ISimpleScreenReaderContentState, direction: string, range: globalThis.Range): Selection {
+		const viewModel = context.viewModel;
+		const model = viewModel.model;
+		const coordinatesConverter = viewModel.coordinatesConverter;
+		const modelScreenReaderContentStartPositionWithinEditor = coordinatesConverter.convertViewPositionToModelPosition(state.startPositionWithinEditor);
+		const offsetOfStartOfScreenReaderContent = model.getOffsetAt(modelScreenReaderContentStartPositionWithinEditor);
+		let offsetOfSelectionStart = range.startOffset + offsetOfStartOfScreenReaderContent;
+		let offsetOfSelectionEnd = range.endOffset + offsetOfStartOfScreenReaderContent;
+		const modelUsesCRLF = model.getEndOfLineSequence() === EndOfLineSequence.CRLF;
+		if (modelUsesCRLF) {
+			const screenReaderContentText = state.value;
+			const offsetTransformer = new PositionOffsetTransformer(screenReaderContentText);
+			const positionOfStartWithinText = offsetTransformer.getPosition(range.startOffset);
+			const positionOfEndWithinText = offsetTransformer.getPosition(range.endOffset);
+			offsetOfSelectionStart += positionOfStartWithinText.lineNumber - 1;
+			offsetOfSelectionEnd += positionOfEndWithinText.lineNumber - 1;
+		}
+		const positionOfSelectionStart = model.getPositionAt(offsetOfSelectionStart);
+		const positionOfSelectionEnd = model.getPositionAt(offsetOfSelectionEnd);
+		const selectionStart = direction === 'forward' ? positionOfSelectionStart : positionOfSelectionEnd;
+		const selectionEnd = direction === 'forward' ? positionOfSelectionEnd : positionOfSelectionStart;
+		return Selection.fromPositions(selectionStart, selectionEnd);
 	}
-
-	shouldIgnoreSelectionChange(): boolean {
-		return Date.now() < this.selectionChangeIgnoreUntil;
-	}
-
-	protected renderText(text: string, _state: ScreenReaderContentState): void {
-		if (this.element.textContent === text && this.element.firstChild?.nodeType === 3) return;
-		this.element.replaceChildren(createText(this.element.ownerDocument, text));
-	}
-
-	protected setDomSelection(state: ScreenReaderContentState): void {
-		const selection = this.host.ownerDocument.getSelection();
-		const anchor = domPointAtOffset(this.element, state.anchorOffset);
-		const active = domPointAtOffset(this.element, state.activeOffset);
-		if (!selection || !anchor || !active) return;
-		this.setIgnoreSelectionChange();
-		selection.setBaseAndExtent(anchor.node, anchor.offset, active.node, active.offset);
-	}
-
-	private resetLayout(): void {
-		this.element.style.removeProperty("left");
-		this.element.style.removeProperty("top");
-		this.element.style.removeProperty("width");
-		this.element.style.removeProperty("height");
-		this.element.style.removeProperty("line-height");
-	}
-
-	private selectionChangeIgnoreUntil = 0;
 }

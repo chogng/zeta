@@ -1,17 +1,18 @@
-.stanza-editor-line-lines-decorations {
-	position: relative;
-	box-sizing: border-box;
-	min-width: 100%;
-  z-index: 5;
-  pointer-events: none;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+.monaco-editor .lines-decorations {
+	position: absolute;
+	top: 0;
+	background: white;
 }
 
-.stanza-editor-line-decoration {
-  position: absolute;
-  top: 0;
-  left: calc(var(--stanza-editor-line-decorations-left) + var(--stanza-editor-line-decoration-offset, 0px));
-  width: var(--stanza-editor-line-decoration-width, 4px);
-  height: 100%;
-  box-sizing: border-box;
-  pointer-events: none;
+/*
+	Keeping name short for faster parsing.
+	cldr = core lines decorations rendering (div)
+*/
+.monaco-editor .margin-view-overlays .cldr {
+	position: absolute;
+	height: 100%;
 }

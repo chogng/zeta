@@ -1,38 +1,33 @@
-.stanza-editor-line-margin {
-  position: absolute;
-  left: 0;
-  z-index: 4;
-  display: block;
-  box-sizing: border-box;
-  width: var(--stanza-editor-gutter-width);
-  height: 100%;
-  user-select: none;
-  background: var(--zeta-editor-background);
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.monaco-editor .margin-view-overlays .line-numbers {
+	bottom: 0;
+	font-variant-numeric: tabular-nums;
+	position: absolute;
+	text-align: right;
+	display: inline-block;
+	vertical-align: middle;
+	box-sizing: border-box;
+	cursor: default;
 }
 
-.line-numbers {
-  position: absolute;
-  left: var(--stanza-editor-line-numbers-left);
-  display: block;
-  box-sizing: border-box;
-  width: var(--stanza-editor-line-numbers-width);
-  height: 100%;
-  padding: 0 8px;
-  color: var(--zeta-description-foreground);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+.monaco-editor .relative-current-line-number {
+	text-align: left;
+	display: inline-block;
+	width: 100%;
 }
 
-.line-numbers.active {
-  color: var(--zeta-editor-foreground);
+.monaco-editor .margin-view-overlays .line-numbers.lh-odd {
+	margin-top: 1px;
 }
 
-@media (forced-colors: active) {
-  .stanza-editor-line-margin {
-    background: Canvas;
-  }
+.monaco-editor .line-numbers {
+	color: var(--vscode-editorLineNumber-foreground);
+}
 
-  .line-numbers {
-    color: CanvasText;
-  }
+.monaco-editor .line-numbers.active-line-number {
+	color: var(--vscode-editorLineNumber-activeForeground);
 }

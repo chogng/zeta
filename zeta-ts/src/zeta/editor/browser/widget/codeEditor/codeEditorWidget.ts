@@ -106,7 +106,6 @@ export interface ICodeEditorWidgetOptions {
 	readonly codeLens?: boolean;
 	readonly stickyScroll?: boolean;
 	readonly formatOnSave?: boolean;
-	readonly insertFinalNewLine?: boolean;
 	readonly showUnicodeHighlights?: boolean;
 	readonly fontZoom?: { readonly initialScale?: number };
 	readonly renderRichScreenReaderContent?: boolean;

@@ -1,120 +1,95 @@
-import "./margin.css";
-import { h } from "../../../../base/browser/dom.js";
-import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { type TextMeasurer } from "../../config/fontMeasurements.js";
-import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-const GUTTER_HORIZONTAL_PADDING = 16;
+import './margin.css';
+import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { ViewPart } from '../../view/viewPart.js';
+import { RenderingContext, RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewContext } from '../../../common/viewModel/viewContext.js';
+import * as viewEvents from '../../../common/viewEvents.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 
-export type MarginPresentation = "document" | "embedded";
+/**
+ * Margin is a vertical strip located on the left of the editor's content area.
+ * It is used for various features such as line numbers, folding markers, and
+ * decorations that provide additional information about the lines of code.
+ */
+export class Margin extends ViewPart {
 
-export interface MarginOptions {
-	readonly host: HTMLElement;
-	readonly contentElement: HTMLElement;
-	readonly model: TextModel;
-	readonly textMeasurer: TextMeasurer;
-	readonly presentation: MarginPresentation;
-	readonly showLineNumbers: boolean;
-	readonly glyphMarginLaneCount: number;
-	readonly lineHeight: number;
-	readonly lineDecorationsWidth: number;
-}
-
-/** Owns editor margin geometry and its background. */
-export class EditorMargin extends EditorViewPart {
 	public static readonly CLASS_NAME = 'glyph-margin';
-	readonly domNode: HTMLDivElement;
-	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly host: HTMLElement;
-	private readonly contentElement: HTMLElement;
-	private readonly model: TextModel;
-	private readonly textMeasurer: TextMeasurer;
-	private readonly presentation: MarginPresentation;
-	private readonly showLineNumbers: boolean;
-	private readonly glyphMarginLaneCount: number;
-	private readonly lineDecorationsWidth: number;
-	private lineHeight: number;
+	public static readonly OUTER_CLASS_NAME = 'margin';
 
-	constructor(options: MarginOptions) {
-		super();
-		this.host = options.host;
-		this.contentElement = options.contentElement;
-		this.model = options.model;
-		this.textMeasurer = options.textMeasurer;
-		this.presentation = options.presentation;
-		this.showLineNumbers = options.showLineNumbers;
-		this.glyphMarginLaneCount = options.glyphMarginLaneCount;
-		this.lineHeight = options.lineHeight;
-		this.lineDecorationsWidth = options.lineDecorationsWidth;
-		const domNode = h(options.host.ownerDocument, "div");
-		this._register(toDisposable(() => domNode.remove()));
-		this.domNode = domNode;
-		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName(EditorMargin.CLASS_NAME);
-		this.domNode.setAttribute("role", "presentation");
-		this.domNode.setAttribute("aria-hidden", "true");
+	private readonly _domNode: FastDomNode<HTMLElement>;
+	private _canUseLayerHinting: boolean;
+	private _contentLeft: number;
+	private _glyphMarginLeft: number;
+	private _glyphMarginWidth: number;
+	private _glyphMarginBackgroundDomNode: FastDomNode<HTMLElement>;
+
+	constructor(context: ViewContext) {
+		super(context);
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+
+		this._canUseLayerHinting = !options.get(EditorOption.disableLayerHinting);
+		this._contentLeft = layoutInfo.contentLeft;
+		this._glyphMarginLeft = layoutInfo.glyphMarginLeft;
+		this._glyphMarginWidth = layoutInfo.glyphMarginWidth;
+
+		this._domNode = createFastDomNode(document.createElement('div'));
+		this._domNode.setClassName(Margin.OUTER_CLASS_NAME);
+		this._domNode.setPosition('absolute');
+		this._domNode.setAttribute('role', 'presentation');
+		this._domNode.setAttribute('aria-hidden', 'true');
+
+		this._glyphMarginBackgroundDomNode = createFastDomNode(document.createElement('div'));
+		this._glyphMarginBackgroundDomNode.setClassName(Margin.CLASS_NAME);
+
+		this._domNode.appendChild(this._glyphMarginBackgroundDomNode);
 	}
 
-	get gutterWidth(): number {
-		if (this.presentation === "embedded") return 0;
-		return this.glyphMarginWidth + this.lineNumbersWidth + this.lineDecorationsWidth;
+
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this._domNode;
 	}
 
-	get glyphMarginLaneWidth(): number {
-		return this.lineHeight;
+	// --- begin event handlers
+
+	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
+		const options = this._context.configuration.options;
+		const layoutInfo = options.get(EditorOption.layoutInfo);
+
+		this._canUseLayerHinting = !options.get(EditorOption.disableLayerHinting);
+		this._contentLeft = layoutInfo.contentLeft;
+		this._glyphMarginLeft = layoutInfo.glyphMarginLeft;
+		this._glyphMarginWidth = layoutInfo.glyphMarginWidth;
+
+		return true;
+	}
+	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
+		return super.onScrollChanged(e) || e.scrollTopChanged;
 	}
 
-	private get glyphMarginWidth(): number {
-		return this.glyphMarginLaneCount * this.glyphMarginLaneWidth;
+	// --- end event handlers
+
+	public prepareRender(ctx: RenderingContext): void {
+		// Nothing to read
 	}
 
-	private get lineNumbersWidth(): number {
-		if (this.presentation === "embedded" || !this.showLineNumbers) return 0;
-		const digitCount = String(this.model.lineCount).length;
-		return Math.ceil(this.textMeasurer.measureLineWidth("9".repeat(digitCount)) + GUTTER_HORIZONTAL_PADDING);
-	}
+	public render(ctx: RestrictedRenderingContext): void {
+		this._domNode.setLayerHinting(this._canUseLayerHinting);
+		this._domNode.setContain('strict');
+		const adjustedScrollTop = ctx.scrollTop - ctx.bigNumbersDelta;
+		this._domNode.setTop(-adjustedScrollTop);
 
-	get glyphMarginLeft(): number {
-		return 0;
-	}
+		const height = Math.min(ctx.scrollHeight, 1000000);
+		this._domNode.setHeight(height);
+		this._domNode.setWidth(this._contentLeft);
 
-	private get lineNumbersLeft(): number {
-		return this.glyphMarginWidth;
-	}
-
-	private get lineDecorationsLeft(): number {
-		return this.glyphMarginWidth + this.lineNumbersWidth;
-	}
-
-	get textLeft(): number {
-		return this.gutterWidth + this.textMeasurer.contentLeftPadding;
-	}
-
-	setLineHeight(lineHeight: number): void {
-		this.lineHeight = lineHeight;
-	}
-
-	render(context: EditorRenderingContext): void {
-		const layout = context.layout;
-		const gutterWidth = this.gutterWidth;
-		const lineNumbersWidth = this.lineNumbersWidth;
-		this.root.setWidth(gutterWidth);
-		this.root.setHeight(layout.contentSize.height);
-		const hidden = gutterWidth === 0;
-		if (this.domNode.hidden !== hidden) this.domNode.hidden = hidden;
-		this.host.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
-		this.host.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
-		this.host.style.setProperty("--stanza-editor-glyph-margin-width", `${this.glyphMarginWidth}px`);
-		this.host.style.setProperty("--stanza-editor-line-numbers-left", `${this.lineNumbersLeft}px`);
-		this.host.style.setProperty("--stanza-editor-line-decorations-left", `${this.lineDecorationsLeft}px`);
-		this.host.style.setProperty("--stanza-editor-line-decorations-width", `${this.lineDecorationsWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-glyph-margin-width", `${this.glyphMarginWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-numbers-left", `${this.lineNumbersLeft}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-decorations-left", `${this.lineDecorationsLeft}px`);
-		this.contentElement.style.setProperty("--stanza-editor-line-decorations-width", `${this.lineDecorationsWidth}px`);
+		this._glyphMarginBackgroundDomNode.setLeft(this._glyphMarginLeft);
+		this._glyphMarginBackgroundDomNode.setWidth(this._glyphMarginWidth);
+		this._glyphMarginBackgroundDomNode.setHeight(height);
 	}
 }

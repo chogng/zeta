@@ -1,172 +1,85 @@
-@property --stanza-editor-caret-opacity {
-	syntax: '<number>';
-	inherits: true;
-	initial-value: 1;
-}
-
-@property --stanza-editor-caret-scale {
-	syntax: '<number>';
-	inherits: true;
-	initial-value: 1;
-}
-
-.stanza-editor-cursors-layer {
-	--stanza-editor-caret-opacity: 1;
-	--stanza-editor-caret-scale: 1;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+.monaco-editor .cursors-layer {
 	position: absolute;
 	top: 0;
-	left: 0;
-	box-sizing: border-box;
-	min-width: 100%;
-	z-index: 5;
-	pointer-events: none;
 }
 
-.stanza-editor-composition-row {
-	position: relative;
-	box-sizing: border-box;
-	min-width: 100%;
-}
-
-.stanza-editor-caret {
-	--stanza-editor-caret-foreground: var(--zeta-editor-cursor-foreground, var(--zeta-editor-foreground));
-	--stanza-editor-caret-background: var(--zeta-editor-cursor-background, var(--zeta-editor-background));
-  position: absolute;
-  box-sizing: border-box;
-	background: var(--stanza-editor-caret-foreground);
-	opacity: calc(var(--stanza-editor-caret-opacity) * var(--stanza-editor-caret-base-opacity, 1));
-	transform: scaleY(var(--stanza-editor-caret-scale));
-	transform-origin: center;
-}
-
-.stanza-editor-caret.cursor-primary {
-	--stanza-editor-caret-foreground: var(--zeta-editor-multi-cursor-primary-foreground, var(--zeta-editor-cursor-foreground, var(--zeta-editor-foreground)));
-	--stanza-editor-caret-background: var(--zeta-editor-multi-cursor-primary-background, var(--zeta-editor-cursor-background, var(--zeta-editor-background)));
-}
-
-.stanza-editor-caret.cursor-secondary {
-	--stanza-editor-caret-foreground: var(--zeta-editor-multi-cursor-secondary-foreground, var(--zeta-editor-cursor-foreground, var(--zeta-editor-foreground)));
-	--stanza-editor-caret-background: var(--zeta-editor-multi-cursor-secondary-background, var(--zeta-editor-cursor-background, var(--zeta-editor-background)));
-}
-
-.stanza-editor-caret.cursor-style-line,
-.stanza-editor-caret.cursor-style-block {
-	color: var(--stanza-editor-caret-background);
-	white-space: pre;
+.monaco-editor .cursors-layer > .cursor {
+	position: absolute;
 	overflow: hidden;
-}
-
-.stanza-editor-caret.cursor-style-line.stanza-editor-token,
-.stanza-editor-caret.cursor-style-block.stanza-editor-token {
-	color: var(--stanza-editor-caret-background);
-}
-
-.stanza-editor-caret.cursor-style-block-outline {
-	background: transparent;
-	border: 1px solid var(--stanza-editor-caret-foreground);
-}
-
-.stanza-editor.composing .stanza-editor-composition {
-	position: absolute;
-	top: 0;
-	bottom: 1px;
 	box-sizing: border-box;
-	border-bottom: 1px solid var(--zeta-editor-composition-border, var(--zeta-editor-foreground));
 }
 
-@media (prefers-reduced-motion: no-preference) {
-	.stanza-editor-cursors-layer.cursor-smooth-caret-animation .stanza-editor-caret {
-		transition: top 80ms, left 80ms;
-	}
-
-  .stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-blink {
-    animation: stanza-editor-caret-blink 1.2s step-end infinite;
-  }
-
-	.stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-smooth {
-		animation: stanza-editor-caret-smooth 1.2s ease-in-out infinite;
-	}
-
-	.stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-phase {
-		animation: stanza-editor-caret-phase 1.2s ease-in-out infinite;
-	}
-
-	.stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-expand {
-		animation: stanza-editor-caret-expand 1.2s ease-in-out infinite;
-	}
+/* -- smooth-caret-animation -- */
+.monaco-editor .cursors-layer.cursor-smooth-caret-animation > .cursor {
+	transition: all 80ms;
 }
 
-@keyframes stanza-editor-caret-blink {
-  0%,
-  45% {
-		--stanza-editor-caret-opacity: 1;
-  }
-
-  46%,
-  100% {
-		--stanza-editor-caret-opacity: 0;
-  }
+/* -- block-outline-style -- */
+.monaco-editor .cursors-layer.cursor-block-outline-style > .cursor {
+	background: transparent !important;
+	border-style: solid;
+	border-width: 1px;
 }
 
-@keyframes stanza-editor-caret-smooth {
+/* -- underline-style -- */
+.monaco-editor .cursors-layer.cursor-underline-style > .cursor {
+	border-bottom-width: 2px;
+	border-bottom-style: solid;
+	background: transparent !important;
+}
+
+/* -- underline-thin-style -- */
+.monaco-editor .cursors-layer.cursor-underline-thin-style > .cursor {
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+	background: transparent !important;
+}
+
+@keyframes monaco-cursor-smooth {
 	0%,
 	20% {
-		--stanza-editor-caret-opacity: 1;
+		opacity: 1;
 	}
-
-	70%,
+	60%,
 	100% {
-		--stanza-editor-caret-opacity: 0;
+		opacity: 0;
 	}
 }
 
-@keyframes stanza-editor-caret-phase {
-	0%,
-	25%,
-	75%,
-	100% {
-		--stanza-editor-caret-opacity: 1;
-	}
-
-	50% {
-		--stanza-editor-caret-opacity: 0;
-	}
-}
-
-@keyframes stanza-editor-caret-expand {
+@keyframes monaco-cursor-phase {
 	0%,
 	20% {
-		--stanza-editor-caret-scale: 1;
+		opacity: 1;
 	}
-
-	70%,
+	90%,
 	100% {
-		--stanza-editor-caret-scale: 0;
+		opacity: 0;
 	}
 }
 
-.stanza-editor-cursors-layer.cursor-blinking-hidden .stanza-editor-caret {
-	display: none;
+@keyframes monaco-cursor-expand {
+	0%,
+	20% {
+		transform: scaleY(1);
+	}
+	80%,
+	100% {
+		transform: scaleY(0);
+	}
 }
 
-.stanza-editor:not(:focus-within) .stanza-editor-caret {
-	--stanza-editor-caret-base-opacity: 0.65;
+.cursor-smooth {
+	animation: monaco-cursor-smooth 0.5s ease-in-out 0s 20 alternate;
 }
 
-@media (forced-colors: active) {
-  .stanza-editor-caret {
-    background: CanvasText;
-    color: CanvasText;
-  }
+.cursor-phase {
+	animation: monaco-cursor-phase 0.5s ease-in-out 0s 20 alternate;
+}
 
-	.stanza-editor-caret.cursor-style-line,
-	.stanza-editor-caret.cursor-style-block,
-	.stanza-editor-caret.stanza-editor-token {
-		color: Canvas;
-	}
-
-	.stanza-editor-caret.cursor-style-block-outline {
-		background: transparent;
-		border-color: CanvasText;
-	}
+.cursor-expand > .cursor {
+	animation: monaco-cursor-expand 0.5s ease-in-out 0s 20 alternate;
 }

@@ -1,97 +1,132 @@
-import { isHighSurrogate } from '../../../base/common/strings.js';
-import { InlineDecorationType, type InlineDecoration } from '../viewModel/inlineDecorations.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import * as strings from '../../../base/common/strings.js';
+import { Constants } from '../../../base/common/uint.js';
+import { InlineDecoration, InlineDecorationType } from '../viewModel/inlineDecorations.js';
 import { LinePartMetadata } from './linePart.js';
 
-/** One one-based source span after line decorations have been clipped. */
 export class LineDecoration {
 	_lineDecorationBrand: void = undefined;
-	public constructor(
+
+	constructor(
 		public readonly startColumn: number,
 		public readonly endColumn: number,
 		public readonly className: string,
-		public readonly type: InlineDecorationType,
+		public readonly type: InlineDecorationType
 	) {
-		if (!Number.isSafeInteger(startColumn) || !Number.isSafeInteger(endColumn) || startColumn < 0 || endColumn < startColumn) {
-			throw new RangeError('Line decoration columns must be ordered non-negative safe integers');
+	}
+
+	private static _equals(a: LineDecoration, b: LineDecoration): boolean {
+		return (
+			a.startColumn === b.startColumn
+			&& a.endColumn === b.endColumn
+			&& a.className === b.className
+			&& a.type === b.type
+		);
+	}
+
+	public static equalsArr(a: readonly LineDecoration[], b: readonly LineDecoration[]): boolean {
+		const aLen = a.length;
+		const bLen = b.length;
+		if (aLen !== bLen) {
+			return false;
 		}
-		if (typeof className !== 'string' || className.trim().length === 0) throw new TypeError('Line decoration class name must be non-empty');
-	}
-
-	public static equalsArr(left: readonly LineDecoration[], right: readonly LineDecoration[]): boolean {
-		if (left.length !== right.length) return false;
-		return left.every((decoration, index) => {
-			const other = right[index]!;
-			return decoration.startColumn === other.startColumn && decoration.endColumn === other.endColumn &&
-				decoration.className === other.className && decoration.type === other.type;
-		});
-	}
-
-	private static _equals(left: LineDecoration, right: LineDecoration): boolean {
-		return left.startColumn === right.startColumn && left.endColumn === right.endColumn && left.className === right.className && left.type === right.type;
-	}
-
-	public static extractWrapped(decorations: LineDecoration[], startOffset: number, endOffset: number): LineDecoration[] {
-		if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset) || startOffset < 0 || endOffset < startOffset) {
-			throw new RangeError('Wrapped line offsets must be ordered non-negative safe integers');
+		for (let i = 0; i < aLen; i++) {
+			if (!LineDecoration._equals(a[i], b[i])) {
+				return false;
+			}
 		}
-		const wrappedStartColumn = startOffset + 1;
-		const wrappedEndColumn = endOffset + 1;
-		return decorations.flatMap(decoration => {
-			if (decoration.endColumn <= wrappedStartColumn || decoration.startColumn >= wrappedEndColumn) return [];
-			const startColumn = Math.max(1, decoration.startColumn - wrappedStartColumn + 1);
-			const endColumn = Math.min(endOffset - startOffset + 1, decoration.endColumn - wrappedStartColumn + 1);
-			return endColumn >= startColumn
-				? [new LineDecoration(startColumn, endColumn, decoration.className, decoration.type)]
-				: [];
-		});
+		return true;
 	}
 
-	public static filter(
-		decorations: InlineDecoration[],
-		lineNumber: number,
-		minColumn: number,
-		maxColumn: number,
-	): LineDecoration[] {
-		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(minColumn) || !Number.isSafeInteger(maxColumn) || minColumn < 0 || maxColumn < minColumn) {
-			throw new RangeError('Line decoration filter coordinates are invalid');
+	public static extractWrapped(arr: LineDecoration[], startOffset: number, endOffset: number): LineDecoration[] {
+		if (arr.length === 0) {
+			return arr;
 		}
-		return decorations.flatMap(decoration => {
-			if (decoration.range.endLineNumber < lineNumber || decoration.range.startLineNumber > lineNumber) return [];
-			if (decoration.range.isEmpty() && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
-			const startColumn = decoration.range.startLineNumber === lineNumber ? decoration.range.startColumn : minColumn;
-			const endColumn = decoration.range.endLineNumber === lineNumber ? decoration.range.endColumn : maxColumn;
-			const clippedStartColumn = Math.max(minColumn, startColumn);
-			const clippedEndColumn = Math.min(maxColumn, endColumn);
-			if (clippedEndColumn < clippedStartColumn) return [];
-			if (clippedEndColumn === clippedStartColumn && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
-			return [new LineDecoration(clippedStartColumn, clippedEndColumn, decoration.inlineClassName, decoration.type)];
-		});
+		const startColumn = startOffset + 1;
+		const endColumn = endOffset + 1;
+		const lineLength = endOffset - startOffset;
+		const r = [];
+		let rLength = 0;
+		for (const dec of arr) {
+			if (dec.endColumn <= startColumn || dec.startColumn >= endColumn) {
+				continue;
+			}
+			r[rLength++] = new LineDecoration(Math.max(1, dec.startColumn - startColumn + 1), Math.min(lineLength + 1, dec.endColumn - startColumn + 1), dec.className, dec.type);
+		}
+		return r;
 	}
 
-	public static compare(left: LineDecoration, right: LineDecoration): number {
-		if (left.startColumn !== right.startColumn) return left.startColumn - right.startColumn;
-		if (left.endColumn !== right.endColumn) return left.endColumn - right.endColumn;
-		return LineDecoration._typeCompare(left.type, right.type) || (left.className < right.className ? -1 : left.className > right.className ? 1 : 0);
+	public static filter(lineDecorations: InlineDecoration[], lineNumber: number, minLineColumn: number, maxLineColumn: number): LineDecoration[] {
+		if (lineDecorations.length === 0) {
+			return [];
+		}
+
+		const result: LineDecoration[] = [];
+		let resultLen = 0;
+
+		for (let i = 0, len = lineDecorations.length; i < len; i++) {
+			const d = lineDecorations[i];
+			const range = d.range;
+
+			if (range.endLineNumber < lineNumber || range.startLineNumber > lineNumber) {
+				// Ignore decorations that sit outside this line
+				continue;
+			}
+
+			if (range.isEmpty() && (d.type === InlineDecorationType.Regular || d.type === InlineDecorationType.RegularAffectingLetterSpacing)) {
+				// Ignore empty range decorations
+				continue;
+			}
+
+			const startColumn = (range.startLineNumber === lineNumber ? range.startColumn : minLineColumn);
+			const endColumn = (range.endLineNumber === lineNumber ? range.endColumn : maxLineColumn);
+
+			result[resultLen++] = new LineDecoration(startColumn, endColumn, d.inlineClassName, d.type);
+		}
+
+		return result;
 	}
 
-	private static _typeCompare(left: InlineDecorationType, right: InlineDecorationType): number {
-		const order = [3, 1, 2, 4, 0];
-		return order[left]! - order[right]!;
+	private static _typeCompare(a: InlineDecorationType, b: InlineDecorationType): number {
+		// WidthOnly, Before, After, Regular, RegularAffectingLetterSpacing.
+		// Width only decorations come from injected text, which renders before any other decoration.
+		const ORDER = [3, 1, 2, 4, 0];
+		return ORDER[a] - ORDER[b];
+	}
+
+	public static compare(a: LineDecoration, b: LineDecoration): number {
+		if (a.startColumn !== b.startColumn) {
+			return a.startColumn - b.startColumn;
+		}
+
+		if (a.endColumn !== b.endColumn) {
+			return a.endColumn - b.endColumn;
+		}
+
+		const typeCmp = LineDecoration._typeCompare(a.type, b.type);
+		if (typeCmp !== 0) {
+			return typeCmp;
+		}
+
+		if (a.className !== b.className) {
+			return a.className < b.className ? -1 : 1;
+		}
+
+		return 0;
 	}
 }
 
 export class DecorationSegment {
-	public startOffset: number;
-	public endOffset: number;
-	public className: string;
-	public metadata: number;
+	startOffset: number;
+	endOffset: number;
+	className: string;
+	metadata: number;
 
-	public constructor(
-		startOffset: number,
-		endOffset: number,
-		className: string,
-		metadata: number,
-	) {
+	constructor(startOffset: number, endOffset: number, className: string, metadata: number) {
 		this.startOffset = startOffset;
 		this.endOffset = endOffset;
 		this.className = className;
@@ -99,55 +134,134 @@ export class DecorationSegment {
 	}
 }
 
-/** Converts overlapping line decorations into sorted, renderable segments. */
-export class LineDecorationsNormalizer {
-	public static normalize(lineContent: string, decorations: LineDecoration[]): DecorationSegment[] {
-		if (typeof lineContent !== 'string') throw new TypeError('Line content must be a string');
-		if (decorations.length === 0) return [];
-		const normalizedDecorations = decorations.map(decoration => ({
-			decoration,
-			startColumn: moveSurrogateBoundary(lineContent, decoration.startColumn - 1),
-			endColumn: moveSurrogateBoundary(lineContent, decoration.endColumn - 1),
-		}));
-		const boundaries = new Set<number>([0, lineContent.length]);
-		for (const { startColumn, endColumn } of normalizedDecorations) {
-			if (endColumn > lineContent.length) throw new RangeError('Line decoration exceeds line content');
-			boundaries.add(startColumn);
-			boundaries.add(endColumn);
+class Stack {
+	public count: number;
+	private readonly stopOffsets: number[];
+	private readonly classNames: string[];
+	private readonly metadata: number[];
+
+	constructor() {
+		this.stopOffsets = [];
+		this.classNames = [];
+		this.metadata = [];
+		this.count = 0;
+	}
+
+	private static _metadata(metadata: number[]): number {
+		let result = 0;
+		for (let i = 0, len = metadata.length; i < len; i++) {
+			result |= metadata[i];
 		}
-		const sortedBoundaries = [...boundaries].sort((left, right) => left - right);
-		const result: DecorationSegment[] = [];
-		for (let index = 0; index + 1 < sortedBoundaries.length; index += 1) {
-			const startOffset = sortedBoundaries[index]!;
-			const endOffset = sortedBoundaries[index + 1]!;
-			if (endOffset <= startOffset) continue;
-			const active = normalizedDecorations.filter(({ startColumn, endColumn }) => startColumn <= startOffset && endColumn >= endOffset);
-			if (active.length === 0) continue;
-			result.push(new DecorationSegment(
-				startOffset,
-				endOffset,
-				active.map(({ decoration }) => decoration.className).join(' '),
-				active.reduce((metadata, { decoration }) => metadata | metadataFor(decoration.type), 0),
-			));
+		return result;
+	}
+
+	public consumeLowerThan(maxStopOffset: number, nextStartOffset: number, result: DecorationSegment[]): number {
+
+		while (this.count > 0 && this.stopOffsets[0] < maxStopOffset) {
+			let i = 0;
+
+			// Take all equal stopping offsets
+			while (i + 1 < this.count && this.stopOffsets[i] === this.stopOffsets[i + 1]) {
+				i++;
+			}
+
+			// Basically we are consuming the first i + 1 elements of the stack
+			result.push(new DecorationSegment(nextStartOffset, this.stopOffsets[i], this.classNames.join(' '), Stack._metadata(this.metadata)));
+			nextStartOffset = this.stopOffsets[i] + 1;
+
+			// Consume them
+			this.stopOffsets.splice(0, i + 1);
+			this.classNames.splice(0, i + 1);
+			this.metadata.splice(0, i + 1);
+			this.count -= (i + 1);
 		}
-		for (const { decoration, startColumn, endColumn } of normalizedDecorations) {
-			if (startColumn !== endColumn) continue;
-			const metadata = metadataFor(decoration.type);
-			if (metadata === 0) continue;
-			result.push(new DecorationSegment(startColumn, endColumn, decoration.className, metadata));
+
+		if (this.count > 0 && nextStartOffset < maxStopOffset) {
+			result.push(new DecorationSegment(nextStartOffset, maxStopOffset - 1, this.classNames.join(' '), Stack._metadata(this.metadata)));
+			nextStartOffset = maxStopOffset;
 		}
-		return result.sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
+
+		return nextStartOffset;
+	}
+
+	public insert(stopOffset: number, className: string, metadata: number): void {
+		if (this.count === 0 || this.stopOffsets[this.count - 1] <= stopOffset) {
+			// Insert at the end
+			this.stopOffsets.push(stopOffset);
+			this.classNames.push(className);
+			this.metadata.push(metadata);
+		} else {
+			// Find the insertion position for `stopOffset`
+			for (let i = 0; i < this.count; i++) {
+				if (this.stopOffsets[i] >= stopOffset) {
+					this.stopOffsets.splice(i, 0, stopOffset);
+					this.classNames.splice(i, 0, className);
+					this.metadata.splice(i, 0, metadata);
+					break;
+				}
+			}
+		}
+		this.count++;
+		return;
 	}
 }
 
-function metadataFor(type: InlineDecorationType): number {
-	return type === InlineDecorationType.Before
-		? LinePartMetadata.PSEUDO_BEFORE
-		: type === InlineDecorationType.After ? LinePartMetadata.PSEUDO_AFTER : 0;
-}
+export class LineDecorationsNormalizer {
+	/**
+	 * Normalize line decorations. Overlapping decorations will generate multiple segments
+	 */
+	public static normalize(lineContent: string, lineDecorations: LineDecoration[]): DecorationSegment[] {
+		if (lineDecorations.length === 0) {
+			return [];
+		}
 
-function moveSurrogateBoundary(lineContent: string, column: number): number {
-	return column > 0 && column < lineContent.length && isHighSurrogate(lineContent.charCodeAt(column - 1))
-		? column - 1
-		: column;
+		const result: DecorationSegment[] = [];
+
+		const stack = new Stack();
+		let nextStartOffset = 0;
+
+		for (let i = 0, len = lineDecorations.length; i < len; i++) {
+			const d = lineDecorations[i];
+			let startColumn = d.startColumn;
+			let endColumn = d.endColumn;
+			const className = d.className;
+			const metadata = (
+				d.type === InlineDecorationType.Before
+					? LinePartMetadata.PSEUDO_BEFORE
+					: d.type === InlineDecorationType.After
+						? LinePartMetadata.PSEUDO_AFTER
+						: 0
+			);
+
+			// If the position would end up in the middle of a high-low surrogate pair, we move it to before the pair
+			if (startColumn > 1) {
+				const charCodeBefore = lineContent.charCodeAt(startColumn - 2);
+				if (strings.isHighSurrogate(charCodeBefore)) {
+					startColumn--;
+				}
+			}
+
+			if (endColumn > 1) {
+				const charCodeBefore = lineContent.charCodeAt(endColumn - 2);
+				if (strings.isHighSurrogate(charCodeBefore)) {
+					endColumn--;
+				}
+			}
+
+			const currentStartOffset = startColumn - 1;
+			const currentEndOffset = endColumn - 2;
+
+			nextStartOffset = stack.consumeLowerThan(currentStartOffset, nextStartOffset, result);
+
+			if (stack.count === 0) {
+				nextStartOffset = currentStartOffset;
+			}
+			stack.insert(currentEndOffset, className, metadata);
+		}
+
+		stack.consumeLowerThan(Constants.MAX_SAFE_SMALL_INTEGER, nextStartOffset, result);
+
+		return result;
+	}
+
 }

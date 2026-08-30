@@ -1,71 +1,13 @@
-.stanza-editor-line-decorations {
-	position: relative;
-	box-sizing: border-box;
-	min-width: 100%;
-  pointer-events: none;
-}
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-.stanza-editor-decoration {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 1;
-  box-sizing: border-box;
-}
-
-.stanza-editor-decoration.search-match {
-  background: var(--zeta-search-match-background);
-}
-
-.stanza-editor-decoration.color-swatch {
-	top: 3px;
-	bottom: 3px;
-	z-index: 4;
-	min-height: 10px;
-	overflow: hidden;
-	background:
-		linear-gradient(45deg, #808080 25%, transparent 25%, transparent 75%, #808080 75%),
-		linear-gradient(45deg, #808080 25%, #fff 25%, #fff 75%, #808080 75%);
-	background-position: 0 0, 3px 3px;
-	background-size: 6px 6px;
-	border: 1px solid var(--zeta-editor-widget-border);
-	border-radius: 2px;
-	cursor: pointer;
-	pointer-events: auto;
-}
-
-.stanza-editor-decoration.color-swatch::after {
+/*
+	Keeping name short for faster parsing.
+	cdr = core decorations rendering (div)
+*/
+.monaco-editor .lines-content .cdr {
 	position: absolute;
-	inset: 0;
-	background: var(--stanza-editor-color-swatch);
-	content: '';
-}
-
-.stanza-editor-decoration.bracket-match {
-  border: 1px solid var(--zeta-focus-border);
-}
-
-.stanza-editor-decoration.error-underline {
-  border-bottom: 2px solid var(--zeta-error-foreground);
-}
-
-.stanza-editor-decoration.warning-underline {
-  border-bottom: 2px solid var(--zeta-warning-foreground);
-}
-
-.stanza-editor-decoration.information-underline {
-  border-bottom: 2px solid var(--zeta-focus-border);
-}
-
-.stanza-editor-decoration.hint-underline {
-  border-bottom: 1px dotted var(--zeta-description-foreground);
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-decoration.error-underline,
-  .stanza-editor-decoration.warning-underline,
-  .stanza-editor-decoration.information-underline,
-  .stanza-editor-decoration.hint-underline {
-    border-bottom-color: CanvasText;
-  }
+	height: 100%;
 }

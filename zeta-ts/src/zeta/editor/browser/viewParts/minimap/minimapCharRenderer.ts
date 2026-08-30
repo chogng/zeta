@@ -1,9 +1,15 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { Constants, getCharIndex } from './minimapCharSheet.js';
 import { toUint8 } from '../../../../base/common/uint.js';
 
 export class MinimapCharRenderer {
 	_minimapCharRendererBrand: void = undefined;
+
 	private readonly charDataNormal: Uint8ClampedArray;
 	private readonly charDataLight: Uint8ClampedArray;
 
@@ -31,7 +37,7 @@ export class MinimapCharRenderer {
 		backgroundAlpha: number,
 		fontScale: number,
 		useLighterFont: boolean,
-		force1pxHeight: boolean,
+		force1pxHeight: boolean
 	): void {
 		const charWidth = Constants.BASE_CHAR_WIDTH * this.scale;
 		const charHeight = Constants.BASE_CHAR_HEIGHT * this.scale;
@@ -82,7 +88,7 @@ export class MinimapCharRenderer {
 		foregroundAlpha: number,
 		backgroundColor: RGBA8,
 		backgroundAlpha: number,
-		force1pxHeight: boolean,
+		force1pxHeight: boolean
 	): void {
 		const charWidth = Constants.BASE_CHAR_WIDTH * this.scale;
 		const charHeight = Constants.BASE_CHAR_HEIGHT * this.scale;

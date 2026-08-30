@@ -1,54 +1,32 @@
-.stanza-editor-glyph-margin {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 5;
-  pointer-events: none;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.monaco-editor .glyph-margin {
+	position: absolute;
+	top: 0;
 }
 
-.stanza-editor-glyph-margin-lane {
-  position: absolute;
-  top: 0;
-  pointer-events: auto;
+/*
+	Keeping name short for faster parsing.
+	cgmr = core glyph margin rendering (div)
+*/
+.monaco-editor .glyph-margin-widgets .cgmr {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
-.stanza-editor-glyph-margin-decoration {
-  position: absolute;
-  left: 0;
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: var(--zeta-description-foreground);
-  font: inherit;
-  line-height: inherit;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-}
-
-.stanza-editor-glyph-margin-decoration > .zeta-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-}
-
-.stanza-editor-glyph-margin-decoration > .zeta-icon [stroke] {
-  stroke: currentColor;
-}
-
-.stanza-editor-glyph-margin-decoration > .zeta-icon [fill]:not([fill='none']) {
-  fill: currentColor;
-}
-
-.stanza-editor-glyph-margin-decoration:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-glyph-margin-decoration:focus-visible {
-    outline-color: Highlight;
-  }
+/*
+	Ensure spinning icons are pixel-perfectly centered and avoid wobble.
+	This is only applied to icons that spin to avoid unnecessary
+	GPU layers and blurry subpixel AA.
+*/
+.monaco-editor .glyph-margin-widgets .cgmr.codicon-modifier-spin::before  {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
 }

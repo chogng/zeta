@@ -1,158 +1,88 @@
-.stanza-editor-lines {
-  position: absolute;
-  top: 0;
-  left: 0;
-  box-sizing: border-box;
-  min-width: 100%;
-	cursor: text;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Uncomment to see lines flashing when they're painted */
+/*.monaco-editor .view-lines > .view-line {
+	background-color: none;
+	animation-name: flash-background;
+	animation-duration: 800ms;
+}
+@keyframes flash-background {
+	0%   { background-color: lightgreen; }
+	100% { background-color: none }
+}*/
+
+.mtkcontrol {
+	color: rgb(255, 255, 255) !important;
+	background: rgb(150, 0, 0) !important;
 }
 
-.stanza-editor-mouse-default .stanza-editor-lines {
-	cursor: default;
+.mtkoverflow {
+	background-color: var(--vscode-button-background, var(--vscode-editor-background));
+	color: var(--vscode-button-foreground, var(--vscode-editor-foreground));
+	border-width: 1px;
+	border-style: solid;
+	border-color: var(--vscode-contrastBorder);
+	border-radius: 2px;
+	padding: 4px;
+	cursor: pointer;
+}
+.mtkoverflow:hover {
+	background-color: var(--vscode-button-hoverBackground);
 }
 
-.stanza-editor-mouse-copy .stanza-editor-lines {
-	cursor: copy;
+.monaco-editor.no-user-select .lines-content,
+.monaco-editor.no-user-select .view-line,
+.monaco-editor.no-user-select .view-lines {
+	user-select: none;
+	-webkit-user-select: none;
+}
+/* Use user-select: text for lookup feature on macOS */
+/* https://github.com/microsoft/vscode/issues/85632 */
+.monaco-editor.mac .lines-content:hover,
+.monaco-editor.mac .view-line:hover,
+.monaco-editor.mac .view-lines:hover {
+	user-select: text;
+	-webkit-user-select: text;
+	-ms-user-select: text;
 }
 
-.view-line {
-  position: absolute;
-  box-sizing: border-box;
-  min-width: 100%;
-  padding-left: var(--stanza-editor-gutter-width);
-  overflow: visible;
-  white-space: pre;
+.monaco-editor.enable-user-select {
+	user-select: initial;
+	-webkit-user-select: initial;
 }
 
-.stanza-editor-line-text,
-.stanza-editor-text-metrics {
-  box-sizing: border-box;
-  padding: 0 var(--stanza-editor-padding-right) 0 var(--stanza-editor-padding-left);
+.monaco-editor .view-lines {
+	white-space: nowrap;
 }
 
-.stanza-editor-line-text {
-  position: relative;
-  z-index: 3;
-  display: inline-block;
-  unicode-bidi: isolate;
+.monaco-editor .view-line {
+	box-sizing: border-box;
+	position: absolute;
+	width: 100%;
 }
 
-.stanza-editor-direction-auto .stanza-editor-line-text {
-  unicode-bidi: plaintext;
+/* There are view-lines in view-zones. We have to make sure this rule does not apply to them, as they don't set a line height */
+.monaco-editor .lines-content > .view-lines > .view-line > span {
+	top: 0;
+	bottom: 0;
+	position: absolute;
 }
 
-.stanza-editor-token.token-comment {
-  color: var(--zeta-editor-token-comment-foreground);
+.monaco-editor .mtkw {
+	color: var(--vscode-editorWhitespace-foreground) !important;
 }
 
-.stanza-editor-token.token-keyword {
-  color: var(--zeta-editor-token-keyword-foreground);
+.monaco-editor .mtkz {
+	display: inline-block;
+	color: var(--vscode-editorWhitespace-foreground) !important;
 }
 
-.stanza-editor-token.token-string {
-  color: var(--zeta-editor-token-string-foreground);
-}
-
-.stanza-editor-token.token-number {
-  color: var(--zeta-editor-token-number-foreground);
-}
-
-.stanza-editor-token.token-regexp {
-  color: var(--zeta-editor-token-regexp-foreground);
-}
-
-.stanza-editor-token.token-type {
-  color: var(--zeta-editor-token-type-foreground);
-}
-
-.stanza-editor-token.token-function {
-  color: var(--zeta-editor-token-function-foreground);
-}
-
-.stanza-editor-token.token-variable {
-  color: var(--zeta-editor-token-variable-foreground);
-}
-
-.stanza-editor-token.token-operator {
-  color: var(--zeta-editor-token-operator-foreground);
-}
-
-.stanza-editor-token.token-modifier-declaration {
-  font-weight: 600;
-}
-
-.stanza-editor-token.token-modifier-readonly,
-.stanza-editor-token.token-modifier-abstract,
-.stanza-editor-token.token-modifier-async {
-  font-style: italic;
-}
-
-.stanza-editor-token.token-modifier-static {
-  text-decoration: underline dotted;
-}
-
-.stanza-editor-token.token-modifier-deprecated {
-  text-decoration: line-through;
-}
-
-.stanza-editor-bracket-level-1 {
-  color: var(--zeta-editor-token-keyword-foreground);
-}
-
-.stanza-editor-bracket-level-2 {
-  color: var(--zeta-editor-token-function-foreground);
-}
-
-.stanza-editor-bracket-level-3 {
-  color: var(--zeta-editor-token-type-foreground);
-}
-
-.stanza-editor-bracket-level-4 {
-  color: var(--zeta-editor-token-number-foreground);
-}
-
-.stanza-editor-bracket-level-5 {
-  color: var(--zeta-editor-token-string-foreground);
-}
-
-.stanza-editor-bracket-level-6 {
-  color: var(--zeta-editor-token-variable-foreground);
-}
-
-.stanza-editor-row-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  box-sizing: border-box;
-  min-width: 100%;
-  pointer-events: none;
-}
-
-.stanza-editor-gpu-canvas {
-  position: absolute;
-  z-index: 3;
-  display: block;
-  pointer-events: none;
-}
-
-.stanza-editor-gpu-canvas[hidden] {
-  display: none;
-}
-
-.view-line.gpu-rendered .stanza-editor-line-text,
-.view-line.gpu-rendered .stanza-editor-line-text * {
-  color: transparent !important;
-  text-decoration-color: transparent !important;
-  text-shadow: none !important;
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-gpu-canvas {
-    display: none;
-  }
-
-  .view-line.gpu-rendered .stanza-editor-line-text,
-  .view-line.gpu-rendered .stanza-editor-line-text * {
-    color: CanvasText !important;
-  }
-}
+/* TODO@tokenization bootstrap fix */
+/*.monaco-editor .view-line > span > span {
+	float: none;
+	min-height: inherit;
+	margin-left: inherit;
+}*/

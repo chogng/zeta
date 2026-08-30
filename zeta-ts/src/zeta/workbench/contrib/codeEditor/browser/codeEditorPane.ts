@@ -5,6 +5,7 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
+import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -29,6 +30,9 @@ import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import type { CursorsController } from "../../../../editor/common/cursor/cursor.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import { trimTrailingWhitespace } from "../../../../editor/common/commands/trimTrailingWhitespaceCommand.js";
+import { EditOperation } from '../../../../editor/common/core/editOperation.js';
+import { Position } from '../../../../editor/common/core/position.js';
 
 export interface EditorPanePart extends IDisposable {
 	readonly onDidChange?: Event<void>;
@@ -93,6 +97,8 @@ export interface EditorPaneOptions {
 	readonly colorDecoratorsLimit?: CodeEditorWidgetOptions["colorDecoratorsLimit"];
 	readonly defaultColorDecorators?: CodeEditorWidgetOptions["defaultColorDecorators"];
 	readonly formatOnSave?: boolean;
+	readonly trimTrailingWhitespace?: boolean;
+	readonly trimTrailingWhitespaceInRegexAndStrings?: boolean;
 	readonly find?: CodeEditorWidgetOptions["find"];
 	readonly indentation?: CodeEditorWidgetOptions["indentation"];
 	/** Browser paragraph direction forwarded to every created editor part. */
@@ -221,7 +227,6 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				decorationSources: this.options.createDecorationSources?.(input.resource, modelReference.model),
 				placeholder: this.options.placeholder,
 				showUnicodeHighlights: this.options.showUnicodeHighlights,
-				insertFinalNewLine: this.options.insertFinalNewLine,
 				fontZoom: this.options.fontZoom,
 				registerBeforeSave: hook => {
 					beforeSaveHooks.push(hook);
@@ -231,6 +236,23 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 					});
 				},
 			});
+			if (this.options.trimTrailingWhitespace) {
+				beforeSaveHooks.unshift(() => {
+					const selections = part?.selections?.getSelections() ?? [];
+					const operations = trimTrailingWhitespace(modelReference.model, [], this.options.trimTrailingWhitespaceInRegexAndStrings ?? true);
+					if (operations.length > 0) modelReference.model.pushEditOperations(selections, operations, () => selections);
+				});
+			}
+			if (this.options.insertFinalNewLine) {
+				beforeSaveHooks.push(() => {
+					const model = modelReference.model;
+					const lineCount = model.getLineCount();
+					if (!lineCount || strings.lastNonWhitespaceIndex(model.getLineContent(lineCount)) === -1) return;
+					const selections = part?.selections?.getSelections() ?? [];
+					const operations = [EditOperation.insert(new Position(lineCount, model.getLineMaxColumn(lineCount)), model.getEOL())];
+					model.pushEditOperations(selections, operations, () => selections);
+				});
+			}
 			workingCopy = new EditorWorkingCopy(
 				modelReference,
 				this.resourceStore,
@@ -334,11 +356,11 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	}
 
 	getStatus(): EditorPaneStatus {
-		const selections = this.part.value?.selections?.selections;
-		const active = selections?.primary.getPosition();
+		const selections = this.part.value?.selections?.getSelections();
+		const active = selections?.[0]?.getPosition();
 		return Object.freeze({
 			...(active ? { lineNumber: active.lineNumber, columnNumber: active.column } : {}),
-			...(selections && selections.selections.length > 1 ? { selectionCount: selections.selections.length } : {}),
+			...(selections && selections.length > 1 ? { selectionCount: selections.length } : {}),
 			...(this.languageId ? { languageId: this.languageId } : {}),
 			encoding: "UTF-8",
 			endOfLine: "LF",
