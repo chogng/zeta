@@ -13,11 +13,123 @@ use zeta_turn_changes::TurnChangeSet;
 use zeta_turn_changes::TurnChangeStore;
 use zeta_work_coordination::RootState;
 use zeta_work_coordination::WorkAttemptChangeEvidenceRef;
+#[cfg(feature = "multi-agent-evals")]
+use zeta_work_coordination::WorkAttemptResult;
 use zeta_work_coordination::WorkRun;
 use zeta_work_coordination::work_attempt_result_digest;
 use zeta_worktree::ManagedDirKind;
 
 impl TurnChangesRuntime {
+    /// Derives a sealing claim from the current durable Thread and managed workspace facts.
+    ///
+    /// The returned value is still revalidated by [`Self::validate_attempt_result`] when the
+    /// `SealAttempt` command is applied. This helper gives trusted hosts a canonical way to request
+    /// sealing without accepting result identities invented by an Agent.
+    #[cfg(feature = "multi-agent-evals")]
+    pub(super) fn derive_attempt_result(
+        &self,
+        run: &WorkRun,
+        attempt_id: &WorkAttemptId,
+    ) -> Result<WorkAttemptResult, String> {
+        let attempt = run
+            .attempts
+            .get(attempt_id)
+            .ok_or_else(|| format!("WorkAttempt {attempt_id} does not exist"))?;
+        let execution_id = attempt
+            .execution_id
+            .as_ref()
+            .ok_or_else(|| "WorkAttempt result omitted its execution identity".to_string())?;
+        self.ensure_work_attempt_workspace(&run.work_run_id, attempt)?;
+        let bindings = self
+            .work_attempt_bindings
+            .read()
+            .map_err(|_| "WorkAttempt workspace binding lock poisoned".to_string())?
+            .get(&(run.work_run_id.clone(), attempt.attempt_id.clone()))
+            .cloned()
+            .ok_or_else(|| "WorkAttempt workspace evidence is unavailable".to_string())?;
+        let records = self
+            .store
+            .list_for_thread(&attempt.thread_id)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .filter(|record| {
+                record.work_attempt.as_ref().is_some_and(|provenance| {
+                    provenance.work_run_id == run.work_run_id
+                        && provenance.attempt_id == attempt.attempt_id
+                        && provenance.execution_id == *execution_id
+                        && provenance.contract_id == attempt.contract.contract_id
+                        && provenance.contract_revision == attempt.contract.revision
+                })
+            })
+            .collect::<Vec<_>>();
+        if records.is_empty() {
+            return Err("WorkAttempt result has no captured Turn evidence".into());
+        }
+        if let Some(record) = records
+            .iter()
+            .find(|record| record.capture_state != CaptureState::Sealed)
+        {
+            let capture_failure = self
+                .capture_failures
+                .read()
+                .map_err(|_| "Turn capture failure lock poisoned".to_string())?
+                .get(&record.turn_id)
+                .cloned();
+            return Err(format!(
+                "WorkAttempt ChangeSet {} remained {:?}; capture failure: {:?}",
+                record.change_set_id, record.capture_state, capture_failure
+            ));
+        }
+        let evidence = records
+            .iter()
+            .map(|record| {
+                record
+                    .evidence_digest()
+                    .map(|evidence_digest| WorkAttemptChangeEvidenceRef {
+                        change_set_id: record.change_set_id.clone(),
+                        evidence_digest,
+                    })
+                    .map_err(|error| error.to_string())
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let change_set_ids = records
+            .iter()
+            .map(|record| record.change_set_id.clone())
+            .collect::<Vec<_>>();
+        let turn_ids = records
+            .iter()
+            .map(|record| record.turn_id.clone())
+            .collect::<BTreeSet<_>>();
+        let effects = work_attempt_effects(
+            &self
+                .threads
+                .read_thread(&attempt.thread_id)
+                .map_err(|error| error.to_string())?,
+            &turn_ids,
+        )?;
+        let private_output_digest = self
+            .worktrees
+            .capture_output(&bindings.output)
+            .map_err(|error| error.to_string())?;
+        let result_digest = work_attempt_result_digest(
+            &run.work_run_id,
+            run.topology_revision,
+            attempt,
+            &evidence,
+            &private_output_digest,
+            &effects.digest,
+            effects.status,
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(WorkAttemptResult {
+            result_digest,
+            change_set_ids,
+            private_output_digest,
+            external_effects_digest: effects.digest,
+            external_effects_status: effects.status,
+        })
+    }
+
     pub(super) fn validate_attempt_result(
         &self,
         run: &WorkRun,

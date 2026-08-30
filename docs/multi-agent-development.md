@@ -2,7 +2,7 @@
 
 > 文档所有权：本文是同一 Session 子 Agent、跨 Session 独立 Agent 以及 Team 在一个或多个项目根中共同开发时，工作契约、动态范围、跨 Agent 冲突、验证证据和最终集成语义的权威设计。
 >
-> 状态：部分具备（Current with limitations，2026-08-30）。后端已经实现持久化 WorkRun、工作契约与尝试、同 Session 与跨 Session 参与者、精确等待关系、Project 多根目录表、任意多根隔离工作目录、ChangeSet 来源绑定、验证与集成状态机，以及受信 App Server 的决定、范围扩张请求和冲突处理接口。Team 产品流程、完整工作契约/尝试 RPC、全部平台资格测试、完整参考状态机、验证器变异测试和真实任务对照仍未完成；生产验证器因此保持 `indeterminate`，当前系统不能宣称已经具备可靠的自动并行开发闭环。
+> 状态：部分具备（Current with limitations，2026-08-30）。后端已经实现持久化 WorkRun、工作契约与尝试、同 Session 与跨 Session 参与者、精确等待关系、Project 多根目录表、任意多根隔离工作目录、ChangeSet 来源绑定、验证与集成状态机，以及受信 App Server 的决定、范围扩张请求和冲突处理接口；版本化模型在环评测包含三个对抗安全场景，并让同一个精确任务分别通过单 Agent、同 Session Team 和跨 Session Agent 走完 Turn、工具、封存、独立验证与集成。Team 产品流程、完整工作契约/尝试 RPC、全部平台资格测试、完整参考状态机、充分的验证器变异测试和真实任务对照仍未完成；生产验证器因此保持 `indeterminate`，当前系统不能宣称已经具备可靠的自动并行开发闭环。
 >
 > Agent 创建、消息、等待、取消和恢复由 [`core-multi-agent.md`](core-multi-agent.md) 拥有；Turn ChangeSet 与受管目录的当前产品语义由 [`chat-session-inspector.md`](chat-session-inspector.md) 拥有；动作授权与操作系统强制执行分别由 [`permissions.md`](permissions.md) 和 [`sandboxing.md`](sandboxing.md) 拥有；当前 App Server 方法由 [`zeta-app-server-api.md`](zeta-app-server-api.md) 拥有。本文不重复这些系统的内部实现。
 
@@ -62,7 +62,7 @@
 | 文件、网络和进程边界的操作系统强制执行 | 部分具备 | [`sandboxing.md`](sandboxing.md) | 所有支持平台都要证明 Agent 无法写同级 Agent 工作区、目标 ref 和验证资源 |
 | 工作契约、工作尝试和范围扩张 | 后端已实现；受信 App Server 可请求停止一个需要扩张范围的精确尝试 | 本文 | 仍需完成新契约与新尝试的产品创建流程和全部迁移的参考模型覆盖 |
 | 跨 Session 观察、等待、另开方向、移交和结果依赖 | 关系领域已实现；精确等待可由 host 恢复并自动收敛 | 本文 | 任意长进程条件、独立 Session 创建/移交产品流程仍未完成 |
-| Team 产品闭环 | 部分具备；App Server 可把 WorkRun 与 canonical Agent tree 组合成只读视图 | 本文 | Desktop、CLI、TUI 的创建、冲突处理和证据界面尚未实现 |
+| Team 产品闭环 | 部分具备；App Server 可把 WorkRun 与 canonical Agent tree 组合成只读视图，评测入口可建立真实父子 Thread 与 WorkAttempt | 本文 | 评测入口不是产品入口；Desktop、CLI、TUI 的创建、冲突处理和证据界面尚未实现 |
 | Project 持久实体、多根目录表与 WorkRun 入口 | 后端已实现；Project 只保存弱关联 | [`domain-model.md`](domain-model.md#11-project多根与共同工作)、本文 | 产品根选择与跨 Environment 交互尚未实现 |
 | 跨 Agent 路径、契约、决定和资源冲突 | 依赖图、显式冲突和实际读写可串行化分析已实现；受信 App Server 可登记冲突并用已有决定解决 | 本文 | 自动把 host 发现映射为用户可处理冲突的产品闭环尚未实现 |
 | 独立证据包与验证结论 | 部分具备；精确输入、失效和不可变重放已实现 | 本文 | 验收验证器和平台隔离未取得资格，生产结论保持无法确认 |
@@ -84,8 +84,9 @@
 - 原子提交前失败与提交后回执丢失：[`persistence_fault_tests.rs`](../zeta-rs/work-coordination/src/persistence_fault_tests.rs)；
 - SQLite WorkRun/Project 回执、损坏拒绝和全局 Thread writer：[`work_coordination_store_tests.rs`](../zeta-rs/state/src/work_coordination_store_tests.rs) 与 [`project_store_tests.rs`](../zeta-rs/state/src/project_store_tests.rs)；
 - App Server 的真实多根工作目录、Git 重放、目标移动、恢复、等待、受信协调命令与 Project 权限分离：[`work_attempt_workspace_tests.rs`](../zeta-rs/app-server/src/server/work_attempt_workspace_tests.rs)、[`work_wait_tests.rs`](../zeta-rs/app-server/src/server/work_wait_tests.rs)、[`work_run_steering_operations_tests.rs`](../zeta-rs/app-server/src/server/work_run_steering_operations_tests.rs) 与 [`project_operations_tests.rs`](../zeta-rs/app-server/src/server/project_operations_tests.rs)。
+- 模型在环的单 Agent、Team 与跨 Session 场景：[`zeta-multi-agent-evals`](../zeta-rs/multi-agent-evals/README.md)；`just multi-agent-eval scripted` 运行三个对抗安全场景和三个共享验收 oracle 的完整开发 loop，真实模型必须显式提供专用 profile 并确认调用成本。
 
-这些测试证明当前后端边界，不等于第 9 节的完整资格结论。参考模型目前覆盖尝试、等待、错误唤醒和范围扩张，没有覆盖所有契约、冲突、验证与集成迁移；平台逃逸、验证器变异、UI 重连和版本化真实任务对照也尚未完成。
+这些测试证明当前后端边界和六个合成的模型在环场景。完整 loop 还证明三种协作形态在一个两文件任务上能得到相同最终树，并且错误验收 oracle 不能进入集成；它仍不等于第 9 节的完整资格结论。参考模型目前覆盖尝试、等待、错误唤醒和范围扩张，没有覆盖所有契约、冲突、验证与集成迁移；平台逃逸、充分的验证器变异、UI 重连、真实模型基线和版本化真实任务对照也尚未完成。
 
 ## 3. 系统边界与端到端流程
 
@@ -660,11 +661,12 @@ Project 的显示名称、描述和归类不进入验证身份。Project 根目�
 | 重试与持久化边界 | 故障存储分别在原子提交前失败和提交成功后丢失回执；SQLite 测试验证完整记录、原命令回执、损坏拒绝和跨 WorkRun Thread writer 租约 | 已证明当前 WorkRun/Project store contract；尚未覆盖第 9.4 节列出的每个外部持久化边界 |
 | 多根结果组合 | App Server 纵向测试使用真实两个 Git 根完成隔离目录、精确 ChangeSet 来源、不可变重放、目标移动失效、多仓库部分状态和 journal 恢复 | 已证明测试场景；不等于所有仓库布局、平台和工具已经取得资格 |
 | 等待与诱导防护 | 等待只绑定精确 WorkAttempt、ExecutionId 和条件；循环、错误代次、活动目标假唤醒、终态伪造摘要和不同精确结果均被状态机拒绝或导出失败 | 已证明当前等待状态机；任意外部长进程观察仍是缺口 |
+| 模型在环执行边界 | `zeta-multi-agent-evals` 通过真实 App Server、模型循环、Thread、Team 委托、WorkRun、WorkAttempt、隔离 Git 目录、工具审查、验证和集成运行六个版本化场景：三个对抗场景测试越界、撤销和冲突后的迟到响应；三个完整 loop 用同一验收 oracle 对照单 Agent、同 Session Team 和跨 Session Agent。Team root 先记录计划，经 host 绑定窄契约后再实际 spawn/send/wait；跨 Session Attempt 只由精确封存结果唤醒 | 已证明六个合成场景的当前宿主边界，以及三种协作形态在一个机械任务上得到相同最终树；评测专用验收器不代表生产验收器已取得资格，也没有证明真实任务收益、全部工具、全部平台或产品流程 |
 | 协调控制面 | 普通连接不能调用工作决定、范围扩张和冲突命令；所有修改绑定 `commandId + expectedRevision`，重放不重复提交；范围扩张与冲突会停止精确尝试，冲突解决会使旧尝试过期 | 已证明当前 App Server 边界；Team、CLI、TUI 的用户确认与冲突界面仍是缺口 |
 | Project 权限隔离 | Project 根只能从受信 host 已解析的 Session `Dir` 创建；Project mutation 不推进 Grant revision，删除 Grant 后 Project 记录不能恢复访问 | 已证明后端组织关系不授予权限；产品根选择和跨 Environment 交互未完成 |
 | 独立验证与发布 | 候选结果绑定目标、根、实际 ChangeSet、授权、控制资源、验证器和环境摘要；目标移动使旧结论过期 | 生产验收验证器和平台隔离未取得资格，结论固定为 `indeterminate`，因此自动发布关闭 |
 
-这张表只声明仓库中已有测试直接证明的范围。要把状态改成“可靠多 Agent 开发已实现”，仍必须补齐第 9.7 节全部完成门，尤其是完整参考模型、平台逃逸、验证器变异、Team/跨 Session 产品测试和真实任务对照。
+这张表只声明仓库中已有测试直接证明的范围。模型在环评测的通过表示被测模型没有突破对应场景的宿主边界，不表示模型的文字结论可信，也不表示整套系统已经取得生产资格；要把状态改成“可靠多 Agent 开发已实现”，仍必须补齐第 9.7 节全部完成门，尤其是完整参考模型、平台逃逸、验证器变异、Team/跨 Session 产品测试和真实任务对照。
 
 ## 10. 失败、取消与恢复
 

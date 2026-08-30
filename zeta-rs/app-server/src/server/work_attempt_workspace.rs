@@ -50,7 +50,7 @@ pub(super) struct WorkAttemptWorkspaceBindings {
 
 #[derive(Clone)]
 pub(super) struct ActiveWorkAttemptWorkspace {
-    identity: WorkAttemptDirIdentity,
+    pub(super) identity: WorkAttemptDirIdentity,
     bindings: WorkAttemptWorkspaceBindings,
 }
 

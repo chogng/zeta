@@ -306,6 +306,110 @@ impl TurnChangesRuntime {
         }
     }
 
+    /// Executes the feature-gated exact-file acceptance profile against the independently
+    /// materialized final root. Production compositions never select this profile.
+    #[cfg(feature = "multi-agent-evals")]
+    pub(super) fn execute_evaluation_verification(
+        &self,
+        run: &WorkRun,
+        verification: &WorkVerification,
+        expected_files: &BTreeMap<String, Vec<u8>>,
+    ) -> WorkVerificationExecution {
+        let sources = match self.verification_source_roots(run, &verification.input.ordered_results)
+        {
+            Ok(sources) => sources,
+            Err(error) => return indeterminate_execution("source-roots", &error),
+        };
+        let (workspace_digest, bindings) =
+            match self.materialize_work_verification(run, &verification.input, &sources) {
+                Ok(materialized) => materialized,
+                Err(error) => return indeterminate_execution("workspace-recovery", &error),
+            };
+        let serializable =
+            verification.input.serializability.status == WorkSerializabilityStatus::Proven;
+        let unknown_effects = verification.input.ordered_results.iter().any(|result| {
+            run.attempts[&result.attempt_id]
+                .result
+                .as_ref()
+                .is_some_and(|result| {
+                    result.external_effects_status == ExternalEffectsStatus::Unknown
+                })
+        });
+        let acceptance = evaluate_expected_files(&bindings, expected_files);
+        let checks = vec![
+            VerificationCheckEvidence {
+                check_id: "immutable-replay".into(),
+                command_digest: verification.input.validator_digest.clone(),
+                output_digest: workspace_digest,
+                outcome: VerificationCheckOutcome::Passed,
+            },
+            VerificationCheckEvidence {
+                check_id: "serializability".into(),
+                command_digest: digest_text("actual-effect-serializability-v1"),
+                output_digest: verification.input.serializability.evidence_digest.clone(),
+                outcome: if serializable {
+                    VerificationCheckOutcome::Passed
+                } else {
+                    VerificationCheckOutcome::Indeterminate
+                },
+            },
+            VerificationCheckEvidence {
+                check_id: "external-effects".into(),
+                command_digest: digest_text("external-effect-reconciliation-v1"),
+                output_digest: digest_text(if unknown_effects {
+                    "one or more external effects have no trusted receipt"
+                } else {
+                    "all selected results have host-confined or verified effects"
+                }),
+                outcome: if unknown_effects {
+                    VerificationCheckOutcome::Indeterminate
+                } else {
+                    VerificationCheckOutcome::Passed
+                },
+            },
+            VerificationCheckEvidence {
+                check_id: "acceptance-profile".into(),
+                command_digest: acceptance.command_digest,
+                output_digest: acceptance.output_digest,
+                outcome: if acceptance.passed {
+                    VerificationCheckOutcome::Passed
+                } else {
+                    VerificationCheckOutcome::Failed
+                },
+            },
+        ];
+        if !serializable {
+            WorkVerificationExecution {
+                conclusion: VerificationConclusion::Indeterminate,
+                checks,
+                reason: format!(
+                    "exact-file acceptance was evaluated, but serializability is not proven: {}",
+                    verification.input.serializability.reason
+                ),
+            }
+        } else if unknown_effects {
+            WorkVerificationExecution {
+                conclusion: VerificationConclusion::Indeterminate,
+                checks,
+                reason: "exact-file acceptance was evaluated, but external effects are not fully reconciled"
+                    .into(),
+            }
+        } else if acceptance.passed {
+            WorkVerificationExecution {
+                conclusion: VerificationConclusion::Verified,
+                checks,
+                reason: "the independently materialized final root matched the exact-file acceptance profile"
+                    .into(),
+            }
+        } else {
+            WorkVerificationExecution {
+                conclusion: VerificationConclusion::Rejected,
+                checks,
+                reason: acceptance.reason,
+            }
+        }
+    }
+
     fn verification_source_roots(
         &self,
         run: &WorkRun,
@@ -464,8 +568,19 @@ impl TurnChangesRuntime {
         input: &WorkVerificationInput,
         sources: &BTreeMap<DirId, VerificationSourceRoot>,
     ) -> Result<ContentDigest, String> {
+        self.materialize_work_verification(run, input, sources)
+            .map(|(digest, _)| digest)
+    }
+
+    fn materialize_work_verification(
+        &self,
+        run: &WorkRun,
+        input: &WorkVerificationInput,
+        sources: &BTreeMap<DirId, VerificationSourceRoot>,
+    ) -> Result<(ContentDigest, Vec<ManagedDirBinding>), String> {
         let key = verification_key(&run.work_run_id, input).map_err(|error| error.to_string())?;
         let mut manifests = Vec::with_capacity(input.roots.len());
+        let mut bindings = Vec::with_capacity(input.roots.len());
         for root in &input.roots {
             let source = sources
                 .get(&root.source_dir_id)
@@ -487,6 +602,7 @@ impl TurnChangesRuntime {
                     .manifest_digest()
                     .map_err(|error| error.to_string())?,
             );
+            bindings.push(binding);
         }
         let output = self
             .worktrees
@@ -495,13 +611,73 @@ impl TurnChangesRuntime {
                 key.to_string(),
             ))
             .map_err(|error| error.to_string())?;
-        canonical_digest(&(
+        let digest = canonical_digest(&(
             1_u32,
             &key,
             manifests,
             output.manifest_digest(),
             output.dir_id(),
-        ))
+        ))?;
+        Ok((digest, bindings))
+    }
+}
+
+#[cfg(feature = "multi-agent-evals")]
+struct ExpectedFileEvaluation {
+    passed: bool,
+    command_digest: ContentDigest,
+    output_digest: ContentDigest,
+    reason: String,
+}
+
+#[cfg(feature = "multi-agent-evals")]
+fn evaluate_expected_files(
+    bindings: &[ManagedDirBinding],
+    expected_files: &BTreeMap<String, Vec<u8>>,
+) -> ExpectedFileEvaluation {
+    let command_digest = canonical_digest(&(1_u32, "exact-files-v1", expected_files))
+        .unwrap_or_else(|_| digest_text("exact-file-command-encoding-failed"));
+    if bindings.len() != 1 || expected_files.is_empty() {
+        return ExpectedFileEvaluation {
+            passed: false,
+            command_digest,
+            output_digest: digest_text(
+                "exact-file profile requires one root and one or more files",
+            ),
+            reason:
+                "exact-file profile requires one materialized root and one or more expected files"
+                    .into(),
+        };
+    }
+    let mut actual = BTreeMap::new();
+    let mut passed = true;
+    for (path, expected) in expected_files {
+        let relative = Path::new(path);
+        let valid = !path.is_empty()
+            && !relative.is_absolute()
+            && relative
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_)));
+        let bytes = valid
+            .then(|| std::fs::read(bindings[0].dir().join(relative)).ok())
+            .flatten();
+        passed &= bytes.as_deref() == Some(expected.as_slice());
+        actual.insert(
+            path.clone(),
+            bytes.map(|bytes| ContentDigest::sha256(&bytes)),
+        );
+    }
+    ExpectedFileEvaluation {
+        passed,
+        command_digest,
+        output_digest: canonical_digest(&(1_u32, actual))
+            .unwrap_or_else(|_| digest_text("exact-file-output-encoding-failed")),
+        reason: if passed {
+            "the exact expected files matched".into()
+        } else {
+            "one or more independently materialized files were missing or had different content"
+                .into()
+        },
     }
 }
 

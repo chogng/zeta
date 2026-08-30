@@ -148,6 +148,84 @@ impl WorkCoordinationRuntime {
         })
     }
 
+    /// Runs the feature-gated exact-file validator without allowing the production verifier's
+    /// intentionally indeterminate acceptance-profile result to race the evaluation record.
+    #[cfg(feature = "multi-agent-evals")]
+    pub(super) fn request_evaluation_verification(
+        &self,
+        begin_command_id: CommandId,
+        finish_command_id: CommandId,
+        work_run_id: WorkRunId,
+        expected_revision: u64,
+        selected_attempt_ids: BTreeSet<WorkAttemptId>,
+        expected_files: &std::collections::BTreeMap<String, Vec<u8>>,
+    ) -> Result<(WorkRun, ContentDigest), WorkCoordinationError> {
+        let _guard = self
+            .reconcile_gate
+            .lock()
+            .map_err(|_| WorkCoordinationError::Storage("reconcile lock poisoned".into()))?;
+        let run = self.coordinator.read(&work_run_id)?;
+        if run.revision != expected_revision {
+            return Err(WorkCoordinationError::RevisionConflict {
+                expected: expected_revision,
+                actual: run.revision,
+            });
+        }
+        let host = self
+            .workspace_host
+            .read()
+            .map_err(|_| WorkCoordinationError::Storage("workspace host lock poisoned".into()))?
+            .clone()
+            .ok_or_else(|| {
+                WorkCoordinationError::InvalidTransition(
+                    "WorkVerification evidence authority is unavailable".into(),
+                )
+            })?;
+        let mut input = host
+            .prepare_work_verification(&run, &selected_attempt_ids)
+            .map_err(WorkCoordinationError::InvalidTransition)?;
+        let validator_bytes =
+            serde_json::to_vec(&(1_u32, "zeta-multi-agent-exact-files-v1", expected_files))
+                .map_err(|error| WorkCoordinationError::InvalidInput(error.to_string()))?;
+        input.validator_digest = ContentDigest::sha256(&validator_bytes);
+        let verification_key = zeta_work_coordination::verification_key(&work_run_id, &input)?;
+        let verifying = self.coordinator.apply(WorkRunCommandRequest {
+            command_id: begin_command_id,
+            work_run_id: work_run_id.clone(),
+            expected_revision,
+            command: WorkRunCommand::BeginVerification { input },
+        })?;
+        if verifying.disposition == WorkCommandDisposition::Committed {
+            self.publish(&verifying.work_run)?;
+        }
+        let verification = verifying
+            .work_run
+            .verifications
+            .get(&verification_key)
+            .ok_or_else(|| {
+                WorkCoordinationError::Storage(
+                    "evaluation WorkVerification disappeared before execution".into(),
+                )
+            })?;
+        let execution =
+            host.execute_evaluation_verification(&verifying.work_run, verification, expected_files);
+        let finished = self.coordinator.apply(WorkRunCommandRequest {
+            command_id: finish_command_id,
+            work_run_id,
+            expected_revision: verifying.work_run.revision,
+            command: WorkRunCommand::FinishVerification {
+                verification_key: verification_key.clone(),
+                conclusion: execution.conclusion,
+                checks: execution.checks,
+                reason: execution.reason,
+            },
+        })?;
+        if finished.disposition == WorkCommandDisposition::Committed {
+            self.publish(&finished.work_run)?;
+        }
+        Ok((finished.work_run, verification_key))
+    }
+
     /// Queues publication of one exact verified result set. Preparation and publication facts are
     /// derived by the host and persisted one root at a time by reconciliation.
     pub(super) fn request_integration(
@@ -326,18 +404,24 @@ impl WorkCoordinationRuntime {
                         let result = if active {
                             host.activate_work_attempt_workspace(work_run_id, attempt)
                         } else {
-                            host.deactivate_work_attempt_workspace(work_run_id, attempt)
+                            host.stop_work_attempt_turns(work_run_id, attempt)
+                                .and_then(|()| {
+                                    host.deactivate_work_attempt_workspace(work_run_id, attempt)
+                                })
                         };
-                        if let Err(message) = result
-                            && active
-                        {
-                            transition = Some(WorkRunCommand::InterruptAttempt {
-                                attempt_id: attempt.attempt_id.clone(),
-                                message: format!(
-                                    "WorkAttempt execution boundary could not be enforced: {message}"
-                                ),
-                            });
-                            break;
+                        if let Err(message) = result {
+                            if active {
+                                transition = Some(WorkRunCommand::InterruptAttempt {
+                                    attempt_id: attempt.attempt_id.clone(),
+                                    message: format!(
+                                        "WorkAttempt execution boundary could not be enforced: {message}"
+                                    ),
+                                });
+                                break;
+                            }
+                            return Err(WorkCoordinationError::Storage(format!(
+                                "WorkAttempt execution could not be stopped before directory scope revocation: {message}"
+                            )));
                         }
                     }
                     WorkAttemptWorkspace::Failed { .. } => {

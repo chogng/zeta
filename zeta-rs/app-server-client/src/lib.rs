@@ -59,8 +59,9 @@ use zeta_app_server_protocol::protocol::fs::{
 };
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitRepositoriesResult,
-    GitRepositoryParams, GitTextDiffResult,
+    GitBranchListResult, GitBranchSwitchParams, GitCommitParams, GitCommitResult,
+    GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams,
+    GitTextDiffResult,
 };
 use zeta_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
@@ -124,6 +125,13 @@ use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalReadResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesCommitParams;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesListParams;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesListResult;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesMutationParams;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesMutationResult;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesReadParams;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesReadResult;
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
 pub use in_process::InProcessAppServer;
@@ -549,6 +557,63 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: GitBranchSwitchParams,
     ) -> Result<GitOperationResult, ClientError> {
         self.call(ClientMethod::GitBranchSwitch, params)
+    }
+
+    pub fn stage_git_paths(
+        &mut self,
+        params: GitPathsParams,
+    ) -> Result<GitOperationResult, ClientError> {
+        self.call(ClientMethod::GitStage, params)
+    }
+
+    pub fn unstage_git_paths(
+        &mut self,
+        params: GitPathsParams,
+    ) -> Result<GitOperationResult, ClientError> {
+        self.call(ClientMethod::GitUnstage, params)
+    }
+
+    pub fn discard_git_paths(
+        &mut self,
+        params: GitPathsParams,
+    ) -> Result<GitOperationResult, ClientError> {
+        self.call(ClientMethod::GitDiscardWorktree, params)
+    }
+
+    pub fn commit_git(&mut self, params: GitCommitParams) -> Result<GitCommitResult, ClientError> {
+        self.call(ClientMethod::GitCommit, params)
+    }
+
+    pub fn push_git(&mut self) -> Result<GitOperationResult, ClientError> {
+        self.call(ClientMethod::GitPush, GitRepositoryParams::default())
+    }
+
+    pub fn list_turn_changes(
+        &mut self,
+        params: TurnChangesListParams,
+    ) -> Result<TurnChangesListResult, ClientError> {
+        self.call(ClientMethod::TurnChangesList, params)
+    }
+
+    pub fn read_turn_changes(
+        &mut self,
+        params: TurnChangesReadParams,
+    ) -> Result<TurnChangesReadResult, ClientError> {
+        self.call(ClientMethod::TurnChangesRead, params)
+    }
+
+    pub fn generate_turn_commit_message(
+        &mut self,
+        params: TurnChangesMutationParams,
+    ) -> Result<TurnChangesMutationResult, ClientError> {
+        self.call(ClientMethod::TurnChangesGenerateMessage, params)
+    }
+
+    pub fn commit_turn_changes(
+        &mut self,
+        params: TurnChangesCommitParams,
+    ) -> Result<TurnChangesMutationResult, ClientError> {
+        self.call(ClientMethod::TurnChangesCommit, params)
     }
 
     pub fn create_session(

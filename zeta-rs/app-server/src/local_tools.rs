@@ -885,14 +885,13 @@ impl LocalExecutorReviewer {
         if call.name.as_str() == "apply_patch" {
             let (review, patch, authorization) =
                 self.prepare_apply_patch(call, session_id, thread_id)?;
+            let execution_dir = authorization.dir().canonical_path().to_path_buf();
             return Ok(PreparedToolExecution::new(
                 review,
-                ToolPayload::FunctionArguments(json!({
-                    "patch": patch,
-                    "dir_root": authorization.dir().canonical_path(),
-                })),
+                ToolPayload::FunctionArguments(json!({"patch": patch})),
             )
-            .with_dir_authorization(authorization));
+            .with_dir_authorization(authorization)
+            .with_execution_dir(execution_dir));
         }
         let review = match call.name.as_str() {
             _ => Err(CoreError::Policy(format!(

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -57,6 +58,7 @@ pub(crate) struct PreparedToolExecution {
     review: ActionReviewRequest,
     payload: ToolPayload,
     dir_authorizations: Vec<Authorization>,
+    execution_dir: Option<PathBuf>,
     sandbox_scope: Option<SandboxScope>,
 }
 
@@ -66,12 +68,18 @@ impl PreparedToolExecution {
             review,
             payload,
             dir_authorizations: Vec::new(),
+            execution_dir: None,
             sandbox_scope: None,
         }
     }
 
     pub(crate) fn with_dir_authorization(mut self, authorization: Authorization) -> Self {
         self.dir_authorizations.push(authorization);
+        self
+    }
+
+    pub(crate) fn with_execution_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.execution_dir = Some(dir.into());
         self
     }
 
@@ -84,6 +92,7 @@ impl PreparedToolExecution {
 struct PreparedToolInvocation {
     payload: ToolPayload,
     dir_authorizations: Vec<Authorization>,
+    execution_dir: Option<PathBuf>,
     sandbox_scope: Option<SandboxScope>,
 }
 
@@ -139,6 +148,7 @@ impl ToolExecutorRuntime {
                 PreparedToolInvocation {
                     payload: prepared.payload,
                     dir_authorizations: prepared.dir_authorizations,
+                    execution_dir: prepared.execution_dir,
                     sandbox_scope: prepared.sandbox_scope,
                 },
             );
@@ -186,7 +196,7 @@ impl ToolExecutorRuntime {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let operation_id = ToolOperationId::new(format!("{turn_id}:{}", call.id))
             .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let (payload, dir_authorizations, sandbox_scope) = {
+        let (payload, dir_authorizations, execution_dir, sandbox_scope) = {
             let prepared = self
                 .prepared
                 .lock()
@@ -200,6 +210,7 @@ impl ToolExecutorRuntime {
             (
                 prepared.payload.clone(),
                 prepared.dir_authorizations.clone(),
+                prepared.execution_dir.clone(),
                 prepared.sandbox_scope.clone(),
             )
         };
@@ -222,6 +233,20 @@ impl ToolExecutorRuntime {
                     .remove(&call.id);
                 return Err(CoreError::Execution(error.to_string()));
             }
+        }
+        if let Some(execution_dir) = &execution_dir
+            && !dir_authorizations.iter().any(|authorization| {
+                authorization.dir().canonical_path() == execution_dir
+                    || authorization.dir().requested_path() == execution_dir
+            })
+        {
+            self.prepared
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&call.id);
+            return Err(CoreError::Execution(
+                "host-selected execution directory has no matching authorization".into(),
+            ));
         }
         if let Some(scope) = &sandbox_scope
             && (scope
@@ -252,6 +277,9 @@ impl ToolExecutorRuntime {
         let mut context =
             ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)
                 .with_session_id(session_id.clone());
+        if let Some(execution_dir) = execution_dir {
+            context = context.with_execution_dir(execution_dir);
+        }
         if let Some(scope) = sandbox_scope {
             context = context.with_sandbox_scope(scope);
         }

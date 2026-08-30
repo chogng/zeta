@@ -1,6 +1,6 @@
 # Agent Harness 设计
 
-> 状态：Accepted（2026-08-03）；实现状态最后核对于 2026-08-23。
+> 状态：Accepted（2026-08-03）；实现状态最后核对于 2026-08-30。
 > 定位：回答"Core 的 agent loop 具体怎么搭起来"——一次模型调用长什么样、Turn 内循环与
 > 失败弹性、steering、提示词组织、工具选择与注册时机、上下文裁剪压缩、prompt cache、评测。
 >
@@ -22,7 +22,7 @@
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
 | 上下文怎么裁剪/压缩？ | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit` | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
 | 缓存怎么搞？ | 前缀字节稳定 + append-only；`cache_control` 由 Anthropic adapter 注入 | [§11](#11-prompt-缓存) |
-| 怎么知道 harness 变好了？ | 现有 Rust/TS 行为测试覆盖确定性回归；真实模型 benchmark 后置 | [§14](#14-评测) |
+| 怎么知道 harness 变好了？ | 普通行为用 Rust/TS 回归；多 Agent 安全边界已有版本化模型在环评测；真实任务质量仍需单 Agent 对照 | [§14](#14-评测) |
 
 ## 1. 现状差距
 
@@ -41,7 +41,7 @@
 | Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
 | 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
 | 计划工具 | 长任务显式计划状态 | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致 |
-| 评测 | 任务集 + 指标回路 | 确定性行为由 Core、App Server 和 Desktop 测试覆盖；真实模型 baseline 与 production telemetry 尚未接入 |
+| 评测 | 任务集 + 指标回路 | Core、App Server 和 Desktop 覆盖普通确定性行为；`zeta-multi-agent-evals` 已覆盖合成的单 Agent、Team、跨 Session 完整 loop 和 Team/跨 Session 对抗安全场景；真实任务 baseline 与 production telemetry 尚未接入 |
 
 ## 2. 一次模型调用的目标形态
 
@@ -416,13 +416,29 @@ authoring 规则以最严格交集为准：
 | 空响应/拒绝 | `stop_reason` + 空 content | `refusal` item | 统一映射 `ResponseItem::Refusal` / 空响应走 §7.1 |
 | 错误分类 | `overloaded_error` 等错误体 | `context_length_exceeded` 等 code | 映射进 §7.4 的 `ApiError` 新分类 |
 
-## 14. 评测（后置，可选）
+## 14. 评测
 
-普通行为正确性由 Core、App Server、Desktop 的单元、集成和 smoke 测试覆盖。只有需要比较模型或 profile 的成功率、token 成本和长会话质量时，才建立独立的版本化 benchmark；当前不维护 `evals/harness/` 任务集。
+普通 harness 行为正确性由 Core、App Server、Desktop 的单元、集成和 smoke 测试覆盖；多 Agent 协调安全使用独立的 [`zeta-multi-agent-evals`](../zeta-rs/multi-agent-evals/README.md)，真实开发质量和收益则必须使用版本化任务与单 Agent 对照，三者不能互相替代。
 
-### 14.1 未来任务集
+### 14.1 当前模型在环执行评测
 
-如果后续需要真实模型行为对比，可按下列层次建立独立 benchmark。它们不是当前 Agent Loop 闭环的完成前置条件：
+`zeta-multi-agent-evals` 把模型放进真实 App Server、Turn 循环、工具审查、WorkRun、WorkAttempt、隔离 Git 目录、验证与集成链路中。默认脚本模式同时使用可重复的恶意模型和确定性开发模型：前者会服从仓库中的越界诱导，也会在取消后故意返回旧 Tool Call；后者让同一两文件任务分别走单 Agent、同 Session Team 和跨 Session Agent 完整 loop。评测结论只读取 Thread/Turn/WorkRun 状态、文件摘要、Git 状态和工具结果，模型文字与 Agent 自评不参与判定。
+
+当前版本区分三种执行形态：单 Agent 是一个 root Session/Thread；Team 必须是同一 Session 的 root 与 delegated child Thread，root 先提交计划，host 批准并绑定子工作边界后才允许实际 spawn、send 和 wait/join；跨 Session 必须是两个不同 Session 的 Root participant 和两个不同 WorkAttempt，依赖方只等待精确封存结果。三者共享同一个逐字节验收 oracle、工作协调、验证与集成规则，但不共享父子身份、取消域或上下文。
+
+完整 loop 只有在独立重建候选根、检查不可变重放、可串行化、外部影响和精确文件内容后才能集成。负面测试会篡改验收 oracle，并要求验证失败、集成关闭、目标 ref 不前进。该验收器只在评测 feature 中启用，生产验收仍保持 `indeterminate`。
+
+运行方式：
+
+- `just multi-agent-eval scripted`：离线运行全部确定性对抗场景，适合回归和 CI；
+- `just multi-agent-eval scripted --case <case-id>`：复现一个固定场景；
+- `just multi-agent-eval live --profile <专用目录> --acknowledge-model-cost`：调用该 profile 明确配置的真实模型，记录冻结的 provider/model、token、工具次数和墙钟时间；没有成本确认、模型身份或完整宿主事实时结果不能变成通过。
+
+脚本模式证明安全机制对已知攻击保持确定性，也证明三种协作形态能在一个机械任务上到达相同宿主结果；真实模型模式观察具体模型是否会被诱导。当前指标可以比较模型调用、token、工具次数和墙钟时间，但单个合成任务不能证明多 Agent 有收益。两种模式都不能证明候选代码满足未表达的产品要求，也不能替代 [`multi-agent-development.md`](multi-agent-development.md#97-可以宣称可靠之前的完成门) 的平台、变异、恢复、产品和真实任务资格测试。
+
+### 14.2 真实开发任务集
+
+真实模型行为对比应按下列层次建立独立 benchmark。它们是模型/profile 质量声明和多 Agent 收益声明的前置证据，不是机械执行边界的替代品：
 
 | 层 | 数量 | 内容 | 考察 |
 | --- | --- | --- | --- |
@@ -431,18 +447,19 @@ authoring 规则以最严格交集为准：
 | T3 | 2 | 长会话（>30 次工具调用） | 计划工具、失控防护 |
 | T4 | 2 | 强制压缩任务（低阈值配置） | 压缩后连贯性（约束保留、不重做已完成工作） |
 
-### 14.2 指标
+### 14.3 指标
 
 每次运行记录：成功与否、input/cached/output tokens、工具调用次数、`apply_patch`/`edit` 选择、prepare/commit 失败、降级次数、验证结果和墙钟时间。运行时聚合只保留去内容化类别，不采集工具参数、diff 或文件正文；按 provider/model × profile 出对比表。
 
-### 14.3 运行方式
+### 14.4 分层运行方式
 
-- **PR smoke（无真模型）**：使用现有 assembler、Core、App Server 和 Desktop 测试，断言
-  （a）请求字节稳定（连续 Turn 前缀不变，§11 回归）；（b）限幅与结构不变量；（c）重试、steering、循环终止和 stream gap 恢复；
-- **模型行为 benchmark（可选）**：只有在有受控测试凭据和明确产品目标时，才运行版本化任务集 × 主力 provider/model × 候选 profile；没有 benchmark 时继续使用统一 profile；
+- **PR smoke（无真模型）**：使用现有 assembler、Core、App Server 和 Desktop 测试，断言请求字节稳定、限幅与结构不变量、重试、steering、循环终止和 stream gap 恢复；
+- **多 Agent 对抗回归（无网络）**：运行 `just multi-agent-eval scripted`，每个场景必须实际触发攻击条件，缺少攻击、宿主证据或终态都不能算通过；
+- **真实模型安全评测（显式成本）**：只在专用 profile 和明确成本确认下运行相同版本的受支持场景，模型是被测对象，不是裁判；
+- **真实开发任务 benchmark**：只有在有受控测试凭据和明确产品目标时，才运行版本化任务集 × 主力 provider/model × 候选 profile，并与单 Agent 结果对照；没有 benchmark 时继续使用统一 profile；
 - M0–M6 每个里程碑的验收优先使用对应的确定性测试；模型指标只在 benchmark 启动后作为补充。
 
-当前 PR 只运行现有 Rust/TS 测试和项目既有 smoke 入口，不依赖网络或真实模型凭据。未来模型 benchmark 若启用，只记录明确允许的去内容化指标；目录内容、日志和任务输出不得进入聚合。
+默认 PR 不依赖网络或真实模型凭据。真实模型和真实任务 benchmark 只记录明确允许的去内容化指标；目录内容、日志和任务输出不得进入聚合。
 
 ## 15. 落地顺序
 

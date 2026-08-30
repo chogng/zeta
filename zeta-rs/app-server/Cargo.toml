@@ -10,6 +10,9 @@ doctest = false
 name = "zeta_app_server"
 path = "src/lib.rs"
 
+[features]
+multi-agent-evals = []
+
 [dependencies]
 base64 = { workspace = true }
 dunce = { workspace = true }
@@ -86,6 +89,7 @@ zeta-skills = { workspace = true }
 zeta-skills-extension = { workspace = true }
 zeta-syntax = { workspace = true }
 zeta-thread-transcript = { workspace = true }
+zeta-thread-store = { workspace = true }
 zeta-turn-changes = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-web-search-extension = { workspace = true }

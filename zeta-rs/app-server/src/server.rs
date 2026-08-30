@@ -106,6 +106,10 @@ mod marketplace_projection;
 pub(crate) mod marketplace_runtime;
 mod marketplace_skill_sources;
 mod mcp_operations;
+#[cfg(feature = "multi-agent-evals")]
+mod multi_agent_evaluation;
+#[cfg(feature = "multi-agent-evals")]
+mod multi_agent_evaluation_loop;
 pub(crate) mod multi_agent_tools;
 pub(crate) mod notification_queue;
 mod operations;
@@ -140,6 +144,10 @@ pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
 mod work_attempt_effects;
 mod work_attempt_evidence;
+mod work_attempt_execution;
+#[cfg(test)]
+#[path = "server/work_attempt_execution_tests.rs"]
+mod work_attempt_execution_tests;
 mod work_attempt_workspace;
 #[cfg(test)]
 #[path = "server/work_attempt_workspace_tests.rs"]
@@ -175,6 +183,32 @@ use request_serialization::RequestCancellationRegistry;
 use request_serialization::RequestScheduler;
 use update_broker::UpdateBroker;
 
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation::MultiAgentEvaluationHost;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation::MultiSessionEvaluationAgentAttempt;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation::MultiSessionEvaluationAttempts;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation::MultiSessionEvaluationAttemptsRequest;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation::TeamEvaluationAttempt;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation::TeamEvaluationAttemptRequest;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation_loop::DevelopmentEvaluationAttempt;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation_loop::EvaluationExpectedFile;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation_loop::EvaluationVerification;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation_loop::SingleAgentDevelopmentEvaluation;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation_loop::TeamLoopChildRequest;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation_loop::TeamLoopDevelopmentEvaluation;
+#[cfg(feature = "multi-agent-evals")]
+pub use multi_agent_evaluation_loop::TeamLoopEvaluationCoordinator;
 pub use zeta_codebase::CodebaseModels;
 
 pub struct AppServer {

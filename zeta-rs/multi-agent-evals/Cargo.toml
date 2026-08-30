@@ -1,0 +1,29 @@
+[package]
+name = "zeta-multi-agent-evals"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_multi_agent_evals"
+path = "src/lib.rs"
+
+[[bin]]
+name = "zeta-multi-agent-evals"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+zeta-app-server = { workspace = true, features = ["multi-agent-evals"] }
+zeta-async-utils = { workspace = true }
+zeta-core = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-work-coordination = { workspace = true }
+
+[lints]
+workspace = true

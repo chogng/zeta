@@ -8,6 +8,10 @@ test package *args:
 check package *args:
     python3 -B build/cargo_with_v8.py check -p {{ package }} {{ args }}
 
+# Run versioned multi-Agent evaluations. Real models require the explicit live subcommand flags.
+multi-agent-eval *args:
+    python3 -B build/cargo_with_v8.py run -p zeta-multi-agent-evals -- {{ args }}
+
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
     python3 -B build/cargo_with_v8.py test -p zeta-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact

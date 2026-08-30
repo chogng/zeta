@@ -101,6 +101,7 @@ pub struct LocalAppServerOptions {
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
     initial_dir_permissions: InitialDirPermissions,
+    agent_model_service: Option<Arc<dyn ModelService>>,
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn zeta_web_search_extension::WebSearchBackend>>,
     connector_runtime: Option<LocalConnectorRuntime>,
@@ -130,6 +131,7 @@ impl LocalAppServerOptions {
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
             initial_dir_permissions: InitialDirPermissions::HostConfiguration,
+            agent_model_service: None,
             model_operation_client: None,
             web_search_backend: None,
             connector_runtime: None,
@@ -180,6 +182,16 @@ impl LocalAppServerOptions {
     /// Selects whether Session and Thread event history is recovered from profile storage.
     pub fn with_session_state_mode(mut self, mode: SessionStateMode) -> Self {
         self.session_state_mode = mode;
+        self
+    }
+
+    /// Replaces only the model used by Agent Turns while retaining the configured model catalog.
+    ///
+    /// Embedded hosts can use this boundary to run deterministic or instrumented model subjects
+    /// through the complete App Server execution stack. Product hosts normally use the model
+    /// resolved from profile configuration.
+    pub fn with_agent_model_service(mut self, model: Arc<dyn ModelService>) -> Self {
+        self.agent_model_service = Some(model);
         self
     }
 
@@ -316,6 +328,10 @@ impl fmt::Debug for LocalAppServerOptions {
             .field("built_in_skills", &self.built_in_skills)
             .field("session_state_mode", &self.session_state_mode)
             .field(
+                "agent_model_service_injected",
+                &self.agent_model_service.is_some(),
+            )
+            .field(
                 "model_operation_client_injected",
                 &self.model_operation_client.is_some(),
             )
@@ -361,6 +377,11 @@ impl PartialEq for LocalAppServerOptions {
             && self.initial_dir_permissions == other.initial_dir_permissions
             && self.built_in_skills == other.built_in_skills
             && self.session_state_mode == other.session_state_mode
+            && match (&self.agent_model_service, &other.agent_model_service) {
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
             && match (&self.model_operation_client, &other.model_operation_client) {
                 (Some(left), Some(right)) => Arc::ptr_eq(left, right),
                 (None, None) => true,
@@ -1069,7 +1090,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_kimi_oauth(Arc::clone(&kimi_oauth));
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
-    let model = Arc::new(ConfigBackedModelService {
+    let configured_model = Arc::new(ConfigBackedModelService {
         config: config.clone(),
         dir_config: dir_config.clone(),
         provider_configs: provider_configs.clone(),
@@ -1078,7 +1099,7 @@ pub fn open_local_app_server_with_codebase_providers(
             model_provider: model_provider.clone(),
         }),
     });
-    let runtime_config = model
+    let runtime_config = configured_model
         .resolve_config(&user_config)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let approval_model_provider: Arc<dyn ModelProvider> = model_provider.clone();
@@ -1103,7 +1124,11 @@ pub fn open_local_app_server_with_codebase_providers(
     kimi_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
-    let direct_catalog: Arc<dyn ModelCatalog> = model.clone();
+    let direct_catalog: Arc<dyn ModelCatalog> = configured_model.clone();
+    let agent_model: Arc<dyn ModelService> = options
+        .agent_model_service
+        .take()
+        .unwrap_or_else(|| configured_model.clone());
     let update_dir = if dir_config.is_some() {
         options
             .dir_root
@@ -1119,10 +1144,12 @@ pub fn open_local_app_server_with_codebase_providers(
     let cloud_codebase_root = state_runtime.cloud_codebase_root().to_path_buf();
     let state_runtime = Arc::clone(&state_runtime);
     let mut server = match &profile_runtime {
-        Some(runtime) => {
-            AppServer::new_with_updates(threads, model.clone(), runtime.scoped_updates(update_dir)?)
-        }
-        None => AppServer::new(threads, model.clone()),
+        Some(runtime) => AppServer::new_with_updates(
+            threads,
+            agent_model.clone(),
+            runtime.scoped_updates(update_dir)?,
+        ),
+        None => AppServer::new(threads, agent_model),
     }
     .with_model_catalog(direct_catalog)
     .with_provider_credentials(Arc::new(
