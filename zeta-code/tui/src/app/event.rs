@@ -2,6 +2,7 @@ use crate::components::chat_input_area::ChatInputAreaInteractionId;
 use crate::components::detail_list::DetailList;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
+use crate::components::queue::QueueId;
 use crate::components::steer::SteerId;
 use crate::features::additional_directories::AdditionalDirectoryPaneSpec;
 use crate::features::config::ConfigPaneSpec;
@@ -82,6 +83,11 @@ pub(crate) enum AppEvent {
         steer_id: SteerId,
         error: String,
     },
+    QueueSubmissionCompleted(QueueId),
+    QueueSubmissionFailed {
+        queue_id: QueueId,
+        error: String,
+    },
     ThemePanesClosed,
     ThemePaneOpened(ThemePaneSpec),
     ThreadTranscriptSnapshotReceived(ThreadTranscriptSnapshot),
@@ -89,10 +95,7 @@ pub(crate) enum AppEvent {
     ThreadTranscriptUpdateReceived(Box<ThreadTranscriptUpdateEnvelope>),
     TranscriptCleared,
     TurnActivityChanged(TurnActivity),
-    TurnInputStatusChanged {
-        plan: Option<PlanUpdate>,
-        queued_turns: Vec<String>,
-    },
+    TurnPlanChanged(Option<PlanUpdate>),
     PendingInteractionChanged(Option<(TurnId, RequestId)>),
     TurnCompleted,
     TurnInterrupted,

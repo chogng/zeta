@@ -230,8 +230,15 @@ impl ListSelectionModel {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ListSelectionInputOutcome {
     Activate(ListSelectionItemId),
+    Adjust(ListSelectionItemId, ListSelectionAdjustment),
     Consumed,
     Dismiss,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ListSelectionAdjustment {
+    Previous,
+    Next,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -441,6 +448,21 @@ impl ListSelectionState {
             KeyCode::Enter => {
                 if let Some(id) = self.selected_item_id() {
                     return ListSelectionInputOutcome::Activate(id);
+                }
+            }
+            KeyCode::Left | KeyCode::Right
+                if !self
+                    .search
+                    .as_ref()
+                    .is_some_and(SearchBoxState::input_active) =>
+            {
+                if let Some(id) = self.selected_item_id() {
+                    let adjustment = if key.code == KeyCode::Left {
+                        ListSelectionAdjustment::Previous
+                    } else {
+                        ListSelectionAdjustment::Next
+                    };
+                    return ListSelectionInputOutcome::Adjust(id, adjustment);
                 }
             }
             KeyCode::Char(' ') => {

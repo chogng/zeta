@@ -10,6 +10,7 @@ use crate::components::chat_input::MentionPluginItem;
 use crate::components::chat_input::SkillSelectorItem;
 use crate::components::chat_input::SlashCommandCatalog;
 use crate::components::chat_input_area::ChatInputAreaInteractionId;
+use crate::components::queue::QueueId;
 use crate::components::steer::SteerId;
 use crate::features::config;
 use crate::features::interactions::InteractionResponse;
@@ -40,11 +41,9 @@ use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_protocol::Thread;
-use zeta_protocol::ThreadItem;
 #[cfg(test)]
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
-use zeta_protocol::TurnStatus;
 
 pub(super) enum RequestCompletion {
     WorkspaceReconnect(TuiWorkspaceReconnect),
@@ -71,7 +70,19 @@ pub(super) enum RequestCompletion {
         steer_id: SteerId,
         result: Result<(TurnSteerResult, LatestThreadSnapshot), ClientError>,
     },
-    TurnStarted(Result<(TurnStartResult, LatestThreadSnapshot), ClientError>),
+    TurnStarted(TurnStartReadCompletion),
+    QueuedTurnStarted {
+        queue_id: QueueId,
+        result: TurnStartReadCompletion,
+    },
+}
+
+pub(super) enum TurnStartReadCompletion {
+    Rejected(ClientError),
+    Accepted {
+        start: TurnStartResult,
+        snapshot: Box<Result<LatestThreadSnapshot, ClientError>>,
+    },
 }
 
 pub(super) struct ConversationRequestCompletion {
@@ -158,12 +169,18 @@ pub(super) fn start_turn_and_read(
     scope: ThreadRequestScope,
     submission: ChatSubmission,
     history: ThreadSnapshotHistory,
-) -> Result<(TurnStartResult, LatestThreadSnapshot), ClientError> {
+) -> TurnStartReadCompletion {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
-    let start = submit_prompt(&mut client, scope, submission)?;
-    let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history)?;
-    Ok((start, snapshot))
+    let start = match submit_prompt(&mut client, scope, submission) {
+        Ok(start) => start,
+        Err(error) => return TurnStartReadCompletion::Rejected(error),
+    };
+    let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history);
+    TurnStartReadCompletion::Accepted {
+        start,
+        snapshot: Box::new(snapshot),
+    }
 }
 
 pub(super) fn steer_turn_and_read(
@@ -326,17 +343,22 @@ pub(super) fn apply_request_completion(
                 app.update(AppEvent::FailureReported(error));
             }
         }
-        RequestCompletion::TurnStarted(Ok((start, snapshot))) => {
-            conversation.set_thread_sequence(snapshot.thread.sequence.max(start.sequence));
-            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-            if active_turn.is_none() {
-                *active_turn = Some(start.turn_id);
-            }
-            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
-        }
-        RequestCompletion::TurnStarted(Err(error)) => {
-            report_turn_start_failure(app, active_turn, error.to_string());
-        }
+        RequestCompletion::TurnStarted(result) => apply_turn_start_completion(
+            result,
+            None,
+            conversation,
+            active_turn,
+            thread_subscription,
+            app,
+        ),
+        RequestCompletion::QueuedTurnStarted { queue_id, result } => apply_turn_start_completion(
+            result,
+            Some(queue_id),
+            conversation,
+            active_turn,
+            thread_subscription,
+            app,
+        ),
         RequestCompletion::TurnSteered {
             steer_id,
             result: Ok((steer, snapshot)),
@@ -429,10 +451,53 @@ pub(super) fn apply_request_completion(
 fn report_turn_start_failure(app: &mut App, active_turn: &Option<TurnId>, error: String) {
     if active_turn.is_some() {
         app.update(AppEvent::HostOperationCompleted(Err(format!(
-            "could not queue the follow-up: {error}"
+            "could not start the Turn: {error}"
         ))));
     } else {
         app.update(AppEvent::FailureReported(error));
+    }
+}
+
+fn apply_turn_start_completion(
+    result: TurnStartReadCompletion,
+    queue_id: Option<QueueId>,
+    conversation: &mut ActiveConversation,
+    active_turn: &mut Option<TurnId>,
+    thread_subscription: &mut ThreadSubscription,
+    app: &mut App,
+) {
+    match result {
+        TurnStartReadCompletion::Rejected(error) => {
+            if let Some(queue_id) = queue_id {
+                app.update(AppEvent::QueueSubmissionFailed {
+                    queue_id,
+                    error: error.to_string(),
+                });
+            } else {
+                report_turn_start_failure(app, active_turn, error.to_string());
+            }
+        }
+        TurnStartReadCompletion::Accepted { start, snapshot } => {
+            conversation.set_thread_sequence(start.sequence);
+            if active_turn.is_none() {
+                *active_turn = Some(start.turn_id);
+            }
+            if let Some(queue_id) = queue_id {
+                app.update(AppEvent::QueueSubmissionCompleted(queue_id));
+            }
+            match *snapshot {
+                Ok(snapshot) => {
+                    conversation.set_thread_sequence(snapshot.thread.sequence.max(start.sequence));
+                    thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
+                    apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
+                }
+                Err(error) => {
+                    app.update(AppEvent::HostOperationCompleted(Err(format!(
+                        "Turn was accepted, but its updated snapshot could not be read: {error}"
+                    ))));
+                }
+            }
+        }
     }
 }
 
@@ -489,7 +554,7 @@ pub(super) fn apply_thread_snapshot(
     } else {
         None
     };
-    let (plan, queued_turns) = turn_input_status(active_turn.as_ref(), &snapshot.turns);
+    let plan = turn_plan(active_turn.as_ref(), &snapshot.turns);
     let pending_interaction = active_turn.as_ref().and_then(|turn_id| {
         snapshot
             .turns
@@ -502,7 +567,7 @@ pub(super) fn apply_thread_snapshot(
             })
     });
     app.update(AppEvent::ThreadTranscriptSnapshotReceived(transcript));
-    app.update(AppEvent::TurnInputStatusChanged { plan, queued_turns });
+    app.update(AppEvent::TurnPlanChanged(plan));
     app.update(AppEvent::PendingInteractionChanged(pending_interaction));
     apply_active_turn_update(app, active_turn_update);
     if let Some(next_active_turn_update) = next_active_turn_update {
@@ -518,33 +583,16 @@ pub(super) fn apply_thread_snapshot(
     app.set_current_approval_mode(current_approval_mode);
 }
 
-fn turn_input_status(
+fn turn_plan(
     active_turn: Option<&TurnId>,
     turns: &[zeta_protocol::Turn],
-) -> (Option<zeta_protocol::PlanUpdate>, Vec<String>) {
-    let plan = active_turn.and_then(|turn_id| {
+) -> Option<zeta_protocol::PlanUpdate> {
+    active_turn.and_then(|turn_id| {
         turns
             .iter()
             .find(|turn| &turn.turn_id == turn_id)
             .and_then(|turn| turn.plan.clone())
-    });
-    let queued_turns = turns
-        .iter()
-        .filter(|turn| {
-            turn.status == TurnStatus::Created
-                && active_turn.is_none_or(|turn_id| &turn.turn_id != turn_id)
-        })
-        .map(|turn| {
-            turn.items
-                .iter()
-                .find_map(|item| match item {
-                    ThreadItem::UserMessage { text, .. } => Some(text.clone()),
-                    _ => None,
-                })
-                .unwrap_or_else(|| "Queued turn".into())
-        })
-        .collect();
-    (plan, queued_turns)
+    })
 }
 
 enum ConversationCompletionPresentation {
@@ -560,6 +608,7 @@ fn finish_conversation_change(
     switch: ThreadSwitch,
     presentation: ConversationCompletionPresentation,
 ) {
+    app.clear_queued_submissions();
     app.set_next_approval_mode(conversation.next_approval_mode());
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
         app.update(AppEvent::ListSelectionPaneClosed);

@@ -5,6 +5,7 @@ use crate::components::approval::ApprovalSpec;
 use crate::components::approval::ApprovalView;
 use crate::components::chat_input::ChatInput;
 use crate::components::chat_input::ChatInputOutcome;
+use crate::components::chat_input::ChatInputQueueOutcome;
 use crate::components::chat_input::ChatSubmission;
 use crate::components::chat_input::MentionPluginItem;
 use crate::components::chat_input::SkillSelectorItem;
@@ -13,6 +14,7 @@ use crate::components::chat_input::SlashCommandInvocation;
 use crate::components::chat_input::SuggestView;
 use crate::components::detail_list::DetailList;
 use crate::components::key_capture::KeyCapture;
+use crate::components::list_selection::ListSelectionAdjustment;
 use crate::components::list_selection::ListSelectionInputOutcome;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
@@ -29,6 +31,8 @@ use crate::components::query::QueryOutcome;
 use crate::components::query::QueryQuestion;
 use crate::components::query::QueryView;
 use crate::components::queue::Queue;
+use crate::components::queue::QueueId;
+use crate::components::queue::QueueSendNowOutcome;
 use crate::components::queue::QueueView;
 use crate::components::steer::Steer;
 use crate::components::steer::SteerId;
@@ -55,6 +59,36 @@ pub(crate) enum ChatInputAreaOverlayView<'a> {
     Suggest(SuggestView<'a>),
     Approval(ApprovalView<'a>),
     Query(QueryView<'a>),
+}
+
+pub(crate) struct ChatInputAreaView<'a> {
+    state: &'a ChatInputArea,
+}
+
+impl ChatInputAreaView<'_> {
+    pub(super) fn input(&self) -> &str {
+        self.state.text()
+    }
+
+    pub(super) fn input_cursor_width(&self) -> usize {
+        self.state.cursor_display_width()
+    }
+
+    pub(super) fn input_cursor_line(&self) -> usize {
+        self.state.cursor_line()
+    }
+
+    pub(super) fn input_desired_height(&self, available_width: u16) -> u16 {
+        self.state.chat_input_desired_height(available_width)
+    }
+
+    pub(super) fn height_entries(&self) -> Vec<ChatInputAreaHeightEntryView<'_>> {
+        self.state.height_entries()
+    }
+
+    pub(super) fn overlay(&self) -> Option<ChatInputAreaOverlayView<'_>> {
+        self.state.overlay()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -98,6 +132,11 @@ pub(crate) enum ChatInputAreaOutcome {
         pane_id: PaneId,
         item_id: ListSelectionItemId,
     },
+    AdjustSelectionItem {
+        pane_id: PaneId,
+        item_id: ListSelectionItemId,
+        adjustment: ListSelectionAdjustment,
+    },
     TextPromptSubmitted {
         pane_id: PaneId,
         value: String,
@@ -112,7 +151,6 @@ pub(crate) enum ChatInputAreaOutcome {
         interaction_id: ChatInputAreaInteractionId,
         answers: Vec<QueryAnswer>,
     },
-    Queue(ChatSubmission),
     SubmissionRejected(String),
     Submit(ChatSubmission),
     Unhandled,
@@ -199,11 +237,15 @@ impl ChatInputArea {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ChatInputAreaOutcome {
-        self.handle_key_with_submission_target(key, SubmissionTarget::StartTurn)
+        self.handle_key_with_submission_target(key, SubmissionTarget::Start)
     }
 
     pub(crate) fn handle_active_turn_key(&mut self, key: KeyEvent) -> ChatInputAreaOutcome {
-        self.handle_key_with_submission_target(key, SubmissionTarget::SteerTurn)
+        self.handle_key_with_submission_target(key, SubmissionTarget::Steer)
+    }
+
+    pub(crate) fn handle_queued_turn_key(&mut self, key: KeyEvent) -> ChatInputAreaOutcome {
+        self.handle_key_with_submission_target(key, SubmissionTarget::Queue)
     }
 
     fn handle_key_with_submission_target(
@@ -257,6 +299,9 @@ impl ChatInputArea {
                         ListSelectionInputOutcome::Activate(item_id) => {
                             PaneInputOutcome::ActivateSelection(item_id)
                         }
+                        ListSelectionInputOutcome::Adjust(item_id, adjustment) => {
+                            PaneInputOutcome::AdjustSelection(item_id, adjustment)
+                        }
                         ListSelectionInputOutcome::Consumed => PaneInputOutcome::Consumed,
                         ListSelectionInputOutcome::Dismiss => PaneInputOutcome::Dismiss,
                     };
@@ -275,6 +320,13 @@ impl ChatInputArea {
                 PaneInputOutcome::ActivateSelection(item_id) => {
                     ChatInputAreaOutcome::ActivateSelectionItem { pane_id, item_id }
                 }
+                PaneInputOutcome::AdjustSelection(item_id, adjustment) => {
+                    ChatInputAreaOutcome::AdjustSelectionItem {
+                        pane_id,
+                        item_id,
+                        adjustment,
+                    }
+                }
                 PaneInputOutcome::SubmitText(value) => {
                     ChatInputAreaOutcome::TextPromptSubmitted { pane_id, value }
                 }
@@ -286,21 +338,38 @@ impl ChatInputArea {
                 }
             };
         }
-        if submission_target == SubmissionTarget::SteerTurn
-            && key.code == KeyCode::Tab
+        if submission_target == SubmissionTarget::Steer
+            && key.code == KeyCode::Enter
+            && key.modifiers.is_empty()
+            && self.suggest().is_none()
+            && self.chat_input.is_empty()
+            && let Some(outcome) = self.take_latest_queue_for_send_now()
+        {
+            return outcome;
+        }
+        if key.code == KeyCode::Up
+            && key.modifiers.is_empty()
+            && self.suggest().is_none()
+            && self.chat_input.is_empty()
+            && self.restore_latest_queued_input()
+        {
+            return ChatInputAreaOutcome::Consumed;
+        }
+        if submission_target == SubmissionTarget::Queue
+            && key.code == KeyCode::Enter
             && key.modifiers.is_empty()
             && self.suggest().is_none()
         {
-            return map_queued_chat_input_outcome(self.chat_input.submit_current());
+            return self.queue_current_input();
         }
-        if submission_target == SubmissionTarget::SteerTurn
+        if submission_target == SubmissionTarget::Steer
             && key.code == KeyCode::Enter
             && key.modifiers.is_empty()
             && self.suggest().is_none()
             && self.chat_input.submission_contains_skill()
         {
             return ChatInputAreaOutcome::SubmissionRejected(
-                "A running Turn cannot change its Skill; press Tab to queue this message for the next Turn"
+                "A running Turn cannot change its Skill; switch follow-up messages to Queue or wait for the next Turn"
                     .into(),
             );
         }
@@ -349,6 +418,10 @@ impl ChatInputArea {
 
     pub(crate) fn text(&self) -> &str {
         self.chat_input.text()
+    }
+
+    pub(crate) fn view(&self) -> ChatInputAreaView<'_> {
+        ChatInputAreaView { state: self }
     }
 
     pub(crate) fn cursor_display_width(&self) -> usize {
@@ -659,23 +732,11 @@ impl ChatInputArea {
         }
     }
 
-    pub(crate) fn list_selection_pane(&self) -> Option<PaneView<'_, ListSelectionState>> {
-        match self.panes.last() {
-            Some(PaneEntry::ListSelection { pane, .. }) => Some(pane.view()),
-            Some(_) => None,
-            None => None,
-        }
-    }
-
     pub(crate) fn top_pane_id(&self) -> Option<PaneId> {
         self.panes.last().map(PaneEntry::id)
     }
 
-    pub(crate) fn replace_turn_status(
-        &mut self,
-        plan: Option<zeta_protocol::PlanUpdate>,
-        queued_turns: Vec<String>,
-    ) {
+    pub(crate) fn replace_plan_progress(&mut self, plan: Option<zeta_protocol::PlanUpdate>) {
         match plan {
             Some(plan) => {
                 if let Some(progress) = self.plan_progress.as_mut() {
@@ -698,13 +759,31 @@ impl ChatInputArea {
                 self.remove_height_entry(ChatInputAreaHeightEntryKind::PlanProgress);
             }
         }
+    }
 
-        self.queue.replace(queued_turns);
+    pub(crate) fn begin_next_queue_send(&mut self) -> Option<(QueueId, ChatSubmission)> {
+        self.queue.begin_next_send()
+    }
+
+    pub(crate) fn finish_queue_send(&mut self, id: QueueId) -> bool {
+        let removed = self.queue.finish_send(id);
         if self.queue.is_empty() {
             self.remove_height_entry(ChatInputAreaHeightEntryKind::Queue);
-        } else {
-            self.ensure_height_entry(ChatInputAreaHeightEntryKind::Queue);
         }
+        removed
+    }
+
+    pub(crate) fn fail_queue_send(&mut self, id: QueueId) -> bool {
+        self.queue.fail_send(id)
+    }
+
+    pub(crate) fn clear_queue(&mut self) {
+        self.queue.clear();
+        self.remove_height_entry(ChatInputAreaHeightEntryKind::Queue);
+    }
+
+    pub(crate) fn has_editable_queue(&self) -> bool {
+        self.queue.has_editable()
     }
 
     pub(crate) fn begin_steer(&mut self, text: String) -> SteerId {
@@ -765,6 +844,48 @@ impl ChatInputArea {
         self.height_order.retain(|entry| *entry != kind);
     }
 
+    fn queue_current_input(&mut self) -> ChatInputAreaOutcome {
+        match self.chat_input.queue_current() {
+            ChatInputQueueOutcome::Command(command) => ChatInputAreaOutcome::Command(command),
+            ChatInputQueueOutcome::Consumed => ChatInputAreaOutcome::Consumed,
+            ChatInputQueueOutcome::Queued(input) => {
+                self.queue.push(input);
+                self.ensure_height_entry(ChatInputAreaHeightEntryKind::Queue);
+                ChatInputAreaOutcome::Consumed
+            }
+        }
+    }
+
+    fn restore_latest_queued_input(&mut self) -> bool {
+        let Some(input) = self.queue.take_latest_for_edit() else {
+            return false;
+        };
+        if let Err(input) = self.chat_input.restore_queued(input) {
+            self.queue.restore_latest(*input);
+            return false;
+        }
+        if self.queue.is_empty() {
+            self.remove_height_entry(ChatInputAreaHeightEntryKind::Queue);
+        }
+        true
+    }
+
+    fn take_latest_queue_for_send_now(&mut self) -> Option<ChatInputAreaOutcome> {
+        match self.queue.take_latest_for_send_now() {
+            QueueSendNowOutcome::Empty => None,
+            QueueSendNowOutcome::SkillBound => Some(ChatInputAreaOutcome::SubmissionRejected(
+                "A queued message with a Skill cannot steer the running Turn; press Up to edit it or wait for the next Turn"
+                    .into(),
+            )),
+            QueueSendNowOutcome::Submission(submission) => {
+                if self.queue.is_empty() {
+                    self.remove_height_entry(ChatInputAreaHeightEntryKind::Queue);
+                }
+                Some(ChatInputAreaOutcome::Submit(submission))
+            }
+        }
+    }
+
     fn ensure_interaction_slot_available(&self) -> Result<(), String> {
         if self.interaction.is_some() {
             Err("an Agent interaction is already active".into())
@@ -808,6 +929,7 @@ impl PaneEntry {
 
 enum PaneInputOutcome {
     ActivateSelection(ListSelectionItemId),
+    AdjustSelection(ListSelectionItemId, ListSelectionAdjustment),
     SubmitText(String),
     Consumed,
     Dismiss,
@@ -816,8 +938,9 @@ enum PaneInputOutcome {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SubmissionTarget {
-    StartTurn,
-    SteerTurn,
+    Start,
+    Queue,
+    Steer,
 }
 
 impl AgentInteraction {
@@ -856,13 +979,6 @@ fn map_chat_input_outcome(outcome: ChatInputOutcome) -> ChatInputAreaOutcome {
         }
         ChatInputOutcome::Submit(prompt) => ChatInputAreaOutcome::Submit(prompt),
         ChatInputOutcome::Unhandled => ChatInputAreaOutcome::Unhandled,
-    }
-}
-
-fn map_queued_chat_input_outcome(outcome: ChatInputOutcome) -> ChatInputAreaOutcome {
-    match outcome {
-        ChatInputOutcome::Submit(prompt) => ChatInputAreaOutcome::Queue(prompt),
-        outcome => map_chat_input_outcome(outcome),
     }
 }
 

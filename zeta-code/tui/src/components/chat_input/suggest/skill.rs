@@ -156,6 +156,21 @@ impl SkillSelector {
             .map(|(_, skill)| skill)
     }
 
+    pub(in crate::components::chat_input) fn take_bindings(
+        &mut self,
+    ) -> Vec<(TextElementId, SkillRef)> {
+        self.close_popup();
+        std::mem::take(&mut self.bindings)
+    }
+
+    pub(in crate::components::chat_input) fn restore_bindings(
+        &mut self,
+        bindings: Vec<(TextElementId, SkillRef)>,
+    ) {
+        self.close_popup();
+        self.bindings = bindings;
+    }
+
     pub(in crate::components::chat_input) fn clear(&mut self) {
         self.close_popup();
         self.bindings.clear();

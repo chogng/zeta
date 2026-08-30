@@ -26,7 +26,7 @@ Zeta Code 的整个聊天界面由 `ChatWidget` 按上中下分成 `ChatHistory`
 | Slash Command 打开管理或配置流程 | 完整 `Pane` | 在输入框上方占据高度 | 页面栈顶部 | 是 |
 | Agent 请求动作批准 | `Approval` | 覆盖插槽，不占据高度 | 当前选择，完成后恢复原焦点所有者 | 否 |
 | Agent 请求回答一个或多个问题 | `Query` | 覆盖插槽，不占据高度 | 当前选择；自定义答案临时借用 `ChatInput` | 否 |
-| Turn 中有排队内容 | `Queue` | 独立占高类型，与其他类型叠加 | 不主动抢占焦点 | 否 |
+| Turn 中有本地待发送内容 | `Queue` | 独立占高类型，与其他类型叠加 | 空输入框按 `↑` 时把队尾草稿移回 `ChatInput` | 否 |
 | Turn 正在接收 steer | `Steer` | 请求提交后到服务端确认交付前独立占高 | 不主动抢占焦点 | 否 |
 | Agent 更新 Plan | `PlanProgress` 的 `1/3` 和可折叠步骤 | 独立占高类型，折叠与展开各自计算高度 | 不改变当前焦点 | 否 |
 | 从子页面返回 | 上一层 `Pane`，最后回到常驻输入框 | 栈顶 Pane 重新计算高度 | 返回后的可见内容 | 按层退出 |
@@ -216,7 +216,7 @@ pub(crate) enum PaneEntry {
 | --- | --- | --- | --- |
 | 动作批准请求 | `ChatInputAreaOverlayView::Approval` | 服务端确认回复后销毁，恢复原焦点所有者 | `features/interactions/approval.rs` 绑定 Turn、Request 和批准响应 |
 | 一个或多个结构化问题 | `ChatInputAreaOverlayView::Query` | 单题完成后翻到下一题；最后一题回复成功后销毁 | `features/interactions/request_user_input.rs` 把协议 `RequestUserInput` 适配为 `Query` |
-| 排队内容 | `ChatInputAreaHeightEntryView::Queue` | 出队、取消或 Turn 结束时只移除该条目 | Queue 功能保存内容和状态 |
+| 本地待发送内容 | `ChatInputAreaHeightEntryView::Queue` | `↑` 取回编辑；当前 Turn 结束后队首自动发送；服务端接受新 Turn 后才移除 | `Queue` 保存稳定身份、完整可编辑草稿和 `queued/sending` 状态；请求层只提交已开始发送的副本 |
 | 正在提交的 steer | `ChatInputAreaHeightEntryView::Steer` | `SteerTurn` 返回后移除；成功消息留在 Transcript，失败原因写入历史区 | `features/thread/request.rs` 提交 typed `SteerTurn`，`Steer` 只保存本地待交付身份和文案 |
 | Plan 完成度与步骤 | `ChatInputAreaHeightEntryView::PlanProgress` | Plan 完成或 Turn 结束后移除，最终结果留在 Transcript | `features/thread` 保存 Plan 事实，`PlanProgress` 只保存折叠与滚动状态 |
 
@@ -229,6 +229,12 @@ pub(crate) enum PaneEntry {
 `Approval` 或 `Query` 确认后先进入 `Submitting`，不再接收重复确认；底层主体可以恢复焦点。服务端确认后销毁覆盖状态，发送失败则恢复为可操作状态并显示错误。
 
 Agent 交互的协议身份不进入通用绘制数据。`features/interactions` 持有等待中的 `turn_id`、`request_id`、交互种类和排队顺序，只把当前请求对应的覆盖状态交给 `ChatInputArea`。覆盖结果带稳定的本地交互身份，功能层据此构造准确的 `AgentResponse`；请求被其他客户端解决、过期或 Turn 结束时，功能层清理对应请求。这个绑定不使用 `PaneId`，因为覆盖交互不进入页面栈。
+
+`Queue` 不是 canonical `Created` Turn 的只读投影。Queue 和 Steer 是二选一的 Running Turn 跟进方式，由 `<profile>/zeta-code/terminal.json` 的 `followUpMode` 保存，默认 Queue。Queue 模式下 Enter 把完整草稿移入本地 Queue；Steer 模式下 Enter 立即提交 `SteerTurn`。Turn 尚处于 `Created` 阶段时，无论设置为何都只能进入 Queue，不提前调用 `StartTurn`。Tab 只服务候选补全和 Pane 标签切换，不再承担排队。
+
+空输入框按 `↑` 时，Queue 把最后一条完整草稿交还 `ChatInput`；只有恢复成功才移除该 Queue 条目。取回并修改后，Enter 仍遵循当前跟进方式：Queue 模式重新排队，Steer 模式立即发送。Running 且切到 Steer 模式时，空输入框按 Enter 会把最后一条可编辑 Queue 消息直接转成 Steer，不等待当前 Turn 结束。
+
+当前 Turn 进入 terminal 状态后，事件循环只自动发送一次队首。条目在请求期间保留并标记 `sending`；`StartTurn` 被服务端拒绝时恢复为 `queued`，不会自动循环重试，也不会丢失附件、长粘贴内容或 Skill 绑定。服务端已经接受、但随后读取 snapshot 失败时视为已经发送并移除 Queue 条目，避免重复创建 Turn。切换 Session/Thread 会清空当前 ChatWidget 的本地 Queue，绝不把旧 Thread 的草稿发送到新 Thread。
 
 `PlanProgress` 折叠时显示摘要和完成度，例如 `1/3`；展开时显示当前步骤列表并独立计算更大高度。展开和折叠只改变 `PlanProgress` 自己的高度；位于它上方的 `Queue` 只整体上移，不重建状态。Plan 需要用户回答时另行产生 `Query` 或 `Approval` 覆盖类型，不新增 Plan 专用 Pane、Picker 或覆盖插槽。
 
@@ -381,7 +387,7 @@ Rust 多文件组件统一使用“同名 `.rs` 模块根 + 同名目录”：�
 App / features
 ├── 产品状态、命令、副作用和请求绑定
 ├── interactions → Approval / Query
-├── thread → Transcript / PlanProgress / Queue / Steer
+├── thread → Transcript / PlanProgress / Steer
 └── ChatWidget
     ├── ChatHistory → Transcript
     ├── ChatInputArea
@@ -422,7 +428,7 @@ App 和产品功能可以创建正文模型并处理结果；`ChatInputArea` 只
 | `components/interaction/state_tests.rs` | `components/chat_input_area/state_tests.rs` | 保留草稿、页面栈、焦点和逐层 Esc 覆盖 |
 | `app/frame.rs` 中的整帧分配 | `components/chat_widget/view.rs` | 收回 `ChatHistory`、`ChatInputArea` 和 Footer 的上中下区域分配 |
 | `app/frame.rs` 中的输入区域切换 | `components/chat_input_area/view.rs` | 收回常驻输入框、占高栈、覆盖区域和统一命中入口 |
-| `app/frame/frame_tests.rs` 中的输入区域 UI 测试 | `components/chat_input_area/view_tests.rs` 及各子组件测试 | 页面替换、输入框增长和候选布局分别归还对应组件 |
+| `app/frame_tests.rs` 中的输入区域 UI 测试 | `components/chat_input_area/view_tests.rs` 及各子组件测试 | 页面替换、输入框增长和候选布局分别归还对应组件 |
 | `components/transcript/mod.rs` 与 `components/transcript/*` | `components/chat_history.rs` 与 `components/chat_history/*` | 让 `mod.rs` 退场，保留 Transcript 数据模型，把区域、滚动和绘制收到 `ChatHistory` |
 | `components/pane/mod.rs` | `components/pane.rs` | 保留必要导出，让 `mod.rs` 退场 |
 | `components/pane/state.rs` | `components/pane/state.rs` | `PaneViewModel<T>` 改为 `PaneSpec<T>`，可变的 `PaneView<T>` 改为 `Pane<T>` |
@@ -484,9 +490,13 @@ impl ChatInput {
 | 当前内容 | 输入事件 | 结果 |
 | --- | --- | --- |
 | 聊天输入，无候选 | 普通字符、编辑键、粘贴 | 修改草稿 |
-| Running Turn，无候选 | Enter | 提交 `SteerTurn`，服务端确认交付前显示 `Steer` 占高条目 |
-| Running 或 Created Turn，无候选 | Tab | 提交新的 `StartTurn`，作为下一轮 Queue |
-| Running Turn，草稿绑定 Skill | Enter | 保留草稿并提示当前 Turn 不能改变冻结的 Skill；Tab 仍可排队下一轮 |
+| Running Turn、Queue 模式、无候选 | Enter | 把完整草稿移入本地 Queue，不发请求；这是默认行为 |
+| Running Turn、Steer 模式、无候选 | Enter | 提交 `SteerTurn`，服务端确认交付前显示 `Steer` 占高条目 |
+| Created Turn、无候选 | Enter | 无论跟进设置为何，都把完整草稿移入本地 Queue，不发送 Steer |
+| Queue 非空、输入框为空 | `↑` | 把最后一条可编辑 Queue 草稿移回输入框；成功恢复后才移除队列条目 |
+| Running、Steer 模式、Queue 非空、输入框为空 | Enter | 把最后一条可编辑 Queue 消息直接作为 Steer 发送，不等待当前 Turn 结束 |
+| 从 Queue 取回的草稿 | Enter | Queue 模式重新排队；Steer 模式立即发送 |
+| Running Turn、Steer 模式、草稿绑定 Skill | Enter | 保留草稿并提示当前 Turn 不能改变冻结的 Skill；切到 Queue 模式后可排队下一轮 |
 | `Suggest` 可见 | 普通字符、删除、移动光标 | 先修改草稿，再按新片段刷新候选 |
 | `Suggest` 可见 | 上下键 | 循环选择候选，不进入历史记录 |
 | `Suggest` 可见 | Esc | 只关闭当前候选，不清空草稿 |
@@ -577,7 +587,7 @@ UI 由对应组件自己绘制，上一层只分配区域并调用下一层，�
 | Agent 交互 | 已实施 | Approval 与多页 Query 是一次性覆盖交互，自定义答案使用独立输入草稿 |
 | 占高叠加 | 已实施 | 栈顶 Pane、Queue、Steer 和可折叠 PlanProgress 可同时存在，各自计算高度和移除 |
 | `ChatHistory` 与目录收敛 | 已实施 | 旧 transcript/composer/interaction/selection 目录已收束到明确组件，TUI 不使用 `mod.rs` |
-| `Steer` 提交与进行中展示 | 已实施 | Running 时 Enter 提交 typed `SteerTurn`，Tab 创建排队 Turn；服务端确认交付前显示独立占高条目 |
+| `Steer` 与本地 Queue | 已实施 | 跟进方式默认 Queue 并持久化；Running 时 Enter 按 Queue/Steer 设置排队或立即发送，`↑` 取回编辑，Turn terminal 后 FIFO 自动开始下一 Turn |
 
 之后如果增加新的 Pane 正文或占高条目，直接更新封闭枚举、输入结果、绘制分派和对应测试；不保留旧模块转发、类型别名或能力布尔开关。
 
@@ -588,7 +598,9 @@ UI 由对应组件自己绘制，上一层只分配区域并调用下一层，�
 - `chat_widget::view` 只把整帧分为 `ChatHistory`、`ChatInputArea` 和 Footer，`Transcript` 只是历史区内容；
 - `ChatInput` 始终在输入区底部可见，打开 `Pane`、`Queue`、`Steer` 或 `PlanProgress` 都不替换它；
 - 栈顶 `Pane`、`Queue`、`Steer` 和 `PlanProgress` 可同时存在，每个占高条目独立计算高度；
-- Running 时 Enter 只提交 `SteerTurn`，Tab 只提交排队 `StartTurn`，Suggest 可见时 Tab 仍优先补全；Created 状态不发送 Steer；
+- Running 时 Enter 按持久化的 Queue/Steer 跟进方式工作，默认 Queue；Created 状态的 Enter 始终进入本地 Queue；Tab 只用于 Suggest 补全和 Pane 标签切换；
+- Queue 必须保存完整草稿和稳定身份；Steer 模式下空输入框 Enter 可直接把队尾转为 Steer，`↑` 取回时先恢复 `ChatInput` 再移除条目，附件、长粘贴内容和 Skill 绑定不得退化为显示文字；
+- 当前 Turn terminal 后只自动发送一次队首；请求拒绝后条目恢复为 queued 且不自动重试，服务端接受后才移除；
 - 每个 Steer 请求用稳定本地身份完成或失败，移除一个 Steer 不影响其他占高条目；
 - 新占高条目出现在现有条目上方；移除任一条目不会重建或清空其他条目；
 - 页面栈只把栈顶 `Pane` 显示为一个占高条目，父子 Pane 不同时累加高度；
@@ -635,6 +647,7 @@ UI 由对应组件自己绘制，上一层只分配区域并调用下一层，�
 - `Suggest`、`Approval` 和 `Query` 是同一覆盖插槽中的三种明确类型；它们共用单列交互机制，不共用触发来源和结果语义。
 - 批准和 Query 是一次性覆盖交互，回复成功后销毁并恢复原焦点所有者；它们永远不进入页面栈。
 - 栈顶 `Pane`、`Queue`、`Steer` 和 `PlanProgress` 是可同时存在的占高条目；各自拥有高度和生命周期，完成时只移除自己。
+- `Queue` 保存尚未提交给服务端的完整 `ChatInput` 草稿；取回编辑必须先恢复输入框再移除条目，开始自动发送后必须等服务端接受才移除。
 - `Steer` 只表示尚未收到 `SteerTurn` 交付确认的本地提交，不复制 canonical Turn 内容；确认后消息由 Transcript 和 `ChatHistory` 持续展示。
 - Plan 进行时由 `PlanProgress` 展示，完成后最终内容留在 Transcript；Plan 中需要回答的问题使用 `Query`。
 - `Pane` 是可入栈、可接收输入的存活页面；`View` 只是当前一帧的只读数据，永远不能进入页面栈。

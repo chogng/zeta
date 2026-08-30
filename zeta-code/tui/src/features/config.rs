@@ -15,4 +15,5 @@ pub(crate) use request::preferred_model;
 pub(crate) use request::set_preferred_model;
 pub(crate) use resource::ConfigResource;
 pub(crate) use resource::TerminalSettingsEdit;
+pub(crate) use settings::FollowUpMode;
 pub(crate) use settings::TerminalSettings;

@@ -82,7 +82,7 @@ pub(crate) fn keymap_pane_spec(
         "No keymap diagnostics",
     );
     let footer = format!(
-        "Space search  ·  ←/→ tabs  ·  Enter edit  ·  Esc back  ·  {}",
+        "Space search  ·  Tab/Shift-Tab tabs  ·  Enter edit  ·  Esc back  ·  {}",
         resource_path.display()
     );
     KeymapPaneSpec {

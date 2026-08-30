@@ -5,6 +5,7 @@ mod view;
 
 pub(crate) use preview::ListSelectionPreview;
 pub(crate) use state::ListSelectionActivationMode;
+pub(crate) use state::ListSelectionAdjustment;
 pub(crate) use state::ListSelectionGroup;
 pub(crate) use state::ListSelectionInputOutcome;
 pub(crate) use state::ListSelectionItem;

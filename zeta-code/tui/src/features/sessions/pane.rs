@@ -54,7 +54,7 @@ pub(crate) fn session_pane_spec(sessions: &[Session], active_session_id: &str) -
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search saved sessions"))
             .with_empty_message("No matching sessions"),
-            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter resume  ·  Esc back",
+            "Space search  ·  Tab/Shift-Tab tabs  ·  ↑/↓ select  ·  Enter resume  ·  Esc back",
         ),
         actions,
     }

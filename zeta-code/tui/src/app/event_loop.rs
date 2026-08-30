@@ -22,8 +22,7 @@ use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
-use crate::components::chat_input_area::ChatInputAreaHeightEntryKind;
-use crate::components::pane;
+use crate::components::chat_input_area::ChatInputAreaPointerTarget;
 use crate::features::additional_directories;
 use crate::features::config;
 use crate::features::config::ConfigResource;
@@ -168,12 +167,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut thread_refresh_requested = false;
     let mut skills_refresh_requested = false;
     let mut connectors_refresh_requested = false;
+    let mut queued_turn_dispatch_requested = false;
     if let Err(error) = draw_terminal(&mut terminal, &app) {
         let _ = pump.shutdown();
         return Err(error.into());
     }
     let result = (|| {
         loop {
+            let had_active_turn = active_turn.is_some();
             let action = match pump.recv()? {
                 client::RuntimeEvent::Client(event) => {
                     let event = match super::recovery::continue_or_exit(
@@ -249,7 +250,18 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 }
             }
 
-            let action = schedule_action(action, pending_request.is_some(), &mut queued_actions);
+            queued_turn_dispatch_requested |= had_active_turn && active_turn.is_none();
+
+            let mut action =
+                schedule_action(action, pending_request.is_some(), &mut queued_actions);
+            if action.is_none()
+                && pending_request.is_none()
+                && queued_actions.is_empty()
+                && queued_turn_dispatch_requested
+            {
+                action = app.dispatch_next_queued_turn();
+                queued_turn_dispatch_requested = false;
+            }
 
             if let Some(file_search) = file_search.as_mut() {
                 sync_file_search_query(&app, file_search);
@@ -802,6 +814,30 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
+                    AppCommand::SubmitQueuedTurn {
+                        queue_id,
+                        submission,
+                    } => {
+                        draw_terminal(&mut terminal, &app)?;
+                        if pending_request.is_none() {
+                            let request_client = client.clone();
+                            let scope = thread_request_scope(&conversation);
+                            let history = thread_subscription.history();
+                            pending_request = spawn_request(
+                                "zeta-tui-start-queued-turn",
+                                move || RequestCompletion::QueuedTurnStarted {
+                                    queue_id,
+                                    result: start_turn_and_read(
+                                        request_client,
+                                        scope,
+                                        submission,
+                                        history,
+                                    ),
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::SteerTurn {
                         steer_id,
                         submission,
@@ -918,67 +954,31 @@ fn activate_pointer_item(
     column: u16,
     row: u16,
 ) -> Option<AppCommand> {
-    if frame::height_entry_area(app, area, ChatInputAreaHeightEntryKind::PlanProgress)
-        .is_some_and(|plan_area| plan_area.contains((column, row).into()))
-    {
-        app.toggle_plan_progress();
-        return None;
+    match frame::input_pointer_target_at(app, area, column, row)? {
+        ChatInputAreaPointerTarget::PlanProgress => {
+            app.toggle_plan_progress();
+            None
+        }
+        ChatInputAreaPointerTarget::PaneTab(index) => {
+            app.select_tab(index);
+            None
+        }
+        ChatInputAreaPointerTarget::PaneItem(index) => app.activate_visible_item(index),
+        ChatInputAreaPointerTarget::OverlayItem(index) => app.activate_input_overlay_choice(index),
     }
-    if let Some(index) = selection_tab_index_at(app, area, column, row) {
-        app.select_tab(index);
-        return None;
-    }
-    if let Some(index) = selection_item_index_at(app, area, column, row) {
-        return app.activate_visible_item(index);
-    }
-    frame::input_overlay_index_at(app, area, column, row)
-        .and_then(|index| app.activate_input_overlay_choice(index))
-}
-
-fn selection_tab_index_at(
-    app: &App,
-    area: ratatui::layout::Rect,
-    column: u16,
-    row: u16,
-) -> Option<usize> {
-    let view = app.list_selection_pane()?;
-    let frame_areas = frame::layout(app, area);
-    let pane_area = frame_areas
-        .input
-        .height_entries
-        .iter()
-        .find(|entry| entry.kind == ChatInputAreaHeightEntryKind::Pane)?
-        .area;
-    let pane_areas = pane::areas(pane_area);
-    view.body().tab_index_at(pane_areas.body, column, row)
 }
 
 fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column: u16, row: u16) {
-    if let Some(index) = selection_item_index_at(app, area, column, row) {
-        app.select_visible_item(index);
-        return;
+    match frame::input_pointer_target_at(app, area, column, row) {
+        Some(ChatInputAreaPointerTarget::PaneItem(index)) => {
+            app.select_visible_item(index);
+        }
+        Some(ChatInputAreaPointerTarget::OverlayItem(index)) => {
+            app.select_input_overlay_choice(index);
+        }
+        Some(ChatInputAreaPointerTarget::PlanProgress | ChatInputAreaPointerTarget::PaneTab(_))
+        | None => {}
     }
-    if let Some(index) = frame::input_overlay_index_at(app, area, column, row) {
-        app.select_input_overlay_choice(index);
-    }
-}
-
-fn selection_item_index_at(
-    app: &App,
-    area: ratatui::layout::Rect,
-    column: u16,
-    row: u16,
-) -> Option<usize> {
-    let view = app.list_selection_pane()?;
-    let frame_areas = frame::layout(app, area);
-    let pane_area = frame_areas
-        .input
-        .height_entries
-        .iter()
-        .find(|entry| entry.kind == ChatInputAreaHeightEntryKind::Pane)?
-        .area;
-    let pane_areas = pane::areas(pane_area);
-    view.body().item_index_at(pane_areas.body, column, row)
 }
 
 fn draw_terminal(

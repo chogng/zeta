@@ -1,5 +1,6 @@
 use crate::components::chat_input::ChatSubmission;
 use crate::components::chat_input::SlashCommandInvocation;
+use crate::components::queue::QueueId;
 use crate::components::steer::SteerId;
 use crate::features::config::AdditionalDirectoryPermissionEdit;
 use crate::features::config::ConfigEdit;
@@ -73,6 +74,10 @@ pub(crate) enum AppCommand {
     },
     CycleNextApprovalMode,
     SubmitTurn {
+        submission: ChatSubmission,
+    },
+    SubmitQueuedTurn {
+        queue_id: QueueId,
         submission: ChatSubmission,
     },
     SteerTurn {

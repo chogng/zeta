@@ -2,10 +2,19 @@ use serde::Deserialize;
 use serde::Serialize;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum FollowUpMode {
+    #[default]
+    Queue,
+    Steer,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct TerminalSettings {
     mouse_interactions: bool,
+    follow_up_mode: FollowUpMode,
     additional_directory_permissions: AdditionalDirectoryPermissionDefaults,
 }
 
@@ -16,6 +25,14 @@ impl TerminalSettings {
 
     pub(crate) fn set_mouse_interactions(&mut self, enabled: bool) {
         self.mouse_interactions = enabled;
+    }
+
+    pub(crate) const fn follow_up_mode(self) -> FollowUpMode {
+        self.follow_up_mode
+    }
+
+    pub(crate) fn set_follow_up_mode(&mut self, mode: FollowUpMode) {
+        self.follow_up_mode = mode;
     }
 
     pub(crate) fn additional_directory_permissions(
@@ -50,6 +67,7 @@ impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
             mouse_interactions: true,
+            follow_up_mode: FollowUpMode::Queue,
             additional_directory_permissions: AdditionalDirectoryPermissionDefaults::default(),
         }
     }

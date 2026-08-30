@@ -1,35 +1,24 @@
-mod footer;
-
 use crate::app::App;
-use crate::components::approval;
+use crate::app::Status;
 use crate::components::chat_history;
 use crate::components::chat_input;
 use crate::components::chat_input_area;
 use crate::components::chat_input_area::ChatInputAreaAreas;
-use crate::components::chat_input_area::ChatInputAreaHeightEntryKind;
-use crate::components::chat_input_area::ChatInputAreaHeightEntryView;
-use crate::components::chat_input_area::ChatInputAreaOverlayView;
-use crate::components::chat_input_area::PaneEntryView;
+use crate::components::chat_input_area::ChatInputAreaPointerTarget;
 use crate::components::chat_widget;
 use crate::components::chat_widget::ChatWidgetAreas;
-use crate::components::detail_list;
-use crate::components::key_capture;
-use crate::components::key_hint_bar;
-use crate::components::list_selection;
-use crate::components::pane;
-use crate::components::plan_progress;
-use crate::components::query;
-use crate::components::queue;
-use crate::components::steer;
-use crate::components::text_prompt;
+use crate::features::config::FollowUpMode;
+use crate::features::status_line;
 use crate::ui::background;
-use crate::ui::bottom_anchored_area;
 use crate::ui::foreground;
 use crate::ui::highlight;
+use crate::ui::muted;
+use crate::ui::warning;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
+use ratatui::widgets::Paragraph;
 
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     frame.render_widget(
@@ -50,100 +39,44 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         app.welcome(),
         presentation_highlight,
     );
-    for (entry, allocation) in app
-        .input_height_entries()
-        .into_iter()
-        .zip(&areas.input.height_entries)
-    {
-        debug_assert_eq!(entry.kind(), allocation.kind);
-        match entry {
-            ChatInputAreaHeightEntryView::Pane(view) => {
-                let pane_areas = pane::areas(allocation.area);
-                let key_hints = match view {
-                    PaneEntryView::DetailList(view) => {
-                        detail_list::draw(frame, pane_areas.body, view.body());
-                        view.key_hints()
-                    }
-                    PaneEntryView::KeyCapture(view) => {
-                        key_capture::draw(frame, pane_areas.body, view.body());
-                        view.key_hints()
-                    }
-                    PaneEntryView::ListSelection(view) => {
-                        list_selection::draw(frame, pane_areas.body, view.body());
-                        view.key_hints()
-                    }
-                    PaneEntryView::TextPrompt(view) => {
-                        text_prompt::draw(frame, pane_areas.body, view.body());
-                        view.key_hints()
-                    }
-                };
-                key_hint_bar::draw(frame, pane_areas.key_hint_bar, key_hints);
-            }
-            ChatInputAreaHeightEntryView::PlanProgress(view) => {
-                plan_progress::draw(frame, allocation.area, view);
-            }
-            ChatInputAreaHeightEntryView::Queue(view) => {
-                queue::draw(frame, allocation.area, view);
-            }
-            ChatInputAreaHeightEntryView::Steer(view) => {
-                steer::draw(frame, allocation.area, &view);
-            }
-        }
-    }
-
     let cursor = if app.accepts_input() && app.chat_input_focused() {
         chat_input::ChatInputCursor::Visible
     } else {
         chat_input::ChatInputCursor::Hidden
     };
-    chat_input::draw_chat_input(
+    let input_view = app.chat_input_area_view();
+    chat_input_area::draw(
         frame,
-        areas.input.input,
-        app.input(),
-        app.input_cursor_width(),
-        app.input_cursor_line(),
+        &areas.input,
+        overlay_area(&areas),
+        &input_view,
         cursor,
     );
-    footer::draw(frame, areas.widget.footer, app);
-
-    let overlay_area = overlay_area(&areas);
-    match app.input_overlay() {
-        Some(ChatInputAreaOverlayView::Suggest(view)) => {
-            chat_input::draw_suggest(frame, overlay_area, Some(view));
-        }
-        Some(ChatInputAreaOverlayView::Approval(view)) => {
-            let area = bottom_anchored_area(overlay_area, approval::desired_height(view));
-            approval::draw(frame, area, view);
-        }
-        Some(ChatInputAreaOverlayView::Query(view)) => {
-            let area = bottom_anchored_area(overlay_area, query::desired_height(view));
-            query::draw(frame, area, view);
-        }
-        None => {}
-    }
+    draw_footer(frame, areas.widget.footer, app);
 }
 
+#[cfg(test)]
 pub(crate) fn input_overlay_index_at(
     app: &App,
     terminal_area: Rect,
     column: u16,
     row: u16,
 ) -> Option<usize> {
-    let areas = layout(app, terminal_area);
-    let available = overlay_area(&areas);
-    match app.input_overlay()? {
-        ChatInputAreaOverlayView::Suggest(view) => {
-            chat_input::suggest_index_at(available, Some(view), column, row)
-        }
-        ChatInputAreaOverlayView::Approval(view) => {
-            let area = bottom_anchored_area(available, approval::desired_height(view));
-            approval::choice_index_at(area, view, column, row)
-        }
-        ChatInputAreaOverlayView::Query(view) => {
-            let area = bottom_anchored_area(available, query::desired_height(view));
-            query::choice_index_at(area, view, column, row)
-        }
+    match input_pointer_target_at(app, terminal_area, column, row) {
+        Some(ChatInputAreaPointerTarget::OverlayItem(index)) => Some(index),
+        _ => None,
     }
+}
+
+pub(crate) fn input_pointer_target_at(
+    app: &App,
+    terminal_area: Rect,
+    column: u16,
+    row: u16,
+) -> Option<ChatInputAreaPointerTarget> {
+    let areas = layout(app, terminal_area);
+    let input_view = app.chat_input_area_view();
+    chat_input_area::pointer_target_at(&areas.input, overlay_area(&areas), &input_view, column, row)
 }
 
 pub(crate) struct FrameLayout {
@@ -152,50 +85,11 @@ pub(crate) struct FrameLayout {
 }
 
 pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
-    let input_height = app.chat_input_desired_height(terminal_area.width);
-    let height_entries = app
-        .input_height_entries()
-        .into_iter()
-        .map(|entry| {
-            let kind = entry.kind();
-            let height = match entry {
-                ChatInputAreaHeightEntryView::Pane(view) => {
-                    let body_height = match view {
-                        PaneEntryView::DetailList(view) => view.body().desired_height(),
-                        PaneEntryView::KeyCapture(view) => view.body().desired_height(),
-                        PaneEntryView::ListSelection(view) => {
-                            view.body().desired_height(terminal_area.width)
-                        }
-                        PaneEntryView::TextPrompt(view) => view.body().desired_height(),
-                    };
-                    pane::desired_height(body_height)
-                }
-                ChatInputAreaHeightEntryView::PlanProgress(view) => {
-                    plan_progress::desired_height(view)
-                }
-                ChatInputAreaHeightEntryView::Queue(view) => queue::desired_height(view),
-                ChatInputAreaHeightEntryView::Steer(view) => steer::desired_height(&view),
-            };
-            (kind, height)
-        })
-        .collect::<Vec<_>>();
-    let desired_height = chat_input_area::desired_height(input_height, &height_entries);
+    let input_view = app.chat_input_area_view();
+    let desired_height = chat_input_area::view_desired_height(&input_view, terminal_area.width);
     let widget = chat_widget::areas(terminal_area, desired_height);
-    let input = chat_input_area::areas(widget.chat_input_area, input_height, &height_entries);
+    let input = chat_input_area::view_areas(widget.chat_input_area, &input_view);
     FrameLayout { widget, input }
-}
-
-pub(crate) fn height_entry_area(
-    app: &App,
-    terminal_area: Rect,
-    kind: ChatInputAreaHeightEntryKind,
-) -> Option<Rect> {
-    layout(app, terminal_area)
-        .input
-        .height_entries
-        .into_iter()
-        .find(|entry| entry.kind == kind)
-        .map(|entry| entry.area)
 }
 
 fn overlay_area(areas: &FrameLayout) -> Rect {
@@ -211,6 +105,42 @@ fn overlay_area(areas: &FrameLayout) -> Rect {
     }
 }
 
+fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    if let Some(prefix) = app.pending_key_chord_label() {
+        frame.render_widget(
+            Paragraph::new(format!("{prefix} … waiting for next key · esc cancel"))
+                .style(Style::default().fg(warning())),
+            area,
+        );
+        return;
+    }
+    if matches!(app.status(), Status::Working) && !app.input().trim().is_empty() {
+        let hint = if app.steers_active_turn() && app.follow_up_mode() == FollowUpMode::Steer {
+            "enter steer"
+        } else {
+            "enter queue"
+        };
+        frame.render_widget(
+            Paragraph::new(hint).style(Style::default().fg(muted())),
+            area,
+        );
+        return;
+    }
+    if app.has_editable_queue() && app.input().trim().is_empty() {
+        let hint = if app.steers_active_turn() && app.follow_up_mode() == FollowUpMode::Steer {
+            "enter send queued now · ↑ edit"
+        } else {
+            "↑ edit queued message"
+        };
+        frame.render_widget(
+            Paragraph::new(hint).style(Style::default().fg(muted())),
+            area,
+        );
+        return;
+    }
+    status_line::draw(frame, area, app.status_line(), app.approval_mode_status());
+}
+
 #[cfg(test)]
-#[path = "frame/frame_tests.rs"]
+#[path = "frame_tests.rs"]
 mod tests;

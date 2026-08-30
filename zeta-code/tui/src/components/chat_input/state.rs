@@ -33,6 +33,13 @@ pub(crate) enum ChatInputOutcome {
     Unhandled,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum ChatInputQueueOutcome {
+    Command(SlashCommandInvocation),
+    Consumed,
+    Queued(QueuedChatInput),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputItem {
     Text(String),
@@ -44,6 +51,35 @@ pub(crate) enum ChatInputItem {
 pub(crate) struct ChatSubmission {
     pub(crate) display_text: String,
     pub(crate) input: Vec<ChatInputItem>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) struct QueuedChatInput {
+    submission: ChatSubmission,
+    draft: ChatInputDraft,
+}
+
+impl QueuedChatInput {
+    pub(crate) fn display_text(&self) -> &str {
+        &self.submission.display_text
+    }
+
+    pub(crate) fn submission(&self) -> &ChatSubmission {
+        &self.submission
+    }
+
+    pub(crate) fn into_submission(self) -> ChatSubmission {
+        self.submission
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ChatInputDraft {
+    textarea: TextArea,
+    slash_command_element: Option<TextElementId>,
+    skill_bindings: Vec<(TextElementId, SkillRef)>,
+    pending_pastes: PendingPastes,
+    attachments: Attachments,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -422,13 +458,7 @@ impl ChatInput {
         let Some(submission) = self.prepare_submission() else {
             return ChatInputOutcome::Consumed;
         };
-        if submission
-            .input
-            .iter()
-            .all(|input| matches!(input, ChatInputItem::Text(_)))
-        {
-            self.record_history(submission.display_text.clone());
-        }
+        self.record_submission_history(&submission);
         let command = self.slash_commands.invocation(&submission.display_text);
         self.clear();
         match command {
@@ -438,6 +468,56 @@ impl ChatInput {
             },
             None => ChatInputOutcome::Submit(submission),
         }
+    }
+
+    pub(crate) fn queue_current(&mut self) -> ChatInputQueueOutcome {
+        let Some(submission) = self.prepare_submission() else {
+            return ChatInputQueueOutcome::Consumed;
+        };
+        if let Some(command) = self.slash_commands.invocation(&submission.display_text) {
+            match into_command_invocation(submission.clone(), command) {
+                Ok(invocation) if invocation.origin == SlashCommandOrigin::Local => {
+                    self.record_submission_history(&submission);
+                    self.clear();
+                    return ChatInputQueueOutcome::Command(invocation);
+                }
+                Ok(invocation) => {
+                    self.record_submission_history(&submission);
+                    let draft = self.take_draft();
+                    return ChatInputQueueOutcome::Queued(QueuedChatInput {
+                        submission: invocation.into_forwarded_submission(),
+                        draft,
+                    });
+                }
+                Err(_) => {}
+            }
+        }
+
+        self.record_submission_history(&submission);
+        let draft = self.take_draft();
+        ChatInputQueueOutcome::Queued(QueuedChatInput { submission, draft })
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.prepare_submission().is_none()
+    }
+
+    pub(crate) fn restore_queued(
+        &mut self,
+        queued: QueuedChatInput,
+    ) -> Result<(), Box<QueuedChatInput>> {
+        if !self.is_empty() {
+            return Err(Box::new(queued));
+        }
+        let QueuedChatInput { draft, .. } = queued;
+        self.clear();
+        self.textarea = draft.textarea;
+        self.slash_command_element = draft.slash_command_element;
+        self.skills.restore_bindings(draft.skill_bindings);
+        self.pending_pastes = draft.pending_pastes;
+        self.attachments = draft.attachments;
+        self.sync_after_text_change();
+        Ok(())
     }
 
     pub(crate) fn submission_contains_skill(&self) -> bool {
@@ -490,6 +570,30 @@ impl ChatInput {
             display_text,
             input,
         })
+    }
+
+    fn take_draft(&mut self) -> ChatInputDraft {
+        let draft = ChatInputDraft {
+            textarea: std::mem::replace(&mut self.textarea, TextArea::new()),
+            slash_command_element: self.slash_command_element.take(),
+            skill_bindings: self.skills.take_bindings(),
+            pending_pastes: std::mem::take(&mut self.pending_pastes),
+            attachments: std::mem::take(&mut self.attachments),
+        };
+        self.slash_commands.clear();
+        self.mentions.clear();
+        self.reset_history_navigation();
+        draft
+    }
+
+    fn record_submission_history(&mut self, submission: &ChatSubmission) {
+        if submission
+            .input
+            .iter()
+            .all(|input| matches!(input, ChatInputItem::Text(_)))
+        {
+            self.record_history(submission.display_text.clone());
+        }
     }
 
     fn clear(&mut self) {

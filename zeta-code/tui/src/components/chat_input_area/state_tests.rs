@@ -4,6 +4,7 @@ use crate::components::chat_input::ChatInputItem;
 use crate::components::chat_input::SkillSelectorItem;
 use crate::components::chat_input::default_slash_command_catalog;
 use crate::components::chat_input_area::ChatInputAreaHeightEntryKind;
+use crate::components::chat_input_area::ChatInputAreaHeightEntryView;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
@@ -124,8 +125,12 @@ fn escape_pops_one_interaction_view_at_a_time() {
 #[test]
 fn queue_stacks_above_an_existing_plan_and_each_can_be_removed_independently() {
     let mut area = ChatInputArea::new();
-    area.replace_turn_status(Some(active_plan()), Vec::new());
-    area.replace_turn_status(Some(active_plan()), vec!["follow up".into()]);
+    area.replace_plan_progress(Some(active_plan()));
+    area.insert_text("follow up");
+    assert_eq!(
+        area.handle_queued_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Consumed
+    );
 
     assert_eq!(
         area.height_entries()
@@ -138,20 +143,26 @@ fn queue_stacks_above_an_existing_plan_and_each_can_be_removed_independently() {
         ]
     );
 
-    area.replace_turn_status(Some(active_plan()), Vec::new());
+    assert_eq!(
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Consumed
+    );
+    assert_eq!(area.text(), "follow up");
     assert_eq!(
         area.height_entries()[0].kind(),
         ChatInputAreaHeightEntryKind::PlanProgress
     );
 
-    area.replace_turn_status(None, Vec::new());
+    area.replace_plan_progress(None);
     assert!(area.height_entries().is_empty());
 }
 
 #[test]
 fn pending_steer_stacks_above_plan_and_queue_until_its_request_finishes() {
     let mut area = ChatInputArea::new();
-    area.replace_turn_status(Some(active_plan()), vec!["follow up".into()]);
+    area.replace_plan_progress(Some(active_plan()));
+    area.insert_text("follow up");
+    area.handle_queued_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let steer_id = area.begin_steer("change direction".into());
 
@@ -181,7 +192,7 @@ fn pending_steer_stacks_above_plan_and_queue_until_its_request_finishes() {
 }
 
 #[test]
-fn active_turn_enter_steers_and_tab_queues_without_displacing_suggest() {
+fn follow_up_handlers_keep_steer_queue_and_suggest_keys_distinct() {
     let mut area = ChatInputArea::new();
     area.insert_text("steer me");
 
@@ -193,12 +204,31 @@ fn active_turn_enter_steers_and_tab_queues_without_displacing_suggest() {
     assert_eq!(steer.display_text, "steer me");
 
     area.insert_text("queue me");
-    let ChatInputAreaOutcome::Queue(queued) =
-        area.handle_active_turn_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
+    assert_eq!(
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Unhandled
+    );
+    assert_eq!(area.text(), "queue me");
+    assert_eq!(
+        area.handle_queued_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Consumed
+    );
+    assert!(matches!(
+        area.height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].text == "queue me"
+    ));
+
+    assert_eq!(
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Consumed
+    );
+    assert_eq!(area.text(), "queue me");
+    let ChatInputAreaOutcome::Submit(send_now) =
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
-        panic!("expected queued submission");
+        panic!("retrieved Queue input should send as a steer");
     };
-    assert_eq!(queued.display_text, "queue me");
+    assert_eq!(send_now.display_text, "queue me");
 
     area.insert_text("/");
     assert_eq!(
@@ -238,12 +268,28 @@ fn active_turn_keeps_a_skill_draft_until_it_is_queued() {
     assert!(matches!(
         outcome,
         ChatInputAreaOutcome::SubmissionRejected(message)
-            if message.contains("press Tab to queue")
+            if message.contains("switch follow-up messages to Queue")
     ));
     assert_eq!(area.text(), "$commit staged changes");
+    assert_eq!(
+        area.handle_queued_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Consumed
+    );
+    assert_eq!(area.text(), "");
     assert!(matches!(
-        area.handle_active_turn_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
-        ChatInputAreaOutcome::Queue(_)
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::SubmissionRejected(message)
+            if message.contains("queued message with a Skill")
+    ));
+    assert!(matches!(
+        area.height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].text == "$commit staged changes"
+    ));
+    area.handle_active_turn_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(area.text(), "$commit staged changes");
+    assert!(matches!(
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::SubmissionRejected(_)
     ));
 }
 
@@ -253,7 +299,7 @@ fn completed_plan_leaves_the_height_stack() {
     let mut plan = active_plan();
     plan.steps[0].status = PlanStepStatus::Completed;
 
-    area.replace_turn_status(Some(plan), Vec::new());
+    area.replace_plan_progress(Some(plan));
 
     assert!(area.height_entries().is_empty());
 }

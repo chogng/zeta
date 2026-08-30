@@ -7,6 +7,8 @@ use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
+use crate::features::config::FollowUpMode;
+use crate::features::config::TerminalSettings;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crate::ui::accent;
@@ -33,6 +35,12 @@ use std::time::UNIX_EPOCH;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 
+fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
+    let mut settings = TerminalSettings::default();
+    settings.set_follow_up_mode(mode);
+    app.update(AppEvent::ConfigSettingsReceived(settings));
+}
+
 #[test]
 fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     let rendered = render(&App::new(), 80, 20);
@@ -51,8 +59,10 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 #[test]
 fn pending_steer_is_drawn_above_the_persistent_chat_input() {
     let mut app = App::new();
+    set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("start");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("check the tests first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -99,17 +109,52 @@ fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
 }
 
 #[test]
-fn working_draft_explains_enter_steer_and_tab_queue() {
+fn working_draft_explains_the_default_queue_action() {
     let mut app = App::new();
     app.insert_text("start");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("change direction");
+
+    let rendered = render(&app, 80, 20);
+
+    assert_eq!(rendered.lines().last().unwrap().trim_end(), "enter queue");
+}
+
+#[test]
+fn queued_message_explains_how_to_move_it_back_to_the_input() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.insert_text("edit this later");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let rendered = render(&app, 80, 20);
 
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "enter steer · tab queue"
+        "↑ edit queued message"
+    );
+}
+
+#[test]
+fn steer_mode_explains_immediate_send_and_queued_send_now() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    set_follow_up_mode(&mut app, FollowUpMode::Steer);
+    app.insert_text("change direction");
+
+    assert_eq!(
+        render(&app, 80, 20).lines().last().unwrap().trim_end(),
+        "enter steer"
+    );
+
+    set_follow_up_mode(&mut app, FollowUpMode::Queue);
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    set_follow_up_mode(&mut app, FollowUpMode::Steer);
+
+    assert_eq!(
+        render(&app, 80, 20).lines().last().unwrap().trim_end(),
+        "enter send queued now · ↑ edit"
     );
 }
 
@@ -267,7 +312,7 @@ fn list_selection_pane_stacks_above_chat_input_and_keeps_history_visible() {
     assert!(rendered.contains("Keys"));
     assert!(rendered.contains("Space search"));
     assert!(rendered.contains("Search commands and shortcuts"));
-    assert!(rendered.contains("←/→ tabs"));
+    assert!(rendered.contains("Tab/Shift-Tab tabs"));
     assert!(!rendered.contains("enter send"));
     let rows = rendered.lines().collect::<Vec<_>>();
     let last_item_row = rows.iter().position(|row| row.contains("/model")).unwrap();
@@ -283,7 +328,7 @@ fn list_selection_pane_supports_keyboard_tab_switching_and_search() {
     let mut app = App::new();
     app.update(AppEvent::ListSelectionPaneOpened(help_view()));
 
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
@@ -560,7 +605,7 @@ fn help_view() -> PaneSpec<ListSelectionModel> {
             ],
         )
         .with_search(SearchBoxModel::new("Search commands and shortcuts")),
-        "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Esc back",
+        "Space search  ·  Tab/Shift-Tab tabs  ·  ↑/↓ select  ·  Esc back",
     )
 }
 

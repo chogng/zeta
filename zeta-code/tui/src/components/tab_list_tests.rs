@@ -24,11 +24,16 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 
 #[test]
-fn horizontal_navigation_switches_tabs_and_wraps() {
+fn tab_navigation_switches_tabs_and_wraps() {
     let mut tabs = TabListState::new(vec![TestTab("Overview"), TestTab("Providers")]);
 
     assert_eq!(
         tabs.handle_key(key(KeyCode::Right)),
+        TabListInputOutcome::Unhandled
+    );
+    assert_eq!(tabs.active_tab().tab_label(), "Overview");
+    assert_eq!(
+        tabs.handle_key(key(KeyCode::Tab)),
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Providers");
@@ -38,7 +43,7 @@ fn horizontal_navigation_switches_tabs_and_wraps() {
     );
     assert_eq!(tabs.active_tab().tab_label(), "Overview");
     assert_eq!(
-        tabs.handle_key(key(KeyCode::Left)),
+        tabs.handle_key(key(KeyCode::BackTab)),
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Providers");
@@ -68,7 +73,7 @@ fn mouse_hit_testing_follows_wrapped_tabs() {
 #[test]
 fn replacing_tabs_preserves_and_clamps_the_active_index() {
     let mut tabs = TabListState::new(vec![TestTab("One"), TestTab("Two"), TestTab("Three")]);
-    tabs.handle_key(key(KeyCode::Left));
+    tabs.handle_key(key(KeyCode::BackTab));
 
     tabs.replace_tabs(vec![TestTab("First"), TestTab("Second")]);
 
@@ -87,7 +92,7 @@ fn narrow_width_wraps_tabs_without_hiding_them() {
 #[test]
 fn draw_highlights_the_active_tab() {
     let mut tabs = TabListState::new(vec![TestTab("One"), TestTab("Two")]);
-    tabs.handle_key(key(KeyCode::Right));
+    tabs.handle_key(key(KeyCode::Tab));
     let backend = TestBackend::new(20, 1);
     let mut terminal = Terminal::new(backend).unwrap();
 

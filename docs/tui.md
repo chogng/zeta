@@ -588,7 +588,7 @@ owning crate interface / typed App Server result
 
 `status_line/` 定义稳定的 item identity、固定顺序、用户开关、separator 和 overflow policy；`StatusLineResource` 把四个产品显示开关保存到 CLI 显式提供的 `<profile>/zeta-code/statusline.json`，资源不进入 App Server，renderer 也不读取文件。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 按“权限、模型、Git 分支、Git 变更”顺序拥有展示映射与宽度降级，`features/status_line/resource.rs` 拥有显示开关的有界读取、revision 校验和原子保存，`features/status_line/setup.rs` 为 `/statusline` 生成左侧项目、中间说明、右侧开关的操作页面；每次切换只刷新页面和 footer，不向对话记录追加状态消息。`features/status_line/view.rs` 在唯一 footer 区域内从左向右渲染已启用项目。Turn 运行状态不属于 status line。`app/frame/footer.rs` 只决定 Chord 等临时操作提示何时覆盖普通 status line，`components/welcome::WelcomeModel` 单独拥有空会话 workspace 路径文案。
+当前实现由 `features/status_line/model.rs` 按“权限、模型、Git 分支、Git 变更”顺序拥有展示映射与宽度降级，`features/status_line/resource.rs` 拥有显示开关的有界读取、revision 校验和原子保存，`features/status_line/setup.rs` 为 `/statusline` 生成左侧项目、中间说明、右侧开关的操作页面；每次切换只刷新页面和 footer，不向对话记录追加状态消息。`features/status_line/view.rs` 在唯一 footer 区域内从左向右渲染已启用项目。Turn 运行状态不属于 status line。`app/frame.rs` 只决定 Chord 等临时操作提示何时覆盖普通 status line，`components/welcome::WelcomeModel` 单独拥有空会话 workspace 路径文案。
 
 ## 12. `host/`：窄宿主能力
 
@@ -866,8 +866,8 @@ lib.rs + lib_tests.rs
 - `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，create/fork/rewind/resume/switch 返回 conversation change，archive 成功后请求退出，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker 与 Session 归档由同一 feature 拥有；
 - `features/interactions` 把 owner-directed full request 分别适配成 Approval 或多问题 Query 覆盖交互，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
-- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；Config 页面从 App Server 读取当前 Session 的附加目录权限，并通过带版本的完整能力集合修改一个目录；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其鼠标交互设置只约束 TUI 本地 `MouseMode`，不进入 App Server 配置；
-- `components/tab_list.rs` 已拥有横向 tab 集合、当前项、左右/Tab 循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；只读详情、文本输入和按键录制已分别交给 `DetailList`、`TextPrompt` 和 `KeyCapture`；
+- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；Config 页面从 App Server 读取当前 Session 的附加目录权限，并通过带版本的完整能力集合修改一个目录；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其中 Mouse interactions 只约束 TUI 本地 `MouseMode`，Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，默认 Queue，两者都不进入 App Server 配置；
+- `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；Space 进入搜索，左右调整当前配置项，不切标签；只读详情、文本输入和按键录制已分别交给 `DetailList`、`TextPrompt` 和 `KeyCapture`；
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
@@ -878,13 +878,13 @@ lib.rs + lib_tests.rs
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
-- `ChatInputArea` 底部常驻 `ChatInput`，栈顶 Pane、Queue、Steer 和可折叠 PlanProgress 可以分别占高叠加。Turn 为 Running 时 Enter 通过 typed `SteerTurn` 调整当前 Turn，Tab 通过 `StartTurn` 排队下一轮；Steer 条目从本地提交持续到服务端确认交付，成功消息留在历史区。`ListSelection` Pane 组合 `tab_list` 支持横向切页、搜索、过滤、循环选择和逐层出栈。`$` Skill、`/` command 和 `@` Mention 在一个 `SuggestView` 中同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
+- `ChatInputArea` 底部常驻 `ChatInput`，栈顶 Pane、Queue、Steer 和可折叠 PlanProgress 可以分别占高叠加。Turn 为 Running 时 Enter 按持久化的 Follow-up messages 设置把完整草稿放入 Queue 或通过 typed `SteerTurn` 立即发送，默认 Queue；Tab 不再提交消息。Queue 非空时，`↑` 将队尾完整草稿移回输入框；Steer 模式且输入框为空时，Enter 可直接把队尾消息转成 Steer。当前 Turn 结束后队首才调用 `StartTurn`，请求被拒绝时保留条目，服务端接受后才移除。Steer 条目从本地提交持续到服务端确认交付，成功消息留在历史区。`ListSelection` Pane 组合 `tab_list` 支持 Tab/Shift-Tab 切页、搜索、过滤、循环选择和逐层出栈。`$` Skill、`/` command 和 `@` Mention 在一个 `SuggestView` 中同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
   All/Enabled/Disabled/Errors catalog tabs；
 - `$name` 候选和 `/skills` 都只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；候选选中后保留原子 `$name` 文本并绑定 exact pinned `SkillRef`；
   `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
   `skills/changed` 也会刷新前台页面。enablement 不等于正文 activation，TUI 当前没有
   Skill context injection；
-- `app/frame.rs` 只装配 frame，`app/frame/footer.rs` 只选择普通 status line 或临时操作提示；各 component/feature view 拥有自己的 surface。`ChatInputArea` 的占高条目从常驻 `ChatInput` 向上累加，Suggest/Approval/Query 从输入框上沿向上覆盖且不计入布局高度；
+- `app/frame.rs` 只装配 frame 并选择普通 status line 或临时操作提示；`components/chat_input_area/view.rs` 拥有输入区内部的占高、绘制与命中判断，各 component/feature view 拥有自己的 surface。`ChatInputArea` 的占高条目从常驻 `ChatInput` 向上累加，Suggest/Approval/Query 从输入框上沿向上覆盖且不计入布局高度；
 - `TerminalModeGuard` 在任一 mode 获取失败时按逆序恢复已经获取的 terminal mode，显式
   restore 和 Drop 共享幂等清理路径；
 - `StatusLineModel` 直接映射 typed config/Git result 与 App 显式提供的权限模式，`StatusLineResource` 保存四个本地显示开关，`features/status_line/view.rs` 在 footer 区域内按固定顺序渲染并按可用宽度降级到短值或从右侧省略；`WelcomeModel` 在 App 构造阶段把 `TuiOptions::workspace_root` 缩写为 home-relative 文案，draw 不读取环境；
@@ -922,7 +922,7 @@ lib.rs + lib_tests.rs
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。Mouse interactions 和 Add-dir 的十二项新增目录默认授权由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置；默认授权只保存能力集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个附加目录的十二项独立能力，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
+- Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。Mouse interactions、Follow-up messages 和 Add-dir 的十二项新增目录默认授权由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置；Follow-up messages 默认 Queue，用左右明确选择 Queue/Steer，Enter 在两者间切换，Tab/Shift-Tab 切标签，Space 进入搜索。默认授权只保存能力集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个附加目录的十二项独立能力，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。

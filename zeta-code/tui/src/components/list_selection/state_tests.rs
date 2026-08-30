@@ -1,4 +1,5 @@
 use super::ListSelectionActivationMode;
+use super::ListSelectionAdjustment;
 use super::ListSelectionGroup;
 use super::ListSelectionInputOutcome;
 use super::ListSelectionItem;
@@ -100,15 +101,39 @@ fn mouse_click_switches_tabs_and_enables_pointer_mode() {
 }
 
 #[test]
-fn arrow_keys_switch_tabs_and_wrap() {
+fn tab_keys_switch_tabs_and_wrap() {
     let mut state = state();
 
-    state.handle_key(key(KeyCode::Right));
+    state.handle_key(key(KeyCode::Tab));
     assert_eq!(active_tab_label(&state), "Keys");
-    state.handle_key(key(KeyCode::Right));
+    state.handle_key(key(KeyCode::Tab));
     assert_eq!(active_tab_label(&state), "Commands");
-    state.handle_key(key(KeyCode::Left));
+    state.handle_key(key(KeyCode::BackTab));
     assert_eq!(active_tab_label(&state), "Keys");
+}
+
+#[test]
+fn arrow_keys_adjust_the_selected_actionable_item() {
+    let item_id = ListSelectionItemId::new("follow-up-mode");
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
+            "Config",
+            vec![ListSelectionGroup::new(
+                "Config",
+                vec![ListSelectionItem::new("Follow-up messages").with_id(item_id.clone())],
+            )],
+        )
+        .without_tab_bar(),
+    );
+
+    assert_eq!(
+        state.handle_key(key(KeyCode::Left)),
+        ListSelectionInputOutcome::Adjust(item_id.clone(), ListSelectionAdjustment::Previous)
+    );
+    assert_eq!(
+        state.handle_key(key(KeyCode::Right)),
+        ListSelectionInputOutcome::Adjust(item_id, ListSelectionAdjustment::Next)
+    );
 }
 
 #[test]
@@ -119,7 +144,7 @@ fn tab_switching_preserves_the_search_query() {
     for character in "esc".chars() {
         state.handle_key(key(KeyCode::Char(character)));
     }
-    state.handle_key(key(KeyCode::Right));
+    state.handle_key(key(KeyCode::Tab));
 
     assert_eq!(state.query(), "esc");
     assert_eq!(state.visible_items().len(), 2);

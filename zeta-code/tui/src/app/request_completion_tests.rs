@@ -7,7 +7,7 @@ use crossterm::event::KeyModifiers;
 use zeta_protocol::TurnId;
 
 #[test]
-fn queued_follow_up_failure_preserves_the_running_turn() {
+fn turn_start_failure_preserves_an_active_turn_that_appeared_during_the_request() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -21,7 +21,7 @@ fn queued_follow_up_failure_preserves_the_running_turn() {
             .last()
             .unwrap()
             .text
-            .contains("could not queue the follow-up: sequence conflict")
+            .contains("could not start the Turn: sequence conflict")
     );
 }
 

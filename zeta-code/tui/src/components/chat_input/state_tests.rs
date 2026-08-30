@@ -1,12 +1,20 @@
 use super::ChatInput;
 use super::ChatInputItem;
 use super::ChatInputOutcome;
+use super::ChatInputQueueOutcome;
+use super::SkillSelectorItem;
 use crate::components::chat_input::TuiSlashCommandAction;
 use crate::components::chat_input::built_in_catalog_command;
 use crate::components::chat_input::built_in_slash_command_definitions;
+use crate::components::chat_input::default_slash_command_catalog;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use zeta_protocol::ContentDigest;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
+use zeta_protocol::SkillSourceId;
 use zeta_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
@@ -215,4 +223,44 @@ fn shift_enter_inserts_a_newline_and_enter_submits_the_multiline_prompt() {
         submission.input,
         vec![ChatInputItem::Text("first line\nsecond line".into())]
     );
+}
+
+#[test]
+fn queued_input_restores_exact_text_image_paste_and_skill_bindings() {
+    let skill = SkillRef::pinned(
+        SkillId::new(
+            SkillSourceId::new("user:skill-source:test").unwrap(),
+            SkillName::new("commit").unwrap(),
+        ),
+        ContentDigest::sha256(b"commit skill"),
+    );
+    let mut chat_input = ChatInput::new();
+    chat_input.replace_chat_input_catalog(
+        default_slash_command_catalog(),
+        vec![SkillSelectorItem::new(
+            "commit".into(),
+            "draft a commit message".into(),
+            skill,
+        )],
+        Vec::new(),
+    );
+    chat_input.insert_text("$com");
+    chat_input.handle_key(key(KeyCode::Tab));
+    chat_input.insert_text("inspect ");
+    chat_input
+        .attach_image_bytes(b"\x89PNG\r\n\x1a\npayload".to_vec())
+        .unwrap();
+    chat_input.handle_paste("p".repeat(1001)).unwrap();
+
+    let ChatInputQueueOutcome::Queued(queued) = chat_input.queue_current() else {
+        panic!("expected queued input");
+    };
+    let expected = queued.submission().clone();
+    assert!(chat_input.is_empty());
+
+    chat_input.restore_queued(queued).unwrap();
+    let ChatInputOutcome::Submit(actual) = chat_input.handle_key(key(KeyCode::Enter)) else {
+        panic!("expected restored submission");
+    };
+    assert_eq!(actual, expected);
 }

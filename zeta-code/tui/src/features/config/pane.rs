@@ -5,6 +5,7 @@ use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::text_prompt::TextPromptSpec;
+use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use crate::features::config::TerminalSettingsEdit;
 use crate::features::config::preferred_model;
@@ -43,6 +44,10 @@ pub(crate) struct AdditionalDirectoryPermissionEdit {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
     SetTerminalSettings(ConfigEdit),
+    ChooseFollowUpMode {
+        queue: Box<ConfigEdit>,
+        steer: Box<ConfigEdit>,
+    },
     SetAdditionalDirectoryPermissions(AdditionalDirectoryPermissionEdit),
     OpenProviderApiKey {
         provider: String,
@@ -117,6 +122,36 @@ pub(crate) fn config_pane_spec(
             additional_directories: additional_directories.clone(),
         }),
     );
+    let follow_up_id = ListSelectionItemId::new("terminal-follow-up-mode");
+    let mut queue_terminal = terminal;
+    queue_terminal.set_follow_up_mode(FollowUpMode::Queue);
+    let mut steer_terminal = terminal;
+    steer_terminal.set_follow_up_mode(FollowUpMode::Steer);
+    actions.insert(
+        follow_up_id.clone(),
+        ConfigSelectionAction::ChooseFollowUpMode {
+            queue: Box::new(ConfigEdit {
+                terminal: TerminalSettingsEdit {
+                    expected_revision: terminal_revision,
+                    settings: queue_terminal,
+                },
+                server_config: config.clone(),
+                providers: providers.clone(),
+                session_id: session_id.clone(),
+                additional_directories: additional_directories.clone(),
+            }),
+            steer: Box::new(ConfigEdit {
+                terminal: TerminalSettingsEdit {
+                    expected_revision: terminal_revision,
+                    settings: steer_terminal,
+                },
+                server_config: config.clone(),
+                providers: providers.clone(),
+                session_id: session_id.clone(),
+                additional_directories: additional_directories.clone(),
+            }),
+        },
+    );
     let mut config_items = vec![
         ListSelectionItem::new("Mouse interactions")
             .with_id(mouse_id)
@@ -124,6 +159,16 @@ pub(crate) fn config_pane_spec(
                 "Mouse interactions",
                 "Clicks and hover in interactive panes",
                 checkbox(mouse_enabled),
+            ),
+        ListSelectionItem::new("Follow-up messages")
+            .with_id(follow_up_id)
+            .with_columns(
+                "Follow-up messages",
+                "How Enter sends a message while a Turn is running",
+                match terminal.follow_up_mode() {
+                    FollowUpMode::Queue => "Queue",
+                    FollowUpMode::Steer => "Steer",
+                },
             ),
     ];
     config_items.extend(overview(config));
@@ -151,7 +196,7 @@ pub(crate) fn config_pane_spec(
             )
             .with_search(SearchBoxModel::new("Search configuration"))
             .with_empty_message("No matching configuration"),
-            "Space search  ·  Enter select/toggle  ·  ←/→ tabs  ·  ↑/↓ inspect  ·  Esc back",
+            "Space search  ·  Tab/Shift-Tab tabs  ·  ←/→ change  ·  Enter select/toggle  ·  ↑/↓ inspect  ·  Esc back",
         ),
         actions,
     }

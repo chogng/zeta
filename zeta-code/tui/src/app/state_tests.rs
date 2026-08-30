@@ -13,6 +13,7 @@ use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
+use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use crate::features::config::config_pane_spec;
 use crate::features::keymap::KeymapEditIntent;
@@ -63,6 +64,12 @@ use zeta_protocol::ThreadStatus;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
+
+fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
+    let mut settings = TerminalSettings::default();
+    settings.set_follow_up_mode(mode);
+    app.update(AppEvent::ConfigSettingsReceived(settings));
+}
 
 fn config_session() -> SessionId {
     SessionId::new("config-state-session").unwrap()
@@ -555,6 +562,45 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
 }
 
 #[test]
+fn config_follow_up_mode_supports_arrow_selection_and_enter_toggle() {
+    let config = empty_config_snapshot();
+    let mut app = App::new();
+    app.update(AppEvent::ConfigPaneOpened(config_pane_spec(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        7,
+        &config_session(),
+        &no_additional_directories(),
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.terminal.expected_revision == 7
+                && edit.terminal.settings.follow_up_mode() == FollowUpMode::Steer
+    ));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.terminal.settings.follow_up_mode() == FollowUpMode::Queue
+    ));
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.terminal.settings.follow_up_mode() == FollowUpMode::Steer
+    ));
+
+    set_follow_up_mode(&mut app, FollowUpMode::Steer);
+    assert!(matches!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::EditConfig(edit))
+            if edit.terminal.settings.follow_up_mode() == FollowUpMode::Queue
+    ));
+}
+
+#[test]
 fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
     let config = empty_config_snapshot();
     let directories = WorkspaceAdditionalDirectoryListResult {
@@ -578,7 +624,7 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
         &config_session(),
         &directories,
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     for _ in 0..12 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
@@ -612,8 +658,8 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         &config_session(),
         &no_additional_directories(),
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -664,8 +710,8 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         &config_session(),
         &no_additional_directories(),
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
@@ -1107,8 +1153,10 @@ fn control_c_interrupts_a_turn_waiting_for_user_input() {
 #[test]
 fn enter_steers_the_working_turn_and_tracks_delivery() {
     let mut app = App::new();
+    set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
 
     app.insert_text("second");
     app.handle_paste("third".into());
@@ -1137,25 +1185,89 @@ fn enter_steers_the_working_turn_and_tracks_delivery() {
 }
 
 #[test]
-fn tab_queues_a_new_turn_while_the_current_turn_is_working() {
+fn enter_queues_a_new_turn_by_default_while_the_current_turn_is_working() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("next turn");
 
-    let action = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(
-        action,
-        Some(AppCommand::SubmitTurn {
-            submission: ChatSubmission {
-                display_text: "next turn".into(),
-                input: vec![ChatInputItem::Text("next turn".into())],
-            },
-        })
-    );
-    assert!(app.input_height_entries().is_empty());
+    assert_eq!(action, None);
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].text == "next turn"
+    ));
     assert_eq!(app.status(), &Status::Working);
+
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(app.input(), "next turn");
+    assert!(app.input_height_entries().is_empty());
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].text == "next turn"
+    ));
+}
+
+#[test]
+fn queued_turn_stays_editable_when_automatic_submission_is_rejected() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.insert_text("keep this message");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnCompleted);
+
+    let Some(AppCommand::SubmitQueuedTurn {
+        queue_id,
+        submission,
+    }) = app.dispatch_next_queued_turn()
+    else {
+        panic!("expected queued Turn dispatch");
+    };
+    assert_eq!(submission.display_text, "keep this message");
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Queue(view)] if view.items[0].sending
+    ));
+
+    app.update(AppEvent::QueueSubmissionFailed {
+        queue_id,
+        error: "server unavailable".into(),
+    });
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Queue(view)] if !view.items[0].sending
+    ));
+
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(app.input(), "keep this message");
+    assert!(app.input_height_entries().is_empty());
+}
+
+#[test]
+fn enter_sends_the_latest_queued_message_now_without_waiting_for_the_active_turn() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+    app.insert_text("send this now");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    set_follow_up_mode(&mut app, FollowUpMode::Steer);
+
+    let Some(AppCommand::SteerTurn { submission, .. }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected queued message to become an immediate steer");
+    };
+
+    assert_eq!(submission.display_text, "send this now");
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Steer(view)] if view.items == ["send this now"]
+    ));
 }
 
 #[test]
@@ -1166,16 +1278,22 @@ fn a_created_turn_does_not_claim_the_running_steer_action() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert!(matches!(&action, Some(AppCommand::SubmitTurn { .. })));
-    assert!(!matches!(&action, Some(AppCommand::SteerTurn { .. })));
+    assert_eq!(action, None);
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Queue(view)]
+            if view.items[0].text == "after the queued turn"
+    ));
     assert_eq!(app.status(), &Status::Working);
 }
 
 #[test]
 fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
     let mut app = App::new();
+    set_follow_up_mode(&mut app, FollowUpMode::Steer);
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
     app.insert_text("change direction");
     let Some(AppCommand::SteerTurn { steer_id, .. }) =
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))

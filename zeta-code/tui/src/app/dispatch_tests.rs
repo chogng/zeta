@@ -266,13 +266,13 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
             .contains("enabled  ·  built-in  ·  builtin:skill-source:zeta-release")
     );
 
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let enabled = app.list_selection().unwrap();
     assert_eq!(enabled.active_tab().label(), "Enabled (1)");
     assert_eq!(enabled.visible_items()[0].label(), "skill-creator");
 
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let action = app
         .handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();
@@ -294,7 +294,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     )
     .unwrap();
     app.update(AppEvent::SkillsPaneReplaced(view));
-    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE));
     let disabled = app.list_selection().unwrap();
     assert_eq!(disabled.active_tab().label(), "Disabled (1)");
     assert_eq!(disabled.visible_items()[0].label(), "skill-creator");

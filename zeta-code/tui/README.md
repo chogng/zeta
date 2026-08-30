@@ -47,7 +47,7 @@ Tool、approval policy 或 persistence。
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
 - `/resume` 提供 Session picker；`/archive` 通过 typed `session/request` 归档当前 Session，成功后退出 TUI，不创建新 Session；失败时保留当前会话并显示错误；
-- `/config` 异步读取服务端配置、供应商目录和当前 Session 的附加目录权限；Add-dir 标签页始终提供文件读取/修改/执行/监听、Workspace Files/Search、Instructions & Agents、Skills、MCP、LSP、Hooks 和 Plugins 十二项新增目录默认授权，并在已有目录时追加目录级开关，使用 Workspace access revision 防止旧页面覆盖新选择。Config 标签页包含本地 Mouse interactions 开关，Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
+- `/config` 异步读取服务端配置、供应商目录和当前 Session 的附加目录权限；Config 标签页包含本地 Mouse interactions 与 Follow-up messages，后者默认 Queue，可用左右选择 Queue/Steer 或 Enter 切换；Add-dir 标签页始终提供文件读取/修改/执行/监听、Workspace Files/Search、Instructions & Agents、Skills、MCP、LSP、Hooks 和 Plugins 十二项新增目录默认授权，并在已有目录时追加目录级开关，使用 Workspace access revision 防止旧页面覆盖新选择。Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
@@ -108,7 +108,7 @@ transport retry。workspace File mention 插入 workspace-relative 原子路径�
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Add-dir、Providers 与 Language servers，其中 Mouse interactions 和 Add-dir 的新增目录默认授权保存在 `<profile>/zeta-code/terminal.json`。默认授权不保存路径；当前 Session 的目录授权也不写入该文件或 User Config。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Add-dir、Providers 与 Language servers，其中 Mouse interactions、Follow-up messages 和 Add-dir 的新增目录默认授权保存在 `<profile>/zeta-code/terminal.json`。默认授权不保存路径；当前 Session 的目录授权也不写入该文件或 User Config。每项开关只授予标题所指的能力，MCP 连接和 Plugin 安装仍由各自流程确认。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。
 
 从 repository root 启动当前 TUI：
 
@@ -237,7 +237,7 @@ src/
 | `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
 | `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
 | `ChatInputArea` | crate-private | 保存常驻 `ChatInput`、Pane 栈、Queue/Steer/Plan 占高条目和当前覆盖交互，统一路由 key/paste/mouse | 本身不是 Pane 或弹层，不保存 Plugin/Session 等产品状态 |
-| `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理左右/Tab 循环切换与鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
+| `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理 Tab/Shift-Tab 循环切换与鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
 | `components::list_selection::ListSelectionState` | crate-private | 可选 search/preview、Space search mode、过滤索引、候选高亮、选择与循环导航，并组合 `TabListState<ListSelectionGroup>` 切换候选集合 | 只承载真正的列表选择，不执行产品 action |
 | `components::list_selection::view` | crate-private | 绘制 title/search/items/preview/caption/footer，并把 tab 区域委托给 `components::tab_list::draw` | 只读 `ListSelectionState`，不解释产品 action |
 | `ChatInput` | private | blank/trim/submit、多行换行、paste routing、`/`/`$`/`@` 输入路由、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
@@ -255,6 +255,7 @@ src/
 | `TextArea` | private | UTF-8 多行 buffer、byte-safe line/cursor movement、原子元素 insert/delete 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
 | `features::thread::{submit_prompt,steer_prompt}` | private | 从显式 `ThreadRequestScope` 构造 typed `StartTurn` 或 `SteerTurn` 请求并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
 | `Steer` | private | 按稳定本地身份保存尚未收到服务端交付确认的 Steer 文案，并提供独立高度和绘制数据 | 不发送请求、不复制 canonical Turn、不长期保存已交付消息 |
+| `Queue` | private | 保存本地未发送的完整 ChatInput 草稿、稳定身份和 queued/sending 状态；支持 `↑` 取回及 FIFO 自动发送 | 不提前创建 canonical Turn、不在请求拒绝时丢弃草稿、不跨 Thread 搬运条目 |
 | `App::approval_mode_status` | crate-private | 缓存 Session 的下一次模式与 active Turn 的冻结模式，供 footer 展示；Shift-Tab 只产生 Session mutation intent | 不成为权威状态、不判断或绕过批准策略 |
 | `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最早 nonterminal Turn 作为执行队首并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
@@ -312,6 +313,7 @@ run(session, options)
       │  ├─ ReadClipboardImage → clipboard::read_image → AppEvent → App::update
       │  ├─ Quit → return
       │  ├─ SubmitTurn → RequestTask(submit_prompt + canonical read)
+      │  ├─ SubmitQueuedTurn → 保留 Queue 条目 → RequestTask(submit_prompt + canonical read)
       │  ├─ SteerTurn → RequestTask(steer_prompt + canonical read)
       │  └─ Interrupt → RequestTask(interrupt_turn + canonical read)
       ├─ left mouse down → ChatInputArea 共享几何命中
@@ -402,13 +404,14 @@ registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 
 ## 快照→ UI 映射
 
-`apply_active_turn_snapshot` 观察当前执行队首；队首进入 terminal state 后选择最早的下一个
-non-terminal Turn，因此 follow-up queue 不会把 interrupt/status 错绑到队尾：
+`apply_active_turn_snapshot` 观察当前 canonical 执行队首；如果其他客户端已经创建后续 Turn，
+队首进入 terminal state 后继续选择最早的 non-terminal Turn。TUI 自己的本地 Queue 在当前
+执行队首 terminal 后才提交，因此不会提前出现在 canonical Turn 列表中：
 
 | Canonical `TurnStatus` | UI effect |
 | --- | --- |
-| `Created` | `Status::Working`；输入继续创建排队 Turn，不发送 Steer |
-| `Running` | `Status::Working`；Enter Steer，Tab 排队 |
+| `Created` | `Status::Working`；Enter 只保存本地 Queue，不发送 Steer 或创建后续 Turn |
+| `Running` | `Status::Working`；Enter 按 Follow-up messages 设置进入 Queue 或立即 Steer，默认 Queue |
 | `WaitingForApproval` | waiting status；owner-directed approval Pane；仍可 interrupt |
 | `WaitingForUserInput` | waiting status；owner-directed multi-question Pane；仍可 interrupt |
 | `WaitingForCapability` | waiting status；当前不能 resolve |
@@ -455,15 +458,22 @@ Ready / Error
 Working / Waiting*
 ├─ Esc / Ctrl-C / empty Ctrl-D → Interrupt → Cancelling
 ├─ Working: Shift-Tab → cycle mode for later submissions
-├─ Running: typing/paste/editing accepted；Enter → steer active Turn；Tab → queue follow-up Turn
-├─ Created: Enter/Tab → queue follow-up Turn
+├─ Running + Queue mode: typing/paste/editing accepted；Enter → local Queue（默认）
+├─ Running + Steer mode: Enter → steer active Turn immediately
+├─ Created: Enter → local Queue，不提前创建下一 Turn
+├─ Queue + empty input: ↑ → move latest complete draft back to ChatInput
+├─ Running + Steer mode + Queue + empty input: Enter → steer latest queued message now
+├─ restored Queue draft: Enter → follow current Queue/Steer mode
+├─ active Turn terminal: FIFO send first queued draft；server reject → keep it editable
 └─ Waiting*: owner-directed interaction Pane owns input until resolved/interrupted
 
 Cancelling
 └─ further quit/interrupt keys ignored until snapshot terminal state
 ```
 
-Running 状态下 Suggest 可见时，Tab 仍先完成 Slash、Mention 或 Skill 候选；候选关闭后 Tab 才排队下一轮。当前 Turn 的 Skill 已在开始时冻结，因此包含 `$skill` 绑定的草稿不能通过 Enter Steer，界面会保留草稿并提示使用 Tab 排队。
+Running 状态下 Suggest 可见时，Tab 仍完成 Slash、Mention 或 Skill 候选；候选关闭后 Tab 不提交消息。当前 Turn 的 Skill 已在开始时冻结，因此包含 `$skill` 绑定的草稿不能通过 Enter Steer，界面会保留草稿并提示切到 Queue 模式排队。
+
+Queue 保存 `TextArea`、附件、长粘贴占位绑定和 exact `SkillRef`，不是 canonical `Created` Turn 的文字摘要。Follow-up messages 是 host-local 持久化设置，Queue/Steer 二选一且默认 Queue。Steer 模式下，Running 时输入框为空可按 Enter 把最新 Queue 消息立即发送；`↑` 取回采用移动语义，输入框恢复成功后 Queue 条目才消失，修改后按 Enter 继续遵循当前模式。自动发送期间条目显示为 sending，只有 `StartTurn` 已被服务端接受才移除，请求拒绝后恢复为 queued，不做自动重试。
 
 `AppEvent::InterruptFailed` 把状态恢复到 Working，使用户可以再次请求 interrupt；ordinary
 client failure 通过 `AppEvent::FailureReported` 进入 Error 并允许输入新 prompt。
@@ -507,7 +517,7 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive Welcome Banner，宽终端使用双栏，窄终端降级为单栏，并在 `Ready when you are` 下方显示 home-relative workspace 路径；
 2. `ChatInputArea`：底部常驻三至八行 `ChatInput`，上方可同时叠加栈顶 Pane、Queue、Steer 和 PlanProgress；`ChatInput` 正文随逻辑行增长、最多显示六行，超出后跟随光标纵向滚动；
-3. 一行 footer 布局区域；普通状态由 `features::status_line` 从左到右显示已启用的权限、模型、Git 分支和 Git 变更，宽度不足时使用短值并从右侧省略。Chord 等操作提示由 `app/frame/footer.rs` 临时覆盖普通 status line。
+3. 一行 footer 布局区域；普通状态由 `features::status_line` 从左到右显示已启用的权限、模型、Git 分支和 Git 变更，宽度不足时使用短值并从右侧省略。Chord 等操作提示由 `app/frame.rs` 临时覆盖普通 status line。
 
 所有输入相关内容都以 terminal 底部为锚点。Footer 和 `ChatInput` 始终保留；栈顶 Pane、Queue、Steer 和 PlanProgress 各自占高并从 `ChatInput` 向上叠加。Suggest、Approval 和 Query 同时最多显示一个，从 `ChatInput` 上沿向上覆盖，不改变布局高度。`ListSelection` Pane 包含标题、可换行 Tabs、搜索框、可滚动窗口和按键提示；关闭后原聊天草稿仍然存在。
 

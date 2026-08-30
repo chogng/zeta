@@ -4,6 +4,7 @@ use crate::components::list_selection::ListSelectionState;
 use crate::components::text_prompt::TextPrompt;
 use crate::components::text_prompt::TextPromptOutcome;
 use crate::features::config::ConfigSelectionAction;
+use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use crate::test_support::empty_config_snapshot;
 use crossterm::event::KeyCode;
@@ -86,8 +87,21 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
             if edit.terminal.expected_revision == 7
                 && !edit.terminal.settings.mouse_interactions()
     ));
+    let follow_up = &state.visible_items()[1];
+    assert_eq!(follow_up.label(), "Follow-up messages");
+    assert_eq!(
+        follow_up.description(),
+        Some("How Enter sends a message while a Turn is running Queue")
+    );
+    assert!(matches!(
+        view.actions.get(follow_up.id().unwrap()).unwrap(),
+        ConfigSelectionAction::ChooseFollowUpMode { queue, steer }
+            if queue.terminal.expected_revision == 7
+                && queue.terminal.settings.follow_up_mode() == FollowUpMode::Queue
+                && steer.terminal.settings.follow_up_mode() == FollowUpMode::Steer
+    ));
 
-    let _ = state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(state.visible_items().len(), 12);
     assert_eq!(state.visible_items()[0].label(), "Read files");
     assert_eq!(state.visible_items()[1].label(), "Modify files");
@@ -102,7 +116,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
                 WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch,
             ]
     ));
-    let _ = state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "OpenAI");
     assert_eq!(state.visible_items()[1].label(), "Ollama");
@@ -165,7 +179,7 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
         &directories,
     );
     let mut state = ListSelectionState::new(view.model.into_body());
-    let _ = state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert_eq!(state.visible_items().len(), 24);
     assert_eq!(

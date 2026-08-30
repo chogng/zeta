@@ -1,12 +1,12 @@
 use super::activate_pointer_item;
 use super::schedule_action;
 use super::select_hovered_popup_item;
-use super::selection_item_index_at;
-use super::selection_tab_index_at;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
+use crate::app::frame;
 use crate::components::chat_input::SuggestView;
+use crate::components::chat_input_area::ChatInputAreaPointerTarget;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
@@ -80,7 +80,9 @@ fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
     let mut target = None;
     'rows: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
-            if selection_item_index_at(&app, area, column, row) == Some(1) {
+            if frame::input_pointer_target_at(&app, area, column, row)
+                == Some(ChatInputAreaPointerTarget::PaneItem(1))
+            {
                 target = Some((column, row));
                 break 'rows;
             }
@@ -115,7 +117,9 @@ fn pointer_click_switches_a_selection_tab() {
     let mut target = None;
     'cells: for row in area.y..area.bottom() {
         for column in area.x..area.right() {
-            if selection_tab_index_at(&app, area, column, row) == Some(1) {
+            if frame::input_pointer_target_at(&app, area, column, row)
+                == Some(ChatInputAreaPointerTarget::PaneTab(1))
+            {
                 target = Some((column, row));
                 break 'cells;
             }

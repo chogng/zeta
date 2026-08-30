@@ -78,10 +78,10 @@ impl<T> TabListState<T> {
         }
         let previous = self.active;
         match key.code {
-            KeyCode::Left | KeyCode::BackTab => {
+            KeyCode::BackTab => {
                 self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len() - 1);
             }
-            KeyCode::Right | KeyCode::Tab => {
+            KeyCode::Tab => {
                 self.active = (self.active + 1) % self.tabs.len();
             }
             _ => return TabListInputOutcome::Unhandled,

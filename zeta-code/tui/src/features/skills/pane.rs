@@ -107,7 +107,7 @@ pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
             )
             .with_search(SearchBoxModel::new("Search available skills"))
             .with_empty_message("No matching skills"),
-            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Manage tab changes enablement  ·  Esc back",
+            "Space search  ·  Tab/Shift-Tab tabs  ·  ↑/↓ select  ·  Manage tab changes enablement  ·  Esc back",
         ),
         actions,
     }

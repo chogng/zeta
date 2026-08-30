@@ -89,7 +89,7 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
     assert_eq!(state.selected_item().unwrap().label(), "Completed work ✓");
 
     assert_eq!(
-        state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
+        state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
         ListSelectionInputOutcome::Consumed
     );
     assert_eq!(state.active_tab().label(), "Active (1)");
