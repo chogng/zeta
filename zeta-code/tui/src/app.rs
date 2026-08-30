@@ -4,6 +4,7 @@ mod dispatch;
 mod escape;
 mod event;
 mod event_loop;
+mod event_pump;
 mod frame;
 mod help;
 mod recovery;

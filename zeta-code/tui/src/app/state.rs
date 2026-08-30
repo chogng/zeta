@@ -69,9 +69,6 @@ use std::path::PathBuf;
 use std::time::Instant;
 use zeta_protocol::ApprovalMode;
 
-#[path = "config_state.rs"]
-mod config_state;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Status {
     Ready,
@@ -872,14 +869,21 @@ impl App {
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
             AppEvent::ConfigSettingsReceived(settings) => self.terminal_settings = settings,
-            AppEvent::ConfigPaneOpened(view) => self.show_config_pane(view),
-            AppEvent::ConfigPaneReplaced(view) => self.replace_config_pane(view),
+            AppEvent::ConfigPaneOpened(view) => {
+                self.push_list_selection_pane(view.model, PaneActions::Config(view.actions))
+            }
+            AppEvent::ConfigPaneReplaced(view) => {
+                self.replace_list_selection_pane(view.model, PaneActions::Config(view.actions))
+            }
             AppEvent::ConfigApiKeySaved {
                 provider,
                 pane_spec,
             } => {
                 self.close_list_selection_pane();
-                self.replace_config_pane(pane_spec);
+                self.replace_list_selection_pane(
+                    pane_spec.model,
+                    PaneActions::Config(pane_spec.actions),
+                );
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(format!(
                         "Saved API key for {provider}"

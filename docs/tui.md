@@ -236,8 +236,8 @@ component 被至少两个真实消费者使用、API 变化频率下降且抽取
 zeta-code/tui/
 ├── src/
 │   ├── app.rs
-│   ├── app/                    # state, event, command, frame and event loop
-│   ├── client.rs / client/     # typed completion and event adaptation
+│   ├── app/                    # state, event, command, frame, event merge and loop
+│   ├── client.rs / client/     # typed completion and App Server event adaptation
 │   ├── features.rs / features/ # product-facing vertical features
 │   ├── components.rs
 │   ├── components/
@@ -257,8 +257,8 @@ zeta-code/tui/
 │   │   ├── search_box.rs / search_box/
 │   │   └── tab_list.rs
 │   ├── ui.rs / ui/             # shared geometry and theme
-│   ├── terminal.rs / terminal/ # terminal lifecycle
-│   ├── host.rs / host/         # narrow OS adapters
+│   ├── terminal.rs / terminal/ # terminal lifecycle and input source
+│   ├── host.rs / host/         # narrow OS and process adapters
 │   └── lib.rs
 ├── Cargo.toml
 └── README.md
@@ -376,7 +376,7 @@ Zeta 的主要交互对象是 Thread，因此不再建立通用 `projection/` �
 | `update.rs` | 校验并应用 typed snapshot/update，处理 committed/transient 替换和 resync intent |
 | `command.rs` | 定义 start、interrupt、fork 等用户意图及 pending command 状态 |
 | `request.rs` | 直接调用 `AppServerClient` 的 Thread/Turn typed methods |
-| `projection.rs` / `transcript.rs` | 把 `ThreadFeatureState` 映射为 `ChatHistory` 消费的持久内容 |
+| `presentation.rs` / `transcript.rs` | 把 `ThreadFeatureState` 映射为 `ChatHistory` 消费的持久内容 |
 | `thread_tests.rs` | 覆盖 sequence、resync、Turn flow 和可见 item 顺序 |
 
 这里保存的是可由 server snapshot 重建的客户端状态，不是第二个 `ThreadController`：
@@ -478,7 +478,7 @@ I/O 和 crossterm 生命周期的所有权。
 
 - raw mode、alternate screen 和 bracketed paste；
 - Crossterm event 读取；
-- Ratatui backend 和 frame scheduling；
+- Ratatui backend 和 frame draw；
 - terminal resize、reflow、cursor 和 scrollback；
 - 在独占 input window 中执行 terminal response probe 和控制序列；host terminal 身份、色彩等级及
   background fallback 解释由 `zeta-terminal-detection` 提供；
@@ -592,9 +592,7 @@ owning crate interface / typed App Server result
 
 ## 12. `host/`：窄宿主能力
 
-`host/` 只放非终端 OS adapter，例如 clipboard、external editor、desktop notification 和
-IDE IPC。每个模块必须暴露窄能力，不能形成一个无所不包的 `PlatformService` 或
-`HostContext`。
+`host/` 只放非终端 OS 或进程 adapter，例如 clipboard、external editor、desktop notification、IDE IPC 和 termination signal registration。每个模块必须暴露窄能力，不能形成一个统一的大型服务对象。
 
 职责按“何时”与“如何”拆开：
 
@@ -604,16 +602,19 @@ host/notification：如何调用某个 OS 通知后端
 
 components/chat_input、components/chat_history：产生 copy/open-editor intent
 host/clipboard、host/external_editor：如何访问宿主能力
+
+app：何时结束当前 TUI session
+host/termination：如何接收进程终止请求
 ```
 
-宿主 adapter 不得反向依赖 component 或 feature workflow。
+宿主 adapter 不得反向依赖 component 或 feature workflow。终端 suspend 使用的 `SIGTSTP` 仍属于 `terminal/`，因为退出终端模式、暂停和重新接管必须作为一个事务完成。
 
 ## 13. 事件与命令流
 
 顶层数据流固定为：
 
 ```text
-TerminalEvent / ClientResult / ServerNotification
+TerminalEvent / ClientResult / ServerNotification / TerminationRequest
                       │
                       ▼
                    AppEvent
@@ -839,10 +840,7 @@ lib.rs + lib_tests.rs
 - 明确声明权威 Thread/Turn 状态留在 App Server 后面；
 - `App` 不再持有 file-search worker/channel；`AppCommand` 描述待执行副作用，外部结果统一以
   `AppEvent` 进入 `App::update`，`FileSearchManager` 由 event loop 持有；
-- `client/event_pump.rs` 独立等待 terminal 与 `AppServerEvents`，并把两者汇入单写者 loop；
-  `client/notification.rs` 把共享 connection event 映射成 typed `ClientEvent`，保留
-  `agent/request`、`skills/changed`、Git、`ThreadUpdateEnvelope` 和 connection failure；event
-  channel 有界，Tick 可丢弃而 input/control 不静默丢失；
+- `terminal/event_source.rs` 负责 Crossterm input 与 Tick，`client/notification_source.rs` 负责持续等待 `AppServerEvents`，`host/termination.rs` 负责进程终止信号；`app/event_pump.rs` 只把三种来源汇入单写者 loop。`client/notification.rs` 把共享 connection event 映射成 typed `ClientEvent`，保留 `agent/request`、`skills/changed`、Git、`ThreadUpdateEnvelope` 和 connection failure；event channel 有界，Tick 可丢弃而 input/control 不静默丢失；
 - `client/RequestTask` 在 worker 执行 typed request，`app/request_completion.rs` 校验 scope 并把
   completion 安装到单写者 state；同一 request slot 前的用户 intent 保序排队，全部 product
   command、Turn mutation 与 subscription switch 均不在 draw/input 线程等待；
@@ -855,7 +853,7 @@ lib.rs + lib_tests.rs
 - `features/thread/ThreadFeatureState` 已成为 active Thread snapshot 与当前 transcript projection
   的唯一 TUI owner；本地 optimistic user message、notice 与 failure 也通过 feature event
   进入同一 owner，下一份 canonical snapshot 会替换 projection；
-- `features/thread/projection.rs` 显示完整 ThreadItem，并有界保存最多 1024 个 transient identity、
+- `features/thread/presentation.rs` 显示完整 ThreadItem，并有界保存最多 1024 个 transient identity、
   每个 row 256 KiB；`components/chat_history` 只负责 role/detail layout 和 scroll；
 - `components/chat_history` 已拥有 transcript row wrapping、role chrome、empty state 与只读
   Ratatui view，以及 component-facing `Message`/`MessageRole`；它不依赖 feature、`App` 或保存
@@ -866,7 +864,7 @@ lib.rs + lib_tests.rs
 - `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，create/fork/rewind/resume/switch 返回 conversation change，archive 成功后请求退出，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker 与 Session 归档由同一 feature 拥有；
 - `features/interactions` 把 owner-directed full request 分别适配成 Approval 或多问题 Query 覆盖交互，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
-- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；Config 页面从 App Server 读取当前 Session 的附加目录权限，并通过带版本的完整能力集合修改一个目录；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其中 Mouse interactions 只约束 TUI 本地 `MouseMode`，Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，默认 Queue，两者都不进入 App Server 配置；
+- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 只调度请求并把 feature result 转成 `AppEvent`；Config 页面读取服务端配置、Provider 和当前 Session 的附加目录权限，API key 保存后的重读链及带版本的目录能力修改也由 `features/config/request.rs` 完成。`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其中 Mouse interactions 只约束 TUI 本地 `MouseMode`，Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，默认 Queue，两者都不进入 App Server 配置；
 - `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；Space 进入搜索，左右调整当前配置项，不切标签；只读详情、文本输入和按键录制已分别交给 `DetailList`、`TextPrompt` 和 `KeyCapture`；
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
@@ -939,7 +937,7 @@ lib.rs + lib_tests.rs
 | typed notification 适配、active Thread subscription 与 snapshot gap/resync | Current |
 | independent request driver 与 wakeable notification pump | Current |
 | request completion 的非阻塞 app command dispatch | Current |
-| canonical `features/thread` snapshot 与 transcript projection owner | Current |
+| canonical `features/thread` snapshot 与 transcript 展示映射 owner | Current |
 | `components/chat_history` 与 `ui` layout/theme 原语 | Current |
 | `components/tab_list` 横向切换、换行与绘制边界 | Current |
 | `components/list_selection` state/view 边界 | Current |
@@ -975,7 +973,7 @@ README 中记录。
    （wakeable event pump、notification adapter、`CommandId` 与 Thread subscription tracking
    以及 request completion 的 app-level 非阻塞调度均为 Current）
 4. 建立 `features/thread/`，用 canonical Thread snapshot 替换扁平 message authority；
-   （snapshot/projection owner、typed request、durable sequence/gap snapshot resync 为 Current；
+   （snapshot/展示映射 owner、typed request、durable sequence/gap snapshot resync 为 Current；
    transient merge 和完整 ThreadItem projection 也为 Current）
 5. 把 bootstrap `toppane/` 与各 presentation surface 按职责迁入
    `components/chat_history/`、`components/chat_input_area/`、`components/tab_list.rs`、`components/list_selection/` 和
@@ -1040,7 +1038,7 @@ component 或第三方 UI API，也不放宽其他 presentation state 的抽取�
   transient/committed 合并和 resync；
 - feature request 测试使用 fake/mock typed client 验证 payload、稳定 CommandId 和错误映射；
 - component 测试覆盖 Unicode width、plain-text wrapping、resize、局部交互和纯渲染；
-- client 测试覆盖 event pump、pending completion 和 subscription transport lifecycle；
+- app 测试覆盖 event merge、request ordering 和单写者协调；client 测试覆盖 notification mapping、pending completion 和 subscription transport lifecycle；
 - terminal 测试覆盖部分初始化失败与 Drop 恢复；
 - feature 测试覆盖 key intent → command → result event → view state；
 - crate 级 `tests/` 覆盖 create/resume/fork/interrupt 和 subscription recovery；

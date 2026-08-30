@@ -1,3 +1,6 @@
 pub(crate) mod browser;
 pub(crate) mod clipboard;
+mod termination;
 pub(crate) mod transcript_export;
+
+pub(crate) use termination::TerminationSource;

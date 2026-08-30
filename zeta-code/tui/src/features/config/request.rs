@@ -1,11 +1,80 @@
+use super::AdditionalDirectoryPermissionEdit;
+use super::ConfigPaneSpec;
+use super::ProviderApiKeyEdit;
+use super::TerminalSettingsSnapshot;
+use super::config_pane_spec;
 use crate::client::new_command_id;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
+use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
+use zeta_app_server_client::ProviderApiKeySetRequest;
 use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
 use zeta_protocol::Patch;
+use zeta_protocol::SessionId;
+
+pub(crate) struct ProviderApiKeyUpdate {
+    pub(crate) provider: String,
+    pub(crate) pane_spec: ConfigPaneSpec,
+}
+
+pub(crate) fn read_config_pane(
+    client: &mut AppServerRequestHandle,
+    session_id: &SessionId,
+    terminal: TerminalSettingsSnapshot,
+) -> Result<ConfigPaneSpec, ClientError> {
+    let server_config = client.read_config()?;
+    let providers = client.list_providers()?;
+    let additional_directories =
+        client.list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
+            session_id: session_id.clone(),
+        })?;
+    Ok(config_pane_spec(
+        &server_config,
+        &providers,
+        terminal.settings,
+        terminal.revision,
+        session_id,
+        &additional_directories,
+    ))
+}
+
+pub(crate) fn set_provider_api_key(
+    client: &mut AppServerRequestHandle,
+    edit: ProviderApiKeyEdit,
+    terminal: TerminalSettingsSnapshot,
+    session_id: &SessionId,
+) -> Result<ProviderApiKeyUpdate, ClientError> {
+    let (provider, api_key) = edit.into_parts();
+    client.set_provider_api_key(ProviderApiKeySetRequest::new(provider.clone(), api_key))?;
+    let pane_spec = read_config_pane(client, session_id, terminal)?;
+    Ok(ProviderApiKeyUpdate {
+        provider,
+        pane_spec,
+    })
+}
+
+pub(crate) fn set_additional_directory_permissions(
+    client: &mut AppServerRequestHandle,
+    edit: AdditionalDirectoryPermissionEdit,
+) -> Result<ConfigPaneSpec, ClientError> {
+    let result = client.set_workspace_additional_directory_permissions(edit.params.clone())?;
+    Ok(config_pane_spec(
+        &edit.server_config,
+        &edit.providers,
+        edit.terminal,
+        edit.terminal_revision,
+        &edit.params.session_id,
+        &WorkspaceAdditionalDirectoryListResult {
+            revision: result.revision,
+            directories: result.directories,
+        },
+    ))
+}
 
 pub(crate) struct PreferredModelUpdate {
     pub(crate) preferred_model: Option<ModelRefDto>,

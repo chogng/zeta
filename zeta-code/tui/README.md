@@ -153,18 +153,18 @@ src/
 │   ├── chords.rs                 # chord validation, pending state, timeout and dispatch
 │   └── input.rs                  # Crossterm event normalization and config serialization
 ├── app/
-│   ├── event_loop.rs              # terminal/client/background coordination
+│   ├── event_loop.rs              # runtime coordination and command scheduling
+│   ├── event_pump.rs              # bounded merge of terminal/client/termination sources
 │   ├── state.rs                   # single-writer presentation state
 │   ├── event.rs / command.rs      # completed facts / typed side-effect intents
 │   ├── dispatch.rs                # built-in product command coordination
 │   ├── bootstrap.rs / help.rs     # startup registry validation / help model
-│   ├── frame.rs                   # top-level frame assembly
-│   └── frame/                     # footer content selection and frame tests
+│   └── frame.rs / frame_tests.rs  # top-level frame assembly and behavior tests
 ├── app.rs                         # application module root and public crate surface
 ├── client/
 │   ├── command_id.rs              # stable logical command identity allocation
-│   ├── event_pump.rs              # terminal + AppServerEvents wakeup/multiplexing
-│   └── notification.rs            # typed ServerNotification → ClientEvent mapping
+│   ├── notification.rs            # typed ServerNotification → ClientEvent mapping
+│   └── notification_source.rs     # AppServerEvents wait lifecycle
 ├── components/
 │   ├── chat_widget.rs             # ChatHistory + ChatInputArea + Footer geometry
 │   ├── chat_history.rs / chat_history/ # transcript rendering and scroll
@@ -178,9 +178,9 @@ src/
 │   └── detail_list.rs / text_prompt.rs / key_capture.rs # concrete Pane bodies
 ├── features/
 │   ├── config.rs                  # config feature module root
-│   ├── config/                    # config snapshot, enhanced-terminal resource/view and model update
+│   ├── config/                    # server config requests, terminal settings resource and pane mapping
 │   ├── sessions/                  # active Session/Thread selection and lifecycle requests
-│   ├── thread/                    # canonical snapshot, requests, subscription and projection
+│   ├── thread/                    # canonical snapshot, requests, subscription and presentation
 │   ├── skills/                    # skill request and selection presentation mapping
 │   ├── keymap.rs                  # keymap resource, profile polling and atomic edits
 │   ├── keymap/                    # searchable view, action menu and key/chord capture
@@ -190,10 +190,13 @@ src/
 │   └── workspace_files/           # bounded async file-search runtime
 ├── mouse.rs                        # shared mouse-mode contract for pages and terminal lifecycle
 ├── host/
-│   ├── clipboard.rs               # native text output plus file/RGBA image input
+│   ├── browser.rs                 # validated HTTPS handoff to the system browser
+│   ├── clipboard.rs               # system text output plus file/RGBA image input
+│   ├── termination.rs             # process termination signal registration
 │   └── transcript_export.rs       # workspace-bounded, no-overwrite Markdown export
 ├── test_support.rs                 # test-only canonical aggregate fixture defaults
 ├── terminal/
+│   ├── event_source.rs            # Crossterm input and bounded Tick source
 │   ├── session.rs                 # transactional terminal acquisition and RAII restore
 │   └── terminal_probe.rs          # bounded OSC query before the crossterm event reader starts
 └── ui/
@@ -230,7 +233,10 @@ src/
 | `features::keymap::pane` | private | 从 `AppKeymap` 快照和固定操作目录生成 `/shortcuts` 的 Pane 创建数据、动作菜单和按键录制状态 | 不执行快捷键、不建立第二套 Resolver |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 `ChatInputArea` 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
-| `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，通过 1024 项有界队列汇入单写者 loop | Tick 可合并；control/input 不静默丢失；不应用 UI state |
+| `app::EventPump` | crate-private | 合并 terminal、client 与 termination 三种独立来源，通过 1024 项有界队列唤醒单写者 loop | Tick 可合并；control/input 不静默丢失；不读取终端或解释服务端通知 |
+| `terminal::TerminalEventSource` | crate-private | 轮询 Crossterm input，并产生 input、Tick 或 terminal failure | 不依赖 `app`、feature、client 或产品 ID |
+| `client::ClientEventSource` | crate-private | 持续等待 `AppServerEvents`，通过 `map_event` 输出 `ClientEvent` | 不读取终端、不注册进程信号、不应用 UI state |
+| `host::TerminationSource` | crate-private | 注册进程终止信号并提供一次性消费的 termination request | 不管理终端 suspend/reacquire，不依赖 `app` 或 feature |
 | `client::RequestTask<T>` | crate-private | 在独立 worker 执行一个 typed request 并以单槽 completion 非阻塞回投 | 不修改 `App`、不解释领域结果 |
 | `app::request_completion` | private module | 校验 request scope、安装 subscription/snapshot 并把 typed completion 映射为 `AppEvent` | 不执行 renderer、不复制 reducer |
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 agent request、skills/Git changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
@@ -285,7 +291,7 @@ run(session, options)
 ├─ client.subscribe_session → Session snapshot + child projections
 ├─ client.subscribe_session_thread → ThreadSubscription + initial canonical snapshot
 ├─ TerminalSession::open
-├─ EventPump::start → terminal source + App Server source
+├─ app::EventPump::start → TerminalEventSource + ClientEventSource + TerminationSource
 ├─ FileSearchManager::new
 ├─ App::for_workspace → WelcomeModel::for_workspace + StatusLineModel::new
 ├─ ConfigResource::refresh → AppEvent::ConfigSettingsReceived → App::update
@@ -294,7 +300,8 @@ run(session, options)
 └─ loop
    ├─ EventPump::recv
    │  ├─ terminal event → input routing
-   │  └─ App Server event → typed notification mapping
+   │  ├─ App Server event → typed notification mapping
+   │  └─ termination request → orderly TUI exit
    ├─ App::mention_query → FileSearchManager::{update_query,stop}
    ├─ FileSearchManager::poll → AppEvent::FileSearchSnapshotReceived → App::update
    ├─ RequestTask::poll → request completion → app::request_completion → App::update
@@ -423,7 +430,7 @@ registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 Completed Turn 没有 Agent message 会被显示为 error。已知 stable Turn error（包括 interaction
 deadline）由
 `present_turn_error` 映射成面向用户的恢复提示，错误详情只在 transcript 出现一次；footer 只说明
-可以 retry 或退出。`features/thread/projection.rs` 按 canonical Item 顺序投影所有 user/agent、
+可以 retry 或退出。`features/thread/presentation.rs` 按 canonical Item 顺序映射所有 user/agent、
 reasoning、plan 与 Tool row；它不从展示内容判断 Turn terminal state。
 
 `client::map_event` 保留 typed `ThreadUpdateEnvelope`；`ThreadSubscription` 验证 active
@@ -550,9 +557,9 @@ follow-latest。`estimated_wrapped_rows` 使用
 | 新 canonical Turn state/item | `apply_active_turn_snapshot`、render behavior、protocol compatibility |
 | 新 terminal mode | `open` rollback、`Drop` cleanup、manual terminal recovery |
 | Composer behavior | `accepts_input`、paste/key handling、cursor width、app tests |
-| Incremental notifications | `features/thread` sequence/cursor state、gap/resync、client event pump、snapshot fallback |
+| Incremental notifications | `features/thread` sequence/cursor state、gap/resync、client notification source、app event pump、snapshot fallback |
 | `ConfigReadResult` 新字段 | `test_support::empty_config_snapshot` 与真实消费该字段的 feature tests；无关 view tests 不复制完整 aggregate |
-| `ThreadItem` variant 字段 | 构造该 variant 的 projection tests 必须显式更新，不能由通用 fixture 隐藏领域不变量 |
+| `ThreadItem` variant 字段 | 构造该 variant 的 presentation tests 必须显式更新，不能由通用 fixture 隐藏领域不变量 |
 
 ## 测试与支持边界
 

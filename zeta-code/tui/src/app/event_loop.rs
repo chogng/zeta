@@ -6,6 +6,8 @@ use super::ChatInputCatalogSnapshot;
 use super::Status;
 use super::chat_input_catalog_snapshot;
 use super::dispatch::execute_product_command;
+use super::event_pump::EventPump;
+use super::event_pump::RuntimeEvent;
 use super::frame;
 use super::request_completion::RequestCompletion;
 use super::request_completion::apply_request_completion;
@@ -54,9 +56,6 @@ use zeta_app_server_client::AppServerSession;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
-
-#[path = "config_actions.rs"]
-mod config_actions;
 
 pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
     let result = run_session(&mut session, options);
@@ -161,7 +160,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         app.update(AppEvent::GitStatusReceived(status));
     }
 
-    let pump = client::EventPump::start(events)?;
+    let pump = EventPump::start(events)?;
     let mut pending_request: Option<client::RequestTask<RequestCompletion>> = None;
     let mut queued_actions = VecDeque::new();
     let mut thread_refresh_requested = false;
@@ -176,7 +175,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         loop {
             let had_active_turn = active_turn.is_some();
             let action = match pump.recv()? {
-                client::RuntimeEvent::Client(event) => {
+                RuntimeEvent::Client(event) => {
                     let event = match super::recovery::continue_or_exit(
                         event,
                         conversation.session_id(),
@@ -197,17 +196,19 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     connectors_refresh_requested |= refresh.connectors;
                     None
                 }
-                client::RuntimeEvent::Tick => {
+                RuntimeEvent::TerminationRequested => {
+                    return Ok(TuiExit::TerminationRequested);
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Failed(error)) => {
+                    return Err(error.into());
+                }
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Tick) => {
                     let now = Instant::now();
                     app.handle_tick(now);
                     poll_keymap_resource(&mut keymap_resource, &mut app, now);
                     None
                 }
-                client::RuntimeEvent::TerminationRequested => {
-                    return Ok(TuiExit::TerminationRequested);
-                }
-                client::RuntimeEvent::TerminalFailed(error) => return Err(error.into()),
-                client::RuntimeEvent::Terminal(event) => match event {
+                RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
                     Event::Key(key) if key.kind != KeyEventKind::Release => app.handle_key(key),
                     Event::Mouse(mouse)
                         if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
@@ -372,38 +373,95 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         app.update(AppEvent::HostOperationCompleted(result));
                     }
                     AppCommand::OpenConfigPane => {
-                        config_actions::open_config(
-                            &mut config_resource,
-                            conversation.session_id(),
-                            &client,
-                            &mut pending_request,
-                            &mut app,
-                        );
+                        match config::refresh_terminal_settings(config_resource.as_mut()) {
+                            Ok(terminal) => {
+                                app.update(AppEvent::ConfigSettingsReceived(terminal.settings));
+                                if pending_request.is_none() {
+                                    let mut request_client = client.clone();
+                                    let session_id = conversation.session_id().clone();
+                                    pending_request = spawn_request(
+                                        "zeta-tui-read-config",
+                                        move || {
+                                            RequestCompletion::Presentation(
+                                                config::read_config_pane(
+                                                    &mut request_client,
+                                                    &session_id,
+                                                    terminal,
+                                                )
+                                                .map(AppEvent::ConfigPaneOpened)
+                                                .map_err(|error| error.to_string()),
+                                            )
+                                        },
+                                        &mut app,
+                                    );
+                                }
+                            }
+                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                        }
                     }
-                    AppCommand::EditConfig(edit) => {
-                        config_actions::edit_config(&mut config_resource, &edit, &mut app);
-                    }
+                    AppCommand::EditConfig(edit) => match config::apply_config_edit(
+                        config_resource.as_mut(),
+                        &edit,
+                    ) {
+                        Ok(result) => {
+                            app.update(AppEvent::ConfigSettingsReceived(result.settings));
+                            app.update(AppEvent::ConfigPaneReplaced(result.pane_spec));
+                        }
+                        Err(error) => app.update(AppEvent::FailureReported(error)),
+                    },
                     AppCommand::EditAdditionalDirectoryPermissions(edit) => {
-                        config_actions::set_additional_directory_permissions(
-                            edit,
-                            &client,
-                            &mut pending_request,
-                            &mut app,
-                        );
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-set-additional-directory-permissions",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        config::set_additional_directory_permissions(
+                                            &mut request_client,
+                                            edit,
+                                        )
+                                        .map(AppEvent::ConfigPaneReplaced)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
                     }
                     AppCommand::SetProviderApiKey(edit) => {
-                        let terminal_snapshot = config_resource
+                        let terminal = config_resource
                             .as_ref()
-                            .map(|resource| (resource.settings(), resource.revision()))
-                            .unwrap_or((config::TerminalSettings::default(), 0));
-                        config_actions::set_provider_api_key(
-                            edit,
-                            terminal_snapshot,
-                            conversation.session_id(),
-                            &client,
-                            &mut pending_request,
-                            &mut app,
-                        );
+                            .map(|resource| config::TerminalSettingsSnapshot {
+                                settings: resource.settings(),
+                                revision: resource.revision(),
+                            })
+                            .unwrap_or(config::TerminalSettingsSnapshot {
+                                settings: config::TerminalSettings::default(),
+                                revision: 0,
+                            });
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let session_id = conversation.session_id().clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-set-provider-api-key",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        config::set_provider_api_key(
+                                            &mut request_client,
+                                            edit,
+                                            terminal,
+                                            &session_id,
+                                        )
+                                        .map(|update| AppEvent::ConfigApiKeySaved {
+                                            provider: update.provider,
+                                            pane_spec: update.pane_spec,
+                                        })
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
                     }
                     AppCommand::OpenKeymapPane => match keymap_resource.as_ref() {
                         Some(resource) => {
