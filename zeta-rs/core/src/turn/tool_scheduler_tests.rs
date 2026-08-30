@@ -131,6 +131,49 @@ fn before_tool_hook_denial_becomes_model_visible_tool_feedback() {
 }
 
 #[test]
+fn tool_preparation_policy_rejection_becomes_model_visible_tool_feedback() {
+    let tools = Arc::new(ReviewTool {
+        preparation_error: Some(CoreError::Policy(
+            "requested path is outside the authorized directories".into(),
+        )),
+        ..ReviewTool::default()
+    });
+    let fixture = fixture_with(tools, Arc::new(ExecAllowPolicy::new()));
+
+    assert_eq!(
+        fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token(),
+            )
+            .unwrap(),
+        ToolSchedulingProgress::Complete
+    );
+
+    assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+    assert!(
+        fixture
+            .threads
+            .read_thread(&fixture.thread_id)
+            .unwrap()
+            .items
+            .iter()
+            .any(|item| matches!(
+                item,
+                ThreadItem::ToolResult {
+                    tool_call_id,
+                    text,
+                    is_error: true,
+                    ..
+                } if tool_call_id == &fixture.call_id
+                    && text.contains("outside the authorized directories")
+            ))
+    );
+}
+
+#[test]
 fn approve_once_resumes_the_exact_tool_call() {
     let fixture = fixture();
     assert!(matches!(
@@ -1088,6 +1131,7 @@ struct ReviewTool {
     requires_escalation: bool,
     evidence: Vec<ReviewEvidence>,
     dynamic_interaction: bool,
+    preparation_error: Option<CoreError>,
 }
 
 impl Default for ReviewTool {
@@ -1098,6 +1142,7 @@ impl Default for ReviewTool {
             requires_escalation: false,
             evidence: Vec::new(),
             dynamic_interaction: false,
+            preparation_error: None,
         }
     }
 }
@@ -1118,6 +1163,9 @@ impl ToolService for ReviewTool {
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        if let Some(error) = &self.preparation_error {
+            return Err(error.clone());
+        }
         Ok(review_request(call, self.requires_escalation))
     }
 

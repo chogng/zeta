@@ -93,6 +93,36 @@ fn applies_only_to_its_bound_dir() {
 }
 
 #[test]
+fn applies_to_the_host_selected_authorized_dir() {
+    let configured = TestDir::new();
+    let selected = TestDir::new();
+    let tool = ApplyPatchTool::new(
+        environment_id(),
+        configured.root(),
+        ApplyPatchLimits::default(),
+    )
+    .unwrap();
+    let definition = tool.definition();
+    let patch = "*** Begin Patch\n*** Add File: selected.txt\n+selected\n*** End Patch\n";
+
+    let outcome = resolve(tool.execute(invocation_with_dir(
+        &definition,
+        json!({"patch": patch}),
+        selected.path(),
+    )));
+
+    let ToolExecutionOutcome::Returned(output) = outcome else {
+        panic!("patch should return a tool output");
+    };
+    assert_eq!(output.status(), ToolOutputStatus::Success);
+    assert!(!configured.path().join("selected.txt").exists());
+    assert_eq!(
+        fs::read_to_string(selected.path().join("selected.txt")).unwrap(),
+        "selected\n"
+    );
+}
+
+#[test]
 fn failed_later_operation_does_not_commit_an_earlier_add() {
     let dir = TestDir::new();
     dir.write("src/lib.rs", "actual\n");
@@ -193,6 +223,39 @@ fn environment_id() -> EnvId {
 }
 
 fn invocation(definition: &ToolDefinition, arguments: serde_json::Value) -> ToolInvocation {
+    invocation_with_context(
+        definition,
+        arguments,
+        ToolExecutionContext::new(
+            environment_id(),
+            CancellationSource::new().token(),
+            ToolRuntimeAuthority::Unrestricted,
+        ),
+    )
+}
+
+fn invocation_with_dir(
+    definition: &ToolDefinition,
+    arguments: serde_json::Value,
+    dir: &Path,
+) -> ToolInvocation {
+    invocation_with_context(
+        definition,
+        arguments,
+        ToolExecutionContext::new(
+            environment_id(),
+            CancellationSource::new().token(),
+            ToolRuntimeAuthority::Unrestricted,
+        )
+        .with_execution_dir(dir),
+    )
+}
+
+fn invocation_with_context(
+    definition: &ToolDefinition,
+    arguments: serde_json::Value,
+    context: ToolExecutionContext,
+) -> ToolInvocation {
     ToolInvocation::new(
         ToolOperationId::new("operation-1").unwrap(),
         ToolCallId::new("call-1").unwrap(),
@@ -205,11 +268,7 @@ fn invocation(definition: &ToolDefinition, arguments: serde_json::Value) -> Tool
             ToolRuntimeKey::new("local:test").unwrap(),
         ),
         ToolPayload::FunctionArguments(arguments),
-        ToolExecutionContext::new(
-            environment_id(),
-            CancellationSource::new().token(),
-            ToolRuntimeAuthority::Unrestricted,
-        ),
+        context,
     )
 }
 

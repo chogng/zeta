@@ -132,7 +132,17 @@ impl ApplyPatchTool {
                 self.limits.max_patch_bytes()
             ));
         }
-        let dir = self.dir.clone();
+        let dir = match invocation.context().execution_dir() {
+            Some(path) => match Dir::open_local(path) {
+                Ok(dir) => dir,
+                Err(error) => {
+                    return not_started(format!(
+                        "host-selected patch directory is unavailable: {error}"
+                    ));
+                }
+            },
+            None => self.dir.clone(),
+        };
         let document = match PatchDocument::parse(&input.patch) {
             Ok(document) => document,
             Err(error) => return returned_error(format!("invalid patch: {error}")),

@@ -31,7 +31,8 @@ fn invocation_keeps_the_frozen_binding_and_environment() {
             EnvId::new("env_1").expect("valid environment"),
             CancellationSource::new().token(),
             ToolRuntimeAuthority::Unrestricted,
-        ),
+        )
+        .with_execution_dir("/host/selected"),
     );
 
     assert_eq!(
@@ -40,6 +41,10 @@ fn invocation_keeps_the_frozen_binding_and_environment() {
     );
     assert_eq!(invocation.binding().registry_generation().get(), 7);
     assert_eq!(invocation.context().environment_id().as_str(), "env_1");
+    assert_eq!(
+        invocation.context().execution_dir(),
+        Some(std::path::Path::new("/host/selected"))
+    );
     assert_eq!(
         invocation.context().authority(),
         ToolRuntimeAuthority::Unrestricted

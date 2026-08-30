@@ -1,6 +1,8 @@
 use crate::{EnvId, ToolBinding, ToolCallId, ToolDefinition, ToolOperationId, ToolOutput};
 use serde_json::Value;
 use std::future::Future;
+use std::path::Path;
+use std::path::PathBuf;
 use std::pin::Pin;
 use zeta_async_utils::CancellationToken;
 use zeta_protocol::SandboxDenialOutput;
@@ -59,6 +61,7 @@ pub struct ToolExecutionContext {
     cancellation: CancellationToken,
     authority: ToolRuntimeAuthority,
     session_id: Option<zeta_protocol::SessionId>,
+    execution_dir: Option<PathBuf>,
     sandbox_scope: Option<SandboxScope>,
 }
 
@@ -84,12 +87,19 @@ impl ToolExecutionContext {
             cancellation,
             authority,
             session_id: None,
+            execution_dir: None,
             sandbox_scope: None,
         }
     }
 
     pub fn with_session_id(mut self, session_id: zeta_protocol::SessionId) -> Self {
         self.session_id = Some(session_id);
+        self
+    }
+
+    /// Binds one host-selected directory to this exact invocation.
+    pub fn with_execution_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.execution_dir = Some(dir.into());
         self
     }
 
@@ -101,6 +111,10 @@ impl ToolExecutionContext {
 
     pub fn session_id(&self) -> Option<&zeta_protocol::SessionId> {
         self.session_id.as_ref()
+    }
+
+    pub fn execution_dir(&self) -> Option<&Path> {
+        self.execution_dir.as_deref()
     }
 
     pub fn environment_id(&self) -> &EnvId {

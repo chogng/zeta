@@ -237,12 +237,15 @@ impl ToolScheduler {
                         )?;
                     }
                     ActionApprovalDecision::ApproveOnce => {
-                        let reviewed = self.prepare_review(
+                        let Some(reviewed) = self.prepare_review_or_record_failure(
                             &snapshot,
                             turn_id,
                             &pending.item_id,
                             &pending.call,
-                        )?;
+                        )?
+                        else {
+                            continue;
+                        };
                         if !approval_matches_review(request, &reviewed) {
                             self.record_failure(
                                 thread_id,
@@ -324,8 +327,15 @@ impl ToolScheduler {
                 continue;
             }
 
-            let reviewed =
-                self.prepare_review(&snapshot, turn_id, &pending.item_id, &pending.call)?;
+            let Some(reviewed) = self.prepare_review_or_record_failure(
+                &snapshot,
+                turn_id,
+                &pending.item_id,
+                &pending.call,
+            )?
+            else {
+                continue;
+            };
             match self.policy.decide_for_turn_with_approval_mode(
                 frozen_policy_revision,
                 approval_mode,
@@ -488,6 +498,28 @@ impl ToolScheduler {
             item_id,
             evidence,
         ))
+    }
+
+    fn prepare_review_or_record_failure(
+        &self,
+        snapshot: &ThreadSnapshot,
+        turn_id: &TurnId,
+        item_id: &ItemId,
+        call: &ToolCall,
+    ) -> Result<Option<zeta_action_policy::ActionReviewRequest>, CoreError> {
+        match self.prepare_review(snapshot, turn_id, item_id, call) {
+            Ok(review) => Ok(Some(review)),
+            Err(error @ (CoreError::InvalidInput(_) | CoreError::Policy(_))) => {
+                self.record_failure(
+                    &snapshot.thread_id,
+                    turn_id,
+                    call.id.clone(),
+                    format!("tool preparation rejected: {error}"),
+                )?;
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     fn enforce_rejection_circuit_breaker(
