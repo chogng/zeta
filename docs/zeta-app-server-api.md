@@ -340,6 +340,14 @@ Desktop 当前实现和 Playwright 后续边界见
 | `terminal/read` | connection + Terminal | 按 sequence 拉取有界 Base64 输出 |
 | `terminal/close` | connection + Terminal | 终止并释放 PTY |
 
+`session/create`、`session/read`、`session/list` 与 Session mutation result 返回的每个 `Session`
+都包含 `manager` 读取视图。App Server 从完整 Thread snapshots 推导 `idle`、`needsInput`、
+`working`、`readyForReview`、`completed`、`failed`、`stopped`，同时提供进入当前状态的
+`statusChangedAtUnixMs`。等待态携带准确的 pending question，运行态携带未完成 Tool Call 或当前
+Plan step，失败态携带稳定错误；这些字段不从 transcript 文案推断。`Archive` 写入 completed
+归档原因，`Stop` 写入 stopped 归档原因，旧归档事件默认按 completed 读取。`summary` 是可选字段；
+当前 App Server 不调用模型生成它，没有结果时省略。
+
 Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的 Zeta account/login control plane。
 
 ### WorkRun 与 Project

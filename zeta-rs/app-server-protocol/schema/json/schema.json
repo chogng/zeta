@@ -22546,6 +22546,13 @@
     "Session": {
       "description": "A read-only view of Threads grouped by their shared `session_id`.\n\nSession has no independent event stream, sequence, or mutable runtime state. Thread remains the\npersistence, ordering, and execution boundary.",
       "properties": {
+        "manager": {
+          "$ref": "#/$defs/SessionManagerInfo",
+          "default": {
+            "status": "idle",
+            "statusChangedAtUnixMs": 0
+          }
+        },
         "sessionId": {
           "$ref": "#/$defs/SessionId"
         },
@@ -22788,6 +22795,106 @@
         "sessions"
       ],
       "type": "object"
+    },
+    "SessionManagerActivity": {
+      "description": "Exact current activity safe to show without asking a summary model to infer lifecycle.",
+      "oneOf": [
+        {
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "operation",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "question",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "const": "failure",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SessionManagerInfo": {
+      "description": "Read-only management facts derived from the durable Threads in one Session.",
+      "properties": {
+        "activity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionManagerActivity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/SessionManagerStatus"
+        },
+        "statusChangedAtUnixMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "statusChangedAtUnixMs"
+      ],
+      "type": "object"
+    },
+    "SessionManagerStatus": {
+      "description": "Canonical status used by products that present the total Session catalog.",
+      "enum": [
+        "idle",
+        "needsInput",
+        "working",
+        "readyForReview",
+        "completed",
+        "failed",
+        "stopped"
+      ],
+      "type": "string"
     },
     "SessionReadParams": {
       "properties": {
@@ -25073,6 +25180,14 @@
       ],
       "type": "object"
     },
+    "ThreadArchiveReason": {
+      "description": "User-visible reason that a Thread left the active Session catalog.",
+      "enum": [
+        "completed",
+        "stopped"
+      ],
+      "type": "string"
+    },
     "ThreadDirBinding": {
       "description": "Public binding for a Thread directory. Managed filesystem paths stay private to App Server.",
       "properties": {
@@ -25129,6 +25244,10 @@
         },
         {
           "properties": {
+            "reason": {
+              "$ref": "#/$defs/ThreadArchiveReason",
+              "default": "completed"
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },

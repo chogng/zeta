@@ -76,12 +76,18 @@ use zeta_core::SteerTurnRequest;
 use zeta_core::ThreadSnapshot;
 use zeta_core::TurnExecutionBackend;
 use zeta_core::TurnStatus;
+use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::Session;
+use zeta_protocol::SessionManagerActivity;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionManagerStatus;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
 use zeta_protocol::StableTurnError;
+use zeta_protocol::ThreadArchiveReason;
+use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::UserInput;
 use zeta_typst::TypstCompileError;
@@ -692,7 +698,11 @@ impl AppServer {
             .map(|thread| (thread.thread_id, thread.sequence))
             .collect::<Vec<_>>();
         self.threads
-            .archive_session_threads(&mutation.session_id, &mutation.command_id)
+            .archive_session_threads(
+                &mutation.session_id,
+                &mutation.command_id,
+                zeta_protocol::ThreadArchiveReason::Stopped,
+            )
             .map_err(core_error)?;
         self.clear_session_dirs(&mutation.session_id);
         for (thread_id, _) in &thread_sequences {
@@ -716,7 +726,11 @@ impl AppServer {
 
     fn lifecycle_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {
         self.threads
-            .archive_session_threads(&mutation.session_id, &mutation.command_id)
+            .archive_session_threads(
+                &mutation.session_id,
+                &mutation.command_id,
+                zeta_protocol::ThreadArchiveReason::Completed,
+            )
             .map_err(core_error)?;
         self.updates.publish_session_changed(&mutation.session_id);
         if let Some(runtime) = &self.turn_changes
@@ -1517,10 +1531,12 @@ impl AppServer {
         } else {
             SessionStatus::Active
         };
+        let manager = session_manager_info(&snapshots, root.created_at_unix_ms, status);
         Ok(Session {
             session_id: session_id.clone(),
             title: root.title.clone(),
             status,
+            manager,
             threads: snapshots
                 .into_iter()
                 .map(|thread| SessionThread {
@@ -1563,6 +1579,174 @@ impl AppServer {
         self.updates.publish_thread(thread_id, &updates);
         Ok(())
     }
+}
+
+fn session_manager_info(
+    threads: &[ThreadSnapshot],
+    created_at_unix_ms: u64,
+    lifecycle: SessionStatus,
+) -> SessionManagerInfo {
+    if lifecycle == SessionStatus::Archived {
+        let stopped = threads
+            .iter()
+            .any(|thread| thread.archive_reason == Some(ThreadArchiveReason::Stopped));
+        let archived_at = threads
+            .iter()
+            .filter_map(|thread| thread.archived_at_unix_ms)
+            .max()
+            .unwrap_or(created_at_unix_ms);
+        let completed_at = latest_turn(threads, |_| true)
+            .filter(|(_, turn)| turn.status == TurnStatus::Completed)
+            .map(|(_, turn)| turn.status_changed_at_unix_ms)
+            .unwrap_or(archived_at);
+        return SessionManagerInfo {
+            status: if stopped {
+                SessionManagerStatus::Stopped
+            } else {
+                SessionManagerStatus::Completed
+            },
+            status_changed_at_unix_ms: if stopped { archived_at } else { completed_at },
+            activity: None,
+            summary: None,
+        };
+    }
+
+    if let Some((_, turn)) = latest_turn(threads, |status| {
+        matches!(
+            status,
+            TurnStatus::WaitingForApproval
+                | TurnStatus::WaitingForUserInput
+                | TurnStatus::WaitingForCapability
+        )
+    }) {
+        return SessionManagerInfo {
+            status: SessionManagerStatus::NeedsInput,
+            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+            activity: turn.pending_interaction.as_ref().map(|interaction| {
+                SessionManagerActivity::Question {
+                    text: interaction_question(&interaction.request),
+                }
+            }),
+            summary: None,
+        };
+    }
+
+    if let Some((thread, turn)) = latest_turn(threads, |status| {
+        matches!(
+            status,
+            TurnStatus::Created | TurnStatus::Running | TurnStatus::Cancelling
+        )
+    }) {
+        return SessionManagerInfo {
+            status: SessionManagerStatus::Working,
+            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+            activity: working_operation(thread, turn),
+            summary: None,
+        };
+    }
+
+    let Some((_, turn)) = latest_turn(threads, |_| true) else {
+        return SessionManagerInfo {
+            status: SessionManagerStatus::Idle,
+            status_changed_at_unix_ms: created_at_unix_ms,
+            activity: None,
+            summary: None,
+        };
+    };
+    match turn.status {
+        TurnStatus::Failed => SessionManagerInfo {
+            status: SessionManagerStatus::Failed,
+            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+            activity: turn
+                .failure
+                .as_ref()
+                .map(|failure| SessionManagerActivity::Failure {
+                    text: failure.message.clone(),
+                }),
+            summary: None,
+        },
+        TurnStatus::Interrupted => SessionManagerInfo {
+            status: SessionManagerStatus::Stopped,
+            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+            activity: None,
+            summary: None,
+        },
+        TurnStatus::Completed => SessionManagerInfo {
+            status: SessionManagerStatus::ReadyForReview,
+            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+            activity: None,
+            summary: None,
+        },
+        _ => SessionManagerInfo {
+            status: SessionManagerStatus::Idle,
+            status_changed_at_unix_ms: created_at_unix_ms,
+            activity: None,
+            summary: None,
+        },
+    }
+}
+
+fn latest_turn(
+    threads: &[ThreadSnapshot],
+    accepts: impl Fn(TurnStatus) -> bool,
+) -> Option<(&ThreadSnapshot, &zeta_core::TurnSnapshot)> {
+    threads
+        .iter()
+        .flat_map(|thread| thread.turns.iter().map(move |turn| (thread, turn)))
+        .filter(|(_, turn)| accepts(turn.status))
+        .max_by_key(|(_, turn)| turn.status_changed_at_unix_ms)
+}
+
+fn interaction_question(request: &AgentRequest) -> String {
+    match request {
+        AgentRequest::Approval { request } => request.reason.clone(),
+        AgentRequest::UserInput { request } => request
+            .questions
+            .first()
+            .map(|question| question.question.clone())
+            .unwrap_or_else(|| "Waiting for user input".into()),
+        AgentRequest::DynamicTool { call } => format!("Run {}?", call.name),
+    }
+}
+
+fn working_operation(
+    thread: &ThreadSnapshot,
+    turn: &zeta_core::TurnSnapshot,
+) -> Option<SessionManagerActivity> {
+    let unresolved_tool = thread.items.iter().rev().find_map(|item| {
+        let ThreadItem::ToolCall {
+            turn_id,
+            tool_call_id,
+            name,
+            ..
+        } = item
+        else {
+            return None;
+        };
+        if turn_id != &turn.turn_id
+            || thread.items.iter().any(|candidate| {
+                matches!(
+                    candidate,
+                    ThreadItem::ToolResult {
+                        tool_call_id: result_id,
+                        ..
+                    } if result_id == tool_call_id
+                )
+            })
+        {
+            return None;
+        }
+        Some(format!("Running {name}"))
+    });
+    let text = unresolved_tool.or_else(|| {
+        turn.plan.as_ref().and_then(|plan| {
+            plan.steps
+                .iter()
+                .find(|step| step.status == zeta_protocol::PlanStepStatus::InProgress)
+                .map(|step| step.step.clone())
+        })
+    })?;
+    Some(SessionManagerActivity::Operation { text })
 }
 
 fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadMutation {

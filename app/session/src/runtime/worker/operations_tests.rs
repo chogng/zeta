@@ -29,6 +29,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
             session_id: session_id.clone(),
             title: "Project".to_owned(),
             status: SessionStatus::Active,
+            manager: Default::default(),
             threads: vec![SessionThread {
                 thread_id: thread_id.clone(),
                 title: "Agent".to_owned(),
@@ -100,6 +101,7 @@ fn root_thread_wins_over_a_later_conversation_thread() {
         session_id: SessionId::new("session-1").unwrap(),
         title: "Project".to_owned(),
         status: SessionStatus::Active,
+        manager: Default::default(),
         threads: vec![
             SessionThread {
                 thread_id: root_id.clone(),

@@ -7,6 +7,7 @@ use crate::components::chat_history;
 use crate::components::chat_history::ChatHistoryView;
 use crate::components::chat_input;
 use crate::components::key_hint_bar;
+use crate::components::welcome;
 use crate::features::approval;
 use crate::features::query;
 use crate::features::queue;
@@ -38,7 +39,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         .unwrap_or_else(|| context.highlight());
 
     if let Some(manager) = app.session_manager_view() {
-        sessions::draw_manager(frame, areas.session.transcript, manager, context);
+        let manager_areas = super::screen_layout::manager_areas(
+            areas.session.transcript,
+            welcome::desired_height(areas.session.transcript.width),
+        );
+        welcome::draw(
+            frame,
+            manager_areas.welcome,
+            app.welcome(),
+            presentation_highlight,
+            context,
+        );
+        sessions::draw_manager(frame, manager_areas.sessions, manager, context);
     } else {
         let messages = app.transcript_views();
         ChatHistoryView {
@@ -208,7 +220,8 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         queue_rows,
         query_rows,
         composer_rows,
-        if app.thread_request_active()
+        if app.session_manager_view().is_some()
+            || app.thread_request_active()
             || app.transcript_selection_active()
             || app.subagent_pane_focused()
             || app.pending_key_chord_label().is_some()
@@ -243,6 +256,15 @@ fn draw_status_area(
     app: &App,
     context: crate::render::RenderContext<'_>,
 ) {
+    if app.session_manager_view().is_some() {
+        let hint = if app.session_manager_focused() {
+            "↑↓ select · enter open · p pin · esc input"
+        } else {
+            "↑ sessions · enter create"
+        };
+        key_hint_bar::draw(frame, area, hint, context);
+        return;
+    }
     if app.approval_view().is_some() {
         key_hint_bar::draw(frame, area, "↑↓ choose · enter confirm", context);
         return;

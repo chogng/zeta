@@ -366,6 +366,7 @@ fn canonical_session_contains_thread_identity_presentation_and_lineage_without_h
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
         status: SessionStatus::Active,
+        manager: Default::default(),
         threads: vec![
             SessionThread {
                 thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
@@ -396,6 +397,47 @@ fn canonical_session_contains_thread_identity_presentation_and_lineage_without_h
     assert_eq!(
         session.threads[1].forked_from_id.as_ref(),
         Some(&session.threads[0].thread_id)
+    );
+}
+
+#[test]
+fn session_manager_info_has_a_stable_status_activity_and_time_shape() {
+    let manager = SessionManagerInfo {
+        status: SessionManagerStatus::NeedsInput,
+        status_changed_at_unix_ms: 42,
+        activity: Some(SessionManagerActivity::Question {
+            text: "Which API should I use?".into(),
+        }),
+        summary: None,
+    };
+
+    assert_eq!(
+        serde_json::to_value(manager).unwrap(),
+        json!({
+            "status": "needsInput",
+            "statusChangedAtUnixMs": 42,
+            "activity": {
+                "type": "question",
+                "text": "Which API should I use?"
+            }
+        })
+    );
+}
+
+#[test]
+fn legacy_thread_archive_defaults_to_completed() {
+    let event = serde_json::from_value::<ThreadEvent>(json!({
+        "type": "threadArchived",
+        "threadId": "thread_1"
+    }))
+    .unwrap();
+
+    assert_eq!(
+        event,
+        ThreadEvent::ThreadArchived {
+            thread_id: ThreadId::new("thread_1").unwrap(),
+            reason: ThreadArchiveReason::Completed,
+        }
     );
 }
 

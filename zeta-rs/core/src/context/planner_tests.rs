@@ -555,6 +555,8 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         forked_from_id: None,
         title: "test".into(),
         status: zeta_protocol::ThreadStatus::Active,
+        archived_at_unix_ms: None,
+        archive_reason: None,
         turn_execution_binding: None,
         sequence: items.len() as u64 + 2,
         usage: zeta_protocol::ModelUsageSummary::default(),
@@ -571,6 +573,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 } else {
                     TurnStatus::Completed
                 },
+                status_changed_at_unix_ms: 0,
                 started_at_unix_ms: None,
                 duration_ms: None,
                 turn_id,

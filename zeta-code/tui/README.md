@@ -33,7 +33,7 @@ Tool、approval policy 或 persistence。
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的 Tab completion、Esc dismiss、鼠标 hover 跟随选中与左键单击可见命令；
 - `$` 打开独立 Skill selector；enabled、compatible 且名称无歧义的 Skill 显示为 `$name`，Tab/Enter 或鼠标选中后作为原子文本插入。提交时保留 `$name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn 后按需加载；Skill 与 `/name` 命令不冲突，`skills/changed` 会刷新候选；
 - `/resume`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
-- command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入 Session Manager，`/subagents` 聚焦常驻 SubagentPane，`/queue` 管理当前 Thread 的 Queue；Approval 和 Query 由各自请求直接打开，不提供总括页面；
+- command popup 只注册已有真实执行流的 built-ins；除原有产品命令外，`/agents` 与 `/sessions` 进入覆盖完整 Session catalog 的唯一 Session Manager，`/subagents` 聚焦常驻 SubagentPane，`/queue` 管理当前 Thread 的 Queue；Manager 保留顶部 Welcome，按 Pinned、Needs input、Working、Ready for review、Failed、Stopped、Completed、Idle 分组，每行以状态图标开头并显示名称、当前操作/问题和状态时长；Approval 和 Query 仍由各自请求直接打开，不提供总括页面；
 - `/status` 使用不改变正常布局高度的 QuickView，展示当前 Thread 最近一次 Turn 使用的模型、上下文窗口以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
 - `/help` 向 `ChatComposer` 推入可搜索的 `ListSelection` Pane；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 逐层返回常驻 `ChatInput`；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
@@ -70,7 +70,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；历史 Session 数量只在 `/resume` 的 Session Manager 展示；需要明确操作键时由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
+- StatusLine 最多两行：第一行显示 working/waiting、Plan、Queue 与当前 Session 的后台 Subagent 数量，配置行按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目；Manager 页面改用一行选择/创建 KeyHints；需要明确操作键时由固定一行 KeyHints 直接替换。Shift-Tab 切换下一次 Turn 的权限模式；
 - 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。`ChatInput` 编辑、`ListSelection` 导航和 `ChatHistory` 滚动仍由各 component 拥有；
 - `ChatInput` 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；`ChatHistory` 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -79,7 +79,7 @@ Tool、approval policy 或 persistence。
 - `/copy` 或 Ctrl-O 把最后一条 Agent response 写入系统剪贴板；`/export [relative-path]` 以
   Markdown 导出当前已加载的 transcript history window，路径限制在当前目录内且绝不覆盖已有文件；
 - Mouse interactions 开启时，所有页面统一捕获左键：按下后发生拖动则按当前 Ratatui frame 的字符网格形成跨行选区，松手立即写入系统剪贴板；没有拖动才执行 Pane、Suggest、Approval、Query 或 transcript marker 的原有点击动作。选区按 Unicode 字符宽度跳过宽字符占用的后续单元格，并裁掉每行末尾的屏幕填充空格；
-- 空会话 Welcome Banner 在 `Ready when you are` 下方显示以 `~` 缩写用户主目录的当前目录路径；底部直接使用 StatusLine 或固定一行 KeyHints，不再套额外容器；
+- 空会话和 Manager 顶部的 Welcome Banner 在 `Ready when you are` 下方显示以 `~` 缩写用户主目录的当前目录路径；底部直接使用 StatusLine 或固定一行 KeyHints，不再套额外容器；
 - Ctrl-C 或 Ctrl-D（空输入）在 idle 时退出，active 时请求 interrupt；单次 Esc 在根界面保持
   inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
@@ -546,7 +546,7 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 ## 渲染
 
-Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPane` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 固定一行，SubagentPane 最多四行。StatusLine/KeyHints 与存在内容的 SubagentPane 之间固定保留一行；几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面只保留列表正文、ChatInput 和 StatusLine/KeyHints。
+Session 页面固定按 `Transcript → Goal → Plan → Queue → Query → ChatInput/Approval → StatusLine/KeyHints → 空行 → SubagentPane` 排列。Goal 与 Plan 各最多一行，Queue 默认最多三行，Query 最多一行；Approval 替换 ChatInput 区域，StatusLine 最多两行，KeyHints 固定一行，SubagentPane 最多四行。StatusLine/KeyHints 与存在内容的 SubagentPane 之间固定保留一行；几何由 `app/screen_layout.rs` 统一分配并优先保留正文。Manager 页面按 `Welcome → 分组 Session rows → ChatInput → KeyHints` 排列，并至少为列表保留四行。
 
 QuickView 和 Suggest 覆盖现有内容；stacked Pane 仍从 ChatInput 向上占高。每个 Thread 的草稿、Queue、Plan 展示、正文滚动、稳定选择和展开集合按 `ThreadId` 独立保存；正文选择、展开集合和滚动锚点都使用 `TranscriptCellId`，不依赖绘制后的行号。
 
@@ -557,7 +557,7 @@ PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢�
 `unicode_width::UnicodeWidthStr`，把 label width 计入首行，然后计算 bottom scroll。它是估算，
 不处理完整 grapheme/reflow/Markdown layout。
 
-`SessionThread` 提供标题和创建时间；SubagentPane 将 Main 与子代理名称统一为小写，以实心圆表示当前项、空心圆表示其他项，在右侧按 Codex 状态时长格式展示从 Thread 创建至今的时间，并隐藏 Thread ID。当前协议仍未提供 attention/summary，也没有为每次工具执行提供可持久恢复的最终时长与退出码；ExecCell 不会从输出文字猜这些字段。
+`SessionThread` 提供标题和创建时间；SubagentPane 将 Main 与子代理名称统一为小写，以实心圆表示当前项、空心圆表示其他项，在右侧按 Codex 状态时长格式展示从 Thread 创建至今的时间，并隐藏 Thread ID。`SessionManagerInfo` 由 App Server 从完整 Thread snapshot 推导明确的 Idle、Needs input、Working、Ready for review、Completed、Failed、Stopped 状态、状态变更时间与当前操作/问题/失败；TUI 不从正文猜状态。Manager 的 Working 图标只由 Tick 推进动画；Completed 显示完成至今的 `… ago`，其他行显示进入当前状态后的时长。`summary` 目前保持空值，等独立配置的摘要模型与请求生命周期存在后再填充，不会暗用当前聊天模型。协议也没有为每次工具执行提供可持久恢复的最终时长与退出码；ExecCell 不会从输出文字猜这些字段。
 
 v15 接受 `inline_visualization` 的终端 fallback，但当前 protocol 没有 visualization artifact、结构化 fallback 或安全引用。TUI 因此不会解析任意 HTML；上游契约到位后，它进入普通 TranscriptCell/Expansion/QuickView 路径，而不是新增一套覆盖层。
 

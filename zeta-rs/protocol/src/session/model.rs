@@ -1,4 +1,5 @@
 use crate::SessionId;
+use crate::SessionManagerInfo;
 use crate::SessionStatus;
 use crate::ThreadId;
 use crate::ThreadStatus;
@@ -17,6 +18,8 @@ pub struct Session {
     pub session_id: SessionId,
     pub title: String,
     pub status: SessionStatus,
+    #[serde(default)]
+    pub manager: SessionManagerInfo,
     pub threads: Vec<SessionThread>,
 }
 

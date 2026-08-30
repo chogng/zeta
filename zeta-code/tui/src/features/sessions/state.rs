@@ -1,5 +1,6 @@
 use super::manager::SessionManagerState;
 use std::collections::BTreeMap;
+use std::time::Instant;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
@@ -118,17 +119,22 @@ impl SessionsState {
         &self.catalog
     }
 
+    pub(crate) fn refresh_manager_time(&mut self, now: Instant) -> bool {
+        self.manager.refresh_time(now, &self.catalog)
+    }
+
     pub(crate) fn previous_root(&self) -> Option<RootTarget> {
         match self.root()? {
             RootTarget::Manager => None,
             RootTarget::Session(session_id) => {
-                let index = self.session_index(session_id)?;
+                let ordered = self.manager.ordered(&self.catalog);
+                let index = ordered
+                    .iter()
+                    .position(|session| &session.session_id == session_id)?;
                 if index == 0 {
                     Some(RootTarget::Manager)
                 } else {
-                    Some(RootTarget::Session(
-                        self.catalog[index - 1].session_id.clone(),
-                    ))
+                    Some(RootTarget::Session(ordered[index - 1].session_id.clone()))
                 }
             }
         }
@@ -137,22 +143,20 @@ impl SessionsState {
     pub(crate) fn next_root(&self) -> Option<RootTarget> {
         match self.root()? {
             RootTarget::Manager => self
-                .catalog
+                .manager
+                .ordered(&self.catalog)
                 .first()
                 .map(|session| RootTarget::Session(session.session_id.clone())),
             RootTarget::Session(session_id) => {
-                let index = self.session_index(session_id)?;
-                self.catalog
+                let ordered = self.manager.ordered(&self.catalog);
+                let index = ordered
+                    .iter()
+                    .position(|session| &session.session_id == session_id)?;
+                ordered
                     .get(index.saturating_add(1))
                     .map(|session| RootTarget::Session(session.session_id.clone()))
             }
         }
-    }
-
-    fn session_index(&self, session_id: &SessionId) -> Option<usize> {
-        self.catalog
-            .iter()
-            .position(|session| &session.session_id == session_id)
     }
 }
 

@@ -71,6 +71,39 @@ fn reducer_preserves_the_thread_creation_timestamp() {
 }
 
 #[test]
+fn reducer_preserves_when_and_why_a_thread_was_archived() {
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let created = reduce_thread_event(
+        None,
+        &envelope_at(
+            1,
+            100,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: thread_id.clone(),
+                title: "test".into(),
+            },
+        ),
+    )
+    .unwrap();
+    let archived = reduce_thread_event(
+        Some(created),
+        &envelope_at(
+            2,
+            900,
+            ThreadEvent::ThreadArchived {
+                thread_id,
+                reason: ThreadArchiveReason::Stopped,
+            },
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(archived.archived_at_unix_ms, Some(900));
+    assert_eq!(archived.archive_reason, Some(ThreadArchiveReason::Stopped));
+}
+
+#[test]
 fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start() {
     let thread_id = ThreadId::new("thread_1").unwrap();
     let first_turn_id = TurnId::new("turn_1").unwrap();
@@ -153,6 +186,9 @@ fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start()
 
     assert_eq!(snapshot.completed_turn_duration_ms(), 7_000);
     assert_eq!(snapshot.active_turn_started_at_unix_ms(), Some(15_000));
+    assert_eq!(snapshot.turns[0].status_changed_at_unix_ms, 5_000);
+    assert_eq!(snapshot.turns[1].status_changed_at_unix_ms, 11_000);
+    assert_eq!(snapshot.turns[2].status_changed_at_unix_ms, 15_000);
 }
 
 #[test]

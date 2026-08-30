@@ -97,6 +97,7 @@ fn session() -> Session {
         session_id: session_id("root"),
         title: "Session".into(),
         status: SessionStatus::Active,
+        manager: Default::default(),
         threads: vec![root(), child("child-a"), child("child-b")],
     }
 }

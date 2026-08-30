@@ -913,7 +913,8 @@ impl App {
     }
 
     pub(crate) fn transcript_selection_active(&self) -> bool {
-        self.thread_presentations.active().selected_cell.is_some()
+        matches!(self.sessions.root(), Some(RootTarget::Session(_)))
+            && self.thread_presentations.active().selected_cell.is_some()
     }
 
     fn show_dirs_pane(&mut self, pane_spec: DirPaneSpec) {
@@ -1185,11 +1186,13 @@ impl App {
     }
 
     pub(crate) fn session_manager_view(&self) -> Option<SessionManagerView<'_>> {
-        matches!(self.sessions.root(), Some(RootTarget::Manager)).then(|| SessionManagerView {
-            sessions: self.sessions.catalog(),
-            selected: self.sessions.manager().selected(),
-            focused: self.sessions.manager().focused(),
-        })
+        matches!(self.sessions.root(), Some(RootTarget::Manager))
+            .then(|| self.sessions.manager().view(self.sessions.catalog()))
+    }
+
+    pub(crate) fn session_manager_focused(&self) -> bool {
+        matches!(self.sessions.root(), Some(RootTarget::Manager))
+            && self.sessions.manager().focused()
     }
 
     pub(crate) fn subagent_pane_view(&self) -> Option<SubagentPaneView<'_>> {
@@ -1628,6 +1631,10 @@ impl App {
                         preferred_thread_id: self.sessions.remembered_thread(session_id).cloned(),
                     }
                 })),
+                KeyCode::Char('p') => {
+                    self.sessions.manager_mut().toggle_selected_pin();
+                    Some(None)
+                }
                 KeyCode::Esc => {
                     self.sessions.manager_mut().blur();
                     Some(None)
@@ -1839,6 +1846,9 @@ impl App {
         let context = self.app_keymap_context(true);
         self.app_keymap.expire(context, now);
         self.subagent_pane.refresh_elapsed();
+        if matches!(self.sessions.root(), Some(RootTarget::Manager)) {
+            self.sessions.refresh_manager_time(now);
+        }
     }
 
     pub(crate) fn pending_key_chord_label(&self) -> Option<String> {

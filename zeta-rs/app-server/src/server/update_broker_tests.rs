@@ -603,6 +603,7 @@ fn thread_update(
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadArchived {
                 thread_id: thread_id.clone(),
+                reason: zeta_protocol::ThreadArchiveReason::Completed,
             },
         },
     }

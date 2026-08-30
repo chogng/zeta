@@ -690,9 +690,13 @@ Never allow Subagent count to consume the full Transcript.
 
 # 18. Session Manager
 
-Manager is a first-class root screen.
+There is exactly one product-level Session Manager over the complete Session catalog.
 
 It is not a temporary Pane.
+
+PR work is one Session kind/workflow owned by this Manager. It must not create a second PR-only
+manager, and the product must not guess PR identity from a Session title. A typed Session kind may
+be added only when the shared protocol owns that fact.
 
 Manager answers:
 
@@ -702,22 +706,25 @@ Example:
 
 ```text
 ┌────────────────────────────────────────────────────┐
-│ Sessions                                           │
+│ Welcome                                            │
+│                                                    │
+│ Pinned                                             │
+│ ◆ Review PR 123     Ready for review          2m   │
 │                                                    │
 │ Needs input                                        │
-│ > TUI refactor      approval · Allow cargo test    │
+│ ? TUI refactor      Allow cargo test?          4m  │
 │                                                    │
 │ Working                                            │
-│   Code index        Indexing protocol definitions  │
-│   Windows tests     Running TUI suite              │
+│ ⠋ Code index        Indexing protocol definitions  8m│
+│ ⠋ Windows tests     Running TUI suite              3m│
 │                                                    │
 │ Completed                                          │
-│   Docs cleanup      Updated architecture docs      │
+│ ● Docs cleanup      Updated architecture docs  1h ago│
 │                                                    │
 ├────────────────────────────────────────────────────┤
 │ > ChatInput                                        │
 ├────────────────────────────────────────────────────┤
-│ waiting 1 · working 2 · done 1                     │
+│ ↑ sessions · enter create                          │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -725,45 +732,74 @@ Example:
 
 # 19. Manager row policy
 
-Manager is the place where summaries are useful.
-
-A row may show:
+Every row starts with a status icon and then uses three columns:
 
 ```text
-Session title/name
-canonical state
-one-line activity / question / result summary
-optional elapsed/age if space allows
+status icon | Session name | activity/question/summary | elapsed/age
 ```
 
-Unlike SubagentPane:
+The middle column follows exact source rules:
 
 ```text
-Manager
-→ summary yes
+Working          → exact current operation from durable Tool/Plan facts
+Needs input      → exact question from the pending request
+Failed           → exact stable failure message
+Ready/Completed  → generated summary when one exists; otherwise empty
+```
 
-SubagentPane
-→ summary no
+Summary generation is an optional worker below the one Session Manager, not another manager. It
+must use an explicitly configured summary model. Until that configuration and request lifecycle
+exist, `summary` remains empty; the preferred chat model is never used implicitly and lifecycle is
+never inferred from generated prose.
+
+The right column measures time in the current management state:
+
+```text
+Working / Needs input / Ready for review / Failed / Stopped
+→ now - status_changed_at
+
+Completed
+→ now - completed_at, rendered as "… ago"
+```
+
+Pinning changes only group placement and does not reset the state timestamp. Animation frames are
+advanced by timer events; drawing reads the current frame without mutating state.
+
+Status icon policy:
+
+```text
+Idle             ○ muted
+Needs input      ? warning
+Working          ⠋⠙⠹… animated accent
+Ready for review ◆ accent
+Completed        ● success
+Failed           ● danger
+Stopped          ■ muted
 ```
 
 ---
 
 # 20. Manager state groups
 
-Suggested canonical groups:
+Canonical display order:
 
 ```text
+Pinned
 Needs input
 Working
-Idle
-Completed
+Ready for review
 Failed
 Stopped
+Completed
+Idle
 ```
 
 Exact mapping must use canonical Session/Thread execution facts.
 
 Do not infer terminal state from transcript prose.
+
+`Pinned` is a placement override, not an execution state. A pinned Session appears only in the
+Pinned group while keeping its own icon, activity and time semantics.
 
 ---
 
@@ -1784,8 +1820,10 @@ Manager root:
 
 ```text
 ┌──────────────────────────────────────────────┐
+│ Welcome                                     │
+│                                              │
 │ Session Manager body                        │
-│ states + one-line summaries                 │
+│ grouped status rows + activity/time         │
 │                                              │
 ├──────────────────────────────────────────────┤
 │ > ChatInput                                  │ dispatch creates Session
@@ -2510,7 +2548,7 @@ generic bottom-area height ordering
 | TranscriptCell projection / Exec grouping | Thread transcript feature |
 | Transcript cell expansion | per-Thread TUI presentation keyed by TranscriptCellId |
 | Transcript cell keyboard selection | per-Thread transcript presentation |
-| Manager row selection/viewport | Session Manager presentation |
+| Manager row selection/viewport/pinning | Session Manager presentation |
 | SubagentPane selection/viewport | SubagentPane presentation |
 | Approval request/UI state | Approval feature |
 | Query request/UI state | Query feature |

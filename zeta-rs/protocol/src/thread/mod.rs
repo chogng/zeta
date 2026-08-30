@@ -17,6 +17,7 @@ pub use event::ToolExecutionAuthority;
 pub use goal::ThreadGoal;
 pub use goal::ThreadGoalStatus;
 pub use model::Thread;
+pub use status::ThreadArchiveReason;
 pub use status::ThreadStatus;
 pub use update::ItemDelta;
 pub use update::ThreadUpdate;

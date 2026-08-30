@@ -161,6 +161,8 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         forked_from_id: None,
         title: "test".into(),
         status: zeta_protocol::ThreadStatus::Active,
+        archived_at_unix_ms: None,
+        archive_reason: None,
         turn_execution_binding: None,
         sequence: 1,
         usage: zeta_protocol::ModelUsageSummary::default(),

@@ -1305,6 +1305,12 @@ fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
     let session = create_session(&server, &mut connection, 2, "create-session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     assert!(session["result"]["session"].get("sequence").is_none());
+    assert_eq!(session["result"]["session"]["manager"]["status"], "idle");
+    assert!(
+        session["result"]["session"]["manager"]["statusChangedAtUnixMs"]
+            .as_u64()
+            .is_some()
+    );
     let thread = create_thread(&server, &mut connection, 3, "create-thread", session_id, 1);
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
 
@@ -1356,6 +1362,10 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
         }),
     );
     assert_eq!(stopped["result"]["value"]["session"]["status"], "archived");
+    assert_eq!(
+        stopped["result"]["value"]["session"]["manager"]["status"],
+        "stopped"
+    );
 
     let rejected = call(
         &server,
@@ -1372,6 +1382,35 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
         }),
     );
     assert_eq!(rejected["error"]["message"], "CoreOperationFailed");
+}
+
+#[test]
+fn session_archive_is_distinct_from_stop_in_the_manager_view() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "archive-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+
+    let archived = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"session/request",
+            "params":{
+                "commandId":"archive-session",
+                "sessionId":session_id,
+                "request":{"type":"archive"}
+            }
+        }),
+    );
+
+    assert_eq!(
+        archived["result"]["value"]["session"]["manager"]["status"],
+        "completed"
+    );
 }
 
 #[test]

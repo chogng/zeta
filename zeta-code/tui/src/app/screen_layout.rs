@@ -1,6 +1,35 @@
 use ratatui::layout::Rect;
 
 const MIN_TRANSCRIPT_ROWS: u16 = 4;
+const MIN_MANAGER_ROWS: u16 = 4;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ManagerAreas {
+    pub(crate) welcome: Rect,
+    pub(crate) sessions: Rect,
+}
+
+pub(crate) fn manager_areas(area: Rect, welcome_desired_rows: u16) -> ManagerAreas {
+    let sessions_rows = MIN_MANAGER_ROWS.min(area.height);
+    let available_above_sessions = area.height.saturating_sub(sessions_rows);
+    let gap_rows = u16::from(available_above_sessions > 0);
+    let welcome_rows = welcome_desired_rows.min(available_above_sessions.saturating_sub(gap_rows));
+    let sessions_y = area.y.saturating_add(welcome_rows).saturating_add(gap_rows);
+    ManagerAreas {
+        welcome: Rect {
+            height: welcome_rows,
+            ..area
+        },
+        sessions: Rect {
+            y: sessions_y,
+            height: area
+                .y
+                .saturating_add(area.height)
+                .saturating_sub(sessions_y),
+            ..area
+        },
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct SessionAreas {

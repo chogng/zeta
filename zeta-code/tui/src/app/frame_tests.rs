@@ -31,6 +31,9 @@ use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
+use zeta_protocol::SessionManagerActivity;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionManagerStatus;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
 use zeta_protocol::ThreadId;
@@ -55,6 +58,57 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(!rendered.contains("ctrl-v image"));
     let status_line = rendered.lines().last().unwrap();
     assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+}
+
+#[test]
+fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
+    let mut app = App::new();
+    app.update(AppEvent::SessionCatalogReceived(vec![
+        manager_session(
+            "needs-input",
+            SessionManagerStatus::NeedsInput,
+            Some(SessionManagerActivity::Question {
+                text: "Which API should I use?".into(),
+            }),
+        ),
+        manager_session(
+            "working",
+            SessionManagerStatus::Working,
+            Some(SessionManagerActivity::Operation {
+                text: "Running targeted tests".into(),
+            }),
+        ),
+        manager_session("done", SessionManagerStatus::Completed, None),
+    ]));
+    app.insert_text("/sessions");
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .is_none()
+    );
+
+    let rendered = render(&app, 100, 28);
+    let needs_input = rendered
+        .lines()
+        .find(|line| line.contains("needs-input"))
+        .unwrap();
+    let working = rendered
+        .lines()
+        .find(|line| line.contains("Running targeted tests"))
+        .unwrap();
+    let completed = rendered.lines().find(|line| line.contains("done")).unwrap();
+
+    assert!(rendered.contains("Welcome back!"));
+    assert!(rendered.contains("Needs input"));
+    assert!(rendered.contains("Working"));
+    assert!(rendered.contains("Completed"));
+    assert!(needs_input.starts_with("? needs-input"));
+    assert!(needs_input.contains("Which API should I use?"));
+    assert!(working.starts_with("⠋ working"));
+    assert!(completed.starts_with("● done"));
+    assert_eq!(
+        rendered.lines().last().unwrap().trim_end(),
+        "  ↑ sessions · enter create"
+    );
 }
 
 #[test]
@@ -275,6 +329,7 @@ fn subagent_pane_starts_at_the_empty_input_cursor_column() {
         session_id,
         title: "Session".into(),
         status: SessionStatus::Active,
+        manager: Default::default(),
         threads: vec![
             SessionThread {
                 thread_id: root_id.clone(),
@@ -615,6 +670,39 @@ fn mention_popup_renders_paths_and_exposes_the_same_click_rows() {
     assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(1));
     assert_eq!(input_overlay_index_at(&app, terminal_area, 1, 15), None);
     let _ = fs::remove_dir_all(dir);
+}
+
+fn manager_session(
+    id: &str,
+    status: SessionManagerStatus,
+    activity: Option<SessionManagerActivity>,
+) -> Session {
+    Session {
+        session_id: SessionId::new(id).unwrap(),
+        title: id.into(),
+        status: if status == SessionManagerStatus::Completed {
+            SessionStatus::Archived
+        } else {
+            SessionStatus::Active
+        },
+        manager: SessionManagerInfo {
+            status,
+            status_changed_at_unix_ms: current_unix_millis().saturating_sub(5_000),
+            activity,
+            summary: None,
+        },
+        threads: Vec::new(),
+    }
+}
+
+fn current_unix_millis() -> u64 {
+    u64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis(),
+    )
+    .unwrap()
 }
 
 fn render(app: &App, width: u16, height: u16) -> String {

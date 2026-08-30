@@ -15,6 +15,7 @@ fn resume_pane_marks_the_current_session_and_maps_enter_to_its_id() {
         session_id: SessionId::new("session-1").unwrap(),
         title: "Current work".into(),
         status: SessionStatus::Active,
+        manager: Default::default(),
         threads: Vec::new(),
     }];
 
@@ -39,12 +40,14 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
             session_id: SessionId::new("session-1").unwrap(),
             title: "Active work".into(),
             status: SessionStatus::Active,
+            manager: Default::default(),
             threads: Vec::new(),
         },
         Session {
             session_id: SessionId::new("session-2").unwrap(),
             title: "Archived work".into(),
             status: SessionStatus::Archived,
+            manager: Default::default(),
             threads: Vec::new(),
         },
     ];

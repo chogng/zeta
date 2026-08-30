@@ -779,6 +779,9 @@ use zeta_protocol::RequestUserInputResponse;
 use zeta_protocol::ReviewTarget;
 use zeta_protocol::SandboxDenialOutput;
 use zeta_protocol::Session;
+use zeta_protocol::SessionManagerActivity;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionManagerStatus;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
 use zeta_protocol::SkillActivationReason;
@@ -791,6 +794,7 @@ use zeta_protocol::StableTurnError;
 use zeta_protocol::StableTurnErrorCode;
 use zeta_protocol::StreamCursor;
 use zeta_protocol::Thread;
+use zeta_protocol::ThreadArchiveReason;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadGoal;
 use zeta_protocol::ThreadGoalStatus;
@@ -2876,6 +2880,9 @@ typescript_bindings! {
     DirPermissionsSetParams,
     DirPermissionsForgetParams,
     SessionStatus,
+    SessionManagerStatus,
+    SessionManagerActivity,
+    SessionManagerInfo,
     ThreadOrigin,
     SessionThread,
     Session,
@@ -2928,6 +2935,7 @@ typescript_bindings! {
     StableTurnErrorCode,
     StableTurnError,
     ThreadStatus,
+    ThreadArchiveReason,
     TurnStatus,
     ActionApprovalCapabilityKind,
     ActionApprovalCapability,

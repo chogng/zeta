@@ -19,6 +19,7 @@ use crate::RequestId;
 use crate::SandboxDenialOutput;
 use crate::SessionId;
 use crate::StableTurnError;
+use crate::ThreadArchiveReason;
 use crate::ThreadId;
 use crate::ThreadItem;
 use crate::ToolCallId;
@@ -79,6 +80,8 @@ pub enum ThreadEvent {
     },
     ThreadArchived {
         thread_id: ThreadId,
+        #[serde(default)]
+        reason: ThreadArchiveReason,
     },
     GoalCreated {
         thread_id: ThreadId,
@@ -363,7 +366,7 @@ impl ThreadEvent {
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
-            | Self::ThreadArchived { thread_id }
+            | Self::ThreadArchived { thread_id, .. }
             | Self::GoalCreated { thread_id, .. }
             | Self::GoalUpdated { thread_id, .. }
             | Self::GoalCleared { thread_id, .. }

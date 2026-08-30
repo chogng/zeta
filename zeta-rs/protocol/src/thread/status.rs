@@ -9,3 +9,12 @@ pub enum ThreadStatus {
     Active,
     Archived,
 }
+
+/// User-visible reason that a Thread left the active Session catalog.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ThreadArchiveReason {
+    #[default]
+    Completed,
+    Stopped,
+}

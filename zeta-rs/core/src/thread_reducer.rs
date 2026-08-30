@@ -42,6 +42,7 @@ use zeta_protocol::SessionId;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::StableTurnErrorCode;
 use zeta_protocol::Thread;
+use zeta_protocol::ThreadArchiveReason;
 use zeta_protocol::ThreadCommand;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
@@ -70,6 +71,8 @@ pub struct ThreadSnapshot {
     pub forked_from_id: Option<ThreadId>,
     pub title: String,
     pub status: ThreadStatus,
+    pub archived_at_unix_ms: Option<u64>,
+    pub archive_reason: Option<ThreadArchiveReason>,
     pub turn_execution_binding: Option<TurnExecutionBinding>,
     pub sequence: u64,
     pub usage: ModelUsageSummary,
@@ -249,6 +252,7 @@ impl ThreadSnapshot {
 pub struct TurnSnapshot {
     pub turn_id: TurnId,
     pub status: TurnStatus,
+    pub status_changed_at_unix_ms: u64,
     pub started_at_unix_ms: Option<u64>,
     pub duration_ms: Option<u64>,
     pub kind: TurnKind,
@@ -355,6 +359,8 @@ pub fn reduce_thread_event(
                     forked_from_id: None,
                     title: title.clone(),
                     status: ThreadStatus::Active,
+                    archived_at_unix_ms: None,
+                    archive_reason: None,
                     turn_execution_binding: None,
                     sequence: envelope.sequence,
                     usage: ModelUsageSummary::default(),
@@ -418,7 +424,7 @@ pub fn reduce_thread_event(
                 "Thread cannot be created more than once".into(),
             ));
         }
-        ThreadEvent::ThreadArchived { thread_id } => {
+        ThreadEvent::ThreadArchived { thread_id, reason } => {
             require_no_command(envelope)?;
             if thread_id != &snapshot.thread_id {
                 return Err(CoreError::Journal(
@@ -436,6 +442,8 @@ pub fn reduce_thread_event(
                 ));
             }
             snapshot.status = ThreadStatus::Archived;
+            snapshot.archived_at_unix_ms = Some(recorded_at_unix_ms(envelope)?);
+            snapshot.archive_reason = Some(*reason);
         }
         ThreadEvent::GoalCreated { thread_id, goal } => {
             require_no_command(envelope)?;
@@ -843,6 +851,7 @@ pub fn reduce_thread_event(
                 TurnSnapshot {
                     turn_id: turn_id.clone(),
                     status: TurnStatus::Created,
+                    status_changed_at_unix_ms: recorded_at_unix_ms(envelope)?,
                     started_at_unix_ms: None,
                     duration_ms: None,
                     kind: *kind,
@@ -935,7 +944,13 @@ pub fn reduce_thread_event(
         }
         ThreadEvent::TurnStarted { turn_id, .. } => {
             require_no_command(envelope)?;
-            transition_turn(&mut snapshot, turn_id, TurnStatus::Running, None)?;
+            transition_turn(
+                &mut snapshot,
+                turn_id,
+                TurnStatus::Running,
+                None,
+                recorded_at_unix_ms(envelope)?,
+            )?;
             find_turn_mut(&mut snapshot, turn_id)?.started_at_unix_ms =
                 Some(recorded_at_unix_ms(envelope)?);
             if let Some(command) = snapshot.commands.iter_mut().find(|command| {
@@ -1167,6 +1182,7 @@ pub fn reduce_thread_event(
                 turn_id,
                 waiting_status_for(&interaction.request),
                 None,
+                recorded_at_unix_ms(envelope)?,
             )?;
             find_turn_mut(&mut snapshot, turn_id)?.pending_interaction = Some(interaction.clone());
         }
@@ -1199,7 +1215,13 @@ pub fn reduce_thread_event(
                     "Thread command ID is already registered".into(),
                 ));
             }
-            transition_turn(&mut snapshot, turn_id, TurnStatus::Running, None)?;
+            transition_turn(
+                &mut snapshot,
+                turn_id,
+                TurnStatus::Running,
+                None,
+                recorded_at_unix_ms(envelope)?,
+            )?;
             find_turn_mut(&mut snapshot, turn_id)?.pending_interaction = None;
             snapshot
                 .resolved_interactions
@@ -1390,12 +1412,24 @@ pub fn reduce_thread_event(
                 });
             }
             pending_interaction(&snapshot, turn_id, request_id)?;
-            transition_turn(&mut snapshot, turn_id, TurnStatus::Running, None)?;
+            transition_turn(
+                &mut snapshot,
+                turn_id,
+                TurnStatus::Running,
+                None,
+                recorded_at_unix_ms(envelope)?,
+            )?;
             find_turn_mut(&mut snapshot, turn_id)?.pending_interaction = None;
         }
         ThreadEvent::TurnCompleted { turn_id, .. } => {
             require_no_command(envelope)?;
-            transition_turn(&mut snapshot, turn_id, TurnStatus::Completed, None)?;
+            transition_turn(
+                &mut snapshot,
+                turn_id,
+                TurnStatus::Completed,
+                None,
+                recorded_at_unix_ms(envelope)?,
+            )?;
             record_turn_duration(&mut snapshot, turn_id, envelope)?;
         }
         ThreadEvent::TurnFailed { turn_id, error, .. } => {
@@ -1405,6 +1439,7 @@ pub fn reduce_thread_event(
                 turn_id,
                 TurnStatus::Failed,
                 Some(error.clone()),
+                recorded_at_unix_ms(envelope)?,
             )?;
             record_turn_duration(&mut snapshot, turn_id, envelope)?;
             if let Some(goal) = snapshot.goal.as_mut() {
@@ -1450,11 +1485,23 @@ pub fn reduce_thread_event(
                     "Turn cancellation must close its outstanding interaction first".into(),
                 ));
             }
-            transition_turn(&mut snapshot, turn_id, TurnStatus::Cancelling, None)?;
+            transition_turn(
+                &mut snapshot,
+                turn_id,
+                TurnStatus::Cancelling,
+                None,
+                recorded_at_unix_ms(envelope)?,
+            )?;
         }
         ThreadEvent::TurnInterrupted { turn_id, .. } => {
             require_no_command(envelope)?;
-            transition_turn(&mut snapshot, turn_id, TurnStatus::Interrupted, None)?;
+            transition_turn(
+                &mut snapshot,
+                turn_id,
+                TurnStatus::Interrupted,
+                None,
+                recorded_at_unix_ms(envelope)?,
+            )?;
             record_turn_duration(&mut snapshot, turn_id, envelope)?;
             if let Some(command) = snapshot.commands.iter_mut().find(|command| {
                 matches!(
@@ -2066,6 +2113,7 @@ fn import_history(
         .map(|turn| TurnSnapshot {
             turn_id: turn.turn_id.clone(),
             status: turn.status,
+            status_changed_at_unix_ms: 0,
             started_at_unix_ms: None,
             duration_ms: None,
             kind: turn.kind,
@@ -2169,6 +2217,7 @@ fn append_imported_turn(
     turns.push(TurnSnapshot {
         turn_id: turn.turn_id.clone(),
         status: turn.status,
+        status_changed_at_unix_ms: 0,
         started_at_unix_ms: None,
         duration_ms: None,
         kind: turn.kind,
@@ -2464,10 +2513,12 @@ fn transition_turn(
     turn_id: &TurnId,
     next: TurnStatus,
     failure: Option<StableTurnError>,
+    status_changed_at_unix_ms: u64,
 ) -> Result<(), CoreError> {
     let turn = find_turn_mut(snapshot, turn_id)?;
     turn.status = transition_turn_status(turn.status, next)?;
     turn.failure = failure;
+    turn.status_changed_at_unix_ms = status_changed_at_unix_ms;
     Ok(())
 }
 

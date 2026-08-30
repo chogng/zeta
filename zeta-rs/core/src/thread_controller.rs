@@ -1828,6 +1828,7 @@ impl ThreadController {
         &self,
         session_id: &SessionId,
         command_id: &CommandId,
+        reason: zeta_protocol::ThreadArchiveReason,
     ) -> Result<Vec<ThreadSnapshot>, CoreError> {
         let threads = self.list_session_threads(session_id)?;
         if threads.is_empty() {
@@ -1861,18 +1862,27 @@ impl ThreadController {
                     )?;
                 }
             }
-            self.archive_thread(&thread.thread_id)?;
+            self.archive_thread_with_reason(&thread.thread_id, reason)?;
         }
         self.list_session_threads(session_id)
     }
 
     pub fn archive_thread(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
+        self.archive_thread_with_reason(thread_id, zeta_protocol::ThreadArchiveReason::Completed)
+    }
+
+    fn archive_thread_with_reason(
+        &self,
+        thread_id: &ThreadId,
+        reason: zeta_protocol::ThreadArchiveReason,
+    ) -> Result<ThreadSnapshot, CoreError> {
         self.mutate_thread(thread_id, |snapshot| {
             if snapshot.status == zeta_protocol::ThreadStatus::Active {
                 self.record_batch(
                     snapshot,
                     vec![ThreadEvent::ThreadArchived {
                         thread_id: thread_id.clone(),
+                        reason,
                     }],
                 )?;
             }

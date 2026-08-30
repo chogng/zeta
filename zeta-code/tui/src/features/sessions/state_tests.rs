@@ -2,6 +2,7 @@ use super::RootTarget;
 use super::SessionsState;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
+use zeta_protocol::SessionManagerStatus;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::SessionThread;
 use zeta_protocol::ThreadId;
@@ -22,6 +23,37 @@ fn manager_is_the_leftmost_root_and_navigation_does_not_wrap() {
     assert_eq!(
         state.next_root(),
         Some(RootTarget::Session(session_id("one")))
+    );
+}
+
+#[test]
+fn horizontal_root_navigation_matches_the_manager_group_order() {
+    let mut completed = session("completed");
+    completed.manager.status = SessionManagerStatus::Completed;
+    let mut working = session("working");
+    working.manager.status = SessionManagerStatus::Working;
+    let mut question = session("question");
+    question.manager.status = SessionManagerStatus::NeedsInput;
+    let mut state = SessionsState::default();
+    state.install_catalog(
+        vec![completed, working, question],
+        session_id("completed"),
+        thread_id("completed"),
+    );
+
+    state.show_manager();
+    assert_eq!(
+        state.next_root(),
+        Some(RootTarget::Session(session_id("question")))
+    );
+    state.show_session(session_id("working"), thread_id("working"));
+    assert_eq!(
+        state.previous_root(),
+        Some(RootTarget::Session(session_id("question")))
+    );
+    assert_eq!(
+        state.next_root(),
+        Some(RootTarget::Session(session_id("completed")))
     );
 }
 
@@ -76,6 +108,7 @@ fn session(value: &str) -> Session {
         session_id: session_id(value),
         title: value.into(),
         status: SessionStatus::Active,
+        manager: Default::default(),
         threads: Vec::new(),
     }
 }
