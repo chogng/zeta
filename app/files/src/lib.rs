@@ -31,21 +31,15 @@ use zui::ui::TextInputCommand;
 use zui::ui::TextInputCompositionEvent;
 use zui::ui::TextStyle;
 
-mod directory_picker;
-#[path = "files/file_icon.rs"]
+mod dir_picker;
 mod file_icon;
-#[path = "files/file_tree.rs"]
 mod file_tree;
-#[path = "files/layout.rs"]
 mod layout;
-#[path = "files/pane.rs"]
 mod pane;
-#[path = "files/toolbar.rs"]
 mod toolbar;
-#[path = "files/tree_view.rs"]
 mod tree_view;
 
-pub use directory_picker::{
+pub use dir_picker::{
     DIRECTORY_SEARCH_INPUT, DirectoryPicker, DirectoryPickerActivation, DirectoryPickerState,
     PICKER_ITEM_HEIGHT, path_item_id,
 };

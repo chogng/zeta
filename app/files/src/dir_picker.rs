@@ -21,7 +21,7 @@ use zeta_ui_theme::UiTheme;
 
 const WINDOW: ElementId = ElementId::scoped(1, 1);
 
-#[path = "directory_picker_path.rs"]
+#[path = "dir_picker_path.rs"]
 mod path_support;
 use path_support::{
     canonical_directory, directory_name, home_directory, read_child_directories,
@@ -501,5 +501,5 @@ fn directory_item(directory: &PathBuf) -> DirectoryPickerItem {
 }
 
 #[cfg(test)]
-#[path = "directory_picker_tests.rs"]
+#[path = "dir_picker_tests.rs"]
 mod tests;
