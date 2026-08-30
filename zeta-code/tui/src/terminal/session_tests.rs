@@ -75,11 +75,11 @@ fn mouse_mode_is_applied_idempotently() {
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
 
     guard
-        .set_mouse_mode(MouseMode::UiClick)
-        .expect("enable UI clicks");
+        .set_mouse_mode(MouseMode::TuiCapture)
+        .expect("enable TUI pointer capture");
     guard
-        .set_mouse_mode(MouseMode::UiClick)
-        .expect("keep UI clicks enabled");
+        .set_mouse_mode(MouseMode::TuiCapture)
+        .expect("keep TUI pointer capture enabled");
     guard
         .set_mouse_mode(MouseMode::TerminalSelection)
         .expect("restore terminal selection");
@@ -133,8 +133,8 @@ fn suspend_cycle_reacquires_requested_mouse_capture() {
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
 
     guard
-        .set_mouse_mode(MouseMode::UiClick)
-        .expect("enable UI clicks");
+        .set_mouse_mode(MouseMode::TuiCapture)
+        .expect("enable TUI pointer capture");
     guard.restore();
     guard.reacquire().expect("reacquire");
     drop(guard);

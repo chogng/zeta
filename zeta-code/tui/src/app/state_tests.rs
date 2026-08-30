@@ -207,7 +207,7 @@ fn pointer_activation_uses_the_feature_pane_action_mapping() {
     let mut app = App::new();
     app.update(AppEvent::ThemePaneOpened(theme_pane_spec(&theme_catalog())));
 
-    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     assert!(app.select_visible_item(1));
     assert_eq!(
         app.list_selection().unwrap().selected_visible_index(),
@@ -1011,15 +1011,15 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
-fn clickable_chat_input_popups_declare_ui_click_mouse_mode() {
+fn mouse_interactions_capture_pointer_input_on_every_screen() {
     let mut app = App::new();
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     app.insert_text("/");
-    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     let dir = temporary_dir("mouse-interaction-mention");
     fs::write(dir.join("notes.md"), "notes").unwrap();
@@ -1027,7 +1027,7 @@ fn clickable_chat_input_popups_declare_ui_click_mouse_mode() {
     app.insert_text("@notes");
     wait_for_mention_results(&mut app, &dir);
 
-    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -1035,13 +1035,17 @@ fn clickable_chat_input_popups_declare_ui_click_mouse_mode() {
 fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
     let mut app = App::new();
     app.insert_text("/");
-    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
+    app.begin_screen_selection(ratatui::layout::Position::new(1, 1));
+    app.drag_screen_selection(ratatui::layout::Position::new(3, 1));
+    assert!(app.screen_selection().range().is_some());
 
     let mut settings = TerminalSettings::default();
     settings.set_mouse_interactions(false);
     app.update(AppEvent::ConfigSettingsReceived(settings));
 
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
+    assert!(app.screen_selection().range().is_none());
 }
 
 #[test]

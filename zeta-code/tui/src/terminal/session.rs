@@ -1,4 +1,6 @@
 use crate::mouse::MouseMode;
+use crate::mouse::ScreenSelectionRange;
+use crate::mouse::text_in_range;
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
 use crossterm::event::DisableMouseCapture;
@@ -10,6 +12,7 @@ use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use std::io;
 use std::io::Stdout;
@@ -20,6 +23,7 @@ pub(crate) struct TerminalSession {
     background_color: Option<TerminalRgb>,
     terminal: Terminal<CrosstermBackend<Stdout>>,
     modes: TerminalModeGuard<CrosstermModeOperations>,
+    rendered_frame: Option<Buffer>,
 }
 
 impl TerminalSession {
@@ -32,6 +36,7 @@ impl TerminalSession {
             background_color,
             terminal,
             modes,
+            rendered_frame: None,
         };
         session.terminal.clear()?;
         Ok(session)
@@ -45,7 +50,9 @@ impl TerminalSession {
     where
         F: FnOnce(&mut ratatui::Frame<'_>),
     {
-        self.terminal.draw(render).map(|_| ())
+        let completed = self.terminal.draw(render)?;
+        self.rendered_frame = Some(completed.buffer.clone());
+        Ok(())
     }
 
     pub(crate) fn area(&self) -> io::Result<Rect> {
@@ -56,6 +63,12 @@ impl TerminalSession {
 
     pub(crate) fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
         self.modes.set_mouse_mode(mode)
+    }
+
+    pub(crate) fn selected_text(&self, range: ScreenSelectionRange) -> Option<String> {
+        self.rendered_frame
+            .as_ref()
+            .and_then(|buffer| text_in_range(buffer, range))
     }
 
     /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.
@@ -120,7 +133,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             self.alternate_screen = true;
             self.operations.enable_bracketed_paste()?;
             self.bracketed_paste = true;
-            if self.mouse_mode == MouseMode::UiClick {
+            if self.mouse_mode == MouseMode::TuiCapture {
                 self.operations.enable_mouse_capture()?;
                 self.mouse_capture = true;
             }
@@ -143,7 +156,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
                     self.mouse_capture = false;
                 }
             }
-            MouseMode::UiClick => {
+            MouseMode::TuiCapture => {
                 if self.alternate_screen && !self.mouse_capture {
                     self.operations.enable_mouse_capture()?;
                     self.mouse_capture = true;

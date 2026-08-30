@@ -14,7 +14,6 @@ use crate::components::tab_list;
 use crate::components::tab_list::TabListInputOutcome;
 use crate::components::tab_list::TabListItem;
 use crate::components::tab_list::TabListState;
-use crate::mouse::MouseMode;
 
 const MAX_VISIBLE_ROWS: usize = 12;
 
@@ -349,19 +348,6 @@ impl ListSelectionState {
 
     pub(crate) fn selected_visible_index(&self) -> Option<usize> {
         self.selected_visible
-    }
-
-    pub(crate) fn mouse_mode(&self) -> MouseMode {
-        let tabs_are_clickable = self.model.show_tabs && self.tabs.tabs().len() > 1;
-        let items_are_clickable = self
-            .visible_items()
-            .into_iter()
-            .any(|item| item.id().is_some());
-        if tabs_are_clickable || items_are_clickable {
-            MouseMode::UiClick
-        } else {
-            MouseMode::TerminalSelection
-        }
     }
 
     pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {

@@ -7,7 +7,6 @@ use super::ListSelectionItemId;
 use super::ListSelectionModel;
 use super::ListSelectionState;
 use crate::components::search_box::SearchBoxModel;
-use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -47,7 +46,7 @@ fn active_tab_label(state: &ListSelectionState) -> &str {
 }
 
 #[test]
-fn actionable_rows_expose_pointer_mode_hit_testing_and_activation() {
+fn actionable_rows_expose_pointer_hit_testing_and_activation() {
     let first_id = ListSelectionItemId::new("first");
     let second_id = ListSelectionItemId::new("second");
     let mut state = ListSelectionState::new(
@@ -65,7 +64,6 @@ fn actionable_rows_expose_pointer_mode_hit_testing_and_activation() {
     );
     let area = Rect::new(0, 0, 80, 10);
 
-    assert_eq!(state.mouse_mode(), MouseMode::UiClick);
     assert_eq!(state.item_index_at(area, 2, 2), Some(0));
     assert_eq!(state.item_index_at(area, 2, 3), Some(1));
     assert_eq!(state.item_index_at(area, 1, 3), None);
@@ -74,7 +72,7 @@ fn actionable_rows_expose_pointer_mode_hit_testing_and_activation() {
 }
 
 #[test]
-fn read_only_rows_leave_drag_selection_to_the_terminal() {
+fn read_only_rows_cannot_be_activated() {
     let mut state = ListSelectionState::new(ListSelectionModel::new(
         "Status",
         vec![ListSelectionGroup::new(
@@ -83,17 +81,15 @@ fn read_only_rows_leave_drag_selection_to_the_terminal() {
         )],
     ));
 
-    assert_eq!(state.mouse_mode(), MouseMode::TerminalSelection);
     assert!(!state.select_visible_item(0));
     assert_eq!(state.activate_visible_item(0), None);
 }
 
 #[test]
-fn mouse_click_switches_tabs_and_enables_pointer_mode() {
+fn mouse_click_switches_tabs() {
     let mut state = state();
     let area = Rect::new(0, 0, 80, 10);
 
-    assert_eq!(state.mouse_mode(), MouseMode::UiClick);
     assert_eq!(state.tab_index_at(area, 14, 2), Some(1));
     assert!(state.select_tab(1));
     assert_eq!(active_tab_label(&state), "Keys");

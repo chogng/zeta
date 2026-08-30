@@ -78,13 +78,14 @@ Tool、approval policy 或 persistence。
   合并页面；TUI 不保存 Thread history；
 - `/copy` 或 Ctrl-O 把最后一条 Agent response 写入系统剪贴板；`/export [relative-path]` 以
   Markdown 导出当前已加载的 transcript history window，路径限制在当前目录内且绝不覆盖已有文件；
+- Mouse interactions 开启时，所有页面统一捕获左键：按下后发生拖动则按当前 Ratatui frame 的字符网格形成跨行选区，松手立即写入系统剪贴板；没有拖动才执行 Pane、Suggest、Approval、Query 或 transcript marker 的原有点击动作。选区按 Unicode 字符宽度跳过宽字符占用的后续单元格，并裁掉每行末尾的屏幕填充空格；
 - 空会话 Welcome Banner 在 `Ready when you are` 下方显示以 `~` 缩写用户主目录的当前目录路径；底部直接使用 StatusLine 或固定一行 KeyHints，不再套额外容器；
 - Ctrl-C 或 Ctrl-D（空输入）在 idle 时退出，active 时请求 interrupt；单次 Esc 在根界面保持
   inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
 - Ctrl-Z 在 Unix 上先恢复当前启用的鼠标捕获、bracketed paste、alternate screen 和 raw mode，再发送 `SIGTSTP`；`fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
-- raw mode、alternate screen、bracketed paste 与 cursor cleanup；鼠标捕获只在 Slash/File/Plugin Suggest 或包含可执行候选项的 `ListSelection` Pane 可见时启用，相关界面关闭后立即释放，使终端恢复拖拽文本选择；
+- raw mode、alternate screen、bracketed paste 与 cursor cleanup；Mouse interactions 开启时在整个 TUI 会话捕获鼠标，关闭时释放捕获并把拖拽文本选择交还终端；
 - 启动时通过 `zeta-theme` 读取共享用户主题；chrome 投影 accent/error/success/warning/muted/highlight，
   Theme Pane preview 投影有限的 syntax/diff token，并按 TrueColor、ANSI-256、ANSI-16 或
   Monochrome 能力确定性降级；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、`Theme` 标题及其上下各一行间距、编号、
@@ -100,7 +101,7 @@ Tool、approval policy 或 persistence。
 transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
 折叠与虚拟化由
 [`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
-[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 Slash/File/Plugin Suggest、多标签 `ListSelection` Pane 的左键切换和带可执行候选项的 `ListSelection` Pane；hover 复用选中态，左键复用 Enter 动作。Config 标签页中的 Mouse interactions item 可关闭鼠标交互，关闭后这些页面不捕获鼠标，任意屏幕文本框选由终端负责。
+[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的鼠标交互覆盖所有页面：拖动选择当前 frame 中可见的字符并在松手时自动复制，没有拖动的左键手势才进入 Slash/File/Plugin Suggest、Pane、Approval、Query 与 transcript marker 的命中路径；hover 继续复用候选选中态。Config 标签页中的 Mouse interactions item 可关闭全部 TUI 鼠标捕获，关闭后框选与复制行为由终端负责。
 Vim 只改变 `ChatInput` 的文字编辑行为，不把 Normal/Visual 状态扩散到 Pane、正文选择或应用级快捷键。
 
 TUI 当前连接 CLI 提供的 profile/Directory-scoped local App Server authority，不提供 remote
@@ -197,7 +198,7 @@ src/
 │   ├── status_line/               # runtime facts, item settings, resource, setup and bounded view
 │   ├── file_search.rs              # file-mention search module root
 │   └── file_search/                # bounded async file-search runtime
-├── mouse.rs                        # shared mouse-mode contract for pages and terminal lifecycle
+├── mouse.rs                        # session-wide pointer gesture, screen selection and mouse-mode contract
 ├── host/
 │   ├── browser.rs                 # validated HTTPS handoff to the system browser
 │   ├── clipboard.rs               # system text output plus file/RGBA image input
@@ -263,7 +264,7 @@ src/
 | `Suggest` | private | 保存由 `/`、`@` 或 `$` 触发的唯一当前候选、选择状态和补全结果 | 不持有草稿、不打开 Pane、不执行请求 |
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 `ChatInput`、不发 RPC、不持久化临时文件 |
-| `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | command-based response copy 与目录边界内的 Markdown export | 不拥有 transcript、不覆盖文件、不实现任意屏幕文本 selection |
+| `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | response/屏幕选区文字写入系统剪贴板，以及目录边界内的 Markdown export | 不拥有 transcript 或屏幕选区状态、不覆盖文件 |
 | `FileSearchManager` | crate-private | event loop 持有的目录搜索 runtime；非阻塞 drain snapshot 并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
 | `Mentions` / `MentionPopup` | private | `@token` query/range、File/Plugin 混合结果、选择/关闭和原子补全 | 不扫描目录、不读 Plugin 文件系统、不拥有 worker |
 | `SkillSelector` | private | `$token` query/range、metadata 过滤、选择/关闭、原子 `$name` 与 exact `SkillRef` 绑定 | 不读取 Skill filesystem、不加载 `SKILL.md`、不占用 `/` 或 `@` |
@@ -282,12 +283,13 @@ src/
 | `app::apply_active_turn_snapshot` | test-visible | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
 | `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
 | `client::new_command_id` | private | process ID + wall-clock nanos 分配 `CommandId` | 一次逻辑 command 一个新 ID |
-| `app::frame::draw` | crate-private | frame 分区并协调 feature/component renderer | 不改变 App state |
+| `app::frame::draw` | crate-private | frame 分区并协调 feature/component renderer，最后把当前屏幕选区样式应用到完整 buffer | 不改变 App state、不写剪贴板 |
 | `app::frame::input_pointer_target_at` | crate-private | 复用当前 Pane、Suggest、Approval、Query 与 ChatInput 区域映射可见行点击 | 不执行命令、不改变选择状态 |
 | `components::chat_history::row::estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
-| `TerminalSession::open` | crate-private | 进入 raw/alternate/paste mode 并创建 backend | partial failure 必须 rollback；默认不捕获鼠标 |
-| `MouseMode` | crate-private | 页面声明 `TerminalSelection` 或 `UiClick`，供 App 与终端共享同一鼠标模式契约 | 不执行终端副作用、不保存页面身份 |
-| `TerminalSession::set_mouse_mode` | crate-private | 应用当前页面声明的鼠标模式并切换终端全屏鼠标捕获 | 不判断具体页面、不处理点击坐标；重复调用保持幂等 |
+| `TerminalSession::open` | crate-private | 进入 raw/alternate/paste mode、创建 backend，并保存最后完成的 Ratatui buffer 供松手复制读取 | partial failure 必须 rollback；鼠标捕获仍由 `set_mouse_mode` 决定 |
+| `ScreenSelection` / `ScreenSelectionRange` | crate-private | 在 `App` 中拥有一次左键手势的起点、终点、拖动判定与屏幕字符范围，并对完整 frame 绘制反色选区 | 不读取 buffer、不写剪贴板、不解释页面内容 |
+| `MouseMode` | crate-private | `App` 按本地 Mouse interactions 设置声明 `TerminalSelection` 或 `TuiCapture` | 不由局部页面决定、不执行终端副作用 |
+| `TerminalSession::set_mouse_mode` / `selected_text` | crate-private | 切换全屏鼠标捕获，并从最后完成的 frame 读取选区字符 | 不保存手势状态、不解释页面或产品动作；mode 切换保持幂等 |
 | `TerminalModeGuard::acquire` | private | 按顺序获取 terminal mode，并在任一步失败时逆序 rollback | 不创建 Ratatui backend、不处理产品状态 |
 | `TerminalModeGuard::restore` | private | 幂等地逆序释放已经获取的 mode | cleanup error 不覆盖原始错误 |
 | `Drop for TerminalSession` | private impl | 委托 guard 恢复 terminal modes，再显示 normal-screen cursor | 所有成功构造后的退出路径都依赖 RAII |
@@ -338,11 +340,11 @@ run(session, options)
       │  ├─ SubmitQueuedTurn → 保留 Queue 条目 → RequestTask(submit_prompt + canonical read)
       │  ├─ SteerTurn → RequestTask(steer_prompt + canonical read)
       │  └─ Interrupt → RequestTask(interrupt_turn + canonical read)
-      ├─ left mouse down → frame 共享几何命中
-      │  ├─ Pane item hit → PaneId 对应的 `PaneActions`
-      │  ├─ Approval / Query hit → 对应 feature 激活
-      │  ├─ Transcript marker/details hit → 展开或 QuickView
-      │  ├─ Suggest hit → 当前候选激活
+      ├─ left mouse down → `ScreenSelection::begin`
+      ├─ left mouse drag → 更新全屏字符选区 → 下一 frame 统一反色绘制
+      ├─ left mouse up
+      │  ├─ 已拖动 → 从最后完成的 frame 提取字符 → `clipboard::write_text`
+      │  └─ 未拖动 → frame 共享几何命中 → Pane / Approval / Query / Transcript / Suggest 原有动作
       ├─ mouse moved → same hit testing → existing selected item
       └─ Paste → App::handle_paste
          ├─ Approval → consumed without changing hidden draft
@@ -515,7 +517,7 @@ enable_raw_mode
 → clear
 ```
 
-首帧前由 `App::mouse_mode` 决定是否另行执行 `EnableMouseCapture`。Config 中的鼠标交互关闭时，该方法始终返回 `TerminalSelection`；页面即使声明可点击，也不会捕获鼠标。
+首帧前由 `App::mouse_mode` 决定是否另行执行 `EnableMouseCapture`。Config 中的 Mouse interactions 开启时，该方法在任何页面都返回 `TuiCapture`，让最外层事件循环区分拖动选择与单击；关闭时始终返回 `TerminalSelection`，TUI 不接收鼠标事件。
 
 `TerminalModeGuard::acquire` 在任一 mode 获取失败时只回滚已经成功获取的 mode。
 `Terminal::new` 或 `clear` 失败时，已经构造的 guard 也执行同一路径。成功后
@@ -598,7 +600,7 @@ canonical Thread snapshot 替换 optimistic transcript、snapshot identity/seque
 ThreadItem projection、transient identity/UTF-8/容量上限、stream duplicate/gap/runtime switch、
 response lifecycle/error/interrupted transitions、Pane 打开期间的聊天草稿保留、tab list 换行/左右循环切换、
 approval 与多问题 option/free-form user input、blocked Esc/Ctrl-C semantics、搜索过滤/选择修复、
-selection render，以及 snapshot
+selection render、全屏拖拽选择、松手复制、反向范围、宽字符与点击/拖动分流，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role
 label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export，以及 status-line item 顺序/开关、profile 保存、Git 长短值降级、Unicode-safe truncation、welcome home-relative 路径，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
 restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session picker/archive 与 Thread recovery、
@@ -614,7 +616,6 @@ directory directory/preview 和 interaction deadline。
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
 固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
 event-loop integration 可以继续加强当前 brokered-local 路径，但 remote reconnect trace、Native
-Markdown/diff/table、任意鼠标文本框选和完整 pointer parity 都不是当前 TUI 验收项；命令式
-copy/export 已由 TUI host adapter 提供。产品要求与
+Markdown/diff/table 和完整 pointer parity 都不是当前 TUI 验收项；屏幕框选只复制当前 Ratatui frame 的可见字符，不把 Markdown 结构或滚出屏幕的内容伪装成语义选区。产品要求与
 owner 判断以 [`docs/tui.md`](../../docs/tui.md#17-已接受的架构迁移顺序) 和
 [`docs/product-lines.md`](../../docs/product-lines.md) 为准。

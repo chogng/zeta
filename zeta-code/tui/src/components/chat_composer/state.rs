@@ -24,7 +24,6 @@ use crate::components::suggest::SuggestEdit;
 use crate::components::suggest::SuggestInputOutcome;
 use crate::components::suggest::SuggestView;
 use crate::components::text_prompt::TextPromptSpec;
-use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use zeta_file_search::PathSearchSnapshot;
@@ -275,14 +274,6 @@ impl ChatComposer {
             return None;
         }
         self.suggest.view()
-    }
-
-    pub(crate) fn mouse_mode(&self, input: &ChatInput) -> MouseMode {
-        if self.panes.mouse_mode() == MouseMode::UiClick || self.suggest(input).is_some() {
-            MouseMode::UiClick
-        } else {
-            MouseMode::TerminalSelection
-        }
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {

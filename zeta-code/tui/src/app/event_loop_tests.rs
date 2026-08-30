@@ -115,7 +115,7 @@ fn pointer_click_switches_a_selection_tab() {
         "Esc back",
     )));
     let area = Rect::new(0, 0, 80, 24);
-    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+    assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
 
     let mut target = None;
     'cells: for row in area.y..area.bottom() {

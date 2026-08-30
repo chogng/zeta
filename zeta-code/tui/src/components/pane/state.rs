@@ -7,7 +7,6 @@ use crate::components::list_selection::ListSelectionState;
 use crate::components::text_prompt::TextPrompt;
 use crate::components::text_prompt::TextPromptOutcome;
 use crate::components::text_prompt::TextPromptSpec;
-use crate::mouse::MouseMode;
 use crossterm::event::KeyEvent;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -149,13 +148,6 @@ impl Pane {
         }
     }
 
-    pub(crate) fn mouse_mode(&self) -> MouseMode {
-        match &self.body {
-            PaneBody::ListSelection(body) => body.mouse_mode(),
-            PaneBody::KeyCapture(_) | PaneBody::TextPrompt(_) => MouseMode::TerminalSelection,
-        }
-    }
-
     fn replace_key_capture(&mut self, body: KeyCapture, key_hints: String) -> bool {
         let PaneBody::KeyCapture(current) = &mut self.body else {
             return false;
@@ -270,12 +262,6 @@ impl PaneStack {
         };
         pane.handle_paste(pasted);
         true
-    }
-
-    pub(crate) fn mouse_mode(&self) -> MouseMode {
-        self.top()
-            .map(Pane::mouse_mode)
-            .unwrap_or(MouseMode::TerminalSelection)
     }
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {

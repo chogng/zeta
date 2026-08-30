@@ -79,7 +79,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(mouse.label(), "Mouse interactions");
     assert_eq!(
         mouse.description(),
-        Some("Clicks and hover in interactive panes [ ✔ ]")
+        Some("Select and auto-copy text, click, and hover [ ✔ ]")
     );
     assert!(matches!(
         view.actions.get(mouse.id().unwrap()).unwrap(),
@@ -164,7 +164,7 @@ fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabl
 
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("Clicks and hover in interactive panes [   ]")
+        Some("Select and auto-copy text, click, and hover [   ]")
     );
 }
 

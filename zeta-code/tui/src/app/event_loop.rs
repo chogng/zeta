@@ -48,6 +48,7 @@ use crate::features::thread::ThreadUpdateDisposition;
 use crate::features::thread::read_older_thread_history;
 use crate::features::thread::read_thread_history;
 use crate::host;
+use crate::mouse::ScreenSelectionOutcome;
 use crate::terminal;
 use crate::ui;
 use crossterm::event::Event;
@@ -219,8 +220,27 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     Event::Mouse(mouse)
                         if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
                     {
-                        let terminal_area = terminal.area()?;
-                        activate_pointer_item(&mut app, terminal_area, mouse.column, mouse.row)
+                        app.begin_screen_selection(ratatui::layout::Position::new(
+                            mouse.column,
+                            mouse.row,
+                        ));
+                        None
+                    }
+                    Event::Mouse(mouse)
+                        if mouse.kind == MouseEventKind::Drag(MouseButton::Left) =>
+                    {
+                        app.drag_screen_selection(ratatui::layout::Position::new(
+                            mouse.column,
+                            mouse.row,
+                        ));
+                        None
+                    }
+                    Event::Mouse(mouse) if mouse.kind == MouseEventKind::Up(MouseButton::Left) => {
+                        finish_pointer_gesture(
+                            &mut app,
+                            &terminal,
+                            ratatui::layout::Position::new(mouse.column, mouse.row),
+                        )?
                     }
                     Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved => {
                         let terminal_area = terminal.area()?;
@@ -1089,6 +1109,28 @@ fn activate_pointer_item(
             app.open_transcript_cell_details(&entry_id);
             None
         }
+    }
+}
+
+fn finish_pointer_gesture(
+    app: &mut App,
+    terminal: &terminal::TerminalSession,
+    position: ratatui::layout::Position,
+) -> Result<Option<AppCommand>, std::io::Error> {
+    match app.finish_screen_selection(position) {
+        Some(ScreenSelectionOutcome::Click(position)) => {
+            let area = terminal.area()?;
+            Ok(activate_pointer_item(app, area, position.x, position.y))
+        }
+        Some(ScreenSelectionOutcome::Copy(range)) => {
+            if let Some(text) = terminal.selected_text(range)
+                && let Err(error) = host::clipboard::write_text(&text)
+            {
+                app.update(AppEvent::FailureReported(error));
+            }
+            Ok(None)
+        }
+        None => Ok(None),
     }
 }
 

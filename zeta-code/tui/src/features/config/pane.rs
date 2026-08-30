@@ -192,7 +192,7 @@ pub(crate) fn config_pane_spec(
             .with_id(mouse_id)
             .with_columns(
                 "Mouse interactions",
-                "Clicks and hover in interactive panes",
+                "Select and auto-copy text, click, and hover",
                 checkbox(mouse_enabled),
             ),
         ListSelectionItem::new("Follow-up messages")

@@ -47,7 +47,7 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 | 本文的 ownership 与长期不变量 | Accepted architecture baseline | 本文 |
 | independent request driver、wakeable event pump | Current | [`app-server-client.md`](app-server-client.md) 与 crate README |
 | 非阻塞 request completion dispatch、有界 transient data plane、Session/Thread/Approval/Query 垂直切片 | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
-| 有序正文单元、命令输出边界、展开/详情与必要鼠标命中 | Current product support boundary | 本文与 crate README |
+| 有序正文单元、命令输出边界、展开/详情、全屏字符框选与必要鼠标命中 | Current product support boundary | 本文与 crate README |
 | active-Turn follow-up Queue、多行 `ChatInput`、copy/export、分页历史与 suspend/resume | Current | [`zeta-code/tui/README.md`](../zeta-code/tui/README.md) |
 | `ChatInput` 的 Standard/Vim 编辑模式 | Current | `components/chat_input/` 与本地 terminal settings |
 | `inline_visualization` 终端 fallback | Accepted；等待 canonical artifact/fallback contract | Core/App Server protocol 与本文 |
@@ -869,7 +869,7 @@ lib.rs + lib_tests.rs
 - `features/sessions/ActiveConversation` 拥有当前 `session_id`、选中 Thread identity 与 Thread sequence，create/fork/rewind/resume/switch 返回 conversation change，archive 成功后请求退出，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker 与 Session 归档由同一 feature 拥有；
 - `features/approval.rs` 与 `features/query.rs` 分别拥有请求绑定、选择、提交和错误状态，只返回准确的
   typed response；Query 的自定义文本由 Query 自己编辑，Approval 替换普通输入区域，owner selection、deadline 与 cancellation 留在 App Server；
-- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 只调度请求并把 feature result 转成 `AppEvent`；Config 页面读取服务端配置、Provider 和当前 Session 的目录权限，API key 保存后的重读链及带版本的权限修改也由 `features/config/request.rs` 完成。`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其中 Mouse interactions 只约束 TUI 本地 `MouseMode`，Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，Input mode 决定 `ChatInput` 使用 Standard 或 Vim；这些设置都不进入 App Server 配置；
+- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 只调度请求并把 feature result 转成 `AppEvent`；Config 页面读取服务端配置、Provider 和当前 Session 的目录权限，API key 保存后的重读链及带版本的权限修改也由 `features/config/request.rs` 完成。`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其中 Mouse interactions 决定整个 TUI 会话由 `TuiCapture` 处理拖动选择、自动复制和点击，还是由 `TerminalSelection` 把鼠标交还终端；Follow-up messages 决定 Running 时 Enter 进入 Queue 还是立即 Steer，Input mode 决定 `ChatInput` 使用 Standard 或 Vim；这些设置都不进入 App Server 配置；
 - `components/tab_list.rs` 已拥有横向 tab 集合、当前项、Tab/Shift-Tab 循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/list_selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；Space 进入搜索，左右调整当前配置项，不切标签；只读详情、文本输入和按键录制已分别交给 `DetailList`、`TextPrompt` 和 `KeyCapture`；
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
@@ -911,11 +911,10 @@ lib.rs + lib_tests.rs
 
 当前产品支持边界与非目标：
 
-- transcript 采用 bounded plain-text wrapping、分页键盘滚动、最后回复 copy 与当前已加载 history
-  window 的 Markdown export。
-  Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `app`，
+- transcript 采用 bounded plain-text wrapping、分页键盘滚动、最后回复 copy 与当前已加载 history window 的 Markdown export。最外层 TUI 表面额外支持任意页面的可见字符框选：左键发生拖动后更新 Ratatui 字符网格范围，松手从最后完成的 frame 提取文字并自动复制；没有拖动才执行页面原有点击动作。该能力只复制屏幕上当前可见的字符，不提供 Markdown 结构或滚出屏幕内容的语义选择；
+  Native Agent Timeline 的 Markdown/table、结构化内容选择、折叠与虚拟化属于 `app`，
   不是 TUI 的“尚未完成”；
-- Mouse 只覆盖 Slash/File/Plugin Suggest、多标签 `ListSelection` Pane 的左键切换，以及可执行候选项的左键命中与 hover。Config 标签页中的 Mouse interactions item 可关闭这类交互，关闭后页面把鼠标拖选留给宿主终端；完整 pointer/selection 交互不属于当前 `zeta code` 要求；
+- 鼠标捕获由 `App` 按 Mouse interactions 设置统一决定，不再由局部页面声明。开启时所有页面共享拖动选择、松手复制与点击/拖动分流，Slash/File/Plugin Suggest、`ListSelection`、Approval、Query 和正文标记继续只拥有各自的点击命中语义；关闭时全部鼠标输入和框选交还宿主终端；
 - 当前入口通过 `AppServerSession` 消费 profile 和 Environment 目录授权，不提供 remote
   selector 或自动 reconnect。若未来接受
   远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；

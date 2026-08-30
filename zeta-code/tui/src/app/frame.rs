@@ -89,6 +89,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     if let Some(quick_view) = app.quick_view() {
         crate::components::quick_view::draw(frame, overlay_area(&areas), quick_view);
     }
+    app.screen_selection().draw(frame.buffer_mut());
 }
 
 #[cfg(test)]

@@ -76,10 +76,13 @@ use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
 use crate::mouse::MouseMode;
+use crate::mouse::ScreenSelection;
+use crate::mouse::ScreenSelectionOutcome;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use ratatui::layout::Position;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -144,6 +147,7 @@ pub(crate) struct App {
     turn_input_mode: TurnInputMode,
     status_line: StatusLineModel,
     terminal_settings: TerminalSettings,
+    screen_selection: ScreenSelection,
     approval_mode_status: ApprovalModeStatus,
 }
 
@@ -188,6 +192,7 @@ impl App {
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
+            screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
         }
     }
@@ -223,6 +228,7 @@ impl App {
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
+            screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
         }
     }
@@ -848,22 +854,29 @@ impl App {
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
         if self.terminal_settings.mouse_interactions() {
-            if self.approval.is_some()
-                || self.query.is_some()
-                || self
-                    .thread
-                    .cells()
-                    .iter()
-                    .any(|cell| cell.can_expand() || cell.has_details())
-            {
-                MouseMode::UiClick
-            } else {
-                self.chat_composer
-                    .mouse_mode(&self.thread_presentations.active().input)
-            }
+            MouseMode::TuiCapture
         } else {
             MouseMode::TerminalSelection
         }
+    }
+
+    pub(crate) const fn screen_selection(&self) -> &ScreenSelection {
+        &self.screen_selection
+    }
+
+    pub(crate) fn begin_screen_selection(&mut self, position: Position) {
+        self.screen_selection.begin(position);
+    }
+
+    pub(crate) fn drag_screen_selection(&mut self, position: Position) {
+        self.screen_selection.drag(position);
+    }
+
+    pub(crate) fn finish_screen_selection(
+        &mut self,
+        position: Position,
+    ) -> Option<ScreenSelectionOutcome> {
+        self.screen_selection.finish(position)
     }
 
     fn show_list_selection_pane(&mut self, model: PaneSpec<ListSelectionModel>) {
@@ -1347,6 +1360,9 @@ impl App {
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
             AppEvent::ConfigSettingsReceived(settings) => {
                 self.terminal_settings = settings;
+                if !settings.mouse_interactions() {
+                    self.screen_selection.clear();
+                }
                 self.thread_presentations
                     .set_input_mode(settings.input_mode());
             }
