@@ -272,6 +272,17 @@ type = "disabled"
 }
 
 #[test]
+fn config_migration_support_window_has_no_expired_compatibility() {
+    let expired = crate::document_migration::expired_migrations();
+
+    assert!(
+        expired.is_empty(),
+        "remove expired user configuration migrations: {}",
+        expired.join(", ")
+    );
+}
+
+#[test]
 fn semantic_index_migration_keeps_models_but_removes_egress_grants() {
     let database_path = config_path("semantic-index-file-migration");
     let grant = format!("sha256:{}", "12".repeat(32));

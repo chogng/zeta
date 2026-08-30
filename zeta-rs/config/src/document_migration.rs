@@ -21,6 +21,46 @@ const CURRENT_FILE_SCHEMA_VERSION: i64 = 1;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
+struct UnversionedMigration {
+    #[cfg(test)]
+    name: &'static str,
+    #[cfg(test)]
+    remove_when_minimum_schema_version_reaches: i64,
+    apply: fn(&mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError>,
+}
+
+macro_rules! declare_unversioned_migrations {
+    ($(($name:literal, $remove_when_minimum_reaches:literal, $apply:path)),* $(,)?) => {
+        const UNVERSIONED_MIGRATIONS: &[UnversionedMigration] = &[
+            $(UnversionedMigration {
+                #[cfg(test)]
+                name: $name,
+                #[cfg(test)]
+                remove_when_minimum_schema_version_reaches: $remove_when_minimum_reaches,
+                apply: $apply,
+            }),*
+        ];
+
+        $(const _: () = assert!(
+            MIN_SUPPORTED_FILE_SCHEMA_VERSION < $remove_when_minimum_reaches,
+            concat!("remove expired user configuration migration: ", $name)
+        );)*
+    };
+}
+
+declare_unversioned_migrations!(
+    (
+        "semanticCodeIndex -> codebase",
+        2,
+        migrate_semantic_code_index
+    ),
+    (
+        "workspaceTrust -> dirPermissions",
+        2,
+        migrate_workspace_trust
+    ),
+);
+
 pub(crate) struct DecodedDocument {
     pub(crate) document: UserConfigDocument,
     pub(crate) rewrite_required: bool,
@@ -89,9 +129,22 @@ fn validate_version(version: i64) -> Result<(), ConfigError> {
 }
 
 fn migrate_unversioned(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {
-    migrate_semantic_code_index(root)?;
-    migrate_workspace_trust(root)?;
+    for migration in UNVERSIONED_MIGRATIONS {
+        (migration.apply)(root)?;
+    }
     Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn expired_migrations() -> Vec<&'static str> {
+    UNVERSIONED_MIGRATIONS
+        .iter()
+        .filter(|migration| {
+            MIN_SUPPORTED_FILE_SCHEMA_VERSION
+                >= migration.remove_when_minimum_schema_version_reaches
+        })
+        .map(|migration| migration.name)
+        .collect()
 }
 
 fn migrate_semantic_code_index(

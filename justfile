@@ -8,6 +8,10 @@ test package *args:
 check package *args:
     python3 -B build/cargo_with_v8.py check -p {{ package }} {{ args }}
 
+# Fail once the configuration support window makes a compatibility migration removable.
+check-config-migrations:
+    python3 -B build/cargo_with_v8.py test -p zeta-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact
+
 # Launch the zeta code TUI product from the current source tree.
 zeta *args:
     python3 -B build/cargo_with_v8.py build -p zeta-app-server-daemon --bin zeta-app-server-daemon
