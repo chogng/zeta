@@ -78,6 +78,8 @@ use crate::keymap::AppKeymapContext;
 use crate::mouse::MouseMode;
 use crate::mouse::ScreenSelection;
 use crate::mouse::ScreenSelectionOutcome;
+use crate::render::RenderContext;
+use crate::render::RenderTheme;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -149,6 +151,7 @@ pub(crate) struct App {
     terminal_settings: TerminalSettings,
     screen_selection: ScreenSelection,
     approval_mode_status: ApprovalModeStatus,
+    render_theme: RenderTheme,
 }
 
 #[derive(Debug)]
@@ -194,6 +197,7 @@ impl App {
             terminal_settings: TerminalSettings::default(),
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
+            render_theme: RenderTheme::fallback(),
         }
     }
 
@@ -230,7 +234,12 @@ impl App {
             terminal_settings: TerminalSettings::default(),
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
+            render_theme: RenderTheme::fallback(),
         }
+    }
+
+    pub(crate) fn render_context(&self) -> RenderContext<'_> {
+        RenderContext::new(&self.render_theme)
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<AppCommand> {
@@ -1501,6 +1510,9 @@ impl App {
             }
             AppEvent::ThemePanesClosed => self.close_theme_panes(),
             AppEvent::ThemePaneOpened(view) => self.show_theme_pane(view),
+            AppEvent::RenderThemeChanged(theme) => {
+                self.render_theme = theme;
+            }
             AppEvent::ThreadTranscriptSnapshotReceived(transcript) => {
                 self.thread
                     .update(ThreadPresentationEvent::TranscriptSnapshotReceived(

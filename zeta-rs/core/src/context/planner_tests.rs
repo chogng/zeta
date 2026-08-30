@@ -571,6 +571,8 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 } else {
                     TurnStatus::Completed
                 },
+                started_at_unix_ms: None,
+                duration_ms: None,
                 turn_id,
                 model: None,
                 policy_revision: "test-policy-v1".into(),

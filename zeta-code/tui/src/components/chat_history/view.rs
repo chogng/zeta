@@ -5,12 +5,9 @@ use super::MessageRole;
 use super::row::estimated_wrapped_rows;
 use crate::components::welcome;
 use crate::components::welcome::WelcomeModel;
-use crate::ui::accent;
-use crate::ui::danger;
-use crate::ui::horizontal_margin;
-use crate::ui::muted;
-use crate::ui::success;
-use crate::ui::warning;
+use crate::render::RenderContext;
+use crate::render::Renderable;
+use crate::render::horizontal_margin;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -22,33 +19,54 @@ use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
 use zeta_ansi_escape::ansi_text;
 
-pub(crate) fn draw(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    messages: &[Message],
-    scroll: &ChatHistoryScroll,
-    welcome: &WelcomeModel,
-    presentation_highlight: Color,
-) {
-    let content_area = horizontal_margin(area, 2);
-    if messages.is_empty() {
-        welcome::draw(frame, area, welcome, presentation_highlight);
-        return;
+pub(crate) struct ChatHistoryView<'a> {
+    pub(crate) messages: &'a [Message],
+    pub(crate) scroll: &'a ChatHistoryScroll,
+    pub(crate) welcome: &'a WelcomeModel,
+    pub(crate) presentation_highlight: Color,
+}
+
+impl Renderable for ChatHistoryView<'_> {
+    fn desired_height(&self, width: u16) -> u16 {
+        if self.messages.is_empty() {
+            return welcome::desired_height(width);
+        }
+        let content_width = horizontal_margin(Rect::new(0, 0, width, u16::MAX), 2).width;
+        self.messages
+            .iter()
+            .map(|message| message_rows(message, usize::from(content_width)))
+            .sum::<usize>()
+            .min(u16::MAX as usize) as u16
     }
 
-    let history_width = content_area.width as usize;
-    let history_height = content_area.height as usize;
-    let history_rows = messages
-        .iter()
-        .map(|message| message_rows(message, history_width))
-        .sum::<usize>();
-    let lines = message_lines(messages);
-    let history = Paragraph::new(lines).wrap(Wrap { trim: false });
-    let bottom_offset = history_rows.saturating_sub(history_height);
-    frame.render_widget(
-        history.scroll((scroll.paragraph_offset(bottom_offset), 0)),
-        content_area,
-    );
+    fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
+        let content_area = horizontal_margin(area, 2);
+        if self.messages.is_empty() {
+            welcome::draw(
+                frame,
+                area,
+                self.welcome,
+                self.presentation_highlight,
+                context,
+            );
+            return;
+        }
+
+        let history_width = content_area.width as usize;
+        let history_height = content_area.height as usize;
+        let history_rows = self
+            .messages
+            .iter()
+            .map(|message| message_rows(message, history_width))
+            .sum::<usize>();
+        let lines = message_lines(self.messages, context);
+        let history = Paragraph::new(lines).wrap(Wrap { trim: false });
+        let bottom_offset = history_rows.saturating_sub(history_height);
+        frame.render_widget(
+            history.scroll((self.scroll.paragraph_offset(bottom_offset), 0)),
+            content_area,
+        );
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -101,15 +119,15 @@ pub(crate) fn pointer_target_at(
     None
 }
 
-fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
+fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec<Line<'a>> {
     let mut lines = Vec::new();
     for message in messages {
         if message.role == MessageRole::Command {
             let (color, status_marker) = match message.command_status {
-                Some(CommandStatus::Running) => (accent(), "◉"),
-                Some(CommandStatus::Succeeded) => (success(), "●"),
-                Some(CommandStatus::Failed) => (danger(), "×"),
-                None => (muted(), "●"),
+                Some(CommandStatus::Running) => (context.accent(), "◉"),
+                Some(CommandStatus::Succeeded) => (context.success(), "●"),
+                Some(CommandStatus::Failed) => (context.danger(), "×"),
+                None => (context.muted(), "●"),
             };
             let marker = expansion_marker(message).unwrap_or(status_marker);
             lines.push(Line::from(vec![
@@ -117,23 +135,23 @@ fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
                     format!("{marker}  "),
                     Style::default().fg(color).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(&message.text, selected_style(message)),
+                Span::styled(&message.text, selected_style(message, context)),
             ]));
             if let Some(detail) = &message.detail {
-                push_detail_lines(&mut lines, message.role, detail);
+                push_detail_lines(&mut lines, message.role, detail, context);
             }
-            push_details_affordance(&mut lines, message);
+            push_details_affordance(&mut lines, message, context);
             lines.push(Line::default());
             continue;
         }
 
         let (role_marker, color) = match message.role {
-            MessageRole::User => ("›", accent()),
-            MessageRole::Agent => ("◆", success()),
-            MessageRole::Reasoning => ("◇", muted()),
-            MessageRole::Plan => ("≡", accent()),
-            MessageRole::Notice => ("•", warning()),
-            MessageRole::Error => ("×", danger()),
+            MessageRole::User => ("›", context.accent()),
+            MessageRole::Agent => ("◆", context.success()),
+            MessageRole::Reasoning => ("◇", context.muted()),
+            MessageRole::Plan => ("≡", context.accent()),
+            MessageRole::Notice => ("•", context.warning()),
+            MessageRole::Error => ("×", context.danger()),
             MessageRole::Command => unreachable!("command messages render as a grouped surface"),
         };
         let marker = expansion_marker(message).unwrap_or(role_marker);
@@ -142,12 +160,12 @@ fn message_lines(messages: &[Message]) -> Vec<Line<'_>> {
                 format!("{marker}  "),
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(&message.text, selected_style(message)),
+            Span::styled(&message.text, selected_style(message, context)),
         ]));
         if let Some(detail) = &message.detail {
-            push_detail_lines(&mut lines, message.role, detail);
+            push_detail_lines(&mut lines, message.role, detail, context);
         }
-        push_details_affordance(&mut lines, message);
+        push_details_affordance(&mut lines, message, context);
         lines.push(Line::default());
     }
     lines
@@ -159,28 +177,41 @@ fn expansion_marker(message: &Message) -> Option<&'static str> {
         .then_some(if message.expanded { "▾" } else { "▸" })
 }
 
-fn selected_style(message: &Message) -> Style {
+fn selected_style(message: &Message, context: RenderContext<'_>) -> Style {
     if message.selected {
-        Style::default().fg(accent()).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(context.accent())
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
     }
 }
 
-fn push_details_affordance<'a>(lines: &mut Vec<Line<'a>>, message: &Message) {
+fn push_details_affordance<'a>(
+    lines: &mut Vec<Line<'a>>,
+    message: &Message,
+    context: RenderContext<'_>,
+) {
     if message.expanded && message.has_details {
         lines.push(Line::from(Span::styled(
             "   view full",
-            Style::default().fg(accent()).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(context.accent())
+                .add_modifier(Modifier::BOLD),
         )));
     }
 }
 
-fn push_detail_lines<'a>(lines: &mut Vec<Line<'a>>, role: MessageRole, detail: &'a str) {
+fn push_detail_lines<'a>(
+    lines: &mut Vec<Line<'a>>,
+    role: MessageRole,
+    detail: &'a str,
+    context: RenderContext<'_>,
+) {
     if role != MessageRole::Command {
         lines.push(Line::from(vec![
-            Span::styled("└─ ", Style::default().fg(muted())),
-            Span::styled(detail, Style::default().fg(muted())),
+            Span::styled("└─ ", Style::default().fg(context.muted())),
+            Span::styled(detail, Style::default().fg(context.muted())),
         ]));
         return;
     }
@@ -192,13 +223,13 @@ fn push_detail_lines<'a>(lines: &mut Vec<Line<'a>>, role: MessageRole, detail: &
     for line in &mut output {
         for span in &mut line.spans {
             if span.style.fg.is_none() {
-                span.style.fg = Some(muted());
+                span.style.fg = Some(context.muted());
             }
         }
     }
     output[0]
         .spans
-        .insert(0, Span::styled("└─ ", Style::default().fg(muted())));
+        .insert(0, Span::styled("└─ ", Style::default().fg(context.muted())));
     lines.extend(output);
 }
 

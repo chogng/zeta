@@ -3,8 +3,8 @@ use super::state::ListSelectionItem;
 use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::tab_list;
-use crate::ui::horizontal_margin;
-use crate::ui::{highlight, muted};
+use crate::render::RenderContext;
+use crate::render::horizontal_margin;
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -24,8 +24,15 @@ use unicode_width::UnicodeWidthStr;
 const ITEM_MARKER_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &ListSelectionState) {
-    let presentation_highlight = view.presentation_highlight().unwrap_or_else(highlight);
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: &ListSelectionState,
+    context: RenderContext<'_>,
+) {
+    let presentation_highlight = view
+        .presentation_highlight()
+        .unwrap_or_else(|| context.highlight());
     frame.render_widget(
         Block::default()
             .borders(Borders::TOP)
@@ -54,11 +61,17 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &ListSelectionState)
         areas[1],
     );
     if view.show_tabs() {
-        tab_list::draw(frame, areas[3], view.tab_list(), presentation_highlight);
+        tab_list::draw(
+            frame,
+            areas[3],
+            view.tab_list(),
+            presentation_highlight,
+            context,
+        );
     }
 
     if let Some(search) = view.search() {
-        search_box::draw(frame, areas[4], search, presentation_highlight);
+        search_box::draw(frame, areas[4], search, presentation_highlight, context);
     }
 
     let visible_items = view.visible_items();
@@ -68,7 +81,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &ListSelectionState)
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 view.empty_message(),
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             ))),
             areas[5],
         );
@@ -93,6 +106,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &ListSelectionState)
                 item,
                 view.selected_visible_index() == Some(index),
                 column_layout,
+                context,
             );
         }
     }
@@ -114,7 +128,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &ListSelectionState)
                 Constraint::Length(bottom_margin),
             ])
             .split(areas[6]);
-        let separator_color = preview.separator_color().unwrap_or_else(muted);
+        let separator_color = preview.separator_color().unwrap_or_else(|| context.muted());
         frame.render_widget(
             Paragraph::new(dashed_rule(
                 preview_areas[1].width,
@@ -268,17 +282,20 @@ fn draw_item(
     item: &ListSelectionItem,
     selected: bool,
     column_layout: ItemColumnLayout,
+    context: RenderContext<'_>,
 ) {
     let label_style = if selected {
         Style::default()
-            .fg(item.selection_foreground().unwrap_or_else(highlight))
+            .fg(item
+                .selection_foreground()
+                .unwrap_or_else(|| context.highlight()))
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
     };
     let marker = if selected { "❯ " } else { "  " };
     let Some(columns) = item.columns() else {
-        let spans = item_spans(item, marker, label_style);
+        let spans = item_spans(item, marker, label_style, context);
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
         return;
     };
@@ -307,7 +324,7 @@ fn draw_item(
     let middle_width = trailing_x
         .saturating_sub(column_layout.gap)
         .saturating_sub(middle_x);
-    let detail_style = Style::default().fg(muted());
+    let detail_style = Style::default().fg(context.muted());
     frame.render_widget(
         Paragraph::new(Span::styled(columns.middle.as_str(), detail_style)),
         Rect::new(middle_x, area.y, middle_width, 1),
@@ -322,6 +339,7 @@ fn item_spans<'a>(
     item: &'a ListSelectionItem,
     marker: &'static str,
     label_style: Style,
+    context: RenderContext<'_>,
 ) -> Vec<Span<'a>> {
     let Some(description) = item.description() else {
         return vec![
@@ -332,8 +350,8 @@ fn item_spans<'a>(
     vec![
         Span::styled(marker, label_style),
         Span::styled(item.label(), label_style),
-        Span::styled("  ·  ", Style::default().fg(muted())),
-        Span::styled(description, Style::default().fg(muted())),
+        Span::styled("  ·  ", Style::default().fg(context.muted())),
+        Span::styled(description, Style::default().fg(context.muted())),
     ]
 }
 

@@ -1,6 +1,7 @@
 use super::draw;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
+use crate::render::test_context;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -16,7 +17,7 @@ fn active_empty_search_keeps_the_cursor_clear_of_the_left_border() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue))
+        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue, test_context()))
         .unwrap();
 
     terminal
@@ -34,7 +35,7 @@ fn active_search_places_the_terminal_cursor_after_the_query() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue))
+        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue, test_context()))
         .unwrap();
 
     terminal
@@ -52,7 +53,7 @@ fn masked_search_renders_bullets_without_exposing_the_query() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue))
+        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue, test_context()))
         .unwrap();
 
     let rendered = terminal.backend().to_string();

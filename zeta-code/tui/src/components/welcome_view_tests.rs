@@ -1,8 +1,6 @@
 use super::WelcomeModel;
 use super::draw;
-use crate::ui::accent;
-use crate::ui::chat_input_chrome;
-use crate::ui::highlight;
+use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
@@ -23,15 +21,15 @@ fn wide_banner_uses_the_two_column_welcome_presentation() {
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Use @ to mention workspace files"));
     assert!(rendered.contains("Try asking"));
-    assert_eq!(buffer[(2, 1)].fg, highlight());
-    assert_eq!(buffer[(77, 11)].fg, highlight());
-    assert_eq!(buffer[(30, 2)].fg, highlight());
-    assert_eq!(buffer[(33, 5)].fg, highlight());
+    assert_eq!(buffer[(2, 1)].fg, test_context().highlight());
+    assert_eq!(buffer[(77, 11)].fg, test_context().highlight());
+    assert_eq!(buffer[(30, 2)].fg, test_context().highlight());
+    assert_eq!(buffer[(33, 5)].fg, test_context().highlight());
     assert_eq!(buffer[(9, 1)].symbol(), "Z");
-    assert_eq!(buffer[(9, 1)].fg, accent());
+    assert_eq!(buffer[(9, 1)].fg, test_context().accent());
     assert!(!buffer[(9, 1)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(19, 1)].symbol(), "v");
-    assert_eq!(buffer[(19, 1)].fg, chat_input_chrome());
+    assert_eq!(buffer[(19, 1)].fg, test_context().chat_input_chrome());
     assert_eq!(buffer[(10, 2)].symbol(), " ");
     assert_eq!(buffer[(11, 3)].symbol(), "W");
 }
@@ -61,7 +59,8 @@ fn render(width: u16, height: u16) -> ratatui::buffer::Buffer {
                 frame,
                 frame.area(),
                 &WelcomeModel::for_workspace(Path::new("/work/zeta")),
-                highlight(),
+                test_context().highlight(),
+                test_context(),
             )
         })
         .unwrap();

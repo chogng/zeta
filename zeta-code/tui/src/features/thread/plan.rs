@@ -1,6 +1,6 @@
 //! One-row presentation state derived from the active Turn plan.
 
-use crate::ui::muted;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -59,7 +59,12 @@ pub(crate) fn desired_height(view: Option<PlanInlineView<'_>>) -> u16 {
     u16::from(view.is_some())
 }
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: Option<PlanInlineView<'_>>) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: Option<PlanInlineView<'_>>,
+    context: RenderContext<'_>,
+) {
     let Some(view) = view else {
         return;
     };
@@ -68,7 +73,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: Option<PlanInlineVie
             "Plan {}/{}: {}",
             view.completed, view.total, view.current
         ))
-        .style(Style::default().fg(muted())),
+        .style(Style::default().fg(context.muted())),
         area,
     );
 }

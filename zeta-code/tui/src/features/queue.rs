@@ -7,7 +7,7 @@ use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
-use crate::ui::muted;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -226,6 +226,7 @@ pub(crate) fn draw(
     area: Rect,
     view: &QueueView<'_>,
     max_visible_items: usize,
+    context: RenderContext<'_>,
 ) {
     let lines = view
         .items
@@ -236,7 +237,7 @@ pub(crate) fn draw(
             let state = if item.sending { " · sending" } else { "" };
             Line::styled(
                 format!("Queue {}: {}{state}", item.position, item.text),
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             )
         })
         .collect::<Vec<_>>();

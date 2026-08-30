@@ -1,8 +1,6 @@
 use crate::features::thread::ThreadRequestKind;
 use crate::features::thread::ThreadRequestResponse;
-use crate::ui::background;
-use crate::ui::highlight;
-use crate::ui::muted;
+use crate::render::RenderContext;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -304,7 +302,12 @@ pub(crate) fn desired_height(view: QueryView<'_>) -> u16 {
     u16::try_from(content_rows.saturating_add(2)).unwrap_or(u16::MAX)
 }
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: QueryView<'_>) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: QueryView<'_>,
+    context: RenderContext<'_>,
+) {
     let mut lines = vec![Line::styled(
         &view.question.prompt,
         Style::default().add_modifier(Modifier::BOLD),
@@ -316,7 +319,12 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: QueryView<'_>) {
             .enumerate()
             .take(MAX_CHOICE_ROWS)
             .map(|(index, choice)| {
-                choice_line(&choice.label, &choice.description, index == view.selected)
+                choice_line(
+                    &choice.label,
+                    &choice.description,
+                    index == view.selected,
+                    context,
+                )
             }),
     );
     if view.question.custom_answer == QueryCustomAnswer::Allowed
@@ -326,16 +334,20 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: QueryView<'_>) {
             "自己输入",
             "在下方输入框中回答",
             view.selected == view.question.choices.len(),
+            context,
         ));
     }
     if let Some(custom_answer) = view.custom_answer {
         lines.push(Line::from(vec![
-            Span::styled("> ", Style::default().fg(highlight())),
+            Span::styled("> ", Style::default().fg(context.highlight())),
             Span::raw(custom_answer),
         ]));
     }
     if view.submitting {
-        lines.push(Line::styled("Submitting…", Style::default().fg(muted())));
+        lines.push(Line::styled(
+            "Submitting…",
+            Style::default().fg(context.muted()),
+        ));
     } else if let Some(error) = view.error {
         lines.push(Line::styled(
             error,
@@ -352,7 +364,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: QueryView<'_>) {
                     view.total
                 ))
                 .borders(Borders::ALL)
-                .style(Style::default().bg(background())),
+                .style(Style::default().bg(context.background())),
         ),
         area,
     );
@@ -377,11 +389,16 @@ pub(crate) fn choice_index_at(
     (row >= first_choice_row && index < visible_choices).then_some(index)
 }
 
-fn choice_line<'a>(label: &'a str, description: &'a str, selected: bool) -> Line<'a> {
+fn choice_line<'a>(
+    label: &'a str,
+    description: &'a str,
+    selected: bool,
+    context: RenderContext<'_>,
+) -> Line<'a> {
     let marker = if selected { "› " } else { "  " };
     let style = if selected {
         Style::default()
-            .fg(highlight())
+            .fg(context.highlight())
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
@@ -389,7 +406,10 @@ fn choice_line<'a>(label: &'a str, description: &'a str, selected: bool) -> Line
     Line::from(vec![
         Span::styled(marker, style),
         Span::styled(label, style),
-        Span::styled(format!("  {description}"), Style::default().fg(muted())),
+        Span::styled(
+            format!("  {description}"),
+            Style::default().fg(context.muted()),
+        ),
     ])
 }
 

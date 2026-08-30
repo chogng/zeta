@@ -17,8 +17,8 @@ use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::skills::load_selection;
 use crate::features::status;
+use crate::features::theme::ThemeResource;
 use crate::features::theme::theme_pane_spec;
-use crate::ui;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
@@ -49,12 +49,13 @@ pub(crate) fn execute_product_command<T>(
     client: &mut AppServerClient<T>,
     invocation: SlashCommandInvocation,
     dir_permissions: Vec<PermissionDto>,
+    theme_resource: &ThemeResource,
 ) -> Result<ProductCommandOutput, String>
 where
     T: JsonRpcTransport,
 {
     conversation
-        .try_execute(client, invocation, &dir_permissions)
+        .try_execute(client, invocation, &dir_permissions, theme_resource)
         .map(|output| ProductCommandOutput {
             conversation,
             events: output.events,
@@ -74,11 +75,17 @@ impl ActiveConversation {
     ) where
         T: JsonRpcTransport,
     {
+        let theme_resource = ThemeResource::for_test(
+            std::env::temp_dir().join(format!("zeta-tui-dispatch-theme-{}", std::process::id())),
+            zeta_terminal_detection::ColorLevel::TrueColor,
+            zeta_theme::ColorScheme::Dark,
+        );
         match execute_product_command(
             self.clone(),
             client,
             invocation,
             config::TerminalSettings::default().dir_permissions(),
+            &theme_resource,
         ) {
             Ok(output) => {
                 *self = output.conversation;
@@ -101,6 +108,7 @@ impl ActiveConversation {
         client: &mut AppServerClient<T>,
         invocation: SlashCommandInvocation,
         dir_permissions: &[PermissionDto],
+        theme_resource: &ThemeResource,
     ) -> Result<CommandOutput, CommandExecutionError>
     where
         T: JsonRpcTransport,
@@ -291,19 +299,24 @@ impl ActiveConversation {
             }
             TuiSlashCommandAction::Theme => {
                 if arguments.is_empty() {
-                    let catalog = ui::theme_catalog().map_err(CommandExecutionError)?;
+                    let catalog = theme_resource.catalog().map_err(CommandExecutionError)?;
                     output
                         .events
                         .push(AppEvent::ThemePaneOpened(theme_pane_spec(&catalog)));
                 } else {
                     let command = format!("/theme {arguments}");
-                    let label = ui::select_theme(&arguments).map_err(CommandExecutionError)?;
+                    let selection = theme_resource
+                        .select(&arguments)
+                        .map_err(CommandExecutionError)?;
                     output
                         .events
                         .push(AppEvent::CommandStarted(command.clone()));
+                    output
+                        .events
+                        .push(AppEvent::RenderThemeChanged(selection.theme));
                     output.events.push(AppEvent::CommandCompleted {
                         command,
-                        result: format!("Theme set to {label}"),
+                        result: format!("Theme set to {}", selection.label),
                     });
                 }
             }

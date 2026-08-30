@@ -2,6 +2,7 @@ use super::RemainingContextWindow;
 use super::StatusViewData;
 use super::status_pane_spec;
 use crate::components::detail_list;
+use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
@@ -60,7 +61,7 @@ fn status_pane_renders_bold_labels_with_colons_and_plain_values() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| detail_list::draw_scrolled(frame, frame.area(), &state, 0))
+        .draw(|frame| detail_list::draw_scrolled(frame, frame.area(), &state, 0, test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();

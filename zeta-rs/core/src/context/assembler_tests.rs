@@ -488,6 +488,8 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             instructions: None,
             turn_id,
             status: TurnStatus::Running,
+            started_at_unix_ms: None,
+            duration_ms: None,
             model: None,
             policy_revision: "test-policy-v1".into(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,

@@ -2,6 +2,7 @@ use super::TabListInputOutcome;
 use super::TabListItem;
 use super::TabListState;
 use super::desired_height;
+use crate::render::test_context;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -97,7 +98,7 @@ fn draw_highlights_the_active_tab() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| super::draw(frame, frame.area(), &tabs, Color::Blue))
+        .draw(|frame| super::draw(frame, frame.area(), &tabs, Color::Blue, test_context()))
         .unwrap();
 
     let active_label = &terminal.backend().buffer()[(8, 0)];

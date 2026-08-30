@@ -46,6 +46,12 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
     }
 }
 
+fn envelope_at(sequence: u64, recorded_at_unix_ms: u64, event: ThreadEvent) -> StoredEvent {
+    let mut envelope = envelope(sequence, event);
+    envelope.recorded_at = Timestamp(u128::from(recorded_at_unix_ms));
+    envelope
+}
+
 #[test]
 fn reducer_preserves_the_thread_creation_timestamp() {
     let thread = reduce_thread_event(
@@ -62,6 +68,91 @@ fn reducer_preserves_the_thread_creation_timestamp() {
     .unwrap();
 
     assert_eq!(thread.created_at_unix_ms, 1);
+}
+
+#[test]
+fn reducer_accumulates_terminal_turn_durations_and_keeps_the_active_turn_start() {
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let first_turn_id = TurnId::new("turn_1").unwrap();
+    let second_turn_id = TurnId::new("turn_2").unwrap();
+    let active_turn_id = TurnId::new("turn_3").unwrap();
+    let accepted = |turn_id: TurnId| ThreadEvent::TurnAccepted {
+        thread_id: thread_id.clone(),
+        turn_id,
+        kind: zeta_protocol::TurnKind::Coding,
+        instructions: None,
+        policy_revision: "test-policy-v1".into(),
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        tool_mode: zeta_protocol::ToolMode::Direct,
+        activated_skills: Vec::new(),
+        model: None,
+        tool_profile: None,
+    };
+    let events = vec![
+        envelope_at(
+            1,
+            100,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: thread_id.clone(),
+                title: "test".into(),
+            },
+        ),
+        envelope_at(2, 200, accepted(first_turn_id.clone())),
+        envelope_at(
+            3,
+            1_000,
+            ThreadEvent::TurnStarted {
+                thread_id: thread_id.clone(),
+                turn_id: first_turn_id.clone(),
+            },
+        ),
+        envelope_at(
+            4,
+            5_000,
+            ThreadEvent::TurnCompleted {
+                thread_id: thread_id.clone(),
+                turn_id: first_turn_id,
+            },
+        ),
+        envelope_at(5, 6_000, accepted(second_turn_id.clone())),
+        envelope_at(
+            6,
+            8_000,
+            ThreadEvent::TurnStarted {
+                thread_id: thread_id.clone(),
+                turn_id: second_turn_id.clone(),
+            },
+        ),
+        envelope_at(
+            7,
+            11_000,
+            ThreadEvent::TurnFailed {
+                thread_id: thread_id.clone(),
+                turn_id: second_turn_id,
+                error: StableTurnError::model_invocation_failed(),
+            },
+        ),
+        envelope_at(8, 12_000, accepted(active_turn_id.clone())),
+        envelope_at(
+            9,
+            15_000,
+            ThreadEvent::TurnStarted {
+                thread_id,
+                turn_id: active_turn_id,
+            },
+        ),
+    ];
+    let snapshot = events
+        .iter()
+        .try_fold(None, |snapshot, event| {
+            reduce_thread_event(snapshot, event).map(Some)
+        })
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(snapshot.completed_turn_duration_ms(), 7_000);
+    assert_eq!(snapshot.active_turn_started_at_unix_ms(), Some(15_000));
 }
 
 #[test]

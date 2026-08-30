@@ -25,7 +25,7 @@ impl KeyCapture {
     }
 }
 
-use crate::ui::highlight;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -34,7 +34,12 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, capture: &KeyCapture) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    capture: &KeyCapture,
+    context: RenderContext<'_>,
+) {
     frame.render_widget(
         Paragraph::new(
             capture
@@ -47,7 +52,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, capture: &KeyCapture) {
             Block::default()
                 .title(capture.title())
                 .borders(Borders::TOP)
-                .border_style(Style::default().fg(highlight())),
+                .border_style(Style::default().fg(context.highlight())),
         ),
         area,
     );

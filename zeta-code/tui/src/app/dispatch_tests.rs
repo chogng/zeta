@@ -5,6 +5,7 @@ use crate::components::chat_history::MessageRole;
 use crate::components::chat_input::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
+use crate::features::theme::ThemeResource;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::ops::Deref;
@@ -144,6 +145,7 @@ fn archive_persists_status_requests_exit_and_does_not_call_the_model() {
         &mut client,
         invocation(TuiSlashCommandAction::Archive, ""),
         Vec::new(),
+        &ThemeResource::new(None),
     )
     .unwrap();
     assert!(output.exit_requested);
@@ -440,6 +442,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
             &additional.display().to_string(),
         ),
         vec![PermissionDto::ReadFiles, PermissionDto::ExecuteCommands],
+        &ThemeResource::new(None),
     )
     .unwrap();
     conversation = output.conversation;

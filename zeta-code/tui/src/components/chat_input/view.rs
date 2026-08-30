@@ -1,6 +1,6 @@
 use super::wrap::PROMPT_WIDTH;
 use super::wrap::wrap_input;
-use crate::ui::chat_input_chrome;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -34,6 +34,7 @@ pub(crate) fn draw(
     cursor_line: usize,
     prompt: &str,
     cursor: ChatInputCursor,
+    context: RenderContext<'_>,
 ) {
     let wrapped = wrap_input(input, cursor_line, cursor_width, area.width);
     let lines = wrapped
@@ -46,7 +47,7 @@ pub(crate) fn draw(
                 Span::styled(
                     prompt,
                     Style::default()
-                        .fg(chat_input_chrome())
+                        .fg(context.chat_input_chrome())
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(line),
@@ -62,7 +63,7 @@ pub(crate) fn draw(
         .block(
             Block::default()
                 .borders(Borders::TOP | Borders::BOTTOM)
-                .border_style(Style::default().fg(chat_input_chrome())),
+                .border_style(Style::default().fg(context.chat_input_chrome())),
         );
     frame.render_widget(chat_input, area);
 

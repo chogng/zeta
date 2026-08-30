@@ -1,5 +1,4 @@
-use crate::ui::accent;
-use crate::ui::muted;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -80,13 +79,21 @@ pub(crate) struct SessionManagerView<'a> {
     pub(crate) focused: bool,
 }
 
-pub(crate) fn draw_manager(frame: &mut Frame<'_>, area: Rect, view: SessionManagerView<'_>) {
+pub(crate) fn draw_manager(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: SessionManagerView<'_>,
+    context: RenderContext<'_>,
+) {
     let mut lines = vec![Line::styled(
         "Sessions",
         Style::default().add_modifier(Modifier::BOLD),
     )];
     if view.sessions.is_empty() {
-        lines.push(Line::styled("No sessions", Style::default().fg(muted())));
+        lines.push(Line::styled(
+            "No sessions",
+            Style::default().fg(context.muted()),
+        ));
     }
     for session in view.sessions {
         let selected = view.selected == Some(&session.session_id);
@@ -96,13 +103,13 @@ pub(crate) fn draw_manager(frame: &mut Frame<'_>, area: Rect, view: SessionManag
             SessionStatus::Archived => "completed",
         };
         let style = if selected {
-            Style::default().fg(accent())
+            Style::default().fg(context.accent())
         } else {
             Style::default()
         };
         lines.push(Line::from(vec![
             Span::styled(format!("{marker} {}", session.title), style),
-            Span::styled(format!(" · {status}"), Style::default().fg(muted())),
+            Span::styled(format!(" · {status}"), Style::default().fg(context.muted())),
         ]));
     }
     frame.render_widget(Paragraph::new(lines), area);

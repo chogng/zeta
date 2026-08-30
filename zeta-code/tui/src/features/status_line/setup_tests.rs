@@ -3,6 +3,7 @@ use crate::components::list_selection::ListSelectionState;
 use crate::features::status_line::StatusLineItem;
 use crate::features::status_line::StatusLineSelectionAction;
 use crate::features::status_line::StatusLineSettings;
+use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use unicode_width::UnicodeWidthStr;
@@ -50,7 +51,9 @@ fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| crate::components::list_selection::draw(frame, frame.area(), &state))
+        .draw(|frame| {
+            crate::components::list_selection::draw(frame, frame.area(), &state, test_context())
+        })
         .unwrap();
 
     let buffer = terminal.backend().buffer();

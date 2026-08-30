@@ -39,6 +39,7 @@ use crate::features::theme::theme_pane_spec;
 use crate::features::thread::TurnActivity;
 use crate::keymap::AppKeymap;
 use crate::mouse::MouseMode;
+use crate::render::RenderTheme;
 use crate::test_support::empty_config_snapshot;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -70,6 +71,9 @@ use zeta_protocol::ThreadStatus;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
+use zeta_terminal_detection::ColorLevel;
+use zeta_theme::ColorScheme;
+use zeta_theme::ThemeCatalog;
 
 fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
     let mut settings = TerminalSettings::default();
@@ -200,6 +204,20 @@ fn selected_theme_closes_the_theme_pane_after_success() {
     );
     app.update(AppEvent::ThemePanesClosed);
     assert!(app.list_selection().is_none());
+}
+
+#[test]
+fn selected_render_theme_is_read_through_the_frame_context() {
+    let mut app = App::new();
+    let snapshot = ThemeCatalog::embedded()
+        .unwrap()
+        .built_in_entry("zeta-code", ColorScheme::Light)
+        .unwrap();
+    let theme = RenderTheme::from_snapshot(&snapshot, ColorLevel::TrueColor).unwrap();
+
+    app.update(AppEvent::RenderThemeChanged(theme));
+
+    assert_eq!(app.render_context().background(), Color::Rgb(255, 255, 255));
 }
 
 #[test]

@@ -53,9 +53,8 @@ impl DetailList {
     }
 }
 
-use crate::ui::highlight;
-use crate::ui::horizontal_margin;
-use crate::ui::muted;
+use crate::render::RenderContext;
+use crate::render::horizontal_margin;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -66,7 +65,13 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
-pub(crate) fn draw_scrolled(frame: &mut Frame<'_>, area: Rect, detail: &DetailList, scroll: u16) {
+pub(crate) fn draw_scrolled(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    detail: &DetailList,
+    scroll: u16,
+    context: RenderContext<'_>,
+) {
     let lines = detail
         .rows()
         .iter()
@@ -76,7 +81,7 @@ pub(crate) fn draw_scrolled(frame: &mut Frame<'_>, area: Rect, detail: &DetailLi
                     format!("{}: ", row.label()),
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(row.value(), Style::default().fg(muted())),
+                Span::styled(row.value(), Style::default().fg(context.muted())),
             ])
         })
         .collect::<Vec<_>>();
@@ -85,7 +90,7 @@ pub(crate) fn draw_scrolled(frame: &mut Frame<'_>, area: Rect, detail: &DetailLi
             Block::default()
                 .title(detail.title())
                 .borders(Borders::TOP)
-                .border_style(Style::default().fg(highlight())),
+                .border_style(Style::default().fg(context.highlight())),
         ),
         horizontal_margin(area, 2),
     );

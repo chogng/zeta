@@ -20,6 +20,7 @@ use crate::features::status_line::StatusLineSettings;
 use crate::features::theme::ThemePaneSpec;
 use crate::features::thread::ThreadRequestIdentity;
 use crate::features::thread::TurnActivity;
+use crate::render::RenderTheme;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
@@ -102,6 +103,7 @@ pub(crate) enum AppEvent {
     },
     ThemePanesClosed,
     ThemePaneOpened(ThemePaneSpec),
+    RenderThemeChanged(RenderTheme),
     ThreadTranscriptSnapshotReceived(ThreadTranscriptSnapshot),
     ThreadTranscriptHistoryPageReceived(ThreadTranscriptSnapshot),
     ThreadTranscriptUpdateReceived(Box<ThreadTranscriptUpdateEnvelope>),

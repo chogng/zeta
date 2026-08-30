@@ -124,7 +124,7 @@ impl fmt::Debug for SearchBoxState {
     }
 }
 
-use crate::ui::muted;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -144,19 +144,20 @@ pub(crate) fn draw(
     area: Rect,
     search: &SearchBoxState,
     active_color: Color,
+    context: RenderContext<'_>,
 ) {
     let rendered_query = search
         .masked()
         .then(|| "•".repeat(search.query().chars().count()));
     let text = if search.query().is_empty() {
-        Span::styled(search.placeholder(), Style::default().fg(muted()))
+        Span::styled(search.placeholder(), Style::default().fg(context.muted()))
     } else {
         Span::raw(rendered_query.as_deref().unwrap_or(search.query()))
     };
     let border_color = if search.input_active() {
         active_color
     } else {
-        muted()
+        context.muted()
     };
     frame.render_widget(
         Paragraph::new(Line::from(text)).block(

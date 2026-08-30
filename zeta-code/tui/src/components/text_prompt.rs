@@ -2,7 +2,7 @@ use crate::components::search_box;
 use crate::components::search_box::SearchBoxInputOutcome;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
-use crate::ui::highlight;
+use crate::render::RenderContext;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -96,7 +96,12 @@ impl TextPrompt {
     }
 }
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, prompt: &TextPrompt) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    prompt: &TextPrompt,
+    context: RenderContext<'_>,
+) {
     let content = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(2), Constraint::Length(3)])
@@ -106,11 +111,17 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, prompt: &TextPrompt) {
             Block::default()
                 .title(prompt.title())
                 .borders(Borders::TOP)
-                .border_style(Style::default().fg(highlight())),
+                .border_style(Style::default().fg(context.highlight())),
         ),
         content[0],
     );
-    search_box::draw(frame, content[1], prompt.input(), highlight());
+    search_box::draw(
+        frame,
+        content[1],
+        prompt.input(),
+        context.highlight(),
+        context,
+    );
 }
 
 #[cfg(test)]

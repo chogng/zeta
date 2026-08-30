@@ -1,4 +1,4 @@
-use crate::ui::muted;
+use crate::render::RenderContext;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -120,7 +120,7 @@ impl<T: TabListItem> TabListState<T> {
 }
 
 pub(crate) fn desired_height<T: TabListItem>(tabs: &[T], width: u16) -> u16 {
-    tab_lines(tabs, 0, width, Color::Reset)
+    tab_lines(tabs, 0, width, Color::Reset, Color::Reset)
         .len()
         .min(u16::MAX as usize) as u16
 }
@@ -130,6 +130,7 @@ pub(crate) fn draw<T: TabListItem>(
     area: Rect,
     state: &TabListState<T>,
     highlight: Color,
+    context: RenderContext<'_>,
 ) {
     frame.render_widget(
         Paragraph::new(tab_lines(
@@ -137,6 +138,7 @@ pub(crate) fn draw<T: TabListItem>(
             state.active_index(),
             area.width,
             highlight,
+            context.muted(),
         )),
         area,
     );
@@ -147,6 +149,7 @@ fn tab_lines<T: TabListItem>(
     active: usize,
     width: u16,
     highlight: Color,
+    muted: Color,
 ) -> Vec<Line<'static>> {
     if tabs.is_empty() {
         return Vec::new();
@@ -180,7 +183,7 @@ fn tab_lines<T: TabListItem>(
         } else {
             spans.push(Span::styled(
                 format!(" {} ", tab.tab_label()),
-                Style::default().fg(muted()),
+                Style::default().fg(muted),
             ));
         }
         *row_width = position.start.saturating_add(position.width);

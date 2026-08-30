@@ -7,10 +7,10 @@ mod features;
 mod host;
 mod keymap;
 mod mouse;
+mod render;
 mod terminal;
 #[cfg(test)]
 mod test_support;
-mod ui;
 
 use std::fmt;
 use std::path::PathBuf;

@@ -21598,6 +21598,22 @@
     "SessionThread": {
       "description": "One Thread grouped into a Session tree by `session_id`.",
       "properties": {
+        "activeTurnStartedAtUnixMs": {
+          "description": "Start time of the current non-terminal Turn, when it has begun running.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "completedTurnDurationMs": {
+          "default": 0,
+          "description": "Sum of durations for terminal Turns that started in this Thread.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "createdAtUnixMs": {
           "format": "uint64",
           "minimum": 0,

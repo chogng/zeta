@@ -4,8 +4,8 @@ use crate::components::detail_list;
 use crate::components::detail_list::DetailList;
 use crate::components::key_hint_bar;
 use crate::components::pane::PaneSpec;
-use crate::ui::background;
-use crate::ui::bottom_anchored_area;
+use crate::render::RenderContext;
+use crate::render::bottom_anchored_area;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -75,7 +75,12 @@ impl QuickViewState {
     }
 }
 
-pub(crate) fn draw(frame: &mut Frame<'_>, available: Rect, state: &QuickViewState) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    available: Rect,
+    state: &QuickViewState,
+    context: RenderContext<'_>,
+) {
     let height = state
         .detail
         .desired_height()
@@ -91,7 +96,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, available: Rect, state: &QuickViewStat
     };
     let area = bottom_anchored_area(centered, height);
     frame.render_widget(
-        Block::default().style(Style::default().bg(background())),
+        Block::default().style(Style::default().bg(context.background())),
         area,
     );
     let key_rows = u16::from(area.height > 0);
@@ -107,8 +112,8 @@ pub(crate) fn draw(frame: &mut Frame<'_>, available: Rect, state: &QuickViewStat
     let visible_scroll = state
         .scroll
         .min(state.detail.desired_height().saturating_sub(body.height));
-    detail_list::draw_scrolled(frame, body, &state.detail, visible_scroll);
-    key_hint_bar::draw(frame, hints, &state.key_hints);
+    detail_list::draw_scrolled(frame, body, &state.detail, visible_scroll, context);
+    key_hint_bar::draw(frame, hints, &state.key_hints, context);
 }
 
 #[cfg(test)]

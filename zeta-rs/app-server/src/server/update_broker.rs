@@ -256,7 +256,7 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.sessions.contains(session_id) {
+            if subscriber_observes_session(subscriber, session_id) {
                 queue.push(notification(
                     ServerNotificationMethod::SessionChanged,
                     &SessionChanged {
@@ -385,6 +385,19 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_thread(&self, thread_id: &ThreadId, updates: &[ThreadUpdateEnvelope]) {
+        let sessions_with_timing_change = updates
+            .iter()
+            .filter_map(|update| match &update.update {
+                ThreadUpdate::Committed {
+                    event:
+                        ThreadEvent::TurnStarted { .. }
+                        | ThreadEvent::TurnCompleted { .. }
+                        | ThreadEvent::TurnFailed { .. }
+                        | ThreadEvent::TurnInterrupted { .. },
+                } => Some(&update.session_id),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -422,19 +435,30 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            let Some(subscription) = subscriber.threads.get_mut(thread_id) else {
-                return true;
-            };
-            let session_pending = updates
-                .iter()
-                .filter(|update| update.durable_sequence > subscription.sequence)
-                .map(|update| notification(ServerNotificationMethod::SessionThreadUpdate, update))
-                .collect::<Vec<_>>();
-            if let Some(last) = updates.last() {
-                subscription.sequence = subscription.sequence.max(last.durable_sequence);
+            if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
+                let session_pending = updates
+                    .iter()
+                    .filter(|update| update.durable_sequence > subscription.sequence)
+                    .map(|update| {
+                        notification(ServerNotificationMethod::SessionThreadUpdate, update)
+                    })
+                    .collect::<Vec<_>>();
+                if let Some(last) = updates.last() {
+                    subscription.sequence = subscription.sequence.max(last.durable_sequence);
+                }
+                if !subscription.session_owners.is_empty() {
+                    queue.extend(session_pending);
+                }
             }
-            if !subscription.session_owners.is_empty() {
-                queue.extend(session_pending);
+            for session_id in &sessions_with_timing_change {
+                if subscriber_observes_session(subscriber, session_id) {
+                    queue.push(notification(
+                        ServerNotificationMethod::SessionChanged,
+                        &SessionChanged {
+                            session_id: (*session_id).clone(),
+                        },
+                    ));
+                }
             }
             true
         });
@@ -819,6 +843,14 @@ impl UpdateBroker {
             true
         });
     }
+}
+
+fn subscriber_observes_session(subscriber: &Subscriber, session_id: &SessionId) -> bool {
+    subscriber.sessions.contains(session_id)
+        || subscriber
+            .threads
+            .values()
+            .any(|subscription| subscription.session_owners.contains(session_id))
 }
 
 fn new_marketplace_instance_id() -> String {

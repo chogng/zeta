@@ -83,6 +83,8 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             instructions: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Running,
+            started_at_unix_ms: None,
+            duration_ms: None,
             model: None,
             policy_revision: "test-policy-v1".into(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,

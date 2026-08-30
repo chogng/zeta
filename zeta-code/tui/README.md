@@ -206,10 +206,10 @@ src/
 │   ├── event_source.rs            # Crossterm input and bounded Tick source
 │   ├── session.rs                 # transactional terminal acquisition and RAII restore
 │   └── terminal_probe.rs          # bounded OSC query before the crossterm event reader starts
-└── ui/
+├── render.rs                      # Renderable measurement/draw contract and module root
+└── render/
     ├── layout.rs                  # shared pure geometry
-    ├── theme.rs                   # shared token subset and detected color-level projection
-    └── theme_tests.rs             # TrueColor/ANSI/monochrome projection contract
+    └── theme.rs                   # immutable RenderTheme and terminal color-level mapping
 ```
 
 实现 module 都是 private；crate 只导出启动 contract。
@@ -224,10 +224,12 @@ src/
 | `TurnActivity` | crate-private | canonical Turn status 到 Working/waiting/Cancelling presentation state 的窄映射 | 不复制完整 Turn reducer |
 | `ThreadFeatureState` | crate-private | active canonical `Thread` snapshot、transcript projection 与本地 optimistic/diagnostic overlay | 下一份 snapshot 替换 projection；不执行 RPC、不复制 product reducer |
 | `ThreadPresentationEvent` | crate-private | snapshot/transient/reset/user/notice/failure/interrupted/clear 的 feature-local 事实 | 只改变 active Thread presentation owner |
-| `components::chat_history::{Message,MessageRole,draw}` | crate-private | 定义 transcript-facing 展示值，并渲染 role chrome、empty state、wrapping 与 bottom scroll | 不依赖 feature/`App`、不保存 Thread/sequence、不处理输入 |
+| `components::chat_history::{Message,MessageRole,ChatHistoryView}` | crate-private | 定义 transcript-facing 展示值，并通过 `Renderable` 渲染 role chrome、empty state、wrapping 与 bottom scroll | 不依赖 feature/`App`、不保存 Thread/sequence、不处理输入 |
 | `zeta_ansi_escape::ansi_text` | dependency public API | 把 Tool stdout/stderr 的 ANSI SGR 和 tab 转为 Ratatui-owned styled text | 实现归 [`zeta-ansi-escape`](../ansi-escape/README.md)；TUI 不复制 parser、不修改 protocol/Thread 原始输出 |
-| `ui::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
-| `ui::theme` | private module | 将 `zeta-theme::ThemeSnapshot` 的明确子集投影到终端能力 | 不复制完整 Desktop token catalog、不拥有用户文件加载、不定义产品状态 |
+| `render::{Renderable,RenderContext}` | private | 统一 surface 的宽度测量、绘制入口与只读主题传递 | 不读取 App/feature、不调用 terminal 或 RPC |
+| `render::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
+| `render::theme::RenderTheme` | private | 将 `zeta-theme::ThemeSnapshot` 的明确颜色子集映射到终端能力 | 不读取或保存用户配置、不定义产品状态 |
+| `features::theme::ThemeResource` | private | 加载主题目录、生成预览、选择并保存用户主题 | 只在事件循环和命令执行路径使用；draw path 不执行文件 I/O |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 按配置顺序把当前权限、preferred model、Git 分支和变更映射为长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
 | `StatusLineResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/statusline.json` | 只保存四个显示开关，不进入 App Server 配置、不拥有被显示的数据 |

@@ -9,6 +9,7 @@ use crate::features::keymap::KeymapCaptureMode;
 use crate::features::keymap::KeymapEditIntent;
 use crate::features::keymap::KeymapEditKind;
 use crate::keymap::AppKeymap;
+use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use zeta_keybinding::HostPlatform;
@@ -120,7 +121,9 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| crate::components::list_selection::draw(frame, frame.area(), &state))
+        .draw(|frame| {
+            crate::components::list_selection::draw(frame, frame.area(), &state, test_context())
+        })
         .unwrap();
 
     let buffer = terminal.backend().buffer();

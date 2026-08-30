@@ -4,6 +4,7 @@ use crate::components::key_capture;
 use crate::components::key_hint_bar;
 use crate::components::list_selection;
 use crate::components::text_prompt;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
@@ -30,14 +31,21 @@ pub(crate) fn view_desired_height(view: PaneView<'_>, available_width: u16) -> u
     desired_height(body_height)
 }
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: PaneView<'_>) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: PaneView<'_>,
+    context: RenderContext<'_>,
+) {
     let pane_areas = areas(area);
     match view.body() {
-        PaneBodyView::KeyCapture(body) => key_capture::draw(frame, pane_areas.body, body),
-        PaneBodyView::ListSelection(body) => list_selection::draw(frame, pane_areas.body, body),
-        PaneBodyView::TextPrompt(body) => text_prompt::draw(frame, pane_areas.body, body),
+        PaneBodyView::KeyCapture(body) => key_capture::draw(frame, pane_areas.body, body, context),
+        PaneBodyView::ListSelection(body) => {
+            list_selection::draw(frame, pane_areas.body, body, context)
+        }
+        PaneBodyView::TextPrompt(body) => text_prompt::draw(frame, pane_areas.body, body, context),
     }
-    key_hint_bar::draw(frame, pane_areas.key_hint_bar, view.key_hints());
+    key_hint_bar::draw(frame, pane_areas.key_hint_bar, view.key_hints(), context);
 }
 
 pub(crate) fn pointer_target_at(

@@ -31,6 +31,10 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
             status: SessionStatus::Active,
             threads: vec![SessionThread {
                 thread_id: thread_id.clone(),
+                title: "Agent".to_owned(),
+                created_at_unix_ms: 0,
+                completed_turn_duration_ms: 0,
+                active_turn_started_at_unix_ms: None,
                 parent_thread_id: None,
                 forked_from_id: None,
                 status: ThreadStatus::Active,
@@ -99,12 +103,20 @@ fn root_thread_wins_over_a_later_conversation_thread() {
         threads: vec![
             SessionThread {
                 thread_id: root_id.clone(),
+                title: "Root".to_owned(),
+                created_at_unix_ms: 0,
+                completed_turn_duration_ms: 0,
+                active_turn_started_at_unix_ms: None,
                 parent_thread_id: None,
                 forked_from_id: None,
                 status: ThreadStatus::Active,
             },
             SessionThread {
                 thread_id: rewound_id.clone(),
+                title: "Rewound".to_owned(),
+                created_at_unix_ms: 0,
+                completed_turn_duration_ms: 0,
+                active_turn_started_at_unix_ms: None,
                 parent_thread_id: Some(root_id.clone()),
                 forked_from_id: Some(root_id.clone()),
                 status: ThreadStatus::Active,

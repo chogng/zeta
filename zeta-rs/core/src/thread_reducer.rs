@@ -217,12 +217,40 @@ impl ThreadSnapshot {
             true
         })
     }
+
+    /// Returns the total duration of terminal Turns that started in this Thread.
+    pub fn completed_turn_duration_ms(&self) -> u64 {
+        self.turns
+            .iter()
+            .filter_map(|turn| turn.duration_ms)
+            .fold(0, u64::saturating_add)
+    }
+
+    /// Returns the start time of the current non-terminal Turn, when one is running.
+    pub fn active_turn_started_at_unix_ms(&self) -> Option<u64> {
+        self.turns
+            .iter()
+            .rev()
+            .find(|turn| {
+                matches!(
+                    turn.status,
+                    TurnStatus::Running
+                        | TurnStatus::WaitingForApproval
+                        | TurnStatus::WaitingForUserInput
+                        | TurnStatus::WaitingForCapability
+                        | TurnStatus::Cancelling
+                )
+            })?
+            .started_at_unix_ms
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TurnSnapshot {
     pub turn_id: TurnId,
     pub status: TurnStatus,
+    pub started_at_unix_ms: Option<u64>,
+    pub duration_ms: Option<u64>,
     pub kind: TurnKind,
     pub instructions: Option<TurnInstructions>,
     pub model: Option<ModelRef>,
@@ -815,6 +843,8 @@ pub fn reduce_thread_event(
                 TurnSnapshot {
                     turn_id: turn_id.clone(),
                     status: TurnStatus::Created,
+                    started_at_unix_ms: None,
+                    duration_ms: None,
                     kind: *kind,
                     instructions: instructions.clone(),
                     model: model.clone(),
@@ -906,6 +936,8 @@ pub fn reduce_thread_event(
         ThreadEvent::TurnStarted { turn_id, .. } => {
             require_no_command(envelope)?;
             transition_turn(&mut snapshot, turn_id, TurnStatus::Running, None)?;
+            find_turn_mut(&mut snapshot, turn_id)?.started_at_unix_ms =
+                Some(recorded_at_unix_ms(envelope)?);
             if let Some(command) = snapshot.commands.iter_mut().find(|command| {
                 matches!(
                     &command.result,
@@ -1364,6 +1396,7 @@ pub fn reduce_thread_event(
         ThreadEvent::TurnCompleted { turn_id, .. } => {
             require_no_command(envelope)?;
             transition_turn(&mut snapshot, turn_id, TurnStatus::Completed, None)?;
+            record_turn_duration(&mut snapshot, turn_id, envelope)?;
         }
         ThreadEvent::TurnFailed { turn_id, error, .. } => {
             require_no_command(envelope)?;
@@ -1373,6 +1406,7 @@ pub fn reduce_thread_event(
                 TurnStatus::Failed,
                 Some(error.clone()),
             )?;
+            record_turn_duration(&mut snapshot, turn_id, envelope)?;
             if let Some(goal) = snapshot.goal.as_mut() {
                 if !goal.status.is_terminal() {
                     goal.status = if error.code == StableTurnErrorCode::UsageLimited {
@@ -1421,6 +1455,7 @@ pub fn reduce_thread_event(
         ThreadEvent::TurnInterrupted { turn_id, .. } => {
             require_no_command(envelope)?;
             transition_turn(&mut snapshot, turn_id, TurnStatus::Interrupted, None)?;
+            record_turn_duration(&mut snapshot, turn_id, envelope)?;
             if let Some(command) = snapshot.commands.iter_mut().find(|command| {
                 matches!(
                     &command.result,
@@ -2031,6 +2066,8 @@ fn import_history(
         .map(|turn| TurnSnapshot {
             turn_id: turn.turn_id.clone(),
             status: turn.status,
+            started_at_unix_ms: None,
+            duration_ms: None,
             kind: turn.kind,
             instructions: turn.instructions.clone(),
             model: turn.model.clone(),
@@ -2132,6 +2169,8 @@ fn append_imported_turn(
     turns.push(TurnSnapshot {
         turn_id: turn.turn_id.clone(),
         status: turn.status,
+        started_at_unix_ms: None,
+        duration_ms: None,
         kind: turn.kind,
         instructions: turn.instructions.clone(),
         model: turn.model.clone(),
@@ -2430,6 +2469,24 @@ fn transition_turn(
     turn.status = transition_turn_status(turn.status, next)?;
     turn.failure = failure;
     Ok(())
+}
+
+fn record_turn_duration(
+    snapshot: &mut ThreadSnapshot,
+    turn_id: &TurnId,
+    envelope: &StoredEvent,
+) -> Result<(), CoreError> {
+    let completed_at_unix_ms = recorded_at_unix_ms(envelope)?;
+    let turn = find_turn_mut(snapshot, turn_id)?;
+    turn.duration_ms = turn
+        .started_at_unix_ms
+        .map(|started_at| completed_at_unix_ms.saturating_sub(started_at));
+    Ok(())
+}
+
+fn recorded_at_unix_ms(envelope: &StoredEvent) -> Result<u64, CoreError> {
+    u64::try_from(envelope.recorded_at.0)
+        .map_err(|_| CoreError::Journal("Thread event timestamp exceeds u64".into()))
 }
 
 fn find_turn<'a>(

@@ -10,6 +10,7 @@ use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
 use crate::features::theme::ThemePreviewPalette;
+use crate::render::test_context;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -124,8 +125,13 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
     terminal
         .draw(|frame| {
             let areas = crate::components::pane::areas(frame.area());
-            crate::components::list_selection::draw(frame, areas.body, &state);
-            crate::components::key_hint_bar::draw(frame, areas.key_hint_bar, &key_hints);
+            crate::components::list_selection::draw(frame, areas.body, &state, test_context());
+            crate::components::key_hint_bar::draw(
+                frame,
+                areas.key_hint_bar,
+                &key_hints,
+                test_context(),
+            );
         })
         .unwrap();
     let buffer = terminal.backend().buffer();

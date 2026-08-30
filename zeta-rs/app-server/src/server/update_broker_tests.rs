@@ -202,6 +202,55 @@ fn session_thread_subscription_can_be_removed_independently() {
 }
 
 #[test]
+fn thread_subscription_observes_session_changes() {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.register(1, &queue);
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id, 0);
+
+    broker.publish_session_changed(&session_id);
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0]["method"], "session/changed");
+    assert_eq!(notifications[0]["params"]["sessionId"], "session_1");
+}
+
+#[test]
+fn subagent_turn_start_invalidates_session_for_the_main_thread_subscriber() {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let main_thread_id = ThreadId::new("main").unwrap();
+    let child_thread_id = ThreadId::new("child").unwrap();
+    broker.register(1, &queue);
+    broker.subscribe_session_thread(1, session_id.clone(), main_thread_id, 0);
+
+    broker.publish_thread(
+        &child_thread_id,
+        &[ThreadUpdateEnvelope {
+            session_id,
+            thread_id: child_thread_id.clone(),
+            durable_sequence: 1,
+            stream_cursor: None,
+            update: ThreadUpdate::Committed {
+                event: ThreadEvent::TurnStarted {
+                    thread_id: child_thread_id.clone(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                },
+            },
+        }],
+    );
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0]["method"], "session/changed");
+    assert_eq!(notifications[0]["params"]["sessionId"], "session_1");
+}
+
+#[test]
 fn thread_update_publishes_backend_assembled_transcript_entry() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();
@@ -552,9 +601,8 @@ fn thread_update(
         durable_sequence: sequence,
         stream_cursor: None,
         update: ThreadUpdate::Committed {
-            event: ThreadEvent::TurnCompleted {
+            event: ThreadEvent::ThreadArchived {
                 thread_id: thread_id.clone(),
-                turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
             },
         },
     }

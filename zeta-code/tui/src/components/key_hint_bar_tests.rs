@@ -1,4 +1,5 @@
 use super::draw;
+use crate::render::test_context;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
@@ -8,7 +9,7 @@ fn key_hint_bar_uses_two_character_horizontal_insets() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| draw(frame, frame.area(), "↑/↓ select"))
+        .draw(|frame| draw(frame, frame.area(), "↑/↓ select", test_context()))
         .unwrap();
 
     let buffer = terminal.backend().buffer();

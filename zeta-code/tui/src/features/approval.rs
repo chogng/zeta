@@ -194,9 +194,7 @@ pub(crate) struct ApprovalView<'a> {
     pub(crate) error: Option<&'a str>,
 }
 
-use crate::ui::background;
-use crate::ui::highlight;
-use crate::ui::muted;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -216,7 +214,12 @@ pub(crate) fn desired_height(view: ApprovalView<'_>) -> u16 {
     u16::try_from(content_rows.saturating_add(2)).unwrap_or(u16::MAX)
 }
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: ApprovalView<'_>) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: ApprovalView<'_>,
+    context: RenderContext<'_>,
+) {
     let mut lines = vec![Line::styled(
         view.reason,
         Style::default().add_modifier(Modifier::BOLD),
@@ -225,18 +228,23 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: ApprovalView<'_>) {
         view.details
             .iter()
             .take(MAX_DETAIL_ROWS)
-            .map(|detail| Line::styled(detail, Style::default().fg(muted()))),
+            .map(|detail| Line::styled(detail, Style::default().fg(context.muted()))),
     );
     lines.push(choice_line(
         "Approve once",
         view.selected == ApprovalDecision::ApproveOnce,
+        context,
     ));
     lines.push(choice_line(
         "Decline",
         view.selected == ApprovalDecision::Decline,
+        context,
     ));
     if view.submitting {
-        lines.push(Line::styled("Submitting…", Style::default().fg(muted())));
+        lines.push(Line::styled(
+            "Submitting…",
+            Style::default().fg(context.muted()),
+        ));
     } else if let Some(error) = view.error {
         lines.push(Line::styled(
             error,
@@ -248,7 +256,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: ApprovalView<'_>) {
             Block::default()
                 .title(view.title)
                 .borders(Borders::ALL)
-                .style(Style::default().bg(background())),
+                .style(Style::default().bg(context.background())),
         ),
         area,
     );
@@ -272,11 +280,11 @@ pub(crate) fn choice_index_at(
     (row >= first_choice_row && index < 2).then_some(index)
 }
 
-fn choice_line(label: &str, selected: bool) -> Line<'_> {
+fn choice_line<'a>(label: &'a str, selected: bool, context: RenderContext<'_>) -> Line<'a> {
     let marker = if selected { "› " } else { "  " };
     let style = if selected {
         Style::default()
-            .fg(highlight())
+            .fg(context.highlight())
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()

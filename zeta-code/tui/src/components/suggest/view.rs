@@ -1,9 +1,9 @@
 mod mention {
     use super::super::MentionMatchKind;
     use super::super::MentionPopupView;
-    use crate::ui::bottom_anchored_area;
-    use crate::ui::horizontal_margin;
-    use crate::ui::{highlight, muted};
+    use crate::render::RenderContext;
+    use crate::render::bottom_anchored_area;
+    use crate::render::horizontal_margin;
     use ratatui::Frame;
     use ratatui::layout::Rect;
     use ratatui::style::Modifier;
@@ -20,7 +20,12 @@ mod mention {
         visible_rows: usize,
     }
 
-    pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<MentionPopupView<'_>>) {
+    pub(crate) fn draw(
+        frame: &mut Frame<'_>,
+        area: Rect,
+        popup: Option<MentionPopupView<'_>>,
+        context: RenderContext<'_>,
+    ) {
         let Some(popup) = popup else {
             return;
         };
@@ -34,7 +39,7 @@ mod mention {
                 } else {
                     "No matching files or plugins"
                 },
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             ))]
         } else {
             popup
@@ -46,10 +51,10 @@ mod mention {
                 .map(|(index, mention_match)| {
                     let base_style = if index == popup.selected {
                         Style::default()
-                            .fg(highlight())
+                            .fg(context.highlight())
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(muted())
+                        Style::default().fg(context.muted())
                     };
                     let mut matched_indices = mention_match.indices.iter().peekable();
                     let mut spans = mention_match
@@ -69,7 +74,10 @@ mod mention {
                         })
                         .collect::<Vec<_>>();
                     if mention_match.kind == MentionMatchKind::Plugin {
-                        spans.push(Span::styled("  plugin", Style::default().fg(muted())));
+                        spans.push(Span::styled(
+                            "  plugin",
+                            Style::default().fg(context.muted()),
+                        ));
                     }
                     Line::from(spans)
                 })
@@ -121,10 +129,9 @@ mod mention {
 
 mod skill {
     use super::super::SkillSelectorView;
-    use crate::ui::bottom_anchored_area;
-    use crate::ui::highlight;
-    use crate::ui::horizontal_margin;
-    use crate::ui::muted;
+    use crate::render::RenderContext;
+    use crate::render::bottom_anchored_area;
+    use crate::render::horizontal_margin;
     use ratatui::Frame;
     use ratatui::layout::Rect;
     use ratatui::style::Modifier;
@@ -136,7 +143,12 @@ mod skill {
 
     const MAX_VISIBLE_ROWS: usize = 6;
 
-    pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SkillSelectorView<'_>>) {
+    pub(crate) fn draw(
+        frame: &mut Frame<'_>,
+        area: Rect,
+        popup: Option<SkillSelectorView<'_>>,
+        context: RenderContext<'_>,
+    ) {
         let Some(popup) = popup else {
             return;
         };
@@ -146,7 +158,7 @@ mod skill {
         let lines = if popup.items.is_empty() {
             vec![Line::from(Span::styled(
                 "No matching Skills",
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             ))]
         } else {
             popup
@@ -158,16 +170,16 @@ mod skill {
                 .map(|(index, item)| {
                     let style = if index == popup.selected {
                         Style::default()
-                            .fg(highlight())
+                            .fg(context.highlight())
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(muted())
+                        Style::default().fg(context.muted())
                     };
                     Line::from(vec![
                         Span::styled(format!("${}", item.name()), style),
                         Span::styled(
                             format!("  {}", item.description()),
-                            Style::default().fg(muted()),
+                            Style::default().fg(context.muted()),
                         ),
                     ])
                 })
@@ -220,9 +232,9 @@ mod skill {
 
 mod slash {
     use super::super::SlashCommandsView;
-    use crate::ui::bottom_anchored_area;
-    use crate::ui::horizontal_margin;
-    use crate::ui::{highlight, muted};
+    use crate::render::RenderContext;
+    use crate::render::bottom_anchored_area;
+    use crate::render::horizontal_margin;
     use ratatui::Frame;
     use ratatui::layout::Rect;
     use ratatui::style::Modifier;
@@ -240,7 +252,12 @@ mod slash {
         visible_rows: usize,
     }
 
-    pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<SlashCommandsView<'_>>) {
+    pub(crate) fn draw(
+        frame: &mut Frame<'_>,
+        area: Rect,
+        popup: Option<SlashCommandsView<'_>>,
+        context: RenderContext<'_>,
+    ) {
         let Some(popup) = popup else {
             return;
         };
@@ -250,7 +267,7 @@ mod slash {
         let lines = if popup.commands.is_empty() {
             vec![Line::from(Span::styled(
                 "No matching commands",
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             ))]
         } else {
             popup
@@ -263,10 +280,10 @@ mod slash {
                     let selected = index == popup.selected;
                     let command_style = if selected {
                         Style::default()
-                            .fg(highlight())
+                            .fg(context.highlight())
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(muted())
+                        Style::default().fg(context.muted())
                     };
                     Line::from(vec![
                         Span::styled(
@@ -322,14 +339,20 @@ mod slash {
 }
 
 use super::SuggestView;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, suggest: Option<SuggestView<'_>>) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    suggest: Option<SuggestView<'_>>,
+    context: RenderContext<'_>,
+) {
     match suggest {
-        Some(SuggestView::Slash(view)) => slash::draw(frame, area, Some(view)),
-        Some(SuggestView::Mention(view)) => mention::draw(frame, area, Some(view)),
-        Some(SuggestView::Skill(view)) => skill::draw(frame, area, Some(view)),
+        Some(SuggestView::Slash(view)) => slash::draw(frame, area, Some(view), context),
+        Some(SuggestView::Mention(view)) => mention::draw(frame, area, Some(view), context),
+        Some(SuggestView::Skill(view)) => skill::draw(frame, area, Some(view), context),
         None => {}
     }
 }

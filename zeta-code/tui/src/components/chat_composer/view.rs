@@ -7,6 +7,8 @@ use crate::components::chat_input::ChatInputCursor;
 use crate::components::pane;
 use crate::components::pane::PanePointerTarget;
 use crate::components::suggest;
+use crate::render::RenderContext;
+use crate::render::Renderable;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
@@ -29,48 +31,52 @@ pub(crate) enum ChatComposerPointerTarget {
     SuggestItem(usize),
 }
 
-pub(crate) fn view_desired_height(view: &ChatComposerView<'_>, available_width: u16) -> u16 {
-    let input_height = view.input_desired_height(available_width);
-    desired_height(input_height, &pane_sizes(view, available_width))
+pub(crate) struct ChatComposerSurface<'a, 'view> {
+    pub(crate) overlay_area: Rect,
+    pub(crate) view: &'view ChatComposerView<'a>,
+    pub(crate) cursor: ChatInputCursor,
+}
+
+impl Renderable for ChatComposerSurface<'_, '_> {
+    fn desired_height(&self, width: u16) -> u16 {
+        let input_height = self.view.input_desired_height(width);
+        desired_height(input_height, &pane_sizes(self.view, width))
+    }
+
+    fn render(&self, frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
+        let areas = view_areas(area, self.view);
+        for (entry, allocation) in self.view.pane_views().into_iter().zip(&areas.panes) {
+            debug_assert_eq!(entry.kind(), allocation.kind);
+            match entry {
+                ChatComposerPaneView::Stacked(view) => {
+                    pane::draw(frame, allocation.area, view, context);
+                }
+            }
+        }
+
+        chat_input::draw_chat_input(
+            frame,
+            areas.input,
+            self.view.input(),
+            self.view.input_cursor_width(),
+            self.view.input_cursor_line(),
+            self.view.input_prompt(),
+            self.cursor,
+            context,
+        );
+
+        match self.view.overlay() {
+            Some(ChatComposerOverlayView::Suggest(view)) => {
+                suggest::draw(frame, self.overlay_area, Some(view), context);
+            }
+            None => {}
+        }
+    }
 }
 
 pub(crate) fn view_areas(area: Rect, view: &ChatComposerView<'_>) -> ChatComposerAreas {
     let input_height = view.input_desired_height(area.width);
     areas(area, input_height, &pane_sizes(view, area.width))
-}
-
-pub(crate) fn draw(
-    frame: &mut Frame<'_>,
-    areas: &ChatComposerAreas,
-    overlay_area: Rect,
-    view: &ChatComposerView<'_>,
-    cursor: ChatInputCursor,
-) {
-    for (entry, allocation) in view.pane_views().into_iter().zip(&areas.panes) {
-        debug_assert_eq!(entry.kind(), allocation.kind);
-        match entry {
-            ChatComposerPaneView::Stacked(view) => {
-                pane::draw(frame, allocation.area, view);
-            }
-        }
-    }
-
-    chat_input::draw_chat_input(
-        frame,
-        areas.input,
-        view.input(),
-        view.input_cursor_width(),
-        view.input_cursor_line(),
-        view.input_prompt(),
-        cursor,
-    );
-
-    match view.overlay() {
-        Some(ChatComposerOverlayView::Suggest(view)) => {
-            suggest::draw(frame, overlay_area, Some(view));
-        }
-        None => {}
-    }
 }
 
 pub(crate) fn pointer_target_at(

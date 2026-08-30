@@ -1,5 +1,4 @@
-use crate::ui::foreground;
-use crate::ui::muted;
+use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -20,7 +19,8 @@ const MARKER_WIDTH: usize = 2;
 pub(crate) struct SubagentPaneRow {
     pub(crate) thread_id: ThreadId,
     pub(crate) label: String,
-    pub(crate) created_at_unix_ms: u64,
+    pub(crate) completed_turn_duration_ms: u64,
+    pub(crate) active_turn_started_at_unix_ms: Option<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -144,7 +144,12 @@ pub(crate) struct SubagentPaneView<'a> {
     pub(crate) now_unix_ms: u64,
 }
 
-pub(crate) fn draw_subagent_pane(frame: &mut Frame<'_>, area: Rect, view: SubagentPaneView<'_>) {
+pub(crate) fn draw_subagent_pane(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: SubagentPaneView<'_>,
+    context: RenderContext<'_>,
+) {
     let lines = view
         .rows
         .iter()
@@ -152,11 +157,18 @@ pub(crate) fn draw_subagent_pane(frame: &mut Frame<'_>, area: Rect, view: Subage
             let selected = view.selected == Some(&row.thread_id);
             let marker = if selected { '●' } else { '○' };
             let style = if selected {
-                Style::default().fg(foreground())
+                Style::default().fg(context.foreground())
             } else {
-                Style::default().fg(muted())
+                Style::default().fg(context.muted())
             };
-            let elapsed_seconds = view.now_unix_ms.saturating_sub(row.created_at_unix_ms) / 1_000;
+            let active_turn_duration_ms = row
+                .active_turn_started_at_unix_ms
+                .map(|started_at| view.now_unix_ms.saturating_sub(started_at))
+                .unwrap_or_default();
+            let elapsed_seconds = row
+                .completed_turn_duration_ms
+                .saturating_add(active_turn_duration_ms)
+                / 1_000;
             Line::styled(
                 row_text(
                     marker,
@@ -218,7 +230,26 @@ fn current_unix_millis() -> u64 {
 }
 
 fn active_rows(session: &Session) -> Vec<SubagentPaneRow> {
-    let mut rows = Vec::new();
+    let child_rows = session
+        .threads
+        .iter()
+        .filter(|thread| {
+            thread.status == ThreadStatus::Active
+                && thread.parent_thread_id.is_some()
+                && thread.forked_from_id.is_none()
+        })
+        .map(|thread| SubagentPaneRow {
+            thread_id: thread.thread_id.clone(),
+            label: thread.title.to_lowercase(),
+            completed_turn_duration_ms: thread.completed_turn_duration_ms,
+            active_turn_started_at_unix_ms: thread.active_turn_started_at_unix_ms,
+        })
+        .collect::<Vec<_>>();
+    if child_rows.is_empty() {
+        return Vec::new();
+    }
+
+    let mut rows = Vec::with_capacity(child_rows.len().saturating_add(1));
     if let Some(root) = session.threads.iter().find(|thread| {
         thread.thread_id.as_str() == session.session_id.as_str()
             && thread.status == ThreadStatus::Active
@@ -226,24 +257,11 @@ fn active_rows(session: &Session) -> Vec<SubagentPaneRow> {
         rows.push(SubagentPaneRow {
             thread_id: root.thread_id.clone(),
             label: "main".into(),
-            created_at_unix_ms: root.created_at_unix_ms,
+            completed_turn_duration_ms: root.completed_turn_duration_ms,
+            active_turn_started_at_unix_ms: root.active_turn_started_at_unix_ms,
         });
     }
-    rows.extend(
-        session
-            .threads
-            .iter()
-            .filter(|thread| {
-                thread.status == ThreadStatus::Active
-                    && thread.parent_thread_id.is_some()
-                    && thread.forked_from_id.is_none()
-            })
-            .map(|thread| SubagentPaneRow {
-                thread_id: thread.thread_id.clone(),
-                label: thread.title.to_lowercase(),
-                created_at_unix_ms: thread.created_at_unix_ms,
-            }),
-    );
+    rows.extend(child_rows);
     rows
 }
 

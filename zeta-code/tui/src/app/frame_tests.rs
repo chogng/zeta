@@ -11,12 +11,7 @@ use crate::features::config::FollowUpMode;
 use crate::features::config::TerminalSettings;
 use crate::features::file_search::FileSearchManager;
 use crate::features::thread::TurnActivity;
-use crate::ui::accent;
-use crate::ui::chat_input_chrome;
-use crate::ui::danger;
-use crate::ui::highlight;
-use crate::ui::muted;
-use crate::ui::warning;
+use crate::render::test_context;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -34,6 +29,12 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
+use zeta_protocol::Session;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionStatus;
+use zeta_protocol::SessionThread;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadStatus;
 
 fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
     let mut settings = TerminalSettings::default();
@@ -166,26 +167,26 @@ fn follow_up_mode_does_not_replace_runtime_status_line() {
 fn status_line_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     let ask_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(ask_permissions[(2, 19)].fg, warning());
+    assert_eq!(ask_permissions[(2, 19)].fg, test_context().warning());
     assert_eq!(
         ask_permissions[(2 + "⏸".width() as u16, 19)].fg,
-        chat_input_chrome()
+        test_context().chat_input_chrome()
     );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
     let auto_review = render_buffer(&app, 80, 20);
-    assert_eq!(auto_review[(2, 19)].fg, accent());
+    assert_eq!(auto_review[(2, 19)].fg, test_context().accent());
     assert_eq!(
         auto_review[(2 + "⏩".width() as u16, 19)].fg,
-        chat_input_chrome()
+        test_context().chat_input_chrome()
     );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
     let bypass_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(bypass_permissions[(2, 19)].fg, danger());
+    assert_eq!(bypass_permissions[(2, 19)].fg, test_context().danger());
     assert_eq!(
         bypass_permissions[(2 + "▶".width() as u16, 19)].fg,
-        chat_input_chrome()
+        test_context().chat_input_chrome()
     );
 }
 
@@ -197,8 +198,8 @@ fn status_line_colors_current_and_next_modes_independently() {
 
     let buffer = render_buffer(&app, 80, 20);
     let next_icon_column = 2 + "⏸ current: ask permissions on · ".width() as u16;
-    assert_eq!(buffer[(2, 19)].fg, warning());
-    assert_eq!(buffer[(next_icon_column, 19)].fg, accent());
+    assert_eq!(buffer[(2, 19)].fg, test_context().warning());
+    assert_eq!(buffer[(next_icon_column, 19)].fg, test_context().accent());
 }
 
 #[test]
@@ -228,7 +229,7 @@ fn status_line_renders_the_configured_model() {
 
     assert!(status_line.starts_with("  ⏸ ask permissions on"));
     assert!(status_line.trim_end().ends_with("anthropic/claude-sonnet"));
-    assert_eq!(buffer[(2, 19)].fg, warning());
+    assert_eq!(buffer[(2, 19)].fg, test_context().warning());
 }
 
 #[test]
@@ -252,13 +253,56 @@ fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
 
     for y in [16, 18] {
         assert_eq!(buffer[(0, y)].symbol(), "─");
-        assert_eq!(buffer[(0, y)].fg, chat_input_chrome());
+        assert_eq!(buffer[(0, y)].fg, test_context().chat_input_chrome());
         assert_eq!(buffer[(79, y)].symbol(), "─");
-        assert_eq!(buffer[(79, y)].fg, chat_input_chrome());
+        assert_eq!(buffer[(79, y)].fg, test_context().chat_input_chrome());
     }
     assert_eq!(buffer[(0, 17)].symbol(), "❯");
-    assert_eq!(buffer[(0, 17)].fg, chat_input_chrome());
+    assert_eq!(buffer[(0, 17)].fg, test_context().chat_input_chrome());
     assert_eq!(buffer[(79, 17)].symbol(), " ");
+}
+
+#[test]
+fn subagent_pane_starts_at_the_empty_input_cursor_column() {
+    let mut app = App::new();
+    let session_id = SessionId::new("root").unwrap();
+    let root_id = ThreadId::new("root").unwrap();
+    app.update(AppEvent::ThreadContextChanged {
+        session_id: session_id.clone(),
+        thread_id: root_id.clone(),
+    });
+    app.update(AppEvent::SessionCatalogReceived(vec![Session {
+        session_id,
+        title: "Session".into(),
+        status: SessionStatus::Active,
+        threads: vec![
+            SessionThread {
+                thread_id: root_id.clone(),
+                title: "Main".into(),
+                created_at_unix_ms: 1,
+                completed_turn_duration_ms: 1_000,
+                active_turn_started_at_unix_ms: None,
+                parent_thread_id: None,
+                forked_from_id: None,
+                status: ThreadStatus::Active,
+            },
+            SessionThread {
+                thread_id: ThreadId::new("child").unwrap(),
+                title: "Child".into(),
+                created_at_unix_ms: 2,
+                completed_turn_duration_ms: 2_000,
+                active_turn_started_at_unix_ms: None,
+                parent_thread_id: Some(root_id),
+                forked_from_id: None,
+                status: ThreadStatus::Active,
+            },
+        ],
+    }]));
+
+    let rendered = render(&app, 40, 20);
+    let main = rendered.lines().find(|line| line.contains("main")).unwrap();
+
+    assert!(main.starts_with("  ● main"));
 }
 
 #[test]
@@ -448,11 +492,11 @@ fn slash_popup_inherits_the_theme_surface_and_bolds_the_selected_command() {
     let unselected = &buffer[(2, 11)];
     let surface_background = buffer[(0, 0)].bg;
 
-    assert_eq!(selected.fg, highlight());
+    assert_eq!(selected.fg, test_context().highlight());
     assert_eq!(selected.bg, surface_background);
     assert_eq!(selected.symbol(), "/");
     assert!(selected.modifier.contains(Modifier::BOLD));
-    assert_eq!(unselected.fg, muted());
+    assert_eq!(unselected.fg, test_context().muted());
     assert_eq!(unselected.bg, surface_background);
     assert_eq!(unselected.symbol(), "/");
     assert!(!unselected.modifier.contains(Modifier::BOLD));

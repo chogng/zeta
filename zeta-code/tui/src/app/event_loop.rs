@@ -42,6 +42,7 @@ use crate::features::sessions::ResumeOutcome;
 use crate::features::skills;
 use crate::features::status_line::StatusLineResource;
 use crate::features::theme as theme_feature;
+use crate::features::theme::ThemeResource;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
 use crate::features::thread::ThreadUpdateDisposition;
@@ -50,7 +51,6 @@ use crate::features::thread::read_thread_history;
 use crate::host;
 use crate::mouse::ScreenSelectionOutcome;
 use crate::terminal;
-use crate::ui;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
@@ -120,10 +120,19 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     )?;
     conversation.set_thread_sequence(initial_thread.sequence);
     let mut terminal = terminal::TerminalSession::open()?;
-    crate::ui::configure(terminal.background_color());
+    let theme_resource = ThemeResource::new(terminal.background_color());
     let mut file_search = host_file_search_root.map(FileSearchManager::new);
     let mut app =
         App::for_dir_with_slash_commands(&display_dir_root, slash_registry.catalog.clone());
+    match theme_resource.load() {
+        Ok(loaded) => {
+            for diagnostic in loaded.diagnostics {
+                eprintln!("theme: {diagnostic}");
+            }
+            app.update(AppEvent::RenderThemeChanged(loaded.theme));
+        }
+        Err(error) => app.update(AppEvent::FailureReported(error)),
+    }
     match sessions::load_catalog(&mut client) {
         Ok(catalog) => app.update(AppEvent::SessionCatalogReceived(catalog)),
         Err(error) => app.update(AppEvent::FailureReported(format!(
@@ -332,6 +341,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 .map(ConfigResource::settings)
                                 .unwrap_or_default()
                                 .dir_permissions();
+                            let command_theme_resource = theme_resource.clone();
                             pending_request = spawn_request(
                                 "zeta-tui-product-command",
                                 move || {
@@ -341,6 +351,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &mut request_client,
                                             invocation,
                                             dir_permissions,
+                                            &command_theme_resource,
                                         )
                                         .and_then(
                                             |output| {
@@ -583,7 +594,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenCustomThemePane => match ui::theme_catalog() {
+                    AppCommand::OpenCustomThemePane => match theme_resource.catalog() {
                         Ok(catalog) => app.update(AppEvent::ThemePaneOpened(
                             theme_feature::custom_theme_pane_spec(&catalog),
                         )),
@@ -853,11 +864,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::SetCustomTheme { preference } => {
                         let command = format!("/theme {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match ui::select_theme(&preference) {
-                            Ok(label) => {
+                        match theme_resource.select(&preference) {
+                            Ok(selection) => {
+                                app.update(AppEvent::RenderThemeChanged(selection.theme));
                                 app.update(AppEvent::CommandCompleted {
                                     command,
-                                    result: format!("Theme set to {label}"),
+                                    result: format!("Theme set to {}", selection.label),
                                 });
                                 app.update(AppEvent::ThemePanesClosed);
                             }
@@ -867,11 +879,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::SetTheme { preference } => {
                         let command = format!("/theme {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match ui::select_theme(&preference) {
-                            Ok(label) => {
+                        match theme_resource.select(&preference) {
+                            Ok(selection) => {
+                                app.update(AppEvent::RenderThemeChanged(selection.theme));
                                 app.update(AppEvent::CommandCompleted {
                                     command,
-                                    result: format!("Theme set to {label}"),
+                                    result: format!("Theme set to {}", selection.label),
                                 });
                                 app.update(AppEvent::ThemePanesClosed);
                             }

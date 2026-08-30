@@ -2,7 +2,9 @@ use crate::app::App;
 use crate::components::chat_composer;
 use crate::components::chat_composer::ChatComposerAreas;
 use crate::components::chat_composer::ChatComposerPointerTarget;
+use crate::components::chat_composer::ChatComposerSurface;
 use crate::components::chat_history;
+use crate::components::chat_history::ChatHistoryView;
 use crate::components::chat_input;
 use crate::components::key_hint_bar;
 use crate::features::approval;
@@ -12,11 +14,7 @@ use crate::features::sessions;
 use crate::features::status_line;
 use crate::features::thread::goal;
 use crate::features::thread::plan;
-use crate::ui::background;
-use crate::ui::foreground;
-use crate::ui::highlight;
-use crate::ui::muted;
-use crate::ui::warning;
+use crate::render::Renderable;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -24,28 +22,32 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Paragraph;
 
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
+    let context = app.render_context();
     frame.render_widget(
-        Block::default().style(Style::default().fg(foreground()).bg(background())),
+        Block::default().style(
+            Style::default()
+                .fg(context.foreground())
+                .bg(context.background()),
+        ),
         frame.area(),
     );
     let areas = layout(app, frame.area());
     let presentation_highlight = app
         .list_selection()
         .and_then(|view| view.presentation_highlight())
-        .unwrap_or_else(highlight);
+        .unwrap_or_else(|| context.highlight());
 
     if let Some(manager) = app.session_manager_view() {
-        sessions::draw_manager(frame, areas.session.transcript, manager);
+        sessions::draw_manager(frame, areas.session.transcript, manager, context);
     } else {
         let messages = app.transcript_views();
-        chat_history::draw(
-            frame,
-            areas.session.transcript,
-            &messages,
-            app.transcript_scroll(),
-            app.welcome(),
+        ChatHistoryView {
+            messages: &messages,
+            scroll: app.transcript_scroll(),
+            welcome: app.welcome(),
             presentation_highlight,
-        );
+        }
+        .render(frame, areas.session.transcript, context);
     }
     let cursor = if app.accepts_input() && app.chat_input_focused() {
         chat_input::ChatInputCursor::Visible
@@ -54,40 +56,41 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     };
     let input_view = app.chat_composer_view();
     if let Some(approval) = app.approval_view() {
-        approval::draw(frame, areas.session.composer, approval);
+        approval::draw(frame, areas.session.composer, approval, context);
     } else {
-        chat_composer::draw(
-            frame,
-            &areas.input,
-            overlay_area(&areas),
-            &input_view,
+        ChatComposerSurface {
+            overlay_area: overlay_area(&areas),
+            view: &input_view,
             cursor,
-        );
+        }
+        .render(frame, areas.session.composer, context);
     }
     if let Some(query) = app.query_view() {
-        query::draw(frame, areas.session.request, query);
+        query::draw(frame, areas.session.request, query, context);
     }
     if app.session_manager_view().is_none() {
-        goal::draw(frame, areas.session.goal, app.goal_view());
-        plan::draw(frame, areas.session.plan, app.plan_view());
+        goal::draw(frame, areas.session.goal, app.goal_view(), context);
+        plan::draw(frame, areas.session.plan, app.plan_view(), context);
         let queue_view = app.queue_view();
         queue::draw(
             frame,
             areas.session.queue,
             &queue_view,
             queue::DEFAULT_MAX_VISIBLE_ITEMS,
+            context,
         );
     }
-    draw_status_area(frame, areas.session.status, app);
+    draw_status_area(frame, areas.session.status, app, context);
     if let Some(subagent_pane) = app.subagent_pane_view() {
         crate::features::thread::draw_subagent_pane(
             frame,
-            areas.session.subagent_pane,
+            chat_input::content_area(areas.session.subagent_pane),
             subagent_pane,
+            context,
         );
     }
     if let Some(quick_view) = app.quick_view() {
-        crate::components::quick_view::draw(frame, overlay_area(&areas), quick_view);
+        crate::components::quick_view::draw(frame, overlay_area(&areas), quick_view, context);
     }
     app.screen_selection().draw(frame.buffer_mut());
 }
@@ -164,7 +167,12 @@ pub(crate) struct FrameLayout {
 
 pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
     let input_view = app.chat_composer_view();
-    let input_rows = chat_composer::view_desired_height(&input_view, terminal_area.width);
+    let input_rows = ChatComposerSurface {
+        overlay_area: Rect::default(),
+        view: &input_view,
+        cursor: chat_input::ChatInputCursor::Hidden,
+    }
+    .desired_height(terminal_area.width);
     let approval_rows = app
         .approval_view()
         .map(approval::desired_height)
@@ -228,9 +236,14 @@ fn overlay_area(areas: &FrameLayout) -> Rect {
     }
 }
 
-fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
+fn draw_status_area(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    context: crate::render::RenderContext<'_>,
+) {
     if app.approval_view().is_some() {
-        key_hint_bar::draw(frame, area, "↑↓ choose · enter confirm");
+        key_hint_bar::draw(frame, area, "↑↓ choose · enter confirm", context);
         return;
     }
     if app.query_view().is_some() {
@@ -238,6 +251,7 @@ fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
             frame,
             area,
             "↑↓ choose · enter answer · esc cancel custom input",
+            context,
         );
         return;
     }
@@ -246,17 +260,18 @@ fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
             frame,
             area,
             "↑↓ select · space expand · enter details · esc input",
+            context,
         );
         return;
     }
     if app.subagent_pane_focused() {
-        key_hint_bar::draw(frame, area, "↑↓ select · enter switch · esc input");
+        key_hint_bar::draw(frame, area, "↑↓ select · enter switch · esc input", context);
         return;
     }
     if let Some(prefix) = app.pending_key_chord_label() {
         frame.render_widget(
             Paragraph::new(format!("{prefix} … waiting for next key · esc cancel"))
-                .style(Style::default().fg(warning())),
+                .style(Style::default().fg(context.warning())),
             chat_input::content_area(area),
         );
         return;
@@ -264,7 +279,7 @@ fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
     if app.viewed_thread_completed() {
         frame.render_widget(
             Paragraph::new("completed · choose Main or another Subagent")
-                .style(Style::default().fg(muted())),
+                .style(Style::default().fg(context.muted())),
             chat_input::content_area(area),
         );
         return;
@@ -275,6 +290,7 @@ fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
         app.status_line(),
         app.approval_mode_status(),
         app.status_line_runtime(),
+        context,
     );
 }
 

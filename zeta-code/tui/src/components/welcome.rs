@@ -33,8 +33,8 @@ fn format_directory(directory: &Path, home: Option<&Path>) -> String {
     directory.display().to_string()
 }
 
-use crate::ui::horizontal_margin;
-use crate::ui::{accent, chat_input_chrome, muted};
+use crate::render::RenderContext;
+use crate::render::horizontal_margin;
 use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
@@ -55,11 +55,21 @@ const EXPANDED_MIN_WIDTH: u16 = 70;
 const EXPANDED_HEIGHT: u16 = 11;
 const COMPACT_HEIGHT: u16 = 12;
 
+pub(crate) fn desired_height(available_width: u16) -> u16 {
+    if horizontal_margin(Rect::new(0, 0, available_width, u16::MAX), 2).width >= EXPANDED_MIN_WIDTH
+    {
+        EXPANDED_HEIGHT
+    } else {
+        COMPACT_HEIGHT
+    }
+}
+
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     model: &WelcomeModel,
     presentation_highlight: Color,
+    context: RenderContext<'_>,
 ) {
     let available = horizontal_margin(area, 2);
     if available.is_empty() {
@@ -67,11 +77,7 @@ pub(crate) fn draw(
     }
 
     let expanded = available.width >= EXPANDED_MIN_WIDTH;
-    let desired_height = if expanded {
-        EXPANDED_HEIGHT
-    } else {
-        COMPACT_HEIGHT
-    };
+    let desired_height = desired_height(area.width);
     let banner_area = Rect {
         y: available
             .y
@@ -102,12 +108,12 @@ pub(crate) fn draw(
             ..content
         }
     };
-    draw_title(frame, title_area);
+    draw_title(frame, title_area, context);
 
     if expanded {
-        draw_expanded(frame, content, model, presentation_highlight);
+        draw_expanded(frame, content, model, presentation_highlight, context);
     } else {
-        draw_compact(frame, content, model);
+        draw_compact(frame, content, model, context);
     }
 }
 
@@ -116,6 +122,7 @@ fn draw_expanded(
     area: Rect,
     model: &WelcomeModel,
     presentation_highlight: Color,
+    context: RenderContext<'_>,
 ) {
     let columns = expanded_columns(area);
     frame.render_widget(
@@ -136,24 +143,32 @@ fn draw_expanded(
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Line::default(),
-            Line::from(Span::styled("╭─────╮", Style::default().fg(accent()))),
+            Line::from(Span::styled(
+                "╭─────╮",
+                Style::default().fg(context.accent()),
+            )),
             Line::from(vec![
-                Span::styled("│  ", Style::default().fg(accent())),
+                Span::styled("│  ", Style::default().fg(context.accent())),
                 Span::styled(
                     "ζ",
-                    Style::default().fg(accent()).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(context.accent())
+                        .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  │", Style::default().fg(accent())),
+                Span::styled("  │", Style::default().fg(context.accent())),
             ]),
-            Line::from(Span::styled("╰─┬─┬─╯", Style::default().fg(accent()))),
+            Line::from(Span::styled(
+                "╰─┬─┬─╯",
+                Style::default().fg(context.accent()),
+            )),
             Line::default(),
             Line::from(Span::styled(
                 "Ready when you are",
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             )),
             Line::from(Span::styled(
                 model.directory(),
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             )),
         ])
         .alignment(Alignment::Center),
@@ -167,7 +182,7 @@ fn draw_expanded(
         .split(guide);
     frame.render_widget(
         Paragraph::new(vec![
-            heading("Tips for getting started"),
+            heading("Tips for getting started", context),
             Line::from("Use @ to mention workspace files and / to discover commands."),
         ])
         .wrap(Wrap { trim: true }),
@@ -180,7 +195,7 @@ fn draw_expanded(
     frame.render_widget(prompts, sections[1]);
     frame.render_widget(
         Paragraph::new(vec![
-            heading("Try asking"),
+            heading("Try asking", context),
             Line::from("“Explain how this workspace is structured.”"),
             Line::from("“Implement the change and run the relevant tests.”"),
         ])
@@ -197,14 +212,14 @@ fn expanded_columns(area: Rect) -> [Rect; 2] {
     [columns[0], columns[1]]
 }
 
-fn draw_title(frame: &mut Frame<'_>, area: Rect) {
+fn draw_title(frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::raw(" "),
-            Span::styled("Zeta Code", Style::default().fg(accent())),
+            Span::styled("Zeta Code", Style::default().fg(context.accent())),
             Span::styled(
                 format!(" v{}", env!("CARGO_PKG_VERSION")),
-                Style::default().fg(chat_input_chrome()),
+                Style::default().fg(context.chat_input_chrome()),
             ),
             Span::raw(" "),
         ]))
@@ -213,7 +228,12 @@ fn draw_title(frame: &mut Frame<'_>, area: Rect) {
     );
 }
 
-fn draw_compact(frame: &mut Frame<'_>, area: Rect, model: &WelcomeModel) {
+fn draw_compact(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    model: &WelcomeModel,
+    context: RenderContext<'_>,
+) {
     let content = horizontal_margin(area, 1);
     let content = Rect {
         y: content.y.saturating_add(1),
@@ -227,17 +247,20 @@ fn draw_compact(frame: &mut Frame<'_>, area: Rect, model: &WelcomeModel) {
                     "Welcome back!",
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  ·  Ready when you are", Style::default().fg(muted())),
+                Span::styled(
+                    "  ·  Ready when you are",
+                    Style::default().fg(context.muted()),
+                ),
             ]),
             Line::from(Span::styled(
                 model.directory(),
-                Style::default().fg(muted()),
+                Style::default().fg(context.muted()),
             )),
             Line::default(),
-            heading("Tips for getting started"),
+            heading("Tips for getting started", context),
             Line::from("Use @ for workspace files and / for commands."),
             Line::default(),
-            heading("Try asking"),
+            heading("Try asking", context),
             Line::from("“Explain this workspace, then help me make a change.”"),
         ])
         .wrap(Wrap { trim: true }),
@@ -245,10 +268,12 @@ fn draw_compact(frame: &mut Frame<'_>, area: Rect, model: &WelcomeModel) {
     );
 }
 
-fn heading(text: &'static str) -> Line<'static> {
+fn heading(text: &'static str, context: RenderContext<'_>) -> Line<'static> {
     Line::from(Span::styled(
         text,
-        Style::default().fg(accent()).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(context.accent())
+            .add_modifier(Modifier::BOLD),
     ))
 }
 

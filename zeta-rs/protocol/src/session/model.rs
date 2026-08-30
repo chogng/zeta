@@ -28,6 +28,14 @@ pub struct SessionThread {
     pub title: String,
     #[ts(type = "number")]
     pub created_at_unix_ms: u64,
+    /// Sum of durations for terminal Turns that started in this Thread.
+    #[serde(default)]
+    #[ts(type = "number")]
+    pub completed_turn_duration_ms: u64,
+    /// Start time of the current non-terminal Turn, when it has begun running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable, type = "number")]
+    pub active_turn_started_at_unix_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub parent_thread_id: Option<ThreadId>,
