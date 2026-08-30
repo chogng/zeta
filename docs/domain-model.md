@@ -1,10 +1,12 @@
 # Zeta 领域模型与命名
 
 > 本文是 Project、Session、Thread、Environment、Workspace、目录与授权概念的长期架构契约。
+>
+> 状态：Session、Thread、Environment、Dir 与目录授权已经进入当前协议和实现；Project 的持久实体、长期多根目录表以及 Project 关联的跨 Session 工作仍是计划设计。计划边界与验证要求见 [`multi-agent-development.md`](multi-agent-development.md)。
 
-## 一句话原则
+## 快速理解
 
-> **Project 是长期组织对象，`session_id` 是 Thread 树的分组身份，`thread.id` 是具体分支地址，Environment 是执行位置，`cwd` 与目录集合是环境内的工作范围。**
+> **Project 是长期多根工作中心，弱关联根目录表、Session 和共同工作；`session_id` 是 Thread 树的分组身份，`thread.id` 是具体执行分支，Environment 是执行位置，`cwd` 与目录集合是环境内的工作范围。**
 
 这些概念不能设计成一组平级的“大实体”。它们回答的问题不同，生命周期也不同。
 
@@ -12,7 +14,7 @@
 
 | 概念 | 回答的问题 | 是否独立持久化 |
 | --- | --- | --- |
-| `Project` | 用户长期保存和归类哪些工作？ | 可选；有自己的名称、配置或生命周期时才保存 |
+| `Project` | 用户长期保存哪些根目录、Session 和共同工作入口？ | 计划；有自己的名称、多根目录表、配置或生命周期时才保存 |
 | `session_id` | 哪些 Thread 属于同一棵会话树？ | 作为 Thread 字段保存，不单独建立事实源 |
 | `Thread` | 当前操作的是哪条具体对话分支？ | 是；拥有自己的事件、顺序、恢复和执行状态 |
 | `Turn` | Thread 中一次输入与执行周期是什么？ | 随 Thread 保存 |
@@ -21,7 +23,9 @@
 基本关系：
 
 ```text
-Project?  ⋯⋯ associates/groups ⋯⋯> Session tree*
+Project?  ⋯⋯ associates ⋯⋯> root catalog*
+          ⋯⋯ associates ⋯⋯> WorkRun*
+          ⋯⋯ groups     ⋯⋯> Session tree*
 
 session_id = S1
 ├── Thread T1   id=T1, parent=None
@@ -42,8 +46,25 @@ get_session(session_id)
 `session_id`。因此代码只能依赖显式字段，不能靠 ID 相等猜关系。
 
 `Project` 与会话树是弱关联。删除 Project、移动 Project 或重新归类 Thread，不得改变 Thread 与
-`session_id` 的核心身份。关联可以落在 Thread 的可选 `project_id` 上；只有 Project 出现独立
-metadata、生命周期和 mutation 时，才值得建立 Project 实体。
+`session_id` 的核心身份。长期关联可以落在 Thread 的可选 `project_id` 上；只有 Project 出现独立
+metadata、多根目录表、生命周期和 mutation 时，才建立 Project 实体。当前协议尚无 `ProjectId` 或 Project store，不能从窗口 Workspace、目录集合或 Session 标题推断 Project 已经存在。
+
+### 1.1 Project、多根与共同工作
+
+Project 在产品上表现为长期多根工作中心，但它不是目录、Workspace、权限主体或跨 Session 协调器。它计划关联：
+
+| 关联内容 | 负责什么 | 不负责什么 |
+| --- | --- | --- |
+| 根目录表 | 保存 Environment + Dir 的稳定引用、显示名称、用途和可选仓库摘要 | 授予文件、命令、配置或 Hook 权限 |
+| Session tree | 让用户长期查找和归类独立 Agent 方向 | 改变 Session/Thread 身份、取消或上下文 |
+| WorkRun | 进入一次跨 Session 目标、工作契约、依赖和验证证据 | 把同 Project 自动解释成正在协作 |
+| Workspace 关联 | 帮助 Desktop 打开相应单根或多根窗口 | 取代窗口 Workspace 身份或修改其内容 |
+
+Project 可以关联同一 Environment 中的多个根，也可以关联本地和远程等不同 Environment 的根。一个工作尝试只在一个 Environment 中执行；跨 Environment 的目标通过多个 Session 和显式 WorkRun 协作，不能让一次工具调用隐式跨越执行位置。
+
+Session 创建或扩大工作范围时，只选择 Project 根目录表的明确子集，并为每个根取得独立 Grant。实际执行绑定选中根的 `DirId`、权限、配置来源和不可变 baseline；Project 后续增加、删除或重新排序根，不会静默改变已运行 Session 或工作尝试。需要采用变化时创建新的范围或工作契约版本。
+
+同属一个 Project 不产生信任、授权、上下文共享、取消传播、目标分支写入权或结果接受权。Project 名称、描述和归类变化不应让验证失效；只有实际消费的根、配置、决定或 baseline 变化才使相关证据过期。
 
 ### 后端协议与前端产品模型不是同一个层次
 
@@ -116,6 +137,8 @@ workspace 配置作用域和 Cargo workspace 等已经有明确行业语义的�
 `Project` 用于长期产品组织；`Folder` 用于面向用户的文件夹或编辑器 folder；`Dir` 用于后端已经
 规范化并绑定环境的目录。三者不能因为都可能指向同一路径就互换。
 
+Project 根目录表与 Workspace 都可能展示多个文件夹，但生命周期和权威不同：Project 保存长期工作入口，Workspace 决定当前编辑器窗口打开哪些 folder，Session 的 `dirs + grants` 决定某棵 Thread 树实际能访问什么。Project 可以帮助创建或打开 Workspace，不能与 Workspace 共用一个身份或让窗口内容自动成为 Agent 权限。
+
 ## 4. 安全模型
 
 | 概念 | 语义 | 例子 |
@@ -155,6 +178,8 @@ workspace 配置作用域和 Cargo workspace 等已经有明确行业语义的�
 - Thread 是唯一的对话事件流和恢复事实源，`session_id` 只负责分组；
 - Session 聚合视图不得拥有独立 sequence、事件表或 store；
 - Project 不拥有 Thread，只建立可选归类关系；
+- Project 根目录表只保存资源引用和长期入口，不授予权限，也不自动改变活动 Session；
+- 一个工作尝试只绑定一个 Environment；跨 Environment 协作使用多个 Session；
 - Environment、路径、目录、Git 与权限身份彼此独立；
 - `cwd` 和目录集合的变化不会暗中扩大 Grant；
 - 每个 Grant 明确记录主体、Permission、范围、来源和撤销生命周期；

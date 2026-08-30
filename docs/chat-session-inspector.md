@@ -2,9 +2,9 @@
 
 > 状态：已实现。本文描述 Chat 内 Session Inspector、Thread 目录绑定、Turn ChangeSet 和异步提交的当前契约。
 > Session、Thread、Turn 的基础语义见 [`protocol.md`](protocol.md)，接口见
-> [`zeta-app-server-api.md`](zeta-app-server-api.md)，Git 行为见 [`git.md`](git.md)。
+> [`zeta-app-server-api.md`](zeta-app-server-api.md)，Git 行为见 [`git.md`](git.md)。跨 Agent 工作契约、冲突、验证和多 ChangeSet 集成的计划设计见 [`multi-agent-development.md`](multi-agent-development.md)。
 
-## 结论
+## 快速理解
 
 Session Inspector 始终跟随 Chat 当前选中的 `Session + Thread`，正式提供四个区块：
 
@@ -30,7 +30,7 @@ Workbench 通用 Agent Sidebar 不受影响。
 | Goal 自动续跑 | 创建新的 Turn |
 | shell Turn | 独立 Turn；读取范围按不透明操作保守处理 |
 | failed / interrupted | 仍封存 ChangeSet，界面显示 terminal 警告 |
-| 子代理 spawn | 子 Thread 从 spawn 时父 Thread 目录检查点创建独立目录 |
+| 子 Agent spawn | 子 Thread 当前从 worktree provision 时捕获的父 Thread 目录 snapshot 创建独立目录；它尚未与 context seed 的 `parentSequence` 绑定为同一个不可变检查点 |
 | Fork | 从 `parentSequence` 对应的最后一个封存检查点创建 |
 | Rewind | 从目标 Turn 的 before 检查点创建 |
 
@@ -47,6 +47,8 @@ Turn 开始前必须成功捕获 baseline。失败时该 Turn 不获得写工具
 - Session 结束后，只有该 Thread 的 ChangeSet 全部 committed 或 discarded，受管目录才具备清理资格。
 
 界面和协议只暴露 `managedWorktreeId`、`sourceDirId`、仓库/分支和 baseline 摘要，不暴露受管目录内部路径。
+
+当前一个 Thread 目录绑定围绕一个来源根建立，可以包含该根中的多个嵌套 Git 仓库；Session 另外获得的任意独立目录不会自动变成同一 Thread 的组合受管根，也不会自动进入 Turn ChangeSet。Project 多根工作尝试、逐根 checkpoint 以及 Team spawn 的 seed/baseline 对齐属于 [`multi-agent-development.md`](multi-agent-development.md#33-project多根与跨环境) 的计划设计。
 
 ## ChangeSet 状态
 

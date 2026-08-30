@@ -71,9 +71,11 @@ flowchart TD
 
 | 系统 | 回答的核心问题 | 应当拥有 | 重点审计边界 | 权威文档 |
 | --- | --- | --- | --- | --- |
+| Project 与工作组织系统 | 哪些本地/远程根、Session 和共同工作需要长期组织在一起？ | Project metadata、长期根目录表以及对 Session/WorkRun 的弱关联 | Project、Workspace、Environment、Grant 和 WorkRun 是否被误建成同一对象 | [`domain-model.md`](domain-model.md)、[`multi-agent-development.md`](multi-agent-development.md) |
 | 会话系统 | 一次工作如何被识别、恢复和持续保存？ | Session、Thread、Turn、事件顺序与持久化事务 | Session、Thread、Store 与 rollout 是否存在重复权威 | [`core.md`](core.md)、[`protocol.md`](protocol.md) |
 | 上下文系统 | 当前模型究竟能看到什么？ | 上下文选择、预算、压缩、恢复和每个 Thread 的上下文状态 | 持久事实、模型输入和 UI 展示状态是否混为一体 | [`core-context.md`](core-context.md) |
-| Agent 运行时 | 模型输出如何推进一次 Turn？ | Agent 生命周期、模型回合、工具回合、取消与多 Agent 协调 | 调度、上下文、工具和持久化是否有唯一协调者 | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) |
+| Agent 运行时 | 模型输出如何推进一次 Turn？ | Agent 生命周期、模型回合、工具回合、取消与同 Session Agent tree 协调 | 单 Agent 执行、子 Agent tree、跨 Session 工作和持久化是否混为一个协调器 | [`agent-harness-design.md`](agent-harness-design.md)、[`core-multi-agent.md`](core-multi-agent.md)、[`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) |
+| 多 Agent 开发系统 | Team 子 Agent 与多个独立 Session 的代码结果凭什么可以共同发布？ | WorkRun、两种协作拓扑、工作契约、Project 多根 checkpoint、跨 Agent 依赖与冲突、验证证据和集成门禁 | Agent tree 生命周期、跨 Session 等待/移交、工作协调、动作授权、验证和目标更新是否互相越权 | [`multi-agent-development.md`](multi-agent-development.md) |
 | Agent 自定义系统 | Agent 长期遵循什么、如何复用工作方法、使用哪种执行配置？ | Instructions、Skills、Agents、`.zeta` 原生命名空间与外部导入边界 | Prompt/Task/Slash Command 是否被误建模为 artifact，外部格式是否污染原生 authority | [`agent-customizations.md`](agent-customizations.md) |
 
 ### 3.2 能力、决策与执行

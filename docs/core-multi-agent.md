@@ -1,6 +1,6 @@
-# 多 Agent 协作系统
+# Agent 树与子 Agent 协作系统
 
-> 状态：核心纵向切片已实现（2026-08-12）。`DelegationId`、`AgentMessageId`、`AgentJoinId`、`AgentContextSeed`、
+> 状态：同一 Session 内的 Agent 树核心纵向切片已实现（2026-08-12）。`DelegationId`、`AgentMessageId`、`AgentJoinId`、`AgentContextSeed`、
 > `ThreadOrigin::AgentSpawn`、durable delegation/message/result events、Fresh child Thread spawn、
 > exact-once delivery、结构性 tree budget，以及 App Server 的 `spawn_agent`、
 > `send_agent_message`、`wait_agent` 工具已落地。`Selected/ForkedPrefix` 在 spawn 时物化并进入
@@ -9,31 +9,36 @@
 > 冻结 generation、digest、reason 与 capability ceiling；Desktop 只消费 canonical tree 并可精确
 > 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
 > mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结
-> （[阶段 D](zeta-agent-runtime-architecture.md#阶段-d多-agent-契约冻结)）与运行时
-> （[阶段 E](zeta-agent-runtime-architecture.md#阶段-emultiagentcoordinator)）；理由见
+> （[阶段 D](zeta-agent-runtime-architecture.md#阶段-d多-agent-契约冻结已完成)）与运行时
+> （[阶段 E](zeta-agent-runtime-architecture.md#阶段-emultiagentcoordinator核心纵向切片已完成)）；理由见
 > [`zeta-agent-runtime-architecture.md` R4](zeta-agent-runtime-architecture.md#44-r4多-agent-契约冻结先行)。
 >
 > Core 总体边界：[`core.md`](core.md)
 > Context 与 ContextManager：[`core-context.md`](core-context.md)
 > Canonical Session/Thread/Turn contract：[`protocol.md`](protocol.md)
 > 外部 MCP Host 调用 Zeta 与 remote Agent bridge：[`mcp-server.md`](mcp-server.md)
+> 多个 Agent 共同修改代码时的工作契约、范围冲突、验证和集成：[`multi-agent-development.md`](multi-agent-development.md)
 
 ## 快速理解
 
-多 Agent 不是多个任务共享一份可变上下文，而是同一 Session 中多个相互关联、可独立恢复的
-Thread。
+本文的 Agent 树不是多个任务共享一份可变上下文，而是同一 Session 中多个相互关联、可独立恢复的 Thread。执行中的主 Agent 和子 Agent 都由 Thread 表达；子 Agent 由 `ThreadOrigin::AgentSpawn + DelegationId` 区分，Session 只是整棵 Thread 树的只读分组视图。
+
+多个独立 Session 的根 Thread 之间不存在父子关系，不属于本文协调器。它们之间的观察、等待、另开方向、移交和共同验证由 [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) 定义。
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
 | 子 Agent 在系统中是什么？ | 一个拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread | [身份与聚合边界](#2-身份与聚合边界) |
 | 父子 Agent 共享历史或模型状态吗？ | 不共享可变状态；只通过明确的种子、消息和结果传递信息 | [上下文隔离](#11-上下文隔离) |
-| 创建、分叉和生成有什么区别？ | 创建建立新 Thread，分叉固定已有序列点，生成额外记录委托关系 | [创建、分叉与生成](#4-创建create分叉fork-与生成spawn) |
+| 创建、分叉和生成有什么区别？ | 创建建立新 Thread，分叉固定已有序列点，生成额外记录委托关系 | [创建、分叉与生成](#4-创建create分叉fork与生成spawn) |
 | 子 Agent 如何回传结果？ | 结果通过可持久化消息和委托终态回到调用方，不靠进程内引用 | [结果与汇合](#8-结果与汇合) |
 | 取消父 Agent 会发生什么？ | App Server 的 Turn interrupt/Session stop 会向所有 live descendants 传播；child 取消不反向影响 parent/sibling | [取消与终态语义](#9-取消与终态语义) |
+| 多个 Agent 的代码结果如何避免互相破坏？ | 本文只保证 Agent 生命周期和通信；工作范围、跨 Agent 冲突、验证与集成由可靠开发系统单独负责 | [`multi-agent-development.md`](multi-agent-development.md) |
+| Team 模式属于哪一种？ | Team 是同一 Session Agent 树的产品形态，根 Thread 协调多个子 Thread | [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) |
+| 多个独立 Session 如何协作？ | 使用显式跨 Session 工作关系；不继承上下文、取消域、预算或授权 | [`multi-agent-development.md`](multi-agent-development.md#32-两种协作拓扑与-team) |
 
 ## 1. 结论
 
-Zeta 的多 Agent 使用同一 Session 下的独立 Thread：
+Zeta 当前实现的 Agent 树使用同一 Session 下的独立 Thread：
 
 ```text
 Session
@@ -50,6 +55,8 @@ Session
 - model/tool/policy snapshot；
 - cancellation domain；
 - 恢复和 terminal outcome。
+
+产品上一个独立 Agent 任务通常显示为一个 Session，但真正执行它的是该 Session 的根 Thread。另一个 Session 的根 Thread 是独立 Agent，不是当前根 Thread 的 child，也不能通过本文的委托关系假装成 child。
 
 多 Agent 不是多个执行 task 共享一份 `SessionHistory`。父子和 sibling 不共享 mutable context、
 projection、provider conversation ID 或 Tool state。
@@ -112,9 +119,9 @@ Agent spawn 可能由模型 Tool Call、用户操作或系统策略触发，因�
 - delivery receipt；
 - provenance。
 
-## 3. MultiAgentCoordinator
+## 3. Agent 树协调器
 
-`MultiAgentCoordinator` 是 Core 内部显式的多 Agent 协调组件。单 Agent 执行不经过它；
+当前 Rust 类型名为 `MultiAgentCoordinator`，实际职责是同一 Session 的 Agent 树协调。长期公开责任和命名应收窄为 Agent tree，不能为了支持跨 Session 工作而给它增加 Project、WorkRun 或全局参与者分支。单 Agent 执行不经过它；
 ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 已经构成完整的单 Agent 路径。
 
 负责：
@@ -138,6 +145,8 @@ ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 已经构成�
 - Session membership reducer；
 - provider connection 或远端 Agent transport；
 - UI projection。
+- 工作契约、跨 Agent 修改冲突、验证结论或目标分支集成。
+- 跨 Session 观察、等待、另开方向、移交、共同预算或共同取消。
 
 MultiAgentCoordinator 可以协调多个 Thread，但不能建立跨所有 Thread 的大锁。长 I/O、等待
 child 和等待 delivery receipt 都在 Thread writer 之外。
@@ -279,7 +288,9 @@ Spawn 跨 parent Thread、Session 和 child Thread，必须使用可恢复 saga�
 
 ### 7.1 显式消息
 
-Parent、child 和 sibling 只能通过显式 Agent message 交流：
+同一 Session 的 parent、child 和 sibling 只能通过显式 Agent message 交流：
+
+当前 Agent message 明确拒绝跨 Session 路由。跨 Session 协作只能交换工作协调域中有来源的观察、等待条件、决定和封存结果，不能放宽本文消息路由后复用父子语义。
 
 ```rust
 struct AgentMessage {
@@ -387,6 +398,7 @@ parent Agent source
 - parent cancellation 传播到所有 live descendants；
 - child cancellation 不影响 parent 或 sibling；
 - Session shutdown 可以取消所有 roots；
+- 一个 Session 的 stop 或 root cancellation 不传播到协作中的其他独立 Session；
 - cancel signal 是 best effort；
 - child 已执行的 Tool 副作用仍按 UnknownOutcome/reconciliation 处理；
 - parent 取消后迟到的 child result 可以 durable 记录为 late，但不能恢复已 terminal parent Turn；
@@ -598,6 +610,8 @@ projection，不公开 coordinator 内部状态机。
 
 ## 17. 验证
 
+本节验证 Agent 生命周期、上下文隔离、消息投递和恢复，不证明多个 Agent 的代码修改可以共同发布。后者的证明义务和完成门由 [`multi-agent-development.md`](multi-agent-development.md#9-怎么证明这是可靠的开发系统) 拥有。
+
 必须覆盖：
 
 - spawn 的每个 durable boundary crash；
@@ -630,4 +644,7 @@ projection，不公开 coordinator 内部状态机。
 - per-Thread context budget 与 Agent tree resource budget 分离；
 - cancellation 向下传播，不向 parent/sibling 反向传播；
 - 多 Agent 恢复只依赖 durable facts；
+- MultiAgentCoordinator 不拥有工作范围、验证或集成决定；
+- 同 Session Agent 树与跨 Session 独立 Agent 协作保持不同的身份、消息、取消、预算和恢复语义；
+- Team 只组合 Agent 树、工作协调和验证视图，不成为新的运行时事实源；
 - 在出现真实多 Thread Agent identity 需求前不增加 Agent aggregate。

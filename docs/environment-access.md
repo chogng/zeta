@@ -17,6 +17,8 @@
 Workspace 可以继续表示编辑器窗口、多根 folder 集合或 workspace 配置作用域，但不是 Agent 执行、
 Session 身份或目录安全边界。
 
+计划中的 Project 可以长期关联多个 Environment 和 Dir，但这些引用不是 Grant。Session 从 Project 选择明确目录子集后，仍要逐目录取得权限并冻结实际使用的范围；Project 目录变化不会自动扩大活动 Session。Project 与跨 Session 工作语义见 [`domain-model.md`](domain-model.md#11-project多根与共同工作) 和 [`multi-agent-development.md`](multi-agent-development.md)。
+
 ## 1. 执行结构
 
 ```text
@@ -174,5 +176,6 @@ env dir remove <env-id> <dir-id>
 - 每个 Grant 都有明确主体、目录范围、Permission、来源和撤销生命周期；
 - `AuthorizationDecision` 是一次检查结果，不保存为 Grant；
 - 来源配置不能给自身扩权；
+- Project、Project 根目录表和同 Project 关系不能产生 Grant；
 - Workspace 只表示编辑器窗口、多根 folder 集合、配置作用域、Cargo 或外部标准中的同名概念；
 - 后端执行位置使用 Environment，执行范围使用 `cwd`、`dirs` 和 `grants`，不能再借用 Workspace 表达。

@@ -26,11 +26,12 @@
 | 你要做什么 | 看这些（按序） |
 | --- | --- |
 | 新人理解 Zeta 全貌 | [`architecture.md`](architecture.md) → 感兴趣系统的领域文档 |
-| 改 Project / Session / Thread / Workspace / Environment 命名 | [`domain-model.md`](domain-model.md) |
+| 改 Project / Session / Thread / Workspace / Environment 命名或多根关系 | [`domain-model.md`](domain-model.md) → [`environment-access.md`](environment-access.md) → [`multi-agent-development.md`](multi-agent-development.md) |
 | **搭 / 改 agent harness**（提示词、工具、循环） | [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md)（照着做）→ [`agent-tools-spec.md`](agent-tools-spec.md)（照着抄）→ [`agent-harness-design.md`](agent-harness-design.md)（查原因） |
 | 改执行内核（Turn/Thread/恢复/取消） | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) → [`core.md`](core.md) |
 | 做上下文预算 / 压缩 | [`core-context.md`](core-context.md) + [`agent-harness-design.md`](agent-harness-design.md) §9–§11 |
-| 做多 Agent | [`core-multi-agent.md`](core-multi-agent.md)（gate 条件见其状态头） |
+| 做同 Session Agent tree / 子 Agent 运行时 | [`core-multi-agent.md`](core-multi-agent.md)（gate 条件见其状态头） |
+| 做 Team、跨 Session Agent 或可靠多 Agent 代码开发 | [`multi-agent-development.md`](multi-agent-development.md) → [`domain-model.md`](domain-model.md) → [`core-multi-agent.md`](core-multi-agent.md) → [`chat-session-inspector.md`](chat-session-inspector.md) → [`permissions.md`](permissions.md) |
 | 开发代码知识、Workspace Symbol 或跨语言导航 | [`code-intelligence.md`](code-intelligence.md) → [`syntax-analysis.md`](syntax-analysis.md) → [`lsp.md`](lsp.md) → [`codebase.md`](codebase.md) |
 | 开发 Codebase / RAG | [`code-intelligence.md`](code-intelligence.md) → [`codebase.md`](codebase.md) → [`zeta-codebase` README](../zeta-rs/codebase/README.md) → [`zeta-cloud-codebase` README](../zeta-rs/cloud-codebase/README.md) |
 | 设计 Instructions / Skills / Agents 或外部导入 | [`agent-customizations.md`](agent-customizations.md) → 对应 authority 文档 |
@@ -69,7 +70,8 @@
 | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E |
 | [`core.md`](core.md) | 设计 | zeta-core 的 ownership、组件、端口、提交顺序 |
 | [`core-context.md`](core-context.md) | 设计 | ContextPlan / Manager / checkpoint / compaction 机制 |
-| [`core-multi-agent.md`](core-multi-agent.md) | 设计 | delegation / Fresh spawn / delivery / 隔离（部分实现，缺口见状态头） |
+| [`core-multi-agent.md`](core-multi-agent.md) | 设计 | 同 Session Agent tree 的 delegation / Fresh spawn / delivery / 隔离（部分实现，缺口见状态头） |
+| [`multi-agent-development.md`](multi-agent-development.md) | 设计 | Team、跨 Session 协作、Project 多根、工作契约、冲突、验证证据与集成门禁（计划设计） |
 | [`agent-customizations.md`](agent-customizations.md) | 设计 | Instructions / Skills / Agents、`.zeta` 与外部导入边界 |
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
