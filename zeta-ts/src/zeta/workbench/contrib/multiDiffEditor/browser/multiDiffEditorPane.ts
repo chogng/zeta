@@ -5,7 +5,7 @@ import { type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { assertDefined } from '../../../../base/common/types.js';
-import { MultiDiffEditorWidget, type MultiDiffEditorItem, type MultiDiffEditorLocation } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
+import { EditorMultiDiffWidget, type MultiDiffEditorItem, type MultiDiffEditorLocation } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type IDiffComputationService } from '../../../../editor/common/diff/diffComputationService.js';
 import { type ITextModelResourceService, type TextModelReference } from '../../../../editor/common/services/textModelResourceService.js';
@@ -148,7 +148,7 @@ export class MultiDiffEditorPane extends Disposable implements IEditorPane {
 }
 
 class MultiDiffEditorPaneSession extends Disposable {
-	public readonly editor: MultiDiffEditorWidget;
+	public readonly editor: EditorMultiDiffWidget;
 
 	constructor(container: HTMLElement, resolved: readonly ResolvedMultiDiffItem[], label: string, options: MultiDiffEditorPaneOptions) {
 		super();
@@ -175,7 +175,7 @@ class MultiDiffEditorPaneSession extends Disposable {
 			}));
 			const inputsById = new Map(resolved.map((item) => [multiDiffEditorItemKey(item.input), item.input]));
 			const fileActions = options.fileActions;
-			this.editor = this._register(new MultiDiffEditorWidget({
+			this.editor = this._register(new EditorMultiDiffWidget({
 				container,
 				items,
 				lineHeight: options.lineHeight,

@@ -1,7 +1,7 @@
 import './media/quickDiff.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import { EditorDiffWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorExtensions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
@@ -153,7 +153,7 @@ class QuickDiffPeekView extends Disposable {
 		this._register(addDisposableListener(previous, 'click', showPrevious));
 		this._register(addDisposableListener(next, 'click', showNext));
 		this._register(addDisposableListener(closeButton, 'click', close));
-		const diffWidget = this._register(new DiffEditorWidget({
+		const diffWidget = this._register(new EditorDiffWidget({
 			container: diffContainer,
 			model: change.comparison.model,
 			lineHeight: context.options.lineHeight,

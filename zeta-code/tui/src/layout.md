@@ -13,20 +13,20 @@ Plan                               0..1 行
 Queue                              0..3 行
 Query                              0..1 行，位于 ChatInput 上方
 ChatInput 或 Approval              同一输入区域二选一
-StatusLine 或 KeyHints             1..2 行或固定 1 行
+StatusLine 及补充 KeyHints       1..3 行；操作 KeyHints 固定 1 行
 SubagentPane                       0..4 行
 ```
 
 Query 使用自己的选择和文本编辑状态，普通输入框保持可见且草稿不变。Approval 替换普通输入区域，结束后原草稿原样恢复。Goal、Plan、Queue 不进入上下方向的焦点链。
 
-StatusLine 与 KeyHints 直接互斥。正文单元进入选择态、SubagentPane 或其他需要明确操作说明的表面获得焦点时，显示一行 KeyHints。
+StatusLine 持续显示系统状态。当空输入下存在可用的根页面导航时，补充 KeyHints 与 StatusLine 同行右对齐，宽度不足时独占一行。正文单元进入选择态、SubagentPane 或其他需要明确操作说明的表面获得焦点时，操作 KeyHints 暂时接管该区域。
 
 ## Session Manager
 
 ```text
 Manager body/list
 ChatInput
-StatusLine 或 KeyHints
+StatusLine 及补充 KeyHints，或操作 KeyHints
 ```
 
 Manager 是横向根页面的最左端：`Manager ← Session 1 ← Session 2 → Session 3`。空输入时 Left/Right 切换根页面；非空时仍由编辑器移动光标。

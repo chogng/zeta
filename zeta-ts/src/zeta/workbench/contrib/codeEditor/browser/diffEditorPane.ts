@@ -10,7 +10,7 @@ import { DIFF_EDITOR_ID, isDiffEditorInput } from "./diffEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
 import { type IDiffComputationService } from "../../../../editor/common/diff/diffComputationService.js";
-import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
+import { EditorDiffWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
 import { type TextModelReference, type ITextModelResourceService } from "../../../../editor/common/services/textModelResourceService.js";
 import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -118,7 +118,7 @@ export class DiffEditorPane extends Disposable implements IEditorPane {
 }
 
 class DiffEditorPaneSession extends Disposable {
-	readonly editor: DiffEditorWidget;
+	readonly editor: EditorDiffWidget;
 
 	constructor(container: HTMLElement, original: TextModelReference, modified: TextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined, options: DiffEditorPaneOptions) {
 		super();
@@ -134,7 +134,7 @@ class DiffEditorPaneSession extends Disposable {
 			modified: modified.model,
 			computationService,
 		}));
-		this.editor = this._register(new DiffEditorWidget({
+		this.editor = this._register(new EditorDiffWidget({
 			container,
 			model,
 			lineHeight: options.lineHeight,

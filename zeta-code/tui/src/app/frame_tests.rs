@@ -61,6 +61,62 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 }
 
 #[test]
+fn empty_session_input_shows_agents_navigation_with_the_status_line() {
+    let mut app = App::new();
+    enter_session(
+        &mut app,
+        "current",
+        vec![manager_session("current", SessionManagerStatus::Idle, None)],
+    );
+
+    let rendered = render(&app, 80, 20);
+    let status_line = rendered.lines().last().unwrap();
+
+    assert!(status_line.starts_with("  ⏸ ask permissions on"));
+    assert!(status_line.trim_end().ends_with("← agents"));
+
+    app.insert_text("draft");
+    let rendered = render(&app, 80, 20);
+    let status_line = rendered.lines().last().unwrap();
+
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    assert!(!status_line.contains("← agents"));
+}
+
+#[test]
+fn narrow_session_footer_keeps_status_and_agents_hint_on_separate_rows() {
+    let mut app = App::new();
+    enter_session(
+        &mut app,
+        "current",
+        vec![manager_session("current", SessionManagerStatus::Idle, None)],
+    );
+
+    let rendered = render(&app, 24, 20);
+    let rows = rendered.lines().collect::<Vec<_>>();
+
+    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
+    assert!(rows[19].trim_end().ends_with("← agents"));
+}
+
+#[test]
+fn agents_navigation_hint_describes_the_left_key_that_opens_the_manager() {
+    let mut app = App::new();
+    enter_session(
+        &mut app,
+        "current",
+        vec![manager_session("current", SessionManagerStatus::Idle, None)],
+    );
+
+    assert!(render(&app, 80, 20).contains("← agents"));
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
+            .is_none()
+    );
+    assert!(app.session_manager_view().is_some());
+}
+
+#[test]
 fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
     let mut app = App::new();
     app.update(AppEvent::SessionCatalogReceived(vec![
@@ -693,6 +749,14 @@ fn manager_session(
         },
         threads: Vec::new(),
     }
+}
+
+fn enter_session(app: &mut App, id: &str, catalog: Vec<Session>) {
+    app.update(AppEvent::ThreadContextChanged {
+        session_id: SessionId::new(id).unwrap(),
+        thread_id: ThreadId::new(id).unwrap(),
+    });
+    app.update(AppEvent::SessionCatalogReceived(catalog));
 }
 
 fn current_unix_millis() -> u64 {

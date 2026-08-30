@@ -7,7 +7,9 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zeta_app_server::AppServer;
 use zeta_app_server::SlashCommandCatalog;
-use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
+use zeta_app_server_protocol::protocol::common::ClientCapabilities;
+use zeta_app_server_protocol::protocol::common::ClientInfo;
+use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
 use zeta_app_server_protocol::protocol::environment::PermissionDto;
 use zeta_app_server_protocol::protocol::environment::SessionDirAddParams;
 use zeta_app_server_protocol::protocol::environment::SessionDirListParams;
@@ -590,6 +592,28 @@ fn embedded_startup_propagates_the_host_slash_command_catalog() {
         client.initialization().unwrap().slash_commands,
         [definition]
     );
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn embedded_startup_accepts_product_host_capabilities() {
+    let state_root = unique_directory("product-host-capabilities");
+    let client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "product-host-client".into(),
+                version: "1".into(),
+            },
+        )
+        .with_capabilities(ClientCapabilities {
+            dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
+            ..ClientCapabilities::default()
+        }),
+    )
+    .unwrap();
+
     drop(client);
     let _ = fs::remove_dir_all(state_root);
 }

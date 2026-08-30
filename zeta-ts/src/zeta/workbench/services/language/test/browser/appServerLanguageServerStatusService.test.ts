@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
-import { DialogService } from "../../../dialogs/common/dialog.js";
+import { DialogService } from "../../../dialogs/common/dialogService.js";
 import { OutputService } from "../../../output/browser/outputService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { AppServerLanguageServerStatusService } from "../../browser/appServerLanguageServerStatusService.js";

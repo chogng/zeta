@@ -1203,6 +1203,16 @@ impl App {
             && self.sessions.manager().focused()
     }
 
+    pub(crate) fn root_navigation_hint(&self) -> Option<&'static str> {
+        if !self.chat_input_focused() || !self.input().is_empty() {
+            return None;
+        }
+        match self.sessions.previous_root()? {
+            RootTarget::Manager => Some("← agents"),
+            RootTarget::Session(_) => Some("← previous session"),
+        }
+    }
+
     pub(crate) fn subagent_pane_view(&self) -> Option<SubagentPaneView<'_>> {
         matches!(self.sessions.root(), Some(RootTarget::Session(_)))
             .then(|| self.subagent_pane.view())

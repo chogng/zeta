@@ -173,6 +173,15 @@ impl InProcessTransport {
             notifications: Vec::new(),
         }
     }
+
+    fn from_shared_product_host(server: Arc<AppServer>) -> Self {
+        let connection = server.product_host_connection();
+        Self {
+            server,
+            connection,
+            notifications: Vec::new(),
+        }
+    }
 }
 
 /// Shared embedded App Server composition that can open multiple isolated logical connections.
@@ -188,6 +197,14 @@ impl InProcessAppServer {
     pub fn connect(&self) -> Result<AppServerClient<InProcessTransport>, ClientError> {
         initialize_client(
             InProcessTransport::from_shared_server(self.server.clone()),
+            self.client_info.clone(),
+            self.capabilities.clone(),
+        )
+    }
+
+    fn connect_product_host(&self) -> Result<AppServerClient<InProcessTransport>, ClientError> {
+        initialize_client(
+            InProcessTransport::from_shared_product_host(self.server.clone()),
             self.client_info.clone(),
             self.capabilities.clone(),
         )
@@ -213,7 +230,7 @@ impl JsonRpcTransport for InProcessTransport {
 pub fn start_in_process_client(
     options: InProcessClientOptions,
 ) -> Result<AppServerClient<InProcessTransport>, ClientError> {
-    open_in_process_app_server(options)?.connect()
+    open_in_process_app_server(options)?.connect_product_host()
 }
 
 /// Opens one embedded App Server composition that may serve multiple client connections.

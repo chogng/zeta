@@ -1730,8 +1730,12 @@ function sessionDto(value: ISession): SessionDto {
 		sessionId: value.sessionId,
 		title: value.title,
 		status: value.status,
+		manager: { status: "idle", statusChangedAtUnixMs: 0 },
 		threads: value.chats.map(chat => ({
 			threadId: chat.threadId,
+			title: `Thread ${chat.threadId}`,
+			createdAtUnixMs: 0,
+			completedTurnDurationMs: 0,
 			status: chat.status,
 			...(chat.origin.type === "root" ? {} : { parentThreadId: chat.origin.parentThreadId }),
 			...(chat.origin.type === "fork" || chat.origin.type === "rewind" ? { forkedFromId: chat.origin.parentThreadId } : {}),

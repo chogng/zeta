@@ -104,10 +104,17 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
     assert!(completed);
 
     session.shutdown().unwrap();
-    assert_eq!(
-        events.recv_timeout(Duration::from_secs(1)).unwrap(),
-        AppServerEvent::ConnectionClosed(ConnectionCloseReason::Shutdown)
-    );
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let close_reason = loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        assert!(!remaining.is_zero(), "shutdown notification timed out");
+        if let AppServerEvent::ConnectionClosed(reason) =
+            events.recv_timeout(remaining).expect("event arrives")
+        {
+            break reason;
+        }
+    };
+    assert_eq!(close_reason, ConnectionCloseReason::Shutdown);
 }
 
 #[test]

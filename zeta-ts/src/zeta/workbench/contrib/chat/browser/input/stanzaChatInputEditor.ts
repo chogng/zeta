@@ -8,7 +8,7 @@ import { CursorsController } from "../../../../../editor/common/cursor/cursor.js
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/languageCompletionSessionController.js";
-import { SuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
+import { EditorSuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
 import "../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
 import { Selection } from "../../../../../editor/common/core/selection.js";
 import { SelectionSet } from "../../../../../editor/common/cursor/selectionSet.js";
@@ -62,7 +62,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 				lineWrapping: EditorLineWrapping.On,
 			},
 		}));
-		this._register(new SuggestController(
+		this._register(new EditorSuggestController(
 			this.editor.view,
 			this.selections,
 			completions,

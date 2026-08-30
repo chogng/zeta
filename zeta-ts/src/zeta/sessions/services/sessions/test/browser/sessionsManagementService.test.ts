@@ -44,7 +44,7 @@ test("Thread updates refresh the owning Session while Thread sequence stays on t
 			sessionId: "session-1",
 			threadId: "thread-1",
 			durableSequence: 3,
-			update: { type: "committed", event: { type: "threadArchived", threadId: "thread-1" } },
+			update: { type: "committed", event: { type: "threadArchived", threadId: "thread-1", reason: "completed" } },
 		},
 	});
 	await waitFor(() => fake.subscribeCount === subscriptions + 1);
@@ -86,7 +86,8 @@ function session(sessionId: string, threadId: string): SessionDto {
 		sessionId,
 		title: `Session ${sessionId}`,
 		status: "active",
-		threads: [{ threadId, status: "active" }],
+		manager: { status: "idle", statusChangedAtUnixMs: 0 },
+		threads: [{ threadId, title: `Thread ${threadId}`, createdAtUnixMs: 0, completedTurnDurationMs: 0, status: "active" }],
 	};
 }
 
