@@ -10589,6 +10589,9 @@
         },
         "toolSearch": {
           "$ref": "#/$defs/ToolSearchConfigDto"
+        },
+        "tui": {
+          "$ref": "#/$defs/TuiConfigDto"
         }
       },
       "required": [
@@ -10606,7 +10609,8 @@
         "languageServers",
         "toolSearch",
         "codebase",
-        "execPolicyRules"
+        "execPolicyRules",
+        "tui"
       ],
       "type": "object"
     },
@@ -10669,6 +10673,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "tuiTheme": {
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -27718,6 +27728,18 @@
           "type": "object"
         }
       ]
+    },
+    "TuiConfigDto": {
+      "description": "Configuration owned by terminal products.",
+      "properties": {
+        "theme": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "theme"
+      ],
+      "type": "object"
     },
     "Turn": {
       "description": "Canonical readable state for one user-intent-driven Agent execution.",

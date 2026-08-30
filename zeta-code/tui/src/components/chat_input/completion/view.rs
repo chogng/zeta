@@ -1,6 +1,6 @@
 mod mention {
-    use super::super::MentionMatchKind;
     use super::super::MentionPopupView;
+    use super::super::mention::MentionMatchKind;
     use crate::render::RenderContext;
     use crate::render::bottom_anchored_area;
     use crate::render::horizontal_margin;
@@ -24,6 +24,7 @@ mod mention {
         frame: &mut Frame<'_>,
         area: Rect,
         popup: Option<MentionPopupView<'_>>,
+        hovered: Option<usize>,
         context: RenderContext<'_>,
     ) {
         let Some(popup) = popup else {
@@ -49,7 +50,7 @@ mod mention {
                 .skip(layout.first_path)
                 .take(layout.visible_rows)
                 .map(|(index, mention_match)| {
-                    let base_style = if index == popup.selected {
+                    let base_style = if Some(index) == hovered.or(Some(popup.selected)) {
                         Style::default()
                             .fg(context.highlight())
                             .add_modifier(Modifier::BOLD)
@@ -128,7 +129,7 @@ mod mention {
 }
 
 mod skill {
-    use super::super::SkillSelectorView;
+    use super::super::SkillCompletionView;
     use crate::render::RenderContext;
     use crate::render::bottom_anchored_area;
     use crate::render::horizontal_margin;
@@ -146,7 +147,8 @@ mod skill {
     pub(crate) fn draw(
         frame: &mut Frame<'_>,
         area: Rect,
-        popup: Option<SkillSelectorView<'_>>,
+        popup: Option<SkillCompletionView<'_>>,
+        hovered: Option<usize>,
         context: RenderContext<'_>,
     ) {
         let Some(popup) = popup else {
@@ -168,7 +170,7 @@ mod skill {
                 .skip(first_item)
                 .take(visible_rows)
                 .map(|(index, item)| {
-                    let style = if index == popup.selected {
+                    let style = if Some(index) == hovered.or(Some(popup.selected)) {
                         Style::default()
                             .fg(context.highlight())
                             .add_modifier(Modifier::BOLD)
@@ -191,7 +193,7 @@ mod skill {
 
     pub(crate) fn skill_index_at(
         area: Rect,
-        popup: Option<SkillSelectorView<'_>>,
+        popup: Option<SkillCompletionView<'_>>,
         column: u16,
         row: u16,
     ) -> Option<usize> {
@@ -211,7 +213,7 @@ mod skill {
         (index < popup.items.len()).then_some(index)
     }
 
-    fn popup_layout(area: Rect, popup: SkillSelectorView<'_>) -> Option<(Rect, usize, usize)> {
+    fn popup_layout(area: Rect, popup: SkillCompletionView<'_>) -> Option<(Rect, usize, usize)> {
         let max_rows = area.height.saturating_sub(2).min(MAX_VISIBLE_ROWS as u16) as usize;
         if max_rows == 0 {
             return None;
@@ -256,6 +258,7 @@ mod slash {
         frame: &mut Frame<'_>,
         area: Rect,
         popup: Option<SlashCommandsView<'_>>,
+        hovered: Option<usize>,
         context: RenderContext<'_>,
     ) {
         let Some(popup) = popup else {
@@ -277,7 +280,7 @@ mod slash {
                 .skip(layout.first_command)
                 .take(layout.visible_rows)
                 .map(|(index, command)| {
-                    let selected = index == popup.selected;
+                    let selected = Some(index) == hovered.or(Some(popup.selected));
                     let command_style = if selected {
                         Style::default()
                             .fg(context.highlight())
@@ -338,7 +341,7 @@ mod slash {
     }
 }
 
-use super::SuggestView;
+use super::CompletionView;
 use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -346,29 +349,32 @@ use ratatui::layout::Rect;
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
-    suggest: Option<SuggestView<'_>>,
+    completion: Option<CompletionView<'_>>,
+    hovered: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    match suggest {
-        Some(SuggestView::Slash(view)) => slash::draw(frame, area, Some(view), context),
-        Some(SuggestView::Mention(view)) => mention::draw(frame, area, Some(view), context),
-        Some(SuggestView::Skill(view)) => skill::draw(frame, area, Some(view), context),
+    match completion {
+        Some(CompletionView::Slash(view)) => slash::draw(frame, area, Some(view), hovered, context),
+        Some(CompletionView::Mention(view)) => {
+            mention::draw(frame, area, Some(view), hovered, context)
+        }
+        Some(CompletionView::Skill(view)) => skill::draw(frame, area, Some(view), hovered, context),
         None => {}
     }
 }
 
 pub(crate) fn index_at(
     area: Rect,
-    suggest: Option<SuggestView<'_>>,
+    completion: Option<CompletionView<'_>>,
     column: u16,
     row: u16,
 ) -> Option<usize> {
-    match suggest {
-        Some(SuggestView::Slash(view)) => slash::command_index_at(area, Some(view), column, row),
-        Some(SuggestView::Mention(view)) => {
+    match completion {
+        Some(CompletionView::Slash(view)) => slash::command_index_at(area, Some(view), column, row),
+        Some(CompletionView::Mention(view)) => {
             mention::mention_index_at(area, Some(view), column, row)
         }
-        Some(SuggestView::Skill(view)) => skill::skill_index_at(area, Some(view), column, row),
+        Some(CompletionView::Skill(view)) => skill::skill_index_at(area, Some(view), column, row),
         None => None,
     }
 }

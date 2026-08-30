@@ -141,11 +141,7 @@ profile placement 和 RPC state。跨层隐私与云端边界见 [`codebase.md`]
 [`codebase/README.md`](../zeta-rs/codebase/README.md) 与
 [`cloud-codebase/README.md`](../zeta-rs/cloud-codebase/README.md)。
 
-`zeta-theme` 当前嵌入 Desktop registry 生成的语言中立 manifest，严格解析同一用户主题 JSON，
-解析 alias/transform/default graph，并以 profile `configuration.json` 的 surface 选择和
-`themes/*.json` 产生 Graphical/Terminal snapshot。它不依赖 renderer、不拥有组件 geometry；
-`app` 消费完整相关 palette，TUI 只消费明确子集；当前 API、
-失败语义和 conformance contract 见 [`theme/README.md`](../zeta-rs/theme/README.md)。
+`zeta-theme` 当前嵌入 Desktop registry 生成的语言中立 manifest，严格解析图形界面用户主题 JSON、别名、变换和默认值依赖，并以 profile `configuration.json` 的 `workbench.colorTheme` 与 `themes/*.json` 产生 Rust 桌面端快照。它不依赖 renderer、不拥有组件 geometry；Zeta Code TUI 的主题由 `zeta-tui` 独立拥有，不消费该 manifest。当前 API、失败语义和 conformance contract 见 [`theme/README.md`](../zeta-rs/theme/README.md)。
 
 `zeta-editor` 当前拥有 `app` 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
 syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 source/visual row 映射、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合

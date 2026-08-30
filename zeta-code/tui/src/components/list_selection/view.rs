@@ -26,10 +26,21 @@ use unicode_width::UnicodeWidthStr;
 const ITEM_MARKER_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
+#[cfg(test)]
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     view: &ListSelectionState,
+    context: RenderContext<'_>,
+) {
+    draw_with_hover(frame, area, view, None, context);
+}
+
+pub(crate) fn draw_with_hover(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: &ListSelectionState,
+    hovered: Option<usize>,
     context: RenderContext<'_>,
 ) {
     let presentation_highlight = view
@@ -106,7 +117,7 @@ pub(crate) fn draw(
                 frame,
                 row_area,
                 item,
-                view.selected_visible_index() == Some(index),
+                hovered.or(view.selected_visible_index()) == Some(index),
                 column_layout,
                 context,
             );

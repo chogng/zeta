@@ -1,13 +1,8 @@
 mod state;
 mod view;
 
-#[cfg(test)]
-#[path = "chat_composer_input_tests.rs"]
-mod input_tests;
-
 pub(crate) use state::ChatComposer;
 pub(crate) use state::ChatComposerOutcome;
-pub(crate) use state::ChatComposerOverlayView;
 pub(crate) use state::ChatComposerPaneKind;
 pub(crate) use state::ChatComposerPaneView;
 pub(crate) use state::ChatComposerView;

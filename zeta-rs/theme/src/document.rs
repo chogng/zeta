@@ -44,7 +44,7 @@ impl ColorScheme {
     }
 }
 
-/// Strict, versioned user color-theme document shared by every presentation surface.
+/// Strict, versioned user color-theme document shared by graphical hosts.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ThemeDocument {

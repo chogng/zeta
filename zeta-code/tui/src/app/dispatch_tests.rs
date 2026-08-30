@@ -5,7 +5,6 @@ use crate::components::chat_history::MessageRole;
 use crate::components::chat_input::{
     ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
-use crate::features::theme::ThemeResource;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::ops::Deref;
@@ -145,7 +144,6 @@ fn archive_persists_status_requests_exit_and_does_not_call_the_model() {
         &mut client,
         invocation(TuiSlashCommandAction::Archive, ""),
         Vec::new(),
-        &ThemeResource::new(None),
     )
     .unwrap();
     assert!(output.exit_requested);
@@ -345,6 +343,17 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
 }
 
 #[test]
+fn theme_selection_uses_the_shared_config_authority() {
+    let (mut client, state_root) = client();
+
+    crate::features::config::set_tui_theme(&mut client, "zeta-code-light".into()).unwrap();
+
+    assert_eq!(client.read_config().unwrap().tui.theme, "zeta-code-light");
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
 fn resume_and_model_without_arguments_open_actionable_panes() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "current".into()).unwrap();
@@ -444,7 +453,6 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
             &additional.display().to_string(),
         ),
         vec![PermissionDto::ReadFiles, PermissionDto::ExecuteCommands],
-        &ThemeResource::new(None),
     )
     .unwrap();
     conversation = output.conversation;

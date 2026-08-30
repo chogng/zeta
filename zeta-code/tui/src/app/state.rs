@@ -2,6 +2,7 @@ use super::command::AppCommand;
 use super::escape::RootEscapeOutcome;
 use super::escape::RootEscapeSequence;
 use super::event::AppEvent;
+use super::frame::InputPointerTarget;
 use super::status_notice::StatusNotice;
 use crate::components::chat_composer::ChatComposer;
 use crate::components::chat_composer::ChatComposerOutcome;
@@ -11,6 +12,7 @@ use crate::components::chat_composer::ChatComposerView;
 use crate::components::chat_history::ChatHistoryRenderCache;
 use crate::components::chat_history::ChatHistoryScroll;
 use crate::components::chat_history::Message;
+use crate::components::chat_input::ChatInputCatalog;
 use crate::components::chat_input::ChatInputItem;
 use crate::components::detail_list::DetailList;
 use crate::components::detail_list::DetailListRow;
@@ -21,8 +23,6 @@ use crate::components::list_selection::ListSelectionState;
 use crate::components::pane::PaneId;
 use crate::components::pane::PaneSpec;
 use crate::components::quick_view::QuickViewState;
-use crate::components::suggest::MentionPluginItem;
-use crate::components::suggest::SkillSelectorItem;
 use crate::components::welcome::WelcomeModel;
 use crate::features::approval::Approval;
 use crate::features::approval::ApprovalOutcome;
@@ -79,10 +79,11 @@ use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
 use crate::mouse::MouseMode;
-use crate::mouse::ScreenSelection;
-use crate::mouse::ScreenSelectionOutcome;
+use crate::mouse::PointerInteraction;
 use crate::render::RenderContext;
 use crate::render::RenderTheme;
+use crate::screen_selection::ScreenSelection;
+use crate::screen_selection::ScreenSelectionOutcome;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -124,6 +125,9 @@ fn empty_input_navigation(root: Option<&RootTarget>, key: KeyCode) -> Option<Emp
     match key {
         KeyCode::Left => Some(EmptyInputNavigation::PreviousRoot),
         KeyCode::Right => Some(EmptyInputNavigation::NextRoot),
+        KeyCode::Esc if matches!(root, Some(RootTarget::Manager)) => {
+            Some(EmptyInputNavigation::NextRoot)
+        }
         KeyCode::Up if matches!(root, Some(RootTarget::Manager)) => {
             Some(EmptyInputNavigation::FocusManager)
         }
@@ -153,6 +157,7 @@ pub(crate) struct App {
     status_line: StatusLineModel,
     status_notice: StatusNotice,
     terminal_settings: TerminalSettings,
+    pointer: PointerInteraction<InputPointerTarget>,
     screen_selection: ScreenSelection,
     approval_mode_status: ApprovalModeStatus,
     render_theme: RenderTheme,
@@ -201,6 +206,7 @@ impl App {
             status_line: StatusLineModel::new(),
             status_notice: StatusNotice::default(),
             terminal_settings: TerminalSettings::default(),
+            pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
@@ -210,22 +216,31 @@ impl App {
 
     #[cfg(test)]
     pub(crate) fn for_dir(dir_root: &Path) -> Self {
-        Self::for_dir_with_slash_commands(
-            dir_root,
-            crate::components::chat_input::default_slash_command_catalog(),
-        )
+        Self::for_dir_with_input_catalog(dir_root, ChatInputCatalog::default())
     }
 
+    #[cfg(test)]
     pub(crate) fn for_dir_with_slash_commands(
         dir_root: &Path,
         slash_commands: SlashCommandCatalog,
     ) -> Self {
+        Self::for_dir_with_input_catalog(
+            dir_root,
+            ChatInputCatalog::with_slash_commands(slash_commands),
+        )
+    }
+
+    pub(crate) fn for_dir_with_input_catalog(
+        dir_root: &Path,
+        input_catalog: ChatInputCatalog,
+    ) -> Self {
         Self {
-            chat_composer: ChatComposer::with_slash_commands(slash_commands),
+            chat_composer: ChatComposer::new(),
             app_keymap: AppKeymap::default(),
             thread: ThreadFeatureState::default(),
-            thread_presentations: ThreadPresentationStore::new(
+            thread_presentations: ThreadPresentationStore::with_input_catalog(
                 zeta_protocol::ThreadId::new("tui-local").expect("the local Thread ID is valid"),
+                input_catalog,
             ),
             sessions: SessionsState::default(),
             subagent_pane: SubagentPaneState::default(),
@@ -240,6 +255,7 @@ impl App {
             status_line: StatusLineModel::new(),
             status_notice: StatusNotice::default(),
             terminal_settings: TerminalSettings::default(),
+            pointer: PointerInteraction::default(),
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
             render_theme: RenderTheme::fallback(),
@@ -261,6 +277,9 @@ impl App {
     }
 
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        if key.kind == KeyEventKind::Press {
+            self.pointer.clear_hover();
+        }
         if matches!(self.top_pane_actions(), Some(PaneActions::KeymapCapture(_))) {
             let input = &mut self.thread_presentations.active_mut().input;
             let outcome = self.chat_composer.handle_key(input, key);
@@ -289,7 +308,7 @@ impl App {
             return command;
         }
         let temporary_interaction_active =
-            self.chat_composer.pane_active() || self.suggest().is_some();
+            self.chat_composer.pane_active() || self.completion().is_some();
         let is_root_escape_press = key.kind == KeyEventKind::Press
             && key.code == KeyCode::Esc
             && key.modifiers.is_empty()
@@ -696,28 +715,14 @@ impl App {
         }
     }
 
-    pub(crate) fn select_input_overlay_choice(&mut self, index: usize) -> bool {
-        self.accepts_input()
-            && self
-                .chat_composer
-                .select_overlay_choice(&self.thread_presentations.active().input, index)
-    }
-
-    pub(crate) fn activate_input_overlay_choice(&mut self, index: usize) -> Option<AppCommand> {
+    pub(crate) fn activate_input_completion(&mut self, index: usize) -> Option<AppCommand> {
         if !self.accepts_input() {
             return None;
         }
         let outcome = self
             .chat_composer
-            .activate_overlay_choice(&mut self.thread_presentations.active_mut().input, index)?;
+            .activate_completion(&mut self.thread_presentations.active_mut().input, index)?;
         self.handle_chat_composer_outcome(outcome)
-    }
-
-    pub(crate) fn select_thread_request_choice(&mut self, index: usize) -> bool {
-        if let Some(approval) = self.approval.as_mut() {
-            return approval.select(index);
-        }
-        self.query.as_mut().is_some_and(|query| query.select(index))
     }
 
     pub(crate) fn activate_thread_request_choice(&mut self, index: usize) -> Option<AppCommand> {
@@ -774,18 +779,8 @@ impl App {
         true
     }
 
-    pub(crate) fn replace_chat_input_catalog(
-        &mut self,
-        slash_commands: SlashCommandCatalog,
-        skills: Vec<SkillSelectorItem>,
-        plugins: Vec<MentionPluginItem>,
-    ) {
-        self.chat_composer.replace_chat_input_catalog(
-            &mut self.thread_presentations.active_mut().input,
-            slash_commands,
-            skills,
-            plugins,
-        );
+    pub(crate) fn replace_chat_input_catalog(&mut self, catalog: ChatInputCatalog) {
+        self.thread_presentations.replace_input_catalog(catalog);
     }
 
     #[cfg(test)]
@@ -797,6 +792,7 @@ impl App {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
+        self.pointer.clear_hover();
         if matches!(self.sessions.root(), Some(RootTarget::Session(_))) {
             if self.approval.is_some() {
                 return;
@@ -846,9 +842,11 @@ impl App {
             .view(&self.thread_presentations.active().input)
     }
 
-    pub(crate) fn suggest(&self) -> Option<SuggestView<'_>> {
-        self.chat_composer
-            .suggest(&self.thread_presentations.active().input)
+    pub(crate) fn completion(&self) -> Option<CompletionView<'_>> {
+        if self.chat_composer.pane_active() {
+            return None;
+        }
+        self.thread_presentations.active().input.completion()
     }
 
     #[cfg(test)]
@@ -864,10 +862,7 @@ impl App {
             && !self.subagent_pane.focused()
             && self.thread_presentations.active().selected_cell.is_none()
             && !self.chat_composer.pane_active()
-            && self
-                .chat_composer
-                .overlay(&self.thread_presentations.active().input)
-                .is_none()
+            && self.completion().is_none()
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
@@ -876,6 +871,14 @@ impl App {
         } else {
             MouseMode::TerminalSelection
         }
+    }
+
+    pub(crate) fn update_pointer_hover(&mut self, target: Option<InputPointerTarget>) {
+        self.pointer.update_hover(target);
+    }
+
+    pub(crate) fn hovered_pointer_target(&self) -> Option<&InputPointerTarget> {
+        self.pointer.hovered()
     }
 
     pub(crate) const fn screen_selection(&self) -> &ScreenSelection {
@@ -893,8 +896,16 @@ impl App {
     pub(crate) fn finish_screen_selection(
         &mut self,
         position: Position,
+        now: Instant,
     ) -> Option<ScreenSelectionOutcome> {
-        self.screen_selection.finish(position)
+        self.screen_selection.finish(position, now)
+    }
+
+    pub(crate) fn select_screen_range(
+        &mut self,
+        range: crate::screen_selection::ScreenSelectionRange,
+    ) {
+        self.screen_selection.select(range);
     }
 
     fn show_list_selection_pane(&mut self, model: PaneSpec<ListSelectionModel>) {
@@ -1126,10 +1137,6 @@ impl App {
         self.chat_composer.list_selection()
     }
 
-    pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
-        self.chat_composer.select_visible_item(index)
-    }
-
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
         self.chat_composer.select_tab(index)
     }
@@ -1140,7 +1147,10 @@ impl App {
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {
-        self.chat_composer.mention_query()
+        if self.chat_composer.pane_active() {
+            return None;
+        }
+        self.thread_presentations.active().input.mention_query()
     }
 
     pub(crate) fn messages(&self) -> &[Message] {
@@ -1208,20 +1218,16 @@ impl App {
         self.sessions.manager().selection_hint()
     }
 
-    pub(crate) fn select_session_manager_pointer_target(
-        &mut self,
-        target: SessionManagerPointerTarget,
-    ) {
-        self.sessions.manager_mut().select_pointer_target(target);
-    }
-
     pub(crate) fn activate_session_manager_pointer_target(
         &mut self,
         target: SessionManagerPointerTarget,
     ) {
         let catalog = self.sessions.catalog().to_vec();
-        self.sessions.manager_mut().select_pointer_target(target);
-        if let Some(preview) = self.sessions.manager_mut().toggle_or_preview(&catalog) {
+        if let Some(preview) = self
+            .sessions
+            .manager_mut()
+            .activate_pointer_target(target, &catalog)
+        {
             self.quick_view = Some(QuickViewState::new(preview));
         }
     }
@@ -1406,6 +1412,7 @@ impl App {
     }
 
     pub(crate) fn update(&mut self, event: AppEvent) {
+        self.pointer.clear_hover();
         match event {
             AppEvent::DirsPaneOpened(view) => self.show_dirs_pane(view),
             AppEvent::DirRemoved { path, pane_spec } => {
@@ -1470,7 +1477,10 @@ impl App {
                 self.turn_input_mode = TurnInputMode::Start;
             }
             AppEvent::FileSearchSnapshotReceived(snapshot) => {
-                self.chat_composer.apply_file_search_snapshot(snapshot);
+                self.thread_presentations
+                    .active_mut()
+                    .input
+                    .apply_file_search_snapshot(snapshot);
             }
             AppEvent::GitStatusReceived(status) => self.status_line.apply_git_status(&status),
             AppEvent::HostOperationCompleted(Ok(notice)) => {
@@ -1835,7 +1845,7 @@ impl App {
         if key.kind != KeyEventKind::Press
             || !matches!(self.sessions.root(), Some(RootTarget::Session(_)))
             || self.chat_composer.pane_active()
-            || self.suggest().is_some()
+            || self.completion().is_some()
             || !self.input().is_empty()
         {
             return false;
@@ -2028,6 +2038,16 @@ impl App {
             {
                 Some(AppCommand::OpenStatusLinePane)
             }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme))
+                if invocation.arguments.is_empty() =>
+            {
+                Some(AppCommand::OpenThemePane)
+            }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Theme)) => {
+                Some(AppCommand::SetTheme {
+                    preference: invocation.display_arguments.trim().to_owned(),
+                })
+            }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
@@ -2071,8 +2091,9 @@ impl App {
 #[cfg(test)]
 #[path = "state_tests.rs"]
 mod tests;
+use crate::components::chat_input::CompletionView;
+#[cfg(test)]
 use crate::components::chat_input::SlashCommandCatalog;
 use crate::components::chat_input::SlashCommandInvocation;
 use crate::components::chat_input::TuiSlashCommandAction;
-use crate::components::suggest::SuggestView;
 use zeta_slash_commands::SlashCommandOrigin;

@@ -21,6 +21,8 @@ pub(crate) use text::styled_text_lines;
 pub(crate) use text::wrapped_height;
 pub(crate) use theme::RenderContext;
 pub(crate) use theme::RenderTheme;
+pub(crate) use theme::ThemePalette;
+pub(crate) use theme::ThemeRgb;
 #[cfg(test)]
 pub(crate) use theme::test_context;
 

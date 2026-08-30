@@ -10,7 +10,6 @@ use crate::ThemeDocument;
 use crate::ThemeLoadOptions;
 use crate::ThemeLoader;
 use crate::ThemeSizeUnit;
-use crate::ThemeSurface;
 use crate::loader::resolve_device_root;
 use crate::tokens;
 
@@ -61,21 +60,13 @@ fn embedded_catalog_preserves_aliases_when_a_dependency_is_overridden() {
 }
 
 #[test]
-fn embedded_entries_keep_one_token_contract_and_select_product_defaults() {
+fn embedded_entries_keep_one_token_contract_and_select_graphical_product_defaults() {
     let catalog = ThemeCatalog::embedded().unwrap();
     let zeta = catalog.built_in_entry("zeta", ColorScheme::Light).unwrap();
-    let zeta_code = catalog
-        .built_in_entry("zeta-code", ColorScheme::Light)
-        .unwrap();
     let app = catalog.built_in_entry("app", ColorScheme::Light).unwrap();
 
     assert_eq!(zeta.id(), "zeta-light");
-    assert_eq!(zeta_code.id(), "zeta-code-light");
     assert_eq!(app.id(), "app-light");
-    assert_eq!(
-        zeta.colors().keys().collect::<Vec<_>>(),
-        zeta_code.colors().keys().collect::<Vec<_>>()
-    );
     assert_eq!(
         zeta.colors().keys().collect::<Vec<_>>(),
         app.colors().keys().collect::<Vec<_>>()
@@ -146,10 +137,9 @@ fn loader_uses_the_host_entry_when_device_preference_follows_system() {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
 
-    let loaded = ThemeLoader::embedded().unwrap().load(
-        ThemeLoadOptions::new(&root, ThemeSurface::Graphical, ColorScheme::Light)
-            .with_default_entry("app"),
-    );
+    let loaded = ThemeLoader::embedded()
+        .unwrap()
+        .load(ThemeLoadOptions::new(&root, ColorScheme::Light).with_default_entry("app"));
 
     assert_eq!(loaded.snapshot.id(), "app-light");
     assert!(loaded.follows_system);
@@ -193,28 +183,27 @@ fn user_theme_transforms_and_legacy_editor_tokens_match_the_shared_contract() {
 }
 
 #[test]
-fn terminal_surface_consumes_its_optional_preference_and_isolates_broken_files() {
+fn graphical_theme_consumes_workbench_preference_and_isolates_broken_files() {
     let root = std::env::temp_dir().join(format!("zeta-theme-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("themes")).unwrap();
     fs::write(
         root.join("configuration.json"),
-        r#"{"version":1,"values":{"workbench.colorTheme":"zeta-light","tui.colorTheme":"terminal-test"}}"#,
+        r#"{"version":1,"values":{"workbench.colorTheme":"graphical-test"}}"#,
     )
     .unwrap();
     fs::write(root.join("themes/broken.json"), "{").unwrap();
     fs::write(
-        root.join("themes/terminal-test.json"),
-        r##"{"version":1,"id":"terminal-test","label":"Terminal Test","colorScheme":"dark","colors":{"accent.foreground":"#abcdef"}}"##,
+        root.join("themes/graphical-test.json"),
+        r##"{"version":1,"id":"graphical-test","label":"Graphical Test","colorScheme":"dark","colors":{"accent.foreground":"#abcdef"}}"##,
     )
     .unwrap();
 
-    let loaded = ThemeLoader::embedded().unwrap().load(
-        ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark)
-            .with_default_entry("app"),
-    );
+    let loaded = ThemeLoader::embedded()
+        .unwrap()
+        .load(ThemeLoadOptions::new(&root, ColorScheme::Dark).with_default_entry("app"));
 
-    assert_eq!(loaded.snapshot.id(), "terminal-test");
+    assert_eq!(loaded.snapshot.id(), "graphical-test");
     assert!(!loaded.follows_system);
     assert_eq!(
         loaded
@@ -228,7 +217,7 @@ fn terminal_surface_consumes_its_optional_preference_and_isolates_broken_files()
 }
 
 #[test]
-fn terminal_theme_selection_is_immediate_and_preserves_other_device_values() {
+fn graphical_theme_selection_is_immediate_and_preserves_other_device_values() {
     let root = std::env::temp_dir().join(format!("zeta-theme-selection-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
@@ -240,26 +229,18 @@ fn terminal_theme_selection_is_immediate_and_preserves_other_device_values() {
     let loader = ThemeLoader::embedded().unwrap();
 
     let selected = loader
-        .select(
-            ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark),
-            "zeta-dark",
-        )
+        .select(ThemeLoadOptions::new(&root, ColorScheme::Dark), "zeta-dark")
         .unwrap();
 
     assert_eq!(selected.snapshot.id(), "zeta-dark");
     let persisted: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(root.join("configuration.json")).unwrap())
             .unwrap();
-    assert_eq!(persisted["values"]["tui.colorTheme"], "zeta-dark");
-    assert_eq!(persisted["values"]["workbench.colorTheme"], "zeta-light");
+    assert_eq!(persisted["values"]["workbench.colorTheme"], "zeta-dark");
     assert_eq!(persisted["values"]["window.zoomLevel"], 2);
     assert_eq!(
         loader
-            .load(ThemeLoadOptions::new(
-                &root,
-                ThemeSurface::Terminal,
-                ColorScheme::Dark,
-            ))
+            .load(ThemeLoadOptions::new(&root, ColorScheme::Dark))
             .snapshot
             .id(),
         "zeta-dark"
@@ -273,14 +254,13 @@ fn theme_preview_resolves_without_persisting_the_candidate() {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     let loader = ThemeLoader::embedded().unwrap();
-    let options = ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark)
-        .with_default_entry("zeta-code");
+    let options = ThemeLoadOptions::new(&root, ColorScheme::Dark).with_default_entry("app");
 
-    let preview = loader.preview(options, "zeta-code-light").unwrap();
+    let preview = loader.preview(options, "app-light").unwrap();
 
-    assert_eq!(preview.snapshot.id(), "zeta-code-light");
+    assert_eq!(preview.snapshot.id(), "app-light");
     assert!(!root.join("configuration.json").exists());
-    assert_eq!(loader.load(options).snapshot.id(), "zeta-code-dark");
+    assert_eq!(loader.load(options).snapshot.id(), "app-dark");
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -291,17 +271,13 @@ fn theme_choices_include_system_builtins_and_valid_user_themes() {
     fs::create_dir_all(root.join("themes")).unwrap();
     fs::write(
         root.join("themes/aurora.json"),
-        r##"{"version":1,"id":"aurora","label":"Aurora","colorScheme":"dark","colors":{"tui.highlightForeground":"#abcdef"}}"##,
+        r##"{"version":1,"id":"aurora","label":"Aurora","colorScheme":"dark","colors":{"accent.foreground":"#abcdef"}}"##,
     )
     .unwrap();
 
     let choices = ThemeLoader::embedded()
         .unwrap()
-        .choices(ThemeLoadOptions::new(
-            &root,
-            ThemeSurface::Terminal,
-            ColorScheme::Dark,
-        ));
+        .choices(ThemeLoadOptions::new(&root, ColorScheme::Dark));
 
     assert_eq!(choices.selected, "system");
     assert!(
@@ -336,7 +312,7 @@ fn unavailable_theme_selection_does_not_rewrite_device_configuration() {
     let error = ThemeLoader::embedded()
         .unwrap()
         .select(
-            ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark),
+            ThemeLoadOptions::new(&root, ColorScheme::Dark),
             "missing-theme",
         )
         .unwrap_err();

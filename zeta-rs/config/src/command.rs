@@ -33,6 +33,8 @@ pub struct PreferencesUpdate {
     pub tool_mode: Patch<ToolMode>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub grep_backend: Patch<AgentGrepBackend>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub tui_theme: Patch<String>,
 }
 
 /// Typed mutations accepted by the user configuration authority.

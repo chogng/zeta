@@ -17,6 +17,7 @@ pub(crate) use request::read_config_pane;
 pub(crate) use request::set_permissions;
 pub(crate) use request::set_preferred_model;
 pub(crate) use request::set_provider_api_key;
+pub(crate) use request::set_tui_theme;
 pub(crate) use resource::ConfigResource;
 pub(crate) use resource::TerminalSettingsEdit;
 pub(crate) use settings::FollowUpMode;

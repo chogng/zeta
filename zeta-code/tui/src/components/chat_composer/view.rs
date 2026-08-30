@@ -1,4 +1,3 @@
-use super::ChatComposerOverlayView;
 use super::ChatComposerPaneKind;
 use super::ChatComposerPaneView;
 use super::ChatComposerView;
@@ -6,7 +5,6 @@ use crate::components::chat_input;
 use crate::components::chat_input::ChatInputCursor;
 use crate::components::pane;
 use crate::components::pane::PanePointerTarget;
-use crate::components::suggest;
 use crate::render::RenderContext;
 use crate::render::Renderable;
 use ratatui::Frame;
@@ -28,13 +26,14 @@ pub(crate) struct ChatComposerPaneArea {
 pub(crate) enum ChatComposerPointerTarget {
     PaneTab(usize),
     PaneItem(usize),
-    SuggestItem(usize),
+    CompletionItem(usize),
 }
 
 pub(crate) struct ChatComposerSurface<'a, 'view> {
     pub(crate) overlay_area: Rect,
     pub(crate) view: &'view ChatComposerView<'a>,
     pub(crate) cursor: ChatInputCursor,
+    pub(crate) hovered: Option<ChatComposerPointerTarget>,
 }
 
 impl Renderable for ChatComposerSurface<'_, '_> {
@@ -49,7 +48,16 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             debug_assert_eq!(entry.kind(), allocation.kind);
             match entry {
                 ChatComposerPaneView::Stacked(view) => {
-                    pane::draw(frame, allocation.area, view, context);
+                    let hovered = match self.hovered {
+                        Some(ChatComposerPointerTarget::PaneTab(index)) => {
+                            Some(PanePointerTarget::Tab(index))
+                        }
+                        Some(ChatComposerPointerTarget::PaneItem(index)) => {
+                            Some(PanePointerTarget::Item(index))
+                        }
+                        Some(ChatComposerPointerTarget::CompletionItem(_)) | None => None,
+                    };
+                    pane::draw(frame, allocation.area, view, hovered, context);
                 }
             }
         }
@@ -65,12 +73,16 @@ impl Renderable for ChatComposerSurface<'_, '_> {
             context,
         );
 
-        match self.view.overlay() {
-            Some(ChatComposerOverlayView::Suggest(view)) => {
-                suggest::draw(frame, self.overlay_area, Some(view), context);
-            }
-            None => {}
-        }
+        chat_input::draw_completion(
+            frame,
+            self.overlay_area,
+            self.view.input_completion(),
+            match self.hovered {
+                Some(ChatComposerPointerTarget::CompletionItem(index)) => Some(index),
+                _ => None,
+            },
+            context,
+        );
     }
 }
 
@@ -101,13 +113,8 @@ pub(crate) fn pointer_target_at(
         }
     }
 
-    let target = match view.overlay()? {
-        ChatComposerOverlayView::Suggest(view) => {
-            suggest::index_at(overlay_area, Some(view), column, row)
-                .map(ChatComposerPointerTarget::SuggestItem)
-        }
-    };
-    target
+    chat_input::completion_index_at(overlay_area, view.input_completion(), column, row)
+        .map(ChatComposerPointerTarget::CompletionItem)
 }
 
 fn pane_sizes(

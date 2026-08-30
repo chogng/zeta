@@ -9,7 +9,6 @@ pub(crate) mod pane;
 pub(crate) mod quick_view;
 pub(crate) mod search_box;
 pub(crate) mod steer;
-pub(crate) mod suggest;
 pub(crate) mod tab_list;
 pub(crate) mod text_prompt;
 pub(crate) mod welcome;

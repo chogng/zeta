@@ -11,10 +11,9 @@ use zeta_utils_path::write_text_atomically;
 use crate::ThemeError;
 use crate::loader::ThemeDiagnostic;
 use crate::loader::ThemeLoadOptions;
-use crate::loader::ThemeSurface;
 use crate::loader::read_bounded_text;
 
-/// Failure to validate or persist a presentation-surface theme selection.
+/// Failure to validate or persist a graphical theme selection.
 #[derive(Debug, Error)]
 pub enum ThemeSelectionError {
     #[error("invalid theme preference '{0}'")]
@@ -77,12 +76,7 @@ pub(crate) fn read_preference(
         });
         return "system".to_owned();
     }
-    let preference = match options.surface {
-        ThemeSurface::Graphical => document.string_value("workbench.colorTheme"),
-        ThemeSurface::Terminal => document
-            .string_value("tui.colorTheme")
-            .or_else(|| document.string_value("workbench.colorTheme")),
-    };
+    let preference = document.string_value("workbench.colorTheme");
     match preference {
         Some(Ok(preference)) => preference.to_owned(),
         Some(Err(key)) => {
@@ -98,7 +92,6 @@ pub(crate) fn read_preference(
 
 pub(crate) fn write_preference(
     device_root: &Path,
-    surface: ThemeSurface,
     preference: &str,
 ) -> Result<(), ThemeSelectionError> {
     let configured_path = device_root.join("configuration.json");
@@ -120,7 +113,7 @@ pub(crate) fn write_preference(
         ));
     }
     document.values.insert(
-        surface.preference_key().to_owned(),
+        "workbench.colorTheme".to_owned(),
         Value::String(preference.to_owned()),
     );
     let mut encoded = serde_json::to_string_pretty(&document)
@@ -148,15 +141,6 @@ impl Default for DeviceConfiguration {
         Self {
             version: 1,
             values: BTreeMap::new(),
-        }
-    }
-}
-
-impl ThemeSurface {
-    const fn preference_key(self) -> &'static str {
-        match self {
-            Self::Graphical => "workbench.colorTheme",
-            Self::Terminal => "tui.colorTheme",
         }
     }
 }

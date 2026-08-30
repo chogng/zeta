@@ -57,31 +57,18 @@ pub(crate) fn resolve_device_root(
         .unwrap_or_else(|| PathBuf::from(".zeta"))
 }
 
-/// Presentation surface selecting a device-local theme preference.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ThemeSurface {
-    Graphical,
-    Terminal,
-}
-
-/// Named inputs for loading one surface's selected theme.
+/// Named inputs for loading the selected graphical theme.
 #[derive(Clone, Copy)]
 pub struct ThemeLoadOptions<'a> {
     pub device_root: &'a Path,
-    pub surface: ThemeSurface,
     pub system_scheme: ColorScheme,
     pub default_entry: &'a str,
 }
 
 impl<'a> ThemeLoadOptions<'a> {
-    pub const fn new(
-        device_root: &'a Path,
-        surface: ThemeSurface,
-        system_scheme: ColorScheme,
-    ) -> Self {
+    pub const fn new(device_root: &'a Path, system_scheme: ColorScheme) -> Self {
         Self {
             device_root,
-            surface,
             system_scheme,
             default_entry: "zeta",
         }
@@ -109,7 +96,7 @@ pub struct LoadedTheme {
     pub follows_system: bool,
 }
 
-/// Origin of one theme exposed to a presentation-surface picker.
+/// Origin of one theme exposed to a graphical theme picker.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ThemeChoiceKind {
     System,
@@ -117,7 +104,7 @@ pub enum ThemeChoiceKind {
     User,
 }
 
-/// One valid theme preference available to a presentation surface.
+/// One valid theme preference available to a graphical host.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThemeChoice {
     pub id: String,
@@ -168,7 +155,7 @@ impl ThemeLoader {
         }
     }
 
-    /// Lists valid built-in and user theme preferences for one presentation surface.
+    /// Lists valid built-in and user theme preferences for one graphical host.
     pub fn choices(&self, options: ThemeLoadOptions<'_>) -> ThemeChoices {
         let mut diagnostics = Vec::new();
         let selected = read_preference(&options, &mut diagnostics);
@@ -212,14 +199,14 @@ impl ThemeLoader {
         }
     }
 
-    /// Validates, persists, and resolves one surface-specific theme preference.
+    /// Validates, persists, and resolves one graphical theme preference.
     pub fn select(
         &self,
         options: ThemeLoadOptions<'_>,
         preference: &str,
     ) -> Result<LoadedTheme, ThemeSelectionError> {
         let loaded = self.preview(options, preference)?;
-        write_preference(options.device_root, options.surface, preference)?;
+        write_preference(options.device_root, preference)?;
         Ok(loaded)
     }
 

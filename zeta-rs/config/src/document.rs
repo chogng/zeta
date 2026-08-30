@@ -11,6 +11,7 @@ use crate::McpConfig;
 use crate::PluginsConfig;
 use crate::SkillsConfig;
 use crate::ToolSearchConfig;
+use crate::TuiConfig;
 use crate::UserExecPolicyConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -149,6 +150,8 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub dir_permissions: DirPermissionsConfig,
     #[serde(default)]
+    pub tui: TuiConfig,
+    #[serde(default)]
     pub desktop: HashMap<String, serde_json::Value>,
 }
 
@@ -232,6 +235,7 @@ impl UserConfigDocument {
         self.hooks.validate_for_namespace("user")?;
         self.language_servers.validate()?;
         self.exec_policy.validate()?;
+        self.tui.validate()?;
         Ok(())
     }
 }
@@ -258,6 +262,7 @@ pub struct ResolvedConfig {
     pub commit_messages: CommitMessageConfig,
     pub exec_policy: UserExecPolicyConfig,
     pub dir_permissions: DirPermissionsConfig,
+    pub tui: TuiConfig,
     pub desktop: HashMap<String, serde_json::Value>,
     pub dir_config: Option<DirConfigIntent>,
 }
@@ -337,6 +342,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             commit_messages: document.commit_messages.clone(),
             exec_policy: document.exec_policy.clone(),
             dir_permissions: document.dir_permissions.clone(),
+            tui: document.tui.clone(),
             desktop: document.desktop.clone(),
             dir_config: None,
         }

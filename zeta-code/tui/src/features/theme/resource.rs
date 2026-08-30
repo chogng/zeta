@@ -1,25 +1,24 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use super::ThemePickerCatalog;
-use super::ThemePickerChoice;
-use super::ThemePickerTarget;
-use super::ThemePreviewPalette;
-use crate::render::RenderTheme;
+use serde::Deserialize;
 use zeta_terminal_detection::BackgroundAppearance;
 use zeta_terminal_detection::ColorLevel;
 use zeta_terminal_detection::TerminalRgb;
 use zeta_terminal_detection::detect_host_terminal;
 use zeta_terminal_detection::resolve_background;
-use zeta_theme::ColorScheme;
-use zeta_theme::ThemeChoiceKind;
-use zeta_theme::ThemeLoadOptions;
-use zeta_theme::ThemeLoader;
-use zeta_theme::ThemeSnapshot;
-use zeta_theme::ThemeSurface;
-use zeta_theme::default_device_root;
 
-const DEFAULT_THEME_ENTRY: &str = "zeta-code";
+mod document;
+
+use document::read_user_themes;
+
+use super::ThemePickerCatalog;
+use super::ThemePickerChoice;
+use super::ThemePickerTarget;
+use super::ThemePreviewPalette;
+use crate::render::RenderTheme;
+use crate::render::ThemePalette;
+
 const ZETA_CODE_THEMES: [(&str, &str); 7] = [
     ("Auto", "system"),
     ("Dark mode", "zeta-code-dark"),
@@ -36,11 +35,55 @@ const ZETA_CODE_THEMES: [(&str, &str); 7] = [
     ("Light mode (ANSI colors only)", "zeta-code-ansi-light"),
 ];
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ThemeAppearance {
+    Dark,
+    Light,
+}
+
+impl ThemeAppearance {
+    const fn base_palette(self) -> ThemePalette {
+        match self {
+            Self::Dark => ThemePalette::dark(),
+            Self::Light => ThemePalette::light(),
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Dark => "Dark",
+            Self::Light => "Light",
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct AvailableTheme {
+    pub(super) id: String,
+    pub(super) label: String,
+    pub(super) appearance: ThemeAppearance,
+    pub(super) palette: ThemePalette,
+    pub(super) ansi_only: bool,
+    pub(super) user_defined: bool,
+}
+
+impl AvailableTheme {
+    fn render(&self, capability: ColorLevel) -> RenderTheme {
+        let capability = if self.ansi_only {
+            ColorLevel::Ansi16
+        } else {
+            capability
+        };
+        RenderTheme::from_palette(self.palette, capability)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct ThemeResource {
-    device_root: PathBuf,
+    product_root: PathBuf,
     capability: ColorLevel,
-    system_scheme: ColorScheme,
+    system_appearance: ThemeAppearance,
 }
 
 pub(crate) struct ThemeLoad {
@@ -55,142 +98,255 @@ pub(crate) struct ThemeSelection {
 
 impl ThemeResource {
     pub(crate) fn new(terminal_background: Option<TerminalRgb>) -> Self {
+        Self::in_product_root(default_product_root(), terminal_background)
+    }
+
+    pub(crate) fn in_product_root(
+        product_root: PathBuf,
+        terminal_background: Option<TerminalRgb>,
+    ) -> Self {
         Self {
-            device_root: default_device_root(),
+            product_root,
             capability: detect_host_terminal().color_level,
-            system_scheme: detect_system_scheme(terminal_background),
+            system_appearance: detect_system_appearance(terminal_background),
         }
     }
 
     #[cfg(test)]
     pub(crate) fn for_test(
-        device_root: PathBuf,
+        product_root: PathBuf,
         capability: ColorLevel,
-        system_scheme: ColorScheme,
+        system_appearance: ThemeAppearance,
     ) -> Self {
         Self {
-            device_root,
+            product_root,
             capability,
-            system_scheme,
+            system_appearance,
         }
     }
 
-    pub(crate) fn load(&self) -> Result<ThemeLoad, String> {
-        let loader = ThemeLoader::embedded().map_err(|error| error.to_string())?;
-        let loaded = loader.load(self.options());
-        let theme = RenderTheme::from_snapshot(&loaded.snapshot, self.capability)
-            .map_err(|error| error.to_string())?;
+    pub(crate) fn load(&self, preference: &str) -> Result<ThemeLoad, String> {
+        let mut diagnostics = Vec::new();
+        let themes = available_themes(&self.product_root, &mut diagnostics);
+        let selected = match resolve_theme(&themes, preference, self.system_appearance) {
+            Some(theme) => theme,
+            None => {
+                diagnostics.push(format!(
+                    "TUI theme '{preference}' is unavailable; using Auto"
+                ));
+                system_theme(self.system_appearance)
+            }
+        };
         Ok(ThemeLoad {
-            theme,
-            diagnostics: loaded
-                .diagnostics
-                .into_iter()
-                .map(|diagnostic| diagnostic.message)
-                .collect(),
+            theme: selected.render(self.capability),
+            diagnostics,
         })
     }
 
-    pub(crate) fn catalog(&self) -> Result<ThemePickerCatalog, String> {
-        theme_catalog_at(&self.device_root, self.capability, self.system_scheme)
+    pub(crate) fn catalog(&self, preference: &str) -> Result<ThemePickerCatalog, String> {
+        let mut diagnostics = Vec::new();
+        let themes = available_themes(&self.product_root, &mut diagnostics);
+        let selected = resolve_theme(&themes, preference, self.system_appearance)
+            .map(|_| preference)
+            .unwrap_or("system");
+        let selected_is_custom = themes
+            .iter()
+            .any(|theme| theme.user_defined && theme.id == selected);
+        let choices = ZETA_CODE_THEMES
+            .into_iter()
+            .map(|(label, preference)| {
+                let theme = resolve_theme(&themes, preference, self.system_appearance)
+                    .expect("every built-in TUI theme preference is available");
+                picker_choice(
+                    label,
+                    preference,
+                    &theme,
+                    selected == preference,
+                    self.capability,
+                )
+            })
+            .chain(std::iter::once(ThemePickerChoice {
+                label: "Custom color theme".into(),
+                palette_label: "User-defined".into(),
+                target: ThemePickerTarget::CustomThemes,
+                palette: preview_palette(
+                    resolve_theme(&themes, selected, self.system_appearance)
+                        .unwrap_or_else(|| system_theme(self.system_appearance))
+                        .render(self.capability),
+                ),
+                selected: selected_is_custom,
+            }))
+            .collect();
+        let custom_choices = themes
+            .iter()
+            .filter(|theme| theme.user_defined)
+            .map(|theme| {
+                picker_choice(
+                    &theme.label,
+                    &theme.id,
+                    theme,
+                    selected == theme.id,
+                    self.capability,
+                )
+            })
+            .collect();
+        Ok(ThemePickerCatalog {
+            choices,
+            custom_choices,
+        })
     }
 
-    pub(crate) fn select(&self, preference: &str) -> Result<ThemeSelection, String> {
-        select_theme_at(
-            &self.device_root,
-            preference,
-            self.capability,
-            self.system_scheme,
-        )
-    }
-
-    fn options(&self) -> ThemeLoadOptions<'_> {
-        ThemeLoadOptions::new(
-            &self.device_root,
-            ThemeSurface::Terminal,
-            self.system_scheme,
-        )
-        .with_default_entry(DEFAULT_THEME_ENTRY)
+    pub(crate) fn resolve(&self, preference: &str) -> Result<ThemeSelection, String> {
+        if preference.is_empty() || preference.split_whitespace().count() != 1 {
+            return Err("usage: /theme <theme-id>".into());
+        }
+        let mut diagnostics = Vec::new();
+        let themes = available_themes(&self.product_root, &mut diagnostics);
+        let theme = resolve_theme(&themes, preference, self.system_appearance)
+            .ok_or_else(|| format!("theme '{preference}' is not a Zeta Code theme"))?;
+        let rendered = theme.render(self.capability);
+        Ok(ThemeSelection {
+            label: theme.label,
+            theme: rendered,
+        })
     }
 }
 
-fn theme_catalog_at(
-    device_root: &Path,
-    capability: ColorLevel,
-    system_scheme: ColorScheme,
-) -> Result<ThemePickerCatalog, String> {
-    let loader = ThemeLoader::embedded().map_err(|error| error.to_string())?;
-    let options = ThemeLoadOptions::new(device_root, ThemeSurface::Terminal, system_scheme)
-        .with_default_entry(DEFAULT_THEME_ENTRY);
-    let available = loader.choices(options);
-    let selected_is_custom = available
-        .themes
-        .iter()
-        .any(|theme| theme.kind == ThemeChoiceKind::User && theme.id == available.selected);
-    let mut choices = ZETA_CODE_THEMES
-        .into_iter()
-        .map(|(label, preference)| {
-            preview_choice(
-                &loader,
-                options,
-                label,
-                preference,
-                available.selected == preference,
-                capability,
-            )
+fn default_product_root() -> PathBuf {
+    std::env::var_os("ZETA_PROFILE_ROOT")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+                .map(PathBuf::from)
+                .map(|root| root.join(".zeta"))
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    let current = loader.load(options);
-    choices.push(ThemePickerChoice {
-        label: "Custom color theme".into(),
-        palette_label: "User-defined".into(),
-        target: ThemePickerTarget::CustomThemes,
-        palette: preview_palette(
-            RenderTheme::from_snapshot(&current.snapshot, capability)
-                .map_err(|error| error.to_string())?,
+        .unwrap_or_else(|| PathBuf::from(".zeta"))
+        .join("zeta-code")
+}
+
+fn built_in_themes() -> Vec<AvailableTheme> {
+    vec![
+        built_in(
+            "zeta-code-dark",
+            "Zeta Code Dark",
+            ThemeAppearance::Dark,
+            ThemePalette::dark(),
+            false,
         ),
-        selected: selected_is_custom,
-    });
-    let custom_choices = available
-        .themes
-        .iter()
-        .filter(|theme| theme.kind == ThemeChoiceKind::User)
-        .map(|theme| {
-            preview_choice(
-                &loader,
-                options,
-                &theme.label,
-                &theme.id,
-                available.selected == theme.id,
-                capability,
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(ThemePickerCatalog {
-        choices,
-        custom_choices,
-    })
+        built_in(
+            "zeta-code-light",
+            "Zeta Code Light",
+            ThemeAppearance::Light,
+            ThemePalette::light(),
+            false,
+        ),
+        built_in(
+            "zeta-code-colorblind-dark",
+            "Zeta Code Colorblind Dark",
+            ThemeAppearance::Dark,
+            ThemePalette::colorblind_dark(),
+            false,
+        ),
+        built_in(
+            "zeta-code-colorblind-light",
+            "Zeta Code Colorblind Light",
+            ThemeAppearance::Light,
+            ThemePalette::colorblind_light(),
+            false,
+        ),
+        built_in(
+            "zeta-code-ansi-dark",
+            "Zeta Code ANSI Dark",
+            ThemeAppearance::Dark,
+            ThemePalette::dark(),
+            true,
+        ),
+        built_in(
+            "zeta-code-ansi-light",
+            "Zeta Code ANSI Light",
+            ThemeAppearance::Light,
+            ThemePalette::light(),
+            true,
+        ),
+    ]
 }
 
-fn preview_choice(
-    loader: &ThemeLoader,
-    options: ThemeLoadOptions<'_>,
+fn built_in(
+    id: &str,
+    label: &str,
+    appearance: ThemeAppearance,
+    palette: ThemePalette,
+    ansi_only: bool,
+) -> AvailableTheme {
+    AvailableTheme {
+        id: id.into(),
+        label: label.into(),
+        appearance,
+        palette,
+        ansi_only,
+        user_defined: false,
+    }
+}
+
+fn system_theme(appearance: ThemeAppearance) -> AvailableTheme {
+    AvailableTheme {
+        id: "system".into(),
+        label: format!("Zeta Code {}", appearance.label()),
+        appearance,
+        palette: appearance.base_palette(),
+        ansi_only: false,
+        user_defined: false,
+    }
+}
+
+fn available_themes(product_root: &Path, diagnostics: &mut Vec<String>) -> Vec<AvailableTheme> {
+    let mut themes = built_in_themes();
+    let mut user_themes = read_user_themes(product_root, diagnostics);
+    user_themes.retain(|theme| {
+        let reserved = theme.id == "system" || themes.iter().any(|item| item.id == theme.id);
+        if reserved {
+            diagnostics.push(format!("custom TUI theme id '{}' is reserved", theme.id));
+        }
+        !reserved
+    });
+    themes.extend(user_themes);
+    themes
+}
+
+fn resolve_theme(
+    themes: &[AvailableTheme],
+    preference: &str,
+    system_appearance: ThemeAppearance,
+) -> Option<AvailableTheme> {
+    if preference == "system" {
+        return Some(system_theme(system_appearance));
+    }
+    themes.iter().find(|theme| theme.id == preference).cloned()
+}
+
+fn picker_choice(
     label: &str,
     preference: &str,
+    theme: &AvailableTheme,
     selected: bool,
     capability: ColorLevel,
-) -> Result<ThemePickerChoice, String> {
-    let loaded = loader
-        .preview(options, preference)
-        .map_err(|error| error.to_string())?;
-    let theme = RenderTheme::from_snapshot(&loaded.snapshot, capability)
-        .map_err(|error| error.to_string())?;
-    Ok(ThemePickerChoice {
+) -> ThemePickerChoice {
+    let palette_label = if theme.user_defined {
+        format!("User-defined · {}", theme.appearance.label())
+    } else if theme.id.contains("colorblind") {
+        format!("GitHub {} Colorblind", theme.appearance.label())
+    } else if theme.id.contains("ansi") {
+        format!("GitHub {} · ANSI 16 colors", theme.appearance.label())
+    } else {
+        format!("GitHub {}", theme.appearance.label())
+    };
+    ThemePickerChoice {
         label: label.into(),
-        palette_label: syntax_palette_label(preference, &loaded.snapshot),
+        palette_label,
         target: ThemePickerTarget::Preference(preference.into()),
-        palette: preview_palette(theme),
+        palette: preview_palette(theme.render(capability)),
         selected,
-    })
+    }
 }
 
 fn preview_palette(theme: RenderTheme) -> ThemePreviewPalette {
@@ -212,59 +368,10 @@ fn preview_palette(theme: RenderTheme) -> ThemePreviewPalette {
     }
 }
 
-fn syntax_palette_label(preference: &str, snapshot: &ThemeSnapshot) -> String {
-    let scheme = match snapshot.color_scheme() {
-        ColorScheme::Dark | ColorScheme::HighContrastDark => "Dark",
-        ColorScheme::Light | ColorScheme::HighContrastLight => "Light",
-    };
-    if preference.starts_with("zeta-code-colorblind-") {
-        format!("GitHub {scheme} Colorblind")
-    } else if preference.starts_with("zeta-code-ansi-") {
-        format!("GitHub {scheme} · ANSI 16 colors")
-    } else if preference == "system" || preference.starts_with("zeta-code-") {
-        format!("GitHub {scheme}")
-    } else {
-        format!("User-defined · {}", snapshot.label())
-    }
-}
-
-fn select_theme_at(
-    device_root: &Path,
-    preference: &str,
-    capability: ColorLevel,
-    system_scheme: ColorScheme,
-) -> Result<ThemeSelection, String> {
-    let loader = ThemeLoader::embedded().map_err(|error| error.to_string())?;
-    let options = ThemeLoadOptions::new(device_root, ThemeSurface::Terminal, system_scheme)
-        .with_default_entry(DEFAULT_THEME_ENTRY);
-    if preference.is_empty() || preference.split_whitespace().count() != 1 {
-        return Err("usage: /theme <theme-id>".into());
-    }
-    let available = loader.choices(options);
-    let supported = ZETA_CODE_THEMES
-        .iter()
-        .any(|(_, candidate)| *candidate == preference)
-        || available
-            .themes
-            .iter()
-            .any(|theme| theme.kind == ThemeChoiceKind::User && theme.id == preference);
-    if !supported {
-        return Err(format!("theme '{preference}' is not a Zeta Code theme"));
-    }
-    let loaded = loader
-        .select(options, preference)
-        .map_err(|error| error.to_string())?;
-    Ok(ThemeSelection {
-        label: loaded.snapshot.label().to_owned(),
-        theme: RenderTheme::from_snapshot(&loaded.snapshot, capability)
-            .map_err(|error| error.to_string())?,
-    })
-}
-
-fn detect_system_scheme(terminal_background: Option<TerminalRgb>) -> ColorScheme {
+fn detect_system_appearance(terminal_background: Option<TerminalRgb>) -> ThemeAppearance {
     match resolve_background(terminal_background).appearance {
-        BackgroundAppearance::Dark => ColorScheme::Dark,
-        BackgroundAppearance::Light => ColorScheme::Light,
+        BackgroundAppearance::Dark => ThemeAppearance::Dark,
+        BackgroundAppearance::Light => ThemeAppearance::Light,
     }
 }
 

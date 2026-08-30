@@ -268,12 +268,6 @@ impl PaneStack {
         self.top()?.list_selection()
     }
 
-    pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
-        self.top_mut()
-            .and_then(Pane::list_selection_mut)
-            .is_some_and(|body| body.select_visible_item(index))
-    }
-
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
         self.top_mut()
             .and_then(Pane::list_selection_mut)

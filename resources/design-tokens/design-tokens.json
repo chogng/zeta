@@ -3481,66 +3481,6 @@
         "high-contrast-dark": "#8c959f",
         "high-contrast-light": "#8c959f"
       }
-    },
-    {
-      "id": "tui.highlightForeground",
-      "kind": "color",
-      "cssVariable": "--zeta-tui-highlight-foreground",
-      "owner": "tui.presentation",
-      "description": "Foreground for selected items, borders, and other TUI highlights.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "accent.foreground",
-        "light": "accent.foreground",
-        "high-contrast-dark": "accent.foreground",
-        "high-contrast-light": "accent.foreground"
-      },
-      "values": {
-        "dark": "#4daafc",
-        "light": "#005fb8",
-        "high-contrast-dark": "#4daafc",
-        "high-contrast-light": "#005fb8"
-      }
-    },
-    {
-      "id": "tui.activeSelectionForeground",
-      "kind": "color",
-      "cssVariable": "--zeta-tui-active-selection-foreground",
-      "owner": "tui.presentation",
-      "description": "Foreground for the active TUI list item.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#000000",
-        "light": "#000000",
-        "high-contrast-dark": "#000000",
-        "high-contrast-light": "#000000"
-      },
-      "values": {
-        "dark": "#000000",
-        "light": "#000000",
-        "high-contrast-dark": "#000000",
-        "high-contrast-light": "#000000"
-      }
-    },
-    {
-      "id": "tui.activeSelectionBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-tui-active-selection-background",
-      "owner": "tui.presentation",
-      "description": "Background for the active TUI list item.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#c0c0c0",
-        "light": "#c0c0c0",
-        "high-contrast-dark": "#c0c0c0",
-        "high-contrast-light": "#c0c0c0"
-      },
-      "values": {
-        "dark": "#c0c0c0",
-        "light": "#c0c0c0",
-        "high-contrast-dark": "#c0c0c0",
-        "high-contrast-light": "#c0c0c0"
-      }
     }
   ],
   "sizes": [

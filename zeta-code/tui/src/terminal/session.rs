@@ -1,6 +1,8 @@
 use crate::mouse::MouseMode;
-use crate::mouse::ScreenSelectionRange;
-use crate::mouse::text_in_range;
+use crate::screen_selection::ScreenSelectionRange;
+use crate::screen_selection::line_range_at;
+use crate::screen_selection::text_in_range;
+use crate::screen_selection::token_range_at;
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
 use crossterm::event::DisableMouseCapture;
@@ -13,6 +15,7 @@ use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
+use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use std::io;
 use std::io::Stdout;
@@ -69,6 +72,18 @@ impl TerminalSession {
         self.rendered_frame
             .as_ref()
             .and_then(|buffer| text_in_range(buffer, range))
+    }
+
+    pub(crate) fn token_range_at(&self, position: Position) -> Option<ScreenSelectionRange> {
+        self.rendered_frame
+            .as_ref()
+            .and_then(|buffer| token_range_at(buffer, position))
+    }
+
+    pub(crate) fn line_range_at(&self, position: Position) -> Option<ScreenSelectionRange> {
+        self.rendered_frame
+            .as_ref()
+            .and_then(|buffer| line_range_at(buffer, position))
     }
 
     /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.

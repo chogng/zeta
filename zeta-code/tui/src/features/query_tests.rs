@@ -70,6 +70,32 @@ fn paste_is_owned_by_the_custom_answer_editor() {
     assert_eq!(query.view().custom_answer, Some("first second"));
 }
 
+#[test]
+fn pointer_activation_answers_its_exact_target() {
+    let mut query = Query::new(vec![QueryQuestion {
+        id: "choice".into(),
+        header: "Choose".into(),
+        prompt: "Which one?".into(),
+        choices: vec![
+            QueryChoice {
+                label: "First".into(),
+                description: "First choice".into(),
+            },
+            QueryChoice {
+                label: "Second".into(),
+                description: "Second choice".into(),
+            },
+        ],
+        custom_answer: QueryCustomAnswer::Unavailable,
+    }])
+    .unwrap();
+
+    let Some(QueryOutcome::Completed(answers)) = query.activate(1) else {
+        panic!("expected the pointer target to complete the query");
+    };
+    assert_eq!(answers[0].value, "Second");
+}
+
 fn question(id: &str) -> QueryQuestion {
     QueryQuestion {
         id: id.into(),

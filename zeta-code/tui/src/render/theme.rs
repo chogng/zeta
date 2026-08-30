@@ -1,9 +1,154 @@
 use ratatui::style::Color;
 use zeta_terminal_detection::ColorLevel;
-use zeta_theme::Rgba;
-use zeta_theme::ThemeError;
-use zeta_theme::ThemeSnapshot;
-use zeta_theme::tokens;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ThemeRgb {
+    red: u8,
+    green: u8,
+    blue: u8,
+}
+
+impl ThemeRgb {
+    pub(crate) const fn new(red: u8, green: u8, blue: u8) -> Self {
+        Self { red, green, blue }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, String> {
+        let hex = value
+            .strip_prefix('#')
+            .filter(|hex| hex.len() == 6 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))
+            .ok_or_else(|| format!("invalid TUI theme color '{value}'; expected #RRGGBB"))?;
+        let component = |start| {
+            u8::from_str_radix(&hex[start..start + 2], 16)
+                .map_err(|_| format!("invalid TUI theme color '{value}'; expected #RRGGBB"))
+        };
+        Ok(Self::new(component(0)?, component(2)?, component(4)?))
+    }
+
+    const fn components(self) -> [u8; 3] {
+        [self.red, self.green, self.blue]
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ThemePalette {
+    pub(crate) accent: ThemeRgb,
+    pub(crate) background: ThemeRgb,
+    pub(crate) border: ThemeRgb,
+    pub(crate) chat_input_chrome: ThemeRgb,
+    pub(crate) danger: ThemeRgb,
+    pub(crate) foreground: ThemeRgb,
+    pub(crate) function: ThemeRgb,
+    pub(crate) highlight: ThemeRgb,
+    pub(crate) inserted_background: ThemeRgb,
+    pub(crate) inserted_marker: ThemeRgb,
+    pub(crate) keyword: ThemeRgb,
+    pub(crate) muted: ThemeRgb,
+    pub(crate) quick_view_background: ThemeRgb,
+    pub(crate) removed_background: ThemeRgb,
+    pub(crate) removed_marker: ThemeRgb,
+    pub(crate) string: ThemeRgb,
+    pub(crate) success: ThemeRgb,
+    pub(crate) active_selection_background: ThemeRgb,
+    pub(crate) active_selection_foreground: ThemeRgb,
+    pub(crate) screen_selection_background: ThemeRgb,
+    pub(crate) screen_selection_foreground: ThemeRgb,
+    pub(crate) r#type: ThemeRgb,
+    pub(crate) variable: ThemeRgb,
+    pub(crate) warning: ThemeRgb,
+}
+
+impl ThemePalette {
+    pub(crate) const fn dark() -> Self {
+        Self {
+            accent: ThemeRgb::new(0x58, 0xa6, 0xff),
+            background: ThemeRgb::new(0x0d, 0x11, 0x17),
+            border: ThemeRgb::new(0x2b, 0x2b, 0x2b),
+            chat_input_chrome: ThemeRgb::new(0x8b, 0x94, 0x9e),
+            danger: ThemeRgb::new(0xf8, 0x51, 0x49),
+            foreground: ThemeRgb::new(0xe6, 0xed, 0xf3),
+            function: ThemeRgb::new(0xd2, 0xa8, 0xff),
+            highlight: ThemeRgb::new(0x9a, 0x91, 0xeb),
+            inserted_background: ThemeRgb::new(0x13, 0x2d, 0x1d),
+            inserted_marker: ThemeRgb::new(0x3f, 0xb9, 0x50),
+            keyword: ThemeRgb::new(0xff, 0x7b, 0x72),
+            muted: ThemeRgb::new(0x8b, 0x94, 0x9e),
+            quick_view_background: ThemeRgb::new(0x25, 0x25, 0x26),
+            removed_background: ThemeRgb::new(0x35, 0x1b, 0x1b),
+            removed_marker: ThemeRgb::new(0xf8, 0x51, 0x49),
+            string: ThemeRgb::new(0xa5, 0xd6, 0xff),
+            success: ThemeRgb::new(0x3f, 0xb9, 0x50),
+            active_selection_background: ThemeRgb::new(0xc0, 0xc0, 0xc0),
+            active_selection_foreground: ThemeRgb::new(0x00, 0x00, 0x00),
+            screen_selection_background: ThemeRgb::new(0x87, 0xce, 0xeb),
+            screen_selection_foreground: ThemeRgb::new(0x0d, 0x11, 0x17),
+            r#type: ThemeRgb::new(0xd2, 0xa8, 0xff),
+            variable: ThemeRgb::new(0xff, 0xa6, 0x57),
+            warning: ThemeRgb::new(0xff, 0xa6, 0x57),
+        }
+    }
+
+    pub(crate) const fn light() -> Self {
+        Self {
+            accent: ThemeRgb::new(0x09, 0x69, 0xda),
+            background: ThemeRgb::new(0xff, 0xff, 0xff),
+            border: ThemeRgb::new(0xe5, 0xe5, 0xe5),
+            chat_input_chrome: ThemeRgb::new(0x57, 0x60, 0x6a),
+            danger: ThemeRgb::new(0xcf, 0x22, 0x2e),
+            foreground: ThemeRgb::new(0x1f, 0x23, 0x28),
+            function: ThemeRgb::new(0x82, 0x50, 0xdf),
+            highlight: ThemeRgb::new(0x66, 0x58, 0xc7),
+            inserted_background: ThemeRgb::new(0xda, 0xfb, 0xe1),
+            inserted_marker: ThemeRgb::new(0x1a, 0x7f, 0x37),
+            keyword: ThemeRgb::new(0xcf, 0x22, 0x2e),
+            muted: ThemeRgb::new(0x57, 0x60, 0x6a),
+            quick_view_background: ThemeRgb::new(0xf8, 0xf8, 0xf8),
+            removed_background: ThemeRgb::new(0xff, 0xeb, 0xe9),
+            removed_marker: ThemeRgb::new(0xcf, 0x22, 0x2e),
+            string: ThemeRgb::new(0x0a, 0x30, 0x69),
+            success: ThemeRgb::new(0x1a, 0x7f, 0x37),
+            active_selection_background: ThemeRgb::new(0xc0, 0xc0, 0xc0),
+            active_selection_foreground: ThemeRgb::new(0x00, 0x00, 0x00),
+            screen_selection_background: ThemeRgb::new(0x87, 0xce, 0xeb),
+            screen_selection_foreground: ThemeRgb::new(0x0d, 0x11, 0x17),
+            r#type: ThemeRgb::new(0x82, 0x50, 0xdf),
+            variable: ThemeRgb::new(0x95, 0x38, 0x00),
+            warning: ThemeRgb::new(0x95, 0x38, 0x00),
+        }
+    }
+
+    pub(crate) const fn colorblind_dark() -> Self {
+        Self {
+            danger: ThemeRgb::new(0xd4, 0x76, 0x16),
+            highlight: ThemeRgb::new(0x58, 0xa6, 0xff),
+            inserted_background: ThemeRgb::new(0x12, 0x29, 0x4b),
+            inserted_marker: ThemeRgb::new(0x58, 0xa6, 0xff),
+            keyword: ThemeRgb::new(0xec, 0x8e, 0x2c),
+            removed_background: ThemeRgb::new(0x40, 0x28, 0x10),
+            removed_marker: ThemeRgb::new(0xd4, 0x76, 0x16),
+            success: ThemeRgb::new(0x58, 0xa6, 0xff),
+            variable: ThemeRgb::new(0xfd, 0xac, 0x54),
+            warning: ThemeRgb::new(0xfd, 0xac, 0x54),
+            ..Self::dark()
+        }
+    }
+
+    pub(crate) const fn colorblind_light() -> Self {
+        Self {
+            danger: ThemeRgb::new(0xb3, 0x59, 0x00),
+            highlight: ThemeRgb::new(0x09, 0x69, 0xda),
+            inserted_background: ThemeRgb::new(0xdd, 0xf4, 0xff),
+            inserted_marker: ThemeRgb::new(0x09, 0x69, 0xda),
+            keyword: ThemeRgb::new(0xb3, 0x59, 0x00),
+            removed_background: ThemeRgb::new(0xff, 0xf1, 0xe5),
+            removed_marker: ThemeRgb::new(0xb3, 0x59, 0x00),
+            success: ThemeRgb::new(0x09, 0x69, 0xda),
+            variable: ThemeRgb::new(0x8a, 0x46, 0x00),
+            warning: ThemeRgb::new(0x8a, 0x46, 0x00),
+            ..Self::light()
+        }
+    }
+}
 
 const fn hex(value: &str) -> Color {
     let bytes = value.as_bytes();
@@ -47,54 +192,47 @@ pub(crate) struct RenderTheme {
     muted: Color,
     removed_background: Color,
     removed_marker: Color,
+    quick_view_background: Color,
     string: Color,
     success: Color,
     active_selection_background: Color,
     active_selection_foreground: Color,
+    screen_selection_background: Color,
+    screen_selection_foreground: Color,
     r#type: Color,
     variable: Color,
     warning: Color,
 }
 
 impl RenderTheme {
-    pub(crate) fn from_snapshot(
-        snapshot: &ThemeSnapshot,
-        capability: ColorLevel,
-    ) -> Result<Self, ThemeError> {
-        let capability = if snapshot.id().starts_with("zeta-code-ansi-") {
-            ColorLevel::Ansi16
-        } else {
-            capability
-        };
-        let background = snapshot.required_color(tokens::TERMINAL_BACKGROUND)?;
-        let projected = |token| {
-            snapshot
-                .required_color(token)
-                .map(|color| terminal_color(color, background, capability))
-        };
-        Ok(Self {
-            accent: projected(tokens::ACCENT_FOREGROUND)?,
-            background: projected(tokens::TERMINAL_BACKGROUND)?,
-            border: projected(tokens::BORDER)?,
-            chat_input_chrome: projected(tokens::DESCRIPTION_FOREGROUND)?,
-            danger: projected(tokens::ERROR_FOREGROUND)?,
-            foreground: projected(tokens::EDITOR_FOREGROUND)?,
-            function: projected(tokens::EDITOR_TOKEN_FUNCTION)?,
-            highlight: projected(tokens::TUI_HIGHLIGHT_FOREGROUND)?,
-            inserted_background: projected(tokens::DIFF_INSERTED_LINE_BACKGROUND)?,
-            inserted_marker: projected(tokens::DIFF_INSERTED_LINE_MARKER)?,
-            keyword: projected(tokens::EDITOR_TOKEN_KEYWORD)?,
-            muted: projected(tokens::MUTED_FOREGROUND)?,
-            removed_background: projected(tokens::DIFF_REMOVED_LINE_BACKGROUND)?,
-            removed_marker: projected(tokens::DIFF_REMOVED_LINE_MARKER)?,
-            string: projected(tokens::EDITOR_TOKEN_STRING)?,
-            success: projected(tokens::SUCCESS_FOREGROUND)?,
-            active_selection_background: projected(tokens::TUI_ACTIVE_SELECTION_BACKGROUND)?,
-            active_selection_foreground: projected(tokens::TUI_ACTIVE_SELECTION_FOREGROUND)?,
-            r#type: projected(tokens::EDITOR_TOKEN_TYPE)?,
-            variable: projected(tokens::EDITOR_TOKEN_VARIABLE)?,
-            warning: projected(tokens::WARNING_FOREGROUND)?,
-        })
+    pub(crate) fn from_palette(palette: ThemePalette, capability: ColorLevel) -> Self {
+        let projected = |color| terminal_color(color, capability);
+        Self {
+            accent: projected(palette.accent),
+            background: projected(palette.background),
+            border: projected(palette.border),
+            chat_input_chrome: projected(palette.chat_input_chrome),
+            danger: projected(palette.danger),
+            foreground: projected(palette.foreground),
+            function: projected(palette.function),
+            highlight: projected(palette.highlight),
+            inserted_background: projected(palette.inserted_background),
+            inserted_marker: projected(palette.inserted_marker),
+            keyword: projected(palette.keyword),
+            muted: projected(palette.muted),
+            removed_background: projected(palette.removed_background),
+            removed_marker: projected(palette.removed_marker),
+            quick_view_background: projected(palette.quick_view_background),
+            string: projected(palette.string),
+            success: projected(palette.success),
+            active_selection_background: projected(palette.active_selection_background),
+            active_selection_foreground: projected(palette.active_selection_foreground),
+            screen_selection_background: projected(palette.screen_selection_background),
+            screen_selection_foreground: projected(palette.screen_selection_foreground),
+            r#type: projected(palette.r#type),
+            variable: projected(palette.variable),
+            warning: projected(palette.warning),
+        }
     }
 
     pub(crate) const fn fallback() -> Self {
@@ -113,10 +251,13 @@ impl RenderTheme {
             muted: hex("#808080"),
             removed_background: hex("#37191b"),
             removed_marker: hex("#f85149"),
+            quick_view_background: hex("#252526"),
             string: hex("#a5d6ff"),
             success: hex("#5fd28c"),
             active_selection_background: hex("#c0c0c0"),
             active_selection_foreground: hex("#000000"),
+            screen_selection_background: hex("#87ceeb"),
+            screen_selection_foreground: hex("#0d1117"),
             r#type: hex("#d2a8ff"),
             variable: hex("#ffa657"),
             warning: hex("#f5be50"),
@@ -165,6 +306,9 @@ impl RenderTheme {
     pub(crate) const fn removed_marker(self) -> Color {
         self.removed_marker
     }
+    pub(crate) const fn quick_view_background(self) -> Color {
+        self.quick_view_background
+    }
     pub(crate) const fn string(self) -> Color {
         self.string
     }
@@ -176,6 +320,12 @@ impl RenderTheme {
     }
     pub(crate) const fn active_selection_foreground(self) -> Color {
         self.active_selection_foreground
+    }
+    pub(crate) const fn screen_selection_background(self) -> Color {
+        self.screen_selection_background
+    }
+    pub(crate) const fn screen_selection_foreground(self) -> Color {
+        self.screen_selection_foreground
     }
     pub(crate) const fn r#type(self) -> Color {
         self.r#type
@@ -226,6 +376,9 @@ impl<'a> RenderContext<'a> {
     pub(crate) const fn muted(self) -> Color {
         self.theme.muted()
     }
+    pub(crate) const fn quick_view_background(self) -> Color {
+        self.theme.quick_view_background()
+    }
     pub(crate) const fn keyword(self) -> Color {
         self.theme.keyword()
     }
@@ -240,6 +393,12 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn active_selection_foreground(self) -> Color {
         self.theme.active_selection_foreground()
+    }
+    pub(crate) const fn screen_selection_background(self) -> Color {
+        self.theme.screen_selection_background()
+    }
+    pub(crate) const fn screen_selection_foreground(self) -> Color {
+        self.theme.screen_selection_foreground()
     }
     pub(crate) const fn r#type(self) -> Color {
         self.theme.r#type()
@@ -262,31 +421,14 @@ pub(crate) fn test_context() -> RenderContext<'static> {
     RenderContext::new(&THEME, 0)
 }
 
-fn terminal_color(foreground: Rgba, background: Rgba, capability: ColorLevel) -> Color {
-    let rgb = composite(foreground, background);
+fn terminal_color(color: ThemeRgb, capability: ColorLevel) -> Color {
+    let rgb = color.components();
     match capability {
         ColorLevel::TrueColor => Color::Rgb(rgb[0], rgb[1], rgb[2]),
         ColorLevel::Ansi256 => Color::Indexed(nearest_ansi256(rgb)),
         ColorLevel::Ansi16 => nearest_ansi16(rgb),
         ColorLevel::Monochrome => Color::Reset,
     }
-}
-
-fn composite(foreground: Rgba, background: Rgba) -> [u8; 3] {
-    let [red, green, blue, alpha] = foreground.components();
-    if alpha == 255 {
-        return [red, green, blue];
-    }
-    let [background_red, background_green, background_blue, _] = background.components();
-    let blend = |foreground: u8, background: u8| {
-        let alpha = u32::from(alpha);
-        ((u32::from(foreground) * alpha + u32::from(background) * (255 - alpha) + 127) / 255) as u8
-    };
-    [
-        blend(red, background_red),
-        blend(green, background_green),
-        blend(blue, background_blue),
-    ]
 }
 
 fn nearest_ansi256(rgb: [u8; 3]) -> u8 {

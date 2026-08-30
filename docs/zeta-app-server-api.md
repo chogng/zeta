@@ -141,7 +141,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "zeta-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 1, "revision": 19 },
+  "protocolVersion": { "major": 1, "revision": 20 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,

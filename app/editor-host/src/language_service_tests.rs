@@ -4,7 +4,7 @@ use std::path::Path;
 use zeta_app_server_protocol::protocol::config::{
     AgentGrepBackendDto, ApprovalReviewModelSelectionDto, CodebaseAutomaticContextDto,
     CodebaseConfigDto, ConfigReadResult, LanguageServerConfigDto, LanguageServerModeDto,
-    ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
+    ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto, TuiConfigDto,
 };
 use zeta_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
@@ -70,6 +70,9 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
             automatic_context: CodebaseAutomaticContextDto::Off,
         },
         exec_policy_rules: Vec::new(),
+        tui: TuiConfigDto {
+            theme: "system".into(),
+        },
     };
 
     let catalog = catalog_from_configuration(&configuration);
@@ -115,6 +118,9 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
             automatic_context: CodebaseAutomaticContextDto::Off,
         },
         exec_policy_rules: Vec::new(),
+        tui: TuiConfigDto {
+            theme: "system".into(),
+        },
     };
 
     let catalog = catalog_from_configuration(&configuration);

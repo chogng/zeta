@@ -1,4 +1,4 @@
-//! Workspace-file mention query and completion state.
+//! Workspace-file mention query and completion state owned by `ChatInput`.
 
 use std::ops::Range;
 use zeta_file_search::PathSearchSnapshot;
@@ -164,14 +164,6 @@ impl MentionPopup {
         }
     }
 
-    pub(super) fn select(&mut self, index: usize) -> bool {
-        if !self.view().is_some_and(|view| index < view.matches.len()) {
-            return false;
-        }
-        self.selected = index;
-        true
-    }
-
     pub(super) fn dismiss(&mut self) {
         self.dismissed = true;
     }
@@ -255,10 +247,6 @@ impl Mentions {
 
     pub(in crate::components) fn select_next(&mut self) {
         self.popup.select_next();
-    }
-
-    pub(in crate::components) fn select(&mut self, index: usize) -> bool {
-        self.popup.select(index)
     }
 
     pub(in crate::components) fn dismiss(&mut self) {

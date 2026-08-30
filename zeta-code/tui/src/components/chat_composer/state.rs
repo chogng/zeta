@@ -2,8 +2,8 @@ use crate::components::chat_input::ChatInput;
 use crate::components::chat_input::ChatInputOutcome;
 use crate::components::chat_input::ChatInputQueueOutcome;
 use crate::components::chat_input::ChatSubmission;
+use crate::components::chat_input::CompletionView;
 use crate::components::chat_input::QueuedChatInput;
-use crate::components::chat_input::SlashCommandCatalog;
 use crate::components::chat_input::SlashCommandInvocation;
 use crate::components::key_capture::KeyCapture;
 use crate::components::list_selection::ListSelectionAdjustment;
@@ -17,20 +17,9 @@ use crate::components::pane::PaneStack;
 use crate::components::pane::PaneView;
 use crate::components::steer::Steer;
 use crate::components::steer::SteerId;
-use crate::components::suggest::MentionPluginItem;
-use crate::components::suggest::SkillSelectorItem;
-use crate::components::suggest::Suggest;
-use crate::components::suggest::SuggestEdit;
-use crate::components::suggest::SuggestInputOutcome;
-use crate::components::suggest::SuggestView;
 use crate::components::text_prompt::TextPromptSpec;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
-use zeta_file_search::PathSearchSnapshot;
-
-pub(crate) enum ChatComposerOverlayView<'a> {
-    Suggest(SuggestView<'a>),
-}
 
 pub(crate) struct ChatComposerView<'a> {
     state: &'a ChatComposer,
@@ -62,8 +51,12 @@ impl ChatComposerView<'_> {
         self.state.pane_views()
     }
 
-    pub(super) fn overlay(&self) -> Option<ChatComposerOverlayView<'_>> {
-        self.state.overlay(self.input)
+    pub(super) fn input_completion(&self) -> Option<CompletionView<'_>> {
+        self.state
+            .panes
+            .is_empty()
+            .then(|| self.input.completion())
+            .flatten()
     }
 }
 
@@ -113,32 +106,20 @@ pub(crate) enum ChatComposerOutcome {
     PaneDismissed(PaneId),
 }
 
-/// Owns focus and routing for the persistent chat input and pages above it.
+/// Routes input between the caller-owned persistent chat input and pages above it.
 ///
 /// The chat input remains alive while pages are stacked above it, preserving draft state when a
 /// page is dismissed. Product feature state remains outside this component.
 #[derive(Debug)]
 pub(crate) struct ChatComposer {
-    suggest: Suggest,
     panes: PaneStack,
     pane_order: Vec<ChatComposerPaneKind>,
     steer: Steer,
 }
 
 impl ChatComposer {
-    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self {
-            suggest: Suggest::new(crate::components::chat_input::default_slash_command_catalog()),
-            panes: PaneStack::default(),
-            pane_order: Vec::new(),
-            steer: Steer::default(),
-        }
-    }
-
-    pub(crate) fn with_slash_commands(slash_commands: SlashCommandCatalog) -> Self {
-        Self {
-            suggest: Suggest::new(slash_commands),
             panes: PaneStack::default(),
             pane_order: Vec::new(),
             steer: Steer::default(),
@@ -203,7 +184,7 @@ impl ChatComposer {
         if submission_target == SubmissionTarget::Queue
             && key.code == KeyCode::Enter
             && key.modifiers.is_empty()
-            && self.suggest(input).is_none()
+            && input.completion().is_none()
             && input.accepts_submission_key()
         {
             return self.queue_current_input(input);
@@ -211,7 +192,7 @@ impl ChatComposer {
         if submission_target == SubmissionTarget::Steer
             && key.code == KeyCode::Enter
             && key.modifiers.is_empty()
-            && self.suggest(input).is_none()
+            && input.completion().is_none()
             && input.accepts_submission_key()
             && input.submission_contains_skill()
         {
@@ -220,13 +201,12 @@ impl ChatComposer {
                     .into(),
             );
         }
-        map_chat_input_outcome(self.handle_chat_input_key(input, key))
+        map_chat_input_outcome(input.handle_key(key))
     }
 
     #[cfg(test)]
     pub(crate) fn insert_text(&mut self, input: &mut ChatInput, text: &str) {
         input.insert_text(text);
-        self.sync_suggest(input);
     }
 
     pub(crate) fn handle_paste(
@@ -239,7 +219,6 @@ impl ChatComposer {
             return Ok(());
         }
         input.handle_paste(pasted)?;
-        self.sync_suggest(input);
         Ok(())
     }
 
@@ -249,53 +228,18 @@ impl ChatComposer {
         bytes: Vec<u8>,
     ) -> Result<(), String> {
         input.attach_image_bytes(bytes)?;
-        self.sync_suggest(input);
         Ok(())
-    }
-
-    pub(crate) fn replace_chat_input_catalog(
-        &mut self,
-        input: &mut ChatInput,
-        slash_commands: SlashCommandCatalog,
-        skills: Vec<SkillSelectorItem>,
-        plugins: Vec<MentionPluginItem>,
-    ) {
-        self.suggest
-            .replace_catalog(slash_commands, skills, plugins);
-        self.sync_suggest(input);
     }
 
     pub(crate) fn view<'a>(&'a self, input: &'a ChatInput) -> ChatComposerView<'a> {
         ChatComposerView { state: self, input }
     }
 
-    pub(crate) fn suggest(&self, _input: &ChatInput) -> Option<SuggestView<'_>> {
-        if !self.panes.is_empty() {
-            return None;
-        }
-        self.suggest.view()
-    }
-
-    pub(crate) fn mention_query(&self) -> Option<&str> {
-        if !self.panes.is_empty() {
-            return None;
-        }
-        self.suggest.mention_query()
-    }
-
-    pub(crate) fn apply_file_search_snapshot(&mut self, snapshot: PathSearchSnapshot) {
-        self.suggest.apply_file_search_snapshot(snapshot);
-    }
-
-    pub(crate) fn overlay(&self, input: &ChatInput) -> Option<ChatComposerOverlayView<'_>> {
-        self.suggest(input).map(ChatComposerOverlayView::Suggest)
-    }
-
     pub(crate) fn pane_active(&self) -> bool {
         !self.panes.is_empty()
     }
 
-    pub(crate) fn activate_suggest(
+    pub(crate) fn activate_completion(
         &mut self,
         input: &mut ChatInput,
         index: usize,
@@ -303,32 +247,7 @@ impl ChatComposer {
         if !self.panes.is_empty() {
             return None;
         }
-        self.suggest(input)?;
-        self.activate_chat_input_suggest(input, index)
-            .map(map_chat_input_outcome)
-    }
-
-    pub(crate) fn select_suggest(&mut self, input: &ChatInput, index: usize) -> bool {
-        if !self.panes.is_empty() {
-            return false;
-        }
-        self.suggest(input).is_some() && self.suggest.select(index)
-    }
-
-    pub(crate) fn select_overlay_choice(&mut self, input: &ChatInput, index: usize) -> bool {
-        self.select_suggest(input, index)
-    }
-
-    pub(crate) fn activate_overlay_choice(
-        &mut self,
-        input: &mut ChatInput,
-        index: usize,
-    ) -> Option<ChatComposerOutcome> {
-        self.activate_suggest(input, index)
-    }
-
-    pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
-        self.panes.select_visible_item(index)
+        input.activate_completion(index).map(map_chat_input_outcome)
     }
 
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
@@ -425,100 +344,11 @@ impl ChatComposer {
     }
 
     fn queue_current_input(&mut self, input: &mut ChatInput) -> ChatComposerOutcome {
-        let command = self.current_command(input);
-        let outcome = input.queue_current(command);
-        self.suggest.clear();
+        let outcome = input.queue_current();
         match outcome {
             ChatInputQueueOutcome::Command(command) => ChatComposerOutcome::Command(command),
             ChatInputQueueOutcome::Consumed => ChatComposerOutcome::Consumed,
             ChatInputQueueOutcome::Queued(input) => ChatComposerOutcome::Queued(input),
-        }
-    }
-
-    fn handle_chat_input_key(&mut self, input: &mut ChatInput, key: KeyEvent) -> ChatInputOutcome {
-        match self.suggest.handle_key(key) {
-            SuggestInputOutcome::Completed(edit) => {
-                self.apply_suggest_edit(input, edit);
-                self.sync_suggest(input);
-                return ChatInputOutcome::Consumed;
-            }
-            SuggestInputOutcome::Consumed => return ChatInputOutcome::Consumed,
-            SuggestInputOutcome::Submit(edit) => {
-                self.apply_suggest_edit(input, edit);
-                self.sync_suggest(input);
-                return self.submit_current(input);
-            }
-            SuggestInputOutcome::Unhandled => {}
-        }
-
-        if key.code == KeyCode::Enter && key.modifiers.is_empty() && input.accepts_submission_key()
-        {
-            return self.submit_current(input);
-        }
-
-        let outcome = input.handle_key(key);
-        self.sync_suggest(input);
-        outcome
-    }
-
-    fn activate_chat_input_suggest(
-        &mut self,
-        input: &mut ChatInput,
-        index: usize,
-    ) -> Option<ChatInputOutcome> {
-        let outcome = self.suggest.activate(index)?;
-        let (edit, submit) = match outcome {
-            SuggestInputOutcome::Completed(edit) => (edit, false),
-            SuggestInputOutcome::Submit(edit) => (edit, true),
-            SuggestInputOutcome::Consumed | SuggestInputOutcome::Unhandled => return None,
-        };
-        self.apply_suggest_edit(input, edit);
-        self.sync_suggest(input);
-        Some(if submit {
-            self.submit_current(input)
-        } else {
-            ChatInputOutcome::Consumed
-        })
-    }
-
-    fn submit_current(&mut self, input: &mut ChatInput) -> ChatInputOutcome {
-        let command = self.current_command(input);
-        let outcome = input.submit_current(command);
-        self.suggest.clear();
-        outcome
-    }
-
-    fn current_command(
-        &self,
-        input: &ChatInput,
-    ) -> Option<zeta_slash_commands::SlashCommandInvocation> {
-        input
-            .submission_display_text()
-            .and_then(|text| self.suggest.invocation(&text))
-    }
-
-    fn sync_suggest(&mut self, input: &mut ChatInput) {
-        let desired_command = self
-            .suggest
-            .command_element_range(input.draft_text(), input.draft_cursor());
-        input.reconcile(desired_command);
-        self.suggest.sync_textarea(
-            input.draft_text(),
-            input.draft_cursor(),
-            input.slash_command_active(),
-        );
-    }
-
-    fn apply_suggest_edit(&mut self, input: &mut ChatInput, edit: SuggestEdit) {
-        match edit {
-            SuggestEdit::Text { range, replacement } => {
-                input.apply_text_completion(range, &replacement);
-            }
-            SuggestEdit::Element {
-                range,
-                value,
-                skill,
-            } => input.apply_element_completion(range, &value, skill),
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::components::chat_input::ChatInputQueueOutcome;
 fn queued_input(text: &str) -> crate::components::chat_input::QueuedChatInput {
     let mut input = ChatInput::new();
     input.insert_text(text);
-    let ChatInputQueueOutcome::Queued(input) = input.queue_current(None) else {
+    let ChatInputQueueOutcome::Queued(input) = input.queue_current() else {
         panic!("expected queued input");
     };
     input

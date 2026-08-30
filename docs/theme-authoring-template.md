@@ -1,6 +1,6 @@
 # 用户主题 JSON 模板
 
-> 本文是可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../resources/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../resources/design-tokens/color-theme.schema.json)。
+> 本文是 Desktop 与 Rust 桌面端可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../resources/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../resources/design-tokens/color-theme.schema.json)。Zeta Code TUI 使用自己的主题格式，见 [`zeta-code/tui/README.md`](../zeta-code/tui/README.md)。
 
 ## 快速理解
 
@@ -156,21 +156,18 @@ Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件�
 - Windows/Linux 原生标题栏按钮区域；
 - 状态栏、菜单、输入框、列表和其他语义组件。
 
-TUI 有意只消费共享 token 子集，并根据终端能力降级到 TrueColor、ANSI-256、ANSI-16 或 Monochrome；因此一个合法主题不保证终端能复现 Desktop 的全部颜色细节。
-
 选择值保存在 profile `configuration.json`；主题文档本身仍位于 profile root 的 `themes/*.json`：
 
 ```json
 {
   "version": 1,
   "values": {
-    "workbench.colorTheme": "zeta-aurora",
-    "tui.colorTheme": "zeta-aurora"
+    "workbench.colorTheme": "zeta-aurora"
   }
 }
 ```
 
-各字段都可省略，省略时使用对应 surface 的 `system` 默认入口。`system` 仍表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存/预览会即时更新；TUI 可用 `/theme` 打开不带搜索的 Zeta Code Theme Pane，通过 Enter 原子保存、即时切换并返回主界面，并在 transcript 中以状态圆点、`/theme <id>` 与下一行通过 `└─` 归属且对齐的 `Theme set to …` 记录结果；也可用 `/theme <id>` 直接选择。Custom color theme 行进入有效用户主题列表；外部修改主题文件后，Native 与 TUI 仍需重启才能重新读取文件内容。
+该字段可以省略，省略时使用 `system` 默认入口。`system` 表示跟随操作系统并在内置 Light/Dark 之间切换。Desktop 保存和预览会即时更新；Rust 桌面端需要重启才能重新读取外部修改的主题文件。
 
 ## 开发与验证
 

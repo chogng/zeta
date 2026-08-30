@@ -73,6 +73,7 @@ fn profile_root_selects_product_scoped_tui_resources() {
         options.terminal_settings_path,
         Some(profile_root.join("zeta-code").join("terminal.json"))
     );
+    assert_eq!(options.theme_root, Some(profile_root.join("zeta-code")));
 }
 
 #[test]
@@ -313,7 +314,12 @@ fn server_slash_commands_become_the_tui_runtime_registry() {
     )
     .unwrap();
 
-    assert!(registry.catalog.command_named("diagnose").is_some());
+    assert!(
+        registry
+            .slash_commands()
+            .command_named("diagnose")
+            .is_some()
+    );
 }
 
 #[test]
@@ -366,11 +372,11 @@ fn enabled_unique_skills_become_dollar_selector_items() {
     )
     .unwrap();
 
-    assert!(registry.catalog.command_named("commit").is_some());
-    assert_eq!(registry.skills.len(), 1);
-    assert_eq!(registry.skills[0].name(), "commit");
+    assert!(registry.slash_commands().command_named("commit").is_some());
+    assert_eq!(registry.skills().len(), 1);
+    assert_eq!(registry.skills()[0].name(), "commit");
     assert_eq!(
-        registry.skills[0].skill(),
+        registry.skills()[0].skill(),
         &zeta_protocol::SkillRef::pinned(skill_id, digest)
     );
 }
@@ -393,7 +399,7 @@ fn effective_plugins_become_at_mention_items() {
     )
     .unwrap();
 
-    assert_eq!(registry.plugins.len(), 1);
+    assert_eq!(registry.plugins().len(), 1);
 }
 
 fn empty_skill_catalog() -> SkillListResult {

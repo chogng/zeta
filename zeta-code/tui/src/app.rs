@@ -16,7 +16,6 @@ mod status_notice;
 mod transcript_batch;
 
 pub(crate) use crate::features::sessions::ActiveConversation;
-pub(crate) use bootstrap::ChatInputCatalogSnapshot;
 pub(crate) use bootstrap::chat_input_catalog_snapshot;
 pub(crate) use bootstrap::slash_command_registry;
 pub(crate) use command::AppCommand;

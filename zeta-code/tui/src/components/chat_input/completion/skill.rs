@@ -1,16 +1,16 @@
-//! `$skill` query, completion, and exact Skill binding state.
+//! `$skill` query, completion, and exact Skill binding state owned by `ChatInput`.
 
 use std::ops::Range;
 use zeta_protocol::SkillRef;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SkillSelectorItem {
+pub(crate) struct SkillCompletionItem {
     name: String,
     description: String,
     skill: SkillRef,
 }
 
-impl SkillSelectorItem {
+impl SkillCompletionItem {
     pub(crate) fn new(name: String, description: String, skill: SkillRef) -> Self {
         Self {
             name,
@@ -34,8 +34,8 @@ impl SkillSelectorItem {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct SkillSelectorView<'a> {
-    pub(crate) items: &'a [SkillSelectorItem],
+pub(crate) struct SkillCompletionView<'a> {
+    pub(crate) items: &'a [SkillCompletionItem],
     pub(crate) selected: usize,
 }
 
@@ -46,17 +46,17 @@ pub(super) struct SkillCompletion {
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
-pub(in crate::components) struct SkillSelector {
-    catalog: Vec<SkillSelectorItem>,
+pub(in crate::components) struct SkillCompletionState {
+    catalog: Vec<SkillCompletionItem>,
     token_range: Option<Range<usize>>,
     query: Option<String>,
-    matches: Vec<SkillSelectorItem>,
+    matches: Vec<SkillCompletionItem>,
     selected: usize,
     dismissed: bool,
 }
 
-impl SkillSelector {
-    pub(in crate::components) fn replace_catalog(&mut self, catalog: Vec<SkillSelectorItem>) {
+impl SkillCompletionState {
+    pub(in crate::components) fn replace_catalog(&mut self, catalog: Vec<SkillCompletionItem>) {
         self.catalog = catalog;
         self.refresh_matches();
     }
@@ -76,8 +76,8 @@ impl SkillSelector {
         self.refresh_matches();
     }
 
-    pub(in crate::components) fn view(&self) -> Option<SkillSelectorView<'_>> {
-        (!self.dismissed && self.query.is_some()).then_some(SkillSelectorView {
+    pub(in crate::components) fn view(&self) -> Option<SkillCompletionView<'_>> {
+        (!self.dismissed && self.query.is_some()).then_some(SkillCompletionView {
             items: &self.matches,
             selected: self.selected,
         })
@@ -98,14 +98,6 @@ impl SkillSelector {
         if !self.matches.is_empty() {
             self.selected = (self.selected + 1) % self.matches.len();
         }
-    }
-
-    pub(in crate::components) fn select(&mut self, index: usize) -> bool {
-        if !self.view().is_some_and(|view| index < view.items.len()) {
-            return false;
-        }
-        self.selected = index;
-        true
     }
 
     pub(in crate::components) fn dismiss(&mut self) {

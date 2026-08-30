@@ -263,4 +263,9 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.grep_backend = crate::AgentGrepBackend::Ripgrep,
         Patch::Value(backend) => document.agent.grep_backend = *backend,
     }
+    match &update.tui_theme {
+        Patch::Missing => {}
+        Patch::Null => document.tui.theme = crate::DEFAULT_TUI_THEME.into(),
+        Patch::Value(theme) => document.tui.theme = theme.clone(),
+    }
 }

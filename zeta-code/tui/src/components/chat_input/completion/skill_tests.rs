@@ -1,5 +1,5 @@
-use super::SkillSelector;
-use super::SkillSelectorItem;
+use super::SkillCompletionItem;
+use super::SkillCompletionState;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillName;
@@ -9,8 +9,8 @@ use zeta_protocol::SkillSourceId;
 #[test]
 fn dollar_token_returns_an_exact_skill_completion() {
     let skill = skill_ref("commit");
-    let mut selector = SkillSelector::default();
-    selector.replace_catalog(vec![SkillSelectorItem::new(
+    let mut selector = SkillCompletionState::default();
+    selector.replace_catalog(vec![SkillCompletionItem::new(
         "commit".into(),
         "draft a commit message".into(),
         skill.clone(),
@@ -26,8 +26,8 @@ fn dollar_token_returns_an_exact_skill_completion() {
 
 #[test]
 fn at_token_does_not_open_the_skill_selector() {
-    let mut selector = SkillSelector::default();
-    selector.replace_catalog(vec![SkillSelectorItem::new(
+    let mut selector = SkillCompletionState::default();
+    selector.replace_catalog(vec![SkillCompletionItem::new(
         "commit".into(),
         "draft a commit message".into(),
         skill_ref("commit"),

@@ -68,7 +68,7 @@ fn actionable_rows_expose_pointer_hit_testing_and_activation() {
     assert_eq!(state.item_index_at(area, 2, 3), Some(1));
     assert_eq!(state.item_index_at(area, 1, 3), None);
     assert_eq!(state.activate_visible_item(1), Some(second_id));
-    assert_eq!(state.selected_visible_index(), Some(1));
+    assert_eq!(state.selected_visible_index(), Some(0));
 }
 
 #[test]

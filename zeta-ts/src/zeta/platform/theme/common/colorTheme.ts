@@ -8,7 +8,6 @@ import * as editorColors from "./colors/editorColors.js";
 import * as filesColors from "./colors/filesColors.js";
 import * as settingsColors from "./colors/settingsColors.js";
 import * as terminalColors from "./colors/terminalColors.js";
-import * as tuiColors from "./colors/tuiColors.js";
 import * as workbenchColors from "./colors/workbenchColors.js";
 import { Sizes, sizeCssVariable, sizeToCss, type SizeContribution, type SizeValue } from "./sizeRegistry.js";
 import "./sizes/baseSizes.js";
@@ -146,9 +145,6 @@ export const ColorId = Object.freeze({
 	terminalAnsiBrightMagenta: terminalColors.terminalAnsiBrightMagenta,
 	terminalAnsiBrightCyan: terminalColors.terminalAnsiBrightCyan,
 	terminalAnsiBrightWhite: terminalColors.terminalAnsiBrightWhite,
-	tuiHighlightForeground: tuiColors.tuiHighlightForeground,
-	tuiActiveSelectionForeground: tuiColors.tuiActiveSelectionForeground,
-	tuiActiveSelectionBackground: tuiColors.tuiActiveSelectionBackground,
 });
 
 export { colorCssVariable, sizeCssVariable };

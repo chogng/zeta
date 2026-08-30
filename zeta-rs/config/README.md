@@ -2,7 +2,7 @@
 
 `zeta-config` 隔离配置文档、持久化事务和作用域合并，具体职责只有三项：
 
-1. `ConfigStore` 按 `schemaVersion` 严格读取并原子迁移用户 `config.toml`，再用 SQLite 保存 revision、generation 和命令回执。
+1. `ConfigStore` 按 `schemaVersion` 严格读取并原子迁移用户 `config.toml`，其中 `[tui].theme` 保存终端产品共用的主题选择；SQLite 保存 revision、generation 和命令回执。
 2. `DirConfigStore` 严格读取目录提供的 `.zeta/config.toml`；目录文档只能表达待处理的配置意图，不能给自身增加 capability。
 3. `DirPermissionsConfig` 按 `DirId` 保存用户明确授予的 capability 集合；缺失条目表示没有持久授权，不使用 Trusted、Restricted 或目录级 Trust 状态。
 

@@ -119,23 +119,14 @@ impl Approval {
         }
     }
 
-    pub(crate) fn select(&mut self, index: usize) -> bool {
-        let Some(decision) = decision_at(index) else {
-            return false;
-        };
-        if self.submitting {
-            return false;
-        }
-        self.selected = decision;
-        true
-    }
-
     pub(crate) fn activate(&mut self, index: usize) -> Option<ApprovalOutcome> {
-        self.select(index).then(|| {
-            self.submitting = true;
-            self.error = None;
-            ApprovalOutcome::Respond(self.selected)
-        })
+        let decision = decision_at(index)?;
+        if self.submitting {
+            return None;
+        }
+        self.submitting = true;
+        self.error = None;
+        Some(ApprovalOutcome::Respond(decision))
     }
 
     pub(crate) fn submission_failed(&mut self, error: String) {
@@ -218,8 +209,10 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     view: ApprovalView<'_>,
+    hovered: Option<usize>,
     context: RenderContext<'_>,
 ) {
+    let presented = hovered.and_then(decision_at).unwrap_or(view.selected);
     let mut lines = vec![Line::styled(
         view.reason,
         Style::default().add_modifier(Modifier::BOLD),
@@ -232,12 +225,12 @@ pub(crate) fn draw(
     );
     lines.push(choice_line(
         "Approve once",
-        view.selected == ApprovalDecision::ApproveOnce,
+        presented == ApprovalDecision::ApproveOnce,
         context,
     ));
     lines.push(choice_line(
         "Decline",
-        view.selected == ApprovalDecision::Decline,
+        presented == ApprovalDecision::Decline,
         context,
     ));
     if view.submitting {

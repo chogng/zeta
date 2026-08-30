@@ -1,10 +1,16 @@
 use super::ThreadPresentationStore;
+use crate::components::chat_input::ChatInputCatalog;
 use crate::components::chat_input::ChatInputQueueOutcome;
+use crate::components::chat_input::CompletionView;
+use crate::components::chat_input::built_in_slash_command_definitions;
 use crate::features::thread::TranscriptCellId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use zeta_protocol::ThreadId;
+use zeta_slash_commands::SlashCommandArgumentMode;
+use zeta_slash_commands::SlashCommandCatalog;
+use zeta_slash_commands::SlashCommandDefinition;
 
 #[test]
 fn switching_threads_restores_draft_queue_and_scroll_together() {
@@ -12,7 +18,7 @@ fn switching_threads_restores_draft_queue_and_scroll_together() {
     let child = thread_id("child");
     let mut store = ThreadPresentationStore::new(main.clone());
     store.active_mut().input.insert_text("main draft");
-    let ChatInputQueueOutcome::Queued(queued) = store.active_mut().input.queue_current(None) else {
+    let ChatInputQueueOutcome::Queued(queued) = store.active_mut().input.queue_current() else {
         panic!("expected queued input");
     };
     store.active_mut().queue.push(queued);
@@ -53,6 +59,36 @@ fn switching_threads_restores_cell_selection_and_expansion_together() {
     store.switch(main);
     assert_eq!(store.active().selected_cell.as_ref(), Some(&main_cell));
     assert!(store.active().expanded_cells.contains(&main_cell));
+}
+
+#[test]
+fn refreshed_completion_catalog_reaches_existing_and_future_threads() {
+    let main = thread_id("main");
+    let child = thread_id("child");
+    let future = thread_id("future");
+    let mut store = ThreadPresentationStore::new(main.clone());
+    store.switch(child.clone());
+    store.switch(main.clone());
+    let catalog = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        [SlashCommandDefinition {
+            name: "diagnose".into(),
+            description: "inspect the current dir".into(),
+            argument_mode: SlashCommandArgumentMode::Optional,
+        }],
+    )
+    .unwrap();
+
+    store.replace_input_catalog(ChatInputCatalog::with_slash_commands(catalog));
+
+    for thread in [main, child, future] {
+        store.switch(thread);
+        store.active_mut().input.insert_text("/diag");
+        let Some(CompletionView::Slash(view)) = store.active().input.completion() else {
+            panic!("expected Slash completion");
+        };
+        assert_eq!(view.commands[0].name, "diagnose");
+    }
 }
 
 fn thread_id(value: &str) -> ThreadId {

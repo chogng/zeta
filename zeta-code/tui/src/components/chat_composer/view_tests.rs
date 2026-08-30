@@ -36,6 +36,7 @@ fn renderable_measurement_matches_the_composer_area_allocation() {
         overlay_area: Rect::default(),
         view: &view,
         cursor: ChatInputCursor::Hidden,
+        hovered: None,
     };
 
     let height = surface.desired_height(80, test_context());

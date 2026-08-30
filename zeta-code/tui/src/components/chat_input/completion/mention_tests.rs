@@ -40,18 +40,6 @@ fn popup_ignores_stale_results_and_preserves_dismissal_for_an_unchanged_token() 
 }
 
 #[test]
-fn direct_selection_tracks_a_hovered_file_match() {
-    let mut popup = MentionPopup::default();
-    popup.sync(active_mention("@lib", 4));
-    popup.apply_search_snapshot(snapshot("lib", &["src/lib.rs", "lib/types.rs"]));
-
-    assert!(popup.select(1));
-    assert_eq!(popup.view().unwrap().selected, 1);
-    assert!(!popup.select(2));
-    assert_eq!(popup.view().unwrap().selected, 1);
-}
-
-#[test]
 fn completing_a_file_returns_only_the_active_token_edit() {
     let mut mentions = Mentions {
         popup: MentionPopup::default(),

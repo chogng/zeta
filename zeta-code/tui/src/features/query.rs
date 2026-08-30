@@ -222,16 +222,11 @@ impl Query {
         }
     }
 
-    pub(crate) fn select(&mut self, index: usize) -> bool {
-        if self.submitting || index >= self.option_count() {
-            return false;
-        }
-        self.selected = index;
-        true
-    }
-
     pub(crate) fn activate(&mut self, index: usize) -> Option<QueryOutcome> {
-        self.select(index).then(|| self.activate_selected())
+        if self.submitting || index >= self.option_count() {
+            return None;
+        }
+        Some(self.activate_at(index))
     }
 
     pub(crate) fn submission_failed(&mut self, error: String) {
@@ -252,9 +247,13 @@ impl Query {
     }
 
     fn activate_selected(&mut self) -> QueryOutcome {
+        self.activate_at(self.selected)
+    }
+
+    fn activate_at(&mut self, index: usize) -> QueryOutcome {
         let question = &self.questions[self.current];
-        if self.selected < question.choices.len() {
-            let value = question.choices[self.selected].label.clone();
+        if index < question.choices.len() {
+            let value = question.choices[index].label.clone();
             return self.advance(value);
         }
         self.custom_answer = Some(String::new());
@@ -306,8 +305,10 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     view: QueryView<'_>,
+    hovered: Option<usize>,
     context: RenderContext<'_>,
 ) {
+    let presented = hovered.unwrap_or(view.selected);
     let mut lines = vec![Line::styled(
         &view.question.prompt,
         Style::default().add_modifier(Modifier::BOLD),
@@ -322,7 +323,7 @@ pub(crate) fn draw(
                 choice_line(
                     &choice.label,
                     &choice.description,
-                    index == view.selected,
+                    index == presented,
                     context,
                 )
             }),
@@ -333,7 +334,7 @@ pub(crate) fn draw(
         lines.push(choice_line(
             "自己输入",
             "在下方输入框中回答",
-            view.selected == view.question.choices.len(),
+            presented == view.question.choices.len(),
             context,
         ));
     }

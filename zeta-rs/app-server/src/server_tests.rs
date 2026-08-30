@@ -1319,8 +1319,7 @@ fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
         "active"
     );
     assert_eq!(
-        thread["result"]["value"]["session"]["threads"][0]["usage"]["inputTokens"]
-            ["reported"],
+        thread["result"]["value"]["session"]["threads"][0]["usage"]["inputTokens"]["reported"],
         0
     );
     assert!(
@@ -3123,6 +3122,49 @@ fn config_updates_use_typed_command_ids() {
     drop(connection);
     drop(server);
     let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+}
+
+#[test]
+fn config_update_persists_and_reads_the_shared_tui_theme() {
+    let path = std::env::temp_dir().join(format!(
+        "zeta-app-server-tui-theme-{}.sqlite3",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let server = server().with_config_store(Arc::new(ConfigStore::open(&path).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let updated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"config/update",
+            "params":{
+                "commandId":"select-tui-theme",
+                "expectedRevision":0,
+                "tuiTheme":"zeta-code-light"
+            }
+        }),
+    );
+    assert_eq!(updated["result"]["revision"], 1);
+
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"config/read","params":{}}),
+    );
+    assert_eq!(read["result"]["tui"]["theme"], "zeta-code-light");
+    let document = std::fs::read_to_string(path.with_extension("toml")).unwrap();
+    assert!(document.contains("[tui]\n"));
+    assert!(document.contains("theme = \"zeta-code-light\""));
+
+    let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(path.with_extension("toml"));
     let _ = std::fs::remove_file(format!("{}-shm", path.display()));
     let _ = std::fs::remove_file(format!("{}-wal", path.display()));
 }

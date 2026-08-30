@@ -130,6 +130,7 @@ where
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
         agent_grep_backend: Patch::Missing,
+        tui_theme: Patch::Missing,
     })?;
     let config = client.read_config()?;
     let notice = format!(
@@ -140,6 +141,27 @@ where
         preferred_model: config.preferred_model,
         notice,
     })
+}
+
+pub(crate) fn set_tui_theme<T>(
+    client: &mut AppServerClient<T>,
+    theme: String,
+) -> Result<(), ConfigCommandError>
+where
+    T: JsonRpcTransport,
+{
+    let config = client.read_config()?;
+    client.update_config(ConfigUpdateParams {
+        command_id: new_command_id("theme"),
+        expected_revision: config.revision,
+        preferred_model: Patch::Missing,
+        approval_review_model: Patch::Missing,
+        commit_message_model: Patch::Missing,
+        tool_mode: Patch::Missing,
+        agent_grep_backend: Patch::Missing,
+        tui_theme: Patch::Value(theme),
+    })?;
+    Ok(())
 }
 
 pub(crate) fn preferred_model(model: Option<&ModelRefDto>) -> String {

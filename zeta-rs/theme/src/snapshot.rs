@@ -5,7 +5,7 @@ use crate::color::Rgba;
 use crate::document::ColorScheme;
 use crate::size::{ThemeSize, ThemeSizeUnit};
 
-/// Immutable, fully resolved theme selected for one presentation surface.
+/// Immutable, fully resolved theme selected for one graphical host.
 #[derive(Clone, Debug)]
 pub struct ThemeSnapshot {
     pub(crate) id: String,

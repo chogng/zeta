@@ -153,6 +153,7 @@ use crate::protocol::config::ToolSearchConfigDto;
 use crate::protocol::config::ToolSearchConfigureParams;
 use crate::protocol::config::ToolSearchEmbeddingStatusDto;
 use crate::protocol::config::ToolSearchModeDto;
+use crate::protocol::config::TuiConfigDto;
 use crate::protocol::connectors::ConnectorAccountDto;
 use crate::protocol::connectors::ConnectorApiTokenConnectParams;
 use crate::protocol::connectors::ConnectorAvailableActionDto;
@@ -2729,6 +2730,7 @@ typescript_bindings! {
     HookConfigDto,
     LanguageServerModeDto,
     LanguageServerConfigDto,
+    TuiConfigDto,
     ConfigReadResult,
     ConfigChanged,
     ConfigCommandDispositionDto,

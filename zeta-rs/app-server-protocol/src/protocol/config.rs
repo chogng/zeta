@@ -380,6 +380,13 @@ pub struct ExecPolicyRuleDto {
     pub justification: Option<String>,
 }
 
+/// Configuration owned by terminal products.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TuiConfigDto {
+    pub theme: String,
+}
+
 /// Current user configuration snapshot returned by `config/read`.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -405,6 +412,7 @@ pub struct ConfigReadResult {
     pub tool_search: ToolSearchConfigDto,
     pub codebase: CodebaseConfigDto,
     pub exec_policy_rules: Vec<ExecPolicyRuleDto>,
+    pub tui: TuiConfigDto,
 }
 
 /// Creates or replaces one durable User execution-policy rule.
@@ -535,6 +543,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<AgentGrepBackendDto>")]
     #[ts(as = "Option<AgentGrepBackendDto>", optional = nullable)]
     pub agent_grep_backend: Patch<AgentGrepBackendDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<String>")]
+    #[ts(as = "Option<String>", optional = nullable)]
+    pub tui_theme: Patch<String>,
 }
 
 /// Creates or replaces one user-owned language-server preference.

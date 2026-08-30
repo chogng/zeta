@@ -9,6 +9,7 @@ use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchModeDto;
+use zeta_app_server_protocol::protocol::config::TuiConfigDto;
 
 static IN_PROCESS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -44,5 +45,8 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
             automatic_context: CodebaseAutomaticContextDto::Off,
         },
         exec_policy_rules: Vec::new(),
+        tui: TuiConfigDto {
+            theme: "system".into(),
+        },
     }
 }

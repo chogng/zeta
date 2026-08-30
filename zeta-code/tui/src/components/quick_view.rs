@@ -96,7 +96,7 @@ pub(crate) fn draw(
     };
     let area = bottom_anchored_area(centered, height);
     frame.render_widget(
-        Block::default().style(Style::default().bg(context.background())),
+        Block::default().style(Style::default().bg(context.quick_view_background())),
         area,
     );
     let key_rows = u16::from(area.height > 0);

@@ -4,11 +4,9 @@ use super::AppEvent;
 use super::chat_input_catalog_snapshot;
 use super::dispatch::ProductCommandOutput;
 use crate::TuiExit;
+use crate::components::chat_input::ChatInputCatalog;
 use crate::components::chat_input::ChatSubmission;
-use crate::components::chat_input::SlashCommandCatalog;
 use crate::components::steer::SteerId;
-use crate::components::suggest::MentionPluginItem;
-use crate::components::suggest::SkillSelectorItem;
 use crate::features::config;
 use crate::features::queue::QueueId;
 use crate::features::sessions::ConversationChange;
@@ -31,6 +29,7 @@ use crate::features::thread::recover_active_turn;
 use crate::features::thread::resolve_interaction;
 use crate::features::thread::steer_prompt;
 use crate::features::thread::submit_prompt;
+use crate::render::RenderTheme;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
@@ -60,6 +59,12 @@ pub(super) enum RequestCompletion {
         result: Result<config::PreferredModelUpdate, String>,
     },
     SkillsRefreshed(Result<SkillRequestCompletion, String>),
+    ThemeUpdated {
+        command: String,
+        label: String,
+        theme: RenderTheme,
+        result: Result<(), String>,
+    },
     ThreadRequestResolved {
         request: ThreadRequestIdentity,
         result: Result<LatestThreadSnapshot, ClientError>,
@@ -104,9 +109,7 @@ pub(super) struct ProductCommandCompletion {
 }
 
 pub(super) struct SkillRequestCompletion {
-    slash_commands: SlashCommandCatalog,
-    skills: Vec<SkillSelectorItem>,
-    plugins: Vec<MentionPluginItem>,
+    input_catalog: ChatInputCatalog,
     pane_spec: SkillPaneSpec,
 }
 
@@ -130,12 +133,10 @@ pub(super) fn refresh_skills_and_registry(
     } else {
         Vec::new()
     };
-    let registry = chat_input_catalog_snapshot(&server_slash_commands, &catalog, &plugins)
+    let input_catalog = chat_input_catalog_snapshot(&server_slash_commands, &catalog, &plugins)
         .map_err(|error| error.to_string())?;
     Ok(SkillRequestCompletion {
-        slash_commands: registry.catalog,
-        plugins: registry.plugins,
-        skills: registry.skills,
+        input_catalog,
         pane_spec: skills::skills_pane_spec(&catalog),
     })
 }
@@ -406,8 +407,24 @@ pub(super) fn apply_request_completion(
         RequestCompletion::PreferredModelUpdated {
             result: Err(error), ..
         } => app.update(AppEvent::FailureReported(error)),
+        RequestCompletion::ThemeUpdated {
+            command,
+            label,
+            theme,
+            result: Ok(()),
+        } => {
+            app.update(AppEvent::RenderThemeChanged(theme));
+            app.update(AppEvent::CommandCompleted {
+                command,
+                result: format!("Theme set to {label}"),
+            });
+            app.update(AppEvent::ThemePanesClosed);
+        }
+        RequestCompletion::ThemeUpdated {
+            result: Err(error), ..
+        } => app.update(AppEvent::FailureReported(error)),
         RequestCompletion::SkillsRefreshed(Ok(refresh)) => {
-            app.replace_chat_input_catalog(refresh.slash_commands, refresh.skills, refresh.plugins);
+            app.replace_chat_input_catalog(refresh.input_catalog);
             if app.skills_view_is_active() {
                 app.update(AppEvent::SkillsPaneReplaced(refresh.pane_spec));
             }

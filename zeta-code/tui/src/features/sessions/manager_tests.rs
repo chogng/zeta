@@ -136,17 +136,18 @@ fn viewport_reserves_rows_for_both_overflow_notices() {
 }
 
 #[test]
-fn pointer_targets_visible_rows_and_focuses_the_hovered_session() {
+fn pointer_activation_does_not_take_keyboard_focus_or_selection() {
     let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
     let target = pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 1)
         .expect("the first session row is interactive");
 
-    state.select_pointer_target(target);
+    let detail = state.activate_pointer_target(target, &sessions).unwrap();
 
-    assert!(state.focused());
-    assert_eq!(state.selected_session().unwrap().as_str(), "idle");
+    assert!(!state.focused());
+    assert!(state.selected_session().is_none());
+    assert_eq!(detail.into_body().title(), "Session preview");
 }
 
 #[test]
@@ -225,6 +226,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
                 frame,
                 Rect::new(0, 0, 32, 5),
                 state.view(&sessions),
+                None,
                 crate::render::test_context(),
             )
         })
@@ -255,6 +257,7 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
                 frame,
                 Rect::new(0, 0, 32, 5),
                 state.view(&sessions),
+                None,
                 crate::render::test_context(),
             )
         })

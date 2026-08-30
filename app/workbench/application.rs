@@ -49,7 +49,7 @@ use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_terminal_runtime::TerminalPaneViewState;
 use zeta_terminal_runtime::TerminalPaneViews;
 use zeta_terminal_runtime::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
-use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
+use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, default_device_root};
 use zeta_ui_components::{SashOrientation, SashPointerPresence};
 use zeta_ui_theme::{DEFAULT_UI_THEME, UiTheme};
 use zui::ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};

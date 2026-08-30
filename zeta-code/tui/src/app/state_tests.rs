@@ -7,13 +7,13 @@ use crate::components::chat_history::MessageRole;
 use crate::components::chat_input::ChatInputItem;
 use crate::components::chat_input::ChatInputMode;
 use crate::components::chat_input::ChatSubmission;
+use crate::components::chat_input::CompletionView;
 use crate::components::chat_input::built_in_slash_command_definitions;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneBodyView;
 use crate::components::pane::PaneSpec;
-use crate::components::suggest::SuggestView;
 use crate::features::approval::Approval;
 use crate::features::approval::ApprovalSpec;
 use crate::features::config::FollowUpMode;
@@ -74,8 +74,6 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
 use zeta_terminal_detection::ColorLevel;
-use zeta_theme::ColorScheme;
-use zeta_theme::ThemeCatalog;
 
 fn set_follow_up_mode(app: &mut App, mode: FollowUpMode) {
     let mut settings = TerminalSettings::default();
@@ -211,11 +209,8 @@ fn selected_theme_closes_the_theme_pane_after_success() {
 #[test]
 fn selected_render_theme_is_read_through_the_frame_context() {
     let mut app = App::new();
-    let snapshot = ThemeCatalog::embedded()
-        .unwrap()
-        .built_in_entry("zeta-code", ColorScheme::Light)
-        .unwrap();
-    let theme = RenderTheme::from_snapshot(&snapshot, ColorLevel::TrueColor).unwrap();
+    let theme =
+        RenderTheme::from_palette(crate::render::ThemePalette::light(), ColorLevel::TrueColor);
 
     app.update(AppEvent::RenderThemeChanged(theme));
 
@@ -228,14 +223,13 @@ fn pointer_activation_uses_the_feature_pane_action_mapping() {
     app.update(AppEvent::ThemePaneOpened(theme_pane_spec(&theme_catalog())));
 
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
-    assert!(app.select_visible_item(1));
-    assert_eq!(
-        app.list_selection().unwrap().selected_visible_index(),
-        Some(1)
-    );
     assert_eq!(
         app.activate_visible_item(1),
         Some(AppCommand::OpenCustomThemePane)
+    );
+    assert_eq!(
+        app.list_selection().unwrap().selected_visible_index(),
+        Some(0)
     );
 }
 
@@ -634,6 +628,31 @@ fn config_slash_command_is_owned_by_the_local_host() {
 }
 
 #[test]
+fn theme_slash_command_is_owned_by_the_tui_host() {
+    let mut app = App::new();
+    app.insert_text("/theme");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, Some(AppCommand::OpenThemePane));
+}
+
+#[test]
+fn inline_theme_selection_requests_a_shared_config_edit() {
+    let mut app = App::new();
+    app.insert_text("/theme zeta-code-light");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(
+        action,
+        Some(AppCommand::SetTheme {
+            preference: "zeta-code-light".into(),
+        })
+    );
+}
+
+#[test]
 fn config_mouse_selection_emits_a_revision_bound_edit() {
     let config = empty_config_snapshot();
     let mut app = App::new();
@@ -959,19 +978,19 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
     )
     .unwrap();
     let mut app = App::for_dir_with_slash_commands(&dir, registry.clone());
-    app.replace_chat_input_catalog(
+    app.replace_chat_input_catalog(crate::components::chat_input::ChatInputCatalog::new(
         registry,
-        vec![crate::components::suggest::SkillSelectorItem::new(
+        vec![crate::components::chat_input::SkillCompletionItem::new(
             "commit".into(),
             "draft a commit message".into(),
             skill.clone(),
         )],
         Vec::new(),
-    );
+    ));
     app.insert_text("$com");
     assert!(matches!(
-        app.suggest(),
-        Some(SuggestView::Skill(view)) if view.items[0].name() == "commit"
+        app.completion(),
+        Some(CompletionView::Skill(view)) if view.items[0].name() == "commit"
     ));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.insert_text("staged changes");
@@ -999,7 +1018,7 @@ fn activating_a_slash_command_by_index_uses_the_command_dispatch_path() {
     let mut app = App::new();
     app.insert_text("/q");
 
-    let action = app.activate_input_overlay_choice(0);
+    let action = app.activate_input_completion(0);
 
     assert_eq!(action, Some(AppCommand::Quit));
     assert!(app.input().is_empty());
@@ -1102,8 +1121,8 @@ fn at_file_popup_completes_an_atomic_path_before_submission() {
     wait_for_mention_results(&mut app, &dir);
 
     assert!(matches!(
-        app.suggest(),
-        Some(SuggestView::Mention(view)) if view.matches[0].label == "src/lib.rs"
+        app.completion(),
+        Some(CompletionView::Mention(view)) if view.matches[0].label == "src/lib.rs"
     ));
     let completion = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -1126,7 +1145,7 @@ fn escape_dismisses_an_at_file_popup_and_is_inert_at_the_root() {
     let dismissed = app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     assert_eq!(dismissed, None);
-    assert!(app.suggest().is_none());
+    assert!(app.completion().is_none());
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         None
@@ -1557,8 +1576,8 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
             app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
         }
         if matches!(
-            app.suggest(),
-            Some(SuggestView::Mention(popup)) if !popup.matches.is_empty()
+            app.completion(),
+            Some(CompletionView::Mention(popup)) if !popup.matches.is_empty()
         ) {
             return;
         }

@@ -27,6 +27,7 @@ pub(crate) enum AppCommand {
     OpenConfigPane,
     OpenKeymapPane,
     OpenStatusLinePane,
+    OpenThemePane,
     EditKeymap(KeymapEdit),
     EditConfig(ConfigEdit),
     EditPermissions(PermissionEdit),

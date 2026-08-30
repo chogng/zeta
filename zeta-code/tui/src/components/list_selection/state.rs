@@ -350,6 +350,7 @@ impl ListSelectionState {
         self.selected_visible
     }
 
+    #[cfg(test)]
     pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
         let selectable = self
             .visible_items()
@@ -363,9 +364,7 @@ impl ListSelectionState {
     }
 
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ListSelectionItemId> {
-        self.select_visible_item(index)
-            .then(|| self.selected_item_id())
-            .flatten()
+        self.visible_items().get(index)?.id().cloned()
     }
 
     pub(crate) fn first_rendered_row(&self, visible_rows: usize) -> usize {

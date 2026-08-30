@@ -21,7 +21,7 @@ its crossterm event stream. `zeta-terminal` separately owns child-terminal emula
 zeta-tui
 ├─ zeta-terminal-detection  # environment identity
 ├─ terminal_probe           # OSC query while TUI exclusively owns stdin
-└─ zeta-theme               # scheme resolution and token snapshots
+└─ features/theme           # TUI-owned palettes, preference, and terminal colors
 ```
 
 Detection favors `TERM_PROGRAM`, then terminal-specific variables, then `TERM`; multiplexer identity

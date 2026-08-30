@@ -3,6 +3,7 @@ use super::transcript::TranscriptCellId;
 use crate::components::chat_history::ChatHistoryRenderCache;
 use crate::components::chat_history::ChatHistoryScroll;
 use crate::components::chat_input::ChatInput;
+use crate::components::chat_input::ChatInputCatalog;
 use crate::components::chat_input::ChatInputMode;
 use crate::features::queue::Queue;
 use std::collections::BTreeMap;
@@ -25,8 +26,14 @@ pub(crate) struct ThreadPresentationState {
 
 impl Default for ThreadPresentationState {
     fn default() -> Self {
+        Self::with_input_catalog(ChatInputCatalog::default())
+    }
+}
+
+impl ThreadPresentationState {
+    fn with_input_catalog(catalog: ChatInputCatalog) -> Self {
         Self {
-            input: ChatInput::new(),
+            input: ChatInput::with_catalog(catalog),
             goal: None,
             plan: PlanState::default(),
             queue: Queue::default(),
@@ -37,9 +44,7 @@ impl Default for ThreadPresentationState {
             scroll_anchor: None,
         }
     }
-}
 
-impl ThreadPresentationState {
     pub(crate) fn toggle_cell(&mut self, cell_id: &TranscriptCellId) -> bool {
         if !self.expanded_cells.remove(cell_id) {
             self.expanded_cells.insert(cell_id.clone());
@@ -101,16 +106,26 @@ pub(crate) struct TranscriptScrollAnchor {
 pub(crate) struct ThreadPresentationStore {
     active: ThreadId,
     input_mode: ChatInputMode,
+    input_catalog: ChatInputCatalog,
     states: BTreeMap<ThreadId, ThreadPresentationState>,
 }
 
 impl ThreadPresentationStore {
+    #[cfg(test)]
     pub(crate) fn new(active: ThreadId) -> Self {
+        Self::with_input_catalog(active, ChatInputCatalog::default())
+    }
+
+    pub(crate) fn with_input_catalog(active: ThreadId, input_catalog: ChatInputCatalog) -> Self {
         let mut states = BTreeMap::new();
-        states.insert(active.clone(), ThreadPresentationState::default());
+        states.insert(
+            active.clone(),
+            ThreadPresentationState::with_input_catalog(input_catalog.clone()),
+        );
         Self {
             active,
             input_mode: ChatInputMode::Standard,
+            input_catalog,
             states,
         }
     }
@@ -119,12 +134,20 @@ impl ThreadPresentationStore {
         if thread_id != self.active {
             self.active_mut().render_cache.clear();
         }
+        let input_catalog = self.input_catalog.clone();
         self.states
             .entry(thread_id.clone())
-            .or_default()
+            .or_insert_with(|| ThreadPresentationState::with_input_catalog(input_catalog))
             .input
             .set_input_mode(self.input_mode);
         self.active = thread_id;
+    }
+
+    pub(crate) fn replace_input_catalog(&mut self, input_catalog: ChatInputCatalog) {
+        self.input_catalog = input_catalog.clone();
+        for state in self.states.values_mut() {
+            state.input.replace_catalog(input_catalog.clone());
+        }
     }
 
     pub(crate) fn set_input_mode(&mut self, input_mode: ChatInputMode) {

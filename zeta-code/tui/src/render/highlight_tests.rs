@@ -1,7 +1,6 @@
 use super::MAX_CODE_BYTES;
 use super::highlight_code;
 use crate::render::test_context;
-use ratatui::style::Color;
 use ratatui::text::Line;
 
 #[test]
@@ -55,7 +54,10 @@ fn unknown_languages_and_oversized_code_remain_visible() {
     );
 
     assert_eq!(unknown[0].to_string(), "hello");
-    assert_eq!(unknown[0].spans[0].style.fg, Some(Color::White));
+    assert_eq!(
+        unknown[0].spans[0].style.fg,
+        Some(test_context().foreground())
+    );
     assert_eq!(oversized[0].to_string().len(), MAX_CODE_BYTES + 1);
 }
 

@@ -7,7 +7,7 @@ impl WorkbenchApplication {
         };
         let device_root = default_device_root();
         let loaded = loader.load(
-            ThemeLoadOptions::new(&device_root, ThemeSurface::Graphical, system_scheme)
+            ThemeLoadOptions::new(&device_root, system_scheme)
                 .with_default_entry(DEFAULT_THEME_ENTRY),
         );
         for diagnostic in &loaded.diagnostics {

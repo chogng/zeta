@@ -168,6 +168,7 @@ fn update_preferences(
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
+            tui_theme: Patch::Missing,
         }),
     }
 }
@@ -400,6 +401,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(zeta_protocol::ToolMode::CodeModeOnly),
                 grep_backend: Patch::Value(AgentGrepBackend::FastRegex),
+                tui_theme: Patch::Missing,
             }),
         })
         .unwrap();
@@ -412,6 +414,56 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
         store.read_snapshot().unwrap().values.agent_grep_backend,
         AgentGrepBackend::FastRegex
     );
+}
+
+#[test]
+fn tui_theme_is_persisted_in_the_tui_table() {
+    let path = config_path("tui-theme");
+    let store = ConfigStore::open(&path).unwrap();
+
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-tui-theme").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                tui_theme: Patch::Value("zeta-code-light".into()),
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+
+    assert_eq!(
+        store.read_snapshot().unwrap().values.tui.theme,
+        "zeta-code-light"
+    );
+    let document = persisted_config_document(&path);
+    assert!(document.contains("[tui]\n"));
+    assert!(document.contains("theme = \"zeta-code-light\""));
+    remove_config_files(&path);
+}
+
+#[test]
+fn invalid_tui_theme_does_not_commit_a_config_revision() {
+    let path = config_path("invalid-tui-theme");
+    let store = ConfigStore::open(&path).unwrap();
+
+    let error = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-invalid-tui-theme").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                tui_theme: Patch::Value("Not A Theme".into()),
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap_err();
+
+    assert!(matches!(error, ConfigCommandError::Config(_)));
+    assert_eq!(
+        store.read_snapshot().unwrap().revision,
+        ConfigRevision::INITIAL
+    );
+    remove_config_files(&path);
 }
 
 #[test]
@@ -865,6 +917,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
+                tui_theme: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
@@ -883,6 +936,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
+                tui_theme: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),

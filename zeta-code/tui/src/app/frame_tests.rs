@@ -229,7 +229,7 @@ fn manager_keeps_welcome_and_renders_grouped_three_column_status_rows() {
     assert!(completed.starts_with("  ● done"));
     assert_eq!(
         rendered.lines().last().unwrap().trim_end(),
-        "  ↑ sessions · enter create"
+        "  ↑ sessions · enter create · esc back"
     );
 }
 
@@ -764,7 +764,8 @@ fn mention_popup_renders_paths_and_exposes_the_same_click_rows() {
     let terminal_area = Rect::new(0, 0, 80, 20);
 
     let buffer = render_buffer(&app, 80, 20);
-    let Some(crate::components::suggest::SuggestView::Mention(popup)) = app.suggest() else {
+    let Some(crate::components::chat_input::CompletionView::Mention(popup)) = app.completion()
+    else {
         panic!("expected mention suggestions");
     };
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
@@ -903,8 +904,8 @@ fn wait_for_mention_results(app: &mut App, dir: &Path) {
             app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
         }
         if matches!(
-            app.suggest(),
-            Some(crate::components::suggest::SuggestView::Mention(popup))
+            app.completion(),
+            Some(crate::components::chat_input::CompletionView::Mention(popup))
                 if popup.matches.len() >= 2
         ) {
             return;

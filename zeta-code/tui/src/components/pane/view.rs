@@ -35,13 +35,18 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     view: PaneView<'_>,
+    hovered: Option<PanePointerTarget>,
     context: RenderContext<'_>,
 ) {
     let pane_areas = areas(area);
     match view.body() {
         PaneBodyView::KeyCapture(body) => key_capture::draw(frame, pane_areas.body, body, context),
         PaneBodyView::ListSelection(body) => {
-            list_selection::draw(frame, pane_areas.body, body, context)
+            let hovered_item = match hovered {
+                Some(PanePointerTarget::Item(index)) => Some(index),
+                Some(PanePointerTarget::Tab(_)) | None => None,
+            };
+            list_selection::draw_with_hover(frame, pane_areas.body, body, hovered_item, context)
         }
         PaneBodyView::TextPrompt(body) => text_prompt::draw(frame, pane_areas.body, body, context),
     }

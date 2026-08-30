@@ -2,7 +2,6 @@ use super::ActiveConversation;
 use super::App;
 use super::AppCommand;
 use super::AppEvent;
-use super::ChatInputCatalogSnapshot;
 use super::Status;
 use super::chat_input_catalog_snapshot;
 use super::dispatch::execute_product_command;
@@ -30,6 +29,7 @@ use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
 use crate::components::chat_composer::ChatComposerPointerTarget;
+use crate::components::chat_input::ChatInputCatalog;
 use crate::features::approval::Approval;
 use crate::features::config;
 use crate::features::config::ConfigResource;
@@ -53,7 +53,8 @@ use crate::features::thread::TranscriptUpdateDisposition;
 use crate::features::thread::read_older_thread_history;
 use crate::features::thread::read_thread_history;
 use crate::host;
-use crate::mouse::ScreenSelectionOutcome;
+use crate::screen_selection::ClickCount;
+use crate::screen_selection::ScreenSelectionOutcome;
 use crate::terminal;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
@@ -88,6 +89,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         keybindings_path,
         status_line_path,
         terminal_settings_path,
+        theme_root,
         recovery,
     } = options;
     let initialization = client.initialization()?;
@@ -98,7 +100,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     } else {
         Vec::new()
     };
-    let slash_registry = client
+    let input_catalog = client
         .list_skills(SkillListParams {
             reload: SkillCatalogReloadDto::Cached,
             session_id: None,
@@ -107,11 +109,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         .and_then(|catalog| {
             chat_input_catalog_snapshot(&server_slash_commands, &catalog, &plugins).ok()
         })
-        .unwrap_or(ChatInputCatalogSnapshot {
-            catalog: slash_command_registry(&server_slash_commands)?,
-            plugins: Default::default(),
-            skills: Default::default(),
-        });
+        .unwrap_or(ChatInputCatalog::with_slash_commands(
+            slash_command_registry(&server_slash_commands)?,
+        ));
     let mut conversation = match recovery {
         Some(recovery) => ActiveConversation::recover(&mut client, recovery)?,
         None => ActiveConversation::start(&mut client, thread_title)?,
@@ -124,11 +124,23 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     )?;
     conversation.set_thread_sequence(initial_thread.sequence);
     let mut terminal = terminal::TerminalSession::open()?;
-    let theme_resource = ThemeResource::new(terminal.background_color());
+    let theme_resource = match theme_root {
+        Some(theme_root) => ThemeResource::in_product_root(theme_root, terminal.background_color()),
+        None => ThemeResource::new(terminal.background_color()),
+    };
     let mut file_search = host_file_search_root.map(FileSearchManager::new);
-    let mut app =
-        App::for_dir_with_slash_commands(&display_dir_root, slash_registry.catalog.clone());
-    match theme_resource.load() {
+    let mut app = App::for_dir_with_input_catalog(&display_dir_root, input_catalog);
+    let mut config_resource = terminal_settings_path.map(ConfigResource::new);
+    match config::refresh_terminal_settings(config_resource.as_mut()) {
+        Ok(terminal) => app.update(AppEvent::ConfigSettingsReceived(terminal.settings)),
+        Err(error) => app.update(AppEvent::FailureReported(error)),
+    }
+    let initial_config = client.read_config();
+    let theme_preference = initial_config
+        .as_ref()
+        .map(|config| config.tui.theme.as_str())
+        .unwrap_or("system");
+    match theme_resource.load(theme_preference) {
         Ok(loaded) => {
             for diagnostic in loaded.diagnostics {
                 eprintln!("theme: {diagnostic}");
@@ -136,6 +148,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             app.update(AppEvent::RenderThemeChanged(loaded.theme));
         }
         Err(error) => app.update(AppEvent::FailureReported(error)),
+    }
+    match initial_config {
+        Ok(config) => app.update(AppEvent::PreferredModelReceived(config.preferred_model)),
+        Err(error) => app.update(AppEvent::FailureReported(format!(
+            "could not read shared configuration: {error}"
+        ))),
     }
     match sessions::load_catalog(&mut client) {
         Ok(catalog) => app.update(AppEvent::SessionCatalogReceived(catalog)),
@@ -146,12 +164,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let now = Instant::now();
     let mut keymap_resource = keybindings_path.map(|path| KeymapResource::new(path, now));
     let mut status_line_resource = status_line_path.map(StatusLineResource::new);
-    let mut config_resource = terminal_settings_path.map(ConfigResource::new);
-    app.replace_chat_input_catalog(
-        slash_registry.catalog,
-        slash_registry.skills,
-        slash_registry.plugins,
-    );
     apply_thread_snapshot(
         &mut app,
         &mut active_turn,
@@ -159,20 +171,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         initial_transcript,
     );
     poll_keymap_resource(&mut keymap_resource, &mut app, now);
-    if let Some(resource) = config_resource.as_mut() {
-        match resource.refresh() {
-            Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
-            Err(error) => app.update(AppEvent::FailureReported(error)),
-        }
-    }
     if let Some(resource) = status_line_resource.as_mut() {
         match resource.refresh() {
             Ok(settings) => app.update(AppEvent::StatusLineSettingsReceived(settings)),
             Err(error) => app.update(AppEvent::FailureReported(error)),
         }
-    }
-    if let Ok(config) = client.read_config() {
-        app.update(AppEvent::PreferredModelReceived(config.preferred_model));
     }
     if let Ok(status) = client.git_status() {
         app.update(AppEvent::GitStatusReceived(status));
@@ -330,7 +333,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved => {
                         let terminal_area = terminal.area()?;
-                        select_hovered_popup_item(&mut app, terminal_area, mouse.column, mouse.row);
+                        update_pointer_hover(&mut app, terminal_area, mouse.column, mouse.row);
                         None
                     }
                     Event::Mouse(mouse)
@@ -344,6 +347,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     Event::Paste(text) => {
                         app.handle_paste(text);
+                        None
+                    }
+                    Event::Resize(_, _) => {
+                        app.update_pointer_hover(None);
                         None
                     }
                     _ => None,
@@ -433,7 +440,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 .map(ConfigResource::settings)
                                 .unwrap_or_default()
                                 .dir_permissions();
-                            let command_theme_resource = theme_resource.clone();
                             pending_request = spawn_request(
                                 "zeta-tui-product-command",
                                 move || {
@@ -443,7 +449,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &mut request_client,
                                             invocation,
                                             dir_permissions,
-                                            &command_theme_resource,
                                         )
                                         .and_then(
                                             |output| {
@@ -694,12 +699,60 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenCustomThemePane => match theme_resource.catalog() {
-                        Ok(catalog) => app.update(AppEvent::ThemePaneOpened(
-                            theme_feature::custom_theme_pane_spec(&catalog),
-                        )),
-                        Err(error) => app.update(AppEvent::FailureReported(error)),
-                    },
+                    AppCommand::OpenThemePane => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let request_theme_resource = theme_resource.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-open-theme",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        request_client
+                                            .read_config()
+                                            .map_err(|error| error.to_string())
+                                            .and_then(|config| {
+                                                request_theme_resource
+                                                    .catalog(&config.tui.theme)
+                                                    .map(|catalog| {
+                                                        AppEvent::ThemePaneOpened(
+                                                            theme_feature::theme_pane_spec(&catalog),
+                                                        )
+                                                    })
+                                            }),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::OpenCustomThemePane => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let request_theme_resource = theme_resource.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-open-custom-theme",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        request_client
+                                            .read_config()
+                                            .map_err(|error| error.to_string())
+                                            .and_then(|config| {
+                                                request_theme_resource
+                                                    .catalog(&config.tui.theme)
+                                                    .map(|catalog| {
+                                                        AppEvent::ThemePaneOpened(
+                                                            theme_feature::custom_theme_pane_spec(
+                                                                &catalog,
+                                                            ),
+                                                        )
+                                                    })
+                                            }),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
                     AppCommand::OpenRewindPane => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
@@ -977,32 +1030,29 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SetCustomTheme { preference } => {
+                    AppCommand::SetCustomTheme { preference }
+                    | AppCommand::SetTheme { preference } => {
                         let command = format!("/theme {preference}");
                         app.update(AppEvent::CommandStarted(command.clone()));
-                        match theme_resource.select(&preference) {
+                        match theme_resource.resolve(&preference) {
                             Ok(selection) => {
-                                app.update(AppEvent::RenderThemeChanged(selection.theme));
-                                app.update(AppEvent::CommandCompleted {
-                                    command,
-                                    result: format!("Theme set to {}", selection.label),
-                                });
-                                app.update(AppEvent::ThemePanesClosed);
-                            }
-                            Err(error) => app.update(AppEvent::FailureReported(error)),
-                        }
-                    }
-                    AppCommand::SetTheme { preference } => {
-                        let command = format!("/theme {preference}");
-                        app.update(AppEvent::CommandStarted(command.clone()));
-                        match theme_resource.select(&preference) {
-                            Ok(selection) => {
-                                app.update(AppEvent::RenderThemeChanged(selection.theme));
-                                app.update(AppEvent::CommandCompleted {
-                                    command,
-                                    result: format!("Theme set to {}", selection.label),
-                                });
-                                app.update(AppEvent::ThemePanesClosed);
+                                if pending_request.is_none() {
+                                    let mut request_client = client.clone();
+                                    pending_request = spawn_request(
+                                        "zeta-tui-set-theme",
+                                        move || RequestCompletion::ThemeUpdated {
+                                            command,
+                                            label: selection.label,
+                                            theme: selection.theme,
+                                            result: config::set_tui_theme(
+                                                &mut request_client,
+                                                preference,
+                                            )
+                                            .map_err(|error| error.to_string()),
+                                        },
+                                        &mut app,
+                                    );
+                                }
                             }
                             Err(error) => app.update(AppEvent::FailureReported(error)),
                         }
@@ -1215,7 +1265,9 @@ fn activate_pointer_item(
     column: u16,
     row: u16,
 ) -> Option<AppCommand> {
-    match frame::input_pointer_target_at(app, area, column, row)? {
+    let target = frame::input_pointer_target_at(app, area, column, row)?;
+    app.update_pointer_hover(None);
+    match target {
         InputPointerTarget::Composer(ChatComposerPointerTarget::PaneTab(index)) => {
             app.select_tab(index);
             None
@@ -1223,8 +1275,8 @@ fn activate_pointer_item(
         InputPointerTarget::Composer(ChatComposerPointerTarget::PaneItem(index)) => {
             app.activate_visible_item(index)
         }
-        InputPointerTarget::Composer(ChatComposerPointerTarget::SuggestItem(index)) => {
-            app.activate_input_overlay_choice(index)
+        InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index)) => {
+            app.activate_input_completion(index)
         }
         InputPointerTarget::Approval(index) | InputPointerTarget::Query(index) => {
             app.activate_thread_request_choice(index)
@@ -1249,46 +1301,61 @@ fn finish_pointer_gesture(
     terminal: &terminal::TerminalSession,
     position: ratatui::layout::Position,
 ) -> Result<Option<AppCommand>, std::io::Error> {
-    match app.finish_screen_selection(position) {
-        Some(ScreenSelectionOutcome::Click(position)) => {
+    match app.finish_screen_selection(position, Instant::now()) {
+        Some(ScreenSelectionOutcome::Click {
+            position,
+            count: ClickCount::Single,
+        }) => {
             let area = terminal.area()?;
             Ok(activate_pointer_item(app, area, position.x, position.y))
         }
-        Some(ScreenSelectionOutcome::Copy(range)) => {
-            if let Some(text) = terminal.selected_text(range) {
-                let char_count = text.chars().count();
-                match host::clipboard::write_text(&text) {
-                    Ok(()) => app.update(AppEvent::StatusNoticeShown(format!(
-                        "Copied {char_count} chars to clipboard"
-                    ))),
-                    Err(error) => app.update(AppEvent::FailureReported(error)),
-                }
+        Some(ScreenSelectionOutcome::Click {
+            position,
+            count: ClickCount::Double,
+        }) => {
+            if let Some(range) = terminal.token_range_at(position) {
+                copy_screen_range(app, terminal, range);
             }
+            Ok(None)
+        }
+        Some(ScreenSelectionOutcome::Click {
+            position,
+            count: ClickCount::Triple,
+        }) => {
+            if let Some(range) = terminal.line_range_at(position) {
+                copy_screen_range(app, terminal, range);
+            }
+            Ok(None)
+        }
+        Some(ScreenSelectionOutcome::Copy(range)) => {
+            copy_screen_range(app, terminal, range);
             Ok(None)
         }
         None => Ok(None),
     }
 }
 
-fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column: u16, row: u16) {
-    match frame::input_pointer_target_at(app, area, column, row) {
-        Some(InputPointerTarget::Composer(ChatComposerPointerTarget::PaneItem(index))) => {
-            app.select_visible_item(index);
-        }
-        Some(InputPointerTarget::Composer(ChatComposerPointerTarget::SuggestItem(index))) => {
-            app.select_input_overlay_choice(index);
-        }
-        Some(InputPointerTarget::Approval(index) | InputPointerTarget::Query(index)) => {
-            app.select_thread_request_choice(index);
-        }
-        Some(InputPointerTarget::SessionManager(target)) => {
-            app.select_session_manager_pointer_target(target);
-        }
-        Some(
-            InputPointerTarget::TranscriptToggle(_) | InputPointerTarget::TranscriptDetails(_),
-        ) => {}
-        Some(InputPointerTarget::Composer(ChatComposerPointerTarget::PaneTab(_))) | None => {}
+fn copy_screen_range(
+    app: &mut App,
+    terminal: &terminal::TerminalSession,
+    range: crate::screen_selection::ScreenSelectionRange,
+) {
+    app.select_screen_range(range);
+    let Some(text) = terminal.selected_text(range) else {
+        return;
+    };
+    let char_count = text.chars().count();
+    match host::clipboard::write_text(&text) {
+        Ok(()) => app.update(AppEvent::StatusNoticeShown(format!(
+            "Copied {char_count} chars to clipboard"
+        ))),
+        Err(error) => app.update(AppEvent::FailureReported(error)),
     }
+}
+
+fn update_pointer_hover(app: &mut App, area: ratatui::layout::Rect, column: u16, row: u16) {
+    let target = frame::input_pointer_target_at(app, area, column, row);
+    app.update_pointer_hover(target);
 }
 
 fn draw_terminal(
@@ -1358,9 +1425,6 @@ fn uses_request_task(action: &AppCommand) -> bool {
             | AppCommand::EditStatusLine(_)
             | AppCommand::ExportTranscript { .. }
             | AppCommand::ReadClipboardImage
-            | AppCommand::OpenCustomThemePane
-            | AppCommand::SetCustomTheme { .. }
-            | AppCommand::SetTheme { .. }
     )
 }
 

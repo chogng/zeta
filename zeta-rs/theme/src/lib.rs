@@ -19,7 +19,6 @@ pub use loader::ThemeChoices;
 pub use loader::ThemeDiagnostic;
 pub use loader::ThemeLoadOptions;
 pub use loader::ThemeLoader;
-pub use loader::ThemeSurface;
 pub use loader::default_device_root;
 pub use preference::ThemeSelectionError;
 pub use size::{ThemeSize, ThemeSizeUnit};

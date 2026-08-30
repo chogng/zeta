@@ -54,6 +54,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         frame.area(),
     );
     let areas = layout(app, frame.area());
+    let hovered = app.hovered_pointer_target();
     let presentation_highlight = app
         .list_selection()
         .and_then(|view| view.presentation_highlight())
@@ -71,7 +72,17 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             presentation_highlight,
             context,
         );
-        sessions::draw_manager(frame, manager_areas.sessions, manager, context);
+        let hovered_manager = match hovered {
+            Some(InputPointerTarget::SessionManager(target)) => Some(target),
+            _ => None,
+        };
+        sessions::draw_manager(
+            frame,
+            manager_areas.sessions,
+            manager,
+            hovered_manager,
+            context,
+        );
     } else {
         let messages = app.transcript_views();
         ChatHistoryView {
@@ -90,17 +101,36 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     };
     let input_view = app.chat_composer_view();
     if let Some(approval) = app.approval_view() {
-        approval::draw(frame, areas.session.composer, approval, context);
+        let hovered_choice = match hovered {
+            Some(InputPointerTarget::Approval(index)) => Some(*index),
+            _ => None,
+        };
+        approval::draw(
+            frame,
+            areas.session.composer,
+            approval,
+            hovered_choice,
+            context,
+        );
     } else {
+        let hovered_composer = match hovered {
+            Some(InputPointerTarget::Composer(target)) => Some(*target),
+            _ => None,
+        };
         ChatComposerSurface {
             overlay_area: overlay_area(&areas),
             view: &input_view,
             cursor,
+            hovered: hovered_composer,
         }
         .render(frame, areas.session.composer, context);
     }
     if let Some(query) = app.query_view() {
-        query::draw(frame, areas.session.request, query, context);
+        let hovered_choice = match hovered {
+            Some(InputPointerTarget::Query(index)) => Some(*index),
+            _ => None,
+        };
+        query::draw(frame, areas.session.request, query, hovered_choice, context);
     }
     if app.session_manager_view().is_none() {
         goal::draw(frame, areas.session.goal, app.goal_view(), context);
@@ -133,7 +163,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     if let Some(quick_view) = app.quick_view() {
         crate::components::quick_view::draw(frame, overlay_area(&areas), quick_view, context);
     }
-    app.screen_selection().draw(frame.buffer_mut());
+    app.screen_selection().draw(frame.buffer_mut(), context);
 }
 
 fn draw_status_notice(
@@ -171,7 +201,7 @@ pub(crate) fn input_overlay_index_at(
 ) -> Option<usize> {
     match input_pointer_target_at(app, terminal_area, column, row) {
         Some(InputPointerTarget::Approval(index) | InputPointerTarget::Query(index)) => Some(index),
-        Some(InputPointerTarget::Composer(ChatComposerPointerTarget::SuggestItem(index))) => {
+        Some(InputPointerTarget::Composer(ChatComposerPointerTarget::CompletionItem(index))) => {
             Some(index)
         }
         _ => None,
@@ -251,6 +281,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         overlay_area: Rect::default(),
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
+        hovered: None,
     }
     .desired_height(terminal_area.width, app.render_context());
     let approval_rows = app
@@ -337,7 +368,7 @@ fn status_area_view(app: &App) -> StatusAreaView<'_> {
         let hint = if app.session_manager_focused() {
             app.session_manager_hint()
         } else {
-            "↑ sessions · enter create"
+            "↑ sessions · enter create · esc back"
         };
         return StatusAreaView::Hint {
             text: Cow::Borrowed(hint),

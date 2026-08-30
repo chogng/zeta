@@ -1,18 +1,18 @@
 use super::activate_pointer_item;
 use super::schedule_action;
-use super::select_hovered_popup_item;
+use super::update_pointer_hover;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
 use crate::app::frame;
 use crate::app::frame::InputPointerTarget;
 use crate::components::chat_composer::ChatComposerPointerTarget;
+use crate::components::chat_input::CompletionView;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
 use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
-use crate::components::suggest::SuggestView;
 use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -23,16 +23,21 @@ use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerInfo;
 use zeta_protocol::SessionStatus;
+use zeta_protocol::SessionThread;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadStatus;
 
 #[test]
 fn request_actions_wait_for_the_active_request_without_losing_order() {
     let mut queued = VecDeque::new();
     let first = AppCommand::OpenConfigPane;
     let second = AppCommand::OpenRewindPane;
+    let third = AppCommand::OpenThemePane;
 
     assert!(schedule_action(Some(first), true, &mut queued).is_none());
     assert!(schedule_action(Some(second), true, &mut queued).is_none());
-    assert_eq!(queued.len(), 2);
+    assert!(schedule_action(Some(third), true, &mut queued).is_none());
+    assert_eq!(queued.len(), 3);
     assert!(matches!(
         schedule_action(None, false, &mut queued),
         Some(AppCommand::OpenConfigPane)
@@ -40,6 +45,10 @@ fn request_actions_wait_for_the_active_request_without_losing_order() {
     assert!(matches!(
         schedule_action(None, false, &mut queued),
         Some(AppCommand::OpenRewindPane)
+    ));
+    assert!(matches!(
+        schedule_action(None, false, &mut queued),
+        Some(AppCommand::OpenThemePane)
     ));
 }
 
@@ -55,20 +64,27 @@ fn quit_bypasses_a_pending_request() {
 }
 
 #[test]
-fn pointer_move_selects_the_hovered_popup_row_and_preserves_it_outside() {
+fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
     let mut app = App::new();
     app.insert_text("/");
     let area = Rect::new(0, 0, 80, 20);
 
-    select_hovered_popup_item(&mut app, area, 2, 12);
-    assert!(matches!(app.suggest(), Some(SuggestView::Slash(view)) if view.selected == 2));
+    update_pointer_hover(&mut app, area, 2, 12);
+    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+    assert!(matches!(
+        app.hovered_pointer_target(),
+        Some(InputPointerTarget::Composer(
+            ChatComposerPointerTarget::CompletionItem(2)
+        ))
+    ));
 
-    select_hovered_popup_item(&mut app, area, 1, 12);
-    assert!(matches!(app.suggest(), Some(SuggestView::Slash(view)) if view.selected == 2));
+    update_pointer_hover(&mut app, area, 1, 12);
+    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+    assert!(app.hovered_pointer_target().is_none());
 }
 
 #[test]
-fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
+fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
     let mut app = App::new();
     app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
         ListSelectionModel::new(
@@ -100,11 +116,17 @@ fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
     }
     let (column, row) = target.expect("second feature row should be clickable");
 
-    select_hovered_popup_item(&mut app, area, column, row);
+    update_pointer_hover(&mut app, area, column, row);
 
     assert_eq!(
         app.list_selection().unwrap().selected_visible_index(),
-        Some(1)
+        Some(0)
+    );
+    assert_eq!(
+        app.hovered_pointer_target(),
+        Some(&InputPointerTarget::Composer(
+            ChatComposerPointerTarget::PaneItem(1)
+        ))
     );
 }
 
@@ -144,15 +166,31 @@ fn pointer_click_switches_a_selection_tab() {
 }
 
 #[test]
-fn pointer_hover_selects_a_manager_row_and_click_opens_its_preview() {
+fn pointer_hover_does_not_focus_manager_and_click_opens_the_target_preview() {
     let mut app = App::new();
+    let session_id = SessionId::new("pointer-session").unwrap();
+    let thread_id = ThreadId::new("pointer-thread").unwrap();
     app.update(AppEvent::SessionCatalogReceived(vec![Session {
-        session_id: SessionId::new("pointer-session").unwrap(),
+        session_id: session_id.clone(),
         title: "Pointer session".into(),
         status: SessionStatus::Active,
         manager: SessionManagerInfo::default(),
-        threads: Vec::new(),
+        threads: vec![SessionThread {
+            thread_id: thread_id.clone(),
+            title: "Pointer thread".into(),
+            created_at_unix_ms: 0,
+            completed_turn_duration_ms: 0,
+            active_turn_started_at_unix_ms: None,
+            usage: Default::default(),
+            parent_thread_id: None,
+            forked_from_id: None,
+            status: ThreadStatus::Active,
+        }],
     }]));
+    app.update(AppEvent::ThreadContextChanged {
+        session_id,
+        thread_id,
+    });
     app.insert_text("/sessions");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     let area = Rect::new(0, 0, 80, 24);
@@ -161,19 +199,25 @@ fn pointer_hover_selects_a_manager_row_and_click_opens_its_preview() {
         for column in area.x..area.right() {
             if matches!(
                 frame::input_pointer_target_at(&app, area, column, row),
-                Some(InputPointerTarget::SessionManager(_))
+                Some(InputPointerTarget::SessionManager(ref target)) if target.is_session()
             ) {
-                select_hovered_popup_item(&mut app, area, column, row);
-                if app.session_manager_hint().contains("space to preview") {
-                    session_cell = Some((column, row));
-                    break 'cells;
-                }
+                update_pointer_hover(&mut app, area, column, row);
+                session_cell = Some((column, row));
+                break 'cells;
             }
         }
     }
     let (column, row) = session_cell.expect("the Session row should be interactive");
 
-    assert!(app.session_manager_focused());
+    assert!(!app.session_manager_focused());
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        None
+    );
+    assert!(app.session_manager_view().is_none());
+
+    app.insert_text("/sessions");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
     assert_eq!(app.quick_view().unwrap().title(), "Session preview");
     assert!(app.session_manager_view().is_some());

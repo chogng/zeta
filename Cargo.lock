@@ -12301,7 +12301,6 @@ dependencies = [
  "zeta-protocol",
  "zeta-slash-commands",
  "zeta-terminal-detection",
- "zeta-theme",
  "zeta-utils-elapsed",
  "zeta-utils-image",
  "zeta-utils-path",

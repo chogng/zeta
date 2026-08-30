@@ -98,11 +98,6 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn select_pointer_target(&mut self, target: SessionManagerPointerTarget) {
-        self.selected = Some(target.0);
-        self.focus();
-    }
-
     pub(crate) fn toggle_or_preview(
         &mut self,
         sessions: &[Session],
@@ -117,6 +112,25 @@ impl SessionManagerState {
             ManagerSelection::Session(session_id) => sessions
                 .iter()
                 .find(|session| &session.session_id == session_id)
+                .map(|session| session_preview(session, self.now_unix_ms)),
+        }
+    }
+
+    pub(crate) fn activate_pointer_target(
+        &mut self,
+        target: SessionManagerPointerTarget,
+        sessions: &[Session],
+    ) -> Option<PaneSpec<DetailList>> {
+        match target.0 {
+            ManagerSelection::Group(group) => {
+                if !self.collapsed.remove(&group) {
+                    self.collapsed.insert(group);
+                }
+                None
+            }
+            ManagerSelection::Session(session_id) => sessions
+                .iter()
+                .find(|session| session.session_id == session_id)
                 .map(|session| session_preview(session, self.now_unix_ms)),
         }
     }
@@ -283,6 +297,13 @@ pub(crate) struct SessionManagerView<'a> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SessionManagerPointerTarget(ManagerSelection);
 
+impl SessionManagerPointerTarget {
+    #[cfg(test)]
+    pub(crate) fn is_session(&self) -> bool {
+        matches!(self.0, ManagerSelection::Session(_))
+    }
+}
+
 pub(crate) fn pointer_target_at(
     area: Rect,
     view: SessionManagerView<'_>,
@@ -308,6 +329,7 @@ pub(crate) fn draw_manager(
     frame: &mut Frame<'_>,
     area: Rect,
     view: SessionManagerView<'_>,
+    hovered: Option<&SessionManagerPointerTarget>,
     context: RenderContext<'_>,
 ) {
     if area.is_empty() {
@@ -325,6 +347,9 @@ pub(crate) fn draw_manager(
         return;
     }
     let visible_rows = usize::from(area.height);
+    // Hover temporarily chooses the row drawn with selection styling. It never replaces the
+    // keyboard-owned selection used by navigation and activation.
+    let presented = hovered.map(|target| &target.0).or(view.selected);
     let selected_row = rows.iter().position(|row| {
         view.selected
             .is_some_and(|selected| row.selection() == *selected)
@@ -348,13 +373,13 @@ pub(crate) fn draw_manager(
                     group,
                     count,
                     view.collapsed.contains(&group),
-                    view.selected == Some(&ManagerSelection::Group(group)),
+                    presented == Some(&ManagerSelection::Group(group)),
                     usize::from(area.width),
                     context,
                 ),
                 ManagerRow::Session(session) => session_line(
                     session,
-                    view.selected == Some(&ManagerSelection::Session(session.session_id.clone())),
+                    presented == Some(&ManagerSelection::Session(session.session_id.clone())),
                     view.animation_frame,
                     view.now_unix_ms,
                     usize::from(area.width),

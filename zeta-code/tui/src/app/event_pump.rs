@@ -3,6 +3,8 @@ use crate::client::ClientEventSource;
 use crate::host::TerminationSource;
 use crate::terminal::TerminalEvent;
 use crate::terminal::TerminalEventSource;
+use crossterm::event::Event;
+use crossterm::event::MouseEventKind;
 use std::collections::VecDeque;
 use std::io;
 use std::sync::Arc;
@@ -120,10 +122,23 @@ impl RuntimeQueue {
 
     fn push(&self, event: RuntimeEvent, stop: &AtomicBool, lane: QueueLane) -> bool {
         let mut state = self.state.lock().unwrap();
-        while lane.queue(&mut state).len() >= EVENT_QUEUE_CAPACITY
-            && !state.closed
-            && !stop.load(Ordering::Acquire)
-        {
+        let mut event = event;
+        loop {
+            if matches!(lane, QueueLane::Priority) {
+                match coalesce_pointer_input(&mut state.priority, event) {
+                    Some(pending) => event = pending,
+                    None => {
+                        self.available.notify_one();
+                        return true;
+                    }
+                }
+            }
+            if lane.queue(&mut state).len() < EVENT_QUEUE_CAPACITY
+                || state.closed
+                || stop.load(Ordering::Acquire)
+            {
+                break;
+            }
             state = self.space.wait(state).unwrap();
         }
         if state.closed || stop.load(Ordering::Acquire) {
@@ -185,6 +200,49 @@ impl RuntimeQueue {
         state.closed = true;
         self.available.notify_all();
         self.space.notify_all();
+    }
+}
+
+fn coalesce_pointer_input(
+    queue: &mut VecDeque<RuntimeEvent>,
+    incoming: RuntimeEvent,
+) -> Option<RuntimeEvent> {
+    let Some(incoming_kind) = mouse_kind(&incoming) else {
+        return Some(incoming);
+    };
+    let Some(previous_kind) = queue.back().and_then(mouse_kind) else {
+        return Some(incoming);
+    };
+
+    let replace_previous = matches!(
+        (previous_kind, incoming_kind),
+        (MouseEventKind::Moved, MouseEventKind::Moved)
+    ) || matches!(
+        (previous_kind, incoming_kind),
+        (MouseEventKind::Drag(previous), MouseEventKind::Drag(incoming)) if previous == incoming
+    );
+    if replace_previous {
+        *queue
+            .back_mut()
+            .expect("the previous pointer event is still queued") = incoming;
+        return None;
+    }
+
+    if matches!(
+        (previous_kind, incoming_kind),
+        (MouseEventKind::Drag(previous), MouseEventKind::Up(incoming)) if previous == incoming
+    ) {
+        queue.pop_back();
+    }
+    Some(incoming)
+}
+
+fn mouse_kind(event: &RuntimeEvent) -> Option<MouseEventKind> {
+    match event {
+        RuntimeEvent::Terminal(TerminalEvent::Input(Event::Mouse(mouse))) => Some(mouse.kind),
+        RuntimeEvent::Terminal(_)
+        | RuntimeEvent::Client(_)
+        | RuntimeEvent::TerminationRequested => None,
     }
 }
 
