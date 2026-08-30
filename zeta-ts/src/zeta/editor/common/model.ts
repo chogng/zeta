@@ -38,6 +38,97 @@ export enum GlyphMarginLane {
 	Right = 3,
 }
 
+export enum OverviewRulerLane {
+	Left = 1,
+	Center = 2,
+	Right = 4,
+	Full = 7,
+}
+
+export const enum MinimapPosition {
+	Inline = 1,
+	Gutter = 2,
+}
+
+export const enum MinimapSectionHeaderStyle {
+	Normal = 1,
+	Underlined = 2,
+}
+
+export interface IDecorationOptions {
+	color: string | ThemeColor | undefined;
+	darkColor?: string | ThemeColor;
+}
+
+export interface IModelDecorationGlyphMarginOptions {
+	position: GlyphMarginLane;
+	persistLane?: boolean;
+}
+
+export interface IModelDecorationOverviewRulerOptions extends IDecorationOptions {
+	position: OverviewRulerLane;
+}
+
+export interface IModelDecorationMinimapOptions extends IDecorationOptions {
+	position: MinimapPosition;
+	sectionHeaderStyle?: MinimapSectionHeaderStyle | null;
+	sectionHeaderText?: string | null;
+}
+
+export interface IModelDecorationOptions {
+	description: string;
+	stickiness?: TrackedRangeStickiness;
+	className?: string | null;
+	shouldFillLineOnLineBreak?: boolean | null;
+	blockClassName?: string | null;
+	blockIsAfterEnd?: boolean | null;
+	blockDoesNotCollapse?: boolean | null;
+	blockPadding?: [top: number, right: number, bottom: number, left: number] | null;
+	glyphMarginHoverMessage?: IMarkdownString | IMarkdownString[] | null;
+	hoverMessage?: IMarkdownString | IMarkdownString[] | null;
+	lineNumberHoverMessage?: IMarkdownString | IMarkdownString[] | null;
+	isWholeLine?: boolean;
+	showIfCollapsed?: boolean;
+	collapseOnReplaceEdit?: boolean;
+	zIndex?: number;
+	overviewRuler?: IModelDecorationOverviewRulerOptions | null;
+	minimap?: IModelDecorationMinimapOptions | null;
+	glyphMarginClassName?: string | null;
+	glyphMargin?: IModelDecorationGlyphMarginOptions | null;
+	lineHeight?: number | null;
+	fontFamily?: string | null;
+	fontSize?: string | null;
+	fontWeight?: string | null;
+	fontStyle?: string | null;
+	linesDecorationsClassName?: string | null;
+	linesDecorationsTooltip?: string | null;
+	lineNumberClassName?: string | null;
+	firstLineDecorationClassName?: string | null;
+	marginClassName?: string | null;
+	inlineClassName?: string | null;
+	inlineClassNameAffectsLetterSpacing?: boolean;
+	beforeContentClassName?: string | null;
+	afterContentClassName?: string | null;
+	after?: InjectedTextOptions | null;
+	before?: InjectedTextOptions | null;
+	hideInCommentTokens?: boolean | null;
+	hideInStringTokens?: boolean | null;
+	affectsFont?: boolean | null;
+	textDirection?: TextDirection | null;
+}
+
+export interface IModelDeltaDecoration {
+	range: IRange;
+	options: IModelDecorationOptions;
+}
+
+export interface IModelDecoration {
+	readonly id: string;
+	readonly ownerId: number;
+	readonly range: Range;
+	readonly options: IModelDecorationOptions;
+}
+
 /** Describes how a tracked range grows when typing at its edges. */
 export enum TrackedRangeStickiness {
 	AlwaysGrowsWhenTypingAtEdges = 0,
@@ -278,6 +369,7 @@ export interface ITextModel extends IDisposable {
 	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent>;
 	readonly onDidChangeOptions: Event<IModelOptionsChangedEvent>;
 	readonly onDidChangeContent: Event<TextModelChange>;
+	readonly onDidChangeDecorations: Event<IModelDecorationsChangedEvent>;
 	readonly onDidChangeAttached: Event<void>;
 	isDisposed(): boolean;
 	dispose(): void;
@@ -288,6 +380,8 @@ export interface ITextModel extends IDisposable {
 	_getTrackedRange(id: string): Range | null;
 	_setTrackedRange(id: string | null, newRange: null, newStickiness: TrackedRangeStickiness): null;
 	_setTrackedRange(id: string | null, newRange: Range, newStickiness: TrackedRangeStickiness): string;
+	deltaDecorations(oldDecorations: string[], newDecorations: IModelDeltaDecoration[], ownerId?: number): string[];
+	getDecorationRange(id: string): Range | null;
 	pushStackElement(): void;
 	popStackElement(): void;
 	edit(edit: TextEdit, options?: { reason?: TextModelEditSource }): void;
@@ -356,7 +450,9 @@ export interface ITextModel extends IDisposable {
 	detectIndentation(defaultInsertSpaces: boolean, defaultTabSize: number): void;
 }
 import type { Event } from '../../base/common/event.js';
+import type { IMarkdownString } from '../../base/common/htmlContent.js';
 import type { IDisposable } from '../../base/common/lifecycle.js';
+import type { ThemeColor } from '../../base/common/themables.js';
 import type { URI } from '../../base/common/uri.js';
 import type { IPosition, Position } from './core/position.js';
 import type { IRange, Range } from './core/range.js';
@@ -368,7 +464,7 @@ import type { FormattingOptions } from './languages.js';
 import type { TextBufferSnapshot } from './model/textBufferSnapshot.js';
 import type { TextEdit } from './core/edits/textEdit.js';
 import type { ISingleEditOperation } from './core/editOperation.js';
-import type { IModelLanguageChangedEvent, IModelOptionsChangedEvent } from './textModelEvents.js';
+import type { IModelDecorationsChangedEvent, IModelLanguageChangedEvent, IModelOptionsChangedEvent } from './textModelEvents.js';
 import { TextChange, type TextModelChange, type TextModelContentChange } from './core/textChange.js';
 import type { TextModelEditSource } from './textModelEditSource.js';
 import type { UndoRedoGroup } from '../../platform/undoRedo/common/undoRedo.js';

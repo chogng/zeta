@@ -32,9 +32,9 @@ import type { DocumentTransaction } from "./documentTransaction.js";
 import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
-import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
+import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationOptions, type IModelDeltaDecoration, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
 import * as languages from '../languages.js';
-import type { IModelLanguageChangedEvent, IModelOptionsChangedEvent } from '../textModelEvents.js';
+import type { IModelDecorationsChangedEvent, IModelLanguageChangedEvent, IModelOptionsChangedEvent } from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
@@ -51,6 +51,13 @@ interface AnnotatedOffsetEdit extends OffsetEdit {
 interface PreparedEdit extends AnnotatedOffsetEdit {
 	readonly range: Range;
 	readonly replacedText: string;
+}
+
+interface ModelDecorationEntry {
+	readonly id: string;
+	readonly ownerId: number;
+	readonly trackedRange: TrackedRange;
+	readonly options: IModelDecorationOptions;
 }
 
 interface CommitContext {
@@ -150,6 +157,7 @@ export class TextModel implements ITextModel {
 	private readonly changeEmitter = this._register(new Emitter<TextModelChange>());
 	private readonly languageEmitter = this._register(new Emitter<IModelLanguageChangedEvent>());
 	private readonly optionsEmitter = this._register(new Emitter<IModelOptionsChangedEvent>());
+	private readonly decorationsEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
 	private readonly attachedEmitter = this._register(new Emitter<void>());
 	private readonly attachedViews = new Set<IAttachedView>();
 	private readonly languageSelection = this._register(new MutableDisposable<IDisposable>());
@@ -158,6 +166,8 @@ export class TextModel implements ITextModel {
 	));
 	private readonly modelTrackedRanges = new Map<string, TrackedRange>();
 	private nextTrackedRangeId = 1;
+	private readonly modelDecorations = new Map<string, ModelDecorationEntry>();
+	private nextDecorationId = 1;
 	private readonly history: TextModelHistory;
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
 	private readonly pendingMaintenance = this._register(new MutableDisposable<IDisposable>());
@@ -183,6 +193,7 @@ export class TextModel implements ITextModel {
 	readonly onDidChangeContent: Event<TextModelChange> = this.changeEmitter.event;
 	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent> = this.languageEmitter.event;
 	readonly onDidChangeOptions: Event<IModelOptionsChangedEvent> = this.optionsEmitter.event;
+	readonly onDidChangeDecorations: Event<IModelDecorationsChangedEvent> = this.decorationsEmitter.event;
 	readonly onDidChangeAttached: Event<void> = this.attachedEmitter.event;
 	/** Fires once so registries can release model identity before teardown completes. */
 	readonly onWillDispose: Event<void> = this.willDisposeEmitter.event;
@@ -246,6 +257,9 @@ export class TextModel implements ITextModel {
 		this._register(toDisposable(() => {
 			this.history.dispose();
 			this.buffer.dispose();
+		}));
+		this._register(this.onDidChangeContent(() => {
+			if (this.modelDecorations.size > 0) this.emitDecorationsChanged(this.modelDecorations.values());
 		}));
 	}
 
@@ -949,6 +963,68 @@ export class TextModel implements ITextModel {
 		const nextId = id ?? `${this.id};${this.nextTrackedRangeId++}`;
 		this.modelTrackedRanges.set(nextId, this.trackRange(Range.lift(newRange), newStickiness));
 		return nextId;
+	}
+
+	deltaDecorations(oldDecorations: string[], newDecorations: IModelDeltaDecoration[], ownerId = 0): string[] {
+		this.assertNotDisposed();
+		if (!Number.isSafeInteger(ownerId) || ownerId < 0) throw new RangeError('Decoration ownerId must be a non-negative safe integer');
+		if (new Set(oldDecorations).size !== oldDecorations.length) throw new RangeError('Decoration delta contains duplicate IDs');
+		const previous = oldDecorations.map(id => {
+			const entry = this.modelDecorations.get(id);
+			if (!entry || entry.ownerId !== ownerId) throw new RangeError(`Unknown model decoration '${id}'`);
+			return entry;
+		});
+		const staged: ModelDecorationEntry[] = [];
+		try {
+			for (let index = 0; index < newDecorations.length; index += 1) {
+				const decoration = newDecorations[index];
+				const range = this.validateRange(decoration.range);
+				const options = validateDecorationOptions(decoration.options);
+				const id = previous[index]?.id ?? `${this.id};d${this.nextDecorationId++}`;
+				staged.push({
+					id,
+					ownerId,
+					trackedRange: this.trackRange(range, options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges),
+					options,
+				});
+			}
+		} catch (error) {
+			for (const entry of staged) entry.trackedRange.dispose();
+			throw error;
+		}
+
+		if (previous.length === 0 && staged.length === 0) return [];
+		for (const entry of previous) {
+			this.modelDecorations.delete(entry.id);
+			entry.trackedRange.dispose();
+		}
+		for (const entry of staged) this.modelDecorations.set(entry.id, entry);
+		this.emitDecorationsChanged([...previous, ...staged]);
+		return staged.map(entry => entry.id);
+	}
+
+	getDecorationRange(id: string): Range | null {
+		this.assertNotDisposed();
+		return this.modelDecorations.get(id)?.trackedRange.range ?? null;
+	}
+
+	private emitDecorationsChanged(entries: Iterable<ModelDecorationEntry>): void {
+		let affectsMinimap = false;
+		let affectsOverviewRuler = false;
+		let affectsGlyphMargin = false;
+		let affectsLineNumber = false;
+		for (const { options } of entries) {
+			affectsMinimap ||= !!options.minimap;
+			affectsOverviewRuler ||= !!options.overviewRuler;
+			affectsGlyphMargin ||= !!options.glyphMargin || !!options.glyphMarginClassName;
+			affectsLineNumber ||= !!options.lineNumberClassName;
+		}
+		this.decorationsEmitter.fire(Object.freeze({
+			affectsMinimap,
+			affectsOverviewRuler,
+			affectsGlyphMargin,
+			affectsLineNumber,
+		}));
 	}
 
 	beginHistoryRevision(historyGroup: UndoRedoGroup): void {
@@ -1717,6 +1793,7 @@ export class TextModel implements ITextModel {
 			this.disposing = false;
 			this.disposed = true;
 			this.modelTrackedRanges.clear();
+			this.modelDecorations.clear();
 			this.attachedViews.clear();
 			this.disposables.dispose();
 		}
@@ -1743,6 +1820,16 @@ function compareOffsetEdits(left: OffsetEdit, right: OffsetEdit): number {
 
 function cloneSelections(selections: readonly Selection[] | null): Selection[] | null {
 	return selections?.map(Selection.liftSelection) ?? null;
+}
+
+function validateDecorationOptions(options: IModelDecorationOptions): IModelDecorationOptions {
+	if (!options || typeof options.description !== 'string' || options.description.length === 0) {
+		throw new TypeError('Model decoration options require a non-empty description');
+	}
+	if (options.stickiness !== undefined && !Object.values(TrackedRangeStickiness).includes(options.stickiness)) {
+		throw new RangeError('Unknown model decoration stickiness');
+	}
+	return Object.freeze({ ...options });
 }
 
 function inverseEditsFromTextChanges(changes: readonly TextChange[]): OffsetEdit[] {

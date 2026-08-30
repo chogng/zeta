@@ -76,13 +76,11 @@ flowchart LR
 
 ### Selection、command 和 composition
 
-一个 `TextModel` 可以被多个 `CursorsController` 投影。Controller 通过 `EditorEditCommand` 提交有序 edit 和明确的 post-selection；undo/redo 使用稳定 transaction identity 恢复各自的 selection，而不把 selection history 放入共享模型。
+一个 `TextModel` 可以由多个编辑器共享，但 selection、cursor 和 composition 状态属于各自的 `ViewModelImpl`。目标生产链固定为 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor`；模型只保存文本、装饰和 undo/redo 数据，不保存某个编辑器的 cursor 状态。
 
-`CursorConfiguration` 从模型选项、编辑器配置和语言配置解析光标策略；`CursorContext` 固定 model、visual-line model、`ICoordinatesConverter` 和配置的同一组身份。`ViewModelLines` 已实现 visual-line `ICursorSimpleModel` 与 model/view 坐标往返，列选的生产调用链已经使用它。`Cursor` 和 `CursorCollection` 现在分别持有 `modelState` / `viewState` 与 primary-first 多光标集合，marker 恢复、重叠合并及折行坐标转换均有直接测试。当前限制是 `CursorsController` 仍由装配根在 `ViewModelLines` 之前创建，尚未由统一 `ViewModel` owner 持有，因此这两个基础 owner 还不能从待处理账目移出。
+当前实现尚未达到这条链。`ConfiguredCodeEditor` 直接创建本地 `CursorsController`，生产调用仍依赖 `SelectionSet + SelectionSetTracker + EditorEditCommand`；同路径的 `CursorCollection`、`CursorContext` 和 `Cursor` 尚未接入生产。`cursorNavigation.ts`、`selectionSetDeleteOperations.ts`、`selectionSetWordOperations.ts`、`languageEnter.ts`、`languagePairEditing.ts` 与 `languageAutoClosingTracker.ts` 又分别占用了 `CursorMoveCommands`、`DeleteOperations`、`WordOperations`、`TypeOperations` 和 `CursorsController` 的职责。它们都是待迁移并删除的重复 owner，不是长期扩展点。
 
-`cursorMoveOperations.ts` 只处理上游同契约的 `SingleCursorState`、visible column、visual-line model 和 buffer 边界；面向本地 `SelectionSet` 的键盘命令编排位于 `cursorNavigation.ts`。两者共享 base 的 grapheme 步长，因此 UTF-16、emoji、sticky tab stop 和折行坐标不会由两个同名 owner 分别解释。
-
-`cursorDeleteOperations.ts` 和 `cursorWordOperations.ts` 使用上游的 `Selection[]`、`SingleCursorState` 与 `ICommand` 契约。Zeta 的 `SelectionSet` 事务转换由 `selectionSetDeleteOperations.ts`、`selectionSetWordOperations.ts` 负责，浏览器正则词选区由 `wordSelection.ts` 负责；这些入口不会再向上游同名 class 添加另一种坐标或命令语义。
+`common/cursor` 的目标文件集合与 VS Code 保持一致：12 个同路径文件，不保留额外的 SelectionSet、导航或语言输入 owner。当前 12 个同路径文件中有 8 个正文一致，但除 `ColumnSelection` 外，多数仍缺生产调用闭环；文件内容一致不代表完成。完成状态以 [`api-alignment-status.md`](./api-alignment-status.md) 的调用者与生命周期证据为准。
 
 IME composition 使用受保护的 history revision。Provisional updates 可以产生可观察 model version，但 commit 只保留一个 undo step，cancel 必须无损恢复初始文本和 selection。Composition 活跃时，普通 edit、selection change 和 history command 不能绕过该边界。
 
@@ -111,17 +109,14 @@ flowchart LR
     Parts --> DOM[DOM / GPU mutation]
 ```
 
-- `EditorViewportLayoutManager` 生成不可变 `EditorViewportLayout`；`EditorViewportLinesLayout` 只转换本地零基行号、overscan 与快照格式，实际行高、padding、View Zone/whitespace 排序和纵向查询统一交给 VS Code 同名的 `LinesLayout`。browser 只挂载调用方拥有的 zone DOM。
-- `View` 同时承担当前 view host、同步 scheduler、measurement 组合、hit test 和 DOM scroll 同步。
-- `EditorViewLines` 先建立当前 rendered lines；`EditorViewContext` 提供当前 layout 和单次渲染上下文的稳定入口。
-- `EditorRenderingContext` 是每次同步 render pass 的不可变快照，包含 layout、viewport data 和通过 model version 校验的 overlay geometry。
-- `EditorViewPartCollection` 和 `EditorOverlayCoordinator` 先向全部 Parts 传入同一个 context 执行 `prepareRender`，再按注册顺序执行 `render`。
-- 当前每次 `project` 仍会调用全部 Parts，Part 通过自己的 retained state 避免不必要的重建。
-- `View` 先创建并注册全部 Part，再在一个显式装配阶段挂载各 Part 根节点并固定层叠顺序；Part 不接收仅用于自行挂载的容器。
+- 当前 `EditorViewportLayoutManager`、`EditorViewportLinesLayout`、`EditorViewContext`、`EditorViewPartCollection` 和 `EditorOverlayCoordinator` 组成一套本地手动调度链。
+- 这套链可以渲染现有界面，但不等同于 VS Code 的 `ViewContext → ViewPart → View` 事件、失效和释放生命周期，不能据此把同路径 View Part 记为已对齐。
+- 目标实现由 `ViewContext` 注册和移除事件处理器，`ViewPart` 统一接收配置、滚动、行映射和装饰事件，`View` 只负责组装、帧调度与 DOM 层级。
+- 迁移完成后删除手动 coordinator 及同职责的 `Editor*` owner；不会让两套调度链长期并存。
 
-### Proposed：按 Part 失效调度
+### 待对齐：ViewPart 生命周期
 
-当前同步 scheduler 已经统一单帧上下文和 `prepareRender`/`render` 阶段，但每次 `project` 仍会遍历全部 Parts。只有可测量的重复工作需要优化时，才引入按 Part 失效标记；该机制必须继续使用同一个 `EditorRenderingContext`，并保持读取阶段先于 DOM 写入。
+下一步不是优化当前 coordinator，而是先恢复 `ViewContext → ViewPart → View` 主干。事件注册、失效、`prepareRender`、`render` 和释放都必须由这条主干统一拥有；具体 Part 只有在生产调用已经切入该生命周期后才算完成。
 
 ### DOM 与 Part 边界
 
@@ -155,7 +150,7 @@ Browser controller 的职责是把一个 DOM event 解析成一个 editor intent
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
 - `PointerEventRouter`：pointer dispatch、drag session 和浏览器 capture 的 browser adapter。
-- `EditorPointerSelectionHandler`：把 mouse/pointer hit target 转换为 selection intent；`BidirectionalDragScrolling` 统一处理拖选期间的横向和纵向边缘滚动，多光标移动命令位于 `common/cursor/cursorMoveCommands.ts`。
+- `EditorPointerSelectionHandler`：当前把 mouse/pointer hit target 转换为 selection intent；拖选滚动仍由仅本地 `BidirectionalDragScrolling` 承担。目标 owner 是 `DragScrolling` 及其上下、左右两个 operation，必须随 `ViewContext`、`MouseTargetFactory`、render/hit-test 和 `dispatchMouse` 同批迁移，之后删除本地文件。多光标移动命令的目标 owner 是 `common/cursor/cursorMoveCommands.ts`。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。
@@ -207,15 +202,13 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 
 | Area | Status | Boundary |
 | --- | --- | --- |
-| TextModel、ITextBuffer、history、snapshot、tracked range、attached view lifecycle | ✅ Current | Renderer 内同步权威；PieceTree 仅为私有实现 |
-| Multi-selection、IME、clipboard、pointer/keyboard input | ✅ Current | Browser adapter 调用 common command |
-| Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `View` 同步调度 |
-| Token、diagnostic、completion、TextMate 和 App Server parser provider | ✅ Current | version-bound async provider path；Editor 不接收后端 API |
-| Diff editor 与 App Server diff | ✅ Current | Workbench 创建计算服务，Stanza 消费通用结果 |
-| Stable view context 与 single frame context | ✅ Current | `EditorViewContext` 持有稳定读取入口；`EditorRenderingContext` 绑定单次 render pass |
-| Host-owned Part DOM mounting | ✅ Current | `View` 显式挂载 Part 根节点并固定 sibling 顺序 |
-| Per-Part invalidation 与 coordinated frame scheduler | Proposed | 当前 `project` 同步 render 全部 Parts |
-| `prepareRender` read/write separation | ✅ Current | Part collection 先完成全部 `prepareRender`，再进入 `render` |
+| TextModel、ITextBuffer、history、snapshot、tracked range | 部分具备 | 行为可用；`ITextModel`、PieceTree 与 ModelService 契约仍在待处理账目 |
+| Multi-selection、IME、clipboard、pointer/keyboard input | 部分具备 | 本地链可用；cursor 与 edit-context owner 尚未对齐 |
+| Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | 本地手动调度可用；ViewPart 生命周期尚未对齐 |
+| Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备 | 异步版本边界存在；language service 与 tokenization owner 尚未对齐 |
+| Diff editor 与 App Server diff | 部分具备 | 本地 review widget 可用；canonical DiffEditorWidget/MultiDiffEditorWidget 契约尚未完成 |
+| `ViewContext → ViewPart → View` | 尚未完成 | 当前仍由 `EditorViewContext` 与手动 coordinator 调度 |
+| `ViewModelImpl → CursorsController` | 尚未完成 | 当前 controller 由 `ConfiguredCodeEditor` 直接创建 |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |
 
 ## 关键实现入口
@@ -223,7 +216,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | Symbol/file | Responsibility | 修改时同步检查 |
 | --- | --- | --- |
 | `common/model/textModel.ts` | transaction、version、history、snapshot | cursor、tracked range、language invalidation、model tests |
-| `common/cursor/cursor.ts` | editor-local selection 和 command execution | input、undo/redo、composition tests |
+| `common/cursor/cursor.ts` | 目标：由 `ViewModelImpl` 持有 selection、command 和 composition | CursorCollection、ViewModel events、input、undo/redo、composition tests |
 | `common/viewLayout/viewLayout.ts`、`linesLayout.ts`、`lineHeights.ts` | viewport/scroll/layout snapshot、行集合与行高 | wrapping、folding、hit test、viewport tests |
 | `common/viewModel/modelLineProjection.ts` | immutable logical → visual line projection data | folding、selection geometry、navigation |
 | `common/viewModel/viewModelLines.ts` | wrapping、visibility 和 model-versioned visual-line collection | folding、viewport、line-count changes |

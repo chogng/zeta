@@ -84,7 +84,7 @@ test("TextDecorationCollection reports tracked range movement", () => {
 	const events: unknown[] = [];
 	using listener = decorations.onDidChange(event => events.push(event));
 
-	model.applyEdits([{ range: range(0, 0), text: "X" }]);
+	model.applyOperations([{ range: range(0, 0), text: "X" }]);
 	model.undo();
 
 	assert.deepEqual(events, [
@@ -124,7 +124,7 @@ test("TextDecorationCollection exposes tracked ranges before change listeners fi
 		metadata: "match",
 	});
 
-	model.applyEdits([{ range: range(0, 0), text: "X" }]);
+	model.applyOperations([{ range: range(0, 0), text: "X" }]);
 
 	assert.deepEqual(observedRange, range(2, 3));
 });
@@ -151,7 +151,7 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: "invalid",
 		},
-	]), /lineIndex/);
+	]), /lineNumber/);
 	assert.deepEqual(decorations.decorations, [{
 		id: originalId,
 		range: range(0, 1),

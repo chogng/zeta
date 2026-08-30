@@ -59,3 +59,11 @@ export interface IModelOptionsChangedEvent {
 	readonly insertSpaces: boolean;
 	readonly trimAutoWhitespace: boolean;
 }
+
+/** Describes which editor decoration lanes need to be recomputed. */
+export interface IModelDecorationsChangedEvent {
+	readonly affectsMinimap: boolean;
+	readonly affectsOverviewRuler: boolean;
+	readonly affectsGlyphMargin: boolean;
+	readonly affectsLineNumber: boolean;
+}

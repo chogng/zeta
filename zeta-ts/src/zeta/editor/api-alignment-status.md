@@ -33,7 +33,7 @@
 
 | 文件 | 声明 | 此前结论（已撤回） |
 | --- | --- | --- |
-| `browser/controller/dragScrolling.ts` | `DragScrolling` | 本地职责已改名或移出上游 owner |
+| `browser/controller/dragScrolling.ts` | `DragScrolling` | 当前只有仅本地 `bidirectionalDragScrolling.ts`，其双轴像素滚动职责不同于上游抽象 owner；需随 `ViewContext`、outside-editor target、`MouseTargetFactory`、render/hit-test、RTL 与 `dispatchMouse` 整链迁移后删除旧文件 |
 | `browser/controller/mouseHandler.ts` | `MouseHandler` | 本地 pointer/selection owner 改为 `EditorPointerSelectionHandler` |
 | `browser/controller/editContext/clipboardUtils.ts` | `IClipboardCopyEvent` | 本地职责已改名或移出上游 owner |
 | `browser/controller/editContext/clipboardUtils.ts` | `createClipboardCopyEvent` | 本地职责已改名或移出上游 owner |
@@ -105,7 +105,7 @@
 | `common/viewLayout/viewLayout.ts` | `ViewLayout` | 本地 viewport layout owner 改为 `EditorViewportLayoutManager` |
 | `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 已恢复上游公开名与成员边界；selection offset 归并留在文件私有 helper，不再伪装成 class API |
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 已恢复上游公开名与 `_runAutoClosingOvertype` 内部阶段，现有多光标 overtype 行为保持不变 |
-| `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 成员边界与上游比较为 0；字符、折行、visible column、sticky tab stop、上下移动、空行与 buffer 边界行为使用 `CursorConfiguration` 和 `ICursorSimpleModel`。本地 `SelectionSet` 键盘导航已迁到 `cursorNavigation.ts` |
+| `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 文件正文与上游一致，但生产键盘导航仍走仅本地的 `cursorNavigation.ts`，尚未形成 `CursorMoveCommands → MoveOperations` 调用链 |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `PieceTreeTextBuffer` | 已恢复 `common/model.ts` 的 `ITextBuffer` owner、1-based Position/Range 查询、原子编辑与逆编辑、逐行搜索、内容事件、BOM/EOL 和释放契约；红黑树内部结构保持本地实现 |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | `PieceTreeTextBufferBuilder` | 已按上游两阶段 builder/factory 契约对齐 |
 | `common/services/model.ts` | `IModelService` | 已恢复 `ITextModel`、buffer factory、creation options 与 edit source 契约 |
@@ -144,7 +144,7 @@
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand` 和自动闭合范围语义；本地 `SelectionSet` 事务位于 `selectionSetDeleteOperations.ts`。仍需随统一 `CursorsController` 接入生产编辑链 |
 | `common/cursor/cursorMoveCommands.ts` | `CursorMoveCommands` | 已恢复上游公开名；命令参数与 ViewModel 调用链仍需核对 |
 | `common/cursor/cursorTypeOperations.ts` | `TypeOperations` | 已恢复上游公开名；输入策略仍需逐项核对 |
-| `common/cursor/cursorWordOperations.ts` | `WordOperations` | 成员边界比较为 0，word start/end、word part、删除范围和 `SingleCursorState` 选词行为已使用上游契约并有直接测试；本地正则词选区与 `SelectionSet` 事务分别位于 `wordSelection.ts`、`selectionSetWordOperations.ts`。仍需随统一 `CursorsController` 接入生产编辑链 |
+| `common/cursor/cursorWordOperations.ts` | `WordOperations` | 文件正文与上游一致，鼠标选词已接入；按词删除仍由仅本地 `selectionSetWordOperations.ts` 承担。历史 `wordSelection.ts` 已删除且无残留 import；仍需随统一 `CursorsController` 接入生产编辑链 |
 | `common/cursor/oneCursor.ts` | `Cursor` | 成员边界、`modelState` / `viewState`、tracked range 与折行坐标转换已与上游一致；仍需随统一 `ViewModel` 进入生产生命周期 |
 | `common/model/textModel.ts` | `TextModel` | 文本模型与 Piece Tree |
 | `common/model.ts` | `ITextModel` | 文本模型与 Piece Tree |
@@ -155,13 +155,14 @@
 - Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
 - `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
 - `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 118 项完成数。
+- TextModel 现在唯一持有 decoration range，`deltaDecorations`、owner 隔离、编辑后的 tracked range、lane 失效和 collection 释放已通过 29 项定向测试；`ITextModel` 仍缺 tokenization、bracket pairs 与内部事件链，因此本项不计入 118 项完成数。
 
 ## 待处理 owner 顺序
 
 | 顺序 | 所有权切片 | 当前问题 | 闭环条件 |
 | --- | --- | --- | --- |
 | 1 | Platform 配置与语言身份 | 配置 override 事件、全局 Registry、Modes Registry、语言实例 Registry 和语言配置 Registry 未形成上游链；现有语言配置服务有 28 个生产调用方 | 先统一配置键、override 与 Registry，再迁移语言身份和语言配置调用方，删除旧 owner |
-| 2 | TextModel parts | token 状态仍由每个 Editor 持有；decoration、tokenization、ViewModel 注册和 Piece Tree 内部 owner 均未完整对应 | TextModel 唯一持有 tokenization/decoration parts；Model Service、Piece Tree、undo/redo 构造与测试同步完成 |
+| 2 | TextModel parts | decoration range 已收回 TextModel；token 状态仍由每个 Editor 持有，tokenization、bracket pairs、内部内容事件和 ViewModel 注册仍未形成上游 owner 链 | TextModel 唯一持有 tokenization、bracket pairs 与 decoration parts；Model Service、Piece Tree、undo/redo 构造与测试同步完成 |
 | 3 | ViewModel 与 Cursor | `CursorsController` 仍使用 `SelectionSet + EditorEditCommand`，并早于 `ViewModelLines` 创建；Cursor 目录 7 个仅本地文件仍承载上游职责 | 建立 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor` 唯一链，迁移调用方后删除 7 个旧文件 |
 | 4 | ViewContext、ViewPart 与 View | 23 个同路径 View Part 被本地 scheduler 类占用，事件、render 阶段和释放由手工 coordinator 调度 | 先恢复 ViewContext 事件与 ViewPart 生命周期，再迁移 View 和全部 Part；不能逐个复制叶子类 |
 | 5 | CodeEditor Widget 与服务 | `CodeEditorWidget`、`ICodeEditor`、编辑器服务和 contribution 生命周期不完整；Workbench 仍导入缺失的 Diff/MultiDiff canonical export | Widget、服务、贡献初始化、model attach/detach、view state 和公开对象身份同批闭环 |
@@ -171,6 +172,6 @@
 
 - 文件集合审计：287 个同路径、0 个大小写错误、281 个仅本地、440 个仅上游；Zeta 568 个生产文件，VS Code 727 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
 - 118 项账本校验通过：7 项已处理、111 项待处理、总计 118 个唯一声明。
-- `tsconfig.stanza.json --noEmit` 通过；已处理项定向测试 20/20 通过，其中 Standalone 13 项，Clipboard、Column Selection 与 Color Picker Model 7 项。
+- `tsconfig.stanza.json --noEmit` 通过；严格已处理项定向测试 20/20 通过，其中 Standalone 13 项，Clipboard、Column Selection 与 Color Picker Model 7 项。TextModel decoration 前置另有 29/29 项定向测试通过，但尚未计入 118 项完成数。
 - `tsconfig.test.json` 仍报告 11 个已有错误，集中在 Workbench Dialog、Diff/MultiDiff canonical export 与 PDF getter 调用；本次 Standalone 文件没有新增类型错误。
 - 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 111 项中扣减。

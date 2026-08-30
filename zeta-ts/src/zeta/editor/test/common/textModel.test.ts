@@ -3,7 +3,7 @@ import test from "node:test";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModelChangeReason } from "../../common/core/textChange.js";
-import { EndOfLinePreference, EndOfLineSequence, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
+import { EndOfLinePreference, EndOfLineSequence, MinimapPosition, OverviewRulerLane, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
@@ -473,6 +473,60 @@ test("TextModel owns VS Code tracked-range identifiers", () => {
 	assert.deepEqual(model._getTrackedRange(id), new Range(1, 3, 1, 4));
 	assert.equal(model._setTrackedRange(id, null, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges), null);
 	assert.equal(model._getTrackedRange(id), null);
+});
+
+test("TextModel owns decoration identifiers, ranges, and lane invalidation", () => {
+	using model = new TextModel("abc");
+	const events: Array<{ minimap: boolean; overview: boolean; glyph: boolean; lineNumber: boolean }> = [];
+	using listener = model.onDidChangeDecorations(event => events.push({
+		minimap: event.affectsMinimap,
+		overview: event.affectsOverviewRuler,
+		glyph: event.affectsGlyphMargin,
+		lineNumber: event.affectsLineNumber,
+	}));
+
+	let ids = model.deltaDecorations([], [{
+		range: new Range(1, 2, 1, 3),
+		options: {
+			description: "cursor-auto-close",
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+			minimap: { color: "#f00", position: MinimapPosition.Inline },
+			overviewRuler: { color: "#f00", position: OverviewRulerLane.Right },
+			glyphMarginClassName: "glyph",
+			lineNumberClassName: "line-number",
+		},
+	}], 7);
+	assert.equal(ids.length, 1);
+	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 2, 1, 3));
+	assert.deepEqual(events, [{ minimap: true, overview: true, glyph: true, lineNumber: true }]);
+
+	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: "X" }]);
+	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 3, 1, 4));
+	assert.equal(events.length, 2);
+
+	const previousId = ids[0];
+	ids = model.deltaDecorations(ids, [{
+		range: new Range(1, 1, 1, 2),
+		options: { description: "cursor-auto-close" },
+	}], 7);
+	assert.equal(ids[0], previousId);
+	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 1, 1, 2));
+	assert.throws(() => model.deltaDecorations(ids, [], 8), /Unknown model decoration/);
+	model.deltaDecorations(ids, [], 7);
+	assert.equal(model.getDecorationRange(previousId), null);
+});
+
+test("TextModel rejects an invalid decoration delta atomically", () => {
+	using model = new TextModel("abc");
+	const ids = model.deltaDecorations([], [{
+		range: new Range(1, 1, 1, 2),
+		options: { description: "existing" },
+	}]);
+	assert.throws(() => model.deltaDecorations(ids, [
+		{ range: new Range(1, 2, 1, 3), options: { description: "valid" } },
+		{ range: new Range(1, 3, 1, 4), options: { description: "" } },
+	]), /non-empty description/);
+	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 1, 1, 2));
 });
 
 test("TextModel commits history before reentrant change listeners run", () => {
