@@ -1,3 +1,4 @@
+use crate::ModelUsageSummary;
 use crate::SessionId;
 use crate::SessionManagerInfo;
 use crate::SessionStatus;
@@ -39,6 +40,9 @@ pub struct SessionThread {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable, type = "number")]
     pub active_turn_started_at_unix_ms: Option<u64>,
+    /// Provider-reported token usage accumulated by this execution branch.
+    #[serde(default)]
+    pub usage: ModelUsageSummary,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub parent_thread_id: Option<ThreadId>,

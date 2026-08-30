@@ -357,6 +357,8 @@ fn resume_and_model_without_arguments_open_actionable_panes() {
         &mut app,
     );
     assert_eq!(app.list_selection().unwrap().title(), "Resume session");
+    assert!(app.list_selection().unwrap().search().is_some());
+    assert!(app.session_manager_view().is_none());
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::ResumeSession {

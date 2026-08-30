@@ -132,7 +132,7 @@ impl SessionsState {
                     .iter()
                     .position(|session| &session.session_id == session_id)?;
                 if index == 0 {
-                    Some(RootTarget::Manager)
+                    None
                 } else {
                     Some(RootTarget::Session(ordered[index - 1].session_id.clone()))
                 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AgentTreeNodeProjection, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../../../generated/app-server/types.js";
+import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto, SessionThreadProjection } from "../../../../../../../generated/app-server/types.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { AppServerSessionsManagementService } from "../../browser/appServerSessionsManagementService.js";
@@ -87,8 +87,20 @@ function session(sessionId: string, threadId: string): SessionDto {
 		title: `Session ${sessionId}`,
 		status: "active",
 		manager: { status: "idle", statusChangedAtUnixMs: 0 },
-		threads: [{ threadId, title: `Thread ${threadId}`, createdAtUnixMs: 0, completedTurnDurationMs: 0, status: "active" }],
+		threads: [{
+			threadId,
+			title: `Thread ${threadId}`,
+			createdAtUnixMs: 0,
+			completedTurnDurationMs: 0,
+			usage: emptyUsage(),
+			status: "active",
+		}],
 	};
+}
+
+function emptyUsage(): ModelUsageSummary {
+	const total = { reported: 0, complete: true };
+	return { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, reasoningTokens: total };
 }
 
 function agentNode(): AgentTreeNodeProjection {

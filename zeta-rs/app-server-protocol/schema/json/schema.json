@@ -23525,6 +23525,29 @@
         },
         "title": {
           "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/ModelUsageSummary",
+          "default": {
+            "cachedInputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "inputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "modelInvocations": 0,
+            "outputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "reasoningTokens": {
+              "complete": true,
+              "reported": 0
+            }
+          },
+          "description": "Provider-reported token usage accumulated by this execution branch."
         }
       },
       "required": [

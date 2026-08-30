@@ -1318,6 +1318,11 @@ fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
         thread["result"]["value"]["session"]["threads"][0]["status"],
         "active"
     );
+    assert_eq!(
+        thread["result"]["value"]["session"]["threads"][0]["usage"]["inputTokens"]
+            ["reported"],
+        0
+    );
     assert!(
         thread["result"]["value"]["session"]
             .get("currentThreadId")

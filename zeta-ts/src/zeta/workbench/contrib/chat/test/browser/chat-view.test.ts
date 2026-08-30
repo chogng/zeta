@@ -1736,6 +1736,7 @@ function sessionDto(value: ISession): SessionDto {
 			title: `Thread ${chat.threadId}`,
 			createdAtUnixMs: 0,
 			completedTurnDurationMs: 0,
+			usage: emptyUsage(),
 			status: chat.status,
 			...(chat.origin.type === "root" ? {} : { parentThreadId: chat.origin.parentThreadId }),
 			...(chat.origin.type === "fork" || chat.origin.type === "rewind" ? { forkedFromId: chat.origin.parentThreadId } : {}),

@@ -1542,6 +1542,7 @@ impl AppServer {
                 .map(|thread| SessionThread {
                     completed_turn_duration_ms: thread.completed_turn_duration_ms(),
                     active_turn_started_at_unix_ms: thread.active_turn_started_at_unix_ms(),
+                    usage: thread.usage,
                     thread_id: thread.thread_id,
                     title: thread.title,
                     created_at_unix_ms: thread.created_at_unix_ms,

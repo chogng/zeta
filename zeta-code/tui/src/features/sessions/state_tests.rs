@@ -9,7 +9,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
-fn manager_is_the_leftmost_root_and_navigation_does_not_wrap() {
+fn the_first_session_has_no_implicit_manager_to_its_left() {
     let mut state = SessionsState::default();
     state.install_catalog(
         vec![session("one"), session("two")],
@@ -17,7 +17,7 @@ fn manager_is_the_leftmost_root_and_navigation_does_not_wrap() {
         thread_id("one"),
     );
 
-    assert_eq!(state.previous_root(), Some(RootTarget::Manager));
+    assert_eq!(state.previous_root(), None);
     state.show_manager();
     assert_eq!(state.previous_root(), None);
     assert_eq!(
@@ -79,6 +79,7 @@ fn reentering_a_session_falls_back_to_main_after_the_viewed_subagent_completes()
             created_at_unix_ms: 1,
             completed_turn_duration_ms: 0,
             active_turn_started_at_unix_ms: None,
+            usage: Default::default(),
             parent_thread_id: None,
             forked_from_id: None,
             status: ThreadStatus::Active,
@@ -89,6 +90,7 @@ fn reentering_a_session_falls_back_to_main_after_the_viewed_subagent_completes()
             created_at_unix_ms: 2,
             completed_turn_duration_ms: 0,
             active_turn_started_at_unix_ms: None,
+            usage: Default::default(),
             parent_thread_id: Some(thread_id("one")),
             forked_from_id: None,
             status: ThreadStatus::Archived,

@@ -1208,7 +1208,7 @@ impl App {
             return None;
         }
         match self.sessions.previous_root()? {
-            RootTarget::Manager => Some("← agents"),
+            RootTarget::Manager => None,
             RootTarget::Session(_) => Some("← previous session"),
         }
     }
