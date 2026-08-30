@@ -1375,6 +1375,15 @@ fn manager_group_and_session_keys_use_the_selected_node_semantics() {
     assert!(app.session_manager_hint().contains("space to preview"));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.quick_view().unwrap().title(), "Session preview");
+    assert!(app.session_manager_view().is_some());
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.quick_view().is_none());
+    assert!(app.session_manager_view().is_some());
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::ResumeSession {
             session_id: "one".into(),
             preferred_thread_id: None,

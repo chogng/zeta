@@ -61,7 +61,7 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 }
 
 #[test]
-fn empty_session_input_does_not_offer_implicit_manager_navigation() {
+fn empty_session_input_offers_manager_navigation() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -72,7 +72,8 @@ fn empty_session_input_does_not_offer_implicit_manager_navigation() {
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+    assert!(status_line.starts_with("  ⏸ ask permissions on"));
+    assert!(status_line.trim_end().ends_with("← agents"));
 
     app.insert_text("draft");
     let rendered = render(&app, 80, 20);
@@ -83,7 +84,7 @@ fn empty_session_input_does_not_offer_implicit_manager_navigation() {
 }
 
 #[test]
-fn narrow_session_footer_does_not_reserve_an_implicit_manager_hint_row() {
+fn narrow_session_footer_keeps_status_and_manager_hint_on_separate_rows() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -94,11 +95,12 @@ fn narrow_session_footer_does_not_reserve_an_implicit_manager_hint_row() {
     let rendered = render(&app, 24, 20);
     let rows = rendered.lines().collect::<Vec<_>>();
 
-    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
+    assert_eq!(rows[18].trim_end(), "  ⏸ ask permissions on");
+    assert!(rows[19].trim_end().ends_with("← agents"));
 }
 
 #[test]
-fn left_at_the_first_session_does_not_open_the_manager() {
+fn left_from_a_session_opens_the_manager() {
     let mut app = App::new();
     enter_session(
         &mut app,
@@ -106,9 +108,14 @@ fn left_at_the_first_session_does_not_open_the_manager() {
         vec![manager_session("current", SessionManagerStatus::Idle, None)],
     );
 
-    assert!(!render(&app, 80, 20).contains("← agents"));
+    assert!(render(&app, 80, 20).contains("← agents"));
     assert!(
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
+            .is_none()
+    );
+    assert!(app.session_manager_view().is_some());
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
             .is_none()
     );
     assert!(app.session_manager_view().is_none());
@@ -733,8 +740,9 @@ fn manager_session(
     status: SessionManagerStatus,
     activity: Option<SessionManagerActivity>,
 ) -> Session {
+    let session_id = SessionId::new(id).unwrap();
     Session {
-        session_id: SessionId::new(id).unwrap(),
+        session_id: session_id.clone(),
         title: id.into(),
         status: if status == SessionManagerStatus::Completed {
             SessionStatus::Archived
@@ -747,7 +755,21 @@ fn manager_session(
             activity,
             summary: None,
         },
-        threads: Vec::new(),
+        threads: vec![SessionThread {
+            thread_id: ThreadId::new(id).unwrap(),
+            title: "main".into(),
+            created_at_unix_ms: 0,
+            completed_turn_duration_ms: 0,
+            active_turn_started_at_unix_ms: None,
+            usage: Default::default(),
+            parent_thread_id: None,
+            forked_from_id: None,
+            status: if status == SessionManagerStatus::Completed {
+                ThreadStatus::Archived
+            } else {
+                ThreadStatus::Active
+            },
+        }],
     }
 }
 

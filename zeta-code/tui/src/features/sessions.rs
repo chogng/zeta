@@ -63,3 +63,31 @@ where
     }
     load_catalog(client)
 }
+
+pub(super) fn branch_count_label(session: &Session) -> String {
+    let count = session.threads.len();
+    format!("{count} {}", if count == 1 { "branch" } else { "branches" })
+}
+
+pub(super) fn session_size_label(session: &Session) -> String {
+    let mut tokens = 0u64;
+    let mut complete = true;
+    for thread in &session.threads {
+        tokens = tokens
+            .saturating_add(thread.usage.input_tokens.reported)
+            .saturating_add(thread.usage.output_tokens.reported);
+        complete &= thread.usage.input_tokens.complete && thread.usage.output_tokens.complete;
+    }
+    let prefix = if complete { "" } else { "≥" };
+    format!("{prefix}{} tokens", compact_count(tokens))
+}
+
+fn compact_count(count: u64) -> String {
+    if count < 1_000 {
+        return count.to_string();
+    }
+    if count < 1_000_000 {
+        return format!("{:.1}K", count as f64 / 1_000.0);
+    }
+    format!("{:.1}M", count as f64 / 1_000_000.0)
+}

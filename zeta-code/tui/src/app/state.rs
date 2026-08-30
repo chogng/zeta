@@ -1208,8 +1208,8 @@ impl App {
             return None;
         }
         match self.sessions.previous_root()? {
-            RootTarget::Manager => None,
-            RootTarget::Session(_) => Some("← previous session"),
+            RootTarget::Manager => Some("← agents"),
+            RootTarget::Session(_) => None,
         }
     }
 
@@ -1662,10 +1662,10 @@ impl App {
                 )),
                 KeyCode::Char(' ') => {
                     let preview = self.sessions.manager_mut().toggle_or_preview(&catalog);
-                    Some(preview.map(|session_id| AppCommand::ResumeSession {
-                        preferred_thread_id: self.sessions.remembered_thread(&session_id).cloned(),
-                        session_id: session_id.to_string(),
-                    }))
+                    if let Some(preview) = preview {
+                        self.quick_view = Some(QuickViewState::new(preview));
+                    }
+                    Some(None)
                 }
                 KeyCode::Char('p') => {
                     self.sessions.manager_mut().toggle_selected_pin();
@@ -1733,8 +1733,7 @@ impl App {
                 Some(None)
             }
             RootTarget::Session(session_id) => {
-                if matches!(self.sessions.root(), Some(RootTarget::Session(current)) if current == &session_id)
-                {
+                if self.sessions.active_session_id() == Some(&session_id) {
                     let viewed = self
                         .sessions
                         .restorable_thread(&session_id)

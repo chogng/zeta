@@ -5,6 +5,8 @@ use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
+use crate::features::sessions::branch_count_label;
+use crate::features::sessions::session_size_label;
 use std::collections::BTreeMap;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -96,8 +98,8 @@ fn session_item(
     .with_description(format!(
         "{}  ·  {}  ·  {}  ·  {}  ·  {}",
         session_time(session, now_unix_ms),
-        branch_count(session),
-        session_size(session),
+        branch_count_label(session),
+        session_size_label(session),
         status_label(session.status),
         session.session_id,
     ))
@@ -114,34 +116,6 @@ fn session_time(session: &Session, now_unix_ms: u64) -> String {
             now_unix_ms.saturating_sub(changed_at),
         ))
     )
-}
-
-fn branch_count(session: &Session) -> String {
-    let count = session.threads.len();
-    format!("{count} {}", if count == 1 { "branch" } else { "branches" })
-}
-
-fn session_size(session: &Session) -> String {
-    let mut tokens = 0u64;
-    let mut complete = true;
-    for thread in &session.threads {
-        tokens = tokens
-            .saturating_add(thread.usage.input_tokens.reported)
-            .saturating_add(thread.usage.output_tokens.reported);
-        complete &= thread.usage.input_tokens.complete && thread.usage.output_tokens.complete;
-    }
-    let prefix = if complete { "" } else { "≥" };
-    format!("{prefix}{} tokens", compact_count(tokens))
-}
-
-fn compact_count(count: u64) -> String {
-    if count < 1_000 {
-        return count.to_string();
-    }
-    if count < 1_000_000 {
-        return format!("{:.1}K", count as f64 / 1_000.0);
-    }
-    format!("{:.1}M", count as f64 / 1_000_000.0)
 }
 
 fn current_unix_millis() -> u64 {

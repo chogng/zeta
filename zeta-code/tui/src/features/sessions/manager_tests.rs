@@ -146,6 +146,50 @@ fn group_selection_collapses_children_and_archives_all_active_children() {
 }
 
 #[test]
+fn session_preview_is_read_only_manager_detail() {
+    let mut session = session("idle", SessionManagerStatus::Idle, None);
+    session.threads.push(zeta_protocol::SessionThread {
+        thread_id: zeta_protocol::ThreadId::new("thread-idle").unwrap(),
+        title: "main".into(),
+        created_at_unix_ms: 0,
+        completed_turn_duration_ms: 0,
+        active_turn_started_at_unix_ms: None,
+        usage: Default::default(),
+        parent_thread_id: None,
+        forked_from_id: None,
+        status: zeta_protocol::ThreadStatus::Active,
+    });
+    session.threads[0].usage.input_tokens.reported = 1_200;
+    session.threads[0].usage.output_tokens.reported = 300;
+    let sessions = vec![session];
+    let mut state = SessionManagerState::default();
+    state.reconcile(&sessions);
+    state.select_next(&sessions);
+
+    let detail = state.toggle_or_preview(&sessions).unwrap().into_body();
+
+    assert_eq!(detail.title(), "Session preview");
+    assert!(
+        detail
+            .rows()
+            .iter()
+            .any(|row| row.label() == "Branches" && row.value() == "1 branch")
+    );
+    assert!(
+        detail
+            .rows()
+            .iter()
+            .any(|row| row.label() == "Size" && row.value() == "1.5K tokens")
+    );
+    assert!(
+        detail
+            .rows()
+            .iter()
+            .any(|row| row.label() == "Root" && row.value() == "main · active")
+    );
+}
+
+#[test]
 fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
     let sessions = (0..8)
         .map(|index| session(&format!("idle-{index}"), SessionManagerStatus::Idle, None))

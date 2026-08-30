@@ -1,3 +1,8 @@
+use super::branch_count_label;
+use super::session_size_label;
+use crate::components::detail_list::DetailList;
+use crate::components::detail_list::DetailListRow;
+use crate::components::pane::PaneSpec;
 use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -94,7 +99,10 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn toggle_or_preview(&mut self, sessions: &[Session]) -> Option<SessionId> {
+    pub(crate) fn toggle_or_preview(
+        &mut self,
+        sessions: &[Session],
+    ) -> Option<PaneSpec<DetailList>> {
         match self.selected.as_ref()? {
             ManagerSelection::Group(group) => {
                 if !self.collapsed.remove(group) {
@@ -104,10 +112,8 @@ impl SessionManagerState {
             }
             ManagerSelection::Session(session_id) => sessions
                 .iter()
-                .find(|session| {
-                    &session.session_id == session_id && session.status == SessionStatus::Active
-                })
-                .map(|session| session.session_id.clone()),
+                .find(|session| &session.session_id == session_id)
+                .map(|session| session_preview(session, self.now_unix_ms)),
         }
     }
 
@@ -198,10 +204,6 @@ impl SessionManagerState {
         }
     }
 
-    pub(crate) fn ordered<'a>(&self, sessions: &'a [Session]) -> Vec<&'a Session> {
-        ordered_sessions(sessions, &self.pinned)
-    }
-
     fn select_offset(&mut self, sessions: &[Session], delta: isize) -> bool {
         let rows = manager_rows(sessions, &self.pinned, &self.collapsed);
         let Some(current) = self.selected.as_ref() else {
@@ -218,6 +220,51 @@ impl SessionManagerState {
         let changed = next != index;
         self.selected = rows.get(next).map(ManagerRow::selection);
         changed
+    }
+}
+
+fn session_preview(session: &Session, now_unix_ms: u64) -> PaneSpec<DetailList> {
+    let mut rows = vec![
+        DetailListRow::new("Session", session.title.clone()),
+        DetailListRow::new("ID", session.session_id.to_string()),
+        DetailListRow::new("Status", manager_status_label(session.manager.status)),
+        DetailListRow::new("Time", elapsed_label(session, now_unix_ms)),
+        DetailListRow::new("Branches", branch_count_label(session)),
+        DetailListRow::new("Size", session_size_label(session)),
+    ];
+    let activity = activity_text(session);
+    if !activity.is_empty() {
+        rows.push(DetailListRow::new("Activity", activity));
+    }
+    for thread in &session.threads {
+        rows.push(DetailListRow::new(
+            if thread.parent_thread_id.is_some() {
+                "Branch"
+            } else {
+                "Root"
+            },
+            format!("{} · {}", thread.title, thread_status_label(thread.status)),
+        ));
+    }
+    PaneSpec::new(DetailList::new("Session preview", rows), "Esc back")
+}
+
+fn manager_status_label(status: SessionManagerStatus) -> &'static str {
+    match status {
+        SessionManagerStatus::Idle => "idle",
+        SessionManagerStatus::NeedsInput => "needs input",
+        SessionManagerStatus::Working => "working",
+        SessionManagerStatus::ReadyForReview => "ready for review",
+        SessionManagerStatus::Completed => "completed",
+        SessionManagerStatus::Failed => "failed",
+        SessionManagerStatus::Stopped => "stopped",
+    }
+}
+
+fn thread_status_label(status: zeta_protocol::ThreadStatus) -> &'static str {
+    match status {
+        zeta_protocol::ThreadStatus::Active => "active",
+        zeta_protocol::ThreadStatus::Archived => "archived",
     }
 }
 
@@ -442,17 +489,6 @@ fn manager_rows<'a>(
         }
     }
     rows
-}
-
-fn ordered_sessions<'a>(sessions: &'a [Session], pinned: &BTreeSet<SessionId>) -> Vec<&'a Session> {
-    SessionGroup::ALL
-        .into_iter()
-        .flat_map(|group| {
-            sessions
-                .iter()
-                .filter(move |session| group.includes(session, pinned))
-        })
-        .collect()
 }
 
 fn session_line<'a>(

@@ -15,6 +15,7 @@ pub(crate) enum RootTarget {
 #[derive(Debug, Default)]
 pub(crate) struct SessionsState {
     root: Option<RootTarget>,
+    active_session_id: Option<SessionId>,
     catalog: Vec<Session>,
     last_viewed_thread: BTreeMap<SessionId, ThreadId>,
     manager: SessionManagerState,
@@ -30,6 +31,7 @@ impl SessionsState {
     ) {
         self.last_viewed_thread
             .insert(active_session_id.clone(), viewed_thread_id);
+        self.active_session_id = Some(active_session_id.clone());
         self.root = Some(RootTarget::Session(active_session_id));
         self.catalog = catalog;
         self.manager.reconcile(&self.catalog);
@@ -38,6 +40,14 @@ impl SessionsState {
     pub(crate) fn refresh_catalog(&mut self, catalog: Vec<Session>) {
         self.catalog = catalog;
         self.manager.reconcile(&self.catalog);
+        if self.active_session_id.as_ref().is_some_and(|session_id| {
+            !self
+                .catalog
+                .iter()
+                .any(|session| &session.session_id == session_id)
+        }) {
+            self.active_session_id = None;
+        }
         if let Some(RootTarget::Session(session_id)) = self.root.as_ref()
             && !self
                 .catalog
@@ -60,6 +70,7 @@ impl SessionsState {
     pub(crate) fn show_session(&mut self, session_id: SessionId, viewed_thread_id: ThreadId) {
         self.last_viewed_thread
             .insert(session_id.clone(), viewed_thread_id);
+        self.active_session_id = Some(session_id.clone());
         self.root = Some(RootTarget::Session(session_id));
     }
 
@@ -74,6 +85,10 @@ impl SessionsState {
 
     pub(crate) fn remembered_thread(&self, session_id: &SessionId) -> Option<&ThreadId> {
         self.last_viewed_thread.get(session_id)
+    }
+
+    pub(crate) fn active_session_id(&self) -> Option<&SessionId> {
+        self.active_session_id.as_ref()
     }
 
     pub(crate) fn restorable_thread(&self, session_id: &SessionId) -> Option<ThreadId> {
@@ -126,36 +141,14 @@ impl SessionsState {
     pub(crate) fn previous_root(&self) -> Option<RootTarget> {
         match self.root()? {
             RootTarget::Manager => None,
-            RootTarget::Session(session_id) => {
-                let ordered = self.manager.ordered(&self.catalog);
-                let index = ordered
-                    .iter()
-                    .position(|session| &session.session_id == session_id)?;
-                if index == 0 {
-                    None
-                } else {
-                    Some(RootTarget::Session(ordered[index - 1].session_id.clone()))
-                }
-            }
+            RootTarget::Session(_) => Some(RootTarget::Manager),
         }
     }
 
     pub(crate) fn next_root(&self) -> Option<RootTarget> {
         match self.root()? {
-            RootTarget::Manager => self
-                .manager
-                .ordered(&self.catalog)
-                .first()
-                .map(|session| RootTarget::Session(session.session_id.clone())),
-            RootTarget::Session(session_id) => {
-                let ordered = self.manager.ordered(&self.catalog);
-                let index = ordered
-                    .iter()
-                    .position(|session| &session.session_id == session_id)?;
-                ordered
-                    .get(index.saturating_add(1))
-                    .map(|session| RootTarget::Session(session.session_id.clone()))
-            }
+            RootTarget::Manager => self.active_session_id.clone().map(RootTarget::Session),
+            RootTarget::Session(_) => None,
         }
     }
 }

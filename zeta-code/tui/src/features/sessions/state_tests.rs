@@ -9,7 +9,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadStatus;
 
 #[test]
-fn the_first_session_has_no_implicit_manager_to_its_left() {
+fn manager_is_directly_left_of_the_active_session() {
     let mut state = SessionsState::default();
     state.install_catalog(
         vec![session("one"), session("two")],
@@ -17,7 +17,7 @@ fn the_first_session_has_no_implicit_manager_to_its_left() {
         thread_id("one"),
     );
 
-    assert_eq!(state.previous_root(), None);
+    assert_eq!(state.previous_root(), Some(RootTarget::Manager));
     state.show_manager();
     assert_eq!(state.previous_root(), None);
     assert_eq!(
@@ -27,7 +27,7 @@ fn the_first_session_has_no_implicit_manager_to_its_left() {
 }
 
 #[test]
-fn horizontal_root_navigation_matches_the_manager_group_order() {
+fn historical_sessions_are_not_horizontal_roots() {
     let mut completed = session("completed");
     completed.manager.status = SessionManagerStatus::Completed;
     let mut working = session("working");
@@ -44,16 +44,15 @@ fn horizontal_root_navigation_matches_the_manager_group_order() {
     state.show_manager();
     assert_eq!(
         state.next_root(),
-        Some(RootTarget::Session(session_id("question")))
+        Some(RootTarget::Session(session_id("completed")))
     );
     state.show_session(session_id("working"), thread_id("working"));
-    assert_eq!(
-        state.previous_root(),
-        Some(RootTarget::Session(session_id("question")))
-    );
+    assert_eq!(state.previous_root(), Some(RootTarget::Manager));
+    assert_eq!(state.next_root(), None);
+    state.show_manager();
     assert_eq!(
         state.next_root(),
-        Some(RootTarget::Session(session_id("completed")))
+        Some(RootTarget::Session(session_id("working")))
     );
 }
 
