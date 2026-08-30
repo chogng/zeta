@@ -1,5 +1,6 @@
 use super::draw;
 use super::input_overlay_index_at;
+use super::layout;
 use crate::app::App;
 use crate::app::AppEvent;
 use crate::components::list_selection::ListSelectionGroup;
@@ -58,6 +59,66 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(!rendered.contains("ctrl-v image"));
     let status_line = rendered.lines().last().unwrap();
     assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
+}
+
+#[test]
+fn status_notice_overlays_the_row_above_chat_input_without_changing_layout() {
+    let mut app = App::new();
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let composer_before = layout(&app, terminal_area).session.composer;
+
+    app.update(AppEvent::StatusNoticeShown(
+        "Copied 246 chars to clipboard".into(),
+    ));
+
+    let composer_after = layout(&app, terminal_area).session.composer;
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
+    let rows = rendered.lines().collect::<Vec<_>>();
+    let notice_row = usize::from(composer_after.y.saturating_sub(1));
+
+    assert_eq!(composer_after, composer_before);
+    assert!(
+        rows[notice_row]
+            .trim_end()
+            .ends_with("Copied 246 chars to clipboard")
+    );
+    assert!(!rows.last().unwrap().contains("Copied"));
+}
+
+#[test]
+fn manager_keeps_overflow_text_left_of_the_status_notice() {
+    let mut app = App::new();
+    app.update(AppEvent::SessionCatalogReceived(
+        (0..24)
+            .map(|index| {
+                manager_session(
+                    &format!("session-{index}"),
+                    SessionManagerStatus::Idle,
+                    None,
+                )
+            })
+            .collect(),
+    ));
+    app.insert_text("/sessions");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.update(AppEvent::StatusNoticeShown(
+        "Copied 246 chars to clipboard".into(),
+    ));
+
+    let terminal_area = Rect::new(0, 0, 100, 20);
+    let composer = layout(&app, terminal_area).session.composer;
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
+    let notice_row = rendered
+        .lines()
+        .nth(usize::from(composer.y.saturating_sub(1)))
+        .unwrap();
+
+    assert!(notice_row.contains("more below"));
+    assert!(
+        notice_row
+            .trim_end()
+            .ends_with("Copied 246 chars to clipboard")
+    );
 }
 
 #[test]

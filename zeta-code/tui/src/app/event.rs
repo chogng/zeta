@@ -61,6 +61,7 @@ pub(crate) enum AppEvent {
     FileSearchSnapshotReceived(PathSearchSnapshot),
     GitStatusReceived(GitStatusResult),
     HostOperationCompleted(Result<String, String>),
+    StatusNoticeShown(String),
     InterruptFailed(String),
     ProductNotice(String),
     ApprovalRequested(Approval),

@@ -19,6 +19,14 @@ fn render_theme_maps_its_colors_for_each_terminal_capability() {
 
     assert!(matches!(true_color.accent(), Color::Rgb(..)));
     assert_eq!(true_color.highlight(), Color::Rgb(154, 145, 235));
+    assert_eq!(
+        true_color.active_selection_foreground(),
+        Color::Rgb(0, 0, 0)
+    );
+    assert_eq!(
+        true_color.active_selection_background(),
+        Color::Rgb(192, 192, 192)
+    );
     assert!(matches!(ansi256.accent(), Color::Indexed(..)));
     assert!(!matches!(
         ansi16.accent(),

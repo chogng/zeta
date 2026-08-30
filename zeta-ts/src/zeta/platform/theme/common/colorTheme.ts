@@ -147,6 +147,8 @@ export const ColorId = Object.freeze({
 	terminalAnsiBrightCyan: terminalColors.terminalAnsiBrightCyan,
 	terminalAnsiBrightWhite: terminalColors.terminalAnsiBrightWhite,
 	tuiHighlightForeground: tuiColors.tuiHighlightForeground,
+	tuiActiveSelectionForeground: tuiColors.tuiActiveSelectionForeground,
+	tuiActiveSelectionBackground: tuiColors.tuiActiveSelectionBackground,
 });
 
 export { colorCssVariable, sizeCssVariable };

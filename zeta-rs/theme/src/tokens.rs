@@ -70,6 +70,8 @@ pub const TERMINAL_BACKGROUND: &str = "terminal.background";
 pub const TERMINAL_FOREGROUND: &str = "terminal.foreground";
 pub const TERMINAL_CURSOR_FOREGROUND: &str = "terminal.cursorForeground";
 pub const TUI_HIGHLIGHT_FOREGROUND: &str = "tui.highlightForeground";
+pub const TUI_ACTIVE_SELECTION_FOREGROUND: &str = "tui.activeSelectionForeground";
+pub const TUI_ACTIVE_SELECTION_BACKGROUND: &str = "tui.activeSelectionBackground";
 pub const TERMINAL_ANSI: [&str; 16] = [
     "terminal.ansiBlack",
     "terminal.ansiRed",

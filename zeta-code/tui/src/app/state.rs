@@ -2,6 +2,7 @@ use super::command::AppCommand;
 use super::escape::RootEscapeOutcome;
 use super::escape::RootEscapeSequence;
 use super::event::AppEvent;
+use super::status_notice::StatusNotice;
 use crate::components::chat_composer::ChatComposer;
 use crate::components::chat_composer::ChatComposerOutcome;
 #[cfg(test)]
@@ -150,6 +151,7 @@ pub(crate) struct App {
     status: Status,
     turn_input_mode: TurnInputMode,
     status_line: StatusLineModel,
+    status_notice: StatusNotice,
     terminal_settings: TerminalSettings,
     screen_selection: ScreenSelection,
     approval_mode_status: ApprovalModeStatus,
@@ -197,6 +199,7 @@ impl App {
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
+            status_notice: StatusNotice::default(),
             terminal_settings: TerminalSettings::default(),
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
@@ -235,6 +238,7 @@ impl App {
             status: Status::Ready,
             turn_input_mode: TurnInputMode::Start,
             status_line: StatusLineModel::new(),
+            status_notice: StatusNotice::default(),
             terminal_settings: TerminalSettings::default(),
             screen_selection: ScreenSelection::default(),
             approval_mode_status: ApprovalModeStatus::default(),
@@ -1310,6 +1314,10 @@ impl App {
         &self.status_line
     }
 
+    pub(crate) fn status_notice(&self) -> Option<&str> {
+        self.status_notice.text()
+    }
+
     pub(crate) fn status_line_runtime(&self) -> StatusLineRuntime {
         let plan = self.plan_view().map(|view| (view.completed, view.total));
         let queue = self.queue_view().items.len();
@@ -1472,6 +1480,9 @@ impl App {
             AppEvent::HostOperationCompleted(Err(error)) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
+            }
+            AppEvent::StatusNoticeShown(notice) => {
+                self.status_notice.show(notice, Instant::now());
             }
             AppEvent::InterruptFailed(error) => {
                 self.thread
@@ -1917,10 +1928,11 @@ impl App {
     pub(crate) fn handle_tick(&mut self, now: Instant) -> bool {
         let context = self.app_keymap_context(true);
         let chord_expired = self.app_keymap.expire(context, now);
+        let status_notice_expired = self.status_notice.expire(now);
         let elapsed_changed = self.subagent_pane.refresh_elapsed();
         let manager_changed = matches!(self.sessions.root(), Some(RootTarget::Manager))
             && self.sessions.refresh_manager_time(now);
-        chord_expired || elapsed_changed || manager_changed
+        chord_expired || status_notice_expired || elapsed_changed || manager_changed
     }
 
     pub(crate) fn pending_key_chord_label(&self) -> Option<String> {

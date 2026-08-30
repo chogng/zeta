@@ -5,6 +5,32 @@ use zeta_theme::ThemeError;
 use zeta_theme::ThemeSnapshot;
 use zeta_theme::tokens;
 
+const fn hex(value: &str) -> Color {
+    let bytes = value.as_bytes();
+    assert!(
+        bytes.len() == 7 && bytes[0] == b'#',
+        "hex color must use the #RRGGBB format"
+    );
+    Color::Rgb(
+        hex_pair(bytes[1], bytes[2]),
+        hex_pair(bytes[3], bytes[4]),
+        hex_pair(bytes[5], bytes[6]),
+    )
+}
+
+const fn hex_pair(high: u8, low: u8) -> u8 {
+    (hex_digit(high) << 4) | hex_digit(low)
+}
+
+const fn hex_digit(value: u8) -> u8 {
+    match value {
+        b'0'..=b'9' => value - b'0',
+        b'a'..=b'f' => value - b'a' + 10,
+        b'A'..=b'F' => value - b'A' + 10,
+        _ => panic!("hex color contains an invalid digit"),
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RenderTheme {
     accent: Color,
@@ -23,6 +49,8 @@ pub(crate) struct RenderTheme {
     removed_marker: Color,
     string: Color,
     success: Color,
+    active_selection_background: Color,
+    active_selection_foreground: Color,
     r#type: Color,
     variable: Color,
     warning: Color,
@@ -61,6 +89,8 @@ impl RenderTheme {
             removed_marker: projected(tokens::DIFF_REMOVED_LINE_MARKER)?,
             string: projected(tokens::EDITOR_TOKEN_STRING)?,
             success: projected(tokens::SUCCESS_FOREGROUND)?,
+            active_selection_background: projected(tokens::TUI_ACTIVE_SELECTION_BACKGROUND)?,
+            active_selection_foreground: projected(tokens::TUI_ACTIVE_SELECTION_FOREGROUND)?,
             r#type: projected(tokens::EDITOR_TOKEN_TYPE)?,
             variable: projected(tokens::EDITOR_TOKEN_VARIABLE)?,
             warning: projected(tokens::WARNING_FOREGROUND)?,
@@ -69,25 +99,27 @@ impl RenderTheme {
 
     pub(crate) const fn fallback() -> Self {
         Self {
-            accent: Color::Rgb(105, 170, 255),
-            background: Color::Rgb(13, 17, 23),
-            border: Color::DarkGray,
-            chat_input_chrome: Color::Rgb(155, 155, 155),
-            danger: Color::Rgb(245, 105, 105),
-            foreground: Color::White,
-            function: Color::Rgb(210, 168, 255),
-            highlight: Color::Rgb(154, 145, 235),
-            inserted_background: Color::Rgb(19, 48, 28),
-            inserted_marker: Color::Rgb(63, 185, 80),
-            keyword: Color::Rgb(255, 123, 114),
-            muted: Color::DarkGray,
-            removed_background: Color::Rgb(55, 25, 27),
-            removed_marker: Color::Rgb(248, 81, 73),
-            string: Color::Rgb(165, 214, 255),
-            success: Color::Rgb(95, 210, 140),
-            r#type: Color::Rgb(210, 168, 255),
-            variable: Color::Rgb(255, 166, 87),
-            warning: Color::Rgb(245, 190, 80),
+            accent: hex("#69aaff"),
+            background: hex("#0d1117"),
+            border: hex("#808080"),
+            chat_input_chrome: hex("#9b9b9b"),
+            danger: hex("#f56969"),
+            foreground: hex("#ffffff"),
+            function: hex("#d2a8ff"),
+            highlight: hex("#9a91eb"),
+            inserted_background: hex("#13301c"),
+            inserted_marker: hex("#3fb950"),
+            keyword: hex("#ff7b72"),
+            muted: hex("#808080"),
+            removed_background: hex("#37191b"),
+            removed_marker: hex("#f85149"),
+            string: hex("#a5d6ff"),
+            success: hex("#5fd28c"),
+            active_selection_background: hex("#c0c0c0"),
+            active_selection_foreground: hex("#000000"),
+            r#type: hex("#d2a8ff"),
+            variable: hex("#ffa657"),
+            warning: hex("#f5be50"),
         }
     }
 
@@ -138,6 +170,12 @@ impl RenderTheme {
     }
     pub(crate) const fn success(self) -> Color {
         self.success
+    }
+    pub(crate) const fn active_selection_background(self) -> Color {
+        self.active_selection_background
+    }
+    pub(crate) const fn active_selection_foreground(self) -> Color {
+        self.active_selection_foreground
     }
     pub(crate) const fn r#type(self) -> Color {
         self.r#type
@@ -196,6 +234,12 @@ impl<'a> RenderContext<'a> {
     }
     pub(crate) const fn success(self) -> Color {
         self.theme.success()
+    }
+    pub(crate) const fn active_selection_background(self) -> Color {
+        self.theme.active_selection_background()
+    }
+    pub(crate) const fn active_selection_foreground(self) -> Color {
+        self.theme.active_selection_foreground()
     }
     pub(crate) const fn r#type(self) -> Color {
         self.theme.r#type()

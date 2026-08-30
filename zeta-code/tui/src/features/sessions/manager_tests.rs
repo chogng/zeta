@@ -2,7 +2,6 @@ use super::*;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use zeta_protocol::SessionManagerInfo;
 use zeta_protocol::SessionStatus;
 
@@ -81,7 +80,14 @@ fn row_starts_with_status_icon_and_keeps_name_activity_and_time_columns() {
             text: "Running targeted tests".into(),
         }),
     );
-    let text = line_text(&session_line(&session, false, 0, 7_210_000, 72));
+    let text = line_text(&session_line(
+        &session,
+        false,
+        0,
+        7_210_000,
+        72,
+        crate::render::test_context(),
+    ));
 
     assert!(text.starts_with("  ⠋ working"));
     assert!(text.contains("Running targeted tests"));
@@ -235,9 +241,10 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
 
     assert!(rendered.contains("▾ Idle (8)"));
     assert!(rendered.contains("more below"));
-    assert_eq!(buffer[(0, 0)].fg, Color::Black);
-    assert_eq!(buffer[(0, 0)].bg, Color::Gray);
-    assert_eq!(buffer[(2, 1)].fg, Color::Gray);
+    let context = crate::render::test_context();
+    assert_eq!(buffer[(0, 0)].fg, context.active_selection_foreground());
+    assert_eq!(buffer[(0, 0)].bg, context.active_selection_background());
+    assert_eq!(buffer[(2, 1)].fg, context.muted());
 
     for _ in 0..5 {
         state.select_next(&sessions);

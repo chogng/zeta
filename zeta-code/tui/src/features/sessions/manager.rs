@@ -7,7 +7,6 @@ use crate::render::RenderContext;
 use ratatui::Frame;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -333,7 +332,12 @@ pub(crate) fn draw_manager(
     let viewport = manager_viewport(rows.len(), selected_row, visible_rows);
     let mut lines = Vec::with_capacity(visible_rows);
     if viewport.start > 0 {
-        lines.push(more_line('↑', viewport.start, usize::from(area.width)));
+        lines.push(more_line(
+            '↑',
+            viewport.start,
+            usize::from(area.width),
+            context,
+        ));
     }
     lines.extend(
         rows[viewport.start..viewport.end]
@@ -346,6 +350,7 @@ pub(crate) fn draw_manager(
                     view.collapsed.contains(&group),
                     view.selected == Some(&ManagerSelection::Group(group)),
                     usize::from(area.width),
+                    context,
                 ),
                 ManagerRow::Session(session) => session_line(
                     session,
@@ -353,6 +358,7 @@ pub(crate) fn draw_manager(
                     view.animation_frame,
                     view.now_unix_ms,
                     usize::from(area.width),
+                    context,
                 ),
             }),
     );
@@ -361,6 +367,7 @@ pub(crate) fn draw_manager(
             '↓',
             rows.len() - viewport.end,
             usize::from(area.width),
+            context,
         ));
     }
     frame.render_widget(Paragraph::new(lines), area);
@@ -522,6 +529,7 @@ fn session_line<'a>(
     animation_frame: usize,
     now_unix_ms: u64,
     width: usize,
+    context: RenderContext<'_>,
 ) -> Line<'a> {
     let icon = status_icon(session.manager.status, animation_frame);
     let elapsed = elapsed_label(session, now_unix_ms);
@@ -536,9 +544,9 @@ fn session_line<'a>(
     let name = pad_to_width(&truncate_to_width(&session.title, name_width), name_width);
     let middle = pad_to_width(&truncate_to_width(middle, middle_width), middle_width);
     let row_style = if selected {
-        selected_style()
+        selected_style(context)
     } else {
-        Style::default().fg(Color::Gray)
+        Style::default().fg(context.muted())
     };
 
     Line::from(vec![
@@ -560,32 +568,40 @@ fn group_line(
     collapsed: bool,
     selected: bool,
     width: usize,
+    context: RenderContext<'_>,
 ) -> Line<'static> {
     let arrow = if collapsed { '▸' } else { '▾' };
     let text = format!("{arrow} {} ({count})", group.label());
     let style = if selected {
-        selected_style().add_modifier(Modifier::BOLD)
+        selected_style(context).add_modifier(Modifier::BOLD)
     } else {
         Style::default()
-            .fg(Color::Gray)
+            .fg(context.muted())
             .add_modifier(Modifier::BOLD)
     };
     Line::styled(pad_to_width(&truncate_to_width(&text, width), width), style)
 }
 
-fn more_line(direction: char, count: usize, width: usize) -> Line<'static> {
+fn more_line(
+    direction: char,
+    count: usize,
+    width: usize,
+    context: RenderContext<'_>,
+) -> Line<'static> {
     let position = if direction == '↑' { "above" } else { "below" };
     let text = format!("{direction} {count} more {position}");
     Line::styled(
         pad_to_width(&truncate_to_width(&text, width), width),
         Style::default()
-            .fg(Color::Gray)
+            .fg(context.muted())
             .add_modifier(Modifier::ITALIC),
     )
 }
 
-fn selected_style() -> Style {
-    Style::default().fg(Color::Black).bg(Color::Gray)
+fn selected_style(context: RenderContext<'_>) -> Style {
+    Style::default()
+        .fg(context.active_selection_foreground())
+        .bg(context.active_selection_background())
 }
 
 fn column_widths(body_width: usize, has_middle: bool) -> (usize, usize, usize) {

@@ -12,6 +12,7 @@ mod redraw;
 mod request_completion;
 mod screen_layout;
 mod state;
+mod status_notice;
 mod transcript_batch;
 
 pub(crate) use crate::features::sessions::ActiveConversation;

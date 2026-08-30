@@ -496,10 +496,18 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             .latest_agent_response()
                             .ok_or_else(|| "there is no Zeta response to copy".to_owned())
                             .and_then(|response| {
+                                let char_count = response.chars().count();
                                 host::clipboard::write_text(response)
-                                    .map(|()| "Copied the latest Zeta response".to_owned())
+                                    .map(|()| char_count)
                             });
-                        app.update(AppEvent::HostOperationCompleted(result));
+                        match result {
+                            Ok(char_count) => app.update(AppEvent::StatusNoticeShown(format!(
+                                "Copied {char_count} chars to clipboard"
+                            ))),
+                            Err(error) => {
+                                app.update(AppEvent::HostOperationCompleted(Err(error)))
+                            }
+                        }
                     }
                     AppCommand::OpenConfigPane => {
                         match config::refresh_terminal_settings(config_resource.as_mut()) {
@@ -1247,10 +1255,14 @@ fn finish_pointer_gesture(
             Ok(activate_pointer_item(app, area, position.x, position.y))
         }
         Some(ScreenSelectionOutcome::Copy(range)) => {
-            if let Some(text) = terminal.selected_text(range)
-                && let Err(error) = host::clipboard::write_text(&text)
-            {
-                app.update(AppEvent::FailureReported(error));
+            if let Some(text) = terminal.selected_text(range) {
+                let char_count = text.chars().count();
+                match host::clipboard::write_text(&text) {
+                    Ok(()) => app.update(AppEvent::StatusNoticeShown(format!(
+                        "Copied {char_count} chars to clipboard"
+                    ))),
+                    Err(error) => app.update(AppEvent::FailureReported(error)),
+                }
             }
             Ok(None)
         }

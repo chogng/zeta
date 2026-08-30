@@ -123,10 +123,43 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             context,
         );
     }
+    draw_status_notice(
+        frame,
+        areas.session.transcript,
+        areas.session.composer,
+        app.status_notice(),
+        context,
+    );
     if let Some(quick_view) = app.quick_view() {
         crate::components::quick_view::draw(frame, overlay_area(&areas), quick_view, context);
     }
     app.screen_selection().draw(frame.buffer_mut());
+}
+
+fn draw_status_notice(
+    frame: &mut Frame<'_>,
+    content: Rect,
+    composer: Rect,
+    notice: Option<&str>,
+    context: crate::render::RenderContext<'_>,
+) {
+    let Some(notice) = notice else {
+        return;
+    };
+    if content.is_empty() || composer.is_empty() || composer.y <= content.y {
+        return;
+    }
+    key_hint_bar::draw_right(
+        frame,
+        Rect {
+            x: content.x,
+            y: composer.y.saturating_sub(1),
+            width: content.width,
+            height: 1,
+        },
+        notice,
+        context,
+    );
 }
 
 #[cfg(test)]

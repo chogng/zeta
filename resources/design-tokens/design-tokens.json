@@ -235,10 +235,10 @@
         "high-contrast-light": "#00000029"
       },
       "values": {
-        "dark": "#00000066",
-        "light": "#00000029",
-        "high-contrast-dark": "#00000066",
-        "high-contrast-light": "#00000029"
+        "dark": "rgba(0, 0, 0, 0.4)",
+        "light": "rgba(0, 0, 0, 0.16)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0.4)",
+        "high-contrast-light": "rgba(0, 0, 0, 0.16)"
       }
     },
     {
@@ -515,10 +515,10 @@
         "high-contrast-light": "#ffffff18"
       },
       "values": {
-        "dark": "#ffffff18",
-        "light": "#ffffff18",
-        "high-contrast-dark": "#ffffff18",
-        "high-contrast-light": "#ffffff18"
+        "dark": "rgba(255, 255, 255, 0.09)",
+        "light": "rgba(255, 255, 255, 0.09)",
+        "high-contrast-dark": "rgba(255, 255, 255, 0.09)",
+        "high-contrast-light": "rgba(255, 255, 255, 0.09)"
       }
     },
     {
@@ -535,10 +535,10 @@
         "high-contrast-light": "#00000030"
       },
       "values": {
-        "dark": "#00000030",
-        "light": "#00000030",
-        "high-contrast-dark": "#00000030",
-        "high-contrast-light": "#00000030"
+        "dark": "rgba(0, 0, 0, 0.19)",
+        "light": "rgba(0, 0, 0, 0.19)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0.19)",
+        "high-contrast-light": "rgba(0, 0, 0, 0.19)"
       }
     },
     {
@@ -975,10 +975,10 @@
         "high-contrast-light": "#5a5d5e29"
       },
       "values": {
-        "dark": "#5a5d5e50",
-        "light": "#5a5d5e29",
-        "high-contrast-dark": "#5a5d5e50",
-        "high-contrast-light": "#5a5d5e29"
+        "dark": "rgba(90, 93, 94, 0.31)",
+        "light": "rgba(90, 93, 94, 0.16)",
+        "high-contrast-dark": "rgba(90, 93, 94, 0.31)",
+        "high-contrast-light": "rgba(90, 93, 94, 0.16)"
       }
     },
     {
@@ -1015,10 +1015,10 @@
         "high-contrast-light": "#dddddd66"
       },
       "values": {
-        "dark": "#8080802b",
-        "light": "#dddddd66",
-        "high-contrast-dark": "#8080802b",
-        "high-contrast-light": "#dddddd66"
+        "dark": "rgba(128, 128, 128, 0.17)",
+        "light": "rgba(221, 221, 221, 0.4)",
+        "high-contrast-dark": "rgba(128, 128, 128, 0.17)",
+        "high-contrast-light": "rgba(221, 221, 221, 0.4)"
       }
     },
     {
@@ -1035,10 +1035,10 @@
         "high-contrast-light": "#cccccc66"
       },
       "values": {
-        "dark": "#80808033",
-        "light": "#cccccc66",
-        "high-contrast-dark": "#80808033",
-        "high-contrast-light": "#cccccc66"
+        "dark": "rgba(128, 128, 128, 0.2)",
+        "light": "rgba(204, 204, 204, 0.4)",
+        "high-contrast-dark": "rgba(128, 128, 128, 0.2)",
+        "high-contrast-light": "rgba(204, 204, 204, 0.4)"
       }
     },
     {
@@ -1075,10 +1075,10 @@
         "high-contrast-light": "#64646433"
       },
       "values": {
-        "dark": "#79797966",
-        "light": "#64646433",
-        "high-contrast-dark": "#79797966",
-        "high-contrast-light": "#64646433"
+        "dark": "rgba(121, 121, 121, 0.4)",
+        "light": "rgba(100, 100, 100, 0.2)",
+        "high-contrast-dark": "rgba(121, 121, 121, 0.4)",
+        "high-contrast-light": "rgba(100, 100, 100, 0.2)"
       }
     },
     {
@@ -1095,10 +1095,10 @@
         "high-contrast-light": "#64646459"
       },
       "values": {
-        "dark": "#646464b3",
-        "light": "#64646459",
-        "high-contrast-dark": "#646464b3",
-        "high-contrast-light": "#64646459"
+        "dark": "rgba(100, 100, 100, 0.7)",
+        "light": "rgba(100, 100, 100, 0.35)",
+        "high-contrast-dark": "rgba(100, 100, 100, 0.7)",
+        "high-contrast-light": "rgba(100, 100, 100, 0.35)"
       }
     },
     {
@@ -1115,10 +1115,10 @@
         "high-contrast-light": "#00000033"
       },
       "values": {
-        "dark": "#bfbfbf66",
-        "light": "#00000033",
-        "high-contrast-dark": "#bfbfbf66",
-        "high-contrast-light": "#00000033"
+        "dark": "rgba(191, 191, 191, 0.4)",
+        "light": "rgba(0, 0, 0, 0.2)",
+        "high-contrast-dark": "rgba(191, 191, 191, 0.4)",
+        "high-contrast-light": "rgba(0, 0, 0, 0.2)"
       }
     },
     {
@@ -1175,10 +1175,10 @@
         "high-contrast-light": "#00000059"
       },
       "values": {
-        "dark": "#00000073",
-        "light": "#00000059",
-        "high-contrast-dark": "#00000073",
-        "high-contrast-light": "#00000059"
+        "dark": "rgba(0, 0, 0, 0.45)",
+        "light": "rgba(0, 0, 0, 0.35)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0.45)",
+        "high-contrast-light": "rgba(0, 0, 0, 0.35)"
       }
     },
     {
@@ -1195,10 +1195,10 @@
         "high-contrast-light": "#0000003d"
       },
       "values": {
-        "dark": "#00000073",
-        "light": "#0000003d",
-        "high-contrast-dark": "#00000073",
-        "high-contrast-light": "#0000003d"
+        "dark": "rgba(0, 0, 0, 0.45)",
+        "light": "rgba(0, 0, 0, 0.24)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0.45)",
+        "high-contrast-light": "rgba(0, 0, 0, 0.24)"
       }
     },
     {
@@ -1235,10 +1235,10 @@
         "high-contrast-light": "#0000001f"
       },
       "values": {
-        "dark": "#00000026",
-        "light": "#0000001f",
-        "high-contrast-dark": "#00000026",
-        "high-contrast-light": "#0000001f"
+        "dark": "rgba(0, 0, 0, 0.15)",
+        "light": "rgba(0, 0, 0, 0.12)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0.15)",
+        "high-contrast-light": "rgba(0, 0, 0, 0.12)"
       }
     },
     {
@@ -1295,10 +1295,510 @@
         "high-contrast-light": "#f9c74f8c"
       },
       "values": {
-        "dark": "#f9c74f8c",
-        "light": "#f9c74f8c",
-        "high-contrast-dark": "#f9c74f8c",
-        "high-contrast-light": "#f9c74f8c"
+        "dark": "rgba(249, 199, 79, 0.55)",
+        "light": "rgba(249, 199, 79, 0.55)",
+        "high-contrast-dark": "rgba(249, 199, 79, 0.55)",
+        "high-contrast-light": "rgba(249, 199, 79, 0.55)"
+      }
+    },
+    {
+      "id": "sectionHeader.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-section-header-foreground",
+      "owner": "workbench.shell",
+      "description": "Section header foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "description.foreground",
+        "light": "description.foreground",
+        "high-contrast-dark": "description.foreground",
+        "high-contrast-light": "description.foreground"
+      },
+      "values": {
+        "dark": "#b8b8b8",
+        "light": "#616161",
+        "high-contrast-dark": "#b8b8b8",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "workbench.background",
+      "kind": "color",
+      "cssVariable": "--zeta-workbench-background",
+      "owner": "workbench.shell",
+      "description": "Workbench root background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      },
+      "values": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editor.background",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-background",
+      "owner": "workbench.shell",
+      "description": "Editor background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      },
+      "values": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editor.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-foreground",
+      "owner": "workbench.shell",
+      "description": "Editor foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#d4d4d4",
+        "light": "#333333",
+        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-light": "#333333"
+      },
+      "values": {
+        "dark": "#d4d4d4",
+        "light": "#333333",
+        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-light": "#333333"
+      }
+    },
+    {
+      "id": "editor.tabBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-tab-background",
+      "owner": "workbench.shell",
+      "description": "Background for inactive Editor tabs.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#EEEEEE",
+        "light": "#EEEEEE",
+        "high-contrast-dark": "#EEEEEE",
+        "high-contrast-light": "#EEEEEE"
+      },
+      "values": {
+        "dark": "#eeeeee",
+        "light": "#eeeeee",
+        "high-contrast-dark": "#eeeeee",
+        "high-contrast-light": "#eeeeee"
+      }
+    },
+    {
+      "id": "titleBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-background",
+      "owner": "workbench.shell",
+      "description": "Title bar background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
+      },
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "titleBar.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-foreground",
+      "owner": "workbench.shell",
+      "description": "Title bar foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      },
+      "values": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "titleBar.actionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-action-foreground",
+      "owner": "workbench.shell",
+      "description": "Title bar action foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#424242",
+        "light": "#424242",
+        "high-contrast-dark": "#424242",
+        "high-contrast-light": "#424242"
+      },
+      "values": {
+        "dark": "#424242",
+        "light": "#424242",
+        "high-contrast-dark": "#424242",
+        "high-contrast-light": "#424242"
+      }
+    },
+    {
+      "id": "titleBar.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-title-bar-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered title bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#e5e5e5",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#e5e5e5",
+        "high-contrast-light": "#e5e5e5"
+      },
+      "values": {
+        "dark": "#e5e5e5",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#e5e5e5",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "sideBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-side-bar-background",
+      "owner": "workbench.shell",
+      "description": "Primary side bar background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#F8F8F8",
+        "light": "#F8F8F8",
+        "high-contrast-dark": "#F8F8F8",
+        "high-contrast-light": "#F8F8F8"
+      },
+      "values": {
+        "dark": "#f8f8f8",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#f8f8f8",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "auxiliaryBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-auxiliary-bar-background",
+      "owner": "workbench.shell",
+      "description": "Auxiliary side bar background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "sideBar.background",
+        "light": "sideBar.background",
+        "high-contrast-dark": "sideBar.background",
+        "high-contrast-light": "sideBar.background"
+      },
+      "values": {
+        "dark": "#f8f8f8",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#f8f8f8",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "panel.background",
+      "kind": "color",
+      "cssVariable": "--zeta-panel-background",
+      "owner": "workbench.shell",
+      "description": "Panel background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "sideBar.background",
+        "light": "sideBar.background",
+        "high-contrast-dark": "sideBar.background",
+        "high-contrast-light": "sideBar.background"
+      },
+      "values": {
+        "dark": "#f8f8f8",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#f8f8f8",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "compositeBar.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-composite-bar-foreground",
+      "owner": "workbench.shell",
+      "description": "Active composite bar foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#ffffff",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#1f1f1f"
+      },
+      "values": {
+        "dark": "#ffffff",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "compositeBar.inactiveForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-composite-bar-inactive-foreground",
+      "owner": "workbench.shell",
+      "description": "Inactive composite bar foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#858585",
+        "light": "#616161",
+        "high-contrast-dark": "#858585",
+        "high-contrast-light": "#616161"
+      },
+      "values": {
+        "dark": "#858585",
+        "light": "#616161",
+        "high-contrast-dark": "#858585",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "statusBar.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-foreground",
+      "owner": "workbench.shell",
+      "description": "Status bar foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      },
+      "values": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "statusBar.background",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-background",
+      "owner": "workbench.shell",
+      "description": "Status bar background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
+      },
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "statusBarItem.hoverForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-hover-foreground",
+      "owner": "workbench.shell",
+      "description": "Hovered status bar item foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBar.foreground",
+        "light": "statusBar.foreground",
+        "high-contrast-dark": "statusBar.foreground",
+        "high-contrast-light": "statusBar.foreground"
+      },
+      "values": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "statusBarItem.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
+      },
+      "values": {
+        "dark": "rgba(90, 93, 94, 0.31)",
+        "light": "rgba(90, 93, 94, 0.16)",
+        "high-contrast-dark": "rgba(90, 93, 94, 0.31)",
+        "high-contrast-light": "rgba(90, 93, 94, 0.16)"
+      }
+    },
+    {
+      "id": "statusBarItem.compactHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-compact-hover-background",
+      "owner": "workbench.shell",
+      "description": "Overlay for the hovered member of a compact status bar group.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverBackground",
+        "light": "statusBarItem.hoverBackground",
+        "high-contrast-dark": "statusBarItem.hoverBackground",
+        "high-contrast-light": "statusBarItem.hoverBackground"
+      },
+      "values": {
+        "dark": "rgba(90, 93, 94, 0.31)",
+        "light": "rgba(90, 93, 94, 0.16)",
+        "high-contrast-dark": "rgba(90, 93, 94, 0.31)",
+        "high-contrast-light": "rgba(90, 93, 94, 0.16)"
+      }
+    },
+    {
+      "id": "statusBarItem.activeBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-active-background",
+      "owner": "workbench.shell",
+      "description": "Pressed status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#37373d",
+        "light": "#dcdcdc",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#dcdcdc"
+      },
+      "values": {
+        "dark": "#37373d",
+        "light": "#dcdcdc",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#dcdcdc"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-foreground",
+      "owner": "workbench.shell",
+      "description": "Remote status bar item foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
+      },
+      "values": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-background",
+      "owner": "workbench.shell",
+      "description": "Remote status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "accent.background",
+        "light": "accent.background",
+        "high-contrast-dark": "accent.background",
+        "high-contrast-light": "accent.background"
+      },
+      "values": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteHoverForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-hover-foreground",
+      "owner": "workbench.shell",
+      "description": "Hovered remote status bar item foreground.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverForeground",
+        "light": "statusBarItem.hoverForeground",
+        "high-contrast-dark": "statusBarItem.hoverForeground",
+        "high-contrast-light": "statusBarItem.hoverForeground"
+      },
+      "values": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-status-bar-item-remote-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered remote status bar item background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverBackground",
+        "light": "statusBarItem.hoverBackground",
+        "high-contrast-dark": "statusBarItem.hoverBackground",
+        "high-contrast-light": "statusBarItem.hoverBackground"
+      },
+      "values": {
+        "dark": "rgba(90, 93, 94, 0.31)",
+        "light": "rgba(90, 93, 94, 0.16)",
+        "high-contrast-dark": "rgba(90, 93, 94, 0.31)",
+        "high-contrast-light": "rgba(90, 93, 94, 0.16)"
+      }
+    },
+    {
+      "id": "sash.hoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-sash-hover-background",
+      "owner": "workbench.shell",
+      "description": "Hovered sash background.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#007acc",
+        "light": "#007acc",
+        "high-contrast-dark": "#007acc",
+        "high-contrast-light": "#007acc"
+      },
+      "values": {
+        "dark": "#007acc",
+        "light": "#007acc",
+        "high-contrast-dark": "#007acc",
+        "high-contrast-light": "#007acc"
       }
     },
     {
@@ -1715,10 +2215,10 @@
         "high-contrast-light": "widget.shadow"
       },
       "values": {
-        "dark": "#00000066",
-        "light": "#00000029",
-        "high-contrast-dark": "#00000066",
-        "high-contrast-light": "#00000029"
+        "dark": "rgba(0, 0, 0, 0.4)",
+        "light": "rgba(0, 0, 0, 0.16)",
+        "high-contrast-dark": "rgba(0, 0, 0, 0.4)",
+        "high-contrast-light": "rgba(0, 0, 0, 0.16)"
       }
     },
     {
@@ -1835,10 +2335,10 @@
         "high-contrast-light": "hover.border"
       },
       "values": {
-        "dark": "#ffffff18",
-        "light": "#ffffff18",
-        "high-contrast-dark": "#ffffff18",
-        "high-contrast-light": "#ffffff18"
+        "dark": "rgba(255, 255, 255, 0.09)",
+        "light": "rgba(255, 255, 255, 0.09)",
+        "high-contrast-dark": "rgba(255, 255, 255, 0.09)",
+        "high-contrast-light": "rgba(255, 255, 255, 0.09)"
       }
     },
     {
@@ -1899,6 +2399,126 @@
         "light": "#a0a0a0",
         "high-contrast-dark": "#a0a0a0",
         "high-contrast-light": "#a0a0a0"
+      }
+    },
+    {
+      "id": "editorCursor.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-cursor-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for the editor cursor.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#aeafad",
+        "light": "#000000",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#0f4a85"
+      },
+      "values": {
+        "dark": "#aeafad",
+        "light": "#000000",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#0f4a85"
+      }
+    },
+    {
+      "id": "editorCursor.background",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-cursor-background",
+      "owner": "editor.presentation",
+      "description": "Foreground for a character covered by a block editor cursor.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.background",
+        "light": "editor.background",
+        "high-contrast-dark": "editor.background",
+        "high-contrast-light": "editor.background"
+      },
+      "values": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editorMultiCursor.primary.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-multi-cursor-primary-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for the primary cursor when multiple cursors are active.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.foreground",
+        "light": "editorCursor.foreground",
+        "high-contrast-dark": "editorCursor.foreground",
+        "high-contrast-light": "editorCursor.foreground"
+      },
+      "values": {
+        "dark": "#aeafad",
+        "light": "#000000",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#0f4a85"
+      }
+    },
+    {
+      "id": "editorMultiCursor.primary.background",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-multi-cursor-primary-background",
+      "owner": "editor.presentation",
+      "description": "Foreground for a character covered by the primary cursor when multiple cursors are active.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.background",
+        "light": "editorCursor.background",
+        "high-contrast-dark": "editorCursor.background",
+        "high-contrast-light": "editorCursor.background"
+      },
+      "values": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editorMultiCursor.secondary.foreground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-multi-cursor-secondary-foreground",
+      "owner": "editor.presentation",
+      "description": "Foreground for secondary cursors when multiple cursors are active.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.foreground",
+        "light": "editorCursor.foreground",
+        "high-contrast-dark": "editorCursor.foreground",
+        "high-contrast-light": "editorCursor.foreground"
+      },
+      "values": {
+        "dark": "#aeafad",
+        "light": "#000000",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#0f4a85"
+      }
+    },
+    {
+      "id": "editorMultiCursor.secondary.background",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-multi-cursor-secondary-background",
+      "owner": "editor.presentation",
+      "description": "Foreground for a character covered by a secondary cursor when multiple cursors are active.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.background",
+        "light": "editorCursor.background",
+        "high-contrast-dark": "editorCursor.background",
+        "high-contrast-light": "editorCursor.background"
+      },
+      "values": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
       }
     },
     {
@@ -2440,10 +3060,10 @@
         }
       },
       "values": {
-        "dark": "#2a2d2e99",
-        "light": "#e8e8e899",
-        "high-contrast-dark": "#2a2d2e99",
-        "high-contrast-light": "#e8e8e899"
+        "dark": "rgba(42, 45, 46, 0.6)",
+        "light": "rgba(232, 232, 232, 0.6)",
+        "high-contrast-dark": "rgba(42, 45, 46, 0.6)",
+        "high-contrast-light": "rgba(232, 232, 232, 0.6)"
       }
     },
     {
@@ -2476,510 +3096,10 @@
         }
       },
       "values": {
-        "dark": "#2a2d2e4d",
-        "light": "#e8e8e84d",
-        "high-contrast-dark": "#2a2d2e4d",
-        "high-contrast-light": "#e8e8e84d"
-      }
-    },
-    {
-      "id": "sectionHeader.foreground",
-      "kind": "color",
-      "cssVariable": "--zeta-section-header-foreground",
-      "owner": "workbench.shell",
-      "description": "Section header foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "description.foreground",
-        "light": "description.foreground",
-        "high-contrast-dark": "description.foreground",
-        "high-contrast-light": "description.foreground"
-      },
-      "values": {
-        "dark": "#b8b8b8",
-        "light": "#616161",
-        "high-contrast-dark": "#b8b8b8",
-        "high-contrast-light": "#616161"
-      }
-    },
-    {
-      "id": "workbench.background",
-      "kind": "color",
-      "cssVariable": "--zeta-workbench-background",
-      "owner": "workbench.shell",
-      "description": "Workbench root background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#1e1e1e",
-        "light": "#ffffff",
-        "high-contrast-dark": "#1e1e1e",
-        "high-contrast-light": "#ffffff"
-      },
-      "values": {
-        "dark": "#1e1e1e",
-        "light": "#ffffff",
-        "high-contrast-dark": "#1e1e1e",
-        "high-contrast-light": "#ffffff"
-      }
-    },
-    {
-      "id": "editor.background",
-      "kind": "color",
-      "cssVariable": "--zeta-editor-background",
-      "owner": "workbench.shell",
-      "description": "Editor background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#1e1e1e",
-        "light": "#ffffff",
-        "high-contrast-dark": "#1e1e1e",
-        "high-contrast-light": "#ffffff"
-      },
-      "values": {
-        "dark": "#1e1e1e",
-        "light": "#ffffff",
-        "high-contrast-dark": "#1e1e1e",
-        "high-contrast-light": "#ffffff"
-      }
-    },
-    {
-      "id": "editor.foreground",
-      "kind": "color",
-      "cssVariable": "--zeta-editor-foreground",
-      "owner": "workbench.shell",
-      "description": "Editor foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#d4d4d4",
-        "light": "#333333",
-        "high-contrast-dark": "#d4d4d4",
-        "high-contrast-light": "#333333"
-      },
-      "values": {
-        "dark": "#d4d4d4",
-        "light": "#333333",
-        "high-contrast-dark": "#d4d4d4",
-        "high-contrast-light": "#333333"
-      }
-    },
-    {
-      "id": "editor.tabBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-editor-tab-background",
-      "owner": "workbench.shell",
-      "description": "Background for inactive Editor tabs.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#EEEEEE",
-        "light": "#EEEEEE",
-        "high-contrast-dark": "#EEEEEE",
-        "high-contrast-light": "#EEEEEE"
-      },
-      "values": {
-        "dark": "#eeeeee",
-        "light": "#eeeeee",
-        "high-contrast-dark": "#eeeeee",
-        "high-contrast-light": "#eeeeee"
-      }
-    },
-    {
-      "id": "titleBar.background",
-      "kind": "color",
-      "cssVariable": "--zeta-title-bar-background",
-      "owner": "workbench.shell",
-      "description": "Title bar background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#FFFFFF",
-        "light": "#FFFFFF",
-        "high-contrast-dark": "#FFFFFF",
-        "high-contrast-light": "#FFFFFF"
-      },
-      "values": {
-        "dark": "#ffffff",
-        "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#ffffff"
-      }
-    },
-    {
-      "id": "titleBar.foreground",
-      "kind": "color",
-      "cssVariable": "--zeta-title-bar-foreground",
-      "owner": "workbench.shell",
-      "description": "Title bar foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#1f1f1f",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#1f1f1f",
-        "high-contrast-light": "#1f1f1f"
-      },
-      "values": {
-        "dark": "#1f1f1f",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#1f1f1f",
-        "high-contrast-light": "#1f1f1f"
-      }
-    },
-    {
-      "id": "titleBar.actionForeground",
-      "kind": "color",
-      "cssVariable": "--zeta-title-bar-action-foreground",
-      "owner": "workbench.shell",
-      "description": "Title bar action foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#424242",
-        "light": "#424242",
-        "high-contrast-dark": "#424242",
-        "high-contrast-light": "#424242"
-      },
-      "values": {
-        "dark": "#424242",
-        "light": "#424242",
-        "high-contrast-dark": "#424242",
-        "high-contrast-light": "#424242"
-      }
-    },
-    {
-      "id": "titleBar.hoverBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-title-bar-hover-background",
-      "owner": "workbench.shell",
-      "description": "Hovered title bar item background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#e5e5e5",
-        "light": "#e5e5e5",
-        "high-contrast-dark": "#e5e5e5",
-        "high-contrast-light": "#e5e5e5"
-      },
-      "values": {
-        "dark": "#e5e5e5",
-        "light": "#e5e5e5",
-        "high-contrast-dark": "#e5e5e5",
-        "high-contrast-light": "#e5e5e5"
-      }
-    },
-    {
-      "id": "sideBar.background",
-      "kind": "color",
-      "cssVariable": "--zeta-side-bar-background",
-      "owner": "workbench.shell",
-      "description": "Primary side bar background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#F8F8F8",
-        "light": "#F8F8F8",
-        "high-contrast-dark": "#F8F8F8",
-        "high-contrast-light": "#F8F8F8"
-      },
-      "values": {
-        "dark": "#f8f8f8",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#f8f8f8",
-        "high-contrast-light": "#f8f8f8"
-      }
-    },
-    {
-      "id": "auxiliaryBar.background",
-      "kind": "color",
-      "cssVariable": "--zeta-auxiliary-bar-background",
-      "owner": "workbench.shell",
-      "description": "Auxiliary side bar background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "sideBar.background",
-        "light": "sideBar.background",
-        "high-contrast-dark": "sideBar.background",
-        "high-contrast-light": "sideBar.background"
-      },
-      "values": {
-        "dark": "#f8f8f8",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#f8f8f8",
-        "high-contrast-light": "#f8f8f8"
-      }
-    },
-    {
-      "id": "panel.background",
-      "kind": "color",
-      "cssVariable": "--zeta-panel-background",
-      "owner": "workbench.shell",
-      "description": "Panel background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "sideBar.background",
-        "light": "sideBar.background",
-        "high-contrast-dark": "sideBar.background",
-        "high-contrast-light": "sideBar.background"
-      },
-      "values": {
-        "dark": "#f8f8f8",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#f8f8f8",
-        "high-contrast-light": "#f8f8f8"
-      }
-    },
-    {
-      "id": "compositeBar.foreground",
-      "kind": "color",
-      "cssVariable": "--zeta-composite-bar-foreground",
-      "owner": "workbench.shell",
-      "description": "Active composite bar foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#ffffff",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#1f1f1f"
-      },
-      "values": {
-        "dark": "#ffffff",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#1f1f1f"
-      }
-    },
-    {
-      "id": "compositeBar.inactiveForeground",
-      "kind": "color",
-      "cssVariable": "--zeta-composite-bar-inactive-foreground",
-      "owner": "workbench.shell",
-      "description": "Inactive composite bar foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#858585",
-        "light": "#616161",
-        "high-contrast-dark": "#858585",
-        "high-contrast-light": "#616161"
-      },
-      "values": {
-        "dark": "#858585",
-        "light": "#616161",
-        "high-contrast-dark": "#858585",
-        "high-contrast-light": "#616161"
-      }
-    },
-    {
-      "id": "statusBar.foreground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-foreground",
-      "owner": "workbench.shell",
-      "description": "Status bar foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#1f1f1f",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#1f1f1f",
-        "high-contrast-light": "#1f1f1f"
-      },
-      "values": {
-        "dark": "#1f1f1f",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#1f1f1f",
-        "high-contrast-light": "#1f1f1f"
-      }
-    },
-    {
-      "id": "statusBar.background",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-background",
-      "owner": "workbench.shell",
-      "description": "Status bar background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#FFFFFF",
-        "light": "#FFFFFF",
-        "high-contrast-dark": "#FFFFFF",
-        "high-contrast-light": "#FFFFFF"
-      },
-      "values": {
-        "dark": "#ffffff",
-        "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#ffffff"
-      }
-    },
-    {
-      "id": "statusBarItem.hoverForeground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-hover-foreground",
-      "owner": "workbench.shell",
-      "description": "Hovered status bar item foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "statusBar.foreground",
-        "light": "statusBar.foreground",
-        "high-contrast-dark": "statusBar.foreground",
-        "high-contrast-light": "statusBar.foreground"
-      },
-      "values": {
-        "dark": "#1f1f1f",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#1f1f1f",
-        "high-contrast-light": "#1f1f1f"
-      }
-    },
-    {
-      "id": "statusBarItem.hoverBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-hover-background",
-      "owner": "workbench.shell",
-      "description": "Hovered status bar item background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#5a5d5e50",
-        "light": "#5a5d5e29",
-        "high-contrast-dark": "#5a5d5e50",
-        "high-contrast-light": "#5a5d5e29"
-      },
-      "values": {
-        "dark": "#5a5d5e50",
-        "light": "#5a5d5e29",
-        "high-contrast-dark": "#5a5d5e50",
-        "high-contrast-light": "#5a5d5e29"
-      }
-    },
-    {
-      "id": "statusBarItem.compactHoverBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-compact-hover-background",
-      "owner": "workbench.shell",
-      "description": "Overlay for the hovered member of a compact status bar group.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "statusBarItem.hoverBackground",
-        "light": "statusBarItem.hoverBackground",
-        "high-contrast-dark": "statusBarItem.hoverBackground",
-        "high-contrast-light": "statusBarItem.hoverBackground"
-      },
-      "values": {
-        "dark": "#5a5d5e50",
-        "light": "#5a5d5e29",
-        "high-contrast-dark": "#5a5d5e50",
-        "high-contrast-light": "#5a5d5e29"
-      }
-    },
-    {
-      "id": "statusBarItem.activeBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-active-background",
-      "owner": "workbench.shell",
-      "description": "Pressed status bar item background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#37373d",
-        "light": "#dcdcdc",
-        "high-contrast-dark": "#37373d",
-        "high-contrast-light": "#dcdcdc"
-      },
-      "values": {
-        "dark": "#37373d",
-        "light": "#dcdcdc",
-        "high-contrast-dark": "#37373d",
-        "high-contrast-light": "#dcdcdc"
-      }
-    },
-    {
-      "id": "statusBarItem.remoteForeground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-foreground",
-      "owner": "workbench.shell",
-      "description": "Remote status bar item foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#FFFFFF",
-        "light": "#FFFFFF",
-        "high-contrast-dark": "#FFFFFF",
-        "high-contrast-light": "#FFFFFF"
-      },
-      "values": {
-        "dark": "#ffffff",
-        "light": "#ffffff",
-        "high-contrast-dark": "#ffffff",
-        "high-contrast-light": "#ffffff"
-      }
-    },
-    {
-      "id": "statusBarItem.remoteBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-background",
-      "owner": "workbench.shell",
-      "description": "Remote status bar item background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "accent.background",
-        "light": "accent.background",
-        "high-contrast-dark": "accent.background",
-        "high-contrast-light": "accent.background"
-      },
-      "values": {
-        "dark": "#328eb9",
-        "light": "#328eb9",
-        "high-contrast-dark": "#328eb9",
-        "high-contrast-light": "#328eb9"
-      }
-    },
-    {
-      "id": "statusBarItem.remoteHoverForeground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-hover-foreground",
-      "owner": "workbench.shell",
-      "description": "Hovered remote status bar item foreground.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "statusBarItem.hoverForeground",
-        "light": "statusBarItem.hoverForeground",
-        "high-contrast-dark": "statusBarItem.hoverForeground",
-        "high-contrast-light": "statusBarItem.hoverForeground"
-      },
-      "values": {
-        "dark": "#1f1f1f",
-        "light": "#1f1f1f",
-        "high-contrast-dark": "#1f1f1f",
-        "high-contrast-light": "#1f1f1f"
-      }
-    },
-    {
-      "id": "statusBarItem.remoteHoverBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-status-bar-item-remote-hover-background",
-      "owner": "workbench.shell",
-      "description": "Hovered remote status bar item background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "statusBarItem.hoverBackground",
-        "light": "statusBarItem.hoverBackground",
-        "high-contrast-dark": "statusBarItem.hoverBackground",
-        "high-contrast-light": "statusBarItem.hoverBackground"
-      },
-      "values": {
-        "dark": "#5a5d5e50",
-        "light": "#5a5d5e29",
-        "high-contrast-dark": "#5a5d5e50",
-        "high-contrast-light": "#5a5d5e29"
-      }
-    },
-    {
-      "id": "sash.hoverBackground",
-      "kind": "color",
-      "cssVariable": "--zeta-sash-hover-background",
-      "owner": "workbench.shell",
-      "description": "Hovered sash background.",
-      "needsTransparency": false,
-      "defaults": {
-        "dark": "#007acc",
-        "light": "#007acc",
-        "high-contrast-dark": "#007acc",
-        "high-contrast-light": "#007acc"
-      },
-      "values": {
-        "dark": "#007acc",
-        "light": "#007acc",
-        "high-contrast-dark": "#007acc",
-        "high-contrast-light": "#007acc"
+        "dark": "rgba(42, 45, 46, 0.3)",
+        "light": "rgba(232, 232, 232, 0.3)",
+        "high-contrast-dark": "rgba(42, 45, 46, 0.3)",
+        "high-contrast-light": "rgba(232, 232, 232, 0.3)"
       }
     },
     {
@@ -3380,6 +3500,46 @@
         "light": "#005fb8",
         "high-contrast-dark": "#4daafc",
         "high-contrast-light": "#005fb8"
+      }
+    },
+    {
+      "id": "tui.activeSelectionForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-tui-active-selection-foreground",
+      "owner": "tui.presentation",
+      "description": "Foreground for the active TUI list item.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#000000",
+        "light": "#000000",
+        "high-contrast-dark": "#000000",
+        "high-contrast-light": "#000000"
+      },
+      "values": {
+        "dark": "#000000",
+        "light": "#000000",
+        "high-contrast-dark": "#000000",
+        "high-contrast-light": "#000000"
+      }
+    },
+    {
+      "id": "tui.activeSelectionBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-tui-active-selection-background",
+      "owner": "tui.presentation",
+      "description": "Background for the active TUI list item.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#c0c0c0",
+        "light": "#c0c0c0",
+        "high-contrast-dark": "#c0c0c0",
+        "high-contrast-light": "#c0c0c0"
+      },
+      "values": {
+        "dark": "#c0c0c0",
+        "light": "#c0c0c0",
+        "high-contrast-dark": "#c0c0c0",
+        "high-contrast-light": "#c0c0c0"
       }
     }
   ],
