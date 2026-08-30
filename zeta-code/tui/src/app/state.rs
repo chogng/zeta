@@ -912,10 +912,6 @@ impl App {
             .flatten()
     }
 
-    pub(crate) fn thread_request_active(&self) -> bool {
-        self.approval_view().is_some() || self.query_view().is_some()
-    }
-
     pub(crate) fn transcript_selection_active(&self) -> bool {
         matches!(self.sessions.root(), Some(RootTarget::Session(_)))
             && self.thread_presentations.active().selected_cell.is_some()

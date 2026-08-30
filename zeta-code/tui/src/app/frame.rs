@@ -274,11 +274,11 @@ fn draw_status_area(
         StatusAreaView::Hint { text, style } => match style {
             StatusHintStyle::Keys => key_hint_bar::draw(frame, area, &text, context),
             StatusHintStyle::Warning => frame.render_widget(
-                Paragraph::new(text.as_ref()).style(Style::default().fg(context.warning())),
+                Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.warning())),
                 chat_input::content_area(area),
             ),
             StatusHintStyle::Muted => frame.render_widget(
-                Paragraph::new(text.as_ref()).style(Style::default().fg(context.muted())),
+                Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.muted())),
                 chat_input::content_area(area),
             ),
         },
