@@ -1,18 +1,21 @@
 //! Vertically scrollable composition of multiple file DiffEditors.
 
 use std::cell::OnceCell;
+use std::ops::Range;
 use std::time::Duration;
 
 use zeta_ui_components::{
-    ListContentPadding, ScrollAxis, ScrollMetrics, ScrollState, ScrollView, ScrollViewStyle,
-    ScrollbarLayout, ScrollbarPresentation, ScrollbarStyle, VirtualListLayout,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
+    ButtonSelection, ButtonState, ButtonStyle, InteractionRegion, ListContentPadding,
+    ListScrollAnchor, ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, ScrollView,
+    ScrollViewStyle, ScrollbarLayout, ScrollbarPresentation, ScrollbarStyle, VirtualListLayout,
 };
 use zui::ui::{
     AccessibilityExpansion, AccessibilityRole, AnimationEasing, Border, Color, Component,
     ComponentContext, ComponentElement, ComputedElement, CornerRadii, CursorFeedback, Edges,
-    Element, ElementId, FocusBehavior, FontFamily, FontWeight, FrameInvalidation, NavigationAxis,
-    NavigationGroupId, NodeAction, PaintRect, Point, Rect, ScalarAnimationSpec, TextBlock,
-    TextStyle, UiNode, UiScene,
+    Element, ElementId, FocusBehavior, FontFamily, FontWeight, FrameInvalidation, Icon,
+    NavigationAxis, NavigationGroupId, NodeAction, PaintIcon, PaintRect, Point, Rect,
+    ScalarAnimationSpec, TextBlock, TextStyle, UiNode, UiScene,
 };
 
 mod identity;
@@ -27,6 +30,8 @@ use crate::{
 const DEFAULT_SECTION_GAP: f32 = 8.0;
 const FILE_HEADER_HEIGHT: f32 = 32.0;
 const FILE_HEADER_PADDING: f32 = 10.0;
+const FILE_HEADER_ICON_SIZE: f32 = 14.0;
+const FILE_HEADER_ACTION_SIZE: f32 = 26.0;
 const CARD_INSET: f32 = 8.0;
 const CARD_PADDING: f32 = 8.0;
 const CARD_BORDER_WIDTH: f32 = 1.0;
@@ -53,6 +58,41 @@ pub struct MultiDiffEditorItem<'a> {
     editor_state: DiffEditorState,
     labels: DiffEditorLabels<'a>,
     identity: Option<MultiDiffEditorItemIdentity>,
+    expanded: bool,
+    disclosure_icon: Option<Icon>,
+    header_actions: Vec<MultiDiffEditorHeaderAction>,
+}
+
+/// One host-owned action painted in a multi-diff file header.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MultiDiffEditorHeaderAction {
+    identity: ElementId,
+    icon: Icon,
+    label: String,
+    state: ButtonState,
+    selection: ButtonSelection,
+}
+
+impl MultiDiffEditorHeaderAction {
+    pub fn new(
+        identity: ElementId,
+        icon: Icon,
+        label: impl Into<String>,
+        state: ButtonState,
+    ) -> Self {
+        Self {
+            identity,
+            icon,
+            label: label.into(),
+            state,
+            selection: ButtonSelection::Unselected,
+        }
+    }
+
+    pub const fn with_selection(mut self, selection: ButtonSelection) -> Self {
+        self.selection = selection;
+        self
+    }
 }
 
 impl<'a> MultiDiffEditorItem<'a> {
@@ -68,6 +108,9 @@ impl<'a> MultiDiffEditorItem<'a> {
             editor_state,
             labels,
             identity: None,
+            expanded: true,
+            disclosure_icon: None,
+            header_actions: Vec::new(),
         }
     }
 
@@ -86,6 +129,22 @@ impl<'a> MultiDiffEditorItem<'a> {
 
     pub const fn identity(&self) -> Option<MultiDiffEditorItemIdentity> {
         self.identity
+    }
+
+    /// Sets the retained file-body expansion and the matching disclosure icon.
+    pub const fn with_expansion(mut self, expanded: bool, disclosure_icon: Icon) -> Self {
+        self.expanded = expanded;
+        self.disclosure_icon = Some(disclosure_icon);
+        self
+    }
+
+    /// Supplies product-owned actions for the right side of the file header.
+    pub fn with_header_actions(
+        mut self,
+        actions: impl IntoIterator<Item = MultiDiffEditorHeaderAction>,
+    ) -> Self {
+        self.header_actions = actions.into_iter().collect();
+        self
     }
 }
 
@@ -141,6 +200,43 @@ impl MultiDiffEditorLayout {
     pub fn content_height(&self) -> f32 {
         self.sections.content_extent()
     }
+
+    pub fn section_count(&self) -> usize {
+        self.sections.item_count()
+    }
+
+    pub fn section_extent(&self, index: usize) -> Option<f32> {
+        self.sections.item_extent(index)
+    }
+
+    /// Copies retained section extents for host-side changed-file snapshot reconciliation.
+    pub fn section_extents(&self) -> Vec<f32> {
+        self.sections.item_extents()
+    }
+
+    /// Updates one retained section measurement without rebuilding unrelated cumulative geometry.
+    pub fn update_section_extent(&mut self, index: usize, extent: f32) -> Option<f32> {
+        self.sections.update_item_extent(index, extent)
+    }
+
+    /// Replaces one contiguous changed-file range without rebuilding unrelated section geometry.
+    pub fn splice_section_extents(
+        &mut self,
+        range: Range<usize>,
+        replacements: impl IntoIterator<Item = f32>,
+    ) {
+        self.sections.splice_item_extents(range, replacements);
+    }
+
+    /// Captures the first section intersecting the current viewport offset.
+    pub fn scroll_anchor(&self, scroll_offset: f32) -> Option<ListScrollAnchor> {
+        self.sections.scroll_anchor(scroll_offset)
+    }
+
+    /// Resolves the logical offset that keeps a captured section at the same viewport position.
+    pub fn command_for_anchor(&self, anchor: ListScrollAnchor) -> Option<ScrollCommand> {
+        self.sections.command_for_anchor(anchor)
+    }
 }
 
 impl Default for MultiDiffEditorLayout {
@@ -160,6 +256,8 @@ pub struct MultiDiffEditorStyle {
     divider: Color,
     file_name: TextStyle,
     diff_editor: DiffEditorStyle,
+    header_button: ButtonStyle,
+    header_icon: Color,
     scroll_view: ScrollViewStyle,
     section_gap: f32,
     section_horizontal_inset: f32,
@@ -176,6 +274,8 @@ pub struct MultiDiffEditorPalette {
     pub divider: Color,
     pub file_name: TextStyle,
     pub diff_editor: DiffEditorStyle,
+    pub header_button: ButtonStyle,
+    pub header_icon: Color,
     pub scroll_view: ScrollViewStyle,
 }
 
@@ -190,6 +290,17 @@ impl MultiDiffEditorStyle {
                 .with_weight(FontWeight::Bold)
                 .with_line_height(18.0),
             diff_editor: DiffEditorStyle::light(),
+            header_button: ButtonStyle::new(
+                zeta_ui_components::ButtonBackgrounds::new(Color::TRANSPARENT)
+                    .with_hovered(Color::rgb(232, 232, 232))
+                    .with_focused(Color::rgb(235, 235, 237))
+                    .with_pressed(Color::rgb(222, 222, 224)),
+                TextStyle::new(12.0, Color::rgb(38, 38, 41)),
+            )
+            .with_padding(Edges::uniform(5.0))
+            .with_icon_size(FILE_HEADER_ICON_SIZE)
+            .with_corner_radii(CornerRadii::uniform(4.0)),
+            header_icon: Color::rgb(72, 72, 78),
             scroll_view: ScrollViewStyle::new(
                 ScrollbarStyle::new(Color::TRANSPARENT, Color::rgba(126, 126, 132, 128))
                     .with_hovered_colors(
@@ -211,6 +322,8 @@ impl MultiDiffEditorStyle {
             divider: palette.divider,
             file_name: palette.file_name,
             diff_editor: palette.diff_editor,
+            header_button: palette.header_button,
+            header_icon: palette.header_icon,
             scroll_view: palette.scroll_view,
             section_gap: DEFAULT_SECTION_GAP,
             section_horizontal_inset: 0.0,
@@ -360,6 +473,11 @@ impl<'a> MultiDiffEditor<'a> {
         }
     }
 
+    /// Measures one section for an incremental update of a retained layout.
+    pub fn measure_section_extent(&self, index: usize) -> Option<f32> {
+        self.items.get(index).map(|item| self.section_height(item))
+    }
+
     /// Returns the visible per-file fold controls after shared scrolling is applied.
     pub fn fold_controls(&self) -> Vec<MultiDiffEditorFoldControl> {
         if self.diff_presentation != DiffEditorPresentation::Unified {
@@ -370,6 +488,9 @@ impl<'a> MultiDiffEditor<'a> {
         let section_layout = self.section_layout();
         for item_index in section_layout.visible_range(viewport) {
             let item = &self.items[item_index];
+            if !item.expanded {
+                continue;
+            }
             let item_identity = Self::item_identity(item_index, item);
             let item_bounds = section_layout
                 .item_bounds(item_index, viewport)
@@ -422,9 +543,8 @@ impl<'a> MultiDiffEditor<'a> {
     }
 
     fn section_height(&self, item: &MultiDiffEditorItem<'_>) -> f32 {
-        self.style.section_border_width * 2.0
-            + FILE_HEADER_HEIGHT
-            + DiffEditor::new(
+        let body_height = if item.expanded {
+            DiffEditor::new(
                 Rect::from_xywh(0.0, 0.0, self.bounds.size.width, 0.0),
                 item.document,
                 item.editor_state.clone(),
@@ -433,6 +553,10 @@ impl<'a> MultiDiffEditor<'a> {
             )
             .with_presentation(self.diff_presentation)
             .content_height()
+        } else {
+            0.0
+        };
+        self.style.section_border_width * 2.0 + FILE_HEADER_HEIGHT + body_height
     }
 
     fn section_layout(&self) -> &VirtualListLayout {
@@ -459,19 +583,25 @@ impl<'a> MultiDiffEditor<'a> {
 
     fn animated_section_layout(&self, context: &mut ComponentContext<'_, '_>) -> VirtualListLayout {
         let target_layout = self.section_layout();
+        let viewport = self.scroll_view_with_layout(target_layout).viewport();
         let spec = fold_animation_spec();
-        let heights = self.items.iter().enumerate().map(|(item_index, item)| {
-            let target = target_layout
-                .item_extent(item_index)
-                .expect("multi-diff target layout must contain every item");
-            context.bind_scalar(
-                Self::item_identity(item_index, item).fold_animation_key(),
-                target,
-                target,
-                spec,
-            )
-        });
-        self.section_layout_from_heights(heights)
+        let overrides = target_layout
+            .visible_range(viewport)
+            .map(|item_index| {
+                let item = &self.items[item_index];
+                let target = target_layout
+                    .item_extent(item_index)
+                    .expect("visible multi-diff item must have a target height");
+                let height = context.bind_scalar(
+                    Self::item_identity(item_index, item).fold_animation_key(),
+                    target,
+                    target,
+                    spec,
+                );
+                (item_index, height)
+            })
+            .collect::<Vec<_>>();
+        target_layout.clone().with_item_extent_overrides(overrides)
     }
 
     fn diff_bounds(&self, section: Rect) -> Rect {
@@ -556,7 +686,11 @@ impl Component for MultiDiffEditor<'_> {
             } else {
                 0.0
             };
-            context.draw_component(&MultiDiffScrollbar::new(identity, scrollbar, percentage));
+            context.draw_component(&MultiDiffScrollbar::new(
+                identity,
+                scrollbar.layout(),
+                percentage,
+            ));
         }
     }
 
@@ -569,6 +703,7 @@ impl Component for MultiDiffEditor<'_> {
             let section_layout = self.section_layout();
             for item_index in section_layout.visible_range(viewport) {
                 let item = &self.items[item_index];
+                let item_identity = Self::item_identity(item_index, item);
                 let item_bounds = section_layout
                     .item_bounds(item_index, viewport)
                     .expect("visible multi-diff section");
@@ -581,24 +716,21 @@ impl Component for MultiDiffEditor<'_> {
                         ))
                         .with_corner_radii(self.style.section_corner_radii),
                 );
-                let header = Rect::from_xywh(
-                    section.origin.x + self.style.section_border_width,
-                    section.origin.y + self.style.section_border_width,
-                    (section.size.width - self.style.section_border_width * 2.0).max(0.0),
-                    FILE_HEADER_HEIGHT.min(section.size.height),
-                );
-                scene.draw_rect(PaintRect::new(header, self.style.file_header).with_border(
-                    Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.divider),
-                ));
-                scene.draw_text(TextBlock::new(
+                scene.draw_component(&MultiDiffFileHeader::new(
+                    item_identity,
+                    section,
                     item.file_name,
-                    Point::new(header.origin.x + FILE_HEADER_PADDING, header.origin.y + 7.0),
-                    zui::ui::Size::new(
-                        (header.size.width - FILE_HEADER_PADDING * 2.0).max(1.0),
-                        18.0,
-                    ),
-                    self.style.file_name.clone(),
+                    item.expanded,
+                    item.disclosure_icon,
+                    &item.header_actions,
+                    self.style.clone(),
+                    self.identity
+                        .map(NavigationGroupId::new)
+                        .unwrap_or_else(|| NavigationGroupId::new(item_identity.section_id())),
                 ));
+                if !item.expanded {
+                    continue;
+                }
                 let diff_bounds = self.diff_bounds(section);
                 scene.draw_component(
                     &DiffEditor::new(
@@ -699,8 +831,15 @@ impl Component for MultiDiffSection<'_> {
             self.item_identity,
             self.bounds,
             self.item.file_name,
+            self.item.expanded,
+            self.item.disclosure_icon,
+            &self.item.header_actions,
             self.style.clone(),
+            self.navigation_group,
         ));
+        if !self.item.expanded {
+            return;
+        }
         let diff = DiffEditor::new(
             self.diff_bounds,
             self.item.document,
@@ -742,7 +881,11 @@ struct MultiDiffFileHeader<'a> {
     item_identity: MultiDiffEditorItemIdentity,
     bounds: Rect,
     file_name: &'a str,
+    expanded: bool,
+    disclosure_icon: Option<Icon>,
+    actions: &'a [MultiDiffEditorHeaderAction],
     style: MultiDiffEditorStyle,
+    navigation_group: NavigationGroupId,
 }
 
 impl<'a> MultiDiffFileHeader<'a> {
@@ -750,7 +893,11 @@ impl<'a> MultiDiffFileHeader<'a> {
         item_identity: MultiDiffEditorItemIdentity,
         section: Rect,
         file_name: &'a str,
+        expanded: bool,
+        disclosure_icon: Option<Icon>,
+        actions: &'a [MultiDiffEditorHeaderAction],
         style: MultiDiffEditorStyle,
+        navigation_group: NavigationGroupId,
     ) -> Self {
         let bounds = Rect::from_xywh(
             section.origin.x + style.section_border_width,
@@ -762,8 +909,83 @@ impl<'a> MultiDiffFileHeader<'a> {
             item_identity,
             bounds,
             file_name,
+            expanded,
+            disclosure_icon,
+            actions,
             style,
+            navigation_group,
         }
+    }
+
+    fn action_bar(&self) -> ActionBar {
+        let width = FILE_HEADER_ACTION_SIZE * self.actions.len() as f32;
+        let bounds = Rect::from_xywh(
+            (self.bounds.right() - FILE_HEADER_PADDING - width).max(self.bounds.origin.x),
+            self.bounds.origin.y + (self.bounds.size.height - FILE_HEADER_ACTION_SIZE) * 0.5,
+            width.min(self.bounds.size.width),
+            FILE_HEADER_ACTION_SIZE,
+        );
+        let items = self
+            .actions
+            .iter()
+            .map(|action| {
+                ActionBarItem::Action(
+                    ActionViewItem::icon(action.icon, action.label.clone(), action.state)
+                        .with_selection(action.selection),
+                )
+            })
+            .collect();
+        ActionBar::new(
+            bounds,
+            ActionBarOrientation::Horizontal,
+            items,
+            ActionBarStyle::new(
+                self.style.header_button.clone(),
+                zui::ui::Size::new(FILE_HEADER_ACTION_SIZE, FILE_HEADER_ACTION_SIZE),
+            ),
+        )
+    }
+
+    fn paint_contents(&self, scene: &mut UiScene) {
+        scene.draw_rect(
+            PaintRect::new(self.bounds, self.style.file_header).with_border(Border::new(
+                Edges::new(0.0, 0.0, 1.0, 0.0),
+                self.style.divider,
+            )),
+        );
+        let disclosure_width = if let Some(icon) = self.disclosure_icon {
+            scene.draw_icon(PaintIcon::new(
+                icon,
+                Rect::from_xywh(
+                    self.bounds.origin.x + FILE_HEADER_PADDING,
+                    self.bounds.origin.y + (self.bounds.size.height - FILE_HEADER_ICON_SIZE) * 0.5,
+                    FILE_HEADER_ICON_SIZE,
+                    FILE_HEADER_ICON_SIZE,
+                ),
+                self.style.header_icon,
+            ));
+            FILE_HEADER_ICON_SIZE + 6.0
+        } else {
+            0.0
+        };
+        let action_bar = self.action_bar();
+        scene.draw_text(TextBlock::new(
+            self.file_name,
+            Point::new(
+                self.bounds.origin.x + FILE_HEADER_PADDING + disclosure_width,
+                self.bounds.origin.y + 7.0,
+            ),
+            zui::ui::Size::new(
+                (action_bar.bounds().origin.x
+                    - self.bounds.origin.x
+                    - FILE_HEADER_PADDING * 2.0
+                    - disclosure_width)
+                    .max(1.0),
+                18.0,
+            ),
+            self.style.file_name.clone(),
+        ));
+        scene.draw_component(&action_bar);
     }
 }
 
@@ -775,25 +997,56 @@ impl Component for MultiDiffFileHeader<'_> {
             .with_inspection_label(self.file_name)
     }
 
+    fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
+        Some(
+            UiNode::new(
+                self.item_identity.header_id(),
+                element.bounds(),
+                AccessibilityRole::Button,
+                format!(
+                    "{} {}",
+                    if self.expanded { "Collapse" } else { "Expand" },
+                    self.file_name
+                ),
+            )
+            .with_cursor(CursorFeedback::Pointer)
+            .with_focus(FocusBehavior::TabStop)
+            .with_action(NodeAction::Activate)
+            .with_navigation(self.navigation_group, NavigationAxis::Vertical)
+            .with_expansion(if self.expanded {
+                AccessibilityExpansion::Expanded
+            } else {
+                AccessibilityExpansion::Collapsed
+            }),
+        )
+    }
+
+    fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
+        self.paint_contents(context.scene_mut());
+        let action_bar = self.action_bar();
+        for (index, action) in self.actions.iter().enumerate() {
+            let Some(bounds) = action_bar.interactive_item_bounds(index) else {
+                continue;
+            };
+            context.draw_component(
+                &InteractionRegion::new(
+                    "MultiDiffFileAction",
+                    action.identity,
+                    bounds,
+                    AccessibilityRole::Button,
+                    action.label.clone(),
+                )
+                .with_parent(self.item_identity.header_id())
+                .with_cursor(CursorFeedback::Pointer)
+                .with_focus(FocusBehavior::TabStop)
+                .with_action(NodeAction::Activate)
+                .with_navigation(self.navigation_group, NavigationAxis::Horizontal),
+            );
+        }
+    }
+
     fn paint(&self, scene: &mut UiScene) {
-        scene.draw_rect(
-            PaintRect::new(self.bounds, self.style.file_header).with_border(Border::new(
-                Edges::new(0.0, 0.0, 1.0, 0.0),
-                self.style.divider,
-            )),
-        );
-        scene.draw_text(TextBlock::new(
-            self.file_name,
-            Point::new(
-                self.bounds.origin.x + FILE_HEADER_PADDING,
-                self.bounds.origin.y + 7.0,
-            ),
-            zui::ui::Size::new(
-                (self.bounds.size.width - FILE_HEADER_PADDING * 2.0).max(1.0),
-                18.0,
-            ),
-            self.style.file_name.clone(),
-        ));
+        self.paint_contents(scene);
     }
 }
 

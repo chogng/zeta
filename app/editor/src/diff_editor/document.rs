@@ -3,6 +3,8 @@ use zeta_diff::{DiffDocument, DiffLine, LineEnding};
 use crate::{CodeEditorDocument, CodeEditorLanguage, CodeEditorSyntaxToken};
 
 use super::DiffEditorSide;
+use super::DiffEditorState;
+use super::unified::UnifiedDiffMetrics;
 
 /// Retained document model for one read-only diff editor implementation.
 ///
@@ -14,10 +16,12 @@ pub struct DiffEditorDocument {
     diff: DiffDocument,
     original: CodeEditorDocument,
     modified: CodeEditorDocument,
+    unified_metrics: UnifiedDiffMetrics,
 }
 
 impl DiffEditorDocument {
     pub fn new(diff: DiffDocument, language: CodeEditorLanguage) -> Self {
+        let unified_metrics = UnifiedDiffMetrics::new(&diff);
         let original = CodeEditorDocument::from_text_with_language(
             source_text(&diff, DiffEditorSide::Original),
             language,
@@ -30,6 +34,7 @@ impl DiffEditorDocument {
             diff,
             original,
             modified,
+            unified_metrics,
         }
     }
 
@@ -44,6 +49,10 @@ impl DiffEditorDocument {
     pub fn set_language(&mut self, language: CodeEditorLanguage) {
         self.original.set_language(language);
         self.modified.set_language(language);
+    }
+
+    pub(super) fn unified_row_count(&self, state: &DiffEditorState) -> usize {
+        self.unified_metrics.row_count(state)
     }
 
     pub(super) fn syntax_tokens(

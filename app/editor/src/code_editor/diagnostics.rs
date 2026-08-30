@@ -106,7 +106,7 @@ impl<'a> CodeEditor<'a> {
             return None;
         }
         let location = self.location_at(point)?;
-        let line = self.visual_projection.line(location.row_index)?;
+        let line = self.visual_projection.line(self.rows, location.row_index)?;
         let row = self.rows.row(line.row_index)?;
         let text = row.text?;
         let source_row = self.rows.source_row(line.row_index)?;

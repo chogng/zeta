@@ -19,9 +19,10 @@ pub(super) struct CodeEditorVisualLine {
     pub(super) last_for_row: bool,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(super) struct CodeEditorVisualProjection {
-    lines: Vec<CodeEditorVisualLine>,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum CodeEditorVisualProjection {
+    Identity { row_count: usize },
+    Wrapped { lines: Vec<CodeEditorVisualLine> },
 }
 
 impl CodeEditorVisualProjection {
@@ -30,39 +31,56 @@ impl CodeEditorVisualProjection {
         wrapping: CodeEditorLineWrapping,
         wrap_columns: usize,
     ) -> Self {
+        if wrapping == CodeEditorLineWrapping::None {
+            return Self::Identity {
+                row_count: rows.row_count(),
+            };
+        }
         let mut lines = Vec::new();
         for row_index in 0..rows.row_count() {
             let text = rows.row(row_index).and_then(|row| row.text).unwrap_or("");
             let first = lines.len();
-            match wrapping {
-                CodeEditorLineWrapping::None => lines.push(CodeEditorVisualLine {
-                    row_index,
+            append_wrapped_lines(&mut lines, row_index, text, wrap_columns.max(1));
+            let last = lines.len().saturating_sub(1);
+            for (index, line) in lines[first..].iter_mut().enumerate() {
+                line.first_for_row = index == 0;
+                line.last_for_row = first + index == last;
+            }
+        }
+        Self::Wrapped { lines }
+    }
+
+    pub(super) fn len(&self) -> usize {
+        match self {
+            Self::Identity { row_count } => *row_count,
+            Self::Wrapped { lines } => lines.len(),
+        }
+    }
+
+    pub(super) fn line(
+        &self,
+        rows: &dyn CodeEditorRowSource,
+        index: usize,
+    ) -> Option<CodeEditorVisualLine> {
+        match self {
+            Self::Identity { row_count } => {
+                if index >= *row_count {
+                    return None;
+                }
+                let row = rows.row(index)?;
+                let text = row.text.unwrap_or("");
+                Some(CodeEditorVisualLine {
+                    row_index: index,
                     start_byte: 0,
                     end_byte: text.len(),
                     start_column: 0,
                     end_column: display_columns(text),
                     first_for_row: true,
                     last_for_row: true,
-                }),
-                CodeEditorLineWrapping::Soft => {
-                    append_wrapped_lines(&mut lines, row_index, text, wrap_columns.max(1));
-                    let last = lines.len().saturating_sub(1);
-                    for (index, line) in lines[first..].iter_mut().enumerate() {
-                        line.first_for_row = index == 0;
-                        line.last_for_row = first + index == last;
-                    }
-                }
+                })
             }
+            Self::Wrapped { lines } => lines.get(index).copied(),
         }
-        Self { lines }
-    }
-
-    pub(super) fn len(&self) -> usize {
-        self.lines.len()
-    }
-
-    pub(super) fn line(&self, index: usize) -> Option<CodeEditorVisualLine> {
-        self.lines.get(index).copied()
     }
 
     pub(super) fn visual_line_for_position(
@@ -71,19 +89,18 @@ impl CodeEditorVisualProjection {
         position: CodeEditorPosition,
     ) -> Option<usize> {
         let row_index = rows.visual_row(position.row_index)?;
-        self.lines
-            .iter()
-            .enumerate()
-            .filter(|(_, line)| {
-                line.row_index == row_index && line.start_byte <= position.byte_offset
-            })
-            .map(|(index, _)| index)
-            .next_back()
-            .or_else(|| {
-                self.lines
-                    .iter()
-                    .position(|line| line.row_index == row_index)
-            })
+        match self {
+            Self::Identity { row_count } => (row_index < *row_count).then_some(row_index),
+            Self::Wrapped { lines } => lines
+                .iter()
+                .enumerate()
+                .filter(|(_, line)| {
+                    line.row_index == row_index && line.start_byte <= position.byte_offset
+                })
+                .map(|(index, _)| index)
+                .next_back()
+                .or_else(|| lines.iter().position(|line| line.row_index == row_index)),
+        }
     }
 }
 

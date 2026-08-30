@@ -44,17 +44,18 @@ undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap�
 | `MultiDiffEditor` | public | 把多个文件标题和 `DiffEditor` section 组合为一个纵向裁剪 surface |
 | `MultiDiffEditorItem` | public | 为一帧借用文件名、`DiffEditorDocument`、两侧标签和该文件的 `DiffEditorState`；产品 host 应通过 `with_identity` 提供稳定 changed-file identity |
 | `MultiDiffEditorItemIdentity` | public | 从 host-owned stable slot 派生 section/header/diff/fold `ElementId`，并提供折叠 section 的 `AnimationProperty::Height` key |
-| `MultiDiffEditorLayout` | public | 用 `zeta-ui-components::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、prefix index 与总内容高度，供高频滚动复用 |
+| `MultiDiffEditorLayout` | public | 用 `zeta-ui-components::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、平衡分块高度索引与总内容高度，并允许宿主更新一个 section measurement 或 splice changed-file 区间 |
 | `zeta-ui-components::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
 | `MultiDiffEditorStyle` | public | 拥有文件 header、section 间距与嵌套 DiffEditor 样式 |
 | `DiffEditorPalette` / `MultiDiffEditorPalette` | public | 让产品宿主通过命名字段注入 diff marker/background、scrollbar 与文件 header 视觉 |
 | `DiffSideRows` | private | 把 `DiffEditorDocument` 的一侧惰性转换为带 editor-owned syntax token 的 `CodeEditorRow` |
 | `UnifiedDiffRows` | private | 用 hunk source-range、修改行索引和 fold segment 紧凑表达单列 diff；按可见 visual index 随机映射代码行，不按文件总行数分配 row 数组 |
+| `UnifiedDiffMetrics` | private | 随 `DiffEditorDocument` 缓存折叠基线行数和各未修改区间展开增量，让离屏文件高度计算不构造完整 row projection |
 | `MultiDiffSection` / `MultiDiffFileHeader` | private | 在共享 `ComponentContext` 中拥有每个 changed file 的 card/header geometry，并把同一 section 的 `DiffEditor` 放入 inspection ancestry |
 | `MultiDiffFoldControl` / `MultiDiffScrollbar` | private | 将 editor-owned fold geometry 和 ScrollView scrollbar geometry 投影为真实组件及 interaction semantics；产品 host 不再手工注册这些节点 |
 | `code_editor::layout::build_layout` | private | 从组件 bounds 计算 header/body/gutter/content |
 | `code_editor::text_metrics::display_columns_until` | private | 把 UTF-8 byte offset 映射到 Tab/Unicode 等宽显示列 |
-| `code_editor::wrapping::CodeEditorVisualProjection` | private | 按 grapheme/Tab display column 把折叠后的 source row 投影成 viewport visual line，并执行 caret/pointer 映射 |
+| `code_editor::wrapping::CodeEditorVisualProjection` | private | 未换行时保存 O(1) 恒等行映射；软换行时才按 grapheme/Tab display column 建立 visual line 索引，并执行 caret/pointer 映射 |
 | `code_editor::editing` | private module | 执行 grapheme-safe mutation、跨行导航、selection 与有界 history |
 | `code_editor::folding` | private module | 规范化 syntax fold、保留 collapsed identity，并执行 source-row / visual-row 双向投影 |
 | `code_editor::decorations` | private module | 绘制 selection、syntax、composition、caret 并计算 IME caret bounds |
@@ -113,7 +114,7 @@ MultiDiffEditor::compose
 ├─ ScrollView::draw_components
 │  ├─ viewport clip / content origin
 │  └─ hover/active/fading scrollbar chrome
-├─ VirtualListLayout::visible_range → prefix-height binary search
+├─ VirtualListLayout::visible_range → balanced cumulative-height lookup
 ├─ visible MultiDiffSection only
 │  ├─ MultiDiffFileHeader
 │  ├─ DiffEditor::compose
@@ -141,14 +142,9 @@ selection 与 caret 共用同一坐标系。语法 token 保存语义 role，不
 折叠与换行投影负责双向映射，
 所以宿主不维护 hidden-line offset。父范围展开后，仍然有效的嵌套 collapsed state 会恢复生效。
 
-Unified projection 以 `DiffDocument::hunks` 的间隙作为可折叠区间，只保存少量 source segment
-和 `Modified` source-row index。展开超大未修改区间不会物化等量 `CodeEditorRow`；可见行通过
-二分映射回 source row。`MultiDiffEditor` 在一个 presentation 实例内通过
-`VirtualListLayout` 缓存每文件 section height 与 prefix index；paint 和 fold-control 查询都先
-二分定位可见 section，不再从首个文件线性累加 offset。
-高频输入宿主可继续保留 `measure_layout` 结果，使 scroll metrics、fold-control geometry 和 paint
-跨 presentation rebuild 共用同一组高度。item、document、`DiffEditorState`、style 或 presentation
-变化时必须重新测量。
+Unified projection 以 `DiffDocument::hunks` 的间隙作为可折叠区间，只保存 source segment、segment end index 和 `Modified` source-row index。展开超大未修改区间不会物化等量 `CodeEditorRow`；可见行先以二分定位 segment，再映射回 source row。`DiffEditorDocument` 缓存统一视图的折叠基线与区间增量，所以离屏文件的高度计算不构造 row projection；未启用软换行的 `CodeEditorVisualProjection` 也只保存恒等映射，真正进入可见区时才请求具体行。
+
+`MultiDiffEditor` 通过 `VirtualListLayout` 缓存每文件 section height 与平衡分块高度索引；paint 和 fold-control 查询先定位可见 section，不从首个文件线性累加 offset。宿主保留 `measure_layout` 结果供滚动、fold-control geometry 和 paint 复用；单文件状态变化调用 `update_section_extent`，changed-file 集合变化调用 `splice_section_extents`，SCM 按稳定 identity 保留区间外布局并通过 `ListScrollAnchor` 保持视口。首次快照、style 或 presentation 变化才重建全部 measurement。
 
 ## 执行、失败与宿主义务
 
@@ -215,7 +211,7 @@ cargo clippy --manifest-path Cargo.toml -p zeta-editor --all-targets -- -D warni
 wrapped pointer/caret/vertical navigation、fold-control hit test、折叠后
 caret/selection/navigation、viewport、Tab/Unicode 列宽和
 无效 UTF-8 range，DiffEditor 的双 pane 映射、Unified 单列映射、字符级高亮和长未修改区间
-展开/收起，以及 MultiDiffEditor 的可变高度多文件 section、prefix-index viewport 定位、
+展开/收起，以及 MultiDiffEditor 的可变高度多文件 section、平衡分块高度索引 viewport 定位、
 每文件 fold-control identity、整体纵向滚动与
 超大单文件的紧凑行映射与 row-level viewport culling。
 
@@ -235,9 +231,7 @@ range 使用同一 undo/revision/analysis mutation path。Diagnostics 已支持 
 波浪线、跨行/soft-wrap 投影和 hover hit-test；文件、tabs、持久化与产品级
 EditorHost 明确不属于本 crate；Native `FileEditorHost` 已负责对应组合。普通 CodeEditor 的 syntax
 结构折叠与 Unified DiffEditor 的未修改区间折叠是两套独立语义，分别保存在各自 document/state 中。
-MultiDiffEditor section
-高度随 diff row 数量增长，并用可变高度 prefix index 二分剔除完全不可见的文件；部分可见的
-超大单文件只投影外层 viewport 内的行。
+MultiDiffEditor section 高度随 diff row 数量增长，并用可变高度平衡分块索引剔除完全不可见的文件；部分可见的超大单文件只处理外层 viewport 内的行。折叠高度动画只绑定目标布局当前可见的 section，并通过稀疏高度覆盖影响后续可见 section，不为全部 changed file 创建 animation track 或复制完整高度索引。SCM 快照插入、删除或重排文件时计算稳定 identity 的共同前后区间，只 splice 变化的中间段，并把原可见文件重新解析到新 index 后恢复滚动锚点。
 section/fold/scrollbar 的组件组合已完成；SCM host 现在为 changed file 分配稳定 identity，section、header、
 diff body、fold control 和折叠高度 animation key 都从该 identity 派生。`MultiDiffEditor::fold_element_id`
 仍保留旧的 index/region 编码，供未迁移的 standalone caller 兼容。SCM host 已把目标 section height 接入

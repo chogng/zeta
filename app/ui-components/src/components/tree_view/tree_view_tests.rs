@@ -1,7 +1,7 @@
 use super::{TreeItem, TreeItemExpansion, TreeView, TreeViewStyle};
 use crate::{
     Color, PaintRect, Point, Rect, ScrollAxis, ScrollCommand, ScrollDelta, ScrollState,
-    ScrollViewStyle, ScrollbarStyle, Size, UiScene,
+    ScrollViewStyle, ScrollbarStyle, Size, UiScene, VirtualListLayout,
 };
 
 fn style() -> TreeViewStyle {
@@ -85,4 +85,58 @@ fn tree_draw_only_projects_virtualized_rows() {
     assert_eq!(tree.visible_range(), 2..4);
     assert_eq!(projected, vec![1, 2, 3, 4]);
     assert!(scene.rects().len() < 10);
+}
+
+#[test]
+fn variable_extent_tree_centers_disclosures_in_expanded_editor_items() {
+    let items = [
+        TreeItem::new(0, TreeItemExpansion::Expanded),
+        TreeItem::new(1, TreeItemExpansion::Collapsed),
+        TreeItem::new(1, TreeItemExpansion::Leaf),
+    ];
+    let tree = TreeView::from_layout(
+        Rect::from_xywh(0.0, 0.0, 240.0, 100.0),
+        &items,
+        VirtualListLayout::variable([24.0, 120.0, 30.0]),
+        ScrollState::default(),
+        style(),
+    );
+
+    assert_eq!(tree.visible_range(), 0..2);
+    assert_eq!(
+        tree.item_layout(1).unwrap().bounds(),
+        Rect::from_xywh(0.0, 24.0, 240.0, 120.0)
+    );
+    assert_eq!(
+        tree.item_layout(1).unwrap().disclosure_bounds(),
+        Some(Rect::from_xywh(12.0, 76.0, 16.0, 16.0))
+    );
+}
+
+#[test]
+fn subtree_splice_updates_only_the_flattened_variable_extent_range() {
+    let mut layout = VirtualListLayout::variable([24.0, 24.0]);
+    let retained_clone = layout.clone();
+
+    layout.splice_item_extents(1..1, [48.0, 72.0]);
+    let expanded_items = [
+        TreeItem::new(0, TreeItemExpansion::Expanded),
+        TreeItem::new(1, TreeItemExpansion::Leaf),
+        TreeItem::new(1, TreeItemExpansion::Leaf),
+        TreeItem::new(0, TreeItemExpansion::Leaf),
+    ];
+    let expanded = TreeView::from_layout(
+        Rect::from_xywh(0.0, 0.0, 240.0, 200.0),
+        &expanded_items,
+        layout.clone(),
+        ScrollState::default(),
+        style(),
+    );
+
+    assert_eq!(expanded.layout().content_extent(), 168.0);
+    assert_eq!(expanded.item_layout(3).unwrap().bounds().origin.y, 144.0);
+    assert_eq!(retained_clone.content_extent(), 48.0);
+
+    layout.splice_item_extents(1..3, []);
+    assert_eq!(layout, retained_clone);
 }

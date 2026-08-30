@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use zeta_diff::{DiffDocument, DiffRowKind};
 
@@ -6,6 +7,42 @@ use super::{DiffEditorDocument, DiffEditorSide, DiffEditorState, DiffEditorStyle
 use crate::{CodeEditorRow, CodeEditorRowSource};
 
 const MIN_FOLDED_LINES: usize = 2;
+
+/// Cached row-count inputs shared by every unified presentation of one immutable diff document.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct UnifiedDiffMetrics {
+    collapsed_row_count: usize,
+    expanded_region_extra_rows: Arc<[usize]>,
+}
+
+impl UnifiedDiffMetrics {
+    pub(super) fn new(document: &DiffDocument) -> Self {
+        let modified_rows = document
+            .rows()
+            .iter()
+            .filter(|row| row.kind() == DiffRowKind::Modified)
+            .count();
+        let expanded_region_extra_rows = fold_regions(document)
+            .into_iter()
+            .map(|region| region.source_rows.len())
+            .collect::<Vec<_>>();
+        let fully_expanded_row_count =
+            document.rows().len() + modified_rows + expanded_region_extra_rows.len();
+        let collapsed_rows = expanded_region_extra_rows.iter().sum::<usize>();
+        Self {
+            collapsed_row_count: fully_expanded_row_count.saturating_sub(collapsed_rows),
+            expanded_region_extra_rows: expanded_region_extra_rows.into(),
+        }
+    }
+
+    pub(super) fn row_count(&self, state: &DiffEditorState) -> usize {
+        self.collapsed_row_count
+            + state
+                .expanded_unchanged_regions()
+                .filter_map(|index| self.expanded_region_extra_rows.get(index))
+                .sum::<usize>()
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FoldRegion {
@@ -45,6 +82,7 @@ pub(super) struct UnifiedDiffRows<'a> {
     style: &'a DiffEditorStyle,
     modified_source_rows: Vec<usize>,
     segments: Vec<UnifiedSegment>,
+    segment_ends: Vec<usize>,
     row_count: usize,
 }
 
@@ -94,12 +132,20 @@ impl<'a> UnifiedDiffRows<'a> {
             &modified_source_rows,
             &mut segments,
         );
-        let row_count = segments.iter().map(UnifiedSegment::visual_row_count).sum();
+        let mut row_count = 0;
+        let segment_ends = segments
+            .iter()
+            .map(|segment| {
+                row_count += segment.visual_row_count();
+                row_count
+            })
+            .collect();
         Self {
             document,
             style,
             modified_source_rows,
             segments,
+            segment_ends,
             row_count,
         }
     }
@@ -108,45 +154,42 @@ impl<'a> UnifiedDiffRows<'a> {
         self.source_at(index).map(|(_, side)| side)
     }
 
-    pub(super) fn fold_rows(&self) -> impl Iterator<Item = (usize, &FoldRegion, bool)> {
-        let mut visual_row = 0;
-        self.segments.iter().filter_map(move |segment| {
-            let segment_start = visual_row;
-            visual_row += segment.visual_row_count();
-            match segment {
-                UnifiedSegment::Fold {
-                    region, expanded, ..
-                } => Some((segment_start, region, *expanded)),
-                UnifiedSegment::Source { .. } => None,
-            }
-        })
+    pub(super) fn fold_at(&self, index: usize) -> Option<(&FoldRegion, bool)> {
+        let (segment, _) = self.segment_at(index)?;
+        match segment {
+            UnifiedSegment::Fold {
+                region, expanded, ..
+            } => Some((region, *expanded)),
+            UnifiedSegment::Source { .. } => None,
+        }
     }
 
-    fn source_at(&self, mut index: usize) -> Option<(usize, DiffEditorSide)> {
-        for segment in &self.segments {
-            if index >= segment.visual_row_count() {
-                index -= segment.visual_row_count();
-                continue;
-            }
-            let UnifiedSegment::Source { source_rows, .. } = segment else {
-                return None;
-            };
-            let source_row = source_row_at_visual_offset(
-                source_rows.clone(),
-                index,
-                &self.modified_source_rows,
-            )?;
-            let before =
-                visual_row_count(source_rows.start..source_row, &self.modified_source_rows);
-            let side = match self.document.diff().rows()[source_row].kind() {
-                DiffRowKind::Context | DiffRowKind::Added => DiffEditorSide::Modified,
-                DiffRowKind::Removed => DiffEditorSide::Original,
-                DiffRowKind::Modified if index == before => DiffEditorSide::Original,
-                DiffRowKind::Modified => DiffEditorSide::Modified,
-            };
-            return Some((source_row, side));
+    fn source_at(&self, index: usize) -> Option<(usize, DiffEditorSide)> {
+        let (segment, offset) = self.segment_at(index)?;
+        let UnifiedSegment::Source { source_rows, .. } = segment else {
+            return None;
+        };
+        let source_row =
+            source_row_at_visual_offset(source_rows.clone(), offset, &self.modified_source_rows)?;
+        let before = visual_row_count(source_rows.start..source_row, &self.modified_source_rows);
+        let side = match self.document.diff().rows()[source_row].kind() {
+            DiffRowKind::Context | DiffRowKind::Added => DiffEditorSide::Modified,
+            DiffRowKind::Removed => DiffEditorSide::Original,
+            DiffRowKind::Modified if offset == before => DiffEditorSide::Original,
+            DiffRowKind::Modified => DiffEditorSide::Modified,
+        };
+        Some((source_row, side))
+    }
+
+    fn segment_at(&self, index: usize) -> Option<(&UnifiedSegment, usize)> {
+        if index >= self.row_count {
+            return None;
         }
-        None
+        let segment_index = self.segment_ends.partition_point(|end| *end <= index);
+        let segment_start = segment_index
+            .checked_sub(1)
+            .map_or(0, |previous| self.segment_ends[previous]);
+        Some((&self.segments[segment_index], index - segment_start))
     }
 }
 
@@ -163,36 +206,27 @@ impl CodeEditorRowSource for UnifiedDiffRows<'_> {
     }
 
     fn row(&self, index: usize) -> Option<CodeEditorRow<'_>> {
-        if let Some((source_row, side)) = self.source_at(index) {
-            let row = self.document.diff().rows().get(source_row)?;
-            let line = match side {
-                DiffEditorSide::Original => row.old(),
-                DiffEditorSide::Modified => row.new_line(),
-            }?;
-            return Some(project_row(
-                row,
-                side,
-                self.style,
-                false,
-                self.document.syntax_tokens(side, line.number()),
-            ));
-        }
-        let mut remaining = index;
-        for segment in &self.segments {
-            if remaining >= segment.visual_row_count() {
-                remaining -= segment.visual_row_count();
-                continue;
-            }
-            let UnifiedSegment::Fold { label, .. } = segment else {
-                return None;
-            };
+        let (segment, _) = self.segment_at(index)?;
+        if let UnifiedSegment::Fold { label, .. } = segment {
             return Some(
                 CodeEditorRow::annotation(label)
                     .with_marker("⋯", self.style.fold_marker())
                     .with_background(self.style.fold_line()),
             );
         }
-        None
+        let (source_row, side) = self.source_at(index)?;
+        let row = self.document.diff().rows().get(source_row)?;
+        let line = match side {
+            DiffEditorSide::Original => row.old(),
+            DiffEditorSide::Modified => row.new_line(),
+        }?;
+        Some(project_row(
+            row,
+            side,
+            self.style,
+            false,
+            self.document.syntax_tokens(side, line.number()),
+        ))
     }
 }
 

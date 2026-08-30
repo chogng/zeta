@@ -9,7 +9,7 @@
 > [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键设置组合由
 > [`zeta-settings`](../settings/README.md) 管，工作界面的组合键提示由 [`zeta-workbench`](../workbench/README.md) 管。
 
-`zeta-ui-components` 基于 `zui` 提供 Button、Switch、ActionBar、ContextMenu、Dropdown、Picker、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
+`zeta-ui-components` 基于 `zui` 提供 Button、Switch、Checkbox、ActionBar、ContextMenu、Dropdown、Picker、TabList、Keycap、Sash、Resizable、HorizontalScrollbar、VerticalScrollbar、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
 ## 1. 边界与依赖方向
@@ -18,7 +18,7 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | --- | --- | --- |
 | Component、Element、scene 与 inspection contract | [`zui`](../zui/README.md) | 委托；调用方直接依赖 `zui` |
 | Text、symbolic-icon 与 icon-only button 的状态、样式和内部布局 | `zeta-ui-components::Button` | ✅ |
-| Switch track、thumb、on/off 与交互状态 presentation | `zeta-ui-components::Switch` | ✅；值、输入路由和 accessibility 归 host |
+| 二态控件的共享交互状态，以及 Switch/Checkbox 的独立几何和样式 | `zeta-ui-components::{ToggleState,Switch,Checkbox}` | ✅；Checkbox 支持 unchecked/checked/mixed，值、输入路由和 accessibility 归 host |
 | Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui-components::ActionBar` | ✅ |
 | Tab surface 状态与横/纵 TabList 排列 | `zeta-ui-components::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
 | NavBar 导航容器 | 计划中的 `zeta-ui-components` presentation composition | 尚未作为独立 public component 实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有 product identity、active state 或 provider |
@@ -31,9 +31,10 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | PaneInput 类型、逻辑 identity 与 Pane binding | `zeta-workbench` | 委托；具体 Terminal/Agent/Files/Diff/Settings runtime 仍由产品模块负责 |
 | Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeta-files` / `zeta-scm` / `zeta-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui-components` |
 | Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui-components::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
-| 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui-components::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
-| 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui-components::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用 prefix index 二分定位；identity、selection、键盘语义与产品数据归 host |
-| 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui-components::TreeView` | ✅；复用固定高度 ListView；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
+| 单轴滚动条几何、绘制和交互映射 | `zeta-ui-components::{HorizontalScrollbar,VerticalScrollbar}` | ✅；两个方向由类型确定，共享标量 metrics、hover/active/fade、thumb drag 和 track paging；pointer capture 与调度归 host |
+| 通用像素滚动状态、viewport 裁剪与内容坐标 | `zeta-ui-components::ScrollState` / `ScrollView` | ✅；`ScrollView` 组合启用方向对应的滚动条；平台事件路由、pointer capture 与产品内容归 host |
+| 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui-components::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用写时复制的平衡分块树，单项更新、按偏移定位和区间 splice 不重建无关分支，并支持稀疏展示覆盖和 item-relative scroll anchor；identity、selection、键盘语义与产品数据归 host |
+| 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui-components::TreeView` | ✅；普通文件树复用固定高度 ListView，展开式编辑器可接入保留的可变高度布局；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
 | 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui-components::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
 | 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
 | 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui-components::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
@@ -77,8 +78,9 @@ zeta-ui-components -X→ App Server / workspace / product state
 | --- | --- | --- |
 | `zui::ui::{Component,Element,ComputedElement,UiScene}` | external | Framework contract；调用方和本 crate 均直接依赖 `zui` |
 | `components::button::{Button, ButtonState, ButtonSelection}` | public | 根据 host 投影的交互、disabled 与 selected 状态绘制 text、icon+text 或 icon-only button |
-| `components::switch::{Switch, SwitchState, SwitchSelection}` | public | 根据 host 投影的交互、on/off 状态和动画采样进度绘制 centered track 与 thumb；不拥有值、时钟或输入 |
-| `components::switch::{SwitchColors, SwitchStateColors, SwitchStyle}` | public | 定义 on/off、交互状态、track/thumb 几何、边框和圆角；动画规格属于 `zui` binding |
+| `components::toggle::ToggleState` | public | 表达 Switch 与 Checkbox 共享的 resting、hovered、focused、pressed、disabled 交互状态 |
+| `components::toggle::{Switch, SwitchSelection, SwitchStyle}` | public | 根据 on/off 状态和动画采样进度绘制 centered track 与 thumb；不拥有值、时钟或输入 |
+| `components::toggle::{Checkbox, CheckboxSelection, CheckboxStyle}` | public | 绘制 unchecked/checked/mixed 方框与调用方提供的语义图标；不拥有值或输入 |
 | `components::action_bar::ActionBar` | public | 在 caller bounds 内排列和绘制 action representation，并公开同源 visual/interactive bounds 与 hit-test |
 | `components::action_bar::{ActionBarItem, ActionViewItem}` | public | `ActionBarItem` 组合可执行项与 Separator；`ActionViewItem` 表达单个动作的展示、状态和可由界面指定的主轴尺寸 |
 | `components::action_bar::{ActionBarStyle, ActionBarSeparatorStyle, ActionBarOrientation}` | public | 定义 item size、gap、separator metrics、共享 Button style 与排列轴 |
@@ -94,12 +96,15 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::context_view::{place_beside, align_with_anchor}` | private | 分别执行主轴侧边翻转/贴边与交叉轴对齐翻转/贴边；只计算 logical geometry，不读取窗口状态 |
 | `components::scroll_view::{ScrollState, ScrollMetrics, ScrollCommand}` | public | 保存 logical-pixel offset，根据 viewport/content metrics 执行按像素、首尾和 ensure-visible transition |
 | `components::scroll_view::{ScrollView, ScrollViewport}` | public | 约束有效 offset，裁剪调用方内容，并公开 translated content origin 与 visible content bounds |
-| `components::scroll_view::{ScrollbarLayout, ScrollbarHit, ScrollbarDrag}` | public | 以绘制所用的同一 track/thumb geometry 执行命中、轨道翻页和拖动到绝对 offset 的映射 |
-| `components::scroll_view::{ScrollbarController, ScrollbarPresentation, ScrollbarStyle}` | public | 计算 hover/active 与 fade-in/hold/fade-out deadline，选择语义颜色并绘制 overlay scrollbar；不安装 timer 或持有平台 pointer capture |
-| `components::list_view::{VirtualListLayout, ListView}` | public | 固定 extent 使用 O(1) geometry；可变 extent 保存 prefix index 并以 O(log n) 定位可见 range，组合 ScrollView 且只调用 projected item paint |
+| `components::scrollbar::{HorizontalScrollbar, VerticalScrollbar, ScrollbarMetrics}` | public | 以类型固定方向，消费单轴 viewport/content/offset，拥有 track/thumb 几何、绘制、命中、轨道翻页和拖动映射 |
+| `components::scrollbar::{ScrollbarController, ScrollbarPresentation, ScrollbarStyle}` | public | 计算 hover/active 与 fade-in/hold/fade-out deadline 并选择语义颜色；不安装 timer 或持有平台 pointer capture |
+| `components::list_view::{VirtualListLayout, ListView}` | public | 固定 extent 使用 O(1) geometry；可变 extent 使用平衡分块树，以 O(log n) 定位范围和更新单项高度，并通过 `splice_item_extents` 保留区间外的共享分支；稀疏高度覆盖不复制 retained index；组合 ScrollView 且只调用可见及 overscan item paint |
+| `components::list_view::extent_tree::VariableExtentTree` | private | 以写时复制的平衡分块树保存叶子高度、子树 item count 与总高度，负责 O(log n) 查询/单点更新和 O(log n + k) 区间 splice；不拥有 item 内容或 identity |
+| `components::list_view::extent_overrides::ListItemExtentOverrides` | private | 保存少量展示期高度覆盖及累计差值，用于动画而不改动或复制保留的高度树 |
+| `components::list_view::ListScrollAnchor` | public | 记录 viewport 相对某个 item 起点的距离；调用方可按稳定 identity 解析新 index 后恢复滚动位置 |
 | `components::list_view::ListContentPadding` | public | 显式表达列表 item sequence 前后的内容留白，不把 padding 混入首尾 item identity 或高度 |
 | `components::list_view::ListItemLayout` | public | 为一个 projected index 暴露 translated item bounds；不携带产品 identity 或内容 |
-| `components::tree_view::{TreeView, TreeViewStyle}` | public | 在 host-flattened visible node sequence 上组合 ListView，拥有 row extent、depth indentation、disclosure/content geometry 与虚拟化 |
+| `components::tree_view::{TreeView, TreeViewStyle}` | public | 在 host-flattened visible node sequence 上组合 ListView；`new` 保留固定高度快速路径，`from_layout` 接收可变高度保留布局；拥有 depth indentation、disclosure/content geometry 与虚拟化 |
 | `components::tree_view::{TreeItem, TreeItemExpansion, TreeItemLayout}` | public | 分别表达可见节点的 depth/Leaf/Collapsed/Expanded 结构状态，以及同源 row/disclosure/content bounds |
 | `components::context_menu::{ContextMenu, ContextMenuItem}` | public | 组合 ContextView 与纵向 ActionBar，绘制带柔和 BoxShadow 的无边框 menu surface，公开同源 item bounds/hit-test，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
 | `components::context_menu::{ContextMenuSelection, ContextMenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style、可选 header height 和锚点 placement，padding 固定为 2px、radius 固定为 4px |
@@ -151,16 +156,18 @@ host
           │   └─ visible/overscan selected item → Button selection presentation
           ├─ Picker → Dropdown + SearchBox + host-owned item identities
           │   └─ anchored searchable candidates + Menu accessibility
-          ├─ ScrollView → viewport clip + translated content geometry + interactive scrollbar chrome
+          ├─ ScrollView → viewport clip + translated content geometry
+          │   ├─ HorizontalScrollbar → horizontal track/thumb component
+          │   └─ VerticalScrollbar → vertical track/thumb component
           ├─ ListView → ScrollView + fixed/variable-extent visible/overscan item projection
-          ├─ TreeView → fixed ListView + depth/disclosure/content item projection
+          ├─ TreeView → fixed/variable ListView + depth/disclosure/content item geometry
           ├─ ActionBar → item bounds
           │   ├─ ActionViewItem → Button → icon/text primitives
           │   └─ Separator → rect primitive
           ├─ TabList → Tab bounds → state/selection surface rect
           ├─ Button state/style → IconLabel → icon/text primitives
           ├─ Files row presentation → IconLabel → icon/text primitives
-          ├─ zui::AnimationBinding → Switch progress → track/thumb rect primitives
+          ├─ ToggleState → Switch track/thumb 或 Checkbox box/mark
           └─ InputBox → rect/text primitives
   → UiScene::draw_rect / UiScene::draw_image / UiScene::draw_icon / UiScene::draw_text
   → UiScene::batches (layer order + exact cross-kind paint order)
@@ -236,18 +243,10 @@ orientation、children 与 preferred sizes 都来自 Host；布局只输出当�
 并自行处理 add/remove/move、active Pane、Session binding 与序列化。若 `zeta-ui-components` 开始创建
 Terminal Session、决定 split command 或跨帧修改树，说明 Grid ownership 已漂移。
 
-`ScrollState` 是 logical-pixel offset primitive，不读取 `winit::MouseScrollDelta`。
-Host 把平台 wheel、键盘或 scrollbar drag 归一化为 `ScrollCommand`，再使用同一
-`ScrollMetrics` 更新 retained state。`ScrollView::draw` 把调用方内容裁剪到 viewport，并通过
-`ScrollViewport` 返回 translated content origin 和 content-coordinate visible bounds；
-`ScrollbarLayout` 与最终 track/thumb paint 使用同一 geometry。`ListView` 在这层基座上为固定
-或可变高度数据提供 content height、可见/overscan range、item bounds、point hit-test 和
-ensure-visible command；固定高度不分配逐项 geometry，可变高度保存 extent prefix index，
-通过二分查找定位 viewport。它只向 caller 请求 projected index，不拥有 item。高度重新测量、
-scroll anchoring、focus reveal policy 和交互 identity 仍归 composed control 或产品 host。
-`TreeView` 再把 host 已按展开状态扁平化的 visible node sequence 映射为固定高度 ListView
-items，计算 depth indentation 与 disclosure/content bounds；它不读取 children、不持有展开状态，
-也不生成产品节点 identity。
+`ScrollState` 是 logical-pixel offset primitive，不读取 `winit::MouseScrollDelta`。Host 把平台 wheel、键盘或 scrollbar drag 归一化为 `ScrollCommand`，再使用同一 `ScrollMetrics` 更新 retained state。`ScrollView::draw` 把调用方内容裁剪到 viewport，并通过 `ScrollViewport` 返回 translated content origin 和 content-coordinate visible bounds；启用横向或纵向滚动时分别组合 `HorizontalScrollbar` 或 `VerticalScrollbar`，滚动条用自己的 `ScrollbarMetrics` 计算同源 track/thumb paint 与交互几何。
+
+`ListView` 在这层基座上为固定或可变高度数据提供 content height、可见/overscan range、item bounds、point hit-test 和 ensure-visible command；固定高度不分配逐项 geometry，可变高度使用写时复制的平衡分块树。`VirtualListLayout::update_item_extent` 以 O(log n) 更新一个已索引高度，`splice_item_extents` 以 O(log n + k) 替换连续区间并共享无关分支，按滚动偏移定位 item 为 O(log n)，`with_item_extent_overrides` 为少量动画项叠加稀疏高度而不复制整张索引，`ListScrollAnchor` 在高度变化或调用方按稳定 identity 解析新 index 后恢复 item-relative scroll position。固定高度布局插入相同高度仍为 O(1)；第一次写入不同高度时会一次性建立可变索引，因此确定包含编辑器的列表应从 `VirtualListLayout::variable` 开始。ListView 只请求可见及 overscan index，不拥有 item、identity、selection、键盘策略或产品数据。
+`TreeView` 把 host 已按展开状态扁平化的 visible node sequence 映射为 ListView items，计算 depth indentation 与 disclosure/content bounds；普通文件树通过 `TreeView::new` 保留固定高度快速路径，承载 CodeEditor 或 DiffEditor 的展开节点通过 `TreeView::from_layout` 使用可变高度，宿主在展开或收起子树时同步 splice 节点序列和 `VirtualListLayout`。TreeView 不读取 children、不持有展开状态，也不生成产品节点 identity。
 Terminal 从底部计数和输出增长锚定不属于通用 `ScrollState`；Native 的
 `TerminalOutputScrollView` 只负责把该产品状态适配为 `ScrollView` 的顶部相对内容坐标。
 
@@ -295,17 +294,14 @@ IME 候选框定位读取同一个 `InputBox::caret_bounds`，即使 blink phase
 ## 6. 测试与修改路径
 
 ```bash
-cargo test -p zeta-ui-components
+just test zeta-ui-components
 bazel test //app/ui-components:ui-unit-tests
 ```
 
 `zui` 单元测试覆盖检查节点、Element、scene、font/text input 与 Split/Grid；`zeta-ui-components` 单元测试覆盖
 组件裁剪与浮层合成、Sash 命中/反馈几何、SashController deadline 与 Resizable drag 结果，
 ScrollState 的 axis clamp、绝对 offset、首尾和
-ensure-visible transition，ScrollView 的内容坐标、裁剪、visibility policy、比例 thumb geometry、
-track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ListView 的固定/可变高度
-visible/overscan range、prefix geometry、gap/padding、translated bounds、hit-test、ensure-visible
-与 projected-only paint，TreeView 的 depth/disclosure geometry、命中与 projected-only paint，
+ensure-visible transition，水平/垂直 Scrollbar 的独立类型、比例 thumb geometry、track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ScrollView 的内容坐标、裁剪和 visibility policy，ListView 的固定/可变高度 visible/overscan range、平衡分块高度索引、O(log n) 单项更新、O(log n + k) 区间 splice、稀疏高度覆盖、scroll anchor、gap/padding、translated bounds、hit-test、ensure-visible 与 visible/overscan-only paint，TreeView 的固定/可变 item、depth/disclosure geometry、命中与 visible/overscan-only paint，
 ContextView 的纵/横锚定、
 翻转、对齐、viewport 约束、外壳/内容裁剪，Dropdown 的默认/显式选择、无外层 inset 与命中，
 ContextMenu 的柔和阴影、2px padding、4px radius、默认/显式选择与命中，ActionBar 排列与命中、
@@ -344,14 +340,9 @@ validation 测试属于具体 backend crate。
 - `ContextView` 不拥有 shadow、arrow/callout，也不拥有 outside click、Escape、focus
   restoration 或 accessibility scope；overflow shadow 由托管内容的 `PaintRect` 拥有，
   lifecycle/interaction 由 host 与 `zui` 组合；
-- `ScrollView` 当前提供 overlay scrollbar 的同源 paint/hit/track-page/thumb-drag geometry，
-  `ScrollbarController` 提供 hover/active/fade presentation；平台事件接线、pointer capture、
-  滚动惯性、overscroll 和 scroll-specific accessibility action 仍由 host/dispatch 扩展；
-- `ListView` 支持固定和可变 item extent，但不测量 item 内容；caller 必须在高度改变时重建
-  layout。稳定 item identity、selection、键盘导航、滚动锚定、focus anchor 与 Tree
-  flatten/expand semantics 仍由 composed control 或后续专用组件拥有；
-- `TreeView` 只消费 host-flattened visible nodes；异步 child loading、展开状态持久化、稳定节点
-  identity、selection、重命名、拖放和文件打开仍属于产品 Tree model/host；
+- `HorizontalScrollbar` 与 `VerticalScrollbar` 当前提供 overlay scrollbar 的同源 paint/hit/track-page/thumb-drag geometry，`ScrollbarController` 提供 hover/active/fade presentation，`ScrollView` 只决定启用方向与 visibility policy；平台事件接线、pointer capture、滚动惯性、overscroll 和 scroll-specific accessibility action 仍由 host/dispatch 扩展；
+- `ListView` 支持固定和可变 item extent，但不主动测量 item 内容；caller 把测量值写入 retained `VirtualListLayout`，并负责以稳定 identity 处理 reorder anchor。Selection、键盘导航与 focus anchor 仍由 composed control 拥有；
+- `TreeView` 只消费 host-flattened visible nodes；宿主负责让节点 splice 与高度 splice 使用同一范围。异步 child loading、展开状态持久化、稳定节点 identity、selection、重命名、拖放和文件打开仍属于产品 Tree model/host；
 - `Sash` 与 `Resizable` 当前提供 presentation geometry、hover timing 和通用 split snapshot
   drag 计算，但没有 pointer capture、keyboard resize 或 accessibility resize action；这些
   产品语义仍由 host 与 `zui` 组合；

@@ -103,6 +103,10 @@ impl DiffEditorState {
         self.expanded_unchanged_regions.contains(&region_index)
     }
 
+    fn expanded_unchanged_regions(&self) -> impl Iterator<Item = usize> + '_ {
+        self.expanded_unchanged_regions.iter().copied()
+    }
+
     fn viewport(&self, side: DiffEditorSide) -> CodeEditorViewport {
         CodeEditorViewport::new(self.first_visible_row)
             .with_horizontal_column(self.horizontal_column(side))
@@ -275,15 +279,14 @@ impl<'a> DiffEditor<'a> {
 
     pub fn content_height(&self) -> f32 {
         match self.presentation {
-            DiffEditorPresentation::SideBySide => {
-                let rows = self.rows(DiffEditorSide::Original);
-                self.code_editor(DiffEditorSide::Original, &rows)
-                    .content_height()
-            }
-            DiffEditorPresentation::Unified => {
-                let rows = self.unified_rows();
-                self.unified_code_editor(&rows).content_height()
-            }
+            DiffEditorPresentation::SideBySide => CodeEditor::content_height_for_rows(
+                CodeEditorHeader::Label(self.labels.original),
+                self.document.diff().rows().len(),
+            ),
+            DiffEditorPresentation::Unified => CodeEditor::content_height_for_rows(
+                CodeEditorHeader::Hidden,
+                self.document.unified_row_count(&self.state),
+            ),
         }
     }
 
@@ -309,15 +312,14 @@ impl<'a> DiffEditor<'a> {
         let rows = self.unified_rows();
         let editor = self.unified_code_editor(&rows);
         let visible = editor.visible_row_range();
-        rows.fold_rows()
-            .filter_map(|(visual_row, region, expanded)| {
-                if !visible.contains(&visual_row) {
-                    return None;
-                }
+        let visible_start = visible.start;
+        visible
+            .filter_map(|visual_row| {
+                let (region, expanded) = rows.fold_at(visual_row)?;
                 let bounds = Rect::from_xywh(
                     self.bounds.origin.x,
                     self.bounds.origin.y
-                        + visual_row.saturating_sub(visible.start) as f32
+                        + visual_row.saturating_sub(visible_start) as f32
                             * CodeEditor::row_height(),
                     self.bounds.size.width,
                     CodeEditor::row_height(),

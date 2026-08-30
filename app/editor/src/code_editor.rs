@@ -447,6 +447,10 @@ impl<'a> CodeEditor<'a> {
         ROW_HEIGHT
     }
 
+    pub(crate) fn content_height_for_rows(header: CodeEditorHeader<'_>, row_count: usize) -> f32 {
+        header.height() + row_count as f32 * ROW_HEIGHT
+    }
+
     pub fn new(
         bounds: Rect,
         rows: &'a dyn CodeEditorRowSource,
@@ -521,7 +525,7 @@ impl<'a> CodeEditor<'a> {
     }
 
     pub fn content_height(&self) -> f32 {
-        self.header.height() + self.visual_projection.len() as f32 * ROW_HEIGHT
+        Self::content_height_for_rows(self.header, self.visual_projection.len())
     }
 
     pub fn visible_row_range(&self) -> Range<usize> {
@@ -558,7 +562,7 @@ impl<'a> CodeEditor<'a> {
             + ((point.y - layout.body.origin.y) / ROW_HEIGHT)
                 .floor()
                 .max(0.0) as usize;
-        let line = self.visual_projection.line(visual_row)?;
+        let line = self.visual_projection.line(self.rows, visual_row)?;
         let row = self.rows.row(line.row_index)?;
         Some(CodeEditorLocation {
             row_index: visual_row,
@@ -569,7 +573,7 @@ impl<'a> CodeEditor<'a> {
     pub fn text_position_at(&self, point: Point) -> Option<CodeEditorPosition> {
         let layout = self.layout();
         let location = self.location_at(point)?;
-        let line = self.visual_projection.line(location.row_index)?;
+        let line = self.visual_projection.line(self.rows, location.row_index)?;
         let row = self.rows.row(line.row_index)?;
         let text = row.text?;
         let local_column = if point.x <= layout.content.origin.x + CONTENT_HORIZONTAL_PADDING {
@@ -597,7 +601,7 @@ impl<'a> CodeEditor<'a> {
         let visible = self.visible_row_range();
         self.painted_row_range(layout)
             .filter_map(|visual_row| {
-                let line = self.visual_projection.line(visual_row)?;
+                let line = self.visual_projection.line(self.rows, visual_row)?;
                 if !line.first_for_row {
                     return None;
                 }
@@ -837,7 +841,7 @@ impl Component for CodeEditor<'_> {
             self.paint_header(scene, layout);
             let visible = self.visible_row_range();
             for visual_row in self.painted_row_range(layout) {
-                let Some(line) = self.visual_projection.line(visual_row) else {
+                let Some(line) = self.visual_projection.line(self.rows, visual_row) else {
                     continue;
                 };
                 let Some(row) = self.rows.row(line.row_index) else {

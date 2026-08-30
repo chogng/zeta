@@ -1,12 +1,24 @@
 //! Fixed- and variable-extent virtual list geometry composed with the shared ScrollView.
 
 use std::ops::Range;
-use std::sync::Arc;
 
 use crate::{
     Point, Rect, ScrollAxis, ScrollCommand, ScrollState, ScrollView, ScrollViewStyle,
     ScrollViewport, ScrollbarPresentation, Size, UiScene,
 };
+
+#[path = "anchor.rs"]
+mod anchor;
+#[path = "extent_index.rs"]
+mod extent_index;
+#[path = "extent_overrides.rs"]
+mod extent_overrides;
+#[path = "extent_tree.rs"]
+mod extent_tree;
+
+pub use anchor::ListScrollAnchor;
+use extent_index::ListItemExtents;
+use extent_overrides::ListItemExtentOverrides;
 
 /// Geometry for one projected list item.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -52,26 +64,15 @@ impl ListContentPadding {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum ListItemExtents {
-    Fixed {
-        item_count: usize,
-        item_extent: f32,
-    },
-    Variable {
-        item_extents: Arc<[f32]>,
-        prefix_extents: Arc<[f32]>,
-    },
-}
-
 /// Platform-independent list measurement and viewport projection.
 ///
-/// Fixed extents use direct arithmetic. Variable extents retain a prefix-height index so visible
-/// ranges, hit testing, and item geometry remain logarithmic in the number of items. This type
+/// Fixed extents use direct arithmetic. Variable extents retain a cumulative-height index so
+/// visible ranges, hit testing, and item geometry remain logarithmic in the number of items. This type
 /// owns no item content or selection; consumers retain stable identity and domain semantics.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VirtualListLayout {
     item_extents: ListItemExtents,
+    extent_overrides: ListItemExtentOverrides,
     item_gap: f32,
     content_padding: ListContentPadding,
     overscan_items: usize,
@@ -82,35 +83,23 @@ impl VirtualListLayout {
     pub fn new(item_count: usize, item_extent: f32) -> Self {
         assert_positive_finite(item_extent, "List item extent");
         Self {
-            item_extents: ListItemExtents::Fixed {
-                item_count,
-                item_extent,
-            },
+            item_extents: ListItemExtents::fixed(item_count, item_extent),
+            extent_overrides: ListItemExtentOverrides::default(),
             item_gap: 0.0,
             content_padding: ListContentPadding::default(),
             overscan_items: 0,
         }
     }
 
-    /// Creates a variable-extent layout and builds its prefix-height index.
+    /// Creates a variable-extent layout and builds its cumulative-height index.
     pub fn variable(item_extents: impl IntoIterator<Item = f32>) -> Self {
         let item_extents = item_extents.into_iter().collect::<Vec<_>>();
-        let mut prefix_extents = Vec::with_capacity(item_extents.len() + 1);
-        prefix_extents.push(0.0);
         for &extent in &item_extents {
             assert_positive_finite(extent, "Variable list item extent");
-            let prefix = prefix_extents.last().copied().unwrap_or(0.0) + extent;
-            assert!(
-                prefix.is_finite(),
-                "Variable list cumulative extent must be finite"
-            );
-            prefix_extents.push(prefix);
         }
         Self {
-            item_extents: ListItemExtents::Variable {
-                item_extents: item_extents.into(),
-                prefix_extents: prefix_extents.into(),
-            },
+            item_extents: ListItemExtents::variable(item_extents),
+            extent_overrides: ListItemExtentOverrides::default(),
             item_gap: 0.0,
             content_padding: ListContentPadding::default(),
             overscan_items: 0,
@@ -133,34 +122,81 @@ impl VirtualListLayout {
         self
     }
 
+    /// Applies a small set of temporary item extents without copying the retained extent index.
+    ///
+    /// This is intended for presentation-time changes such as the handful of rows currently
+    /// animating. Indices must be unique; out-of-range indices are rejected.
+    pub fn with_item_extent_overrides(
+        mut self,
+        overrides: impl IntoIterator<Item = (usize, f32)>,
+    ) -> Self {
+        self.extent_overrides = ListItemExtentOverrides::new(&self.item_extents, overrides);
+        self
+    }
+
     pub fn item_count(&self) -> usize {
-        match &self.item_extents {
-            ListItemExtents::Fixed { item_count, .. } => *item_count,
-            ListItemExtents::Variable { item_extents, .. } => item_extents.len(),
-        }
+        self.item_extents.item_count()
     }
 
     pub fn item_extent(&self, index: usize) -> Option<f32> {
-        match &self.item_extents {
-            ListItemExtents::Fixed {
-                item_count,
-                item_extent,
-            } => (index < *item_count).then_some(*item_extent),
-            ListItemExtents::Variable { item_extents, .. } => item_extents.get(index).copied(),
+        self.extent_overrides
+            .item_extent(index)
+            .or_else(|| self.item_extents.item_extent(index))
+    }
+
+    /// Copies the current item extents in index order for collection snapshot reconciliation.
+    pub fn item_extents(&self) -> Vec<f32> {
+        let mut extents = self.item_extents.extents();
+        for (index, extent) in extents.iter_mut().enumerate() {
+            if let Some(overridden) = self.extent_overrides.item_extent(index) {
+                *extent = overridden;
+            }
         }
+        extents
+    }
+
+    /// Updates one measured item extent in the cached cumulative index.
+    ///
+    /// A fixed layout becomes variable when its first item-specific measurement is recorded. The
+    /// returned value is the previous extent, or `None` when `index` is outside the layout.
+    pub fn update_item_extent(&mut self, index: usize, item_extent: f32) -> Option<f32> {
+        assert_positive_finite(item_extent, "List item extent");
+        let previous = self.item_extent(index)?;
+        if previous == item_extent {
+            return Some(previous);
+        }
+        self.extent_overrides.remove(index, &self.item_extents);
+        self.item_extents.update(index, item_extent);
+        Some(previous)
+    }
+
+    /// Replaces one contiguous item range while retaining unrelated extent-tree branches.
+    ///
+    /// This is the incremental collection operation used when a flattened tree expands, collapses,
+    /// or refreshes one child range. The range must be ordered and within the current item count.
+    pub fn splice_item_extents(
+        &mut self,
+        range: Range<usize>,
+        replacements: impl IntoIterator<Item = f32>,
+    ) {
+        assert!(
+            range.start <= range.end && range.end <= self.item_count(),
+            "List item extent splice range must be ordered and in bounds"
+        );
+        let replacements = replacements.into_iter().collect::<Vec<_>>();
+        for &extent in &replacements {
+            assert_positive_finite(extent, "Variable list item extent");
+        }
+        let inserted_count = replacements.len();
+        self.item_extents.splice(range.clone(), replacements);
+        self.extent_overrides
+            .splice(range, inserted_count, &self.item_extents);
     }
 
     pub fn content_extent(&self) -> f32 {
         let item_count = self.item_count();
-        let items_extent = match &self.item_extents {
-            ListItemExtents::Fixed {
-                item_count,
-                item_extent,
-            } => *item_count as f32 * *item_extent,
-            ListItemExtents::Variable { prefix_extents, .. } => {
-                prefix_extents.last().copied().unwrap_or(0.0)
-            }
-        };
+        let items_extent =
+            self.item_extents.total_extent() + self.extent_overrides.delta_before(item_count);
         let content_extent = self.content_padding.before
             + items_extent
             + item_count.saturating_sub(1) as f32 * self.item_gap
@@ -216,14 +252,35 @@ impl VirtualListLayout {
         )))
     }
 
+    /// Captures the first item intersecting a vertical viewport offset.
+    pub fn scroll_anchor(&self, scroll_offset: f32) -> Option<ListScrollAnchor> {
+        assert_non_negative_finite(scroll_offset, "List scroll offset");
+        let item_count = self.item_count();
+        if item_count == 0 {
+            return None;
+        }
+        let item_index = self
+            .first_item_ending_after(scroll_offset)
+            .min(item_count - 1);
+        Some(ListScrollAnchor {
+            item_index,
+            distance_from_item_start: scroll_offset - self.item_start(item_index)?,
+        })
+    }
+
+    /// Restores a captured item-relative viewport position after measurements or order change.
+    pub fn command_for_anchor(&self, anchor: ListScrollAnchor) -> Option<ScrollCommand> {
+        let offset =
+            (self.item_start(anchor.item_index)? + anchor.distance_from_item_start).max(0.0);
+        Some(ScrollCommand::ToOffset(Point::new(0.0, offset)))
+    }
+
     fn item_start(&self, index: usize) -> Option<f32> {
         if index >= self.item_count() {
             return None;
         }
-        let preceding_extent = match &self.item_extents {
-            ListItemExtents::Fixed { item_extent, .. } => index as f32 * *item_extent,
-            ListItemExtents::Variable { prefix_extents, .. } => prefix_extents[index],
-        };
+        let preceding_extent =
+            self.item_extents.extent_before(index)? + self.extent_overrides.delta_before(index);
         Some(self.content_padding.before + preceding_extent + index as f32 * self.item_gap)
     }
 
@@ -242,6 +299,11 @@ impl VirtualListLayout {
     }
 
     fn first_item_ending_after(&self, coordinate: f32) -> usize {
+        if self.extent_overrides.is_empty() {
+            return self
+                .item_extents
+                .first_item_ending_after(coordinate - self.content_padding.before, self.item_gap);
+        }
         self.partition_items(|index| {
             self.item_end(index)
                 .is_some_and(|item_end| item_end <= coordinate)
@@ -249,6 +311,12 @@ impl VirtualListLayout {
     }
 
     fn first_item_starting_at_or_after(&self, coordinate: f32) -> usize {
+        if self.extent_overrides.is_empty() {
+            return self.item_extents.first_item_starting_at_or_after(
+                coordinate - self.content_padding.before,
+                self.item_gap,
+            );
+        }
         self.partition_items(|index| {
             self.item_start(index)
                 .is_some_and(|item_start| item_start < coordinate)
@@ -349,6 +417,16 @@ impl ListView {
     pub fn ensure_visible_command(&self, index: usize) -> Option<ScrollCommand> {
         self.layout
             .ensure_visible_command(index, self.scroll_view.bounds().size.width)
+    }
+
+    pub fn scroll_anchor(&self) -> Option<ListScrollAnchor> {
+        self.layout.scroll_anchor(
+            self.scroll_view
+                .viewport()
+                .visible_content_bounds()
+                .origin
+                .y,
+        )
     }
 
     pub fn draw(

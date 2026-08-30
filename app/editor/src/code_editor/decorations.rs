@@ -16,7 +16,7 @@ impl CodeEditor<'_> {
         if !visible.contains(&visual_row) {
             return None;
         }
-        let line = self.visual_projection.line(visual_row)?;
+        let line = self.visual_projection.line(self.rows, visual_row)?;
         let row = self.rows.row(line.row_index)?;
         let text = row.text?;
         let layout = self.layout();

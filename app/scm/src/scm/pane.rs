@@ -4,23 +4,30 @@ use std::time::Instant;
 
 use zeta_editor::{
     DiffEditorDocument, DiffEditorLabels, DiffEditorPresentation, DiffEditorState, MultiDiffEditor,
-    MultiDiffEditorItem, MultiDiffEditorItemIdentity, MultiDiffEditorLayout, MultiDiffEditorStyle,
+    MultiDiffEditorHeaderAction, MultiDiffEditorItem, MultiDiffEditorItemIdentity,
+    MultiDiffEditorLayout, MultiDiffEditorStyle,
 };
+use zeta_icons::icons;
 use zeta_ui_components::{
-    ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollbarController,
-    ScrollbarDrag, ScrollbarPart, ScrollbarPointerPresence, ScrollbarPresentation,
+    ButtonSelection, ButtonState, ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics,
+    ScrollState, ScrollbarController, ScrollbarDrag, ScrollbarPart, ScrollbarPointerPresence,
+    ScrollbarPresentation,
 };
 use zui::ui::{
     AccessibilityRole, Border, Component, ComponentContext, ComponentElement, ComputedElement,
-    Edges, Element, ElementId, PaintRect, Rect, Size, TextBlock, TextStyle, UiNode, UiScene,
+    Edges, Element, ElementId, PaintRect, Rect, Size, TextBlock, TextStyle, UiDispatch, UiNode,
+    UiScene,
 };
 
 use super::ScmDiff;
 use super::ScmPaneStyle;
 use crate::CHANGES_PANE;
-use crate::toolbar::ChangesToolbar;
+use crate::ChangesActivation;
+use crate::ChangesToolbarState;
 use crate::MULTI_DIFF_EDITOR;
 use crate::MULTI_DIFF_SCROLLBAR;
+use crate::ScmStaging;
+use crate::toolbar::ChangesToolbar;
 
 const EMPTY_STATE_PADDING: f32 = 12.0;
 
@@ -32,10 +39,29 @@ pub struct EditorDiff {
     document: DiffEditorDocument,
     editor_state: DiffEditorState,
     identity: MultiDiffEditorItemIdentity,
+    staging: ScmStaging,
+    expanded: bool,
 }
 
 impl EditorDiff {
-    fn item(&self) -> MultiDiffEditorItem<'_> {
+    fn item(&self, dispatch: &UiDispatch) -> MultiDiffEditorItem<'_> {
+        let action = |index, icon, label, selected| {
+            let identity = self
+                .identity
+                .header_action_id(index)
+                .expect("changed-file header action identity");
+            MultiDiffEditorHeaderAction::new(
+                identity,
+                icon,
+                label,
+                button_state(identity, dispatch),
+            )
+            .with_selection(if selected {
+                ButtonSelection::Selected
+            } else {
+                ButtonSelection::Unselected
+            })
+        };
         MultiDiffEditorItem::new(
             &self.file_name,
             &self.document,
@@ -43,6 +69,32 @@ impl EditorDiff {
             DiffEditorLabels::new(&self.original_label, &self.modified_label),
         )
         .with_identity(self.identity)
+        .with_expansion(
+            self.expanded,
+            if self.expanded {
+                icons::CHEVRON_DOWN
+            } else {
+                icons::CHEVRON_RIGHT
+            },
+        )
+        .with_header_actions([
+            action(0, icons::LINK_EXTERNAL, "Open editor", false),
+            action(1, icons::DISCARD, "Discard changes", false),
+            action(
+                2,
+                if self.staging == ScmStaging::Unstaged {
+                    icons::CHECK
+                } else {
+                    icons::REMOVE
+                },
+                if self.staging == ScmStaging::Unstaged {
+                    "Stage changes"
+                } else {
+                    "Unstage changes"
+                },
+                self.staging != ScmStaging::Unstaged,
+            ),
+        ])
     }
 
     #[allow(
@@ -63,6 +115,7 @@ pub struct EditorPaneState {
     measured_layout: MultiDiffEditorLayout,
     style: MultiDiffEditorStyle,
     diff_identities: BTreeMap<String, MultiDiffEditorItemIdentity>,
+    diff_indices: BTreeMap<MultiDiffEditorItemIdentity, usize>,
     next_identity_slot: u32,
 }
 
@@ -76,6 +129,7 @@ impl Default for EditorPaneState {
             measured_layout: MultiDiffEditorLayout::default(),
             style: MultiDiffEditorStyle::light_cards(),
             diff_identities: BTreeMap::new(),
+            diff_indices: BTreeMap::new(),
             next_identity_slot: 1,
         }
     }
@@ -116,23 +170,50 @@ impl EditorPaneState {
     }
 
     pub fn toggle_fold_for_element(&mut self, id: ElementId) -> bool {
-        let mut toggled = false;
+        let Some((identity, region_index)) = MultiDiffEditorItemIdentity::from_fold_id(id) else {
+            return false;
+        };
+        let Some(&index) = self.diff_indices.get(&identity) else {
+            return false;
+        };
+        let diff = &mut self.diffs[index];
+        if region_index >= diff.document.diff().rows().len() {
+            return false;
+        }
+        diff.editor_state.toggle_unchanged_region(region_index);
+        self.remeasure_section(index);
+        true
+    }
+
+    pub fn activate(&mut self, id: ElementId) -> Option<ChangesActivation> {
+        if let Some(identity) = MultiDiffEditorItemIdentity::from_header_id(id) {
+            let &index = self.diff_indices.get(&identity)?;
+            self.diffs[index].expanded = !self.diffs[index].expanded;
+            self.remeasure_section(index);
+            return Some(ChangesActivation::Changed);
+        }
+        let (identity, action) = MultiDiffEditorItemIdentity::from_header_action_id(id)?;
+        let &index = self.diff_indices.get(&identity)?;
+        let diff = &self.diffs[index];
+        match action {
+            0 => Some(ChangesActivation::OpenFile(diff.file_name.clone())),
+            1 => Some(ChangesActivation::Discard(vec![diff.file_name.clone()])),
+            2 if diff.staging == ScmStaging::Unstaged => {
+                Some(ChangesActivation::Stage(vec![diff.file_name.clone()]))
+            }
+            2 => Some(ChangesActivation::Unstage(vec![diff.file_name.clone()])),
+            _ => None,
+        }
+    }
+
+    pub fn set_all_expanded(&mut self, expanded: bool) {
+        if self.diffs.iter().all(|diff| diff.expanded == expanded) {
+            return;
+        }
         for diff in &mut self.diffs {
-            for region_index in 0..diff.document.diff().rows().len() {
-                if diff.identity.fold_id(region_index) == Some(id) {
-                    diff.editor_state.toggle_unchanged_region(region_index);
-                    toggled = true;
-                    break;
-                }
-            }
-            if toggled {
-                break;
-            }
+            diff.expanded = expanded;
         }
-        if toggled {
-            self.remeasure();
-        }
-        toggled
+        self.remeasure();
     }
 
     pub fn replace_diffs(&mut self, diffs: &[ScmDiff]) -> Vec<MultiDiffEditorItemIdentity> {
@@ -146,6 +227,8 @@ impl EditorPaneState {
                 modified_label: "Working Tree".to_string(),
                 document: diff.document().clone(),
                 editor_state: DiffEditorState::default(),
+                staging: diff.staging(),
+                expanded: true,
             });
         }
         self.replace_editor_diffs(next_diffs)
@@ -169,10 +252,31 @@ impl EditorPaneState {
         &mut self,
         next_diffs: Vec<EditorDiff>,
     ) -> Vec<MultiDiffEditorItemIdentity> {
+        let previous_identities = self
+            .diffs
+            .iter()
+            .map(|diff| diff.identity)
+            .collect::<Vec<_>>();
+        let previous_extents =
+            (!previous_identities.is_empty()).then(|| self.measured_layout.section_extents());
+        let anchor = self
+            .measured_layout
+            .scroll_anchor(self.scroll_state.vertical_offset())
+            .and_then(|anchor| {
+                previous_identities
+                    .get(anchor.item_index())
+                    .copied()
+                    .map(|identity| (identity, anchor))
+            });
         let previous_states = self
             .diffs
             .drain(..)
-            .map(|diff| (diff.file_name, (diff.editor_state, diff.identity)))
+            .map(|diff| {
+                (
+                    diff.file_name,
+                    (diff.editor_state, diff.identity, diff.expanded),
+                )
+            })
             .collect::<BTreeMap<_, _>>();
         let next_paths = next_diffs
             .iter()
@@ -180,23 +284,39 @@ impl EditorPaneState {
             .collect::<BTreeSet<_>>();
         let removed_identities = previous_states
             .iter()
-            .filter_map(|(path, (_, identity))| {
+            .filter_map(|(path, (_, identity, _))| {
                 (!next_paths.contains(path.as_str())).then_some(*identity)
             })
             .collect();
         self.diffs = next_diffs
             .into_iter()
             .map(|mut diff| {
-                if let Some((state, _)) = previous_states.get(&diff.file_name) {
+                if let Some((state, _, expanded)) = previous_states.get(&diff.file_name) {
                     diff.editor_state = state.clone();
+                    diff.expanded = *expanded;
                 }
                 diff
             })
             .collect();
-        self.scroll_state = ScrollState::default();
-        self.scrollbar = ScrollbarController::default();
+        self.rebuild_diff_indices();
         self.scrollbar_capture = None;
-        self.remeasure();
+        if previous_identities.is_empty() {
+            self.remeasure();
+        } else {
+            let section_extents = self.measure_section_extents();
+            self.reconcile_section_layout(
+                &previous_identities,
+                previous_extents
+                    .as_deref()
+                    .expect("non-empty changed-file layout extents"),
+                &section_extents,
+            );
+        }
+        if let Some((identity, anchor)) = anchor {
+            if let Some(&index) = self.diff_indices.get(&identity) {
+                self.restore_scroll_anchor(anchor.with_item_index(index));
+            }
+        }
         removed_identities
     }
 
@@ -221,7 +341,10 @@ impl EditorPaneState {
             modified_label: modified_label.into(),
             document: DiffEditorDocument::new(document, zeta_editor::CodeEditorLanguage::PlainText),
             editor_state: DiffEditorState::default(),
+            staging: ScmStaging::Unstaged,
+            expanded: true,
         });
+        self.rebuild_diff_indices();
         self.remeasure();
     }
 
@@ -242,13 +365,15 @@ impl EditorPaneState {
                     zeta_editor::CodeEditorLanguage::PlainText,
                 ),
                 editor_state: DiffEditorState::default(),
+                staging: ScmStaging::Unstaged,
+                expanded: true,
             });
         }
         self.replace_editor_diffs(next_diffs)
     }
 
-    fn items(&self) -> Vec<MultiDiffEditorItem<'_>> {
-        self.diffs.iter().map(EditorDiff::item).collect()
+    fn items(&self, dispatch: &UiDispatch) -> Vec<MultiDiffEditorItem<'_>> {
+        self.diffs.iter().map(|diff| diff.item(dispatch)).collect()
     }
 
     pub fn scroll(&mut self, delta: f32, viewport: Size, now: Instant) -> bool {
@@ -378,7 +503,8 @@ impl EditorPaneState {
     }
 
     fn scroll_view(&self, bounds: Rect) -> zeta_ui_components::ScrollView {
-        let items = self.items();
+        let dispatch = UiDispatch::default();
+        let items = self.items(&dispatch);
         MultiDiffEditor::new(bounds, &items, self.scroll_state, self.style())
             .with_diff_presentation(DiffEditorPresentation::Unified)
             .with_measured_layout(&self.measured_layout)
@@ -387,7 +513,8 @@ impl EditorPaneState {
     }
 
     fn remeasure(&mut self) {
-        let items = self.items();
+        let dispatch = UiDispatch::default();
+        let items = self.items(&dispatch);
         self.measured_layout = MultiDiffEditor::new(
             Rect::from_xywh(0.0, 0.0, 1.0, 0.0),
             &items,
@@ -396,6 +523,150 @@ impl EditorPaneState {
         )
         .with_diff_presentation(DiffEditorPresentation::Unified)
         .measure_layout();
+    }
+
+    fn measure_section_extents(&self) -> Vec<f32> {
+        let dispatch = UiDispatch::default();
+        let items = self.items(&dispatch);
+        let editor = MultiDiffEditor::new(
+            Rect::from_xywh(0.0, 0.0, 1.0, 0.0),
+            &items,
+            ScrollState::default(),
+            self.style(),
+        )
+        .with_diff_presentation(DiffEditorPresentation::Unified);
+        (0..items.len())
+            .map(|index| {
+                editor
+                    .measure_section_extent(index)
+                    .expect("changed file must have a section extent")
+            })
+            .collect()
+    }
+
+    fn reconcile_section_layout(
+        &mut self,
+        previous_identities: &[MultiDiffEditorItemIdentity],
+        previous_extents: &[f32],
+        section_extents: &[f32],
+    ) {
+        assert_eq!(
+            previous_identities.len(),
+            self.measured_layout.section_count(),
+            "multi-diff retained layout must match the previous changed-file collection"
+        );
+        assert_eq!(
+            section_extents.len(),
+            self.diffs.len(),
+            "measured sections must match the next changed-file collection"
+        );
+        assert_eq!(
+            previous_extents.len(),
+            previous_identities.len(),
+            "retained section extents must match the previous changed-file collection"
+        );
+        let next_identities = self
+            .diffs
+            .iter()
+            .map(|diff| diff.identity)
+            .collect::<Vec<_>>();
+        let prefix = previous_identities
+            .iter()
+            .zip(&next_identities)
+            .take_while(|(previous, next)| previous == next)
+            .count();
+        let suffix_limit = previous_identities
+            .len()
+            .min(next_identities.len())
+            .saturating_sub(prefix);
+        let suffix = previous_identities
+            .iter()
+            .rev()
+            .zip(next_identities.iter().rev())
+            .take(suffix_limit)
+            .take_while(|(previous, next)| previous == next)
+            .count();
+        let previous_middle_end = previous_identities.len() - suffix;
+        let next_middle_end = next_identities.len() - suffix;
+        self.measured_layout.splice_section_extents(
+            prefix..previous_middle_end,
+            section_extents[prefix..next_middle_end].iter().copied(),
+        );
+
+        for index in 0..prefix {
+            if previous_extents[index] != section_extents[index] {
+                self.measured_layout
+                    .update_section_extent(index, section_extents[index]);
+            }
+        }
+        for offset in 0..suffix {
+            let previous_index = previous_middle_end + offset;
+            let next_index = next_middle_end + offset;
+            if previous_extents[previous_index] != section_extents[next_index] {
+                self.measured_layout
+                    .update_section_extent(next_index, section_extents[next_index]);
+            }
+        }
+    }
+
+    fn remeasure_section(&mut self, index: usize) {
+        assert_eq!(
+            self.measured_layout.section_count(),
+            self.diffs.len(),
+            "multi-diff retained layout must match the changed-file collection"
+        );
+        let anchor = self
+            .measured_layout
+            .scroll_anchor(self.scroll_state.vertical_offset());
+        let extent = {
+            let dispatch = UiDispatch::default();
+            let items = [self.diffs[index].item(&dispatch)];
+            MultiDiffEditor::new(
+                Rect::from_xywh(0.0, 0.0, 1.0, 0.0),
+                &items,
+                ScrollState::default(),
+                self.style(),
+            )
+            .with_diff_presentation(DiffEditorPresentation::Unified)
+            .measure_section_extent(0)
+            .expect("single multi-diff item must have a section extent")
+        };
+        self.measured_layout
+            .update_section_extent(index, extent)
+            .expect("changed file must have retained section geometry");
+        let Some(anchor) = anchor else {
+            return;
+        };
+        self.restore_scroll_anchor(anchor);
+    }
+
+    fn restore_scroll_anchor(&mut self, anchor: zeta_ui_components::ListScrollAnchor) {
+        let Some(command) = self.measured_layout.command_for_anchor(anchor) else {
+            return;
+        };
+        self.scroll_state.apply(
+            command,
+            ScrollMetrics::new(
+                Size::new(0.0, 0.0),
+                Size::new(0.0, self.measured_layout.content_height()),
+            ),
+            ScrollAxis::Vertical,
+        );
+    }
+
+    fn rebuild_diff_indices(&mut self) {
+        self.diff_indices.clear();
+        self.diff_indices.extend(
+            self.diffs
+                .iter()
+                .enumerate()
+                .map(|(index, diff)| (diff.identity, index)),
+        );
+        assert_eq!(
+            self.diff_indices.len(),
+            self.diffs.len(),
+            "changed-file identities must be unique"
+        );
     }
 
     fn scrollbar_presence(&self, point: zui::ui::Point, bounds: Rect) -> ScrollbarPointerPresence {
@@ -413,6 +684,8 @@ pub struct EditorPane<'a> {
     state: &'a EditorPaneState,
     style: ScmPaneStyle,
     parent: ElementId,
+    toolbar: Option<&'a ChangesToolbarState>,
+    dispatch: Option<&'a UiDispatch>,
     content_bounds: Option<Rect>,
 }
 
@@ -428,8 +701,20 @@ impl<'a> EditorPane<'a> {
             state,
             style,
             parent,
+            toolbar: None,
+            dispatch: None,
             content_bounds: None,
         }
+    }
+
+    pub const fn with_toolbar(
+        mut self,
+        toolbar: &'a ChangesToolbarState,
+        dispatch: &'a UiDispatch,
+    ) -> Self {
+        self.toolbar = Some(toolbar);
+        self.dispatch = Some(dispatch);
+        self
     }
 
     /// Overrides the area used by the diff content while keeping the Changes toolbar full width.
@@ -452,7 +737,11 @@ impl<'a> EditorPane<'a> {
         if let Some(bounds) = self.content_bounds {
             return bounds;
         }
-        self.bounds
+        if self.toolbar.is_some() {
+            Self::content_bounds_for(self.bounds)
+        } else {
+            self.bounds
+        }
     }
 
     fn interaction_node_for_bounds(&self, bounds: Rect) -> UiNode {
@@ -476,10 +765,22 @@ impl<'a> EditorPane<'a> {
 
     fn paint_empty_state(&self, scene: &mut UiScene, bounds: Rect) {
         scene.draw_text(TextBlock::new(
-            "No changed files",
+            "No changes in this scope",
             zui::ui::Point::new(
                 bounds.origin.x + EMPTY_STATE_PADDING,
                 bounds.origin.y + EMPTY_STATE_PADDING,
+            ),
+            zui::ui::Size::new(
+                (bounds.size.width - EMPTY_STATE_PADDING * 2.0).max(1.0),
+                18.0,
+            ),
+            TextStyle::new(12.0, self.style.text_muted).with_line_height(18.0),
+        ));
+        scene.draw_text(TextBlock::new(
+            "Your working tree is clean.",
+            zui::ui::Point::new(
+                bounds.origin.x + EMPTY_STATE_PADDING,
+                bounds.origin.y + EMPTY_STATE_PADDING + 24.0,
             ),
             zui::ui::Size::new(
                 (bounds.size.width - EMPTY_STATE_PADDING * 2.0).max(1.0),
@@ -507,17 +808,38 @@ impl Component for EditorPane<'_> {
         let content_bounds = self.content_bounds();
         if self.state.diffs().is_empty() {
             self.paint_empty_state(context.scene_mut(), content_bounds);
-            return;
+        } else {
+            let default_dispatch = UiDispatch::default();
+            let dispatch = self.dispatch.unwrap_or(&default_dispatch);
+            let items = self.state.items(dispatch);
+            let editor = MultiDiffEditor::new(
+                content_bounds,
+                &items,
+                self.state.scroll_state,
+                self.state.style(),
+            )
+            .with_diff_presentation(DiffEditorPresentation::Unified)
+            .with_measured_layout(&self.state.measured_layout)
+            .with_scrollbar_presentation(self.state.scrollbar_presentation())
+            .with_identity(MULTI_DIFF_EDITOR)
+            .with_scrollbar_identity(MULTI_DIFF_SCROLLBAR);
+            context.draw_component(&editor);
         }
-        let items = self.state.items();
-        let editor =
-            MultiDiffEditor::new(content_bounds, &items, self.state.scroll_state, self.state.style())
-                .with_diff_presentation(DiffEditorPresentation::Unified)
-                .with_measured_layout(&self.state.measured_layout)
-                .with_scrollbar_presentation(self.state.scrollbar_presentation())
-                .with_identity(MULTI_DIFF_EDITOR)
-                .with_scrollbar_identity(MULTI_DIFF_SCROLLBAR);
-        context.draw_component(&editor);
+        if let (Some(toolbar), Some(dispatch)) = (self.toolbar, self.dispatch) {
+            context.draw_component(&ChangesToolbar::new(
+                Rect::from_xywh(
+                    bounds.origin.x,
+                    bounds.origin.y,
+                    bounds.size.width,
+                    ChangesToolbar::height(),
+                ),
+                bounds,
+                toolbar,
+                self.style,
+                CHANGES_PANE,
+                dispatch,
+            ));
+        }
     }
 
     fn paint(&self, scene: &mut UiScene) {
@@ -525,20 +847,44 @@ impl Component for EditorPane<'_> {
         let bounds = self.content_bounds();
         if self.state.diffs().is_empty() {
             self.paint_empty_state(scene, bounds);
-            return;
+        } else {
+            let default_dispatch = UiDispatch::default();
+            let dispatch = self.dispatch.unwrap_or(&default_dispatch);
+            let items = self.state.items(dispatch);
+            scene.draw_component(
+                &MultiDiffEditor::new(bounds, &items, self.state.scroll_state, self.state.style())
+                    .with_diff_presentation(DiffEditorPresentation::Unified)
+                    .with_measured_layout(&self.state.measured_layout)
+                    .with_scrollbar_presentation(self.state.scrollbar_presentation()),
+            );
         }
-        let items = self.state.items();
-        scene.draw_component(
-            &MultiDiffEditor::new(
+        if let (Some(toolbar), Some(dispatch)) = (self.toolbar, self.dispatch) {
+            scene.draw_component(&ChangesToolbar::new(
+                Rect::from_xywh(
+                    self.bounds.origin.x,
+                    self.bounds.origin.y,
+                    self.bounds.size.width,
+                    ChangesToolbar::height(),
+                ),
                 self.bounds,
-                &items,
-                self.state.scroll_state,
-                self.state.style(),
-            )
-            .with_diff_presentation(DiffEditorPresentation::Unified)
-            .with_measured_layout(&self.state.measured_layout)
-            .with_scrollbar_presentation(self.state.scrollbar_presentation()),
-        );
+                toolbar,
+                self.style,
+                CHANGES_PANE,
+                dispatch,
+            ));
+        }
+    }
+}
+
+fn button_state(id: ElementId, dispatch: &UiDispatch) -> ButtonState {
+    if dispatch.is_pressed(id) {
+        ButtonState::Pressed
+    } else if dispatch.is_focused(id) {
+        ButtonState::Focused
+    } else if dispatch.is_hovered(id) {
+        ButtonState::Hovered
+    } else {
+        ButtonState::Resting
     }
 }
 

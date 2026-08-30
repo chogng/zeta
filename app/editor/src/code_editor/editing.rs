@@ -414,7 +414,7 @@ impl CodeEditorDocument {
         let Some(current_index) = projection.visual_line_for_position(self, position) else {
             return;
         };
-        let Some(current_line) = projection.line(current_index) else {
+        let Some(current_line) = projection.line(self, current_index) else {
             return;
         };
         let target_index = if direction.is_negative() {
@@ -424,7 +424,7 @@ impl CodeEditorDocument {
                 .checked_add(direction as usize)
                 .filter(|index| *index < projection.len())
         };
-        let Some(target_line) = target_index.and_then(|index| projection.line(index)) else {
+        let Some(target_line) = target_index.and_then(|index| projection.line(self, index)) else {
             return;
         };
         let current_range = self.line_ranges[source_row].clone();

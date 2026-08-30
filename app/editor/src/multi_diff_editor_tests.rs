@@ -9,9 +9,28 @@ use std::time::{Duration, Instant};
 use zeta_diff::DiffDocument;
 use zeta_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollState};
 use zui::ui::{
-    AnimationProperty, AnimationRegistry, Color, Component, CornerRadii, ElementId,
-    InteractionFrame, Rect, UiFrame, UiScene,
+    AnimationBinding, AnimationKey, AnimationProperty, AnimationRegistry, Color, Component,
+    CornerRadii, ElementId, InteractionFrame, Rect, ScalarAnimationSpec, UiFrame, UiScene,
 };
+
+#[derive(Default)]
+struct CountingAnimationBindings {
+    bound: usize,
+}
+
+impl AnimationBinding for CountingAnimationBindings {
+    fn bind_scalar(
+        &mut self,
+        _key: AnimationKey,
+        _initial: f32,
+        target: f32,
+        _spec: ScalarAnimationSpec,
+        _now: Instant,
+    ) -> f32 {
+        self.bound += 1;
+        target
+    }
+}
 
 fn document(original: &str, modified: &str) -> DiffEditorDocument {
     DiffEditorDocument::new(
@@ -43,8 +62,24 @@ fn stable_item_identity_derives_nested_ids_and_fold_animation_key() {
     assert_eq!(identity.section_id(), ElementId::scoped(10, 17));
     assert_eq!(identity.header_id(), ElementId::scoped(11, 17));
     assert_eq!(identity.diff_id(), ElementId::scoped(12, 17));
+    assert_eq!(
+        identity.header_action_id(2),
+        Some(ElementId::scoped(13, 1_114_115))
+    );
     assert_eq!(identity.fold_id(3), Some(ElementId::scoped(4, 1_114_116)));
     assert_ne!(identity.fold_id(3), other.fold_id(3));
+    assert_eq!(
+        MultiDiffEditorItemIdentity::from_header_id(identity.header_id()),
+        Some(identity)
+    );
+    assert_eq!(
+        MultiDiffEditorItemIdentity::from_header_action_id(identity.header_action_id(2).unwrap()),
+        Some((identity, 2))
+    );
+    assert_eq!(
+        MultiDiffEditorItemIdentity::from_fold_id(identity.fold_id(3).unwrap()),
+        Some((identity, 3))
+    );
 
     let animation = identity.fold_animation_key();
     assert_eq!(animation.element(), identity.section_id());
@@ -147,6 +182,48 @@ fn fold_height_animation_updates_component_bounds_from_the_retained_key() {
         registry.value(identity.fold_animation_key()),
         Some(halfway_height)
     );
+}
+
+#[test]
+fn large_multi_diff_binds_height_animation_only_for_visible_sections() {
+    let item_count = 10_000;
+    let document = document("old", "new");
+    let names = (0..item_count)
+        .map(|index| format!("file-{index}.rs"))
+        .collect::<Vec<_>>();
+    let items = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| {
+            MultiDiffEditorItem::new(
+                name,
+                &document,
+                DiffEditorState::default(),
+                DiffEditorLabels::new("base", "working"),
+            )
+            .with_identity(MultiDiffEditorItemIdentity::from_slot(index as u32 + 1))
+        })
+        .collect::<Vec<_>>();
+    let layout = super::MultiDiffEditorLayout {
+        sections: zeta_ui_components::VirtualListLayout::variable(vec![100.0; item_count]),
+        presentation: DiffEditorPresentation::Unified,
+    };
+    let editor = MultiDiffEditor::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 120.0),
+        &items,
+        ScrollState::default(),
+        MultiDiffEditorStyle::light(),
+    )
+    .with_diff_presentation(DiffEditorPresentation::Unified)
+    .with_measured_layout(&layout);
+    let mut bindings = CountingAnimationBindings::default();
+    let mut frame = UiFrame::<InteractionFrame>::at(Color::WHITE, Instant::now());
+
+    frame.with_animation_bindings(&mut bindings, |context| {
+        context.draw_component(&editor);
+    });
+
+    assert_eq!(bindings.bound, 2);
 }
 
 fn section_height(frame: &UiFrame<InteractionFrame>) -> f32 {
@@ -468,4 +545,25 @@ fn measured_layout_indexes_variable_section_heights_and_spacing() {
         measured.content_height(),
         8.0 + small_height + 8.0 + large_height + 8.0
     );
+}
+
+#[test]
+fn measured_layout_splices_changed_file_sections_without_mutating_retained_clones() {
+    let mut layout = super::MultiDiffEditorLayout {
+        sections: zeta_ui_components::VirtualListLayout::variable([40.0, 60.0, 80.0])
+            .with_item_gap(8.0)
+            .with_content_padding(zeta_ui_components::ListContentPadding::symmetric(8.0)),
+        presentation: DiffEditorPresentation::Unified,
+    };
+    let retained_clone = layout.clone();
+
+    layout.splice_section_extents(1..2, [120.0, 140.0]);
+
+    assert_eq!(layout.section_count(), 4);
+    assert_eq!(layout.section_extent(0), Some(40.0));
+    assert_eq!(layout.section_extent(1), Some(120.0));
+    assert_eq!(layout.section_extent(2), Some(140.0));
+    assert_eq!(layout.section_extent(3), Some(80.0));
+    assert_eq!(retained_clone.section_count(), 3);
+    assert_eq!(retained_clone.section_extent(1), Some(60.0));
 }

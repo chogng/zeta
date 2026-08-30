@@ -1,9 +1,10 @@
-//! Virtualized tree-row geometry built on the shared fixed-extent ListView.
+//! Virtualized fixed- and variable-extent tree geometry built on the shared ListView.
 
 use std::ops::Range;
 
 use crate::{
-    ListView, Point, Rect, ScrollCommand, ScrollState, ScrollView, ScrollViewStyle, UiScene,
+    ListScrollAnchor, ListView, Point, Rect, ScrollCommand, ScrollState, ScrollView,
+    ScrollViewStyle, UiScene, VirtualListLayout,
 };
 
 /// Expansion semantics projected by one visible tree item.
@@ -41,7 +42,7 @@ impl TreeItem {
     }
 }
 
-/// Component-owned fixed row, indentation, and disclosure geometry.
+/// Component-owned default row, indentation, and disclosure geometry.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TreeViewStyle {
     scroll_view: ScrollViewStyle,
@@ -149,6 +150,29 @@ impl<'a> TreeView<'a> {
         }
     }
 
+    /// Creates a tree over retained variable item geometry.
+    ///
+    /// The host keeps `layout` synchronized with its flattened visible-node sequence and uses
+    /// [`VirtualListLayout::splice_item_extents`] for subtree expansion and collapse.
+    pub fn from_layout(
+        bounds: Rect,
+        items: &'a [TreeItem],
+        layout: VirtualListLayout,
+        state: ScrollState,
+        style: TreeViewStyle,
+    ) -> Self {
+        assert_eq!(
+            items.len(),
+            layout.item_count(),
+            "Tree items and retained list layout must have the same length"
+        );
+        Self {
+            items,
+            list: ListView::from_layout(bounds, layout, state, style.scroll_view),
+            style,
+        }
+    }
+
     pub fn with_overscan_items(mut self, overscan_items: usize) -> Self {
         self.list = self.list.with_overscan_items(overscan_items);
         self
@@ -160,6 +184,14 @@ impl<'a> TreeView<'a> {
 
     pub const fn scroll_view(&self) -> ScrollView {
         self.list.scroll_view()
+    }
+
+    pub const fn layout(&self) -> &VirtualListLayout {
+        self.list.layout()
+    }
+
+    pub fn scroll_anchor(&self) -> Option<ListScrollAnchor> {
+        self.list.scroll_anchor()
     }
 
     pub fn item_layout(&self, index: usize) -> Option<TreeItemLayout> {

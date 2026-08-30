@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use super::{EditorPane, EditorPaneState};
 use crate::CHANGES_PANE;
+use crate::ChangesActivation;
 use crate::MULTI_DIFF_EDITOR;
 use crate::MULTI_DIFF_SCROLLBAR;
 use crate::TEST_SCM_PANE_STYLE;
@@ -81,6 +82,60 @@ fn changed_file_identity_and_viewport_state_survive_snapshot_reordering() {
     assert_eq!(state.diffs[1].identity, alpha_identity);
     assert_eq!(state.diffs[0].editor_state.first_visible_row(), 8);
     assert_eq!(state.diffs[1].editor_state.first_visible_row(), 0);
+}
+
+#[test]
+fn snapshot_splice_preserves_the_visible_file_anchor_when_items_are_inserted_above_it() {
+    let mut state = EditorPaneState::default();
+    let large_document = || {
+        document(
+            &(0..20)
+                .map(|line| format!("old {line}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            &(0..20)
+                .map(|line| format!("new {line}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    };
+    state.replace_test_diffs(vec![
+        ("alpha.rs".to_string(), large_document()),
+        ("beta.rs".to_string(), large_document()),
+        ("gamma.rs".to_string(), large_document()),
+    ]);
+    let first_extent = state.measured_layout.section_extent(0).unwrap();
+    state.scroll(
+        first_extent + 19.0,
+        zui::ui::Size::new(320.0, 80.0),
+        Instant::now(),
+    );
+    let beta_identity = state.diffs[1].identity;
+    let anchor_before = state
+        .measured_layout
+        .scroll_anchor(state.scroll_state.vertical_offset())
+        .unwrap();
+
+    state.replace_test_diffs(vec![
+        ("inserted.rs".to_string(), large_document()),
+        ("alpha.rs".to_string(), large_document()),
+        ("beta.rs".to_string(), large_document()),
+        ("gamma.rs".to_string(), large_document()),
+    ]);
+
+    let anchor_after = state
+        .measured_layout
+        .scroll_anchor(state.scroll_state.vertical_offset())
+        .unwrap();
+    assert_eq!(
+        state.diffs[anchor_after.item_index()].identity,
+        beta_identity
+    );
+    assert_eq!(anchor_after.item_index(), 2);
+    assert_eq!(
+        anchor_after.distance_from_item_start(),
+        anchor_before.distance_from_item_start()
+    );
 }
 
 #[test]
@@ -333,7 +388,7 @@ fn empty_editor_pane_exposes_an_honest_empty_state() {
         scene
             .text_blocks()
             .iter()
-            .any(|text| text.text() == "No changed files")
+            .any(|text| text.text() == "No changes in this scope")
     );
 }
 
@@ -391,4 +446,113 @@ fn unchanged_region_controls_are_accessible_and_toggle_retained_diff_state() {
             .iter()
             .any(|node| node.label == "Hide 7 unchanged lines in alpha.rs")
     );
+}
+
+#[test]
+fn file_header_toggles_the_whole_diff_and_exposes_scm_actions() {
+    let mut state = EditorPaneState::default();
+    state.open_diff(
+        "alpha.rs",
+        "alpha base",
+        "alpha working",
+        document("old alpha\n", "new alpha\n"),
+    );
+    let identity = state.diffs[0].identity;
+    let dispatch = UiDispatch::default();
+    let pane = EditorPane::new(
+        Rect::from_xywh(0.0, 0.0, 420.0, 300.0),
+        &state,
+        TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
+    );
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
+    frame.draw_component(&pane);
+    let nodes = frame.interaction().accessibility_nodes(&dispatch);
+
+    assert!(
+        nodes
+            .iter()
+            .any(|node| node.id == identity.header_id() && node.label == "Collapse alpha.rs")
+    );
+    for label in ["Open editor", "Discard changes", "Stage changes"] {
+        assert!(nodes.iter().any(|node| node.label == label));
+    }
+    assert_eq!(
+        state.activate(identity.header_action_id(0).unwrap()),
+        Some(ChangesActivation::OpenFile("alpha.rs".into()))
+    );
+    assert_eq!(
+        state.activate(identity.header_id()),
+        Some(ChangesActivation::Changed)
+    );
+
+    let collapsed = EditorPane::new(
+        Rect::from_xywh(0.0, 0.0, 420.0, 300.0),
+        &state,
+        TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
+    );
+    let mut collapsed_frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
+    collapsed_frame.draw_component(&collapsed);
+    assert!(
+        collapsed_frame
+            .interaction()
+            .accessibility_nodes(&dispatch)
+            .iter()
+            .any(|node| node.id == identity.header_id() && node.label == "Expand alpha.rs")
+    );
+    assert!(
+        collapsed_frame
+            .scene()
+            .text_blocks()
+            .iter()
+            .all(|text| !matches!(text.text(), "old alpha" | "new alpha"))
+    );
+}
+
+#[test]
+fn collapsing_one_file_updates_only_its_measurement_and_preserves_the_visible_anchor() {
+    let mut state = EditorPaneState::default();
+    state.replace_test_diffs(
+        ["alpha.rs", "beta.rs", "gamma.rs"]
+            .into_iter()
+            .map(|name| {
+                (
+                    name.to_string(),
+                    document("old 1\nold 2\nold 3\n", "new 1\nnew 2\nnew 3\n"),
+                )
+            })
+            .collect(),
+    );
+    let before = (0..3)
+        .map(|index| state.measured_layout.section_extent(index).unwrap())
+        .collect::<Vec<_>>();
+    state.scroll(
+        before[0] + 12.0,
+        zui::ui::Size::new(320.0, 80.0),
+        Instant::now(),
+    );
+    let anchor_before = state
+        .measured_layout
+        .scroll_anchor(state.scroll_state.vertical_offset())
+        .unwrap();
+    let first_identity = state.diffs[0].identity;
+
+    assert_eq!(
+        state.activate(first_identity.header_id()),
+        Some(ChangesActivation::Changed)
+    );
+
+    let anchor_after = state
+        .measured_layout
+        .scroll_anchor(state.scroll_state.vertical_offset())
+        .unwrap();
+    assert_eq!(anchor_after.item_index(), anchor_before.item_index());
+    assert_eq!(
+        anchor_after.distance_from_item_start(),
+        anchor_before.distance_from_item_start()
+    );
+    assert!(state.measured_layout.section_extent(0).unwrap() < before[0]);
+    assert_eq!(state.measured_layout.section_extent(1), Some(before[1]));
+    assert_eq!(state.measured_layout.section_extent(2), Some(before[2]));
 }
