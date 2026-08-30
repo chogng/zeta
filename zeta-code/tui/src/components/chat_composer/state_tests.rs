@@ -44,7 +44,6 @@ fn pane_preserves_thread_owned_draft_until_dismissed() {
             )],
         )
         .with_search(SearchBoxModel::new("Search commands")),
-        "↑ search · Esc back",
     ));
 
     composer.handle_key(&mut input, KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));

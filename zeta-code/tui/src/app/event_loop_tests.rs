@@ -99,7 +99,6 @@ fn pointer_move_tracks_a_feature_row_without_changing_its_keyboard_selection() {
             )],
         )
         .without_tab_bar(),
-        "Esc back",
     )));
     let area = Rect::new(0, 0, 80, 24);
     let mut target = None;
@@ -142,7 +141,6 @@ fn pointer_click_switches_a_selection_tab() {
                 ListSelectionGroup::new("Second", vec![ListSelectionItem::new("Another item")]),
             ],
         ),
-        "Esc back",
     )));
     let area = Rect::new(0, 0, 80, 24);
     assert_eq!(app.mouse_mode(), MouseMode::TuiCapture);
@@ -178,7 +176,6 @@ fn pointer_click_explicitly_focuses_the_pane_search_box() {
             )],
         )
         .with_search(SearchBoxModel::new("Search features")),
-        "Esc back",
     )));
     let area = Rect::new(0, 0, 80, 24);
     let mut target = None;

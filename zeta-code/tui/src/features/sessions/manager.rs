@@ -267,7 +267,7 @@ fn session_preview(session: &Session, now_unix_ms: u64) -> PaneSpec<DetailList> 
             format!("{} · {}", thread.title, thread_status_label(thread.status)),
         ));
     }
-    PaneSpec::new(DetailList::new("Session preview", rows), "Esc back")
+    PaneSpec::new(DetailList::new("Session preview", rows)).with_key_hint("Esc", "to close")
 }
 
 fn manager_status_label(status: SessionManagerStatus) -> &'static str {

@@ -250,6 +250,7 @@ zeta-code/tui/
 │   │   ├── detail_list.rs / detail_list/
 │   │   ├── text_prompt.rs / text_prompt/
 │   │   ├── key_capture.rs / key_capture/
+│   │   ├── key_hint.rs
 │   │   ├── search_box.rs / search_box/
 │   │   └── tab_list.rs
 │   ├── render.rs               # Renderable and RenderContext
@@ -433,6 +434,7 @@ value；但不能调用领域接口或保存 canonical aggregate。
 | `chat_history/` | plain-text visible row、wrapping、scroll 与每个 Thread 独立的有界派生 buffer cache | canonical Thread snapshot、sequence、transient cursor |
 | `pane/` | `PaneSpec`、`PaneStack`、`PaneId`、封闭 `PaneBody`、统一 `PaneOutcome`、存活 `Pane` 和当前帧只读 `PaneView`；集中输入、高度、顶边反色标题、提示和命中分派 | 具体产品动作、RPC、QuickView、`ListSelection` 专属的 Tab/Search/Adjust 状态 |
 | `quick_view.rs` | 不改变正常布局高度的通用只读覆盖层 | `/status` 等功能事实和产品动作 |
+| `key_hint.rs` | 结构化按键提示、统一分隔与底栏绘制 | 产品动作语义和按键处理 |
 | `tab_list.rs` | tab 集合、当前项、键盘与鼠标横向切换、窄宽度换行和绘制 | pane 内容、搜索、产品 action |
 | `list_selection/` | query、filtered indices、selection 和通用列表渲染，并组合 `tab_list` 切换每组候选项 | Session/Skill identity 的业务 action，非列表页面 |
 

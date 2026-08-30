@@ -7,7 +7,7 @@ use crate::components::chat_history;
 use crate::components::chat_history::ChatHistoryPointerState;
 use crate::components::chat_history::ChatHistoryView;
 use crate::components::chat_input;
-use crate::components::key_hint_bar;
+use crate::components::key_hint;
 use crate::components::welcome;
 use crate::features::approval;
 use crate::features::query;
@@ -196,7 +196,7 @@ fn draw_status_notice(
     if content.is_empty() || composer.is_empty() || composer.y <= content.y {
         return;
     }
-    key_hint_bar::draw_right(
+    key_hint::draw_right(
         frame,
         Rect {
             x: content.x,
@@ -389,7 +389,7 @@ fn draw_status_area(
 ) {
     match status_area_view(app) {
         StatusAreaView::Hint { text, style } => match style {
-            StatusHintStyle::Keys => key_hint_bar::draw(frame, area, &text, context),
+            StatusHintStyle::Keys => key_hint::draw(frame, area, &text, context),
             StatusHintStyle::Warning => frame.render_widget(
                 Paragraph::new(text.as_ref() as &str).style(Style::default().fg(context.warning())),
                 chat_input::content_area(area),
@@ -524,7 +524,7 @@ fn draw_status_line(
             ..area
         }
     };
-    key_hint_bar::draw_right(frame, hint_area, hint, context);
+    key_hint::draw_right(frame, hint_area, hint, context);
 }
 
 fn status_and_hint_fit(app: &App, width: u16, hint: &str) -> bool {

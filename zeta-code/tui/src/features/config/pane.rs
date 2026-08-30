@@ -214,9 +214,9 @@ pub(crate) fn config_pane_spec(
                     ListSelectionGroup::new("Language servers", language_servers(config)),
                 ],
             )
+            .with_activation_label("change")
             .with_search(SearchBoxModel::new("Search configuration"))
             .with_empty_message("No matching configuration"),
-            "↑/↓ focus  ·  Tab/Shift-Tab tabs  ·  ←/→ tab/change  ·  Enter select/toggle  ·  Esc back",
         ),
         actions,
     }
@@ -426,15 +426,14 @@ pub(crate) fn provider_api_key_prompt(
     display_name: String,
 ) -> ProviderApiKeyPrompt {
     ProviderApiKeyPrompt {
-        spec: PaneSpec::new(
-            TextPromptSpec {
-                title: format!("{display_name} API key"),
-                explanation: "The key is hidden and stored in the profile secret store".into(),
-                placeholder: "Enter API key".into(),
-                masked: true,
-            },
-            "Enter save  ·  Esc cancel",
-        ),
+        spec: PaneSpec::new(TextPromptSpec {
+            title: format!("{display_name} API key"),
+            explanation: "The key is hidden and stored in the profile secret store".into(),
+            placeholder: "Enter API key".into(),
+            masked: true,
+        })
+        .with_key_hint("Enter", "save")
+        .with_key_hint("Esc", "cancel"),
         provider,
     }
 }

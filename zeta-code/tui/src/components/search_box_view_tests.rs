@@ -63,7 +63,7 @@ fn masked_search_renders_bullets_without_exposing_the_query() {
 }
 
 #[test]
-fn hover_and_pressed_use_their_distinct_border_colors() {
+fn search_box_uses_muted_rest_and_foreground_hover_border_without_a_focus_layer() {
     let search = SearchBoxState::new(SearchBoxModel::new("Search"));
     let backend = TestBackend::new(20, 3);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -73,7 +73,11 @@ fn hover_and_pressed_use_their_distinct_border_colors() {
         .unwrap();
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].fg,
-        test_context().hover_foreground()
+        test_context().foreground()
+    );
+    assert_eq!(
+        terminal.backend().buffer()[(0, 0)].bg,
+        ratatui::style::Color::Reset
     );
 
     terminal
@@ -82,5 +86,14 @@ fn hover_and_pressed_use_their_distinct_border_colors() {
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].fg,
         test_context().pressed_foreground()
+    );
+
+    let active = SearchBoxState::new(SearchBoxModel::new("Search").initially_active());
+    terminal
+        .draw(|frame| draw(frame, frame.area(), &active, false, false, test_context()))
+        .unwrap();
+    assert_eq!(
+        terminal.backend().buffer()[(0, 0)].fg,
+        test_context().muted()
     );
 }

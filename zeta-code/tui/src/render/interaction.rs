@@ -68,12 +68,6 @@ pub(crate) fn action_style(context: RenderContext<'_>) -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
-pub(crate) fn focus_style(context: RenderContext<'_>) -> Style {
-    Style::default()
-        .fg(context.focus())
-        .add_modifier(Modifier::BOLD)
-}
-
 fn interaction_colors_are_unavailable(context: RenderContext<'_>) -> bool {
     context.focus() == Color::Reset
         && context.selection_background() == Color::Reset

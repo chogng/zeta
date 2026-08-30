@@ -7,6 +7,8 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
@@ -95,13 +97,6 @@ impl<T> TabListState<T> {
 }
 
 impl<T: TabListItem> TabListState<T> {
-    pub(crate) fn active_row(&self, width: u16) -> u16 {
-        tab_positions(&self.tabs, width)
-            .get(self.active)
-            .map(|position| position.row.min(u16::MAX as usize) as u16)
-            .unwrap_or_default()
-    }
-
     pub(crate) fn index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
         if area.width == 0
             || area.height == 0
@@ -199,9 +194,15 @@ fn tab_lines<T: TabListItem>(
             pressed: pressed == Some(index),
         };
         let mut style = interaction_style(context, state);
-        if target == InteractionTarget::Rest && !state.selected && !state.hovered && !state.pressed
-        {
-            style = style.fg(context.muted());
+        if target == InteractionTarget::Rest && !state.selected && !state.pressed {
+            style = Style::default().fg(if state.hovered {
+                context.foreground()
+            } else {
+                context.muted()
+            });
+            if state.hovered {
+                style = style.add_modifier(Modifier::UNDERLINED);
+            }
         }
         spans.push(Span::styled(format!(" {} ", tab.tab_label()), style));
         *row_width = position.start.saturating_add(position.width);

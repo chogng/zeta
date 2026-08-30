@@ -123,11 +123,7 @@ impl fmt::Debug for SearchBoxState {
     }
 }
 
-use crate::render::InteractionState;
-use crate::render::InteractionTarget;
 use crate::render::RenderContext;
-use crate::render::focus_style;
-use crate::render::interaction_style;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -152,23 +148,23 @@ pub(crate) fn draw(
     let rendered_query = search
         .masked()
         .then(|| "•".repeat(search.query().chars().count()));
-    let text = if search.query().is_empty() {
-        Span::styled(search.placeholder(), Style::default().fg(context.muted()))
+    let text_style = Style::default().fg(if hovered || pressed {
+        context.foreground()
     } else {
-        Span::raw(rendered_query.as_deref().unwrap_or(search.query()))
-    };
-    let border_style = if hovered || pressed {
-        interaction_style(
-            context,
-            InteractionState {
-                target: InteractionTarget::Rest,
-                selected: false,
-                hovered,
-                pressed,
-            },
+        context.muted()
+    });
+    let text = if search.query().is_empty() {
+        Span::styled(search.placeholder(), text_style)
+    } else {
+        Span::styled(
+            rendered_query.as_deref().unwrap_or(search.query()),
+            text_style,
         )
-    } else if search.input_active() {
-        focus_style(context)
+    };
+    let border_style = if pressed {
+        Style::default().fg(context.pressed_foreground())
+    } else if hovered {
+        Style::default().fg(context.foreground())
     } else {
         Style::default().fg(context.muted())
     };

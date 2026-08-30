@@ -2,7 +2,8 @@
 
 use crate::components::detail_list;
 use crate::components::detail_list::DetailList;
-use crate::components::key_hint_bar;
+use crate::components::key_hint;
+use crate::components::key_hint::KeyHints;
 use crate::components::pane::PaneSpec;
 use crate::render::RenderContext;
 use crate::render::bottom_anchored_area;
@@ -18,7 +19,7 @@ use ratatui::widgets::Block;
 #[derive(Debug)]
 pub(crate) struct QuickViewState {
     detail: DetailList,
-    key_hints: String,
+    key_hints: KeyHints,
     scroll: u16,
 }
 
@@ -113,7 +114,7 @@ pub(crate) fn draw(
         .scroll
         .min(state.detail.desired_height().saturating_sub(body.height));
     detail_list::draw_scrolled(frame, body, &state.detail, visible_scroll, context);
-    key_hint_bar::draw(frame, hints, &state.key_hints, context);
+    key_hint::draw(frame, hints, state.key_hints.text(), context);
 }
 
 #[cfg(test)]

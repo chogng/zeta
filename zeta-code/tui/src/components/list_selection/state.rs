@@ -6,6 +6,7 @@ use ratatui::style::Color;
 
 use super::ListSelectionPreview;
 use super::matcher::selection_match_score;
+use crate::components::key_hint::KeyHints;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::search_box::SearchBoxInputOutcome;
 use crate::components::search_box::SearchBoxModel;
@@ -170,6 +171,8 @@ struct ListSelectionPresentation {
     search: Option<SearchBoxModel>,
     empty_message: String,
     activation_mode: ListSelectionActivationMode,
+    activation_label: Option<String>,
+    key_hints: KeyHints,
     show_tabs: bool,
     initial_selected: usize,
 }
@@ -187,6 +190,8 @@ impl ListSelectionModel {
                 search: None,
                 empty_message: "No matching items".into(),
                 activation_mode: ListSelectionActivationMode::Enter,
+                activation_label: None,
+                key_hints: KeyHints::new(),
                 show_tabs: true,
                 initial_selected: 0,
             },
@@ -195,6 +200,25 @@ impl ListSelectionModel {
 
     pub(crate) fn with_activation_mode(mut self, mode: ListSelectionActivationMode) -> Self {
         self.presentation.activation_mode = mode;
+        self
+    }
+
+    pub(crate) fn with_activation_label(mut self, label: impl Into<String>) -> Self {
+        self.presentation.activation_label = Some(label.into());
+        self
+    }
+
+    pub(crate) fn with_key_hint(
+        mut self,
+        keys: impl Into<String>,
+        label: impl Into<String>,
+    ) -> Self {
+        self.presentation.key_hints = self.presentation.key_hints.with(keys, label);
+        self
+    }
+
+    pub(crate) fn with_key_hint_note(mut self, note: impl Into<String>) -> Self {
+        self.presentation.key_hints = self.presentation.key_hints.with_note(note);
         self
     }
 
@@ -216,6 +240,31 @@ impl ListSelectionModel {
     pub(crate) fn with_empty_message(mut self, message: impl Into<String>) -> Self {
         self.presentation.empty_message = message.into();
         self
+    }
+
+    pub(crate) fn key_hints(&self) -> KeyHints {
+        let presentation = &self.presentation;
+        let mut hints = KeyHints::new();
+        if presentation.show_tabs {
+            hints = hints.with("←/→/Tab", "to switch");
+        } else if presentation.activation_label.is_some() {
+            hints = hints.with(
+                "↑/↓",
+                if presentation.search.is_some() {
+                    "search/select"
+                } else {
+                    "select"
+                },
+            );
+        }
+        if let Some(label) = &presentation.activation_label {
+            let keys = match presentation.activation_mode {
+                ListSelectionActivationMode::Enter => "Enter",
+                ListSelectionActivationMode::EnterOrSpace => "Enter/Space",
+            };
+            hints = hints.with(keys, label);
+        }
+        hints.extend(presentation.key_hints.clone())
     }
 
     fn into_parts(self) -> (ListSelectionPresentation, Vec<ListSelectionGroup>) {
@@ -330,10 +379,12 @@ impl ListSelectionState {
         self.focus == ListSelectionFocus::Tabs
     }
 
+    #[cfg(test)]
     pub(super) fn search_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Search
     }
 
+    #[cfg(test)]
     pub(super) fn items_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Items
     }

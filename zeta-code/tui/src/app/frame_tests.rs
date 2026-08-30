@@ -537,15 +537,15 @@ fn list_selection_pane_replaces_chat_input_and_status_line_with_its_hint_bar() {
     assert!(rendered.contains("Help"));
     assert!(rendered.contains("Commands"));
     assert!(rendered.contains("Keys"));
-    assert!(rendered.contains("↑/↓ focus"));
+    assert!(rendered.contains("Esc to close"));
     assert!(rendered.contains("Search commands and shortcuts"));
-    assert!(rendered.contains("Tab/Shift-Tab tabs"));
+    assert!(rendered.contains("←/→/Tab to switch"));
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ask permissions on"));
     let rows = rendered.lines().collect::<Vec<_>>();
     let hint_bar_row = rows
         .iter()
-        .position(|row| row.contains("↑/↓ focus"))
+        .position(|row| row.contains("Esc to close"))
         .unwrap();
     assert_eq!(hint_bar_row, rows.len() - 1);
     let layout = super::layout(&app, Rect::new(0, 0, 80, 24));
@@ -590,7 +590,6 @@ fn theme_candidate_focus_repaints_only_the_pane_focus_border() {
                 ],
             )],
         ),
-        "Esc back",
     )));
 
     let first = render_buffer(&app, 80, 24);
@@ -910,7 +909,6 @@ fn help_view() -> PaneSpec<ListSelectionModel> {
             ],
         )
         .with_search(SearchBoxModel::new("Search commands and shortcuts")),
-        "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Esc back",
     )
 }
 

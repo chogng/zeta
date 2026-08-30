@@ -8,6 +8,10 @@ use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::render::RenderContext;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -179,6 +183,54 @@ pub(crate) enum QueueSelectionAction {
     Select(QueueId),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum QueuePaneInput {
+    Restore,
+    Delete,
+    MoveUp,
+    MoveDown,
+    Send,
+}
+
+impl QueuePaneInput {
+    const ALL: [Self; 5] = [
+        Self::Restore,
+        Self::Delete,
+        Self::MoveUp,
+        Self::MoveDown,
+        Self::Send,
+    ];
+
+    fn key(self) -> (KeyCode, KeyModifiers) {
+        match self {
+            Self::Restore => (KeyCode::Char('r'), KeyModifiers::NONE),
+            Self::Delete => (KeyCode::Char('d'), KeyModifiers::NONE),
+            Self::MoveUp => (KeyCode::Up, KeyModifiers::ALT),
+            Self::MoveDown => (KeyCode::Down, KeyModifiers::ALT),
+            Self::Send => (KeyCode::Enter, KeyModifiers::CONTROL),
+        }
+    }
+
+    fn hint(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Self::Restore => Some(("r", "restore")),
+            Self::Delete => Some(("d", "delete")),
+            Self::MoveUp => Some(("Alt+↑/↓", "move")),
+            Self::MoveDown => None,
+            Self::Send => Some(("Ctrl+Enter", "send")),
+        }
+    }
+}
+
+pub(crate) fn pane_input(key: KeyEvent) -> Option<QueuePaneInput> {
+    if key.kind != KeyEventKind::Press {
+        return None;
+    }
+    QueuePaneInput::ALL
+        .into_iter()
+        .find(|input| input.key() == (key.code, key.modifiers))
+}
+
 pub(crate) struct QueuePaneSpec {
     pub(crate) model: PaneSpec<ListSelectionModel>,
     pub(crate) actions: BTreeMap<ListSelectionItemId, QueueSelectionAction>,
@@ -197,17 +249,24 @@ pub(crate) fn pane_spec(view: &QueueView<'_>) -> QueuePaneSpec {
                 .with_description(if item.sending { "sending" } else { "queued" })
         })
         .collect();
+    let model = QueuePaneInput::ALL.into_iter().fold(
+        ListSelectionModel::new(
+            "Queue",
+            vec![ListSelectionGroup::new("Current Thread", items)],
+        )
+        .with_activation_mode(ListSelectionActivationMode::Enter)
+        .with_activation_label("view")
+        .without_tab_bar()
+        .with_empty_message("Queue is empty"),
+        |model, input| {
+            let Some((keys, label)) = input.hint() else {
+                return model;
+            };
+            model.with_key_hint(keys, label)
+        },
+    );
     QueuePaneSpec {
-        model: PaneSpec::new(
-            ListSelectionModel::new(
-                "Queue",
-                vec![ListSelectionGroup::new("Current Thread", items)],
-            )
-            .with_activation_mode(ListSelectionActivationMode::Enter)
-            .without_tab_bar()
-            .with_empty_message("Queue is empty"),
-            "Enter view  ·  r restore  ·  d delete  ·  Alt+↑/↓ move  ·  Ctrl+Enter send",
-        ),
+        model: PaneSpec::new(model),
         actions,
     }
 }

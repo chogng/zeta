@@ -3,7 +3,7 @@ pub(crate) mod chat_history;
 pub(crate) mod chat_input;
 pub(crate) mod detail_list;
 pub(crate) mod key_capture;
-pub(crate) mod key_hint_bar;
+pub(crate) mod key_hint;
 pub(crate) mod list_selection;
 pub(crate) mod pane;
 pub(crate) mod quick_view;

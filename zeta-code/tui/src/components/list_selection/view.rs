@@ -4,12 +4,8 @@ use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::tab_list;
 use crate::render::Insets;
-use crate::render::InteractionState;
-use crate::render::InteractionTarget;
 use crate::render::RectExt;
 use crate::render::RenderContext;
-use crate::render::focus_style;
-use crate::render::interaction_style;
 use crate::render::line_to_borrowed;
 use ratatui::Frame;
 use ratatui::layout::Constraint;
@@ -17,6 +13,7 @@ use ratatui::layout::Direction;
 use ratatui::layout::Layout;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
@@ -78,20 +75,6 @@ pub(crate) fn draw_with_pointer(
             pressed_tab,
             context,
         );
-        if view.tabs_focused() {
-            draw_focus_marker(
-                frame,
-                Rect::new(
-                    areas[1].x,
-                    areas[1]
-                        .y
-                        .saturating_add(view.tab_list().active_row(tab_area.width)),
-                    ITEM_STATE_COLUMN_WIDTH.min(areas[1].width),
-                    1,
-                ),
-                context,
-            );
-        }
     }
 
     if let Some(search) = view.search() {
@@ -103,18 +86,6 @@ pub(crate) fn draw_with_pointer(
             pressed_search,
             context,
         );
-        if view.search_focused() {
-            draw_focus_marker(
-                frame,
-                Rect::new(
-                    areas[2].x,
-                    areas[2].y.saturating_add(areas[2].height / 2),
-                    ITEM_STATE_COLUMN_WIDTH.min(areas[2].width),
-                    1,
-                ),
-                context,
-            );
-        }
     }
 
     let visible_items = view.visible_items();
@@ -147,7 +118,7 @@ pub(crate) fn draw_with_pointer(
                 frame,
                 row_area,
                 item,
-                view.items_focused() && view.selected_visible_index() == Some(index),
+                view.selected_visible_index() == Some(index),
                 hovered_item == Some(index),
                 pressed_item == Some(index),
                 column_layout,
@@ -286,13 +257,6 @@ fn content_after_state_column(area: Rect) -> Rect {
     }
 }
 
-fn draw_focus_marker(frame: &mut Frame<'_>, area: Rect, context: RenderContext<'_>) {
-    frame.render_widget(
-        Paragraph::new(Span::styled("❯ ", focus_style(context))),
-        area,
-    );
-}
-
 fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) -> Rc<[Rect]> {
     let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
     let preview_height = view
@@ -362,15 +326,7 @@ fn draw_item(
     column_layout: ItemColumnLayout,
     context: RenderContext<'_>,
 ) {
-    let row_style = interaction_style(
-        context,
-        InteractionState {
-            target: InteractionTarget::Rest,
-            selected,
-            hovered,
-            pressed,
-        },
-    );
+    let row_style = item_style(context, selected, hovered, pressed);
     frame.render_widget(Block::default().style(row_style), area);
     let label_style = if selected && !pressed {
         item.selection_foreground()
@@ -379,23 +335,30 @@ fn draw_item(
     } else if selected || hovered || pressed {
         row_style
     } else {
-        Style::default()
+        row_style
     };
     let marker = if selected { "❯ " } else { "  " };
+    let marker_style = if selected {
+        Style::default()
+            .fg(context.foreground())
+            .add_modifier(Modifier::BOLD)
+    } else {
+        label_style
+    };
     let detail_style = if !selected && !hovered && !pressed {
         Style::default().fg(context.muted())
     } else {
         row_style
     };
     let Some(columns) = item.columns() else {
-        let spans = item_spans(item, marker, label_style, detail_style);
+        let spans = item_spans(item, marker, marker_style, label_style, detail_style);
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
         return;
     };
 
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(marker, label_style),
+            Span::styled(marker, marker_style),
             Span::styled(columns.leading.as_str(), label_style),
         ])),
         Rect::new(
@@ -430,21 +393,36 @@ fn draw_item(
 fn item_spans<'a>(
     item: &'a ListSelectionItem,
     marker: &'static str,
+    marker_style: Style,
     label_style: Style,
     detail_style: Style,
 ) -> Vec<Span<'a>> {
     let Some(description) = item.description() else {
         return vec![
-            Span::styled(marker, label_style),
+            Span::styled(marker, marker_style),
             Span::styled(item.label(), label_style),
         ];
     };
     vec![
-        Span::styled(marker, label_style),
+        Span::styled(marker, marker_style),
         Span::styled(item.label(), label_style),
         Span::styled("  ·  ", detail_style),
         Span::styled(description, detail_style),
     ]
+}
+
+fn item_style(context: RenderContext<'_>, selected: bool, hovered: bool, pressed: bool) -> Style {
+    let mut style = Style::default().fg(if pressed {
+        context.pressed_foreground()
+    } else if selected || hovered {
+        context.foreground()
+    } else {
+        context.muted()
+    });
+    if selected || pressed {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    style
 }
 
 fn dashed_rule(width: u16, title: Option<&str>, color: Color) -> Line<'static> {

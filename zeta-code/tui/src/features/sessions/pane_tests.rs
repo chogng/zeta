@@ -2,6 +2,7 @@ use super::SessionSelectionAction;
 use super::session_pane_spec;
 use super::session_pane_spec_at;
 use crate::components::list_selection::ListSelectionInputOutcome;
+use crate::components::list_selection::ListSelectionItemId;
 use crate::components::list_selection::ListSelectionState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -34,6 +35,29 @@ fn resume_pane_marks_the_current_session_and_maps_enter_to_its_id() {
         Some(&SessionSelectionAction::Resume {
             session_id: "session-1".into(),
         })
+    );
+    assert!(
+        view.actions
+            .contains_key(&ListSelectionItemId::new("session:session-1"))
+    );
+}
+
+#[test]
+fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
+    let session = |id: &str| Session {
+        session_id: SessionId::new(id).unwrap(),
+        title: id.into(),
+        status: SessionStatus::Active,
+        manager: Default::default(),
+        threads: Vec::new(),
+    };
+
+    let first = session_pane_spec(&[session("session-1"), session("session-2")], "");
+    let reordered = session_pane_spec(&[session("session-2"), session("session-1")], "");
+
+    assert_eq!(
+        first.actions, reordered.actions,
+        "session actions must be keyed by the real session identity"
     );
 }
 

@@ -96,9 +96,9 @@ pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
                     ListSelectionGroup::new("Manage", manage),
                 ],
             )
+            .with_activation_label("toggle")
             .with_search(SearchBoxModel::new("Search available skills"))
             .with_empty_message("No matching skills"),
-            "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter select  ·  Esc back",
         ),
         actions,
         diagnostics: catalog.diagnostics.clone(),

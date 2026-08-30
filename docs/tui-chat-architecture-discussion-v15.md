@@ -1708,8 +1708,7 @@ components/
 ├─ pane/
 ├─ quick_view.rs
 ├─ quick_view/
-├─ key_hint_bar.rs
-├─ key_hint_bar/
+├─ key_hint.rs
 ├─ list_selection.rs
 ├─ list_selection/
 └─ ...
@@ -3057,8 +3056,7 @@ components/
 │
 ├─ quick_view.rs
 ├─ quick_view/
-├─ key_hint_bar.rs
-├─ key_hint_bar/
+├─ key_hint.rs
 ├─ list_selection.rs
 ├─ list_selection/
 ├─ detail_list.rs

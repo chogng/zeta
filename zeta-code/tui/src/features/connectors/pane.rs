@@ -73,9 +73,9 @@ pub(crate) fn connector_pane_spec(catalog: &ConnectorListResult) -> ConnectorPan
                 ],
             )
             .with_activation_mode(ListSelectionActivationMode::Enter)
+            .with_activation_label("connect/disconnect")
             .with_search(SearchBoxModel::new("Search connectors"))
             .with_empty_message("No matching Connectors"),
-            "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter connect/disconnect  ·  Esc back",
         ),
         actions,
     }

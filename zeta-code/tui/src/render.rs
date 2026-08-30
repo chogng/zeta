@@ -12,7 +12,6 @@ pub(crate) use highlight_streaming::StreamingCodeHighlighter;
 pub(crate) use interaction::InteractionState;
 pub(crate) use interaction::InteractionTarget;
 pub(crate) use interaction::action_style;
-pub(crate) use interaction::focus_style;
 pub(crate) use interaction::interaction_style;
 pub(crate) use layout::Insets;
 pub(crate) use layout::RectExt;

@@ -26,30 +26,28 @@ pub(crate) enum RemainingContextWindow {
 }
 
 pub(crate) fn status_pane_spec(data: StatusViewData<'_>) -> PaneSpec<DetailList> {
-    PaneSpec::new(
-        DetailList::new(
-            "Status",
-            vec![
-                detail("Model", data.model),
-                detail(
-                    "Full context window",
-                    format_optional_tokens(data.full_context_window),
-                ),
-                detail(
-                    "Available context window",
-                    format_optional_tokens(data.available_context_window),
-                ),
-                detail(
-                    "Remaining context window",
-                    format_remaining_context(data.remaining_context_window),
-                ),
-                detail("Session ID", data.session_id),
-                detail("Thread ID", data.thread_id),
-                detail("Thread version", data.thread_sequence.to_string()),
-            ],
-        ),
-        "Esc back",
-    )
+    PaneSpec::new(DetailList::new(
+        "Status",
+        vec![
+            detail("Model", data.model),
+            detail(
+                "Full context window",
+                format_optional_tokens(data.full_context_window),
+            ),
+            detail(
+                "Available context window",
+                format_optional_tokens(data.available_context_window),
+            ),
+            detail(
+                "Remaining context window",
+                format_remaining_context(data.remaining_context_window),
+            ),
+            detail("Session ID", data.session_id),
+            detail("Thread ID", data.thread_id),
+            detail("Thread version", data.thread_sequence.to_string()),
+        ],
+    ))
+    .with_key_hint("Esc", "to close")
 }
 
 fn detail(label: &str, value: impl Into<String>) -> DetailListRow {

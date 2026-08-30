@@ -1,4 +1,5 @@
 use crate::components::key_capture::KeyCapture;
+use crate::components::key_hint::KeyHints;
 use crate::components::list_selection::ListSelectionAdjustment;
 use crate::components::list_selection::ListSelectionInputOutcome;
 use crate::components::list_selection::ListSelectionItemId;
@@ -21,18 +22,32 @@ impl PaneId {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PaneSpec<T> {
     body: T,
-    key_hints: String,
+    key_hints: KeyHints,
 }
 
 impl<T> PaneSpec<T> {
-    pub(crate) fn new(body: T, key_hints: impl Into<String>) -> Self {
+    pub(crate) fn new(body: T) -> Self {
         Self {
             body,
-            key_hints: key_hints.into(),
+            key_hints: KeyHints::new(),
         }
     }
 
-    pub(crate) fn into_parts(self) -> (T, String) {
+    pub(crate) fn with_key_hint(
+        mut self,
+        keys: impl Into<String>,
+        label: impl Into<String>,
+    ) -> Self {
+        self.key_hints = self.key_hints.with(keys, label);
+        self
+    }
+
+    pub(crate) fn with_key_hint_note(mut self, note: impl Into<String>) -> Self {
+        self.key_hints = self.key_hints.with_note(note);
+        self
+    }
+
+    pub(crate) fn into_parts(self) -> (T, KeyHints) {
         (self.body, self.key_hints)
     }
 
@@ -46,7 +61,7 @@ impl<T> PaneSpec<T> {
 pub(crate) struct Pane {
     id: PaneId,
     body: PaneBody,
-    key_hints: String,
+    key_hints: KeyHints,
 }
 
 #[derive(Debug)]
@@ -94,7 +109,7 @@ impl Default for PaneStack {
 }
 
 impl Pane {
-    fn new(id: PaneId, body: PaneBody, key_hints: String) -> Self {
+    fn new(id: PaneId, body: PaneBody, key_hints: KeyHints) -> Self {
         Self {
             id,
             body,
@@ -144,7 +159,7 @@ impl Pane {
         }
     }
 
-    fn replace_key_capture(&mut self, body: KeyCapture, key_hints: String) -> bool {
+    fn replace_key_capture(&mut self, body: KeyCapture, key_hints: KeyHints) -> bool {
         let PaneBody::KeyCapture(current) = &mut self.body else {
             return false;
         };
@@ -153,7 +168,7 @@ impl Pane {
         true
     }
 
-    fn replace_list_selection(&mut self, body: ListSelectionModel, key_hints: String) -> bool {
+    fn replace_list_selection(&mut self, body: ListSelectionModel, key_hints: KeyHints) -> bool {
         let PaneBody::ListSelection(current) = &mut self.body else {
             return false;
         };
@@ -213,7 +228,7 @@ impl PaneStack {
     }
 
     pub(crate) fn top_key_hints(&self) -> Option<&str> {
-        self.top().map(|pane| pane.key_hints.as_str())
+        self.top().map(|pane| pane.key_hints.text())
     }
 
     pub(crate) fn push_key_capture(&mut self, spec: PaneSpec<KeyCapture>) -> PaneId {
@@ -222,7 +237,11 @@ impl PaneStack {
     }
 
     pub(crate) fn push_list_selection(&mut self, spec: PaneSpec<ListSelectionModel>) -> PaneId {
-        let (body, key_hints) = spec.into_parts();
+        let (body, additional_hints) = spec.into_parts();
+        let key_hints = body
+            .key_hints()
+            .extend(additional_hints)
+            .with("Esc", "to close");
         self.push(
             PaneBody::ListSelection(ListSelectionState::new(body)),
             key_hints,
@@ -245,7 +264,11 @@ impl PaneStack {
         &mut self,
         spec: PaneSpec<ListSelectionModel>,
     ) -> Option<PaneId> {
-        let (body, key_hints) = spec.into_parts();
+        let (body, additional_hints) = spec.into_parts();
+        let key_hints = body
+            .key_hints()
+            .extend(additional_hints)
+            .with("Esc", "to close");
         let pane = self.top_mut()?;
         pane.replace_list_selection(body, key_hints)
             .then_some(pane.id())
@@ -295,7 +318,7 @@ impl PaneStack {
             .map(|item_id| (pane_id, item_id))
     }
 
-    fn push(&mut self, body: PaneBody, key_hints: String) -> PaneId {
+    fn push(&mut self, body: PaneBody, key_hints: KeyHints) -> PaneId {
         let id = PaneId::new(self.next_id);
         self.next_id = self.next_id.saturating_add(1);
         self.entries.push(Pane::new(id, body, key_hints));

@@ -47,6 +47,8 @@ use crate::features::models::ModelPaneSpec;
 use crate::features::models::ModelSelectionAction;
 use crate::features::query::Query;
 use crate::features::query::QueryOutcome;
+use crate::features::queue;
+use crate::features::queue::QueuePaneInput;
 use crate::features::queue::QueuePaneSpec;
 use crate::features::queue::QueueSelectionAction;
 use crate::features::queue::QueueView;
@@ -536,13 +538,13 @@ impl App {
                         .find(|item| item.id == queue_id)?
                         .text
                         .to_owned();
-                    self.quick_view = Some(QuickViewState::new(PaneSpec::new(
-                        DetailList::new(
+                    self.quick_view = Some(QuickViewState::new(
+                        PaneSpec::new(DetailList::new(
                             "Queued message",
                             vec![DetailListRow::new("Message", text)],
-                        ),
-                        "Esc back",
-                    )));
+                        ))
+                        .with_key_hint("Esc", "to close"),
+                    ));
                     None
                 }
             };
@@ -772,13 +774,13 @@ impl App {
             return false;
         };
         self.thread_presentations.active_mut().selected_cell = Some(cell_id);
-        self.quick_view = Some(QuickViewState::new(PaneSpec::new(
-            DetailList::new(
+        self.quick_view = Some(QuickViewState::new(
+            PaneSpec::new(DetailList::new(
                 "Transcript cell",
                 vec![DetailListRow::new("Content", details)],
-            ),
-            "esc close",
-        )));
+            ))
+            .with_key_hint("Esc", "to close"),
+        ));
         true
     }
 
@@ -974,16 +976,14 @@ impl App {
     }
 
     fn handle_queue_pane_key(&mut self, key: KeyEvent) -> Option<Option<AppCommand>> {
-        if key.kind != KeyEventKind::Press {
-            return None;
-        }
+        let input = queue::pane_input(key)?;
         let PaneActions::Queue(actions) = self.top_pane_actions()? else {
             return None;
         };
         let item_id = self.list_selection()?.selected_item()?.id()?.clone();
         let QueueSelectionAction::Select(queue_id) = *actions.get(&item_id)?;
-        match (key.code, key.modifiers) {
-            (KeyCode::Char('r'), KeyModifiers::NONE) => {
+        match input {
+            QueuePaneInput::Restore => {
                 let state = self.thread_presentations.active_mut();
                 match state.queue.restore(queue_id, &mut state.input) {
                     Ok(()) => self.close_top_pane(),
@@ -993,7 +993,7 @@ impl App {
                 }
                 Some(None)
             }
-            (KeyCode::Char('d'), KeyModifiers::NONE) => {
+            QueuePaneInput::Delete => {
                 self.thread_presentations
                     .active_mut()
                     .queue
@@ -1001,7 +1001,7 @@ impl App {
                 self.replace_queue_pane();
                 Some(None)
             }
-            (KeyCode::Up, KeyModifiers::ALT) => {
+            QueuePaneInput::MoveUp => {
                 self.thread_presentations
                     .active_mut()
                     .queue
@@ -1009,7 +1009,7 @@ impl App {
                 self.replace_queue_pane();
                 Some(None)
             }
-            (KeyCode::Down, KeyModifiers::ALT) => {
+            QueuePaneInput::MoveDown => {
                 self.thread_presentations
                     .active_mut()
                     .queue
@@ -1017,7 +1017,7 @@ impl App {
                 self.replace_queue_pane();
                 Some(None)
             }
-            (KeyCode::Enter, KeyModifiers::CONTROL) => {
+            QueuePaneInput::Send => {
                 if matches!(self.status, Status::Working) {
                     self.thread.update(ThreadPresentationEvent::FailureReported(
                         "finish or interrupt the active Turn before sending this queued message"
@@ -1041,7 +1041,6 @@ impl App {
                     submission,
                 }))
             }
-            _ => None,
         }
     }
 

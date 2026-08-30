@@ -113,10 +113,10 @@ fn pane_spec(result: SessionDirListResult) -> DirPaneSpec {
                 vec![ListSelectionGroup::new("Directories", items)],
             )
             .with_activation_mode(ListSelectionActivationMode::Enter)
+            .with_activation_label("remove")
             .without_tab_bar()
             .with_search(SearchBoxModel::new("Search directories"))
             .with_empty_message("No directories"),
-            "↑/↓ search/select  ·  Enter remove  ·  Esc back",
         ),
         actions,
     }

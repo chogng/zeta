@@ -1,3 +1,4 @@
+use super::KeyHints;
 use super::draw;
 use super::draw_right;
 use crate::render::test_context;
@@ -5,7 +6,20 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 #[test]
-fn key_hint_bar_uses_two_character_horizontal_insets() {
+fn key_hints_format_actions_and_notes_in_order() {
+    let hints = KeyHints::new()
+        .with("Enter", "apply")
+        .with_note("current: dark")
+        .with("Esc", "to close");
+
+    assert_eq!(
+        hints.text(),
+        "Enter apply  ·  current: dark  ·  Esc to close"
+    );
+}
+
+#[test]
+fn key_hint_uses_two_character_horizontal_insets() {
     let backend = TestBackend::new(30, 1);
     let mut terminal = Terminal::new(backend).unwrap();
 

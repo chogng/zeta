@@ -63,11 +63,11 @@ pub(crate) fn rewind_pane_spec(thread: &Thread) -> RewindPaneSpec {
                 vec![ListSelectionGroup::new("Checkpoints", items)],
             )
             .with_activation_mode(ListSelectionActivationMode::Enter)
+            .with_activation_label("rewind")
             .without_tab_bar()
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search message checkpoints"))
             .with_empty_message("No message checkpoints available"),
-            "↑/↓ search/select  ·  Enter rewind  ·  Esc back",
         ),
         actions,
     }

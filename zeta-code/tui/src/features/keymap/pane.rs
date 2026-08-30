@@ -78,7 +78,6 @@ pub(crate) fn keymap_pane_spec(
             .collect(),
         "No keymap diagnostics",
     );
-    let key_hints = "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter edit  ·  Esc back  ·  config.toml [tui.keybindings]";
     KeymapPaneSpec {
         model: PaneSpec::new(
             ListSelectionModel::new(
@@ -89,9 +88,9 @@ pub(crate) fn keymap_pane_spec(
                     ListSelectionGroup::new("Diagnostics", diagnostic_items),
                 ],
             )
+            .with_activation_label("edit")
             .with_search(SearchBoxModel::new("Search shortcuts"))
             .with_empty_message("No matching shortcuts"),
-            key_hints,
         ),
         actions: item_actions,
     }
@@ -162,8 +161,9 @@ pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) ->
                 action.label,
                 vec![ListSelectionGroup::new("Actions", items)],
             )
+            .with_activation_label("choose")
+            .with_key_hint_note(summary)
             .without_tab_bar(),
-            format!("{summary}  ·  Enter choose  ·  Esc back"),
         ),
         actions,
     }
@@ -261,14 +261,11 @@ impl KeymapCaptureState {
         if let Some(error) = &self.error {
             lines.push(format!("Error: {error}"));
         }
-        PaneSpec::new(
-            KeyCapture::new("Record shortcut", lines),
-            format!(
-                "{}  ·  {}",
-                self.action.label,
-                binding_summary(&self.action)
-            ),
-        )
+        PaneSpec::new(KeyCapture::new("Record shortcut", lines)).with_key_hint_note(format!(
+            "{}  ·  {}",
+            self.action.label,
+            binding_summary(&self.action)
+        ))
     }
 }
 

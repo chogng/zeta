@@ -82,7 +82,7 @@ fn catalog() -> ThemePickerCatalog {
 #[test]
 fn theme_pane_is_numbered_fixed_and_not_searchable() {
     let view = theme_pane_spec(&catalog());
-    let (model, key_hints) = view.model.clone().into_parts();
+    let model = view.model.clone().into_body();
     let mut state = ListSelectionState::new(model);
 
     assert_eq!(state.title(), "Theme");
@@ -123,6 +123,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
     assert_eq!(caption, "Syntax palette: Palette 1");
     let mut panes = PaneStack::default();
     panes.push_list_selection(view.model);
+    let key_hints = panes.top_key_hints().unwrap().to_owned();
     let pane_view = panes.top_view().unwrap();
     let pane_height = crate::components::pane::view_desired_height(pane_view, 80);
     let height = pane_height.saturating_add(1);
@@ -141,7 +142,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
                 None,
                 test_context(),
             );
-            crate::components::key_hint_bar::draw(
+            crate::components::key_hint::draw(
                 frame,
                 ratatui::layout::Rect {
                     y: pane_height,

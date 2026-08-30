@@ -21,8 +21,8 @@ fn selection_spec(id: ListSelectionItemId) -> PaneSpec<ListSelectionModel> {
                 vec![ListSelectionItem::new("First").with_id(id)],
             )],
         )
+        .with_activation_label("choose")
         .without_tab_bar(),
-        "Enter choose  ·  Esc back",
     )
 }
 
@@ -64,15 +64,16 @@ fn list_selection_input_is_normalized_into_pane_outcomes() {
 #[test]
 fn text_prompt_submission_uses_the_same_pane_outcome_boundary() {
     let mut stack = PaneStack::default();
-    let pane_id = stack.push_text_prompt(PaneSpec::new(
-        TextPromptSpec {
+    let pane_id = stack.push_text_prompt(
+        PaneSpec::new(TextPromptSpec {
             title: "API key".into(),
             explanation: "Enter a value".into(),
             placeholder: "value".into(),
             masked: false,
-        },
-        "Enter save  ·  Esc back",
-    ));
+        })
+        .with_key_hint("Enter", "save")
+        .with_key_hint("Esc", "to close"),
+    );
     stack.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
 
     assert_eq!(
@@ -84,10 +85,13 @@ fn text_prompt_submission_uses_the_same_pane_outcome_boundary() {
 #[test]
 fn key_capture_emits_a_pane_outcome_before_the_feature_interprets_it() {
     let mut stack = PaneStack::default();
-    let pane_id = stack.push_key_capture(PaneSpec::new(
-        KeyCapture::new("Record shortcut", vec!["Press a key".into()]),
-        "Esc cancel",
-    ));
+    let pane_id = stack.push_key_capture(
+        PaneSpec::new(KeyCapture::new(
+            "Record shortcut",
+            vec!["Press a key".into()],
+        ))
+        .with_key_hint("Esc", "cancel"),
+    );
     let key = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL);
 
     assert_eq!(

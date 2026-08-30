@@ -68,11 +68,11 @@ pub(crate) fn model_pane_spec(
         model: PaneSpec::new(
             ListSelectionModel::new("Model", vec![ListSelectionGroup::new("Models", items)])
                 .with_activation_mode(ListSelectionActivationMode::Enter)
+                .with_activation_label("apply")
                 .without_tab_bar()
                 .with_initial_selected(selected)
                 .with_search(SearchBoxModel::new("Search models"))
                 .with_empty_message("No matching models"),
-            "↑/↓ search/select  ·  Enter apply  ·  Esc back",
         ),
         actions,
     }

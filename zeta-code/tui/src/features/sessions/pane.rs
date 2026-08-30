@@ -43,7 +43,7 @@ fn session_pane_spec_at(
             if session.session_id.as_str() == active_session_id {
                 selected = index;
             }
-            session_item(index, session, active_session_id, now_unix_ms, &mut actions)
+            session_item(session, active_session_id, now_unix_ms, &mut actions)
         })
         .collect::<Vec<_>>();
     let active = filtered_items(&all, sessions, SessionStatus::Active);
@@ -62,23 +62,22 @@ fn session_pane_spec_at(
                 ],
             )
             .with_activation_mode(ListSelectionActivationMode::Enter)
+            .with_activation_label("resume")
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search saved sessions"))
             .with_empty_message("No matching sessions"),
-            "↑/↓ focus  ·  ←/→ or Tab/Shift-Tab tabs  ·  Enter resume  ·  Esc back",
         ),
         actions,
     }
 }
 
 fn session_item(
-    index: usize,
     session: &Session,
     active_session_id: &str,
     now_unix_ms: u64,
     actions: &mut BTreeMap<ListSelectionItemId, SessionSelectionAction>,
 ) -> ListSelectionItem {
-    let item_id = ListSelectionItemId::new(format!("session-{index}"));
+    let item_id = ListSelectionItemId::new(format!("session:{}", session.session_id));
     actions.insert(
         item_id.clone(),
         SessionSelectionAction::Resume {

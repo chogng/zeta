@@ -239,7 +239,7 @@ fn provider_api_key_input_is_masked_keeps_its_explanation_and_submits_with_enter
     let outcome = state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(state.input().masked());
-    assert_eq!(key_hints, "Enter save  ·  Esc cancel");
+    assert_eq!(key_hints.text(), "Enter save  ·  Esc cancel");
     assert_eq!(
         state.explanation(),
         "The key is hidden and stored in the profile secret store"

@@ -17,7 +17,7 @@ fn detail_scroll_is_bounded_and_supports_first_and_last_shortcuts() {
         "Output",
         vec![DetailListRow::new("stdout", "one\ntwo\nthree")],
     );
-    let mut quick_view = QuickViewState::new(PaneSpec::new(detail, "Esc close"));
+    let mut quick_view = QuickViewState::new(PaneSpec::new(detail).with_key_hint("Esc", "close"));
 
     quick_view.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::CONTROL));
     assert_eq!(quick_view.scroll, quick_view.max_scroll());
@@ -30,7 +30,7 @@ fn detail_scroll_is_bounded_and_supports_first_and_last_shortcuts() {
 #[test]
 fn overlay_fills_its_surface_with_the_quick_view_background() {
     let detail = DetailList::new("Output", vec![DetailListRow::new("stdout", "done")]);
-    let quick_view = QuickViewState::new(PaneSpec::new(detail, "Esc close"));
+    let quick_view = QuickViewState::new(PaneSpec::new(detail).with_key_hint("Esc", "close"));
     let mut terminal = Terminal::new(TestBackend::new(20, 8)).unwrap();
 
     terminal

@@ -72,10 +72,10 @@ fn list_selection(
         model: PaneSpec::new(
             ListSelectionModel::new(title, vec![ListSelectionGroup::new("Themes", items)])
                 .with_activation_mode(ListSelectionActivationMode::Enter)
+                .with_activation_label("apply")
                 .without_tab_bar()
                 .with_initial_selected(selected)
                 .with_empty_message("No color themes available"),
-            "↑/↓ select  ·  Enter apply  ·  Esc back",
         ),
         actions,
     }

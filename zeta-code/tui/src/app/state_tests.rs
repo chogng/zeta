@@ -1238,7 +1238,6 @@ fn escape_from_a_view_does_not_count_toward_the_root_rewind_sequence() {
                 vec![ListSelectionItem::new("Item")],
             )],
         ),
-        "Esc back",
     )));
 
     assert_eq!(
