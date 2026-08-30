@@ -38,6 +38,7 @@ def build_package_directory(
     node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
     windows_helpers: Optional[WindowsSandboxHelpers] = None,
+    protocol_metadata: Optional[Dict[str, object]] = None,
 ) -> None:
     output = output.expanduser().resolve()
     if output.exists():
@@ -196,7 +197,11 @@ def build_package_directory(
             components["bubblewrap"] = bubblewrap_metadata
         if windows_sandbox_metadata is not None:
             components["windowsSandbox"] = windows_sandbox_metadata
-        protocol = load_protocol_metadata(repository_root)
+        protocol = (
+            protocol_metadata
+            if protocol_metadata is not None
+            else load_protocol_metadata(repository_root)
+        )
         build_identity = {
             "appServerDaemonSha256": components["appServerDaemon"]["binarySha256"],
             "codeModeHostSha256": components["codeModeHost"]["binarySha256"],
@@ -541,9 +546,18 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def load_protocol_metadata(repository_root: Path) -> Dict[str, object]:
+def load_protocol_metadata(
+    repository_root: Path,
+    generated_typescript: Optional[Path] = None,
+) -> Dict[str, object]:
     generated = (
-        repository_root / "zeta-rs" / "app-server-protocol" / "schema" / "types.ts"
+        generated_typescript
+        or repository_root
+        / "zeta-rs"
+        / "app-server-protocol"
+        / "schema"
+        / "typescript"
+        / "types.ts"
     ).read_text(encoding="utf-8")
     major = re.search(
         r"^export const APP_SERVER_PROTOCOL_MAJOR = (\d+) as const;$",

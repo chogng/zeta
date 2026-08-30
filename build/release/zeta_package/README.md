@@ -37,7 +37,7 @@ notarization, installer formats, or update delivery.
         └── vscode/LICENSE.txt        # built-in Editor Extension resources
 ```
 
-The stable entry point is `build/release/build_zeta_package.py`. If `--server-bin` or
+The stable entry point is `build/release/build_zeta_package.py`. Before resolving product binaries, it runs the App Server protocol generator into a temporary directory and binds the current protocol major, revision, and schema hash into `zeta-package.json`; it does not rewrite checked-in fixtures. `verify:protocol` remains an explicit fixture check, while `generate:protocol` refreshes repository fixtures when they are intentionally being reviewed. If `--server-bin` or
 `--app-server-daemon-bin` is omitted, `cargo.py` builds the corresponding product-neutral
 `zeta-server-host` or profile-scoped `zeta-app-server-daemon` for the selected target. `ripgrep.py`
 maps the package target through `third_party/ripgrep/runtime-lock.json`,

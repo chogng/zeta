@@ -8,12 +8,15 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
+from zeta_package.cli import generate_protocol_metadata
 from zeta_package.bubblewrap import load_vendored_source, resolve_bubblewrap
 from zeta_package.layout import (
     build_package_directory,
     copy_builtin_extensions,
     copy_builtin_skills,
+    load_protocol_metadata,
 )
 from zeta_package.node import NodeResolution, artifact_for_target, load_node_lock, resolve_node
 from zeta_package.ripgrep import load_lock, resolve_ripgrep
@@ -46,6 +49,44 @@ class PackageTests(unittest.TestCase):
         "xml",
         "yaml",
     ]
+
+    def test_product_protocol_metadata_comes_from_generator_output(self) -> None:
+        generated_fixture = (
+            "export const APP_SERVER_PROTOCOL_MAJOR = 7 as const;\n"
+            "export const APP_SERVER_PROTOCOL_REVISION = 11 as const;\n"
+            'export const APP_SERVER_SCHEMA_HASH = "sha256:'
+            + "a" * 64
+            + '" as const;\n'
+        )
+        commands = []
+
+        def run(command, *, cwd, check):
+            commands.append((command, cwd, check))
+            output_directory = Path(command[command.index("--out") + 1])
+            output_directory.mkdir(parents=True, exist_ok=True)
+            (output_directory / "types.ts").write_text(
+                generated_fixture,
+                encoding="utf-8",
+            )
+
+        with patch("zeta_package.cli.subprocess.run", side_effect=run):
+            metadata = generate_protocol_metadata(REPOSITORY_ROOT, "cargo")
+
+        self.assertEqual(
+            {
+                "major": 7,
+                "revision": 11,
+                "schemaHash": "sha256:" + "a" * 64,
+            },
+            metadata,
+        )
+        self.assertEqual(1, len(commands))
+        command, cwd, check = commands[0]
+        self.assertEqual(REPOSITORY_ROOT, cwd)
+        self.assertTrue(check)
+        self.assertEqual("zeta-app-server-protocol", command[command.index("-p") + 1])
+        self.assertEqual("typescript", command[command.index("--") + 1])
+        self.assertNotEqual(metadata, load_protocol_metadata(REPOSITORY_ROOT))
 
     def test_production_lock_covers_every_package_target(self) -> None:
         lock = load_lock(PRODUCTION_LOCK)

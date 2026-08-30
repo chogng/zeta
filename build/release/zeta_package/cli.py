@@ -1,8 +1,10 @@
 """Command-line interface for building a canonical Zeta package directory."""
 
 import argparse
+import subprocess
+import tempfile
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 from .bubblewrap import resolve_bubblewrap
 from .cargo import (
@@ -10,7 +12,7 @@ from .cargo import (
     resolve_code_mode_host_binary,
     resolve_server_binary,
 )
-from .layout import build_package_directory
+from .layout import build_package_directory, load_protocol_metadata
 from .node import resolve_node
 from .ripgrep import resolve_ripgrep
 from .targets import TARGETS, default_target
@@ -24,6 +26,34 @@ DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 DEFAULT_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "ripgrep"
 DEFAULT_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
 DEFAULT_NODE_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "node"
+
+
+def generate_protocol_metadata(repository_root: Path, cargo: str) -> Dict[str, object]:
+    with tempfile.TemporaryDirectory(prefix=".zeta-protocol-") as temporary:
+        output_directory = Path(temporary)
+        subprocess.run(
+            [
+                cargo,
+                "run",
+                "--quiet",
+                "--manifest-path",
+                str(repository_root / "Cargo.toml"),
+                "-p",
+                "zeta-app-server-protocol",
+                "--bin",
+                "generate_protocol",
+                "--",
+                "typescript",
+                "--out",
+                str(output_directory),
+            ],
+            cwd=repository_root,
+            check=True,
+        )
+        return load_protocol_metadata(
+            repository_root,
+            output_directory / "types.ts",
+        )
 
 
 def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -142,6 +172,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     args = parse_arguments(arguments)
     target = args.target or default_target()
     spec = TARGETS[target]
+    protocol_metadata = generate_protocol_metadata(REPOSITORY_ROOT, args.cargo)
     server_binary = resolve_server_binary(
         REPOSITORY_ROOT,
         spec,
@@ -210,6 +241,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         node,
         bubblewrap,
         windows_helpers,
+        protocol_metadata=protocol_metadata,
     )
     print("Built Zeta {} package at {}".format(target, output))
     return 0
