@@ -10894,6 +10894,7 @@ dependencies = [
  "zeta-slash-commands",
  "zeta-state",
  "zeta-syntax",
+ "zeta-thread-store",
  "zeta-thread-transcript",
  "zeta-tool-executor",
  "zeta-tools",
@@ -11474,7 +11475,6 @@ dependencies = [
 name = "zeta-files"
 version = "0.1.0"
 dependencies = [
- "zeta-commands",
  "zeta-file-search",
  "zeta-icons",
  "zeta-ui-components",
@@ -11839,6 +11839,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-multi-agent-evals"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zeta-app-server",
+ "zeta-async-utils",
+ "zeta-core",
+ "zeta-protocol",
+ "zeta-work-coordination",
+]
+
+[[package]]
 name = "zeta-otel"
 version = "0.1.0"
 dependencies = [
@@ -11994,6 +12009,7 @@ dependencies = [
  "zeta-app-server-protocol",
  "zeta-diff",
  "zeta-editor",
+ "zeta-icons",
  "zeta-ui-components",
  "zeta-ui-theme",
  "zui",
@@ -12036,7 +12052,6 @@ dependencies = [
  "serde_json",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
- "zeta-commands",
  "zeta-editor",
  "zeta-icons",
  "zeta-input-classifier",
@@ -12693,14 +12708,6 @@ dependencies = [
  "winit",
  "x11rb",
  "zbus 5.19.0",
-]
-
-[[package]]
-name = "zui-demo"
-version = "0.1.0"
-dependencies = [
- "zeta-ui-components",
- "zui",
 ]
 
 [[package]]

@@ -74,6 +74,7 @@ members = [
     "zeta-rs/model-provider-config",
     "zeta-rs/models-manager",
     "zeta-rs/model-tokenizer",
+    "zeta-rs/multi-agent-evals",
     "zeta-rs/mcp",
     "zeta-rs/mcp-server",
     "zeta-rs/action-policy",
@@ -144,7 +145,6 @@ members = [
     "app/ui-components",
     "app/workbench",
     "app/zui",
-    "app/zui-demo",
 ]
 default-members = ["app"]
 resolver = "3"

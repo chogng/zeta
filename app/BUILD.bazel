@@ -39,7 +39,6 @@ filegroup(
         "//app/ui-components:ui-components_sources",
         "//app/workbench:workbench_sources",
         "//app/zui:zui_sources",
-        "//app/zui-demo:zui_demo_sources",
     ],
 )
 
