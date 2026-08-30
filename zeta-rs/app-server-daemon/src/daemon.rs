@@ -40,9 +40,9 @@ const STOP_CONNECTION_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub(crate) fn serve(options: ConnectionOptions) -> Result<(), String> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
+    let registry = Arc::new(ProfileAppServerRegistry::open(options)?);
     let listener = endpoint.bind_listener()?;
     let socket_cleanup = SocketCleanup::new(endpoint.socket.clone());
-    let registry = Arc::new(ProfileAppServerRegistry::open(options)?);
     let record = ProcessRecord::current(&endpoint)?;
     let process_record = ProcessRecordGuard::publish(&endpoint.pid, &record)?;
     let stop_requested = Arc::new(AtomicBool::new(false));

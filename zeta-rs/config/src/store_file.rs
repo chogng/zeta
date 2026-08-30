@@ -10,14 +10,16 @@ pub(crate) fn read_document(path: &Path) -> Result<UserConfigDocument, ConfigErr
         return Ok(UserConfigDocument::default());
     }
     let source = fs::read_to_string(path).map_err(io_error)?;
-    let document = toml::from_str::<UserConfigDocument>(&source).map_err(|error| {
+    let decoded = crate::document_migration::decode(&source).map_err(|error| {
         ConfigError(format!(
             "invalid user configuration '{}': {error}",
             path.display()
         ))
     })?;
-    document.validate()?;
-    Ok(document)
+    if decoded.rewrite_required {
+        write_document(path, &decoded.document)?;
+    }
+    Ok(decoded.document)
 }
 
 pub(crate) fn write_document(
@@ -30,8 +32,7 @@ pub(crate) fn write_document(
     {
         fs::create_dir_all(parent).map_err(io_error)?;
     }
-    let encoded =
-        toml::to_string_pretty(document).map_err(|error| ConfigError(error.to_string()))?;
+    let encoded = crate::document_migration::encode(document)?;
     let temporary = temporary_path(path);
     let result = write_and_replace(path, &temporary, encoded.as_bytes());
     if result.is_err() {

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use zeta_utils_path::write_atomically;
 
 use super::TerminalSettings;
+use super::settings_migration;
 
 const MAX_RESOURCE_BYTES: u64 = 64 * 1024;
 
@@ -45,12 +46,20 @@ impl ConfigResource {
         if self.observed.as_ref() == Some(&snapshot) {
             return Ok(self.settings);
         }
-        let settings = settings_from_snapshot(&snapshot)
+        let decoded = settings_from_snapshot(&snapshot)
             .map_err(|error| format!("rejected {}: {error}", self.path.display()))?;
+        let snapshot = if decoded.rewrite_required {
+            let contents = settings_migration::encode(&decoded.settings)?;
+            write_atomically(&self.path, &contents)
+                .map_err(|error| format!("could not save {}: {error}", self.path.display()))?;
+            ResourceSnapshot::Contents(contents)
+        } else {
+            snapshot
+        };
         self.observed = Some(snapshot);
-        self.settings = settings;
+        self.settings = decoded.settings;
         self.revision = self.revision.saturating_add(1);
-        Ok(settings)
+        Ok(decoded.settings)
     }
 
     pub(crate) const fn revision(&self) -> u64 {
@@ -80,9 +89,7 @@ impl ConfigResource {
         settings_from_snapshot(&current)
             .map_err(|error| format!("rejected {}: {error}", self.path.display()))?;
         let settings = edit.settings.validate()?;
-        let mut contents = serde_json::to_vec_pretty(&settings)
-            .map_err(|error| format!("could not serialize terminal settings: {error}"))?;
-        contents.push(b'\n');
+        let contents = settings_migration::encode(&settings)?;
         write_atomically(&self.path, &contents)
             .map_err(|error| format!("could not save {}: {error}", self.path.display()))?;
 
@@ -93,14 +100,15 @@ impl ConfigResource {
     }
 }
 
-fn settings_from_snapshot(snapshot: &ResourceSnapshot) -> Result<TerminalSettings, String> {
+fn settings_from_snapshot(
+    snapshot: &ResourceSnapshot,
+) -> Result<settings_migration::DecodedSettings, String> {
     match snapshot {
-        ResourceSnapshot::Missing => Ok(TerminalSettings::default()),
-        ResourceSnapshot::Contents(contents) => {
-            serde_json::from_slice::<TerminalSettings>(contents)
-                .map_err(|error| format!("invalid JSON: {error}"))?
-                .validate()
-        }
+        ResourceSnapshot::Missing => Ok(settings_migration::DecodedSettings {
+            settings: TerminalSettings::default(),
+            rewrite_required: false,
+        }),
+        ResourceSnapshot::Contents(contents) => settings_migration::decode(contents),
     }
 }
 

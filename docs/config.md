@@ -44,6 +44,8 @@ Runtime snapshot
 - TOML 替换和回执提交保持原子；
 - 成功提交只影响后续安全点，不改写已经冻结的 Turn。
 
+`config.toml` 顶层使用 `schemaVersion` 标记文件格式。读取无版本的历史文件时，Config 只执行已登记且无歧义的迁移，完成严格校验后原子重写为当前版本；历史字段和当前字段同时出现、未登记字段、过新版本或低于最低支持版本都会拒绝启动。`semanticCodeIndex` 迁到 `codebase` 时不会保留旧的源码外发授权；`workspaceTrust` 只转换路径仍存在、旧身份与路径一致的 `trusted` 项，并为它生成当前目录身份，其他项不落盘。
+
 用户文档的主要 section 是 `agent`、`providers`、`mcp`、`skills`、`plugins`、`hooks`、
 `toolSearch`、`execPolicy`、`dirPermissions` 和 `codebase`。Config 保存非敏感引用，不保存 API key、
 OAuth token、authorization header 或 refresh 状态。
@@ -152,3 +154,4 @@ BuiltInDefaults
 - Secret 不进入 TOML、日志、索引或协议快照。
 - 已冻结的 Turn 不随可变配置漂移。
 - Config 使用 `Dir` 与明确权限，不重新引入 Workspace 身份或目录级 Trust。
+- 配置迁移必须先完成完整校验再替换原文件；失败时保留原文件并阻止运行时启动。

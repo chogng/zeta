@@ -9,6 +9,7 @@ mod commit_messages;
 mod dir_config;
 mod dir_permissions;
 mod document;
+mod document_migration;
 mod exec_policy;
 mod hooks;
 mod language_servers;

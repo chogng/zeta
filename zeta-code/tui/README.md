@@ -234,7 +234,7 @@ src/
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 按配置顺序把当前权限、preferred model、Git 分支和变更映射为长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
 | `StatusLineResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/statusline.json` | 只保存四个显示开关，不进入 App Server 配置、不拥有被显示的数据 |
-| `ConfigResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json` | 只保存终端本地设置；服务端配置仍来自 `config/read` |
+| `ConfigResource` | crate-private | 按 `schemaVersion` 有界读取、迁移历史字段、revision 校验并原子保存 `<profile>/zeta-code/terminal.json` | 只保存终端本地设置；未知字段和不支持的版本必须拒绝，服务端配置仍来自 `config/read` |
 | `components::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 directory 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |

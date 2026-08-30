@@ -2,6 +2,7 @@ mod pane;
 mod request;
 mod resource;
 mod settings;
+mod settings_migration;
 
 pub(crate) use pane::ConfigEdit;
 pub(crate) use pane::ConfigPaneSpec;

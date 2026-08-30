@@ -17,6 +17,15 @@ pub(crate) enum ChatInputCursor {
     Visible,
 }
 
+pub(crate) fn content_area(area: Rect) -> Rect {
+    let offset = (PROMPT_WIDTH as u16).min(area.width);
+    Rect {
+        x: area.x.saturating_add(offset),
+        width: area.width.saturating_sub(offset),
+        ..area
+    }
+}
+
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -58,16 +67,16 @@ pub(crate) fn draw(
     frame.render_widget(chat_input, area);
 
     if cursor == ChatInputCursor::Visible {
+        let content = content_area(area);
         let input_width = wrapped
             .cursor_column
-            .min(area.width.saturating_sub(PROMPT_WIDTH as u16 + 1) as usize)
-            as u16;
+            .min(content.width.saturating_sub(1) as usize) as u16;
         let visible_cursor_line = wrapped.cursor_row.saturating_sub(scroll_row);
         let cursor_y = area
             .y
             .saturating_add(1)
             .saturating_add(visible_cursor_line.min(u16::MAX as usize) as u16)
             .min(area.y.saturating_add(area.height.saturating_sub(2)));
-        frame.set_cursor_position((area.x + PROMPT_WIDTH as u16 + input_width, cursor_y));
+        frame.set_cursor_position((content.x.saturating_add(input_width), cursor_y));
     }
 }

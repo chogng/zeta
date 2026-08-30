@@ -257,7 +257,7 @@ fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
         frame.render_widget(
             Paragraph::new(format!("{prefix} … waiting for next key · esc cancel"))
                 .style(Style::default().fg(warning())),
-            area,
+            chat_input::content_area(area),
         );
         return;
     }
@@ -265,13 +265,13 @@ fn draw_status_area(frame: &mut Frame<'_>, area: Rect, app: &App) {
         frame.render_widget(
             Paragraph::new("completed · choose Main or another Subagent")
                 .style(Style::default().fg(muted())),
-            area,
+            chat_input::content_area(area),
         );
         return;
     }
     status_line::draw(
         frame,
-        area,
+        chat_input::content_area(area),
         app.status_line(),
         app.approval_mode_status(),
         app.status_line_runtime(),

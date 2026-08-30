@@ -87,6 +87,23 @@ fn endpoint_identity_is_shared_across_product_service_adapters() {
 }
 
 #[test]
+#[cfg(any(unix, windows))]
+fn invalid_profile_config_is_rejected_before_daemon_socket_is_bound() {
+    let profile = tempfile::tempdir().unwrap();
+    std::fs::write(
+        profile.path().join("config.toml"),
+        "schemaVersion = 1\nunknownField = true\n",
+    )
+    .unwrap();
+    let endpoint = super::daemon_endpoint_path(profile.path()).unwrap();
+
+    let error = super::serve(profile.path()).unwrap_err();
+
+    assert!(error.contains("unknown field `unknownField`"));
+    assert!(!endpoint.exists());
+}
+
+#[test]
 fn lifecycle_output_uses_one_stable_camel_case_json_contract() {
     let output = LifecycleOutput {
         status: LifecycleStatus::Running,

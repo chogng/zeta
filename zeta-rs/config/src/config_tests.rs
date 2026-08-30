@@ -177,6 +177,197 @@ fn dir_permissions_id() -> DirId {
 }
 
 #[test]
+fn unversioned_config_is_migrated_and_rewritten_once() {
+    let database_path = config_path("unversioned-file-migration");
+    let document_path = database_path.with_extension("toml");
+    let trusted_dir = database_path.with_extension("trusted-dir");
+    std::fs::create_dir(&trusted_dir).unwrap();
+    let trusted_path = std::fs::canonicalize(&trusted_dir).unwrap();
+    let trusted = crate::document_migration::legacy_id_for_path(&trusted_path);
+    let mismatched_dir = database_path.with_extension("mismatched-dir");
+    std::fs::create_dir(&mismatched_dir).unwrap();
+    let mismatched_path = std::fs::canonicalize(&mismatched_dir).unwrap();
+    let mismatched = format!("sha256:{}", "56".repeat(32));
+    let restricted = format!("sha256:{}", "34".repeat(32));
+    std::fs::write(
+        &document_path,
+        format!(
+            r#"
+[semanticCodeIndex]
+automaticContext = "firstInvocation"
+
+[semanticCodeIndex.selection]
+type = "disabled"
+
+[workspaceTrust.roots]
+"{trusted}" = "trusted"
+"{mismatched}" = "trusted"
+"{restricted}" = "restricted"
+
+[workspaceTrust.rootPaths]
+"{trusted}" = "{}"
+"{mismatched}" = "{}"
+"{restricted}" = "/tmp/restricted"
+"#,
+            trusted_path.display(),
+            mismatched_path.display()
+        ),
+    )
+    .unwrap();
+
+    let store = ConfigStore::open(&database_path).unwrap();
+    let snapshot = store.read_snapshot().unwrap();
+    let trusted_id = zeta_file_access::Dir::open_local(&trusted_path)
+        .unwrap()
+        .id();
+    let mismatched_id = zeta_file_access::Dir::open_local(&mismatched_path)
+        .unwrap()
+        .id();
+    let restricted_id = restricted.parse::<DirId>().unwrap();
+    let permissions = snapshot
+        .values
+        .dir_permissions
+        .explicit_permissions_for(&trusted_id)
+        .unwrap();
+
+    assert_eq!(
+        snapshot.values.codebase.automatic_context,
+        CodebaseAutomaticContext::FirstInvocation
+    );
+    assert_eq!(permissions.entries().count(), 15);
+    assert!(permissions.allows(Permission::LoadConfig));
+    assert!(permissions.allows(Permission::MutateRepository));
+    assert!(
+        snapshot
+            .values
+            .dir_permissions
+            .explicit_permissions_for(&restricted_id)
+            .is_none()
+    );
+    assert!(
+        snapshot
+            .values
+            .dir_permissions
+            .explicit_permissions_for(&mismatched_id)
+            .is_none()
+    );
+    assert_eq!(
+        snapshot.values.dir_permissions.path_for(&trusted_id),
+        Some(trusted_path.as_path())
+    );
+
+    let persisted = persisted_config_document(&database_path);
+    assert!(persisted.contains("schemaVersion = 1"));
+    assert!(persisted.contains("[codebase]"));
+    assert!(persisted.contains("[dirPermissions.entries]"));
+    assert!(!persisted.contains("semanticCodeIndex"));
+    assert!(!persisted.contains("workspaceTrust"));
+    assert!(!persisted.contains("/tmp/restricted"));
+    assert!(!persisted.contains(&mismatched_path.display().to_string()));
+
+    drop(store);
+    remove_config_files(&database_path);
+    std::fs::remove_dir(trusted_dir).unwrap();
+    std::fs::remove_dir(mismatched_dir).unwrap();
+}
+
+#[test]
+fn semantic_index_migration_keeps_models_but_removes_egress_grants() {
+    let database_path = config_path("semantic-index-file-migration");
+    let grant = format!("sha256:{}", "12".repeat(32));
+    std::fs::write(
+        database_path.with_extension("toml"),
+        format!(
+            r#"
+[providers.ollama]
+provider = "ollama"
+
+[semanticCodeIndex]
+automaticContext = "firstInvocation"
+
+[semanticCodeIndex.selection]
+type = "remote"
+
+[semanticCodeIndex.selection.models.embeddingModel]
+provider = "ollama"
+model = "embed"
+
+[semanticCodeIndex.sourceEgressGrants."{grant}".models.embeddingModel]
+provider = "ollama"
+model = "embed"
+
+[semanticCodeIndex.sourceEgressGrants."{grant}".providers.ollama]
+provider = "ollama"
+"#
+        ),
+    )
+    .unwrap();
+
+    let store = ConfigStore::open(&database_path).unwrap();
+    let codebase = store.read_snapshot().unwrap().values.codebase;
+
+    assert_eq!(
+        codebase.models.unwrap().embedding_model,
+        model_ref("ollama", "embed")
+    );
+    assert_eq!(
+        codebase.automatic_context,
+        CodebaseAutomaticContext::FirstInvocation
+    );
+    let persisted = persisted_config_document(&database_path);
+    assert!(!persisted.contains("sourceEgressGrants"));
+    assert!(!persisted.contains(&grant));
+
+    drop(store);
+    remove_config_files(&database_path);
+}
+
+#[test]
+fn file_migration_rejects_ambiguous_legacy_and_current_fields() {
+    let database_path = config_path("ambiguous-file-migration");
+    std::fs::write(
+        database_path.with_extension("toml"),
+        "[semanticCodeIndex]\n[codebase]\n",
+    )
+    .unwrap();
+
+    let error = ConfigStore::open(&database_path).err().unwrap();
+
+    assert!(
+        error
+            .0
+            .contains("contains both semanticCodeIndex and codebase")
+    );
+    remove_config_files(&database_path);
+}
+
+#[test]
+fn versioned_config_keeps_unknown_fields_strict() {
+    let database_path = config_path("strict-versioned-file");
+    std::fs::write(
+        database_path.with_extension("toml"),
+        "schemaVersion = 1\nunknownField = true\n",
+    )
+    .unwrap();
+
+    let error = ConfigStore::open(&database_path).err().unwrap();
+
+    assert!(error.0.contains("unknown field `unknownField`"));
+    remove_config_files(&database_path);
+}
+
+#[test]
+fn newer_file_schema_is_rejected_explicitly() {
+    let database_path = config_path("newer-file-schema");
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 2\n").unwrap();
+
+    let error = ConfigStore::open(&database_path).err().unwrap();
+
+    assert!(error.0.contains("newer than supported version 1"));
+    remove_config_files(&database_path);
+}
+
+#[test]
 fn tool_mode_defaults_to_direct_and_updates_durably() {
     let store = ConfigStore::open(config_path("tool-mode")).unwrap();
     assert_eq!(
@@ -564,7 +755,7 @@ fn dir_permissions_commands_persist_user_owned_decisions() {
     let store = ConfigStore::open(&path).unwrap();
     let dir = dir_permissions_id();
     let display_path = std::path::PathBuf::from("/tmp/zeta-dir-permissions");
-    let permissions = Permissions::new([Capability::ReadFiles, Capability::SearchFiles]);
+    let permissions = Permissions::new([Permission::ReadFiles, Permission::SearchFiles]);
     let configured = store
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("set-dir-permissions").unwrap(),
@@ -888,10 +1079,16 @@ fn valid_external_toml_edits_advance_revision_and_publish() {
     let configured = configure_provider(&store, 0, "openai");
     let changes = store.subscribe_changes();
     let config_path = store.config_path().to_path_buf();
-    let mut document: UserConfigDocument =
-        toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+    let mut document =
+        crate::document_migration::decode(&std::fs::read_to_string(&config_path).unwrap())
+            .unwrap()
+            .document;
     document.agent.preferred_model = Some(model_ref("openai", "external-model"));
-    std::fs::write(&config_path, toml::to_string_pretty(&document).unwrap()).unwrap();
+    std::fs::write(
+        &config_path,
+        crate::document_migration::encode(&document).unwrap(),
+    )
+    .unwrap();
 
     let change = changes
         .recv_timeout(std::time::Duration::from_secs(2))

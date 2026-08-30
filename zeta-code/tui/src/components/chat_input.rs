@@ -22,6 +22,7 @@ pub(crate) use state::ChatSubmission;
 pub(crate) use state::QueuedChatInput;
 pub(crate) use state::SlashCommandInvocation;
 pub(crate) use view::ChatInputCursor;
+pub(crate) use view::content_area;
 pub(crate) use view::draw as draw_chat_input;
 pub(crate) use vim::ChatInputMode;
 pub(crate) use zeta_slash_commands::SlashCommandCatalog;

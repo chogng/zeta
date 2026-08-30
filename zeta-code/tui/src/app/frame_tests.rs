@@ -53,7 +53,7 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
     let status_line = rendered.lines().last().unwrap();
-    assert_eq!(status_line.trim_end(), "⏸ ask permissions on");
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -101,9 +101,9 @@ fn status_line_uses_a_distinct_symbol_for_each_approval_mode() {
     assert_eq!(
         [ask_permissions, auto_review, bypass_permissions],
         [
-            "⏸ ask permissions on",
-            "⏩  auto review on",
-            "▶ bypass permissions on",
+            "  ⏸ ask permissions on",
+            "  ⏩  auto review on",
+            "  ▶ bypass permissions on",
         ]
     );
 }
@@ -118,7 +118,7 @@ fn working_draft_keeps_runtime_state_in_status_line() {
 
     let rendered = render(&app, 80, 20);
 
-    assert!(rendered.lines().any(|line| line.trim_end() == "working"));
+    assert!(rendered.lines().any(|line| line.trim_end() == "  working"));
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn queued_message_is_visible_inline_and_counted_in_status_line() {
     assert!(
         rendered
             .lines()
-            .any(|line| line.trim_end() == "working · queue 1")
+            .any(|line| line.trim_end() == "  working · queue 1")
     );
 }
 
@@ -148,7 +148,7 @@ fn follow_up_mode_does_not_replace_runtime_status_line() {
     assert!(
         render(&app, 80, 20)
             .lines()
-            .any(|line| line.trim_end() == "working")
+            .any(|line| line.trim_end() == "  working")
     );
 
     set_follow_up_mode(&mut app, FollowUpMode::Queue);
@@ -158,7 +158,7 @@ fn follow_up_mode_does_not_replace_runtime_status_line() {
     assert!(
         render(&app, 80, 20)
             .lines()
-            .any(|line| line.trim_end() == "working · queue 1")
+            .any(|line| line.trim_end() == "  working · queue 1")
     );
 }
 
@@ -166,25 +166,25 @@ fn follow_up_mode_does_not_replace_runtime_status_line() {
 fn status_line_uses_a_distinct_color_for_each_approval_mode_symbol() {
     let mut app = App::new();
     let ask_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(ask_permissions[(0, 19)].fg, warning());
+    assert_eq!(ask_permissions[(2, 19)].fg, warning());
     assert_eq!(
-        ask_permissions[("⏸".width() as u16, 19)].fg,
+        ask_permissions[(2 + "⏸".width() as u16, 19)].fg,
         chat_input_chrome()
     );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
     let auto_review = render_buffer(&app, 80, 20);
-    assert_eq!(auto_review[(0, 19)].fg, accent());
+    assert_eq!(auto_review[(2, 19)].fg, accent());
     assert_eq!(
-        auto_review[("⏩".width() as u16, 19)].fg,
+        auto_review[(2 + "⏩".width() as u16, 19)].fg,
         chat_input_chrome()
     );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
     let bypass_permissions = render_buffer(&app, 80, 20);
-    assert_eq!(bypass_permissions[(0, 19)].fg, danger());
+    assert_eq!(bypass_permissions[(2, 19)].fg, danger());
     assert_eq!(
-        bypass_permissions[("▶".width() as u16, 19)].fg,
+        bypass_permissions[(2 + "▶".width() as u16, 19)].fg,
         chat_input_chrome()
     );
 }
@@ -196,8 +196,8 @@ fn status_line_colors_current_and_next_modes_independently() {
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
 
     let buffer = render_buffer(&app, 80, 20);
-    let next_icon_column = "⏸ current: ask permissions on · ".width() as u16;
-    assert_eq!(buffer[(0, 19)].fg, warning());
+    let next_icon_column = 2 + "⏸ current: ask permissions on · ".width() as u16;
+    assert_eq!(buffer[(2, 19)].fg, warning());
     assert_eq!(buffer[(next_icon_column, 19)].fg, accent());
 }
 
@@ -226,9 +226,9 @@ fn status_line_renders_the_configured_model() {
         .map(|x| buffer[(x, 19)].symbol())
         .collect::<String>();
 
-    assert!(status_line.starts_with("⏸ ask permissions on"));
+    assert!(status_line.starts_with("  ⏸ ask permissions on"));
     assert!(status_line.trim_end().ends_with("anthropic/claude-sonnet"));
-    assert_eq!(buffer[(0, 19)].fg, warning());
+    assert_eq!(buffer[(2, 19)].fg, warning());
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn narrow_status_line_keeps_the_first_configured_item() {
     let rendered = render(&app, 24, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(status_line.trim_end(), "⏸ ask permissions on");
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
     assert!(!status_line.contains("claude"));
 }
 
@@ -272,7 +272,7 @@ fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[15].contains("first"));
     assert!(rows[16].contains("second"));
     assert!(rows[17].contains("third"));
-    assert_eq!(rows[19].trim_end(), "⏸ ask permissions on");
+    assert_eq!(rows[19].trim_end(), "  ⏸ ask permissions on");
 }
 
 #[test]
@@ -283,7 +283,7 @@ fn working_status_line_keeps_configured_context_separate_from_runtime_text() {
     let rendered = render(&app, 80, 20);
     let status_line = rendered.lines().last().unwrap();
 
-    assert_eq!(status_line.trim_end(), "⏸ ask permissions on");
+    assert_eq!(status_line.trim_end(), "  ⏸ ask permissions on");
     assert!(!status_line.contains("enter queue"));
     assert!(!status_line.contains("ctrl-c interrupt"));
 }

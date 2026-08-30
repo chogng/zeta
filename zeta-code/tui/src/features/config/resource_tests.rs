@@ -68,12 +68,87 @@ fn existing_terminal_settings_without_follow_up_mode_load_as_queue() {
     )
     .unwrap();
 
-    let mut resource = ConfigResource::new(path);
+    let mut resource = ConfigResource::new(path.clone());
     let settings = resource.refresh().unwrap();
 
     assert!(!settings.mouse_interactions());
     assert_eq!(settings.follow_up_mode(), FollowUpMode::Queue);
     assert_eq!(settings.input_mode(), ChatInputMode::Standard);
+    assert!(
+        fs::read_to_string(path)
+            .unwrap()
+            .contains("\"schemaVersion\": 1")
+    );
+}
+
+#[test]
+fn legacy_directory_defaults_are_migrated_and_rewritten() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("terminal.json");
+    fs::write(
+        &path,
+        r#"{
+  "mouseInteractions": false,
+  "additionalDirectoryPermissions": {
+    "readFiles": true,
+    "writeFiles": false,
+    "watchFileChanges": true,
+    "useWorkspaceFiles": true,
+    "useWorkspaceSearch": true,
+    "loadInstructionsAndAgents": true
+  }
+}"#,
+    )
+    .unwrap();
+
+    let mut resource = ConfigResource::new(path.clone());
+    let settings = resource.refresh().unwrap();
+
+    assert_eq!(
+        settings.dir_permissions(),
+        vec![
+            PermissionDto::ReadFiles,
+            PermissionDto::WatchFiles,
+            PermissionDto::BrowseFiles,
+            PermissionDto::SearchFiles,
+            PermissionDto::LoadInstructions,
+        ]
+    );
+    let persisted = fs::read_to_string(path).unwrap();
+    assert!(persisted.contains("\"schemaVersion\": 1"));
+    assert!(persisted.contains("\"dirPermissions\""));
+    assert!(persisted.contains("\"watchFiles\": true"));
+    assert!(!persisted.contains("additionalDirectoryPermissions"));
+    assert!(!persisted.contains("watchFileChanges"));
+}
+
+#[test]
+fn versioned_terminal_settings_reject_unknown_fields() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("terminal.json");
+    fs::write(
+        &path,
+        r#"{
+  "schemaVersion": 1,
+  "unknownField": true
+}"#,
+    )
+    .unwrap();
+
+    let error = ConfigResource::new(path).refresh().unwrap_err();
+
+    assert!(error.contains("unknown field `unknownField`"));
+}
+
+#[test]
+fn newer_terminal_settings_schema_is_rejected_explicitly() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("terminal.json");
+    fs::write(&path, r#"{"schemaVersion":2}"#).unwrap();
+
+    let error = ConfigResource::new(path).refresh().unwrap_err();
+
+    assert!(error.contains("newer than supported version 1"));
 }
 
 #[test]
