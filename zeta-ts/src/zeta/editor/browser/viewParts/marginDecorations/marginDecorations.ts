@@ -2,12 +2,12 @@ import "./marginDecorations.css";
 import { DecorationsOverlay } from "../decorations/decorations.js";
 import { type ResolvedDecoration, DecorationPresentation } from '../decorations/decorations.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects line-level diagnostics into the editor margin. */
-export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {
+export class MarginViewLineDecorationsOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly decorations: DecorationsOverlay;
 	private readonly rows: ViewPartRows;

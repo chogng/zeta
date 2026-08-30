@@ -11,7 +11,7 @@ import { type TrackedRange } from '../../../common/model/trackedRange.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';
 import { CursorPlurality, ViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';
@@ -25,7 +25,7 @@ export interface ViewCursorsOptions extends ViewCursorOptions {
 }
 
 /** Coordinates active cursors, movement animation, and input composition presentation. */
-export class ViewCursors extends DynamicViewOverlay {
+export class ViewCursors extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly fastDomNode: FastDomNode<HTMLElement>;
 	private readonly model: TextModel;

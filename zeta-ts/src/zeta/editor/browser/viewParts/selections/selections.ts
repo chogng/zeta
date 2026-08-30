@@ -3,12 +3,12 @@ import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext } from '../../view/renderingContext.js';
-import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects selection ranges and current-line state without owning selection state. */
-export class SelectionsOverlay extends DynamicViewOverlay {
+export class SelectionsOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;

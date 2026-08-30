@@ -2,7 +2,7 @@ import { h, reset, fragment as createFragment } from "../../../../base/browser/d
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
-import { ViewLineTextDirection, type ViewLineOptions } from './viewLineOptions.js';
+import { EditorTextDirection, type ViewLineOptions } from './viewLineOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type Range } from '../../../common/core/range.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
@@ -74,8 +74,8 @@ export class ViewLine {
 	}
 
 	public isRightToLeft(): boolean {
-		if (this.options.textDirection === ViewLineTextDirection.RightToLeft) return true;
-		if (this.options.textDirection === ViewLineTextDirection.LeftToRight) return false;
+		if (this.options.textDirection === EditorTextDirection.RightToLeft) return true;
+		if (this.options.textDirection === EditorTextDirection.LeftToRight) return false;
 		return this.textElement.ownerDocument.defaultView?.getComputedStyle(this.textElement).direction === 'rtl';
 	}
 

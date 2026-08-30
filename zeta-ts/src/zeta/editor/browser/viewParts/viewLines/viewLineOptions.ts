@@ -1,11 +1,11 @@
-export enum ViewLineTextDirection {
+export enum EditorTextDirection {
 	Auto = 'auto',
 	LeftToRight = 'ltr',
 	RightToLeft = 'rtl',
 }
 
 export interface ViewLineOptionsConfiguration {
-	readonly textDirection: ViewLineTextDirection;
+	readonly textDirection: EditorTextDirection;
 	readonly fontLigatures: boolean;
 	readonly useGpu: boolean;
 	readonly useMonospaceOptimizations: boolean;
@@ -15,7 +15,7 @@ export interface ViewLineOptionsConfiguration {
 
 /** Immutable rendering configuration shared by DOM and GPU line renderers. */
 export class ViewLineOptions {
-	public readonly textDirection: ViewLineTextDirection;
+	public readonly textDirection: EditorTextDirection;
 	public readonly fontLigatures: boolean;
 	public readonly useGpu: boolean;
 	public readonly useMonospaceOptimizations: boolean;
@@ -23,7 +23,7 @@ export class ViewLineOptions {
 	public readonly tabSize: number;
 
 	constructor(configuration: ViewLineOptionsConfiguration) {
-		if (!Object.values(ViewLineTextDirection).includes(configuration.textDirection)) {
+		if (!Object.values(EditorTextDirection).includes(configuration.textDirection)) {
 			throw new TypeError('Unknown Stanza editor text direction');
 		}
 		if (typeof configuration.fontLigatures !== 'boolean' || typeof configuration.useGpu !== 'boolean' || typeof configuration.useMonospaceOptimizations !== 'boolean') {

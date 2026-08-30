@@ -4,14 +4,14 @@ import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';
 
 export type WhitespaceRenderingMode = 'none' | 'boundary' | 'selection' | 'trailing' | 'all';
 
 /** Projects whitespace glyphs without changing the text rows used for selection geometry. */
-export class WhitespaceOverlay extends DynamicViewOverlay {
+export class WhitespaceOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly rows: ViewPartRows;
 

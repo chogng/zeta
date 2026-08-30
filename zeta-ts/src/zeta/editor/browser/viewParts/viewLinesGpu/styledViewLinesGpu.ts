@@ -1,7 +1,7 @@
 import { Disposable, MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
-import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
+import { StyledViewGpuContext } from '../../gpu/styledViewGpuContext.js';
 import { GPULifecycle } from '../../gpu/gpuDisposable.js';
-import { GlyphRasterizer } from '../../gpu/raster/glyphRasterizer.js';
+import { StyledGlyphRasterizer } from '../../gpu/raster/styledGlyphRasterizer.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -10,8 +10,8 @@ import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
 import { type ViewLines } from '../viewLines/viewLines.js';
 import { BindingId } from '../../gpu/gpu.js';
 import { type GpuRenderFrame, type IGpuFrameRenderStrategy } from '../../gpu/gpuFrameStrategy.js';
-import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
-import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
+import { StyledFullFileRenderStrategy } from '../../gpu/renderStrategy/styledFullFileRenderStrategy.js';
+import { StyledViewportRenderStrategy } from '../../gpu/renderStrategy/styledViewportRenderStrategy.js';
 import { type EditorRenderingContext } from '../../view/renderingContext.js';
 
 export interface ViewLinesGpuOptions {
@@ -33,8 +33,8 @@ interface PreparedGpuFrame {
 const VERTEX_FLOAT_COUNT = 5;
 
 /** Draws eligible visible text rows through the VS Code-aligned WebGPU glyph-atlas path. */
-export class ViewLinesGpu extends Disposable {
-	private readonly context: ViewGpuContext;
+export class StyledViewLinesGpu extends Disposable {
+	private readonly context: StyledViewGpuContext;
 	private readonly vertexBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly uniformBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly atlasTexture = this._register(new MutableDisposable<IReference<GPUTexture>>());
@@ -45,7 +45,7 @@ export class ViewLinesGpu extends Disposable {
 	private vertexBufferSize = 0;
 	private atlasRevision = -1;
 	private uploadedPageVersions: number[] = [];
-	private rasterizer: GlyphRasterizer | undefined;
+	private rasterizer: StyledGlyphRasterizer | undefined;
 	private lastRenderingContext: EditorRenderingContext | undefined;
 	private pendingRenderingContext: EditorRenderingContext | undefined;
 	private rendering = false;
@@ -53,13 +53,13 @@ export class ViewLinesGpu extends Disposable {
 
 	constructor(private readonly options: ViewLinesGpuOptions) {
 		super();
-		this.context = this._register(new ViewGpuContext({ host: options.host }));
+		this.context = this._register(new StyledViewGpuContext({ host: options.host }));
 		this._register(this.context.onDidChange(() => {
 			if (this.lastRenderingContext) options.requestRender();
 		}));
 	}
 
-	public get gpuContext(): ViewGpuContext {
+	public get gpuContext(): StyledViewGpuContext {
 		return this.context;
 	}
 
@@ -119,14 +119,14 @@ export class ViewLinesGpu extends Disposable {
 	private ensureResources(visualLines: EditorVisualLineProjection): void {
 		const device = this.context.device;
 		if (!this.rasterizer || this.rasterizer.devicePixelRatio !== this.context.devicePixelRatio) {
-			this.rasterizer = new GlyphRasterizer(this.context.canvas, this.context.devicePixelRatio);
+			this.rasterizer = new StyledGlyphRasterizer(this.context.canvas, this.context.devicePixelRatio);
 			this.renderStrategy.value = this.createRenderStrategy(this.rasterizer, visualLines);
 		}
 		if (!this.pipeline) {
 			const presentationFormat = this.context.canvas.ownerDocument.defaultView!.navigator.gpu.getPreferredCanvasFormat();
-			const shader = device.createShaderModule({ label: 'Stanza ViewLinesGpu shader', code: this.renderStrategy.value!.wgsl });
+			const shader = device.createShaderModule({ label: 'Stanza StyledViewLinesGpu shader', code: this.renderStrategy.value!.wgsl });
 			this.pipeline = device.createRenderPipeline({
-				label: 'Stanza ViewLinesGpu pipeline',
+				label: 'Stanza StyledViewLinesGpu pipeline',
 				layout: 'auto',
 				vertex: {
 					module: shader,
@@ -155,7 +155,7 @@ export class ViewLinesGpu extends Disposable {
 			});
 			this.sampler = device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
 			this.uniformBuffer.value = GPULifecycle.createBuffer(device, {
-				label: 'Stanza ViewLinesGpu dimensions',
+				label: 'Stanza StyledViewLinesGpu dimensions',
 				size: 6 * Float32Array.BYTES_PER_ELEMENT,
 				usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 			});
@@ -167,7 +167,7 @@ export class ViewLinesGpu extends Disposable {
 		const atlas = this.context.atlas;
 		this.renderStrategy.value?.reset();
 		this.atlasTexture.value = GPULifecycle.createTexture(this.context.device, {
-			label: 'Stanza ViewLinesGpu glyph atlas',
+			label: 'Stanza StyledViewLinesGpu glyph atlas',
 			size: { width: atlas.pageSize, height: atlas.pageSize, depthOrArrayLayers: atlas.pages.length },
 			format: 'rgba8unorm',
 			usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
@@ -175,7 +175,7 @@ export class ViewLinesGpu extends Disposable {
 		this.atlasRevision = this.context.textureAtlasRevision;
 		this.uploadedPageVersions = [];
 		this.bindGroup = this.context.device.createBindGroup({
-			label: 'Stanza ViewLinesGpu bindings',
+			label: 'Stanza StyledViewLinesGpu bindings',
 			layout: this.pipeline!.getBindGroupLayout(0),
 			entries: [
 				{ binding: BindingId.Texture, resource: this.atlasTexture.value.object.createView({ dimension: '2d-array' }) },
@@ -238,17 +238,17 @@ export class ViewLinesGpu extends Disposable {
 		if (vertices.byteLength > this.vertexBufferSize) {
 			this.vertexBufferSize = Math.max(vertices.byteLength, 4_096);
 			this.vertexBuffer.value = GPULifecycle.createBuffer(this.context.device, {
-				label: 'Stanza ViewLinesGpu vertices',
+				label: 'Stanza StyledViewLinesGpu vertices',
 				size: this.vertexBufferSize,
 				usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 			});
 		}
 		if (vertices.byteLength > 0) this.context.device.queue.writeBuffer(this.vertexBuffer.value!.object, 0, vertices as Float32Array<ArrayBuffer>);
-		const encoder = this.context.device.createCommandEncoder({ label: 'Stanza ViewLinesGpu frame' });
+		const encoder = this.context.device.createCommandEncoder({ label: 'Stanza StyledViewLinesGpu frame' });
 		const textureView = this.context.context.getCurrentTexture().createView();
 		this.context.rectangleRenderer.encode(encoder, textureView, dimensions.width, dimensions.height, layout.scrollPosition.left * this.context.devicePixelRatio, layout.scrollPosition.top * this.context.devicePixelRatio);
 		const pass = encoder.beginRenderPass({
-			label: 'Stanza ViewLinesGpu pass',
+			label: 'Stanza StyledViewLinesGpu pass',
 			colorAttachments: [{
 				view: textureView,
 				clearValue: { r: 0, g: 0, b: 0, a: 0 },
@@ -287,10 +287,10 @@ export class ViewLinesGpu extends Disposable {
 		this.renderStrategy.value = this.createRenderStrategy(this.rasterizer!, visualLines);
 	}
 
-	private createRenderStrategy(rasterizer: GlyphRasterizer, visualLines: EditorVisualLineProjection): IGpuFrameRenderStrategy {
+	private createRenderStrategy(rasterizer: StyledGlyphRasterizer, visualLines: EditorVisualLineProjection): IGpuFrameRenderStrategy {
 		return this.canUseFullFileStrategy(visualLines)
-			? new FullFileRenderStrategy(rasterizer)
-			: new ViewportRenderStrategy(rasterizer);
+			? new StyledFullFileRenderStrategy(rasterizer)
+			: new StyledViewportRenderStrategy(rasterizer);
 	}
 
 	private isRenderingContextCurrent(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): boolean {
@@ -304,9 +304,9 @@ export class ViewLinesGpu extends Disposable {
 	}
 
 	private canUseFullFileStrategy(visualLines: EditorVisualLineProjection): boolean {
-		if (visualLines.visualLineCount > FullFileRenderStrategy.maxSupportedLines) return false;
+		if (visualLines.visualLineCount > StyledFullFileRenderStrategy.maxSupportedLines) return false;
 		for (let lineIndex = 0; lineIndex < this.options.model.lineCount; lineIndex += 1) {
-			if (this.options.model.getLineContent((lineIndex) + 1).length > FullFileRenderStrategy.maxSupportedColumns) return false;
+			if (this.options.model.getLineContent((lineIndex) + 1).length > StyledFullFileRenderStrategy.maxSupportedColumns) return false;
 		}
 		return true;
 	}

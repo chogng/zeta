@@ -4,7 +4,7 @@ import { type InternalGuidesOptions } from '../../../common/config/editorOptions
 import { Position } from '../../../common/core/position.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { type EditorVisualLine } from '../../../common/viewModel/modelLineProjection.js';
-import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { ViewPartRows } from '../../view/viewLayer.js';
 import { type BracketColorizationSource, type BracketGuide } from '../viewLines/viewLine.js';
@@ -18,7 +18,7 @@ interface IndentGuidesOptions {
 }
 
 /** Owns and projects the visible indentation-guide rows. */
-export class IndentGuidesOverlay extends DynamicViewOverlay {
+export class IndentGuidesOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly guides: InternalGuidesOptions;
 	private readonly tabSize: number;

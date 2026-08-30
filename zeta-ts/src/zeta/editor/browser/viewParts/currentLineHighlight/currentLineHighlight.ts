@@ -1,11 +1,11 @@
 import './currentLineHighlight.css';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
-import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects the active logical line independently from selection ranges. */
-export class CurrentLineHighlightOverlay extends DynamicViewOverlay {
+export class CurrentLineHighlightOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;

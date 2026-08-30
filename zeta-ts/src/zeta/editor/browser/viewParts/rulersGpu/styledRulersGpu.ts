@@ -1,14 +1,14 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
+import { type StyledViewGpuContext } from '../../gpu/styledViewGpuContext.js';
 import { type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
 import { type EditorRuler, validateRuler } from '../rulers/rulers.js';
 
 /** Projects configured rulers into the shared GPU rectangle buffer. */
-export class RulersGpu extends EditorViewPart {
+export class StyledRulersGpu extends EditorViewPart {
 	private readonly entries = this._register(new DisposableStore());
 	private readonly rulers: readonly EditorRuler[];
 
-	constructor(private readonly gpuContext: ViewGpuContext, rulers: readonly EditorRuler[], private readonly measureColumn: (column: number) => number) {
+	constructor(private readonly gpuContext: StyledViewGpuContext, rulers: readonly EditorRuler[], private readonly measureColumn: (column: number) => number) {
 		super();
 		this.rulers = Object.freeze(rulers.map(validateRuler));
 	}

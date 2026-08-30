@@ -14,7 +14,7 @@ import { type EditorLineRange } from '../../../common/viewModel/editorViewportCo
 import { type DiagnosticOverviewMarker, type DiffOverviewMarker } from "../overviewRuler/overviewRuler.js";
 import { type EditorOverlayContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
-import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { ViewPartRows } from '../../view/viewLayer.js';
 
@@ -527,7 +527,7 @@ function lastCoveredLineIndex(decoration: ResolvedDecoration): number {
 	return endLineNumber - 2;
 }
 
-export class DecorationsOverlay extends DynamicViewOverlay {
+export class DecorationsOverlay extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];

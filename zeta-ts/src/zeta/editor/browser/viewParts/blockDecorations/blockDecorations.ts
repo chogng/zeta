@@ -7,10 +7,10 @@ import { type ResolvedDecoration } from '../decorations/decorations.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
-import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
+import { EditorDynamicViewOverlay } from '../../view/editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 
-export class BlockDecorations extends DynamicViewOverlay {
+export class BlockDecorations extends EditorDynamicViewOverlay {
 	public readonly domNode: HTMLDivElement;
 
 	private readonly root: FastDomNode<HTMLDivElement>;
