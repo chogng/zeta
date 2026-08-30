@@ -68,11 +68,11 @@ pub(super) struct ActiveSession {
     pub(super) subscription: SessionSubscribeResult,
 }
 
-pub(super) fn ensure_active_session(
+pub(super) fn ensure_session_catalog(
     client: &mut AppServerRequestHandle,
     cwd: &Path,
     preferred_session_id: Option<&SessionId>,
-) -> Result<(Vec<Session>, ActiveSession)> {
+) -> Result<(Vec<Session>, Session)> {
     let mut sessions = client.list_sessions().map_err(client_error)?.sessions;
     sessions.sort_by(|left, right| {
         left.title
@@ -99,9 +99,16 @@ pub(super) fn ensure_active_session(
             session
         }
     };
-    let active = initialize_session(client, session, cwd)?;
     sessions.retain(|session| session.status == SessionStatus::Active);
-    Ok((sessions, active))
+    Ok((sessions, session))
+}
+
+pub(super) fn initialize_active_session(
+    client: &mut AppServerRequestHandle,
+    session: Session,
+    cwd: &Path,
+) -> Result<ActiveSession> {
+    initialize_session(client, session, cwd)
 }
 
 pub(super) fn create_active_session(

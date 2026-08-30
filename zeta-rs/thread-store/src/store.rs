@@ -1,7 +1,24 @@
 use crate::ThreadStoreError;
+use serde::Deserialize;
+use serde::Serialize;
 use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use zeta_history::StoredEvent;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionThread;
 use zeta_protocol::ThreadId;
+
+/// Lightweight durable facts used to list Sessions without replaying Thread history.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ThreadCatalogRecord {
+    pub session_id: SessionId,
+    pub thread: SessionThread,
+    pub sequence: u64,
+    pub manager: SessionManagerInfo,
+    pub archived_at_unix_ms: Option<u64>,
+    pub stopped: bool,
+    pub requires_startup_recovery: bool,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ThreadEventBatch {
@@ -9,6 +26,7 @@ pub struct ThreadEventBatch {
     pub thread_id: ThreadId,
     pub expected_sequence: u64,
     pub events: Vec<StoredEvent>,
+    pub catalog: ThreadCatalogRecord,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,6 +43,11 @@ pub struct AppendBatchResult {
 /// uncommitted tail batches from subsequent `load` results.
 pub trait ThreadStore: Send + Sync {
     fn list_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError>;
+
+    fn list_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError>;
+
+    /// Installs a missing catalog row while upgrading an older event store.
+    fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError>;
 
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError>;
 
@@ -75,6 +98,13 @@ pub fn validate_append_batch(
                 "event IDs must be unique within a batch".into(),
             ));
         }
+    }
+    if batch.catalog.thread.thread_id != batch.thread_id
+        || batch.catalog.sequence != batch.expected_sequence + batch.events.len() as u64
+    {
+        return Err(ThreadStoreError::InvalidBatch(
+            "catalog Thread identity or sequence does not match its batch".into(),
+        ));
     }
     Ok(AppendBatchResult {
         batch_id: batch.batch_id.clone(),

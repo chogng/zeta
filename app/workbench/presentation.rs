@@ -28,15 +28,14 @@ use crate::PaneBinding;
 use crate::QuickAccess;
 use crate::SessionSearchState;
 use crate::{
-    FIRST_TAB_CONTAINER_SESSION_TAB, MainSurfaceKind, SESSION_SEARCH_INPUT, TabContextMenu,
-    TabContextMenuState, WINDOW, paint_chord_hint,
-};
-use crate::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
     PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState,
-    TabContainerToolbar, TabGroupId, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets,
-    WorkbenchTab, WorkbenchTabGroup, mounted_tab_element_id, pane_group_element_id,
-    tab_input_element_id, workbench_tab_groups,
+    TabContainerToolbar, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets,
+    mounted_tab_element_id, pane_group_element_id, tab_input_element_id, workbench_tab_groups,
+};
+use crate::{
+    MainSurfaceKind, SESSION_SEARCH_INPUT, TabContextMenu, TabContextMenuState, WINDOW,
+    paint_chord_hint,
 };
 use zeta_files::FILE_SEARCH_INPUT;
 use zeta_files::FilesLayout;
@@ -365,8 +364,6 @@ pub struct WorkbenchPresentationModel<'a> {
 
 #[derive(Clone)]
 struct TabContainerView<'a> {
-    title: &'a str,
-    context: EnvironmentContextView<'a>,
     search: &'a SessionSearchState,
     tab_part: &'a TabPart,
     selected_id: ElementId,
@@ -507,18 +504,6 @@ fn build_workbench_presentation_with_bindings(
         };
     };
 
-    let title = if model.main_surface == MainSurfaceKind::Terminal {
-        model
-            .terminal
-            .and_then(TerminalCore::title)
-            .unwrap_or("Terminal")
-    } else {
-        model
-            .session_pane
-            .thread()
-            .map(|thread| thread.title.as_str())
-            .unwrap_or(model.app_name)
-    };
     let session_title = model
         .active_tab_input
         .and_then(|selected| model.tab_part.input(selected))
@@ -560,8 +545,6 @@ fn build_workbench_presentation_with_bindings(
                 bounds,
                 Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
                 TabContainerView {
-                    title,
-                    context: model.environment_context.clone(),
                     search: model.session_search,
                     tab_part: model.tab_part,
                     selected_id,
@@ -1178,34 +1161,9 @@ fn draw_tab_container(
     );
     let search_caret = toolbar.search_caret_bounds();
     context.draw_component(&toolbar);
-    let has_session_input = view.tab_part.inputs().any(TabInput::is_session);
-    let mut groups = workbench_tab_groups(view.tab_part, TabContainerPlacement::Body, |input| {
+    let groups = workbench_tab_groups(view.tab_part, TabContainerPlacement::Body, |input| {
         input.is_settings() || view.search.matches_session_name(input.title())
     });
-    if !has_session_input && view.search.matches_session_name(view.title) {
-        let fallback = WorkbenchTab::new(
-            FIRST_TAB_CONTAINER_SESSION_TAB,
-            crate::FIRST_TAB_CONTAINER_SESSION_ACTION,
-            crate::FIRST_TAB_CONTAINER_SESSION_CLOSE,
-            view.title,
-            view.context.working_directory,
-            crate::TabStatus::idle("Ready"),
-            false,
-        );
-        if let Some(group) = groups
-            .iter_mut()
-            .find(|group| group.id() == TabGroupId::DEFAULT)
-        {
-            group.insert_tab(0, fallback);
-        } else {
-            groups.push(WorkbenchTabGroup::new(
-                TabGroupId::DEFAULT,
-                None,
-                false,
-                vec![fallback],
-            ));
-        }
-    }
     let mut tab_container = TabContainer::new(
         bounds,
         TabContainerToolbar::content_bounds(bounds),

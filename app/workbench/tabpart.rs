@@ -13,9 +13,8 @@ mod titlebar;
 mod toolbar;
 
 pub use identity::{
-    ADD_SESSION, CHANGES_PANE_BUTTON, FIRST_TAB_CONTAINER_SESSION_ACTION,
-    FIRST_TAB_CONTAINER_SESSION_CLOSE, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER, TAB_CONTAINER_TOGGLE, WINDOW,
+    ADD_SESSION, CHANGES_PANE_BUTTON, SESSION_SEARCH_INPUT, TAB_CONTAINER, TAB_CONTAINER_TOGGLE,
+    WINDOW,
 };
 pub use session_input::session_tab_input;
 pub use session_search::SessionSearchState;
@@ -29,8 +28,8 @@ pub use tab_context_menu::{
 };
 pub use tab_mount::TabIntent;
 pub use tabs::{
-    TabContainer, TabContainerPlacement, WorkbenchTab, WorkbenchTabGroup, mounted_tab_element_id,
-    tab_input_element_id, tab_intent_for_element, tab_key_for_element, workbench_tab_groups,
+    TabContainer, TabContainerPlacement, mounted_tab_element_id, tab_input_element_id,
+    tab_intent_for_element, tab_key_for_element, workbench_tab_groups,
 };
 pub use tabs_state::TabContainerState;
 pub use titlebar::{TITLEBAR_HEIGHT, Titlebar, TitlebarInsets};
@@ -38,9 +37,9 @@ pub use toolbar::TabContainerToolbar;
 
 #[cfg(test)]
 pub(crate) use identity::{
-    FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
-    TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
-    TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
+    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR,
+    TAB_CONTAINER_LIST, TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE,
+    TAB_CONTAINER_SETTINGS_TAB, TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
 };
 #[cfg(test)]
 pub(crate) use tab_context_menu::TAB_CONTEXT_MENU;

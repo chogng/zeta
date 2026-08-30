@@ -749,7 +749,7 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
 }
 
 #[test]
-fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab() {
+fn expanded_tab_container_reflows_the_terminal_without_a_placeholder_session() {
     let layout = WorkbenchSceneLayout::for_viewport(
         viewport(),
         TabContainerState::expanded(),
@@ -765,10 +765,6 @@ fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab
         .iter()
         .map(|block| block.text())
         .collect::<Vec<_>>();
-    let session_tab = accessibility_nodes
-        .iter()
-        .find(|node| node.id == crate::FIRST_TAB_CONTAINER_SESSION_TAB)
-        .unwrap();
     let resize_handle = accessibility_nodes
         .iter()
         .find(|node| node.id == TAB_CONTAINER_RESIZE_HANDLE)
@@ -787,6 +783,12 @@ fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab
     assert_eq!(layout.main().origin.x, 200.0);
     assert_eq!(layout.composer.origin.x, 224.0);
     assert!(visible_text.contains(&"Search sessions..."));
+    assert!(visible_text.contains(&"Settings"));
+    assert!(
+        accessibility_nodes
+            .iter()
+            .all(|node| node.id != crate::FIRST_TAB_CONTAINER_SESSION_TAB)
+    );
     let inspected_search = presentation
         .frame()
         .scene()
@@ -807,11 +809,6 @@ fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab
     assert_eq!(search.role, AccessibilityRole::TextInput);
     assert_eq!(add_session.role, AccessibilityRole::Button);
     assert_eq!(add_session.label, "Add new session");
-    assert_eq!(session_tab.role, AccessibilityRole::Tab);
-    assert_eq!(
-        session_tab.selection,
-        zui::ui::AccessibilitySelection::Selected
-    );
     assert_eq!(resize_handle.role, AccessibilityRole::Separator);
     assert_eq!(resize_handle.label, "Resize tabs");
     assert_eq!(resize_handle.value.as_deref(), Some("200 pixels"));
@@ -1825,7 +1822,7 @@ fn alternate_screen_ime_position_comes_from_the_terminal_cursor() {
 }
 
 #[test]
-fn background_terminal_title_does_not_replace_the_agent_session_title() {
+fn background_terminal_title_does_not_create_a_placeholder_session() {
     let mut terminal = TerminalCore::new(GridSize::new(29, 119));
     terminal.process_output(b"\x1b]2;project shell\x07");
 
@@ -1839,6 +1836,6 @@ fn background_terminal_title_does_not_replace_the_agent_session_title() {
         .iter()
         .map(|block| block.text())
         .collect::<Vec<_>>();
-    assert!(text.contains(&APP_DISPLAY_NAME));
+    assert!(!text.contains(&APP_DISPLAY_NAME));
     assert!(!text.contains(&"project shell"));
 }

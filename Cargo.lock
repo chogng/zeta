@@ -11987,6 +11987,7 @@ name = "zeta-rollout-trace"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "zeta-core",
  "zeta-history",
  "zeta-protocol",
  "zeta-rollout",
@@ -12231,6 +12232,7 @@ dependencies = [
 name = "zeta-thread-store"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "zeta-history",
  "zeta-protocol",
 ]

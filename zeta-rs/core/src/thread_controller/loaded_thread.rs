@@ -121,6 +121,25 @@ impl LoadedThreads {
             .map(|loaded| loaded.incarnation))
     }
 
+    pub(super) fn snapshots(&self) -> Result<Vec<ThreadSnapshot>, CoreError> {
+        let slots = self
+            .slots
+            .lock()
+            .map_err(|_| CoreError::Journal("loaded Thread registry lock poisoned".into()))?
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        slots
+            .into_iter()
+            .filter_map(|slot| match slot.loaded.lock() {
+                Ok(loaded) => loaded.as_ref().map(|loaded| Ok(loaded.snapshot.clone())),
+                Err(_) => Some(Err(CoreError::Journal(
+                    "loaded Thread state lock poisoned".into(),
+                ))),
+            })
+            .collect()
+    }
+
     pub(super) fn ensure_loaded_incarnation(
         &self,
         thread_id: &ThreadId,

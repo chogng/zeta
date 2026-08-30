@@ -148,14 +148,6 @@ impl<'a> WorkbenchTabGroup<'a> {
             tabs,
         }
     }
-
-    pub const fn id(&self) -> TabGroupId {
-        self.id
-    }
-
-    pub fn insert_tab(&mut self, index: usize, tab: WorkbenchTab<'a>) {
-        self.tabs.insert(index.min(self.tabs.len()), tab);
-    }
 }
 
 /// Resolves one presentation's element identity without leaking UI identity into Workbench state.

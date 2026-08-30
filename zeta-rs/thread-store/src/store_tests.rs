@@ -3,7 +3,10 @@ use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use zeta_history::EventId;
 use zeta_history::StoredEvent;
 use zeta_history::Timestamp;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionThread;
 use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadStatus;
 
 fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
     ThreadEventBatch {
@@ -24,6 +27,25 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
                 title: "test".into(),
             },
         }],
+        catalog: ThreadCatalogRecord {
+            session_id: zeta_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
+            thread: SessionThread {
+                thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
+                title: "test".into(),
+                created_at_unix_ms: 1,
+                completed_turn_duration_ms: 0,
+                active_turn_started_at_unix_ms: None,
+                usage: Default::default(),
+                parent_thread_id: None,
+                forked_from_id: None,
+                status: ThreadStatus::Active,
+            },
+            sequence: event_sequence,
+            manager: SessionManagerInfo::default(),
+            archived_at_unix_ms: None,
+            stopped: false,
+            requires_startup_recovery: false,
+        },
     }
 }
 

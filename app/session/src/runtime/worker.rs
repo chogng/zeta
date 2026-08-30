@@ -214,6 +214,13 @@ fn run_connection(
         .initialization()
         .map_err(|error| SessionRuntimeFailure::connection(anyhow!(error.to_string())))?;
     let slash_commands = initialization.slash_commands.clone();
+    let events = session
+        .take_events()
+        .map_err(|error| SessionRuntimeFailure::connection(anyhow!(error.to_string())))?;
+    let (sessions, selected) = ensure_session_catalog(&mut client, cwd, preferred_session_id)
+        .map_err(SessionRuntimeFailure::connection)?;
+    send_event(event_sink, SessionRuntimeEvent::SessionCatalog(sessions))
+        .map_err(SessionRuntimeFailure::fatal)?;
     let models = client
         .list_models()
         .map_err(|error| SessionRuntimeFailure::connection(anyhow!(error.to_string())))?
@@ -226,13 +233,8 @@ fn run_connection(
         },
     )
     .map_err(SessionRuntimeFailure::fatal)?;
-    let events = session
-        .take_events()
-        .map_err(|error| SessionRuntimeFailure::connection(anyhow!(error.to_string())))?;
-    let (sessions, mut active) = ensure_active_session(&mut client, cwd, preferred_session_id)
+    let mut active = initialize_active_session(&mut client, selected, cwd)
         .map_err(SessionRuntimeFailure::connection)?;
-    send_event(event_sink, SessionRuntimeEvent::SessionCatalog(sessions))
-        .map_err(SessionRuntimeFailure::fatal)?;
     publish_subscription(event_sink, &active.subscription, &active.thread_id)
         .map_err(SessionRuntimeFailure::fatal)?;
     send_event(event_sink, SessionRuntimeEvent::Connected(client.clone()))

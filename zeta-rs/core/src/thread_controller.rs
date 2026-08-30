@@ -38,6 +38,10 @@ use zeta_protocol::ItemId;
 use zeta_protocol::ModelRef;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
+use zeta_protocol::SessionManagerActivity;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionManagerStatus;
+use zeta_protocol::SessionThread;
 use zeta_protocol::SkillActivationReason;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::ThreadCommand;
@@ -47,6 +51,7 @@ use zeta_protocol::ThreadGoalStatus;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadOrigin;
+use zeta_protocol::ThreadStatus;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
 use zeta_protocol::ToolCallBinding;
@@ -60,6 +65,7 @@ use zeta_protocol::TurnKind;
 use zeta_protocol::TurnStatus;
 use zeta_protocol::UserInput;
 use zeta_thread_store::AppendBatchResult;
+use zeta_thread_store::ThreadCatalogRecord;
 use zeta_thread_store::ThreadStoreError;
 use zeta_thread_store::validate_append_batch;
 
@@ -1811,6 +1817,25 @@ impl ThreadController {
             .collect()
     }
 
+    /// Reads lightweight durable Thread facts without loading full histories.
+    pub fn list_thread_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, CoreError> {
+        self.store.list_catalog().map_err(CoreError::from)
+    }
+
+    /// Reads only histories already recovered for startup or opened by a caller.
+    pub fn list_loaded_threads(&self) -> Result<Vec<ThreadSnapshot>, CoreError> {
+        self.loaded_threads.snapshots()
+    }
+
+    /// Builds the durable catalog record for one loaded or newly read Thread.
+    pub fn thread_catalog_record(
+        &self,
+        thread_id: &ThreadId,
+    ) -> Result<ThreadCatalogRecord, CoreError> {
+        self.read_thread(thread_id)
+            .map(|snapshot| thread_catalog_record(&snapshot))
+    }
+
     /// Reads the Threads that currently share one Session tree identity.
     pub fn list_session_threads(
         &self,
@@ -2137,13 +2162,16 @@ impl ThreadController {
             projection = Some(reduce_thread_event(projection, &envelope)?);
             envelopes.push(envelope);
         }
+        let projection = projection.expect("a non-empty event batch always creates a projection");
+        let catalog = thread_catalog_record(&projection);
         Ok((
-            projection.expect("a non-empty event batch always creates a projection"),
+            projection,
             ThreadEventBatch {
                 batch_id: self.next_identifier("batch"),
                 thread_id: thread_id.clone(),
                 expected_sequence,
                 events: envelopes,
+                catalog,
             },
         ))
     }
@@ -2450,12 +2478,204 @@ fn matching_created_thread(
     }
 }
 
+fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
+    ThreadCatalogRecord {
+        session_id: snapshot.session_id.clone(),
+        thread: SessionThread {
+            thread_id: snapshot.thread_id.clone(),
+            title: snapshot.title.clone(),
+            created_at_unix_ms: snapshot.created_at_unix_ms,
+            completed_turn_duration_ms: snapshot.completed_turn_duration_ms(),
+            active_turn_started_at_unix_ms: snapshot.active_turn_started_at_unix_ms(),
+            usage: snapshot.usage.clone(),
+            parent_thread_id: snapshot.parent_thread_id.clone(),
+            forked_from_id: snapshot.forked_from_id.clone(),
+            status: snapshot.status,
+        },
+        sequence: snapshot.sequence,
+        manager: thread_manager_info(snapshot),
+        archived_at_unix_ms: snapshot.archived_at_unix_ms,
+        stopped: snapshot.archive_reason == Some(zeta_protocol::ThreadArchiveReason::Stopped),
+        requires_startup_recovery: thread_requires_startup_recovery(snapshot),
+    }
+}
+
+fn thread_requires_startup_recovery(snapshot: &ThreadSnapshot) -> bool {
+    snapshot
+        .goal
+        .as_ref()
+        .is_some_and(|goal| goal.status.is_active())
+        || snapshot.turns.iter().any(|turn| {
+            matches!(
+                turn.status,
+                TurnStatus::Created
+                    | TurnStatus::Running
+                    | TurnStatus::WaitingForApproval
+                    | TurnStatus::WaitingForUserInput
+                    | TurnStatus::WaitingForCapability
+                    | TurnStatus::Cancelling
+            )
+        })
+}
+
+fn thread_manager_info(snapshot: &ThreadSnapshot) -> SessionManagerInfo {
+    if snapshot.status == ThreadStatus::Archived {
+        let archived_at = snapshot
+            .archived_at_unix_ms
+            .unwrap_or(snapshot.created_at_unix_ms);
+        let completed_at = latest_catalog_turn(snapshot, |_| true)
+            .filter(|turn| turn.status == TurnStatus::Completed)
+            .map(|turn| turn.status_changed_at_unix_ms)
+            .unwrap_or(archived_at);
+        return SessionManagerInfo {
+            status: if snapshot.archive_reason == Some(zeta_protocol::ThreadArchiveReason::Stopped)
+            {
+                SessionManagerStatus::Stopped
+            } else {
+                SessionManagerStatus::Completed
+            },
+            status_changed_at_unix_ms: if snapshot.archive_reason
+                == Some(zeta_protocol::ThreadArchiveReason::Stopped)
+            {
+                archived_at
+            } else {
+                completed_at
+            },
+            activity: None,
+            summary: None,
+        };
+    }
+    if let Some(turn) = latest_catalog_turn(snapshot, |status| {
+        matches!(
+            status,
+            TurnStatus::WaitingForApproval
+                | TurnStatus::WaitingForUserInput
+                | TurnStatus::WaitingForCapability
+        )
+    }) {
+        return SessionManagerInfo {
+            status: SessionManagerStatus::NeedsInput,
+            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+            activity: turn.pending_interaction.as_ref().map(|interaction| {
+                SessionManagerActivity::Question {
+                    text: interaction_question(&interaction.request),
+                }
+            }),
+            summary: None,
+        };
+    }
+    if let Some(turn) = latest_catalog_turn(snapshot, |status| {
+        matches!(
+            status,
+            TurnStatus::Created | TurnStatus::Running | TurnStatus::Cancelling
+        )
+    }) {
+        return SessionManagerInfo {
+            status: SessionManagerStatus::Working,
+            status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+            activity: working_operation(snapshot, turn),
+            summary: None,
+        };
+    }
+    let Some(turn) = latest_catalog_turn(snapshot, |_| true) else {
+        return SessionManagerInfo {
+            status: SessionManagerStatus::Idle,
+            status_changed_at_unix_ms: snapshot.created_at_unix_ms,
+            activity: None,
+            summary: None,
+        };
+    };
+    let (status, activity) = match turn.status {
+        TurnStatus::Failed => (
+            SessionManagerStatus::Failed,
+            turn.failure
+                .as_ref()
+                .map(|failure| SessionManagerActivity::Failure {
+                    text: failure.message.clone(),
+                }),
+        ),
+        TurnStatus::Interrupted => (SessionManagerStatus::Stopped, None),
+        TurnStatus::Completed => (SessionManagerStatus::ReadyForReview, None),
+        _ => (SessionManagerStatus::Idle, None),
+    };
+    SessionManagerInfo {
+        status,
+        status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+        activity,
+        summary: None,
+    }
+}
+
+fn latest_catalog_turn(
+    snapshot: &ThreadSnapshot,
+    accepts: impl Fn(TurnStatus) -> bool,
+) -> Option<&crate::TurnSnapshot> {
+    snapshot
+        .turns
+        .iter()
+        .filter(|turn| accepts(turn.status))
+        .max_by_key(|turn| turn.status_changed_at_unix_ms)
+}
+
+fn interaction_question(request: &AgentRequest) -> String {
+    match request {
+        AgentRequest::Approval { request } => request.reason.clone(),
+        AgentRequest::UserInput { request } => request
+            .questions
+            .first()
+            .map(|question| question.question.clone())
+            .unwrap_or_else(|| "Waiting for user input".into()),
+        AgentRequest::DynamicTool { call } => format!("Run {}?", call.name),
+    }
+}
+
+fn working_operation(
+    snapshot: &ThreadSnapshot,
+    turn: &crate::TurnSnapshot,
+) -> Option<SessionManagerActivity> {
+    let unresolved_tool = snapshot.items.iter().rev().find_map(|item| {
+        let ThreadItem::ToolCall {
+            turn_id,
+            tool_call_id,
+            name,
+            ..
+        } = item
+        else {
+            return None;
+        };
+        if turn_id != &turn.turn_id
+            || snapshot.items.iter().any(|candidate| {
+                matches!(
+                    candidate,
+                    ThreadItem::ToolResult {
+                        tool_call_id: result_id,
+                        ..
+                    } if result_id == tool_call_id
+                )
+            })
+        {
+            return None;
+        }
+        Some(format!("Running {name}"))
+    });
+    let text = unresolved_tool.or_else(|| {
+        turn.plan.as_ref().and_then(|plan| {
+            plan.steps
+                .iter()
+                .find(|step| step.status == zeta_protocol::PlanStepStatus::InProgress)
+                .map(|step| step.step.clone())
+        })
+    })?;
+    Some(SessionManagerActivity::Operation { text })
+}
+
 #[derive(Default)]
 pub struct InMemoryThreadStore(Mutex<InMemoryThreadStoreState>);
 
 #[derive(Default)]
 struct InMemoryThreadStoreState {
     threads: BTreeMap<ThreadId, Vec<StoredEvent>>,
+    catalog: BTreeMap<ThreadId, ThreadCatalogRecord>,
     batch_ids: BTreeSet<String>,
 }
 
@@ -2495,6 +2715,26 @@ impl ThreadStore for InMemoryThreadStore {
             .unwrap_or_default())
     }
 
+    fn list_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
+            .catalog
+            .values()
+            .cloned()
+            .collect())
+    }
+
+    fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError> {
+        self.0
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("in-memory store lock poisoned".into()))?
+            .catalog
+            .insert(record.thread.thread_id.clone(), record.clone());
+        Ok(())
+    }
+
     fn append_batch(
         &self,
         batch: &ThreadEventBatch,
@@ -2521,6 +2761,9 @@ impl ThreadStore for InMemoryThreadStore {
             ));
         }
         events.extend(batch.events.iter().cloned());
+        state
+            .catalog
+            .insert(batch.thread_id.clone(), batch.catalog.clone());
         state.batch_ids.insert(batch.batch_id.clone());
         Ok(result)
     }

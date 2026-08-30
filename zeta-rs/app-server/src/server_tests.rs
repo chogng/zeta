@@ -1339,6 +1339,16 @@ fn session_first_flow_exposes_derived_session_and_canonical_thread_models() {
     );
     assert_eq!(read["result"]["thread"]["sessionId"], session_id);
     assert_eq!(read["result"]["thread"]["sequence"], 1);
+
+    let listed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"session/list","params":{}}),
+    );
+    assert_eq!(
+        listed["result"]["sessions"][0],
+        thread["result"]["value"]["session"]
+    );
 }
 
 #[test]

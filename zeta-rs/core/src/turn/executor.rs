@@ -368,7 +368,7 @@ impl TurnExecutor {
         session_ids: &BTreeSet<SessionId>,
     ) -> Result<usize, CoreError> {
         let mut resumed = 0;
-        for snapshot in self.threads.list_threads()? {
+        for snapshot in self.threads.list_loaded_threads()? {
             if !session_ids.contains(&snapshot.session_id) {
                 continue;
             }
@@ -417,7 +417,7 @@ impl TurnExecutor {
         matches_session: impl Fn(&SessionId) -> bool,
     ) -> Result<usize, CoreError> {
         let mut resumed = 0;
-        for snapshot in self.threads.list_threads()? {
+        for snapshot in self.threads.list_loaded_threads()? {
             if !matches_session(&snapshot.session_id) {
                 continue;
             }

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{SqliteDurability, open_sqlite_database};
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 4;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 5;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -115,7 +115,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
-        Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(4) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
                 "unsupported event-store SQLite schema version {version}"
@@ -124,7 +124,18 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
     }
     transaction
         .execute_batch(
-            "CREATE INDEX IF NOT EXISTS turn_change_sets_thread_revision
+            "CREATE TABLE IF NOT EXISTS thread_catalog (
+                 thread_id TEXT PRIMARY KEY,
+                 session_id TEXT NOT NULL,
+                 requires_startup_recovery INTEGER NOT NULL,
+                 record_json TEXT NOT NULL,
+                 FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
+             );
+             CREATE INDEX IF NOT EXISTS thread_catalog_session
+             ON thread_catalog(session_id, thread_id);
+             CREATE INDEX IF NOT EXISTS thread_catalog_startup_recovery
+             ON thread_catalog(requires_startup_recovery, session_id, thread_id);
+             CREATE INDEX IF NOT EXISTS turn_change_sets_thread_revision
              ON turn_change_sets(thread_id, revision);",
         )
         .map_err(sql_error)?;

@@ -32,8 +32,8 @@ use crate::TabPart;
 use crate::TabStatusKind;
 
 pub use super::tab_mount::TabContainerPlacement;
-pub use super::tab_mount::WorkbenchTab;
-pub use super::tab_mount::WorkbenchTabGroup;
+use super::tab_mount::WorkbenchTab;
+use super::tab_mount::WorkbenchTabGroup;
 use super::tab_mount::WorkbenchTabKind;
 pub use super::tab_mount::mounted_tab_element_id;
 pub use super::tab_mount::tab_input_element_id;

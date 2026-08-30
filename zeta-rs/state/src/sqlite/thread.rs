@@ -6,6 +6,7 @@ use zeta_history::StoredEvent;
 use zeta_history::supports_stored_event_schema_version;
 use zeta_protocol::ThreadId;
 use zeta_thread_store::AppendBatchResult;
+use zeta_thread_store::ThreadCatalogRecord;
 use zeta_thread_store::ThreadEventBatch;
 use zeta_thread_store::ThreadStore;
 use zeta_thread_store::ThreadStoreError;
@@ -49,6 +50,75 @@ impl ThreadStore for SqliteThreadStore {
                     .map_err(|error| ThreadStoreError::Storage(error.to_string()))
             })
             .collect()
+    }
+
+    fn list_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT catalog.thread_id,
+                        catalog.session_id,
+                        catalog.requires_startup_recovery,
+                        catalog.record_json,
+                        streams.current_sequence
+                 FROM thread_catalog AS catalog
+                 JOIN thread_streams AS streams ON streams.thread_id = catalog.thread_id
+                 ORDER BY catalog.session_id, catalog.thread_id",
+            )
+            .map_err(storage_error)?;
+        statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            })
+            .map_err(storage_error)?
+            .map(|row| {
+                let (thread_id, session_id, requires_recovery, record_json, current_sequence) =
+                    row.map_err(storage_error)?;
+                let record = serde_json::from_str::<ThreadCatalogRecord>(&record_json)
+                    .map_err(|error| ThreadStoreError::Storage(error.to_string()))?;
+                let current_sequence =
+                    from_sql_integer(current_sequence).map_err(ThreadStoreError::Storage)?;
+                if record.thread.thread_id.as_str() != thread_id
+                    || record.session_id.as_str() != session_id
+                    || i64::from(record.requires_startup_recovery) != requires_recovery
+                    || record.sequence != current_sequence
+                {
+                    return Err(ThreadStoreError::Storage(
+                        "Thread catalog metadata disagrees with its stored record".into(),
+                    ));
+                }
+                Ok(record)
+            })
+            .collect()
+    }
+
+    fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError> {
+        let mut connection = self.connection()?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        let current_sequence = transaction
+            .query_row(
+                "SELECT current_sequence FROM thread_streams WHERE thread_id = ?1",
+                [record.thread.thread_id.as_str()],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(storage_error)
+            .and_then(|value| from_sql_integer(value).map_err(ThreadStoreError::Storage))?;
+        if current_sequence != record.sequence {
+            return Err(ThreadStoreError::SequenceConflict {
+                expected: record.sequence,
+                actual: current_sequence,
+            });
+        }
+        write_catalog(&transaction, record)?;
+        transaction.commit().map_err(storage_error)
     }
 
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError> {
@@ -218,9 +288,35 @@ impl ThreadStore for SqliteThreadStore {
                 actual,
             });
         }
+        write_catalog(&transaction, &batch.catalog)?;
         transaction.commit().map_err(storage_error)?;
         Ok(result)
     }
+}
+
+fn write_catalog(
+    connection: &Connection,
+    record: &ThreadCatalogRecord,
+) -> Result<(), ThreadStoreError> {
+    connection
+        .execute(
+            "INSERT INTO thread_catalog
+             (thread_id, session_id, requires_startup_recovery, record_json)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(thread_id) DO UPDATE SET
+                 session_id = excluded.session_id,
+                 requires_startup_recovery = excluded.requires_startup_recovery,
+                 record_json = excluded.record_json",
+            params![
+                record.thread.thread_id.as_str(),
+                record.session_id.as_str(),
+                record.requires_startup_recovery,
+                serde_json::to_string(record)
+                    .map_err(|error| ThreadStoreError::Storage(error.to_string()))?,
+            ],
+        )
+        .map_err(storage_error)?;
+    Ok(())
 }
 
 impl SqliteThreadStore {

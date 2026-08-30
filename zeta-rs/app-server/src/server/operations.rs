@@ -6,6 +6,7 @@ use super::decode;
 use super::result;
 use base64::Engine;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::common::SchemaHash;
@@ -90,6 +91,7 @@ use zeta_protocol::ThreadArchiveReason;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::UserInput;
+use zeta_thread_store::ThreadCatalogRecord;
 use zeta_typst::TypstCompileError;
 use zeta_typst::TypstCompileOutcome;
 use zeta_typst::TypstDiagnostic;
@@ -1555,16 +1557,16 @@ impl AppServer {
     }
 
     fn session_views(&self) -> Result<Vec<Session>, RpcError> {
-        let session_ids = self
-            .threads
-            .list_threads()
-            .map_err(core_error)?
+        let mut records = BTreeMap::<zeta_protocol::SessionId, Vec<ThreadCatalogRecord>>::new();
+        for record in self.threads.list_thread_catalog().map_err(core_error)? {
+            records
+                .entry(record.session_id.clone())
+                .or_default()
+                .push(record);
+        }
+        records
             .into_iter()
-            .map(|thread| thread.session_id)
-            .collect::<std::collections::BTreeSet<_>>();
-        session_ids
-            .into_iter()
-            .map(|session_id| self.session_view(&session_id))
+            .map(|(_, records)| session_from_catalog(records))
             .collect()
     }
 
@@ -1580,6 +1582,92 @@ impl AppServer {
         self.updates.publish_thread(thread_id, &updates);
         Ok(())
     }
+}
+
+fn session_from_catalog(mut records: Vec<ThreadCatalogRecord>) -> Result<Session, RpcError> {
+    records.sort_by(|left, right| left.thread.thread_id.cmp(&right.thread.thread_id));
+    let first = records.first().ok_or_else(|| {
+        core_error(zeta_core::CoreError::Journal(
+            "empty Session catalog".into(),
+        ))
+    })?;
+    let session_id = first.session_id.clone();
+    let root = records
+        .iter()
+        .find(|record| record.thread.thread_id.as_str() == session_id.as_str())
+        .unwrap_or(first);
+    let title = root.thread.title.clone();
+    let created_at_unix_ms = root.thread.created_at_unix_ms;
+    let status = if records
+        .iter()
+        .all(|record| record.thread.status == ThreadStatus::Archived)
+    {
+        SessionStatus::Archived
+    } else {
+        SessionStatus::Active
+    };
+    let manager = catalog_session_manager(&records, created_at_unix_ms, status);
+    Ok(Session {
+        session_id,
+        title,
+        status,
+        manager,
+        threads: records.into_iter().map(|record| record.thread).collect(),
+    })
+}
+
+fn catalog_session_manager(
+    records: &[ThreadCatalogRecord],
+    created_at_unix_ms: u64,
+    lifecycle: SessionStatus,
+) -> SessionManagerInfo {
+    if lifecycle == SessionStatus::Archived {
+        let stopped = records.iter().any(|record| record.stopped);
+        let archived_at = records
+            .iter()
+            .filter_map(|record| record.archived_at_unix_ms)
+            .max()
+            .unwrap_or(created_at_unix_ms);
+        let completed_at = records
+            .iter()
+            .filter(|record| record.manager.status == SessionManagerStatus::Completed)
+            .map(|record| record.manager.status_changed_at_unix_ms)
+            .max()
+            .unwrap_or(archived_at);
+        return SessionManagerInfo {
+            status: if stopped {
+                SessionManagerStatus::Stopped
+            } else {
+                SessionManagerStatus::Completed
+            },
+            status_changed_at_unix_ms: if stopped { archived_at } else { completed_at },
+            activity: None,
+            summary: None,
+        };
+    }
+    for status in [
+        SessionManagerStatus::NeedsInput,
+        SessionManagerStatus::Working,
+    ] {
+        if let Some(record) = records
+            .iter()
+            .filter(|record| record.manager.status == status)
+            .max_by_key(|record| record.manager.status_changed_at_unix_ms)
+        {
+            return record.manager.clone();
+        }
+    }
+    records
+        .iter()
+        .filter(|record| record.manager.status != SessionManagerStatus::Idle)
+        .max_by_key(|record| record.manager.status_changed_at_unix_ms)
+        .map(|record| record.manager.clone())
+        .unwrap_or(SessionManagerInfo {
+            status: SessionManagerStatus::Idle,
+            status_changed_at_unix_ms: created_at_unix_ms,
+            activity: None,
+            summary: None,
+        })
 }
 
 fn session_manager_info(

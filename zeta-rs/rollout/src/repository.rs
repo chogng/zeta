@@ -1,5 +1,6 @@
 use crate::LocalStateError;
 use crate::lease::LeaseDirectory;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zeta_attachments::FileImageAttachmentStore;
@@ -10,8 +11,8 @@ use zeta_state::{SqliteThreadStore, StateRuntime};
 /// Opens and recovers local authoritative Thread state under one profile root.
 ///
 /// A repository provides the typed store ports needed by consumers that must inspect durable
-/// history. New controllers must be obtained through [`Self::recover_threads`] so every durable
-/// Thread is available before product services resume work.
+/// history. New controllers must be obtained through [`Self::recover_threads`] so resumable work
+/// is restored before product services start while ordinary history stays lazy.
 pub struct LocalStateRepository {
     database_path: PathBuf,
     thread_store: Arc<SqliteThreadStore>,
@@ -48,7 +49,7 @@ impl LocalStateRepository {
         self.recover_threads_with_image_attachments(Arc::clone(&self.image_attachments))
     }
 
-    /// Recovers state with the exact attachment service used by the owning product host.
+    /// Opens Thread state, upgrades missing catalog rows, and recovers only resumable work.
     pub fn recover_threads_with_image_attachments(
         &self,
         image_attachments: Arc<ImageAttachments>,
@@ -60,8 +61,26 @@ impl LocalStateRepository {
             thread_lease,
             image_attachments,
         ));
+        let catalog = self.thread_store.list_catalog()?;
+        let catalog_ids = catalog
+            .iter()
+            .map(|record| record.thread.thread_id.clone())
+            .collect::<BTreeSet<_>>();
+        let mut recovered = BTreeSet::new();
         for thread_id in self.thread_store.list_thread_ids()? {
+            if catalog_ids.contains(&thread_id) {
+                continue;
+            }
             threads.recover_thread(&thread_id)?;
+            let record = threads.thread_catalog_record(&thread_id)?;
+            self.thread_store.backfill_catalog(&record)?;
+            recovered.insert(thread_id);
+        }
+        for record in self.thread_store.list_catalog()? {
+            if record.requires_startup_recovery && recovered.insert(record.thread.thread_id.clone())
+            {
+                threads.recover_thread(&record.thread.thread_id)?;
+            }
         }
 
         Ok(threads)

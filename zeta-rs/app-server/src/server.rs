@@ -1392,7 +1392,7 @@ impl AppServer {
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
         let backend = Arc::clone(&self.turn_backend);
         let mut resumed = 0;
-        for session_id in self.session_ids()? {
+        for session_id in self.loaded_session_ids()? {
             for spawned in self.multi_agent.recover_session(&session_id)? {
                 let child = self.threads.read_thread(&spawned.child_thread_id)?;
                 let should_start = child.turns.iter().any(|turn| {
@@ -1411,14 +1411,14 @@ impl AppServer {
 
     /// Re-enqueues durable running Tool continuations after host services are installed.
     pub fn resume_recovered_tool_continuations(&self) -> Result<usize, CoreError> {
-        let session_ids = self.session_ids()?;
+        let session_ids = self.loaded_session_ids()?;
         self.turn_executor_snapshot()
             .resume_recovered_tool_continuations_in_sessions(&session_ids)
     }
 
     /// Starts durable idle Goal continuations after the local runtime has been restored.
     pub fn resume_recovered_goal_continuations(&self) -> Result<usize, CoreError> {
-        let session_ids = self.session_ids()?;
+        let session_ids = self.loaded_session_ids()?;
         self.turn_executor_snapshot()
             .resume_recovered_goal_continuations_in_sessions(&session_ids)
     }
@@ -1426,7 +1426,16 @@ impl AppServer {
     fn session_ids(&self) -> Result<BTreeSet<zeta_protocol::SessionId>, CoreError> {
         Ok(self
             .threads
-            .list_threads()?
+            .list_thread_catalog()?
+            .into_iter()
+            .map(|record| record.session_id)
+            .collect())
+    }
+
+    fn loaded_session_ids(&self) -> Result<BTreeSet<zeta_protocol::SessionId>, CoreError> {
+        Ok(self
+            .threads
+            .list_loaded_threads()?
             .into_iter()
             .map(|thread| thread.session_id)
             .collect())

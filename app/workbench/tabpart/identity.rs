@@ -33,10 +33,6 @@ pub const ADD_SESSION: ElementId = ElementId::scoped(SHELL_SCOPE, 27);
 pub const TITLEBAR_SETTINGS_BUTTON: ElementId = ElementId::scoped(SHELL_SCOPE, 55);
 pub const FIRST_TAB_CONTAINER_SESSION_TAB: ElementId = ElementId::scoped(TAB_CONTAINER_SCOPE, 2);
 pub const FIRST_TITLEBAR_SESSION_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 2);
-pub const FIRST_TAB_CONTAINER_SESSION_CLOSE: ElementId =
-    ElementId::scoped(TAB_CONTAINER_CLOSE_SCOPE, FIRST_SESSION_TAB);
-pub const FIRST_TAB_CONTAINER_SESSION_ACTION: ElementId =
-    ElementId::scoped(TAB_CONTAINER_ACTION_SCOPE, FIRST_SESSION_TAB);
 pub const TAB_CONTAINER_LIST: ElementId = ElementId::scoped(TAB_CONTAINER_GROUP_SCOPE, 1);
 pub const TITLEBAR_TAB_LIST: ElementId = ElementId::scoped(TITLEBAR_TAB_GROUP_SCOPE, 1);
 

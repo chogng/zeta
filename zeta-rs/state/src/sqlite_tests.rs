@@ -8,9 +8,13 @@ use zeta_history::EventId;
 use zeta_history::StoredEvent;
 use zeta_history::Timestamp;
 use zeta_protocol::SessionId;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionThread;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadStatus;
 use zeta_protocol::TurnId;
+use zeta_thread_store::ThreadCatalogRecord;
 use zeta_thread_store::ThreadEventBatch;
 use zeta_thread_store::ThreadStore;
 use zeta_thread_store::ThreadStoreError;
@@ -50,6 +54,28 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
         work_attempt: None,
     })
     .unwrap()
+}
+
+fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
+    ThreadCatalogRecord {
+        session_id: session_id.clone(),
+        thread: SessionThread {
+            thread_id: thread_id.clone(),
+            title: "Primary".into(),
+            created_at_unix_ms: 1,
+            completed_turn_duration_ms: 0,
+            active_turn_started_at_unix_ms: None,
+            usage: Default::default(),
+            parent_thread_id: None,
+            forked_from_id: None,
+            status: ThreadStatus::Active,
+        },
+        sequence,
+        manager: SessionManagerInfo::default(),
+        archived_at_unix_ms: None,
+        stopped: false,
+        requires_startup_recovery: false,
+    }
 }
 
 #[test]
@@ -150,6 +176,7 @@ fn sqlite_thread_store_recovers_typed_events() {
         },
     };
 
+    let expected_catalog = catalog(&session_id, &thread_id, 1);
     SqliteThreadStore::open(&path)
         .unwrap()
         .append_batch(&ThreadEventBatch {
@@ -157,22 +184,63 @@ fn sqlite_thread_store_recovers_typed_events() {
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![thread_event.clone()],
+            catalog: expected_catalog.clone(),
         })
         .unwrap();
 
-    assert_eq!(
-        SqliteThreadStore::open(&path)
-            .unwrap()
-            .load(&thread_id)
-            .unwrap(),
-        vec![thread_event]
-    );
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(reopened.load(&thread_id).unwrap(), vec![thread_event]);
+    assert_eq!(reopened.list_catalog().unwrap(), vec![expected_catalog]);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
+    let path = database_path("catalog-metadata");
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    store
+        .append_batch(&ThreadEventBatch {
+            batch_id: "thread-batch-1".into(),
+            thread_id: thread_id.clone(),
+            expected_sequence: 0,
+            events: vec![StoredEvent {
+                schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
+                event_id: EventId("thread-event-1".into()),
+                sequence: 1,
+                thread_id: thread_id.clone(),
+                recorded_at: Timestamp(2),
+                command: None,
+                event: ThreadEvent::ThreadCreated {
+                    session_id: session_id.clone(),
+                    thread_id: thread_id.clone(),
+                    title: "Primary".into(),
+                },
+            }],
+            catalog: catalog(&session_id, &thread_id, 1),
+        })
+        .unwrap();
+    drop(store);
+
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE thread_catalog SET session_id = 'wrong-session' WHERE thread_id = ?1",
+            [thread_id.as_str()],
+        )
+        .unwrap();
+    assert!(matches!(
+        SqliteThreadStore::open(&path).unwrap().list_catalog(),
+        Err(ThreadStoreError::Storage(message)) if message.contains("metadata disagrees")
+    ));
     fs::remove_file(path).unwrap();
 }
 
 #[test]
 fn sqlite_thread_append_is_atomic_and_sequence_checked() {
     let path = database_path("sequence");
+    let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -182,7 +250,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            session_id: SessionId::new("session_1").unwrap(),
+            session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             title: "Primary".into(),
         },
@@ -194,6 +262,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![event.clone()],
+            catalog: catalog(&session_id, &thread_id, 1),
         })
         .unwrap();
     let stale = store.append_batch(&ThreadEventBatch {
@@ -201,6 +270,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         thread_id: thread_id.clone(),
         expected_sequence: 0,
         events: vec![event],
+        catalog: catalog(&session_id, &thread_id, 1),
     });
 
     assert!(matches!(
@@ -218,6 +288,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
 #[test]
 fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() {
     let path = database_path("legacy-schema");
+    let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let mut event = StoredEvent {
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
@@ -227,7 +298,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            session_id: SessionId::new("session_1").unwrap(),
+            session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             title: "Primary".into(),
         },
@@ -239,6 +310,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![event.clone()],
+            catalog: catalog(&session_id, &thread_id, 1),
         })
         .unwrap();
     drop(store);

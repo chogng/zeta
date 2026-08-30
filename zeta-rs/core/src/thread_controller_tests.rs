@@ -188,6 +188,37 @@ fn completion_is_durable_before_snapshot_exposes_it() {
 }
 
 #[test]
+fn thread_catalog_marks_only_unfinished_work_for_startup_recovery() {
+    let journal = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(journal);
+    let thread = create_thread(&threads, "catalog");
+    assert!(
+        !threads
+            .thread_catalog_record(&thread)
+            .unwrap()
+            .requires_startup_recovery
+    );
+
+    let turn = start_turn(&threads, &thread, "catalog-turn");
+    assert!(
+        threads
+            .thread_catalog_record(&thread)
+            .unwrap()
+            .requires_startup_recovery
+    );
+
+    threads
+        .complete_turn(&thread, &turn, "done".into())
+        .unwrap();
+    assert!(
+        !threads
+            .thread_catalog_record(&thread)
+            .unwrap()
+            .requires_startup_recovery
+    );
+}
+
+#[test]
 fn failure_is_durable_before_snapshot_exposes_it() {
     let journal = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(journal.clone());
@@ -433,6 +464,19 @@ impl ThreadStore for ToggleStore {
 
     fn load(&self, _: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError> {
         Ok(Vec::new())
+    }
+
+    fn list_catalog(
+        &self,
+    ) -> Result<Vec<zeta_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
+        Ok(Vec::new())
+    }
+
+    fn backfill_catalog(
+        &self,
+        _: &zeta_thread_store::ThreadCatalogRecord,
+    ) -> Result<(), ThreadStoreError> {
+        Ok(())
     }
 
     fn append_batch(
@@ -829,6 +873,19 @@ impl ThreadStore for PerThreadBlockingStore {
 
     fn load(&self, thread_id: &ThreadId) -> Result<Vec<StoredEvent>, ThreadStoreError> {
         self.inner.load(thread_id)
+    }
+
+    fn list_catalog(
+        &self,
+    ) -> Result<Vec<zeta_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
+        self.inner.list_catalog()
+    }
+
+    fn backfill_catalog(
+        &self,
+        record: &zeta_thread_store::ThreadCatalogRecord,
+    ) -> Result<(), ThreadStoreError> {
+        self.inner.backfill_catalog(record)
     }
 
     fn append_batch(
