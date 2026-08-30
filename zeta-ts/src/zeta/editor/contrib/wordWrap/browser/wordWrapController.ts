@@ -2,13 +2,13 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../common/config/editorOptions.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Owns the transient Alt+Z word-wrap toggle for one Stanza viewport. */
 export class WordWrapController extends Disposable {
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 	) {
 		super();
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));

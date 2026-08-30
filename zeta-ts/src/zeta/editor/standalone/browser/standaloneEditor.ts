@@ -1,22 +1,23 @@
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { toDisposable } from "../../../base/common/lifecycle.js";
+import { Emitter } from "../../../base/common/event.js";
+import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { ContentWidgetPositionPreference, type EditorBrowserOptions, OverlayWidgetPositionPreference } from "../../browser/editorBrowser.js";
+import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference } from "../../browser/editorBrowser.js";
+import { type ConfiguredCodeEditorOptions } from '../../browser/configuredCodeEditor.js';
 import { PositionAffinity } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type NamedEditorThemeData } from "../common/namedEditorTheme.js";
 import { StandaloneEditorInstance, type IStandaloneEditorInstance } from "./standaloneEditorInstance.js";
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 
-type StandaloneEditorBrowserOptions = Omit<EditorBrowserOptions,
+type StandaloneConfiguredCodeEditorOptions = Omit<ConfiguredCodeEditorOptions,
 	"container" | "input" | "languageId" | "model" | "languageFeaturesService" |
 	"languageConfigurationService" | "editorWorkerFactory" | "syntaxWorkerFactory" | "completionWorkerFactory" | "instantiationService"
 >;
 
-export interface IStandaloneEditorConstructionOptions extends StandaloneEditorBrowserOptions {
+export interface IStandaloneEditorConstructionOptions extends StandaloneConfiguredCodeEditorOptions {
 	readonly model?: TextModel;
 	readonly value?: string;
-	readonly languageId?: string;
+	readonly language?: string;
 	readonly resource?: URI;
 	readonly label?: string;
 	readonly readOnly?: boolean;
@@ -34,22 +35,42 @@ export interface IStandaloneEditorApi {
 	readonly getModels: typeof getModels;
 	readonly setModelLanguage: typeof setModelLanguage;
 	readonly getEditors: typeof getEditors;
-	readonly onDidCreateEditor: Event<IStandaloneEditorInstance>;
-	readonly onDidCreateModel: Event<TextModel>;
-	readonly onWillDisposeModel: Event<TextModel>;
-	readonly onDidChangeModelLanguage: Event<{ readonly model: TextModel; readonly oldLanguage: string }>;
+	readonly onDidCreateEditor: typeof onDidCreateEditor;
+	readonly onDidCreateModel: typeof onDidCreateModel;
+	readonly onWillDisposeModel: typeof onWillDisposeModel;
+	readonly onDidChangeModelLanguage: typeof onDidChangeModelLanguage;
 	readonly defineNamedTheme: typeof defineNamedTheme;
 	readonly setTheme: typeof setTheme;
 }
 
 const editors = new Set<IStandaloneEditorInstance>();
 const createEditorEmitter = new Emitter<IStandaloneEditorInstance>();
+const contentWidgetPositionPreference = Object.freeze({
+	EXACT: ContentWidgetPositionPreference.EXACT,
+	ABOVE: ContentWidgetPositionPreference.ABOVE,
+	BELOW: ContentWidgetPositionPreference.BELOW,
+});
+const overlayWidgetPositionPreference = Object.freeze({
+	TOP_RIGHT_CORNER: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER,
+	BOTTOM_RIGHT_CORNER: OverlayWidgetPositionPreference.BOTTOM_RIGHT_CORNER,
+	TOP_CENTER: OverlayWidgetPositionPreference.TOP_CENTER,
+});
 
-export const onDidCreateEditor: Event<IStandaloneEditorInstance> = createEditorEmitter.event;
-export const onDidCreateModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onModelAdded(listener);
-export const onWillDisposeModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onModelRemoved(listener);
-export const onDidChangeModelLanguage: Event<{ readonly model: TextModel; readonly oldLanguage: string }> = listener =>
-	StandaloneServices.get().modelService.onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
+export function onDidCreateEditor(listener: (codeEditor: IStandaloneEditorInstance) => void): IDisposable {
+	return createEditorEmitter.event(listener);
+}
+
+export function onDidCreateModel(listener: (model: TextModel) => void): IDisposable {
+	return StandaloneServices.get().modelService.onModelAdded(listener);
+}
+
+export function onWillDisposeModel(listener: (model: TextModel) => void): IDisposable {
+	return StandaloneServices.get().modelService.onModelRemoved(listener);
+}
+
+export function onDidChangeModelLanguage(listener: (event: { readonly model: TextModel; readonly oldLanguage: string }) => void): IDisposable {
+	return StandaloneServices.get().modelService.onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
+}
 
 /** Creates one browser editor. A supplied model must come from createModel(). */
 export function create(
@@ -62,7 +83,7 @@ export function create(
 	const {
 		model: suppliedModel,
 		value,
-		languageId,
+		language,
 		resource,
 		label,
 		readOnly,
@@ -70,16 +91,17 @@ export function create(
 		autoDetectHighContrast,
 		...browserOptions
 	} = options;
-	if (suppliedModel && (value !== undefined || languageId !== undefined || resource !== undefined)) {
-		throw new TypeError("Standalone editor model cannot be combined with value, languageId, or resource");
+	if (suppliedModel && (value !== undefined || language !== undefined || resource !== undefined)) {
+		throw new TypeError("Standalone editor model cannot be combined with value, language, or resource");
 	}
 	if (theme !== undefined) services.themeService.setTheme(theme);
 	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
+	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
 	const model = suppliedModel ?? services.modelService.createModel(value ?? "", services.languageService.createById(languageId), resource);
 	const ownsModel = suppliedModel === undefined;
 	try {
 		if (services.modelService.getModel(model.uri) !== model) throw new ReferenceError('Standalone editor model is not registered with the model service');
-		const editorOptions: EditorBrowserOptions = {
+		const editorOptions: ConfiguredCodeEditorOptions = {
 			...browserOptions,
 			container: domElement,
 			input: { resource: model.uri, label, readOnly },
@@ -105,21 +127,24 @@ export function create(
 	}
 }
 
-export function createModel(value: string, languageId?: string, resource?: URI): TextModel {
+export function createModel(value: string, language?: string, uri?: URI): TextModel {
 	const services = StandaloneServices.get();
-	return services.modelService.createModel(value, services.languageService.createById(languageId), resource);
+	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
+	return services.modelService.createModel(value, services.languageService.createById(languageId), uri);
 }
 
-export function getModel(resource: URI): TextModel | null {
-	return StandaloneServices.get().modelService.getModel(resource);
+export function getModel(uri: URI): TextModel | null {
+	return StandaloneServices.get().modelService.getModel(uri);
 }
 
 export function getModels(): TextModel[] {
 	return StandaloneServices.get().modelService.getModels();
 }
 
-export function setModelLanguage(model: TextModel, languageId: string): void {
-	model.setLanguage(languageId);
+export function setModelLanguage(model: TextModel, mimeTypeOrLanguageId: string): void {
+	const languageService = StandaloneServices.get().languageService;
+	const languageId = languageService.getLanguageIdByMimeType(mimeTypeOrLanguageId) ?? (mimeTypeOrLanguageId || 'plaintext');
+	model.setLanguage(languageService.createById(languageId));
 }
 
 export function getEditors(): readonly IStandaloneEditorInstance[] {
@@ -136,8 +161,8 @@ export function setTheme(themeId: string): void {
 
 export function createStandaloneEditorApi(): IStandaloneEditorApi {
 	return Object.freeze({
-		ContentWidgetPositionPreference,
-		OverlayWidgetPositionPreference,
+		ContentWidgetPositionPreference: contentWidgetPositionPreference,
+		OverlayWidgetPositionPreference: overlayWidgetPositionPreference,
 		PositionAffinity,
 		create,
 		createModel,

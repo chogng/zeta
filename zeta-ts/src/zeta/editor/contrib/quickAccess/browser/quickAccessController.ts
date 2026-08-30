@@ -8,7 +8,7 @@ import { CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 export interface GotoLineControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -23,7 +23,7 @@ export class GotoLineController extends Disposable {
 
 	constructor(
 		private readonly editorInput: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		options: GotoLineControllerOptions = {},
 	) {

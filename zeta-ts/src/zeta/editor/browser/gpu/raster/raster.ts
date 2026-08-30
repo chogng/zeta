@@ -22,7 +22,7 @@ export interface IRasterizedGlyph {
 	readonly fontBoundingBoxDescent: number;
 }
 
-export interface IGpuGlyphStyle {
+export interface IStyledGlyphStyle {
 	readonly color: string;
 	readonly fontFamily: string;
 	readonly fontSize: number;
@@ -37,9 +37,9 @@ export interface IStyledGlyphRasterizer {
 	readonly id: number;
 	readonly cacheKey: string;
 	readonly devicePixelRatio: number;
-	styleKey(style: IGpuGlyphStyle): string;
-	rasterizeGlyph(chars: string, style: IGpuGlyphStyle, subPixelX: number): Readonly<IStyledRasterizedGlyph>;
-	getTextMetrics(text: string, style: IGpuGlyphStyle): TextMetrics;
+	styleKey(style: IStyledGlyphStyle): string;
+	rasterizeGlyph(chars: string, style: IStyledGlyphStyle, subPixelX: number): Readonly<IStyledRasterizedGlyph>;
+	getTextMetrics(text: string, style: IStyledGlyphStyle): TextMetrics;
 }
 
 export interface IStyledRasterizedGlyph {

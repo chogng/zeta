@@ -2,24 +2,24 @@ import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { NKeyMap } from '../../../../base/common/map.js';
 import { type IStyledGlyphRasterizer, type IStyledRasterizedGlyph } from '../raster/raster.js';
-import { type IGpuReadableTextureAtlasPage, type IGpuTextureAtlasAllocator, type IGpuTextureAtlasPageGlyph, type ITextureAtlasAllocator } from './atlas.js';
-import { TextureAtlasShelfAllocator } from './textureAtlasShelfAllocator.js';
-import { TextureAtlasSlabAllocator } from './textureAtlasSlabAllocator.js';
+import { type IStyledReadableTextureAtlasPage, type IStyledTextureAtlasAllocator, type IStyledTextureAtlasPageGlyph, type ITextureAtlasAllocator } from './atlas.js';
+import { StyledTextureAtlasShelfAllocator } from './styledTextureAtlasShelfAllocator.js';
+import { StyledTextureAtlasSlabAllocator } from './styledTextureAtlasSlabAllocator.js';
 
 export type AllocatorType = 'shelf' | 'slab' | ((canvas: OffscreenCanvas, textureIndex: number) => ITextureAtlasAllocator);
 
-export type GpuAllocatorType = 'shelf' | 'slab' | ((canvas: HTMLCanvasElement, textureIndex: number) => IGpuTextureAtlasAllocator);
+export type StyledAllocatorType = 'shelf' | 'slab' | ((canvas: HTMLCanvasElement, textureIndex: number) => IStyledTextureAtlasAllocator);
 
-export class TextureAtlasPage extends Disposable implements IGpuReadableTextureAtlasPage {
+export class StyledTextureAtlasPage extends Disposable implements IStyledReadableTextureAtlasPage {
 	public static readonly maximumGlyphCount = 2_500;
 	public readonly source: HTMLCanvasElement;
-	public readonly glyphs = new Set<Readonly<IGpuTextureAtlasPageGlyph>>();
-	private readonly allocator: IGpuTextureAtlasAllocator;
-	private readonly glyphMap = new NKeyMap<Readonly<IGpuTextureAtlasPageGlyph>, [string, string, string]>();
+	public readonly glyphs = new Set<Readonly<IStyledTextureAtlasPageGlyph>>();
+	private readonly allocator: IStyledTextureAtlasAllocator;
+	private readonly glyphMap = new NKeyMap<Readonly<IStyledTextureAtlasPageGlyph>, [string, string, string]>();
 	private currentVersion = 0;
 	private mutableUsedArea = { left: 0, top: 0, right: 0, bottom: 0 };
 
-	constructor(host: HTMLElement, public readonly index: number, pageSize: number, allocatorType: GpuAllocatorType = 'slab') {
+	constructor(host: HTMLElement, public readonly index: number, pageSize: number, allocatorType: StyledAllocatorType = 'slab') {
 		super();
 		this.source = h(host.ownerDocument, 'canvas');
 		this.source.width = pageSize;
@@ -27,8 +27,8 @@ export class TextureAtlasPage extends Disposable implements IGpuReadableTextureA
 		this.allocator = typeof allocatorType === 'function'
 			? allocatorType(this.source, index)
 			: allocatorType === 'shelf'
-				? new TextureAtlasShelfAllocator(this.source, index)
-				: new TextureAtlasSlabAllocator(this.source, index);
+				? new StyledTextureAtlasShelfAllocator(this.source, index)
+				: new StyledTextureAtlasSlabAllocator(this.source, index);
 		this._register(toDisposable(() => {
 			this.source.width = 1;
 			this.source.height = 1;
@@ -43,10 +43,10 @@ export class TextureAtlasPage extends Disposable implements IGpuReadableTextureA
 		return this.mutableUsedArea;
 	}
 
-	public getGlyph(rasterizer: IStyledGlyphRasterizer, chars: string, styleKey: string, rasterize: () => IStyledRasterizedGlyph): Readonly<IGpuTextureAtlasPageGlyph> | undefined {
+	public getGlyph(rasterizer: IStyledGlyphRasterizer, chars: string, styleKey: string, rasterize: () => IStyledRasterizedGlyph): Readonly<IStyledTextureAtlasPageGlyph> | undefined {
 		const existing = this.glyphMap.get(rasterizer.cacheKey, styleKey, chars);
 		if (existing) return existing;
-		if (this.glyphs.size >= TextureAtlasPage.maximumGlyphCount) return undefined;
+		if (this.glyphs.size >= StyledTextureAtlasPage.maximumGlyphCount) return undefined;
 		const glyph = this.allocator.allocate(rasterize());
 		if (!glyph) return undefined;
 		this.glyphMap.set(glyph, rasterizer.cacheKey, styleKey, chars);

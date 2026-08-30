@@ -3,13 +3,13 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { jumpToMatchingBrackets } from "../common/bracketNavigation.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Routes the VS Code go-to-bracket shortcut through the shared structural bracket index. */
 export class BracketNavigationController extends Disposable {
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly bracketPairs: LanguageBracketPairs,
 	) {

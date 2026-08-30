@@ -38,7 +38,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view.js");
+const { View } = await import("../../../browser/view.js");
 const { MouseHandler } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Alt pointer gestures add, toggle, drag, and track multiple selections", () => {
@@ -50,7 +50,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 		model,
 		SelectionSet.single(caret(0, 1)),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -145,7 +145,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 		model,
 		SelectionSet.single(caret(0, 0)),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,

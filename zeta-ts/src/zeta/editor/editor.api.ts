@@ -27,7 +27,7 @@ export type { LanguageProviderBatch, LanguageProviderBatchRegistration } from '.
 export type { LanguageConfigurationInput } from './common/languages/languageConfiguration.js';
 export type { LanguageConfigurationRegistrationOptions } from './common/languages/ownedLanguageConfigurationContributions.js';
 export { RGBA8 } from './common/core/misc/rgba.js';
-export type { TextEdit } from './common/languages.js';
+export type { DocumentColorProvider, IColor, IColorInformation, IColorPresentation, TextEdit } from './common/languages.js';
 export type { TextSnapshot } from './common/core/textChange.js';
 export { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from './common/languages/completion/languageCompletions.js';
 export type { LanguageCompletionCommand, LanguageCompletionItem, LanguageCompletionItemDetails, LanguageCompletionResult, LanguageCompletionTextEdit } from './common/languages/completion/languageCompletions.js';
@@ -45,7 +45,7 @@ export type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolKind, LanguageWork
 export type { LanguageCallHierarchyEntry, LanguageCallHierarchyProvider, LanguageHierarchyFollowupRequest, LanguageHierarchyItem, LanguageHierarchyRequest, LanguageTypeHierarchyProvider } from './contrib/callHierarchy/common/languageHierarchy.js';
 export type { LanguageCodeAction, LanguageCodeActionProvider, LanguageCodeActionRequest } from './contrib/codeAction/common/languageCodeActions.js';
 export type { LanguageCodeLens, LanguageCodeLensCommand, LanguageCodeLensProvider, LanguageCodeLensRequest } from './contrib/codelens/common/languageCodeLenses.js';
-export type { LanguageColorInformation, LanguageColorPresentation, LanguageColorPresentationRequest, LanguageColorProvider, LanguageColorRequest } from './contrib/colorPicker/common/languageColors.js';
+export type { LanguageColorPresentationRequest, LanguageColorProvider, LanguageColorRequest } from './contrib/colorPicker/common/languageColors.js';
 export type { LanguageDocumentSymbol, LanguageDocumentSymbolProvider, LanguageDocumentSymbolRequest, LanguageSymbolKind } from './contrib/documentSymbols/common/languageDocumentSymbols.js';
 export type { LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRangeProvider, LanguageFoldingRangeRequest } from './contrib/folding/common/languageFoldingRanges.js';
 export type { LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from './contrib/format/common/formatCommands.js';

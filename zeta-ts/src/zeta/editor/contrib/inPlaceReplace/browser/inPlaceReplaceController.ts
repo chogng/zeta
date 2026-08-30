@@ -3,14 +3,14 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/versionedEditorWorkerClient.js";
 import { DEFAULT_WORD_REGEXP } from "../../../common/core/wordHelper.js";
 import { Range } from '../../../common/core/range.js';
 
 /** Replaces the current number or well-known value with its neighbor. */
 export class InPlaceReplaceController extends Disposable {
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly wordDefinition: () => RegExp, private readonly onError: (error: unknown) => void) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly wordDefinition: () => RegExp, private readonly onError: (error: unknown) => void) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza in-place replace dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => {

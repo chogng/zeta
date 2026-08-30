@@ -12,7 +12,7 @@ Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本�
 | --- | --- | --- |
 | 输入、删除、undo/redo | `TextModel` + `CursorsController` | 一个同步事务，不等待 IPC |
 | 换行、折叠、可见行和滚动 | `common/viewModel` + `common/viewLayout` | DOM-free、版本绑定 |
-| DOM、光标、选区和 decoration | `browser/view` + `browser/viewparts` | 只投影，不创建第二套模型或滚动权威 |
+| DOM、光标、选区和 decoration | `browser/view` + `browser/viewParts` | 只投影，不创建第二套模型或滚动权威 |
 | token、诊断、补全、折叠、符号和结构选择 | `common/languages`、通用 provider contract 与 frontend service | 异步结果必须通过 model identity 与 version gate；App Server provider 由 Workbench 注册 |
 | 打开、保存、冲突和恢复 | Editor model service + Workbench adapter | 文件传输不拥有 live model |
 | 可选编辑能力 | `contrib/<feature>` | 移除 feature 不破坏基础模型正确性 |
@@ -37,7 +37,7 @@ flowchart LR
     Model --> ViewModel[common/viewModel]
     ViewModel --> ViewLayout[common/viewLayout]
     ViewLayout --> BrowserView[browser/view]
-    BrowserView --> ViewParts[browser/viewparts]
+    BrowserView --> ViewParts[browser/viewParts]
     ViewParts --> DOM[DOM / Canvas]
     Model --> Languages[common/languages + tokens]
     Languages --> Adapters[browser / Workbench / App Server adapters]
@@ -89,7 +89,7 @@ VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效
 
 ```mermaid
 flowchart LR
-    Change[Model / layout / decoration change] --> Project[EditorViewport.project]
+    Change[Model / layout / decoration change] --> Project[View.project]
     Layout[Current EditorViewportLayout] --> Project
     Project --> Lines[ViewLines]
     Lines --> Context[EditorRenderingContext]
@@ -98,13 +98,13 @@ flowchart LR
     Parts --> DOM[DOM / GPU mutation]
 ```
 
-- `ViewLayout` 是 DOM-free layout owner，生成不可变 `EditorViewportLayout`；`LinesLayout` 统一负责行集合、行高与行间 View Zone，browser 只挂载调用方拥有的 zone DOM。
-- `EditorViewport` 同时承担当前 view host、同步 scheduler、measurement 组合、hit test 和 DOM scroll 同步。
+- `ViewLayout` 生成不可变 `EditorViewportLayout`；`EditorViewportLinesLayout` 只转换本地零基行号、overscan 与快照格式，实际行高、padding、View Zone/whitespace 排序和纵向查询统一交给 VS Code 同名的 `LinesLayout`。browser 只挂载调用方拥有的 zone DOM。
+- `View` 同时承担当前 view host、同步 scheduler、measurement 组合、hit test 和 DOM scroll 同步。
 - `ViewLines` 先建立当前 rendered lines；`EditorViewContext` 提供当前 layout 和单次渲染上下文的稳定入口。
 - `EditorRenderingContext` 是每次同步 render pass 的不可变快照，包含 layout、viewport data 和通过 model version 校验的 overlay geometry。
-- `EditorViewPartCollection` 和 `ViewOverlays` 先向全部 Parts 传入同一个 context 执行 `prepareRender`，再按注册顺序执行 `render`。
+- `EditorViewPartCollection` 和 `EditorOverlayCoordinator` 先向全部 Parts 传入同一个 context 执行 `prepareRender`，再按注册顺序执行 `render`。
 - 当前每次 `project` 仍会调用全部 Parts，Part 通过自己的 retained state 避免不必要的重建。
-- `EditorViewport` 先创建并注册全部 Part，再在一个显式装配阶段挂载各 Part 根节点并固定层叠顺序；Part 不接收仅用于自行挂载的容器。
+- `View` 先创建并注册全部 Part，再在一个显式装配阶段挂载各 Part 根节点并固定层叠顺序；Part 不接收仅用于自行挂载的容器。
 
 ### Proposed：按 Part 失效调度
 
@@ -142,7 +142,7 @@ Browser controller 的职责是把一个 DOM event 解析成一个 editor intent
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
 - `PointerEventRouter`：pointer dispatch、drag session 和浏览器 capture 的 browser adapter。
-- `MouseHandler`：把 mouse/pointer hit target 转换为 selection intent；`DragScrolling` 保持拖选期间的边缘滚动，多光标移动命令位于 `common/cursor/cursorMoveCommands.ts`。
+- `MouseHandler`：把 mouse/pointer hit target 转换为 selection intent；`BidirectionalDragScrolling` 统一处理拖选期间的横向和纵向边缘滚动，多光标移动命令位于 `common/cursor/cursorMoveCommands.ts`。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。
@@ -196,11 +196,11 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | --- | --- | --- |
 | TextModel、TextBuffer、history、snapshot、tracked range | ✅ Current | Renderer 内同步权威；PieceTree 仅为私有实现 |
 | Multi-selection、IME、clipboard、pointer/keyboard input | ✅ Current | Browser adapter 调用 common command |
-| Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `EditorViewport` 同步调度 |
+| Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `View` 同步调度 |
 | Token、diagnostic、completion、TextMate 和 App Server parser provider | ✅ Current | version-bound async provider path；Editor 不接收后端 API |
 | Diff editor 与 App Server diff | ✅ Current | Workbench 创建计算服务，Stanza 消费通用结果 |
 | Stable view context 与 single frame context | ✅ Current | `EditorViewContext` 持有稳定读取入口；`EditorRenderingContext` 绑定单次 render pass |
-| Host-owned Part DOM mounting | ✅ Current | `EditorViewport` 显式挂载 Part 根节点并固定 sibling 顺序 |
+| Host-owned Part DOM mounting | ✅ Current | `View` 显式挂载 Part 根节点并固定 sibling 顺序 |
 | Per-Part invalidation 与 coordinated frame scheduler | Proposed | 当前 `project` 同步 render 全部 Parts |
 | `prepareRender` read/write separation | ✅ Current | Part collection 先完成全部 `prepareRender`，再进入 `render` |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |
@@ -217,7 +217,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | `browser/view/domLineBreaksComputer.ts` | browser font measurement for logical-line breaks | DOM measurement、grapheme boundaries |
 | `browser/view.ts` | 当前 view host 和 scheduler | Part order、DOM topology、scroll |
 | `browser/view/renderingContext.ts` | 单次 render pass 的 layout、viewport data 和 version-gated overlay snapshot | 全部 View Parts 与 rendering-context tests |
-| `browser/viewparts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
+| `browser/viewParts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | canonical browser editing surface | input、accessibility、contribution integration |
 | `browser/editorExtensions.ts` | feature-neutral registry/capability seam | `editor.*.all.ts` 与 contribution order |
 

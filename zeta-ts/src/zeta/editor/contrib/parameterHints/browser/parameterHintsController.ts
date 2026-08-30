@@ -4,14 +4,15 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/languageParameterHints.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
+import { EditorOptions } from '../../../common/config/editorOptions.js';
 
 /** Routes the signature-help shortcut and owns the accessible parameter widget. */
 export class ParameterHintsController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
 		super();
 		this.element = h(viewport.element.ownerDocument, "div");
 		this.element.className = "stanza-editor-parameter-hints";
@@ -99,7 +100,7 @@ export class ParameterHintsController extends Disposable {
 }
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.parameterHints", install: context => {
-	if (context.kind !== "text" || context.options.parameterHints === false) return;
+	if (context.kind !== "text" || !EditorOptions.parameterHints.validate(context.options.parameterHints).enabled) return;
 	const service = context.register(new ParameterHintsService(context.model, context.languageFeaturesService.parameterHintsProvider, context.options.input.resource));
 	context.register(new ParameterHintsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

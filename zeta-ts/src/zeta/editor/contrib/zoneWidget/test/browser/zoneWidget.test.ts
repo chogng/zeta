@@ -22,14 +22,14 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import('../../../../browser/view.js');
+const { View } = await import('../../../../browser/view.js');
 const { EditorLineWrapping } = await import('../../../../common/config/editorOptions.js');
 const { ZoneWidget } = await import('../../browser/zoneWidget.js');
 
 test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and releases its zone', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('alpha\nbeta\ngamma');
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
@@ -128,7 +128,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 test('ZoneWidget preserves selection on request and exposes an enabled resize sash while shown', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('alpha\nbeta');
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
@@ -178,7 +178,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 test('ZoneWidget places an anchor after its wrapped visual line', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('abcdefghijklmnopqrst');
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,

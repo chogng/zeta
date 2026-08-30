@@ -15,7 +15,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../browser/view.js");
+const { View } = await import("../../browser/view.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -29,12 +29,14 @@ test("Stanza viewport resize observations use the scrollable client area", () =>
 		}
 
 		observe(): void {}
+		unobserve(): void {}
 		disconnect(): void {}
 	}
 	Object.defineProperty(dom.window, "ResizeObserver", { configurable: true, value: TestResizeObserver });
+	Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: TestResizeObserver });
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel();
-	using viewport = new EditorViewport({ container, model, lineHeight: 20 });
+	using viewport = new View({ container, model, lineHeight: 20 });
 	Object.defineProperties(viewport.element, {
 		clientWidth: { configurable: true, value: 383 },
 		clientHeight: { configurable: true, value: 62 },
@@ -57,7 +59,7 @@ test("Stanza viewport enables scrollbars only for model-backed overflow", () => 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel(`${"x".repeat(100)}\nsecond line`);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20 });
+	using viewport = new View({ container, model, lineHeight: 20 });
 
 	viewport.layout({ width: 50, height: 20 });
 

@@ -1,34 +1,34 @@
 import { h } from '../../../../base/browser/dom.js';
 import { BugIndicatingError } from '../../../../base/common/errors.js';
 import { type IStyledRasterizedGlyph } from '../raster/raster.js';
-import { UsagePreviewColors, type IGpuTextureAtlasAllocator, type IGpuTextureAtlasPageGlyph } from './atlas.js';
+import { UsagePreviewColors, type IStyledTextureAtlasAllocator, type IStyledTextureAtlasPageGlyph } from './atlas.js';
 
 export interface TextureAtlasSlabAllocatorOptions {
 	readonly slabW: number;
 	readonly slabH: number;
 }
 
-export interface GpuTextureAtlasSlabAllocatorOptions {
+export interface StyledTextureAtlasSlabAllocatorOptions {
 	readonly minimumSlabSize?: number;
 }
 
-export class TextureAtlasSlabAllocator implements IGpuTextureAtlasAllocator {
+export class StyledTextureAtlasSlabAllocator implements IStyledTextureAtlasAllocator {
 	private readonly context: CanvasRenderingContext2D;
-	private readonly allocatedGlyphs = new Set<Readonly<IGpuTextureAtlasPageGlyph>>();
+	private readonly allocatedGlyphs = new Set<Readonly<IStyledTextureAtlasPageGlyph>>();
 	private readonly minimumSlabSize: number;
 	private currentX = 0;
 	private currentY = 0;
 	private rowHeight = 0;
 	private nextIndex = 0;
 
-	constructor(private readonly canvas: HTMLCanvasElement, private readonly textureIndex: number, options: GpuTextureAtlasSlabAllocatorOptions = {}) {
+	constructor(private readonly canvas: HTMLCanvasElement, private readonly textureIndex: number, options: StyledTextureAtlasSlabAllocatorOptions = {}) {
 		const context = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
 		if (!context) throw new Error('WebGPU texture atlas requires a 2D canvas context');
 		this.context = context;
 		this.minimumSlabSize = options.minimumSlabSize ?? 8;
 	}
 
-	public allocate(rasterizedGlyph: IStyledRasterizedGlyph): IGpuTextureAtlasPageGlyph | undefined {
+	public allocate(rasterizedGlyph: IStyledRasterizedGlyph): IStyledTextureAtlasPageGlyph | undefined {
 		const width = rasterizedGlyph.boundingBox.right - rasterizedGlyph.boundingBox.left + 1;
 		const height = rasterizedGlyph.boundingBox.bottom - rasterizedGlyph.boundingBox.top + 1;
 		const slabSize = Math.max(this.minimumSlabSize, nextPowerOfTwo(Math.max(width, height)));

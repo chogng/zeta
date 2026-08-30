@@ -14,14 +14,14 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { SemanticTokenPresentation } = await import('../../browser/viewparts/viewLines/viewLine.js');
-const { ViewLine } = await import('../../browser/viewparts/viewLines/viewLine.js');
-const { ViewLineTextDirection, ViewLineOptions } = await import('../../browser/viewparts/viewLines/viewLineOptions.js');
+const { SemanticTokenPresentation } = await import('../../browser/viewParts/viewLines/viewLine.js');
+const { ViewLine } = await import('../../browser/viewParts/viewLines/viewLine.js');
+const { EditorTextDirection, ViewLineOptions } = await import('../../browser/viewParts/viewLines/viewLineOptions.js');
 
 test('ViewLine owns rendering, character mapping, geometry, and DOM hit conversion', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions({
-		textDirection: ViewLineTextDirection.Auto,
+		textDirection: EditorTextDirection.Auto,
 		fontLigatures: false,
 		useGpu: false,
 		useMonospaceOptimizations: false,

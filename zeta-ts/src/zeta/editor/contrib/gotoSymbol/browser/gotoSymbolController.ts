@@ -5,7 +5,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/languageDocumentSymbolSearch.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Owns editor-local document-symbol quick navigation (Ctrl/Cmd+Shift+O). */
 export class GotoSymbolController extends Disposable {
@@ -16,7 +16,7 @@ export class GotoSymbolController extends Disposable {
 	private request: AbortController | undefined;
 	private matches: readonly LanguageSymbolMatch[] = [];
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
 		super();
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");

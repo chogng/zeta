@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewParts/decorations/decorations.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { BracketMatchController } = await import("../../browser/bracketMatchController.js");
 
 test("Bracket match controller projects current pairs and clears them for a range selection", () => {
@@ -42,7 +42,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using decorations = new TextDecorationCollection<void>(model);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,

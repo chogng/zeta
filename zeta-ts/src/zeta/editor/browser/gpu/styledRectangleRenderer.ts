@@ -20,7 +20,7 @@ const rectangleProperties: RectangleRendererEntrySpec = [
 	{ name: 'red' }, { name: 'green' }, { name: 'blue' }, { name: 'alpha' },
 ];
 
-export class RectangleRenderer extends Disposable {
+export class StyledRectangleRenderer extends Disposable {
 	private readonly shapes: IObjectCollectionBuffer<RectangleRendererEntrySpec> = this._register(createObjectCollectionBuffer(rectangleProperties, 32));
 	private readonly shapeBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly vertexBuffer: GPUBuffer;

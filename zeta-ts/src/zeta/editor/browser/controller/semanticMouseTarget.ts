@@ -1,4 +1,4 @@
-import { type EditorViewport } from '../view.js';
+import { type View } from '../view.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
 import { type TextDecorationId } from '../../common/model/decorationCollection.js';
 import { GlyphMarginLane } from '../../common/model.js';
@@ -28,7 +28,7 @@ export interface SemanticMouseTarget {
 
 /** Resolves DOM event targets into editor semantics without owning gesture state. */
 export class SemanticMouseTargetFactory {
-	constructor(private readonly viewport: EditorViewport) {}
+	constructor(private readonly viewport: View) {}
 
 	create(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'target'>, nearest = false): SemanticMouseTarget | undefined {
 		const element = eventTargetElement(event.target, this.viewport.element.ownerDocument);

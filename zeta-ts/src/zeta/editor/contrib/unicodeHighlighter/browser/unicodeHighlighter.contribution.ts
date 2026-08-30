@@ -2,7 +2,7 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { UnicodeHighlighterController } from "./unicodeHighlighterController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 import { type UnicodeHighlight } from "../common/unicodeHighlights.js";
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.unicodeHighlighter", configure: context => {

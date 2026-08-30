@@ -1,4 +1,4 @@
-import '../viewparts/viewLines/viewLines.css';
+import '../viewParts/viewLines/viewLines.css';
 import { h, reset, fragment as createFragment } from '../../../base/browser/dom.js';
 import { FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';

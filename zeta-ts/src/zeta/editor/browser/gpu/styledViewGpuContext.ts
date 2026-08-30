@@ -2,12 +2,12 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IReference } from '../../../base/common/lifecycle.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../../base/browser/pixelRatio.js';
 import { h } from '../../../base/browser/dom.js';
-import { TextureAtlas } from './atlas/textureAtlas.js';
+import { StyledTextureAtlas } from './atlas/styledTextureAtlas.js';
 import { GPULifecycle } from './gpuDisposable.js';
 import { observeDevicePixelDimensions } from './gpuUtils.js';
 import { DecorationCssRuleExtractor } from './css/decorationCssRuleExtractor.js';
 import { DecorationStyleCache } from './css/decorationStyleCache.js';
-import { RectangleRenderer } from './rectangleRenderer.js';
+import { StyledRectangleRenderer } from './styledRectangleRenderer.js';
 
 type ViewGpuStatus = 'initializing' | 'ready' | 'unavailable';
 
@@ -18,7 +18,7 @@ interface ViewGpuContextOptions {
 const sharedDevices = new WeakMap<Window, Promise<IReference<GPUDevice>>>();
 
 /** Owns the VS Code-aligned WebGPU canvas, device state, DPR, and shared glyph pages for one editor view. */
-export class ViewGpuContext extends Disposable {
+export class StyledViewGpuContext extends Disposable {
 	public readonly canvas: HTMLCanvasElement;
 	public readonly decorationCssRuleExtractor: DecorationCssRuleExtractor;
 	public readonly decorationStyleCache = new DecorationStyleCache();
@@ -28,8 +28,8 @@ export class ViewGpuContext extends Disposable {
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 	private canvasContext: GPUCanvasContext | undefined;
 	private currentDevice: GPUDevice | undefined;
-	private currentAtlas: TextureAtlas | undefined;
-	private currentRectangleRenderer: RectangleRenderer | undefined;
+	private currentAtlas: StyledTextureAtlas | undefined;
+	private currentRectangleRenderer: StyledRectangleRenderer | undefined;
 	private currentStatus: ViewGpuStatus = 'initializing';
 	private currentDevicePixelRatio: number;
 	private physicalWidth = 1;
@@ -80,12 +80,12 @@ export class ViewGpuContext extends Disposable {
 		return this.canvasContext;
 	}
 
-	public get atlas(): TextureAtlas {
+	public get atlas(): StyledTextureAtlas {
 		if (!this.currentAtlas) throw new Error('WebGPU editor texture atlas is not ready');
 		return this.currentAtlas;
 	}
 
-	public get rectangleRenderer(): RectangleRenderer {
+	public get rectangleRenderer(): StyledRectangleRenderer {
 		if (!this.currentRectangleRenderer) throw new Error('WebGPU rectangle renderer is not ready');
 		return this.currentRectangleRenderer;
 	}
@@ -167,7 +167,7 @@ export class ViewGpuContext extends Disposable {
 				format: presentationFormat,
 				alphaMode: 'premultiplied',
 			});
-			this.currentRectangleRenderer = this._register(new RectangleRenderer(reference.object, presentationFormat));
+			this.currentRectangleRenderer = this._register(new StyledRectangleRenderer(reference.object, presentationFormat));
 			this.createAtlas();
 			this.currentStatus = 'ready';
 			void reference.object.lost.then(info => this.markUnavailable(new Error(`WebGPU device lost: ${info.message || info.reason}`)));
@@ -181,7 +181,7 @@ export class ViewGpuContext extends Disposable {
 		const maximumTextureSize = this.device.limits.maxTextureDimension2D;
 		const pageSize = Math.min(maximumTextureSize, 1024 * Math.max(1, Math.floor(this.currentDevicePixelRatio)));
 		this.currentAtlas?.dispose();
-		this.currentAtlas = new TextureAtlas(this.canvas, pageSize);
+		this.currentAtlas = new StyledTextureAtlas(this.canvas, pageSize);
 		this.atlasRevision += 1;
 	}
 

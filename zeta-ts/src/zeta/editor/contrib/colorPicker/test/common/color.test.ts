@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { RGBA8 } from '../../../../common/core/misc/rgba.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { ColorService, type LanguageColorProvider } from '../../common/languageColors.js';
@@ -17,7 +16,7 @@ test('default document colors parse CSS hex, RGB, HSL, alpha, and presentations'
 
 	assert.deepEqual(colors.map(data => ({
 		text: model.getTextInRange(data.information.range),
-		color: { r: data.information.color.r, g: data.information.color.g, b: data.information.color.b, a: data.information.color.a },
+		color: { r: Math.round(data.information.color.red * 255), g: Math.round(data.information.color.green * 255), b: Math.round(data.information.color.blue * 255), a: Math.round(data.information.color.alpha * 255) },
 	})), [
 		{ text: '#f00', color: { r: 255, g: 0, b: 0, a: 255 } },
 		{ text: 'rgba(0, 128, 255, .5)', color: { r: 0, g: 128, b: 255, a: 128 } },
@@ -39,7 +38,7 @@ test('explicit providers suppress the default provider in auto mode and retain p
 		languageIds: ['typescript'],
 		provideDocumentColors: () => [{
 			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (model.getLineContent((0) + 1).length) + 1)),
-			color: new RGBA8(1, 2, 3, 255),
+			color: { red: 1 / 255, green: 2 / 255, blue: 3 / 255, alpha: 1 },
 		}],
 		provideColorPresentations: request => [{ label: 'provider-color', textEdit: { range: request.range, text: 'provider-color' } }],
 	});

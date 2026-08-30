@@ -16,7 +16,7 @@ import { TrackedRangeStickiness } from '../../../../common/model.js';
 
 const environment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, Event: environment.window.Event, KeyboardEvent: environment.window.KeyboardEvent })) Object.defineProperty(globalThis, name, { configurable: true, value });
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { DiagnosticNavigationController } = await import("../../browser/gotoError.js");
 
 test("F8 navigates current diagnostics in both directions", () => {
@@ -27,7 +27,7 @@ test("F8 navigates current diagnostics in both directions", () => {
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
 	diagnostics.add({ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("first") });
 	diagnostics.add({ range: Range.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("last") });
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using controller = new DiagnosticNavigationController(input, viewport, selections, diagnostics);

@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/versionedEditorWorkerClient.js";
 import { createFormattingCommand, FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
 
@@ -16,7 +16,7 @@ export class FormatController extends Disposable {
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: FormatService, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly languageId: string, options: FormatControllerOptions = {}) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: FormatService, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly languageId: string, options: FormatControllerOptions = {}) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };

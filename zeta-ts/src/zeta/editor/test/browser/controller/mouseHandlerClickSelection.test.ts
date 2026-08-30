@@ -37,7 +37,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view.js");
+const { View } = await import("../../../browser/view.js");
 const { MouseHandler } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Pointer click counts select and drag by word or complete line", () => {
@@ -49,7 +49,7 @@ test("Pointer click counts select and drag by word or complete line", () => {
 		model,
 		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

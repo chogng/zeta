@@ -19,12 +19,17 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: class {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
 await import('../../browser/colorPickerController.js');
-const { EditorBrowser } = await import('../../../../browser/editorBrowser.js');
+const { ConfiguredCodeEditor } = await import('../../../../browser/configuredCodeEditor.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -34,7 +39,7 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('const color = #ff000080;');
 	const errors: unknown[] = [];
-	using editor = new EditorBrowser({
+	using editor = new ConfiguredCodeEditor({
 		container,
 		input: { resource: URI.file('C:\\project\\colors.css'), label: 'colors.css' },
 		languageId: 'css',

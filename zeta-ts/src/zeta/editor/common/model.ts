@@ -40,6 +40,15 @@ export const enum EndOfLinePreference {
 	CRLF = 2,
 }
 
+/** Text snapshot consumed sequentially by model clients. */
+export interface ITextSnapshot {
+	read(): string | null;
+}
+
+export function isITextSnapshot(value: unknown): value is ITextSnapshot {
+	return !!value && typeof (value as ITextSnapshot).read === 'function';
+}
+
 /**
  * Editor-facing text model contract. The interface grows with supported editor
  * capabilities while preserving VS Code's ownership and method names.
@@ -50,20 +59,42 @@ export interface ITextModel extends IDisposable {
 	readonly isForSimpleWidget: boolean;
 	readonly onWillDispose: Event<void>;
 	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent>;
+	mightContainRTL(): boolean;
+	mightContainUnusualLineTerminators(): boolean;
+	removeUnusualLineTerminators(): void;
+	mightContainNonBasicASCII(): boolean;
 	getLanguageId(): string;
 	setLanguage(languageId: string | ILanguageSelection, source?: string): void;
 	getVersionId(): number;
-	getValue(): string;
-	getValueInRange(range: IRange): string;
+	setValue(newValue: string | ITextSnapshot): void;
+	getValue(eol?: EndOfLinePreference, preserveBOM?: boolean): string;
+	createSnapshot(preserveBOM?: boolean): ITextSnapshot;
+	getValueLength(eol?: EndOfLinePreference, preserveBOM?: boolean): number;
+	getValueInRange(range: IRange, eol?: EndOfLinePreference): string;
+	getValueLengthInRange(range: IRange, eol?: EndOfLinePreference): number;
+	getCharacterCountInRange(range: IRange, eol?: EndOfLinePreference): number;
 	getLineCount(): number;
 	getLineContent(lineNumber: number): string;
 	getLineLength(lineNumber: number): number;
+	getLinesContent(): string[];
+	getEOL(): string;
+	getEndOfLineSequence(): EndOfLineSequence;
+	getLineMinColumn(lineNumber: number): number;
 	getLineMaxColumn(lineNumber: number): number;
+	getLineFirstNonWhitespaceColumn(lineNumber: number): number;
+	getLineLastNonWhitespaceColumn(lineNumber: number): number;
 	getFullModelRange(): Range;
+	modifyPosition(position: IPosition, offset: number): Position;
 	getOffsetAt(position: IPosition): number;
 	getPositionAt(offset: number): Position;
 	validatePosition(position: IPosition): Position;
 	validateRange(range: IRange): Range;
+	isValidRange(range: IRange): boolean;
+	getLanguageIdAtPosition(lineNumber: number, column: number): string;
+	canUndo(): boolean;
+	canRedo(): boolean;
+	normalizePosition(position: Position, affinity: PositionAffinity): Position;
+	getLineIndentColumn(lineNumber: number): number;
 }
 import type { Event } from '../../base/common/event.js';
 import type { IDisposable } from '../../base/common/lifecycle.js';

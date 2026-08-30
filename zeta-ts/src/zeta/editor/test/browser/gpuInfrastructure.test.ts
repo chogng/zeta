@@ -5,11 +5,11 @@ import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProj
 import { BufferDirtyTracker } from '../../browser/gpu/bufferDirtyTracker.js';
 import { createStringContentSegmenter } from '../../browser/gpu/stringContentSegmenter.js';
 import { createObjectCollectionBuffer } from '../../browser/gpu/objectCollectionBuffer.js';
-import { type TextureAtlas } from '../../browser/gpu/atlas/textureAtlas.js';
-import { FullFileRenderStrategy } from '../../browser/gpu/renderStrategy/fullFileRenderStrategy.js';
-import { type GlyphRasterizer } from '../../browser/gpu/raster/glyphRasterizer.js';
-import { RectangleRenderer } from '../../browser/gpu/rectangleRenderer.js';
-import { ViewLineTextDirection } from '../../browser/viewparts/viewLines/viewLineOptions.js';
+import { type StyledTextureAtlas } from '../../browser/gpu/atlas/styledTextureAtlas.js';
+import { StyledFullFileRenderStrategy } from '../../browser/gpu/renderStrategy/styledFullFileRenderStrategy.js';
+import { type StyledGlyphRasterizer } from '../../browser/gpu/raster/styledGlyphRasterizer.js';
+import { StyledRectangleRenderer } from '../../browser/gpu/styledRectangleRenderer.js';
+import { EditorTextDirection } from '../../browser/viewParts/viewLines/viewLineOptions.js';
 
 test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	const tracker = new BufferDirtyTracker();
@@ -51,7 +51,7 @@ test('ContentSegmenter returns one entry for a complete grapheme', () => {
 test('Full-file GPU rendering starts at canonical coordinates and leaves subpixel placement to the atlas', () => {
 	using model = new TextModel('abcd');
 	const visualLines = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4]], [16]);
-	using strategy = new FullFileRenderStrategy({ devicePixelRatio: 1 } as unknown as GlyphRasterizer);
+	using strategy = new StyledFullFileRenderStrategy({ devicePixelRatio: 1 } as unknown as StyledGlyphRasterizer);
 	const frame = strategy.update({
 		layout: {
 			modelVersion: model.version,
@@ -71,7 +71,7 @@ test('Full-file GPU rendering starts at canonical coordinates and leaves subpixe
 		bracketColorizationSource: undefined,
 		textLeft: 44.2,
 		paddingTop: 0,
-		textDirection: ViewLineTextDirection.LeftToRight,
+		textDirection: EditorTextDirection.LeftToRight,
 		fontLigatures: false,
 		rootStyle: gpuRootStyle(),
 		atlas: fixedGlyphAtlas(8.25),
@@ -119,7 +119,7 @@ test('Rectangle GPU rendering encodes a clear pass into the caller-owned frame',
 	const view = {} as GPUTextureView;
 
 	try {
-		using renderer = new RectangleRenderer(device, 'bgra8unorm');
+		using renderer = new StyledRectangleRenderer(device, 'bgra8unorm');
 		renderer.encode(encoder, view, 800, 600, 10, 20);
 		const attachment = [...(passes[0]?.colorAttachments ?? [])][0] as GPURenderPassColorAttachment | undefined;
 		assert.deepEqual({
@@ -158,7 +158,7 @@ function gpuRootStyle(): CSSStyleDeclaration {
 	} as unknown as CSSStyleDeclaration;
 }
 
-function fixedGlyphAtlas(advance = 8): TextureAtlas {
+function fixedGlyphAtlas(advance = 8): StyledTextureAtlas {
 	return {
 		getGlyph: () => ({
 			pageIndex: 0,
@@ -173,5 +173,5 @@ function fixedGlyphAtlas(advance = 8): TextureAtlas {
 			fontBoundingBoxAscent: 8,
 			fontBoundingBoxDescent: 2,
 		}),
-	} as unknown as TextureAtlas;
+	} as unknown as StyledTextureAtlas;
 }

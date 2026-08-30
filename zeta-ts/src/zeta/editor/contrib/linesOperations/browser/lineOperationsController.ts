@@ -5,7 +5,7 @@ import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../../common/core/misc/indentation.js";
 import { createDeleteLinesCommand, createDuplicateLinesCommand, createInsertLineCommand, createMoveLinesCommand, EditorLineDuplicateDirection, EditorLineInsertDirection, EditorLineMoveDirection } from "./linesOperations.js";
 import { createLineIndentCommand, EditorLineIndentDirection } from "./lineIndentCommands.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 
 export const EditorLineOperationCommandId = Object.freeze({
@@ -34,7 +34,7 @@ export class LineOperationsController extends Disposable {
 
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		options: LineOperationsControllerOptions = {},
 	) {

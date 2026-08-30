@@ -3,7 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
+import { createStanzaDecorationSource } from '../../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
@@ -25,7 +25,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorView, EditorViewport } = await import('../../../../browser/view.js');
+const { EditorView } = await import('../../../../browser/editorView.js');
+const { View } = await import('../../../../browser/view.js');
 const { resolveSelectionHighlightPresentation } = await import('../../../wordHighlighter/browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
 const { SelectionHighlighter } = await import('../../browser/multicursor.js');
@@ -63,7 +64,7 @@ function createHarness(text: string, languages: LanguageFeaturesService, initial
 	const selections = new CursorsController(model, SelectionSet.single(initialSelection));
 	const textualProvider = new TextualMultiDocumentHighlightFeature(languages, { resource: URI.parse('file:///selection.ts'), model, wordPattern: () => undefined });
 	const decorations = new TextDecorationCollection<boolean>(model);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -86,7 +87,7 @@ class SelectionHarness implements Disposable {
 		readonly model: TextModel,
 		readonly selections: CursorsController,
 		readonly decorations: TextDecorationCollection<boolean>,
-		readonly viewport: InstanceType<typeof EditorViewport>,
+		readonly viewport: InstanceType<typeof View>,
 		readonly view: InstanceType<typeof EditorView>,
 		readonly controller: InstanceType<typeof SelectionHighlighter>,
 		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,

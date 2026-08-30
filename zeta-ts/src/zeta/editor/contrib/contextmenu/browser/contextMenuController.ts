@@ -3,13 +3,13 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
 import { type EditorHitTarget } from "../../../common/viewModel/pointerHitTest.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 export interface ContextMenuRequest { readonly position: Position; readonly target: EditorHitTarget | undefined; readonly clientX: number; readonly clientY: number; }
 
 /** Delegates context-menu composition to the host while keeping editor hit testing local. */
 export class ContextMenuController extends Disposable {
-	constructor(private readonly viewport: EditorViewport, private readonly showContextMenu: (request: ContextMenuRequest) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza context menu failed", error)) {
+	constructor(private readonly viewport: View, private readonly showContextMenu: (request: ContextMenuRequest) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza context menu failed", error)) {
 		super();
 		this._register(addDisposableListener<MouseEvent>(viewport.element, "contextmenu", event => {
 			event.preventDefault();

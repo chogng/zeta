@@ -41,8 +41,8 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view.js");
-const { EditorView } = await import("../../../browser/view.js");
+const { View } = await import("../../../browser/view.js");
+const { EditorView } = await import('../../../browser/editorView.js');
 const { TextAreaEditContext } = await import("../../../browser/controller/editContext/textArea/textAreaEditContext.js");
 const { NativeEditContext } = await import("../../../browser/controller/editContext/native/nativeEditContext.js");
 
@@ -51,7 +51,7 @@ test("EditorView falls back to the textarea EditContext", () => {
 	const container = dom.window.document.querySelector("main")!;
 	using model = new TextModel("text");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 
 	assert.equal(input.editContext instanceof TextAreaEditContext, true);
@@ -68,7 +68,7 @@ test("Native EditContext normalizes text updates and feeds common commands", () 
 	});
 	using model = new TextModel("abcd");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 
 	assert.equal(input.editContext instanceof NativeEditContext, true);
@@ -127,7 +127,7 @@ test("Native EditContext composition updates use the protected common session", 
 	});
 	using model = new TextModel("abcd");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
 
@@ -160,7 +160,7 @@ test("Native EditContext maps a bounded native window back to model offsets", ()
 	const source = "a".repeat(40_000);
 	using model = new TextModel(source);
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 20_000)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	const native = input.editContext as InstanceType<typeof NativeEditContext>;
 	const nativeContext = native.nativeContext as FakeNativeEditContext;
@@ -190,7 +190,7 @@ test("Native EditContext combines split UTF-16 surrogate updates", () => {
 	});
 	using model = new TextModel("");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 0)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
 
@@ -223,7 +223,7 @@ test("Native EditContext restores its browser buffer in read-only mode", () => {
 	});
 	using model = new TextModel("abcd");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)), { readOnly: true });
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
 
@@ -260,7 +260,7 @@ test("Native EditContext normalizes text formats to model offsets", () => {
 	});
 	using model = new TextModel("a".repeat(40_000));
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 20_000)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	const native = input.editContext as InstanceType<typeof NativeEditContext>;
 	const nativeContext = native.nativeContext as FakeNativeEditContext;
@@ -292,7 +292,7 @@ test("Native EditContext answers character bounds in native-text coordinates", (
 	});
 	using model = new TextModel("abcd");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	const nativeContext = (input.editContext as InstanceType<typeof NativeEditContext>).nativeContext as FakeNativeEditContext;
 	const boundsEvent = new browserEnvironment.window.Event("characterboundsupdate") as FakeCharacterBoundsUpdateEvent;
@@ -313,7 +313,7 @@ test("Native EditContext keeps focus through the IME-disabled textarea bridge", 
 	});
 	using model = new TextModel("text");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 2)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	try {
 		input.focus();

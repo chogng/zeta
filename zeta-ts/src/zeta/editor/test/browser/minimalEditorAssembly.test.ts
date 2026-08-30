@@ -13,9 +13,14 @@ for (const [name, value] of Object.entries({
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
+	ResizeObserver: class {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-const { EditorBrowser } = await import("../../browser/editorBrowser.js");
+const { ConfiguredCodeEditor } = await import('../../browser/configuredCodeEditor.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -25,7 +30,7 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("const value = (1);");
 	const resource = URI.file("C:\\project\\minimal.ts");
-	const editor = new EditorBrowser({
+	const editor = new ConfiguredCodeEditor({
 		container,
 		input: { resource, label: "minimal.ts" },
 		languageId: "typescript",

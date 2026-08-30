@@ -32,8 +32,8 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
-const { EditorView } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
+const { EditorView } = await import('../../../../browser/editorView.js');
 
 test("Completion widget projects named options, focus, ARIA, and content coordinates", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -43,7 +43,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	using registry = new LanguageCompletionProviderRegistry();
 	using service = new LanguageCompletionService(model, registry);
 	using session = new LanguageCompletionSessionController(service.results, selections);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -229,7 +229,7 @@ test("Completion widget validates ownership and clears its active descendant on 
 	using otherService = new LanguageCompletionService(otherModel, otherRegistry);
 	using session = new LanguageCompletionSessionController(service.results, selections);
 	using otherSession = new LanguageCompletionSessionController(otherService.results, otherSelections);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -307,7 +307,7 @@ interface CompletionFixture extends Disposable {
 	readonly selections: CursorsController;
 	readonly store: ReturnType<typeof createLanguageCompletionStore>;
 	readonly session: LanguageCompletionSessionController;
-	readonly viewport: InstanceType<typeof EditorViewport>;
+	readonly viewport: InstanceType<typeof View>;
 	readonly input: InstanceType<typeof EditorView>;
 	readonly suggest: SuggestController;
 }
@@ -319,7 +319,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	const registry = new LanguageCompletionProviderRegistry();
 	const service = new LanguageCompletionService(model, registry);
 	const session = new LanguageCompletionSessionController(service.results, selections, sessionOptions);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,

@@ -1,6 +1,6 @@
 import { Position } from "../../../common/core/position.js";
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { type EditorView } from '../../../browser/view.js';
+import { type EditorView } from '../../../browser/editorView.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { type Range } from '../../../common/core/range.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';

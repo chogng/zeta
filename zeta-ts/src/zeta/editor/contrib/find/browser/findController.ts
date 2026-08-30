@@ -11,7 +11,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type TextSearchMatch, type TextModelSearchQuery } from "../../../common/model/textModelSearch.js";
 import { createReplaceAllTextMatchesCommand, createReplaceTextMatchCommand, resolveTextSearchReplacement } from "../common/textSearchCommands.js";
 import { type TrackedRange } from "../../../common/model/trackedRange.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { EditorOptions } from '../../../common/config/editorOptions.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
@@ -56,7 +56,7 @@ export class FindController extends Disposable {
 
 	constructor(
 		private readonly editorInput: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<void>,
 		options: FindControllerOptions = {},

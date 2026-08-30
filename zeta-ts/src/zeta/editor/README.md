@@ -56,7 +56,7 @@ Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 fe
 
 ### 行式文本 engine
 
-`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorBrowser` 投影它，但不拥有共享 model。`browser/editorBrowser.ts` 是稳定的 browser composition root，负责语言与 typed capability 装配，并只提供持久化前的 `prepareSave()` hook；`browser/widget/codeEditor/codeEditorWidget.ts` 拥有编辑器操作和 view state，`codeEditorContributions.ts` 统一拥有 contribution 实例化阶段与生命周期；`browser/editorDom.ts` 提供稳定 DOM root 与布局。`BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 的 working copy 持有 reference，并拥有保存、回退、快捷键、结果呈现和 Pane 生命周期。Standalone 则由 `standalone/browser` 管理 URI/language identity；外部传入 model 时 editor 不拥有 model，使用 `value` 隐式创建时 editor 拥有 model。
+`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 `ConfiguredCodeEditor` 使用它，但不拥有共享 model。`browser/editorBrowser.ts` 只拥有与 VS Code 同路径的浏览器编辑器契约；`browser/configuredCodeEditor.ts` 是 Zeta 的装配根，负责语言、typed capability 和持久化前的 `prepareSave()` hook；`browser/widget/codeEditor/codeEditorWidget.ts` 拥有编辑器操作和 view state，`codeEditorContributions.ts` 统一拥有 contribution 实例化阶段与生命周期；`browser/editorDom.ts` 提供稳定 DOM root 与布局。`BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 的 working copy 持有 reference，并拥有保存、回退、快捷键、结果呈现和 Pane 生命周期。Standalone 则由 `standalone/browser` 管理 URI/language identity；外部传入 model 时 editor 不拥有 model，使用 `value` 隐式创建时 editor 拥有 model。
 
 ### 富文档 engine
 
@@ -103,7 +103,7 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 | `TextBuffer` | 字符与物理行存储 contract；PieceTree 是当前私有实现 | TextModel edit、snapshot、worker mirror、maintenance |
 | `CodeEditorWidget` | Code 模式的行式 DOM projection 与 input/navigation surface | viewport、accessibility、contributed controllers |
 | `StandaloneServices` | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `NamedEditorThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
-| `StandaloneEditorInstance` | 把 `EditorBrowser` 适配为独立编辑器实例，绑定主题并按 model 来源决定所有权 | `standaloneEditor.ts`、model/editor 生命周期测试 |
+| `StandaloneEditorInstance` | 把 `ConfiguredCodeEditor` 适配为独立编辑器实例，绑定主题并按 model 来源决定所有权 | `standaloneEditor.ts`、model/editor 生命周期测试 |
 | `NamedEditorThemeService` | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置 | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineNamedTheme/setTheme`、主题服务测试 |
 | `registerEditorContribution` | 所有 Stanza capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `RichTextEditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |

@@ -5,9 +5,9 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type Position } from "../../../common/core/position.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
-import { PeekViewWidget } from "../../peekView/browser/peekView.js";
+import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
 import { type LanguageHierarchyItem, type LanguageHierarchyService, type PreparedCallHierarchy, type PreparedTypeHierarchy } from "../common/languageHierarchy.js";
 
 type HierarchyKind = "call" | "type";
@@ -24,7 +24,7 @@ export class LanguageHierarchyController extends Disposable {
 	private readonly peek = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
 		super();
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		this._register(viewport.textModel.onDidChange(() => this.closePeek()));
@@ -63,7 +63,7 @@ export class LanguageHierarchyController extends Disposable {
 
 	private showSessions(anchor: Position, sessions: readonly HierarchySession[]): void {
 		this.closePeek();
-		const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${sessions[0]!.kind === "call" ? "Call" : "Type"} Hierarchy`));
+		const widget = this.peek.add(new EditorPeekViewWidget(this.viewport, anchor, `${sessions[0]!.kind === "call" ? "Call" : "Type"} Hierarchy`));
 		const body = h(widget.element.ownerDocument, "div");
 		body.className = "stanza-editor-language-hierarchy";
 		widget.setBody(body);
@@ -78,7 +78,7 @@ export class LanguageHierarchyController extends Disposable {
 		}));
 	}
 
-	private createNode(widget: PeekViewWidget, session: HierarchySession, item: LanguageHierarchyItem, ancestors: readonly LanguageHierarchyItem[], direction: HierarchyDirection): HTMLElement {
+	private createNode(widget: EditorPeekViewWidget, session: HierarchySession, item: LanguageHierarchyItem, ancestors: readonly LanguageHierarchyItem[], direction: HierarchyDirection): HTMLElement {
 		const document = widget.element.ownerDocument;
 		const node = h(document, "section");
 		node.className = "stanza-editor-language-hierarchy-node";
@@ -112,7 +112,7 @@ export class LanguageHierarchyController extends Disposable {
 		return node;
 	}
 
-	private async expand(node: HTMLElement, widget: PeekViewWidget, session: HierarchySession, item: LanguageHierarchyItem, ancestors: readonly LanguageHierarchyItem[], direction: HierarchyDirection, button: HTMLButtonElement): Promise<void> {
+	private async expand(node: HTMLElement, widget: EditorPeekViewWidget, session: HierarchySession, item: LanguageHierarchyItem, ancestors: readonly LanguageHierarchyItem[], direction: HierarchyDirection, button: HTMLButtonElement): Promise<void> {
 		button.disabled = true;
 		try {
 			const items = await session.query(item, direction);

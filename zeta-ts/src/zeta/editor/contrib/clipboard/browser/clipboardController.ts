@@ -1,7 +1,9 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { isFirefox } from '../../../../base/browser/browser.js';
 import { UriList } from '../../../../base/common/dataTransfer.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isWindows } from '../../../../base/common/platform.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { type IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.js';
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
@@ -12,10 +14,10 @@ import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { AbstractEditContext } from "../../../browser/controller/editContext/editContext.js";
-import { createClipboardCopyEvent, createClipboardPasteEvent, readEditorClipboardText, type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
-import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewparts/viewLines/viewLine.js";
+import { createEditorClipboardCopyEvent, createClipboardPasteEvent, InMemoryClipboardMetadataManager, readEditorClipboardText, type ClipboardStoredMetadata, type IEditorClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
+import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewParts/viewLines/viewLine.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
 
 export const EDITOR_CLIPBOARD_MIME = 'application/x-stanza-editor';
@@ -46,6 +48,7 @@ interface EditorClipboardPayload {
 	readonly plainText: string;
 	readonly html: string;
 	readonly metadata: string;
+	readonly editorMetadata: ClipboardStoredMetadata;
 }
 
 interface EditorClipboardPasteData {
@@ -80,7 +83,7 @@ export class ClipboardController extends Disposable {
 
 	constructor(
 		target: AbstractEditContext | HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
@@ -124,12 +127,12 @@ export class ClipboardController extends Disposable {
 			this._register(addDisposableListener<ClipboardEvent>(
 				this.element,
 				"copy",
-				event => this.handleCopy(createClipboardCopyEvent(event, false)),
+				event => this.handleCopy(createEditorClipboardCopyEvent(event, false)),
 			));
 			this._register(addDisposableListener<ClipboardEvent>(
 				this.element,
 				"cut",
-				event => this.handleCut(createClipboardCopyEvent(event, true)),
+				event => this.handleCut(createEditorClipboardCopyEvent(event, true)),
 			));
 			this._register(addDisposableListener<ClipboardEvent>(
 				this.element,
@@ -141,7 +144,7 @@ export class ClipboardController extends Disposable {
 
 	private readonly element: HTMLElement;
 
-	private handleCopy(event: IClipboardCopyEvent): void {
+	private handleCopy(event: IEditorClipboardCopyEvent): void {
 		if (event.isHandled || event.browserEvent.defaultPrevented) return;
 		const entries = getEditorClipboardEntries(
 			this.viewport.textModel,
@@ -155,7 +158,7 @@ export class ClipboardController extends Disposable {
 		this.writeSystemClipboard(event, entries);
 	}
 
-	private handleCut(event: IClipboardCopyEvent): void {
+	private handleCut(event: IEditorClipboardCopyEvent): void {
 		if (event.isHandled || event.browserEvent.defaultPrevented) return;
 		if (!this.isEditingAllowed()) {
 			event.setHandled();
@@ -176,7 +179,7 @@ export class ClipboardController extends Disposable {
 
 	private handlePaste(event: IClipboardPasteEvent): void {
 		const nativeClipboard = event.clipboardData;
-		if (event.isHandled || event.browserEvent.defaultPrevented) return;
+		if (event.isHandled || event.browserEvent?.defaultPrevented) return;
 		if (!this.isEditingAllowed()) {
 			event.setHandled();
 			return;
@@ -238,13 +241,14 @@ export class ClipboardController extends Disposable {
 		});
 	}
 
-	private writeSystemClipboard(event: IClipboardCopyEvent, entries: readonly EditorClipboardEntry[], cut = false): boolean {
+	private writeSystemClipboard(event: IEditorClipboardCopyEvent, entries: readonly EditorClipboardEntry[], cut = false): boolean {
 		if (!entries.some(entry => entry.text.length > 0)) return false;
 		const model = this.viewport.textModel;
 		const expectedVersion = model.version;
 		const expectedSelections = this.selectionController.selections;
 		const request = ++this.asynchronousPasteRequest;
 		const payload = this.createClipboardPayload(entries);
+		storeEditorClipboardMetadata(payload.plainText, payload.editorMetadata);
 		event.setHandled();
 		void this.clipboardService.writeText(payload.plainText).then(() => {
 			if (!cut || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
@@ -288,6 +292,12 @@ export class ClipboardController extends Disposable {
 		} catch {
 			// Plain text remains authoritative when a browser rejects HTML clipboard data.
 		}
+		try {
+			clipboardData.setData('vscode-editor-data', JSON.stringify(payload.editorMetadata));
+		} catch {
+			// Plain text remains authoritative when custom metadata is rejected.
+		}
+		storeEditorClipboardMetadata(payload.plainText, payload.editorMetadata);
 		return true;
 	}
 
@@ -373,7 +383,18 @@ function createEditorClipboardPayload(entries: readonly EditorClipboardEntry[], 
 		plainText: joinClipboardEntries(entries, lineEnding),
 		html: createSyntaxClipboardHtml(entries, lineEnding, tokens, ownerDocument),
 		metadata: JSON.stringify(metadata),
+		editorMetadata: Object.freeze({
+			version: 1,
+			id: generateUuid(),
+			isFromEmptySelection: entries.length === 1 && entries[0]!.pasteMode === EditorClipboardPasteMode.Line,
+			multicursorText: entries.length > 1 ? entries.map(entry => entry.text) : null,
+			mode: tokens?.textModel.getLanguageId() ?? null,
+		}),
 	});
+}
+
+function storeEditorClipboardMetadata(text: string, metadata: ClipboardStoredMetadata): void {
+	InMemoryClipboardMetadataManager.INSTANCE.set(isFirefox ? text.replace(/\r\n/g, '\n') : text, metadata);
 }
 
 function readEditorClipboardPasteData(clipboardData: IReadableClipboardData, selectionCount: number): EditorClipboardPasteData | undefined {

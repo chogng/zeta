@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { BracketEditingController } = await import("../../browser/bracketEditingController.js");
 
 test("Remove-brackets shortcut mutates through an isolated Stanza transaction", () => {
@@ -36,7 +36,7 @@ test("Remove-brackets shortcut mutates through an isolated Stanza transaction", 
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
@@ -63,7 +63,7 @@ test("Bracket editing controller rejects cross-model wiring and preserves unsupp
 	using otherLexical = new LanguageLexicalContextIndex(other, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using otherBracketPairs = new LanguageBracketPairs(other, otherLexical);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using controller = new BracketEditingController(input, viewport, selections, bracketPairs);

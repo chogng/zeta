@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from '../../../common/languages/completion/languageCompletionProviders.js';
 import { type LanguageCompletionService } from '../../../common/languages/completion/languageCompletionService.js';
-import { type EditorView, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from '../../../browser/view.js';
+import { type EditorView, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from '../../../browser/editorView.js';
 import { LanguageCompletionSessionController, type LanguageCompletionSessionState } from '../common/languageCompletionSessionController.js';
 import { CompletionWidget } from './suggestWidget.js';
 

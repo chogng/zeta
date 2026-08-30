@@ -74,7 +74,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view.js");
+const { View } = await import("../../../browser/view.js");
 const { MouseHandler } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Pointer drag autoscroll advances selection and stops at boundaries", () => {
@@ -90,7 +90,7 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 		model,
 		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,

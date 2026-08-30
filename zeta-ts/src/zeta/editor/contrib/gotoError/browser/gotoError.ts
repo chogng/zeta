@@ -7,11 +7,11 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Moves the primary selection through current-version diagnostics with F8. */
 export class DiagnosticNavigationController extends Disposable {
-	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
+	constructor(input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
 		super();
 		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) {
 			this.dispose();

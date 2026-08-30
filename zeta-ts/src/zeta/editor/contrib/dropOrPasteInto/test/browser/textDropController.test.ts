@@ -62,7 +62,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import('../../../../browser/view.js');
+const { View } = await import('../../../../browser/view.js');
 const { TextDropController } = await import('../../browser/textDropController.js');
 
 test.after(() => browserEnvironment.window.close());
@@ -72,7 +72,7 @@ test("Plain-text drops insert at the viewport hit target", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("ab\ncd");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });
 	using controller = new TextDropController(viewport, selections);
@@ -96,7 +96,7 @@ test("Non-text drops remain available to their host", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("alpha");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
 	using controller = new TextDropController(viewport, selections);
@@ -121,7 +121,7 @@ test("Read-only editors leave text drops available to their host", () => {
 		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 		{ readOnly: true },
 	);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
 	using controller = new TextDropController(viewport, selections);
@@ -143,7 +143,7 @@ test("Rich HTML drops reduce to inert text when plain text is unavailable", () =
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("ab");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
 	using controller = new TextDropController(viewport, selections);
@@ -164,7 +164,7 @@ test("One user-provided text file drop inserts at the hit target after decoding"
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("ab\ncd");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });
 	using controller = new TextDropController(viewport, selections);

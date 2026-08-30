@@ -1,10 +1,10 @@
 import { fontVariantForCanvas } from '../config/fontMeasurements.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../viewparts/viewLines/viewLine.js';
-import { type IGpuTextureAtlasPageGlyph } from './atlas/atlas.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../viewParts/viewLines/viewLine.js';
+import { type IStyledTextureAtlasPageGlyph } from './atlas/atlas.js';
 import { createStringContentSegmenter } from './stringContentSegmenter.js';
 import { type GpuRenderFrame, type GpuRenderStrategyInput } from './gpuFrameStrategy.js';
-import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
-import { type IGpuGlyphStyle } from './raster/raster.js';
+import { type StyledGlyphRasterizer } from './raster/styledGlyphRasterizer.js';
+import { type IStyledGlyphStyle } from './raster/raster.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { containsRTL, isBasicASCII } from '../../../base/common/strings.js';
 
@@ -36,7 +36,7 @@ export function observeDevicePixelDimensions(element: HTMLElement, ownerWindow: 
 	return toDisposable(() => observer.disconnect());
 }
 
-export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: GpuRenderStrategyInput, lineIndexes: Iterable<number>): GpuRenderFrame {
+export function createGpuRenderFrame(glyphRasterizer: StyledGlyphRasterizer, input: GpuRenderStrategyInput, lineIndexes: Iterable<number>): GpuRenderFrame {
 		const vertices: number[] = [];
 		const gpuLineIndexes = new Set<number>();
 		const baseStyle = readBaseStyle(input.rootStyle);
@@ -83,7 +83,7 @@ function canRenderLine(input: GpuRenderStrategyInput, text: string, tokens: read
 		return true;
 	}
 
-function readBaseStyle(style: CSSStyleDeclaration): IGpuGlyphStyle {
+function readBaseStyle(style: CSSStyleDeclaration): IStyledGlyphStyle {
 	return Object.freeze({
 		color: style.color,
 		fontFamily: style.fontFamily,
@@ -95,7 +95,7 @@ function readBaseStyle(style: CSSStyleDeclaration): IGpuGlyphStyle {
 	});
 }
 
-function resolveGlyphStyle(base: IGpuGlyphStyle, rootStyle: CSSStyleDeclaration, tokens: readonly ResolvedSemanticToken[], brackets: readonly { readonly startColumn: number; readonly endColumn: number; readonly level: number }[], column: number): IGpuGlyphStyle {
+function resolveGlyphStyle(base: IStyledGlyphStyle, rootStyle: CSSStyleDeclaration, tokens: readonly ResolvedSemanticToken[], brackets: readonly { readonly startColumn: number; readonly endColumn: number; readonly level: number }[], column: number): IStyledGlyphStyle {
 	const token = tokens.find(candidate => candidate.startColumn <= column && candidate.endColumn > column);
 	const bracket = brackets.find(candidate => candidate.startColumn <= column && candidate.endColumn > column);
 	const syntax = token?.syntaxPresentation;
@@ -110,7 +110,7 @@ function resolveGlyphStyle(base: IGpuGlyphStyle, rootStyle: CSSStyleDeclaration,
 	});
 }
 
-function appendGlyphQuad(vertices: number[], glyph: Readonly<IGpuTextureAtlasPageGlyph>, left: number, top: number): void {
+function appendGlyphQuad(vertices: number[], glyph: Readonly<IStyledTextureAtlasPageGlyph>, left: number, top: number): void {
 	const right = left + glyph.w;
 	const bottom = top + glyph.h;
 	const atlasRight = glyph.x + glyph.w;

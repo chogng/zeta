@@ -6,7 +6,7 @@ import { type EditorFoldingModel } from "./folding/browser/foldingModel.js";
 import { type LanguageTokenLineIndexPart } from "./tokenization/common/languageTokenLineIndexPart.js";
 import { type UnicodeHighlight } from "./unicodeHighlighter/common/unicodeHighlights.js";
 import { type SyntaxService } from "../common/languages/syntax/syntaxService.js";
-import { type SemanticTokenSource } from "../browser/viewparts/viewLines/viewLine.js";
+import { type SemanticTokenSource } from "../browser/viewParts/viewLines/viewLine.js";
 import { type LanguageStructuralBracketSource } from "../common/languages/languageLexicalContext.js";
 import { type SemanticTokensModelPart, type SemanticTokensService } from "./semanticTokens/common/semanticTokens.js";
 

@@ -42,7 +42,7 @@ export interface ILanguageService {
 	readonly onDidRequestRichLanguageFeatures: Event<string>;
 	readonly onDidChange: Event<void>;
 	registerLanguage(definition: ILanguageExtensionPoint): IDisposable;
-	isRegisteredLanguageId(languageId: string): boolean;
+	isRegisteredLanguageId(languageId: string | null | undefined): boolean;
 	getRegisteredLanguageIds(): string[];
 	getSortedRegisteredLanguageNames(): ILanguageNameIdPair[];
 	getLanguageName(languageId: string): string | null;
@@ -53,7 +53,7 @@ export interface ILanguageService {
 	getConfigurationFiles(languageId: string): ReadonlyArray<URI>;
 	getLanguageIdByLanguageName(languageName: string): string | null;
 	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null;
-	guessLanguageIdByFilepathOrFirstLine(resource: URI, firstLine?: string): string | null;
+	guessLanguageIdByFilepathOrFirstLine(resource: URI | null, firstLine?: string): string | null;
 	createById(languageId: string | null | undefined): ILanguageSelection;
 	createByMimeType(mimeType: string | null | undefined): ILanguageSelection;
 	createByFilepathOrFirstLine(resource: URI | null, firstLine?: string): ILanguageSelection;

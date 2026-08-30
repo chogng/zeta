@@ -42,7 +42,7 @@ const editor = disposables.add(stanzaApi.editor.create(container, {
   stickyScroll: true,
   suggestions: true,
   inlineCompletions: true,
-  parameterHints: true,
+  parameterHints: { enabled: true },
   inlayHints: true,
   codeLens: true,
   placeholder: "Start typing…",

@@ -7,7 +7,7 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { Range } from "../../../common/core/range.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type CodeActionService, type LanguageCodeAction } from "../common/languageCodeActions.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
@@ -20,7 +20,7 @@ export class CodeActionController extends Disposable {
 	private actionRange: Range | undefined;
 	private actionDiagnostics: readonly LanguageDiagnostic[] = [];
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Stanza code action dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;

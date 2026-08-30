@@ -5,12 +5,12 @@ import { type LanguageLexicalContextSource } from "../../../common/languages/lan
 import { findSectionHeaders, type FindSectionHeaderOptions } from "../../../common/services/findSectionHeaders.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { Position } from '../../../common/core/position.js';
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Marks named source sections for browser presentation and accessibility. */
 export class SectionHeadersController extends Disposable {
 	constructor(
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly model: TextModel,
 		private readonly languageId: string,
 		private readonly configurations: LanguageConfigurationSource,

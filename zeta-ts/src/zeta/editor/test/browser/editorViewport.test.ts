@@ -5,12 +5,12 @@ import { h } from "../../../base/browser/dom.js";
 import { Emitter } from '../../../base/common/event.js';
 import { ContentWidgetPositionPreference, type IContentWidgetPosition, OverlayWidgetPositionPreference } from '../../browser/editorBrowser.js';
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
-import { createStanzaDecorationSource, DecorationPresentation } from "../../browser/viewparts/decorations/decorations.js";
-import { type BracketColorizationSource } from '../../browser/viewparts/viewLines/viewLine.js';
+import { createStanzaDecorationSource, DecorationPresentation } from "../../browser/viewParts/decorations/decorations.js";
+import { type BracketColorizationSource } from '../../browser/viewParts/viewLines/viewLine.js';
 import { CursorsController } from "../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
-import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
+import { EditorFoldingDecorationSource } from '../../contrib/folding/browser/editorFoldingDecorationSource.js';
 import { Selection } from "../../common/core/selection.js";
 import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
@@ -30,6 +30,11 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	ResizeObserver: class {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -37,7 +42,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import(
+const { View } = await import(
 	"../../browser/view.js"
 );
 const { EditorTextDirection } = await import(
@@ -47,14 +52,14 @@ const { EditorLineWrapping } = await import(
 	"../../common/config/editorOptions.js"
 );
 
-test("EditorViewport projects the initial virtual line window", () => {
+test("View projects the initial virtual line window", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel([
 		"<strong>not markup</strong>",
 		...lines(99),
 	].join("\n"));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -95,11 +100,11 @@ test("EditorViewport projects the initial virtual line window", () => {
 	dom.window.close();
 });
 
-test("EditorViewport gives browser text shaping an explicit paragraph direction", () => {
+test("View gives browser text shaping an explicit paragraph direction", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("שלום alpha");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -115,11 +120,11 @@ test("EditorViewport gives browser text shaping an explicit paragraph direction"
 	dom.window.close();
 });
 
-test("EditorViewport projects configured column rulers through the margin coordinate system", () => {
+test("View projects configured column rulers through the margin coordinate system", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abcdefghij");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -137,7 +142,7 @@ test("EditorViewport projects configured column rulers through the margin coordi
 	dom.window.close();
 });
 
-test("EditorViewport uses browser range geometry for RTL selections and carets", () => {
+test("View uses browser range geometry for RTL selections and carets", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	const createRange = dom.window.document.createRange.bind(dom.window.document);
@@ -160,7 +165,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 	});
 	using model = new TextModel("abc אבג");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -187,7 +192,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 	dom.window.close();
 });
 
-test("EditorViewport selection geometry includes selected newlines on empty lines", () => {
+test("View selection geometry includes selected newlines on empty lines", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	const createRange = dom.window.document.createRange.bind(dom.window.document);
@@ -206,7 +211,7 @@ test("EditorViewport selection geometry includes selected newlines on empty line
 	});
 	using model = new TextModel("alpha\n\nomega");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -240,11 +245,11 @@ test("EditorViewport selection geometry includes selected newlines on empty line
 	dom.window.close();
 });
 
-test("EditorViewport resolves RTL pointer hits from the browser caret position", () => {
+test("View resolves RTL pointer hits from the browser caret position", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abc אבג");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -267,12 +272,12 @@ test("EditorViewport resolves RTL pointer hits from the browser caret position",
 	dom.window.close();
 });
 
-test("EditorViewport announces cursor and selection changes through its live region", () => {
+test("View announces cursor and selection changes through its live region", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha\nbeta");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
 
 	const status = requiredElement(viewport.element, ".stanza-editor-accessibility-status");
 	assert.equal(status.getAttribute("aria-live"), "polite");
@@ -287,11 +292,11 @@ test("EditorViewport announces cursor and selection changes through its live reg
 	dom.window.close();
 });
 
-test("EditorViewport accepts explicit accessibility status announcements", () => {
+test("View accepts explicit accessibility status announcements", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 
 	viewport.announceAccessibilityStatus("  Saved  ");
 	assert.equal(requiredElement(viewport.element, ".stanza-editor-accessibility-status").textContent, "Saved");
@@ -299,11 +304,11 @@ test("EditorViewport accepts explicit accessibility status announcements", () =>
 	dom.window.close();
 });
 
-test("EditorViewport projects indentation guides for visible logical rows only", () => {
+test("View projects indentation guides for visible logical rows only", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("    alpha\n  beta");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -320,11 +325,11 @@ test("EditorViewport projects indentation guides for visible logical rows only",
 	dom.window.close();
 });
 
-test("EditorViewport renders a canvas minimap and maps a primary click to document scroll", () => {
+test("View renders a canvas minimap and maps a primary click to document scroll", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel(lines(200).join("\n"));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -374,11 +379,11 @@ test("EditorViewport renders a canvas minimap and maps a primary click to docume
 	dom.window.close();
 });
 
-test("EditorViewport keeps minimaps out of embedded presentations", () => {
+test("View keeps minimaps out of embedded presentations", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -389,12 +394,12 @@ test("EditorViewport keeps minimaps out of embedded presentations", () => {
 	dom.window.close();
 });
 
-test("EditorViewport lets a direct host own its focus outline and omits active lines by default when embedded", () => {
+test("View lets a direct host own its focus outline and omits active lines by default when embedded", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using embeddedViewport = new EditorViewport({
+	using embeddedViewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -408,14 +413,14 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 	assert.equal(embeddedViewport.element.classList.contains("stanza-editor-focus-owner-editor"), false);
 	assert.equal(embeddedViewport.element.querySelector(".view-line.active"), null);
 	assert.ok(embeddedViewport.element.querySelector(".stanza-editor-caret"));
-	assert.throws(() => new EditorViewport({
+	assert.throws(() => new View({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		focusOutlineOwner: "unknown" as never,
 	}), /Unknown Stanza editor focus outline owner/);
-	assert.throws(() => new EditorViewport({
+	assert.throws(() => new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -425,11 +430,11 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 	dom.window.close();
 });
 
-test("EditorViewport normalizes minimap options through common editor configuration", () => {
+test("View normalizes minimap options through common editor configuration", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -445,16 +450,16 @@ test("EditorViewport normalizes minimap options through common editor configurat
 	dom.window.close();
 });
 
-test("EditorViewport uses the common proportional minimap size by default and preserves an explicit fill size", () => {
+test("View uses the common proportional minimap size by default and preserves an explicit fill size", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main><aside></aside></body>");
 	using model = new TextModel("alpha\nbeta");
-	using proportionalViewport = new EditorViewport({
+	using proportionalViewport = new View({
 		container: requiredElement(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 	});
-	using fillingViewport = new EditorViewport({
+	using fillingViewport = new View({
 		container: requiredElement(dom.window.document, "aside"),
 		model,
 		lineHeight: 20,
@@ -471,11 +476,11 @@ test("EditorViewport uses the common proportional minimap size by default and pr
 	dom.window.close();
 });
 
-test("EditorViewport rejects an unknown GPU acceleration mode", () => {
+test("View rejects an unknown GPU acceleration mode", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	assert.throws(() => new EditorViewport({
+	assert.throws(() => new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -485,11 +490,11 @@ test("EditorViewport rejects an unknown GPU acceleration mode", () => {
 	dom.window.close();
 });
 
-test("EditorViewport keeps DOM text visible when WebGPU initialization is unavailable", () => {
+test("View keeps DOM text visible when WebGPU initialization is unavailable", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -512,7 +517,7 @@ test("Scrolling virtualizes rows while preserving overlapping DOM identity", () 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel(lines(100).join("\n"));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -551,7 +556,7 @@ test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to log
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abcdef\ngh");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -617,7 +622,7 @@ test("Soft wrapping applies the configured indent to continuation DOM rows", () 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("  abcdefgh");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -643,8 +648,8 @@ test("Folding model removes folded physical rows from the viewport projection", 
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
-	using decorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({
+	using decorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -693,11 +698,11 @@ test("Folding model removes folded physical rows from the viewport projection", 
 	dom.window.close();
 });
 
-test("EditorViewport keeps short minimap content at the top and projects a proportional hover slider", () => {
+test("View keeps short minimap content at the top and projects a proportional hover slider", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha\nbeta\ngamma");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -737,8 +742,8 @@ test("Editor gutter orders generic glyphs, line numbers, folding controls, then 
 	});
 	using folding = new EditorFoldingModel(model);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
-	using foldingDecorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({
+	using foldingDecorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -771,7 +776,7 @@ test("Editor gutter can disable the glyph margin without changing remaining colu
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("header");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -794,7 +799,7 @@ test("Model edits refresh visible rows and clamp a shrinking document", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel(lines(100).join("\n"));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -848,7 +853,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 			Selection.fromPositions(new Position((2) + 1, (1) + 1)),
 		], 0),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -938,11 +943,11 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	dom.window.close();
 });
 
-test('EditorViewport projects the configured mouse style onto its text layer', () => {
+test('View projects the configured mouse style onto its text layer', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -954,7 +959,7 @@ test('EditorViewport projects the configured mouse style onto its text layer', (
 	dom.window.close();
 });
 
-test('EditorViewport places RTL block cursors over their following glyph or trailing space', () => {
+test('View places RTL block cursors over their following glyph or trailing space', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	const createRange = dom.window.document.createRange.bind(dom.window.document);
@@ -973,7 +978,7 @@ test('EditorViewport places RTL block cursors over their following glyph or trai
 	});
 	using model = new TextModel('讗');
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1002,7 +1007,7 @@ test('EditorViewport places RTL block cursors over their following glyph or trai
 	dom.window.close();
 });
 
-test('EditorViewport renders active bracket and indentation guides from the structural bracket source', () => {
+test('View renders active bracket and indentation guides from the structural bracket source', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('{\n    value\n}\ntail');
@@ -1016,7 +1021,7 @@ test('EditorViewport renders active bracket and indentation guides from the stru
 			level: 1,
 		})]),
 	};
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: selections,
@@ -1040,7 +1045,7 @@ test('EditorViewport renders active bracket and indentation guides from the stru
 	dom.window.close();
 });
 
-test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight semantics', () => {
+test('View preserves line, gutter, focus, and multi-cursor highlight semantics', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta\ngamma');
@@ -1048,7 +1053,7 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
 		Selection.fromPositions(new Position((2) + 1, (1) + 1)),
 	], 1));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1086,12 +1091,12 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	dom.window.close();
 });
 
-test('EditorViewport matches line and thin-underline cursor geometry', () => {
+test('View matches line and thin-underline cursor geometry', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('abc');
 	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1133,12 +1138,12 @@ test('EditorViewport matches line and thin-underline cursor geometry', () => {
 	dom.window.close();
 });
 
-test('EditorViewport normalizes a block cursor to the complete containing grapheme', () => {
+test('View normalizes a block cursor to the complete containing grapheme', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a😊b');
 	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: controller,
@@ -1159,12 +1164,12 @@ test('EditorViewport normalizes a block cursor to the complete containing graphe
 	dom.window.close();
 });
 
-test('EditorViewport gives every cursor one shared blinking animation', () => {
+test('View gives every cursor one shared blinking animation', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha;\nbeta;');
 	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (5) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: controller,
@@ -1194,12 +1199,12 @@ test('EditorViewport gives every cursor one shared blinking animation', () => {
 	dom.window.close();
 });
 
-test('EditorViewport animates stable explicit cursor movement and pauses cursor-count changes', () => {
+test('View animates stable explicit cursor movement and pauses cursor-count changes', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
 	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: controller,
@@ -1240,13 +1245,13 @@ test('EditorViewport animates stable explicit cursor movement and pauses cursor-
 	dom.window.close();
 });
 
-test('EditorViewport snaps line cursors to physical pixels', () => {
+test('View snaps line cursors to physical pixels', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 1.25 });
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('abc');
 	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: controller,
@@ -1267,7 +1272,7 @@ test('EditorViewport snaps line cursors to physical pixels', () => {
 	dom.window.close();
 });
 
-test('EditorViewport keeps token font styling on characters redrawn inside cursors', () => {
+test('View keeps token font styling on characters redrawn inside cursors', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
@@ -1286,7 +1291,7 @@ test('EditorViewport keeps token font styling on characters redrawn inside curso
 		getLineTokens: () => tokens,
 	};
 	using controller = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: controller,
@@ -1328,7 +1333,7 @@ test('EditorViewport keeps token font styling on characters redrawn inside curso
 	dom.window.close();
 });
 
-test('EditorViewport sizes block cursors from contextual tab advances', () => {
+test('View sizes block cursors from contextual tab advances', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a\tb\nabcd\tb');
@@ -1336,7 +1341,7 @@ test('EditorViewport sizes block cursors from contextual tab advances', () => {
 		Selection.fromPositions(new Position((0) + 1, (1) + 1)),
 		Selection.fromPositions(new Position((1) + 1, (4) + 1)),
 	], 0));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: controller,
@@ -1359,7 +1364,7 @@ test("Measured content width, line height, and scroll stay synchronized", () => 
 		"x".repeat(458),
 		...lines(29),
 	].join("\n"));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1393,7 +1398,7 @@ test("Line width indexing updates only affected model line groups", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abcdef\nxx");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1433,7 +1438,7 @@ test("Font metric refresh rebuilds authoritative horizontal width", () => {
 	const measurer = fixedTextMeasurer(10, 20);
 	using model = new TextModel("xxxx");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1460,7 +1465,7 @@ test("Viewport disposal removes DOM without owning the text model", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1478,11 +1483,11 @@ test("Viewport disposal removes DOM without owning the text model", () => {
 	dom.window.close();
 });
 
-test('EditorViewport mounts content and overlay widgets through their VS Code owners', () => {
+test('View mounts content and overlay widgets through their VS Code owners', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 	viewport.layout({ width: 300, height: 100 });
 	const contentDomNode = h(dom.window.document, 'div');
 	let contentPosition: IContentWidgetPosition = { position: { lineNumber: 1, column: 2 }, preference: [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW] };
@@ -1523,12 +1528,12 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 	dom.window.close();
 });
 
-test('EditorViewport renders relative, interval, and custom line numbers', () => {
+test('View renders relative, interval, and custom line numbers', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel(lines(12).join('\n'));
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((5) + 1, (0) + 1))));
-	using relative = new EditorViewport({
+	using relative = new View({
 		container,
 		model,
 		selectionController: selections,
@@ -1543,23 +1548,23 @@ test('EditorViewport renders relative, interval, and custom line numbers', () =>
 	assert.equal(lineNumber(relativeRows[9]!).textContent, '4');
 	relative.dispose();
 
-	using interval = new EditorViewport({ container, model, lineHeight: 20, lineNumbers: 'interval', textMeasurer: fixedTextMeasurer() });
+	using interval = new View({ container, model, lineHeight: 20, lineNumbers: 'interval', textMeasurer: fixedTextMeasurer() });
 	interval.layout({ width: 300, height: 240 });
 	assert.equal(lineNumber(lineElements(interval.element)[8]!).textContent, '');
 	assert.equal(lineNumber(lineElements(interval.element)[9]!).textContent, '10');
 	interval.dispose();
 
-	using custom = new EditorViewport({ container, model, lineHeight: 20, lineNumbers: line => `L${line}`, textMeasurer: fixedTextMeasurer() });
+	using custom = new View({ container, model, lineHeight: 20, lineNumbers: line => `L${line}`, textMeasurer: fixedTextMeasurer() });
 	custom.layout({ width: 300, height: 40 });
 	assert.equal(lineNumber(lineElements(custom.element)[0]!).textContent, 'L1');
 	dom.window.close();
 });
 
-test('EditorViewport changes public view zones with content and margin ownership', () => {
+test('View changes public view zones with content and margin ownership', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 	viewport.layout({ width: 300, height: 100 });
 	const domNode = h(dom.window.document, 'button');
 	const marginDomNode = h(dom.window.document, 'span');
@@ -1597,11 +1602,11 @@ test('EditorViewport changes public view zones with content and margin ownership
 	dom.window.close();
 });
 
-test('EditorViewport resolves line-based and default view-zone heights after line-height changes', () => {
+test('View resolves line-based and default view-zone heights after line-height changes', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 	viewport.layout({ width: 300, height: 100 });
 	const lineHeightNode = h(dom.window.document, 'div');
 	const defaultHeightNode = h(dom.window.document, 'div');
@@ -1625,11 +1630,11 @@ test('EditorViewport resolves line-based and default view-zone heights after lin
 	dom.window.close();
 });
 
-test('EditorViewport lays out overflowing and relayout-aware overlay widgets', () => {
+test('View lays out overflowing and relayout-aware overlay widgets', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -1666,11 +1671,11 @@ test('EditorViewport lays out overflowing and relayout-aware overlay widgets', (
 	dom.window.close();
 });
 
-test('EditorViewport preserves focused overflow content widgets off screen and suppresses their mouse down', () => {
+test('View preserves focused overflow content widgets off screen and suppresses their mouse down', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), fixedOverflowWidgets: true });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), fixedOverflowWidgets: true });
 	viewport.layout({ width: 300, height: 20 });
 	const contentDomNode = h(dom.window.document, 'button');
 	let position: IContentWidgetPosition = { position: new Position((0) + 1, (1) + 1), preference: [ContentWidgetPositionPreference.EXACT] };
@@ -1706,11 +1711,11 @@ test('EditorViewport preserves focused overflow content widgets off screen and s
 	dom.window.close();
 });
 
-test('EditorViewport projects configured whitespace through WhitespaceOverlay', () => {
+test('View projects configured whitespace through WhitespaceOverlay', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a b\t');
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), renderWhitespace: 'all' });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), renderWhitespace: 'all' });
 
 	viewport.layout({ width: 300, height: 100 });
 
@@ -1718,12 +1723,12 @@ test('EditorViewport projects configured whitespace through WhitespaceOverlay', 
 	dom.window.close();
 });
 
-test('EditorViewport limits selection whitespace to the current selections', () => {
+test('View limits selection whitespace to the current selections', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a b c');
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		selectionController: selections,

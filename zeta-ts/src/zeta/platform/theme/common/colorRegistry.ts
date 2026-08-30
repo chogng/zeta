@@ -89,7 +89,7 @@ export class ColorRegistry {
 			const source = Object.hasOwn(overrides, id) ? overrides[id] : defaultsForScheme(contribution.defaults, scheme);
 			const value = resolveColorValue(source, resolveIdentifier);
 			resolving.pop();
-			if (contribution.needsTransparency && value?.alpha === 1) {
+			if (contribution.needsTransparency && value?.rgba.a === 1) {
 				throw new Error(`Color token '${id}' must be transparent`);
 			}
 			cache.set(id, value);

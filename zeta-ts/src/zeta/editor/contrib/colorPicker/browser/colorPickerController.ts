@@ -1,19 +1,20 @@
 import './media/colorPicker.css';
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
+import { Color, RGBA } from '../../../../base/common/color.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { createEditorEditCommand } from '../../../common/commands/editorCommand.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
-import { RGBA8 } from '../../../common/core/misc/rgba.js';
-import { type EditorViewport } from '../../../browser/view.js';
+import { type IColor } from '../../../common/languages.js';
+import { type View } from '../../../browser/view.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { ColorService, type ColorData } from '../common/languageColors.js';
 import { ColorDetector } from './colorDetector.js';
 import { ColorPickerModel } from './colorPickerModel.js';
-import { ColorPickerWidget } from './colorPickerWidget.js';
+import { EditorColorPickerDialog } from './editorColorPickerDialog.js';
 
 interface ColorPickerCapabilityValue {
 	readonly service: ColorService;
@@ -26,7 +27,7 @@ export type ColorDecoratorsActivatedOn = 'clickAndHover' | 'click' | 'hover';
 
 /** Coordinates color detection, picker requests, focus, and one atomic editor edit. */
 export class ColorPickerController extends Disposable {
-	private readonly widget: ColorPickerWidget;
+	private readonly widget: EditorColorPickerDialog;
 	private readonly model = this._register(new MutableDisposable<ColorPickerModel>());
 	private readonly hoverTimer = this._register(new MutableDisposable<IDisposable>());
 	private presentationRequest: AbortController | undefined;
@@ -36,7 +37,7 @@ export class ColorPickerController extends Disposable {
 
 	constructor(
 		private readonly editorInput: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly service: ColorService,
 		private readonly detector: ColorDetector,
@@ -47,7 +48,7 @@ export class ColorPickerController extends Disposable {
 	) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError('Stanza color picker dependencies must share a text model');
-		this.widget = this._register(new ColorPickerWidget(
+		this.widget = this._register(new EditorColorPickerDialog(
 			viewport.element,
 			color => this.refreshPresentations(color),
 			() => this.apply(),
@@ -142,28 +143,30 @@ export class ColorPickerController extends Disposable {
 		this.presentationRequest?.abort();
 		this.activeData = data;
 		this.originalText = this.viewport.textModel.getTextInRange(data.information.range);
-		const model = new ColorPickerModel(data.information.color);
+		const color = toColor(data.information.color);
+		const model = new ColorPickerModel(color, [], 0);
 		this.widget.hide();
 		this.model.value = model;
 		this.widget.show(model, this.widgetPosition(data.information.range.getStartPosition()), focus);
-		await this.loadPresentations(model, data.information.color);
+		await this.loadPresentations(model, color);
 	}
 
-	private refreshPresentations(color: RGBA8): void {
+	private refreshPresentations(color: Color): void {
 		const model = this.model.value;
 		if (!model) return;
 		void this.loadPresentations(model, color);
 	}
 
-	private async loadPresentations(model: ColorPickerModel, color: RGBA8): Promise<void> {
+	private async loadPresentations(model: ColorPickerModel, color: Color): Promise<void> {
 		const data = this.activeData;
 		if (!data) return;
 		this.presentationRequest?.abort();
 		const request = this.presentationRequest = new AbortController();
 		try {
-			const presentations = await this.service.provideColorPresentations(this.languageId, data, color, request.signal);
+			const presentations = await this.service.provideColorPresentations(this.languageId, data, toLanguageColor(color), request.signal);
 			if (request.signal.aborted || this.model.value !== model) return;
-			model.setColorPresentations(presentations, this.originalText);
+			model.colorPresentations = [...presentations];
+			model.guessColorPresentation(color, this.originalText);
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
 		}
@@ -171,7 +174,7 @@ export class ColorPickerController extends Disposable {
 
 	private apply(): void {
 		const data = this.activeData;
-		const presentation = this.model.value?.selectedPresentation;
+		const presentation = this.model.value?.presentation;
 		if (!data || !presentation) return;
 		if (this.readOnly) {
 			this.viewport.announceAccessibilityStatus(localize('zeta.editor.colorPicker', 'readOnly', 'The editor is read-only.'));
@@ -218,6 +221,19 @@ export class ColorPickerController extends Disposable {
 		this.close(false);
 		super.disposeCore();
 	}
+}
+
+function toColor(color: IColor): Color {
+	return new Color(new RGBA(color.red * 255, color.green * 255, color.blue * 255, color.alpha));
+}
+
+function toLanguageColor(color: Color): IColor {
+	return Object.freeze({
+		red: color.rgba.r / 255,
+		green: color.rgba.g / 255,
+		blue: color.rgba.b / 255,
+		alpha: color.rgba.a,
+	});
 }
 
 function colorSwatch(target: EventTarget | null): HTMLElement | undefined {

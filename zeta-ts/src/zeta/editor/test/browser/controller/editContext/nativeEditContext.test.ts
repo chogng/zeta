@@ -9,7 +9,7 @@ import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { SemanticTokenPresentation, type BracketColorizationSource, type SemanticTokenSource } from "../../../../browser/viewparts/viewLines/viewLine.js";
+import { SemanticTokenPresentation, type BracketColorizationSource, type SemanticTokenSource } from "../../../../browser/viewParts/viewLines/viewLine.js";
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
@@ -45,7 +45,7 @@ const { SimpleScreenReaderContent } = await import("../../../../browser/controll
 const { RichScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentRich.js");
 const { createScreenReaderContentState, modelOffsetAtContentOffset } = await import("../../../../browser/controller/editContext/native/screenReaderUtils.js");
 const { ScreenReaderSupport } = await import("../../../../browser/controller/editContext/native/screenReaderSupport.js");
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -169,7 +169,7 @@ test("native screen-reader support follows logical EditContext focus through the
 		model,
 		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: host,
 		model,
 		lineHeight: 20,
@@ -220,7 +220,7 @@ test("native screen-reader mirror follows viewport coordinates and scrolls to th
 		model,
 		SelectionSet.single(Selection.fromPositions(new Position((2) + 1, (1) + 1))),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: host,
 		model,
 		lineHeight: 20,

@@ -1,4 +1,4 @@
-import { createInsertCitationCommand, createInsertReferenceCommand } from "../common/commands.js";
+import { createInsertCitationCommand, createInsertReferenceCommand } from "../common/citationCommands.js";
 import type { EditorToolbarAction } from "../../../browser/widget/richTextEditor/richTextEditorWidget.js";
 
 /** Toolbar actions contributed by the citation capability. */

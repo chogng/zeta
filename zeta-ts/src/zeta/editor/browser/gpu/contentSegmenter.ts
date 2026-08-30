@@ -1,7 +1,7 @@
 import { safeIntl } from '../../../base/common/date.js';
 import type { GraphemeIterator } from '../../../base/common/strings.js';
 import type { ViewLineRenderingData } from '../../common/viewModel.js';
-import type { ViewLineOptions } from '../viewparts/viewLines/viewLineOptions.js';
+import type { ViewLineOptions } from '../viewParts/viewLines/viewLineOptions.js';
 
 export interface IContentSegmenter {
 	getSegmentAtIndex(index: number): string | undefined;

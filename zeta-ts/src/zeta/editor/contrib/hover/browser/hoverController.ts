@@ -4,7 +4,7 @@ import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageHoverService, type LanguageHover } from "../common/hover.js";
 import { type Position } from "../../../common/core/position.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
 export class HoverController extends Disposable {
@@ -12,7 +12,7 @@ export class HoverController extends Disposable {
 	private request: AbortController | undefined;
 	private readonly timer = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly viewport: EditorViewport, private readonly service: LanguageHoverService, private readonly languageId: string) {
+	constructor(private readonly viewport: View, private readonly service: LanguageHoverService, private readonly languageId: string) {
 		super();
 		this.element = h(viewport.element.ownerDocument, "div");
 		this.element.className = "stanza-editor-hover";

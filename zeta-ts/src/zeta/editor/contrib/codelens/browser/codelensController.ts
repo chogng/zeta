@@ -1,5 +1,5 @@
 import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
-import { type EditorViewport } from '../../../browser/view.js';
+import { type View } from '../../../browser/view.js';
 import { StableEditorScrollState } from '../../../browser/stableEditorScroll.js';
 import { TimeoutTimer } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -29,7 +29,7 @@ export class CodeLensContribution extends Disposable {
 	private modelVersion: number;
 
 	public constructor(
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>,
 		private readonly languageId: string,
 		private readonly resource: URI | undefined,

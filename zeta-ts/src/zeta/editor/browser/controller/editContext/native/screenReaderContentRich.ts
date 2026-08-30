@@ -1,6 +1,6 @@
 import { fragment as createFragment, h, text as createText } from "../../../../../base/browser/dom.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
-import { projectStanzaSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewparts/viewLines/viewLine.js";
+import { projectStanzaSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type ScreenReaderContentState } from "./screenReaderUtils.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 

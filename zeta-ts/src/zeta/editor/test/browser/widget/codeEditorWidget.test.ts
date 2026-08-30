@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
-const { CodeEditorContributionInstantiation } = await import("../../../browser/widget/codeEditor/codeEditorContributions.js");
+const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
@@ -142,12 +142,12 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 		contributions: [
 			{
 				id: "test.eager",
-				instantiation: CodeEditorContributionInstantiation.Eager,
+				instantiation: EditorContributionInstantiation.Eager,
 				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId, IInstantiationService] }),
 			},
 			{
 				id: "test.lazy",
-				instantiation: CodeEditorContributionInstantiation.Lazy,
+				instantiation: EditorContributionInstantiation.Lazy,
 				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId, IInstantiationService] }),
 			},
 		],

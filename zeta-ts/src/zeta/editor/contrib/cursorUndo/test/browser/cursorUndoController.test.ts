@@ -21,7 +21,7 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { CursorUndoController, isCursorUndoChord } = await import("../../browser/cursorUndoController.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -31,7 +31,7 @@ test("Cursor undo restores macOS multi-cursor history without changing text", ()
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	container.append(input);
 	using controller = new CursorUndoController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });

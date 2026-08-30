@@ -141,7 +141,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import(
+const { View } = await import(
 	"../../browser/view.js"
 );
 
@@ -152,7 +152,7 @@ test("Viewport maps client coordinates through its bounds and scroll state", () 
 	using model = new TextModel(
 		Array.from({ length: 20 }, () => "abcdefghij".repeat(3)).join("\n"),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,

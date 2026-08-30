@@ -14,8 +14,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { DomReadingContext } = await import('../../browser/viewparts/viewLines/domReadingContext.js');
-const { RangeUtil } = await import('../../browser/viewparts/viewLines/rangeUtil.js');
+const { DomReadingContext } = await import('../../browser/viewParts/viewLines/domReadingContext.js');
+const { RangeUtil } = await import('../../browser/viewParts/viewLines/rangeUtil.js');
 
 test('RangeUtil keeps one UTF-16 offset space across syntax spans', () => {
 	const dom = new JSDOM('<!doctype html><body><div id="line"><span id="text"><span>ab</span><span>😊</span><span>cd</span></span></div></body>');

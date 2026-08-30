@@ -7,7 +7,7 @@ import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type TextEditorContributionContext } from "../../../browser/editorExtensions.js";
 import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from "../../../browser/controller/semanticMouseTarget.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
@@ -31,7 +31,7 @@ export interface FoldingControllerOptions {
 /** Routes local VS Code fold chords and gutter controls through Stanza's folding model. */
 export class FoldingController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
-	private readonly viewport: EditorViewport;
+	private readonly viewport: View;
 	private readonly selections: CursorsController;
 	private readonly folding: EditorFoldingModel;
 	private readonly mouseTargets: SemanticMouseTargetFactory;

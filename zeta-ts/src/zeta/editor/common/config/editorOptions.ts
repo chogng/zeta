@@ -1779,6 +1779,7 @@ type EditorOptionsCollection = Record<string, IEditorOption<EditorOption, unknow
 	readonly quickSuggestions: IEditorOption<EditorOption.quickSuggestions, InternalQuickSuggestionsOptions>;
 	readonly suggest: IEditorOption<EditorOption.suggest, InternalSuggestOptions>;
 	readonly inlineSuggest: IEditorOption<EditorOption.inlineSuggest, InternalInlineSuggestOptions>;
+	readonly parameterHints: IEditorOption<EditorOption.parameterHints, InternalParameterHintOptions>;
 	readonly unicodeHighlighting: IEditorOption<EditorOption.unicodeHighlighting, InternalUnicodeHighlightOptions>;
 	readonly layoutInfo: IEditorOption<EditorOption.layoutInfo, EditorLayoutInfo>;
 	readonly wrappingInfo: IEditorOption<EditorOption.wrappingInfo, EditorWrappingInfo>;

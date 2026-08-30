@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import('../../../../browser/view.js');
+const { View } = await import('../../../../browser/view.js');
 const { RenameCommandId, RenameController } = await import('../../browser/renameController.js');
 
 test.after(() => browserEnvironment.window.close());
@@ -38,7 +38,7 @@ test('Rename reports its command after applying the provider edit', async () => 
 	const resource = URI.file('C:\\project\\rename.ts');
 	using model = new TextModel('abc');
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, 'textarea');
 	container.append(editorInput);

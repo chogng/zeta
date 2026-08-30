@@ -7,22 +7,22 @@ import { type InternalGuidesOptions, type TextEditorCursorBlinkingStyle, type Te
 import { type Range } from '../../common/core/range.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../common/services/resolvedSemanticTokens.js';
-import { type BracketColorizationSource } from '../viewparts/viewLines/viewLine.js';
-import { type DecorationSource } from '../viewparts/decorations/decorations.js';
-import { BlockDecorations } from '../viewparts/blockDecorations/blockDecorations.js';
-import { DecorationsOverlay } from '../viewparts/decorations/decorations.js';
-import { CurrentLineHighlightOverlay } from '../viewparts/currentLineHighlight/currentLineHighlight.js';
-import { GpuMarkOverlay } from '../viewparts/gpuMark/gpuMark.js';
-import { IndentGuidesOverlay } from '../viewparts/indentGuides/indentGuides.js';
-import { LinesDecorationsOverlay } from '../viewparts/linesDecorations/linesDecorations.js';
-import { MarginViewLineDecorationsOverlay } from '../viewparts/marginDecorations/marginDecorations.js';
-import { SelectionsOverlay } from '../viewparts/selections/selections.js';
-import { ViewCursors } from '../viewparts/viewCursors/viewCursors.js';
-import { WhitespaceOverlay, type WhitespaceRenderingMode } from '../viewparts/whitespace/whitespace.js';
-import { DynamicViewOverlay } from './dynamicViewOverlay.js';
+import { type BracketColorizationSource } from '../viewParts/viewLines/viewLine.js';
+import { type DecorationSource } from '../viewParts/decorations/decorations.js';
+import { BlockDecorations } from '../viewParts/blockDecorations/blockDecorations.js';
+import { DecorationsOverlay } from '../viewParts/decorations/decorations.js';
+import { CurrentLineHighlightOverlay } from '../viewParts/currentLineHighlight/currentLineHighlight.js';
+import { StyledGpuMarkOverlay } from '../viewParts/gpuMark/styledGpuMark.js';
+import { IndentGuidesOverlay } from '../viewParts/indentGuides/indentGuides.js';
+import { LinesDecorationsOverlay } from '../viewParts/linesDecorations/linesDecorations.js';
+import { MarginViewLineDecorationsOverlay } from '../viewParts/marginDecorations/marginDecorations.js';
+import { SelectionsOverlay } from '../viewParts/selections/selections.js';
+import { ViewCursors } from '../viewParts/viewCursors/viewCursors.js';
+import { WhitespaceOverlay, type WhitespaceRenderingMode } from '../viewParts/whitespace/whitespace.js';
+import { EditorDynamicViewOverlay } from './editorDynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from './viewPart.js';
 
-export interface ViewOverlaysOptions {
+export interface EditorOverlayCoordinatorOptions {
 	readonly contentElement: HTMLDivElement;
 	readonly model: TextModel;
 	readonly selectionController: CursorsController | undefined;
@@ -42,20 +42,20 @@ export interface ViewOverlaysOptions {
 }
 
 /** Coordinates row and block overlays while keeping their concrete projections independent. */
-export class ViewOverlays extends Disposable {
+export class EditorOverlayCoordinator extends Disposable {
 	readonly domNodes: readonly HTMLElement[];
 	readonly blockDecorations: BlockDecorations;
 	readonly decorations: DecorationsOverlay;
 	readonly onDidChangeDecorations: Event<void>;
 
-	private readonly parts: DynamicViewOverlay[] = [];
+	private readonly parts: EditorDynamicViewOverlay[] = [];
 	private readonly selections: SelectionsOverlay;
 	private readonly currentLineHighlight: CurrentLineHighlightOverlay;
 	private readonly indentGuides: IndentGuidesOverlay;
 	private readonly viewCursors: ViewCursors;
 	private readonly whitespace: WhitespaceOverlay;
 
-	constructor(context: EditorViewContext, options: ViewOverlaysOptions) {
+	constructor(context: EditorViewContext, options: EditorOverlayCoordinatorOptions) {
 		super();
 		this.decorations = this.register(new DecorationsOverlay(
 			context,
@@ -92,7 +92,7 @@ export class ViewOverlays extends Disposable {
 			fontInfo: options.fontInfo,
 		}, options.model, options.selectionController));
 		const gpuMark = options.readGpuLineIndexes
-			? this.register(new GpuMarkOverlay(context, options.contentElement, options.readGpuLineIndexes))
+			? this.register(new StyledGpuMarkOverlay(context, options.contentElement, options.readGpuLineIndexes))
 			: undefined;
 		this.domNodes = Object.freeze([
 			this.indentGuides.domNode,
@@ -143,7 +143,7 @@ export class ViewOverlays extends Disposable {
 		this.viewCursors.setLineWidth(lineWidth);
 	}
 
-	private register<TPart extends DynamicViewOverlay>(part: TPart): TPart {
+	private register<TPart extends EditorDynamicViewOverlay>(part: TPart): TPart {
 		this.parts.push(part);
 		this._register(part);
 		return part;

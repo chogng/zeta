@@ -1,11 +1,11 @@
 import { h } from '../../../../base/browser/dom.js';
-import { type IGpuGlyphStyle, type IStyledGlyphRasterizer, type IStyledRasterizedGlyph } from './raster.js';
+import { type IStyledGlyphStyle, type IStyledGlyphRasterizer, type IStyledRasterizedGlyph } from './raster.js';
 import { createCanvasFontShorthand } from '../../config/fontMeasurements.js';
 
 let nextId = 0;
 
 /** Rasterizes one grapheme using the browser canvas font stack selected by the editor. */
-export class GlyphRasterizer implements IStyledGlyphRasterizer {
+export class StyledGlyphRasterizer implements IStyledGlyphRasterizer {
 	public readonly id = nextId++;
 	public readonly cacheKey: string;
 	private readonly canvas: HTMLCanvasElement;
@@ -19,16 +19,16 @@ export class GlyphRasterizer implements IStyledGlyphRasterizer {
 		this.context = context;
 	}
 
-	public styleKey(style: IGpuGlyphStyle): string {
+	public styleKey(style: IStyledGlyphStyle): string {
 		return JSON.stringify([style.color, style.fontFamily, style.fontSize, style.fontStyle, style.fontVariant, style.fontWeight, style.letterSpacing, this.devicePixelRatio]);
 	}
 
-	public getTextMetrics(text: string, style: IGpuGlyphStyle): TextMetrics {
+	public getTextMetrics(text: string, style: IStyledGlyphStyle): TextMetrics {
 		this.applyFont(style, style.fontSize * this.devicePixelRatio);
 		return this.context.measureText(text);
 	}
 
-	public rasterizeGlyph(chars: string, style: IGpuGlyphStyle, subPixelX: number): IStyledRasterizedGlyph {
+	public rasterizeGlyph(chars: string, style: IStyledGlyphStyle, subPixelX: number): IStyledRasterizedGlyph {
 		if (!chars) throw new TypeError('WebGPU glyph text must not be empty');
 		const advance = this.getTextMetrics(chars, style).width + style.letterSpacing * this.devicePixelRatio;
 		this.applyRasterFont(style);
@@ -61,11 +61,11 @@ export class GlyphRasterizer implements IStyledGlyphRasterizer {
 		});
 	}
 
-	private applyRasterFont(style: IGpuGlyphStyle): void {
+	private applyRasterFont(style: IStyledGlyphStyle): void {
 		this.applyFont(style, Math.ceil(style.fontSize * this.devicePixelRatio));
 	}
 
-	private applyFont(style: IGpuGlyphStyle, fontSize: number): void {
+	private applyFont(style: IStyledGlyphStyle, fontSize: number): void {
 		this.context.font = createCanvasFontShorthand({
 			style: style.fontStyle,
 			variant: style.fontVariant,

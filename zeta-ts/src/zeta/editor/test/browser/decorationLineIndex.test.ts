@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationLineIndex } from "../../browser/viewparts/decorations/decorations.js";
-import { DecorationPresentation, type ResolvedDecoration } from "../../browser/viewparts/decorations/decorations.js";
+import { DecorationLineIndex } from "../../browser/viewParts/decorations/decorations.js";
+import { DecorationPresentation, type ResolvedDecoration } from "../../browser/viewParts/decorations/decorations.js";
 import { type TextDecorationId } from "../../common/model/decorationCollection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";

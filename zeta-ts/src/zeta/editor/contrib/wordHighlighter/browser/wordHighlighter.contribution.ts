@@ -4,8 +4,8 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
-import { type EditorView } from '../../../browser/view.js';
-import { createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
+import { type EditorView } from '../../../browser/editorView.js';
+import { createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../common/core/selection.js';
 import { SelectionSet } from '../../../common/cursor/selectionSet.js';
 import { Position } from '../../../common/core/position.js';
@@ -148,7 +148,7 @@ class WordHighlighter extends Disposable {
 		return Object.freeze({
 			resource: this.resource,
 			model: this.textModel,
-			snapshot: this.textModel.createSnapshot(),
+			snapshot: this..createVersionedSnapshot(),
 			languageId: this.languageId,
 			...(wordPattern ? { wordPattern } : {}),
 		});

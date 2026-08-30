@@ -2,7 +2,7 @@ import './media/codelens.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { type EditorViewport, type EditorViewZone, type EditorViewZoneHandle } from '../../../browser/view.js';
+import { type View, type EditorViewZone, type EditorViewZoneHandle } from '../../../browser/view.js';
 import { type LanguageCodeLens, type LanguageCodeLensCommand } from '../common/languageCodeLenses.js';
 import { type LanguageCodeLensItem } from './codelens.js';
 
@@ -17,7 +17,7 @@ export class CodeLensWidget extends Disposable {
 	private readonly viewZone: EditorViewZone;
 	private readonly viewZoneHandle: EditorViewZoneHandle;
 
-	public constructor(private readonly viewport: EditorViewport, items: readonly LanguageCodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
+	public constructor(private readonly viewport: View, items: readonly LanguageCodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
 		super();
 		this.items = items;
 		this.domNode = h(viewport.element.ownerDocument, 'div');

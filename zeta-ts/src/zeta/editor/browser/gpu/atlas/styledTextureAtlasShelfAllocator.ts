@@ -1,11 +1,11 @@
 import { h } from '../../../../base/browser/dom.js';
 import { BugIndicatingError } from '../../../../base/common/errors.js';
 import { type IStyledRasterizedGlyph } from '../raster/raster.js';
-import { UsagePreviewColors, type IGpuTextureAtlasAllocator, type IGpuTextureAtlasPageGlyph } from './atlas.js';
+import { UsagePreviewColors, type IStyledTextureAtlasAllocator, type IStyledTextureAtlasPageGlyph } from './atlas.js';
 
-export class TextureAtlasShelfAllocator implements IGpuTextureAtlasAllocator {
+export class StyledTextureAtlasShelfAllocator implements IStyledTextureAtlasAllocator {
 	private readonly context: CanvasRenderingContext2D;
-	private readonly allocatedGlyphs = new Set<Readonly<IGpuTextureAtlasPageGlyph>>();
+	private readonly allocatedGlyphs = new Set<Readonly<IStyledTextureAtlasPageGlyph>>();
 	private currentX = 0;
 	private currentY = 0;
 	private rowHeight = 0;
@@ -17,7 +17,7 @@ export class TextureAtlasShelfAllocator implements IGpuTextureAtlasAllocator {
 		this.context = context;
 	}
 
-	public allocate(rasterizedGlyph: IStyledRasterizedGlyph): IGpuTextureAtlasPageGlyph | undefined {
+	public allocate(rasterizedGlyph: IStyledRasterizedGlyph): IStyledTextureAtlasPageGlyph | undefined {
 		const width = rasterizedGlyph.boundingBox.right - rasterizedGlyph.boundingBox.left + 1;
 		const height = rasterizedGlyph.boundingBox.bottom - rasterizedGlyph.boundingBox.top + 1;
 		if (width > this.canvas.width || height > this.canvas.height) throw new BugIndicatingError('Glyph is too large for the atlas page');
@@ -45,7 +45,7 @@ export class TextureAtlasShelfAllocator implements IGpuTextureAtlasAllocator {
 		return `page${this.textureIndex}: ${usedPixels}/${totalPixels} pixels used`;
 	}
 
-	private createGlyph(rasterizedGlyph: IStyledRasterizedGlyph, x: number, y: number, width: number, height: number): IGpuTextureAtlasPageGlyph {
+	private createGlyph(rasterizedGlyph: IStyledRasterizedGlyph, x: number, y: number, width: number, height: number): IStyledTextureAtlasPageGlyph {
 		return Object.freeze({
 			pageIndex: this.textureIndex,
 			glyphIndex: this.nextIndex++,
@@ -62,7 +62,7 @@ export class TextureAtlasShelfAllocator implements IGpuTextureAtlasAllocator {
 	}
 }
 
-async function canvasToBlob(source: HTMLCanvasElement, glyphs: ReadonlySet<Readonly<IGpuTextureAtlasPageGlyph>>): Promise<Blob> {
+async function canvasToBlob(source: HTMLCanvasElement, glyphs: ReadonlySet<Readonly<IStyledTextureAtlasPageGlyph>>): Promise<Blob> {
 	const canvas = h(source.ownerDocument, 'canvas');
 	canvas.width = source.width;
 	canvas.height = source.height;

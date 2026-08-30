@@ -25,8 +25,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
-const { DecorationPresentation, createStanzaDecorationSource } = await import("../../../../browser/viewparts/decorations/decorations.js");
+const { View } = await import("../../../../browser/view.js");
+const { DecorationPresentation, createStanzaDecorationSource } = await import("../../../../browser/viewParts/decorations/decorations.js");
 const { FindController } = await import("../../browser/findController.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -169,7 +169,7 @@ interface Fixture extends Disposable {
 	readonly model: TextModel;
 	readonly selections: CursorsController;
 	readonly decorations: TextDecorationCollection<void>;
-	readonly viewport: InstanceType<typeof EditorViewport>;
+	readonly viewport: InstanceType<typeof View>;
 	readonly editorInput: HTMLTextAreaElement;
 	readonly find: InstanceType<typeof FindController>;
 }
@@ -180,7 +180,7 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 	const model = new TextModel(text);
 	const selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(anchor, active)));
 	const decorations = new TextDecorationCollection<void>(model);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

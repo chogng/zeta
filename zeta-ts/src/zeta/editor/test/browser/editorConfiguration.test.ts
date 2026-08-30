@@ -48,7 +48,7 @@ test('browser editor option migration updates supported legacy shapes in place',
 		defaultColorDecorators: false,
 	};
 
-	migrateOptions(legacy);
+	migrateOptions(legacy as never);
 	assert.deepEqual(legacy, {
 		wordWrap: 'on',
 		lineNumbers: 'off',
@@ -64,6 +64,6 @@ test('browser editor option migration updates supported legacy shapes in place',
 
 test('browser editor option migration preserves current values', () => {
 	const options = { lineNumbers: 'relative', renderLineHighlight: 'gutter' };
-	migrateOptions(options);
+	migrateOptions(options as never);
 	assert.deepEqual(options, { lineNumbers: 'relative', renderLineHighlight: 'gutter' });
 });

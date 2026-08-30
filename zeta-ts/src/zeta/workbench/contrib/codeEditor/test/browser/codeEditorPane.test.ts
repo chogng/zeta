@@ -24,6 +24,11 @@ for (const [name, value] of Object.entries({
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
+	ResizeObserver: class {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
@@ -287,7 +292,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.stickyScroll, false);
 	assert.equal(received?.suggestions, false);
 	assert.equal(received?.inlineCompletions, false);
-	assert.equal(received?.parameterHints, false);
+	assert.deepEqual(received?.parameterHints, { enabled: false });
 	assert.equal(received?.inlayHints, false);
 	assert.equal(received?.codeLens, false);
 	assert.equal(received?.colorDecorators, false);

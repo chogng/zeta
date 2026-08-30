@@ -37,7 +37,7 @@ test("Chat completion providers use one-based editor positions and ranges", asyn
 		languageId: "zeta-chat-input",
 		position: slashPosition,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: slashModel.createSnapshot(),
+		snapshot: .createVersionedSnapshot(),
 	}, new AbortController().signal);
 	assert.deepEqual(slashResult?.items[0]?.range, new Range(1, 1, 1, 4));
 
@@ -55,7 +55,7 @@ test("Chat completion providers use one-based editor positions and ranges", asyn
 		languageId: "zeta-chat-input",
 		position: skillPosition,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
-		snapshot: skillModel.createSnapshot(),
+		snapshot: .createVersionedSnapshot(),
 	}, new AbortController().signal);
 	assert.deepEqual(skillResult?.items[0]?.range, new Range(2, 5, 2, 9));
 });

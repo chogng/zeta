@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../browser/viewParts/decorations/decorations.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { createStanzaLanguageDiagnosticSource, resolveStanzaLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorTextDirection, EditorViewport } = await import(
+const { EditorTextDirection, View } = await import(
 	"../../browser/view.js"
 );
 const { EditorLineWrapping } = await import(
@@ -66,7 +66,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 			? DecorationPresentation.ErrorUnderline
 			: DecorationPresentation.WarningUnderline,
 	);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -203,7 +203,7 @@ test("Line and block decoration parts project source presentation details", () =
 		undefined,
 		{ linesDecorationLanes: [{ owner: "test-lines", width: 4 }] },
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -247,7 +247,7 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 		{ range: Range.fromPositions(new Position((2) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffModified },
 		{ range: Range.fromPositions(new Position((3) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffDeleted },
 	]);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -293,7 +293,7 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: undefined,
 	});
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -330,7 +330,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: undefined,
 	});
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -373,7 +373,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 	using store = createLanguageDiagnosticStore(model);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
 	const source = createStanzaLanguageDiagnosticSource(bridge.decorations);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

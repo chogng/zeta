@@ -3,7 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
+import { createStanzaDecorationSource } from '../../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
@@ -27,7 +27,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorView, EditorViewport } = await import('../../../../browser/view.js');
+const { EditorView } = await import('../../../../browser/editorView.js');
+const { View } = await import('../../../../browser/view.js');
 const { resolveDocumentHighlightPresentation } = await import('../../browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
 const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');
@@ -121,7 +122,7 @@ function createHarness(text: string, languages: LanguageFeaturesService, resourc
 	const selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
 	const textualProvider = new TextualMultiDocumentHighlightFeature(languages, { resource, model, wordPattern: () => undefined });
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -147,7 +148,7 @@ class EditorHarness implements Disposable {
 		readonly model: TextModel,
 		readonly selections: CursorsController,
 		readonly decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
-		readonly viewport: InstanceType<typeof EditorViewport>,
+		readonly viewport: InstanceType<typeof View>,
 		readonly view: InstanceType<typeof EditorView>,
 		readonly controller: InstanceType<typeof WordHighlighterContribution>,
 		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,

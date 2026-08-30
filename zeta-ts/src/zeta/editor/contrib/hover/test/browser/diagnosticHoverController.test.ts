@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewParts/decorations/decorations.js";
 import { DiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
@@ -36,7 +36,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 
 test("Diagnostic hover presents current gutter-marker messages and hides on pointer exit", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -48,7 +48,7 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "Use let instead",
 	});
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

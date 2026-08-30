@@ -108,6 +108,11 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: class {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -115,14 +120,14 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { ClipboardController, ClipboardLineEnding, EDITOR_CLIPBOARD_MIME, EDITOR_HTML_CLIPBOARD_MIME, EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../browser/clipboardController.js");
-const { SemanticTokenPresentation } = await import("../../../../browser/viewparts/viewLines/viewLine.js");
-const { EditorView } = await import("../../../../browser/view.js");
+const { SemanticTokenPresentation } = await import("../../../../browser/viewParts/viewLines/viewLine.js");
+const { EditorView } = await import('../../../../browser/editorView.js');
 
 function attachClipboard(
 	input: InstanceType<typeof EditorView>,
-	viewport: InstanceType<typeof EditorViewport>,
+	viewport: InstanceType<typeof View>,
 	selections: CursorsController,
 	options: ClipboardControllerOptions = {},
 	clipboardService: IClipboardService = inertClipboardService,
@@ -143,7 +148,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 		selection(1, 0, 1, 5),
 	], 1);
 	using selections = new CursorsController(model, copiedSelections);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -223,7 +228,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 		model,
 		SelectionSet.withPrimary([caret(0, 0), caret(0, 2)], 0),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -284,7 +289,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 		model,
 		SelectionSet.withPrimary([caret(0, 1), caret(2, 2)], 1),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -368,7 +373,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 			selection(1, 0, 1, 1),
 		], 1),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -415,7 +420,7 @@ test("Empty-selection clipboard policy may explicitly preserve browser behavior"
 		model,
 		SelectionSet.single(caret(0, 1)),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -443,7 +448,7 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
 	assert.ok(container);
 	using model = new TextModel("if (a < b && c > d) {}");
 	using selections = new CursorsController(model, SelectionSet.single(selection(0, 0, 0, model.getLineContent((0) + 1).length)));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -475,7 +480,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 	dom.window.document.documentElement.style.setProperty("--zeta-editor-token-keyword-foreground", "rgb(1, 2, 3)");
 	using model = new TextModel("const value\nnext");
 	using selections = new CursorsController(model, SelectionSet.single(selection(0, 0, 1, model.getLineContent((1) + 1).length)));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -531,7 +536,7 @@ test('Clipboard reads system text only for an empty event transfer', async () =>
 	assert.ok(container);
 	using model = new TextModel("one");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 3)));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -574,7 +579,7 @@ test('Clipboard owns URI-list and bounded text-file paste', async () => {
 	assert.ok(container);
 	using model = new TextModel('one');
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 3)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections);
 
@@ -601,7 +606,7 @@ test('Clipboard writes system text and delays cut until it succeeds', async () =
 	assert.ok(container);
 	using model = new TextModel("one");
 	using selections = new CursorsController(model, SelectionSet.single(selection(0, 0, 0, 3)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const clipboardService = new DeferredClipboardService();
 	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {}, clipboardService);
@@ -632,7 +637,7 @@ test("Clipboard preserves an active IME composition by rejecting mutable clipboa
 	assert.ok(container);
 	using model = new TextModel("one");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 3)));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

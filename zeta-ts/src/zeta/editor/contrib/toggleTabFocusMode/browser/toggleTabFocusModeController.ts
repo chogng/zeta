@@ -2,11 +2,11 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { type TabFocus } from "../../../browser/config/tabFocus.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Controls whether Tab is routed to editor text insertion or browser focus traversal. */
 export class ToggleTabFocusModeController extends Disposable {
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly tabFocus: TabFocus) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly tabFocus: TabFocus) {
 		super();
 		this._register(this.tabFocus.onDidChange(() => this.updateState()));
 		this._register(addDisposableListener(input, "keydown", event => this.handleToggle(event), true));

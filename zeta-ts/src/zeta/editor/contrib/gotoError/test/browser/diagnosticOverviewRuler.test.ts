@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationPresentation, type ResolvedDecoration } from "../../../../browser/viewparts/decorations/decorations.js";
-import { createStanzaDiagnosticOverviewMarkers } from "../../../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, type ResolvedDecoration } from "../../../../browser/viewParts/decorations/decorations.js";
+import { createStanzaDiagnosticOverviewMarkers } from "../../../../browser/viewParts/decorations/decorations.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 

@@ -1,18 +1,6 @@
 import { type CursorsController } from '../common/cursor/cursor.js';
 import { Position } from '../common/core/position.js';
-import { EditorViewport } from './view.js';
-
-/** A viewport host accepted by stable-scroll helpers. */
-export interface StableEditorScrollTarget {
-	readonly viewport: EditorViewport;
-	readonly selections?: CursorsController;
-	readonly selectionController?: CursorsController;
-	readonly view?: {
-		readonly selectionController: CursorsController;
-	};
-}
-
-type StableEditor = EditorViewport | StableEditorScrollTarget;
+import { type View } from './view.js';
 
 /** Preserves the first visible visual row while editor content is reprojected. */
 export class StableEditorScrollState {
@@ -24,13 +12,11 @@ export class StableEditorScrollState {
 	private readonly selectionController: CursorsController | undefined;
 
 	public static capture(
-		editor: StableEditor,
+		viewport: View,
 		selectionController?: CursorsController,
 	): StableEditorScrollState {
-		const viewport = resolveViewport(editor);
 		const layout = viewport.currentLayout;
-		const selections = resolveSelections(editor, selectionController);
-		const cursorPosition = selections?.selections.primary.getPosition();
+		const cursorPosition = selectionController?.selections.primary.getPosition();
 		if (layout.scrollPosition.top === 0) {
 			return new StableEditorScrollState(
 				layout.scrollPosition.top,
@@ -38,7 +24,7 @@ export class StableEditorScrollState {
 				undefined,
 				0,
 				cursorPosition,
-				selections,
+				selectionController,
 			);
 		}
 
@@ -50,7 +36,7 @@ export class StableEditorScrollState {
 				undefined,
 				0,
 				cursorPosition,
-				selections,
+				selectionController,
 			);
 		}
 
@@ -62,7 +48,7 @@ export class StableEditorScrollState {
 			visiblePosition,
 			layout.scrollPosition.top - visiblePositionTop,
 			cursorPosition,
-			selections,
+			selectionController,
 		);
 	}
 
@@ -83,8 +69,7 @@ export class StableEditorScrollState {
 	}
 
 	/** Restores the captured top-row offset after the viewport layout changes. */
-	public restore(editor: StableEditor): void {
-		const viewport = resolveViewport(editor);
+	public restore(viewport: View): void {
 		const layout = viewport.currentLayout;
 		if (
 			this.initialContentHeight === layout.contentSize.height &&
@@ -107,10 +92,9 @@ export class StableEditorScrollState {
 	 * model or visual-line projection change.
 	 */
 	public restoreRelativeVerticalPositionOfCursor(
-		editor: StableEditor,
+		viewport: View,
 		selectionController?: CursorsController,
 	): void {
-		const viewport = resolveViewport(editor);
 		const layout = viewport.currentLayout;
 		if (
 			this.initialContentHeight === layout.contentSize.height &&
@@ -120,7 +104,7 @@ export class StableEditorScrollState {
 		}
 
 		const initialCursorPosition = this.cursorPosition;
-		const selections = selectionController ?? this.selectionController ?? resolveSelections(editor);
+		const selections = selectionController ?? this.selectionController;
 		const currentCursorPosition = selections?.selections.primary.getPosition();
 		if (!initialCursorPosition || !currentCursorPosition) return;
 
@@ -140,8 +124,7 @@ export class StableEditorBottomScrollState {
 	private readonly visiblePosition: Position | undefined;
 	private readonly visiblePositionScrollDelta: number;
 
-	public static capture(editor: StableEditor): StableEditorBottomScrollState {
-		const viewport = resolveViewport(editor);
+	public static capture(viewport: View): StableEditorBottomScrollState {
 		const layout = viewport.currentLayout;
 		const visibleLine = layout.visibleLines.endLineIndexExclusive > layout.visibleLines.startLineIndex
 			? viewport.getVisualLineProjection().lineAt(layout.visibleLines.endLineIndexExclusive - 1)
@@ -178,8 +161,7 @@ export class StableEditorBottomScrollState {
 	}
 
 	/** Restores the captured bottom-row offset after the viewport layout changes. */
-	public restore(editor: StableEditor): void {
-		const viewport = resolveViewport(editor);
+	public restore(viewport: View): void {
 		const layout = viewport.currentLayout;
 		if (
 			this.initialContentHeight === layout.contentSize.height &&
@@ -198,22 +180,7 @@ export class StableEditorBottomScrollState {
 	}
 }
 
-function resolveViewport(editor: StableEditor): EditorViewport {
-	return editor instanceof EditorViewport ? editor : editor.viewport;
-}
-
-function resolveSelections(
-	editor: StableEditor,
-	selectionController: CursorsController | undefined = undefined,
-): CursorsController | undefined {
-	if (selectionController) return selectionController;
-	if (!(editor instanceof EditorViewport)) {
-		return editor.selections ?? editor.selectionController ?? editor.view?.selectionController;
-	}
-	return undefined;
-}
-
-function clampPosition(viewport: EditorViewport, position: Position): Position {
+function clampPosition(viewport: View, position: Position): Position {
 	const model = viewport.textModel;
 	const lineNumber = Math.min(Math.max(position.lineNumber, 1), model.lineCount);
 	return new Position(lineNumber, Math.min(Math.max(position.column, 1), model.getLineLength(lineNumber) + 1));

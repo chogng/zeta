@@ -37,7 +37,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import(
+const { View } = await import(
 	"../../../browser/view.js"
 );
 const { MouseHandler } = await import(
@@ -55,7 +55,7 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 			Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -260,7 +260,7 @@ test("Pointer and viewport selection wiring rejects different text models", () =
 			Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		),
 	);
-	assert.throws(() => new EditorViewport({
+	assert.throws(() => new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -269,7 +269,7 @@ test("Pointer and viewport selection wiring rejects different text models", () =
 	}), /must share one text model/);
 	assert.equal(container.childElementCount, 0);
 
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -294,7 +294,7 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
 	assert.ok(container);
 	using model = new TextModel("abcdef\nab\n12345\nxy");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -347,7 +347,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 			Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,

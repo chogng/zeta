@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { BracketNavigationController } = await import("../../browser/bracketNavigationController.js");
 
 test("Go-to-bracket shortcut uses the shared structural bracket index", () => {
@@ -36,7 +36,7 @@ test("Go-to-bracket shortcut uses the shared structural bracket index", () => {
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
@@ -61,7 +61,7 @@ test("Bracket navigation controller rejects cross-model wiring and unrelated cho
 	using otherLexical = new LanguageLexicalContextIndex(other, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using otherBracketPairs = new LanguageBracketPairs(other, otherLexical);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using controller = new BracketNavigationController(input, viewport, selections, bracketPairs);

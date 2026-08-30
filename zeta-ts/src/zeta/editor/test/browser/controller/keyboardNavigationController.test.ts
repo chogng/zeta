@@ -106,7 +106,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view.js");
+const { View } = await import("../../../browser/view.js");
 const { KeyboardNavigationController } = await import("../../../browser/view/viewController.js");
 const { EditorLineWrapping } = await import("../../../common/config/editorOptions.js");
 
@@ -130,7 +130,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 		model,
 		SelectionSet.single(caret(0, 5)),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -236,7 +236,7 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 		model,
 		SelectionSet.single(caret(0, 1)),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -287,7 +287,7 @@ test('Keyboard controller applies sticky tab stops to indentation movement', () 
 	assert.ok(container);
 	using model = new TextModel('        value');
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 8)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const userInputEvents = new ViewUserInputEvents();
 	using keyboard = new KeyboardNavigationController(
 		viewport,
@@ -316,7 +316,7 @@ test("Keyboard controller rejects cross-model wiring and invalid OS options", ()
 		model,
 		SelectionSet.single(caret(0, 0)),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

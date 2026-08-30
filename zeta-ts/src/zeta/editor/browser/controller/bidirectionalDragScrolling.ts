@@ -1,7 +1,7 @@
 import { AnimationFrameScheduler } from "../../../base/browser/scheduler.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { clamp } from "../../../base/common/numbers.js";
-import { type EditorViewport } from "../view.js";
+import { type View } from "../view.js";
 import { type ClientPoint, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
 
 const MINIMUM_SPEED = 240;
@@ -42,14 +42,14 @@ export function getStanzaDragScrollVelocity(bounds: DragScrollBounds, point: Cli
  * Owns animation-frame scrolling for one active pointer drag.
  */
 /** Owns animation-frame scrolling for one active editor drag. */
-export class DragScrolling extends Disposable {
+export class BidirectionalDragScrolling extends Disposable {
 	private readonly scheduler: AnimationFrameScheduler;
 	private pointer: ClientPoint | undefined;
 	private lastFrameTime: number | undefined;
 
 	constructor(
 		private readonly targetWindow: Window,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly applyTarget: (target: EditorHitTarget) => void,
 	) {
 		super();

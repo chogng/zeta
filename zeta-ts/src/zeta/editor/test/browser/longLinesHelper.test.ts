@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
-import { LineWidthIndex } from "../../browser/viewparts/viewLines/viewLines.js";
+import { LineWidthIndex } from "../../browser/viewParts/viewLines/viewLines.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 

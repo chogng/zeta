@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { InlayHintsService, type LanguageInlayHint } from "../common/languageInlayHints.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Projects versioned inlay hints into lightweight editor-local inline nodes. */
@@ -12,7 +12,7 @@ export class InlayHintsController extends Disposable {
 	private hints: readonly LanguageInlayHint[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly viewport: EditorViewport, private readonly service: InlayHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inlay hints failed", error)) {
+	constructor(private readonly viewport: View, private readonly service: InlayHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inlay hints failed", error)) {
 		super();
 		this._register(viewport.onDidChangeLayout(() => this.render()));
 		this._register(viewport.textModel.onDidChange(() => void this.refresh()));

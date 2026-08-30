@@ -11,7 +11,8 @@ import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { EditorView, EditorViewport } from '../../../../browser/view.js';
+import { EditorView } from '../../../../browser/editorView.js';
+import { View } from '../../../../browser/view.js';
 
 test("TextAreaInput owns textarea DOM events and direction-aware state", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -46,7 +47,7 @@ test("TextAreaEditContext delegates to TextAreaInput and registers its domNode",
 		model,
 		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

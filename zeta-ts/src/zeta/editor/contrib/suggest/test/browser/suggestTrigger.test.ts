@@ -34,8 +34,8 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
-const { EditorView } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
+const { EditorView } = await import('../../../../browser/editorView.js');
 test("Ctrl+Space requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
@@ -168,7 +168,7 @@ test("Completion request wiring rejects a same-model session from another servic
 	using selections = controllerAt(model, new Position((0) + 1, (3) + 1));
 	using session = new LanguageCompletionSessionController(firstService.results, selections);
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
@@ -200,7 +200,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	const session = new LanguageCompletionSessionController(service.results, selections);
 	const configurations = new OwnedLanguageConfigurationContributions();
 	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,

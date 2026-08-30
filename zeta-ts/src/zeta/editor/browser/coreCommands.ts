@@ -5,7 +5,7 @@ import { Selection } from "../common/core/selection.js";
 import { SelectionSet } from "../common/cursor/selectionSet.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { registerTextEditorCapabilityContribution } from "./editorExtensions.js";
-import { type EditorViewport } from "./view.js";
+import { type View } from "./view.js";
 
 export const EditorCoreCommandId = Object.freeze({
 	selectAll: "editor.action.selectAll",
@@ -13,7 +13,7 @@ export const EditorCoreCommandId = Object.freeze({
 
 export interface CoreTextEditorCommandContext {
 	readonly model: TextModel;
-	readonly viewport: EditorViewport;
+	readonly viewport: View;
 	readonly selections: CursorsController;
 }
 
@@ -30,7 +30,7 @@ export function selectAll(context: CoreTextEditorCommandContext): void {
 /** Installs text-editor core keybindings for one editor lifetime. */
 export function installCoreTextEditorCommands(
 	input: HTMLElement,
-	viewport: EditorViewport,
+	viewport: View,
 	selections: CursorsController,
 ): IDisposable {
 	if (viewport.textModel !== selections.textModel) {

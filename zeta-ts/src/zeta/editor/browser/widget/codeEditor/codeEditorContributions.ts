@@ -5,20 +5,17 @@ import { scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IInstantiationService, type ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
-import { type EditorView } from '../../view.js';
-import { type EditorViewport } from '../../view.js';
+import { type EditorView } from '../../editorView.js';
+import { type View } from '../../view.js';
 import { type CodeEditorWidget } from './codeEditorWidget.js';
-import { EditorContributionInstantiation as CodeEditorContributionInstantiation } from '../../editorExtensions.js';
-
-/** VS Code-aligned instantiation phases shared by widget and host contributions. */
-export { CodeEditorContributionInstantiation };
+import { EditorContributionInstantiation } from '../../editorExtensions.js';
 
 /** Narrow editor state exposed to a direct CodeEditorWidget contribution. */
 export interface CodeEditorContributionContext {
 	readonly editor: CodeEditorWidget;
 	readonly model: TextModel;
 	readonly selectionController: CursorsController;
-	readonly viewport: EditorViewport;
+	readonly viewport: View;
 	readonly view: EditorView;
 	readonly placeholder: string | undefined;
 }
@@ -28,7 +25,7 @@ export interface CodeEditorContribution extends IDisposable {}
 export interface CodeEditorContributionDescription {
 	readonly id: string;
 	readonly descriptor: ServiceConstructionDescriptor<CodeEditorContribution>;
-	readonly instantiation: CodeEditorContributionInstantiation;
+	readonly instantiation: EditorContributionInstantiation;
 }
 
 interface PendingCodeEditorContribution {
@@ -57,7 +54,7 @@ export function getCodeEditorContributions(): readonly CodeEditorContributionDes
 export class CodeEditorContributions extends Disposable {
 	private readonly instances = this._register(new DisposableMap<string, CodeEditorContribution>());
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
-	private readonly completedInstantiation = new Set<CodeEditorContributionInstantiation>();
+	private readonly completedInstantiation = new Set<EditorContributionInstantiation>();
 	private instantiationService: IInstantiationService | undefined;
 	private onError: (error: unknown) => void = reportContributionError;
 
@@ -86,8 +83,8 @@ export class CodeEditorContributions extends Disposable {
 		}
 
 		const targetWindow = getWindow(context.viewport.element);
-		this._register(scheduleAtNextAnimationFrame(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.AfterFirstRender)));
-		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.Eventually), 5_000));
+		this._register(scheduleAtNextAnimationFrame(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.AfterFirstRender)));
+		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.Eventually), 5_000));
 	}
 
 	/** Adds another contribution group that shares this widget's instantiation phases and lifetime. */
@@ -108,7 +105,7 @@ export class CodeEditorContributions extends Disposable {
 		for (const description of descriptions) {
 			if (this.completedInstantiation.has(description.instantiation)) this.instantiateById(description.id);
 		}
-		this.instantiateSome(CodeEditorContributionInstantiation.Eager);
+		this.instantiateSome(EditorContributionInstantiation.Eager);
 	}
 
 	get(id: string): CodeEditorContribution | undefined {
@@ -120,10 +117,10 @@ export class CodeEditorContributions extends Disposable {
 	}
 
 	onBeforeInteractionEvent(): void {
-		this.instantiateSome(CodeEditorContributionInstantiation.BeforeFirstInteraction);
+		this.instantiateSome(EditorContributionInstantiation.BeforeFirstInteraction);
 	}
 
-	private instantiateSome(instantiation: CodeEditorContributionInstantiation): void {
+	private instantiateSome(instantiation: EditorContributionInstantiation): void {
 		if (this.isDisposed || this.completedInstantiation.has(instantiation)) return;
 		this.completedInstantiation.add(instantiation);
 		const pending = [...this.pending.values()].filter(value => value.description.instantiation === instantiation);
@@ -142,7 +139,7 @@ export class CodeEditorContributions extends Disposable {
 			if (!instance || typeof instance.dispose !== 'function') throw new TypeError(`Code editor contribution '${id}' did not return a disposable`);
 			this.instances.set(id, instance);
 		} catch (error) {
-			if (pending.description.instantiation === CodeEditorContributionInstantiation.Eager) throw error;
+			if (pending.description.instantiation === EditorContributionInstantiation.Eager) throw error;
 			this.onError(error);
 		}
 	}
@@ -158,12 +155,12 @@ function isValidDescription(description: CodeEditorContributionDescription): boo
 	);
 }
 
-function isInstantiation(value: CodeEditorContributionInstantiation): boolean {
-	return value === CodeEditorContributionInstantiation.Eager
-		|| value === CodeEditorContributionInstantiation.AfterFirstRender
-		|| value === CodeEditorContributionInstantiation.BeforeFirstInteraction
-		|| value === CodeEditorContributionInstantiation.Eventually
-		|| value === CodeEditorContributionInstantiation.Lazy;
+function isInstantiation(value: EditorContributionInstantiation): boolean {
+	return value === EditorContributionInstantiation.Eager
+		|| value === EditorContributionInstantiation.AfterFirstRender
+		|| value === EditorContributionInstantiation.BeforeFirstInteraction
+		|| value === EditorContributionInstantiation.Eventually
+		|| value === EditorContributionInstantiation.Lazy;
 }
 
 function reportContributionError(error: unknown): void {

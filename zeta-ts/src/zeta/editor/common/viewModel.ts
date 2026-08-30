@@ -3,6 +3,41 @@ import { type TextDirection } from './model.js';
 import { type IViewLineTokens } from './tokens/lineTokens.js';
 import { type InlineDecoration } from './viewModel/inlineDecorations.js';
 
+export interface IEditorWhitespace {
+	readonly id: string;
+	readonly afterLineNumber: number;
+	readonly height: number;
+}
+
+export interface IWhitespaceChangeAccessor {
+	insertWhitespace(afterLineNumber: number, ordinal: number, heightInPx: number, minWidth: number): string;
+	changeOneWhitespace(id: string, newAfterLineNumber: number, newHeight: number): void;
+	removeWhitespace(id: string): void;
+}
+
+export interface ILineHeightChangeAccessor {
+	insertOrChangeCustomLineHeight(decorationId: string, startLineNumber: number, endLineNumber: number, lineHeight: number): void;
+	removeCustomLineHeight(decorationId: string): void;
+}
+
+export interface IPartialViewLinesViewportData {
+	readonly bigNumbersDelta: number;
+	readonly startLineNumber: number;
+	readonly endLineNumber: number;
+	readonly relativeVerticalOffset: number[];
+	readonly centeredLineNumber: number;
+	readonly completelyVisibleStartLineNumber: number;
+	readonly completelyVisibleEndLineNumber: number;
+	readonly lineHeight: number;
+}
+
+export interface IViewWhitespaceViewportData {
+	readonly id: string;
+	readonly afterLineNumber: number;
+	readonly verticalOffset: number;
+	readonly height: number;
+}
+
 export class ViewLineRenderingData {
 	public readonly minColumn: number;
 	public readonly maxColumn: number;

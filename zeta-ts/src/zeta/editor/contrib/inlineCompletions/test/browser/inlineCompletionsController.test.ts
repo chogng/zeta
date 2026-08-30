@@ -26,7 +26,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import('../../../../browser/view.js');
+const { View } = await import('../../../../browser/view.js');
 const { InlineCompletionProviderService } = await import('../../../../browser/services/inlineCompletionProviderService.js');
 const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
 
@@ -37,7 +37,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('abc');
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const input = h(dom.window.document, 'textarea');
 	container.append(input);

@@ -1,7 +1,7 @@
 import { DisposableStore, toDisposable } from '../../../src/zeta/base/common/lifecycle.js';
 import * as stanzaApi from '../../../src/zeta/editor/editor.main.js';
-import { GlyphRasterizer } from '../../../src/zeta/editor/browser/gpu/raster/glyphRasterizer.js';
-import { type IGpuGlyphStyle } from '../../../src/zeta/editor/browser/gpu/raster/raster.js';
+import { StyledGlyphRasterizer } from '../../../src/zeta/editor/browser/gpu/raster/styledGlyphRasterizer.js';
+import { type IStyledGlyphStyle } from '../../../src/zeta/editor/browser/gpu/raster/raster.js';
 import '../../../src/zeta/editor/editor.code.all.js';
 
 const initialText = `interface GeometrySample {
@@ -84,8 +84,8 @@ function measureGpuAdvance(text: string): number {
 	const editorElement = container.querySelector<HTMLElement>('.stanza-editor');
 	if (!editorElement) throw new Error('GPU integration editor is missing');
 	const style = getComputedStyle(editorElement);
-	const rasterizer = new GlyphRasterizer(editorElement, devicePixelRatio);
-	const glyphStyle: IGpuGlyphStyle = {
+	const rasterizer = new StyledGlyphRasterizer(editorElement, devicePixelRatio);
+	const glyphStyle: IStyledGlyphStyle = {
 		color: style.color,
 		fontFamily: style.fontFamily,
 		fontSize: Number.parseFloat(style.fontSize),
@@ -131,7 +131,7 @@ function installGpuFrameTrace(): GpuFrameTraceController {
 				const originalBeginRenderPass = encoder.beginRenderPass;
 				encoder.beginRenderPass = descriptor => {
 					const label = descriptor.label ?? '';
-					if (label === 'Stanza rectangle pass' || label === 'Stanza ViewLinesGpu pass') {
+					if (label === 'Stanza styled rectangle pass' || label === 'Stanza StyledViewLinesGpu pass') {
 						const attachment = [...descriptor.colorAttachments][0];
 						if (attachment) {
 							let viewId = viewIds.get(attachment.view);

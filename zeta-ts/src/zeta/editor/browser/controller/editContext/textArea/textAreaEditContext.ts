@@ -11,7 +11,7 @@ import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
-import { type EditorViewport } from '../../../view.js';
+import { type View } from '../../../view.js';
 import { MappedScreenReaderStrategy, modelOffsetAtContentOffset, type MappedScreenReaderContentState } from '../mappedScreenReaderUtils.js';
 import { TextAreaInput } from "./textAreaEditContextInput.js";
 import { TextAreaEditContextRegistry } from "./textAreaEditContextRegistry.js";
@@ -196,7 +196,7 @@ class TextAreaAccessibilityController extends Disposable {
 
 	constructor(
 		private readonly input: TextAreaEditContext,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		private readonly compositionController: CompositionController,
 	) {

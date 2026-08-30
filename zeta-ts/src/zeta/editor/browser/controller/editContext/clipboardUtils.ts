@@ -1,6 +1,51 @@
 import { h } from '../../../../base/browser/dom.js';
 import { sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
+import { type VSDataTransfer } from '../../../../base/common/dataTransfer.js';
 import { Mimes } from '../../../../base/common/mime.js';
+import { type Range } from '../../../common/core/range.js';
+import { toExternalVSDataTransfer } from '../../dataTransfer.js';
+
+export interface ClipboardDataToCopy {
+	readonly isFromEmptySelection: boolean;
+	readonly sourceRanges: Range[];
+	readonly multicursorText: string[] | null | undefined;
+	readonly text: string;
+	readonly html: string | null | undefined;
+	readonly mode: string | null;
+}
+
+export interface ClipboardStoredMetadata {
+	readonly version: 1;
+	readonly id: string | undefined;
+	readonly isFromEmptySelection: boolean | undefined;
+	readonly multicursorText: string[] | null | undefined;
+	readonly mode: string | null;
+}
+
+export const CopyOptions = {
+	forceCopyWithSyntaxHighlighting: false,
+	electronBugWorkaroundCopyEventHasFired: false,
+};
+
+interface InMemoryClipboardMetadata {
+	readonly lastCopiedValue: string;
+	readonly data: ClipboardStoredMetadata;
+}
+
+export class InMemoryClipboardMetadataManager {
+	public static readonly INSTANCE = new InMemoryClipboardMetadataManager();
+	private lastState: InMemoryClipboardMetadata | null = null;
+
+	public set(lastCopiedValue: string, data: ClipboardStoredMetadata): void {
+		this.lastState = { lastCopiedValue, data };
+	}
+
+	public get(pastedText: string): ClipboardStoredMetadata | null {
+		if (this.lastState?.lastCopiedValue === pastedText) return this.lastState.data;
+		this.lastState = null;
+		return null;
+	}
+}
 
 /** Clipboard data readable by an editor input adapter. */
 export interface IReadableClipboardData {
@@ -15,7 +60,7 @@ export interface IWritableClipboardData {
 }
 
 /** A copy or cut event exposed before the clipboard contribution handles it. */
-export interface IClipboardCopyEvent {
+export interface IEditorClipboardCopyEvent {
 	readonly isCut: boolean;
 	readonly clipboardData: IWritableClipboardData;
 	readonly hasClipboardData: boolean;
@@ -27,13 +72,15 @@ export interface IClipboardCopyEvent {
 /** A paste event exposed before the clipboard contribution handles it. */
 export interface IClipboardPasteEvent {
 	readonly clipboardData: IReadableClipboardData;
+	readonly metadata: ClipboardStoredMetadata | null;
 	readonly text: string;
-	readonly browserEvent: ClipboardEvent;
+	readonly browserEvent: ClipboardEvent | undefined;
+	toExternalVSDataTransfer(): VSDataTransfer | undefined;
 	setHandled(): void;
 	readonly isHandled: boolean;
 }
 
-export function createClipboardCopyEvent(browserEvent: ClipboardEvent, isCut: boolean): IClipboardCopyEvent {
+export function createEditorClipboardCopyEvent(browserEvent: ClipboardEvent, isCut: boolean): IEditorClipboardCopyEvent {
 	let handled = false;
 	return {
 		isCut,
@@ -55,10 +102,14 @@ export function createClipboardCopyEvent(browserEvent: ClipboardEvent, isCut: bo
 export function createClipboardPasteEvent(browserEvent: ClipboardEvent): IClipboardPasteEvent {
 	let handled = false;
 	const clipboardData = createReadableClipboardData(browserEvent.clipboardData);
+	let [text, metadata] = ClipboardEventUtils.getTextData(clipboardData);
+	metadata ||= InMemoryClipboardMetadataManager.INSTANCE.get(text);
 	return {
 		clipboardData,
-		text: readPlainText(clipboardData),
+		metadata,
+		text,
 		browserEvent,
+		toExternalVSDataTransfer: () => browserEvent.clipboardData ? toExternalVSDataTransfer(browserEvent.clipboardData) : undefined,
 		setHandled: () => {
 			if (handled) return;
 			handled = true;
@@ -70,6 +121,32 @@ export function createClipboardPasteEvent(browserEvent: ClipboardEvent): IClipbo
 		},
 	};
 }
+
+const ClipboardEventUtils = {
+	getTextData(clipboardData: IReadableClipboardData | DataTransfer): [string, ClipboardStoredMetadata | null] {
+		const text = clipboardData.getData(Mimes.text);
+		let metadata: ClipboardStoredMetadata | null = null;
+		const rawMetadata = clipboardData.getData('vscode-editor-data');
+		if (typeof rawMetadata === 'string' && rawMetadata.length > 0) {
+			try {
+				const parsed = JSON.parse(rawMetadata) as ClipboardStoredMetadata;
+				if (parsed.version === 1) metadata = parsed;
+			} catch {
+				// Invalid metadata is ignored; plain text remains authoritative.
+			}
+		}
+		if (text.length === 0 && metadata === null && clipboardData.files.length > 0) {
+			return [[...clipboardData.files].map(file => file.name).join('\n'), null];
+		}
+		return [text, metadata];
+	},
+
+	setTextData(clipboardData: IWritableClipboardData, text: string, html: string | null | undefined, metadata: ClipboardStoredMetadata): void {
+		clipboardData.setData(Mimes.text, text);
+		if (typeof html === 'string') clipboardData.setData(Mimes.html, html);
+		clipboardData.setData('vscode-editor-data', JSON.stringify(metadata));
+	},
+};
 
 export function createReadableClipboardData(dataTransfer: DataTransfer | undefined | null): IReadableClipboardData {
 	return {
@@ -83,10 +160,6 @@ export function createWritableClipboardData(dataTransfer: DataTransfer | undefin
 	return {
 		setData: (type: string, value: string) => dataTransfer?.setData(type, value),
 	};
-}
-
-function readPlainText(clipboardData: IReadableClipboardData): string {
-	return clipboardData.getData(Mimes.text);
 }
 
 export function readEditorClipboardText(clipboardData: IReadableClipboardData, ownerDocument: Document): string {

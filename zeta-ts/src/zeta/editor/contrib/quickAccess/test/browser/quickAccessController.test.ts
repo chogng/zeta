@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { GotoLineController, isStanzaGotoLineChord } = await import("../../browser/quickAccessController.js");
 
 test("Go to Line previews locally, accepts a line and column, and cancels without changing selections", () => {
@@ -31,7 +31,7 @@ test("Go to Line previews locally, accepts a line and column, and cancels withou
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, "textarea");
 	container.append(editorInput);
@@ -62,7 +62,7 @@ test("Go to Line uses Command+G on macOS", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const editorInput = h(dom.window.document, "textarea");
 	container.append(editorInput);
 	using controller = new GotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });

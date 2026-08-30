@@ -23,9 +23,9 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { LineOperationsController } = await import("../../browser/lineOperationsController.js");
-const { EditorView } = await import("../../../../browser/view.js");
+const { EditorView } = await import('../../../../browser/editorView.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -34,7 +34,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -69,7 +69,7 @@ test("Line operations controller validates model ownership and indentation optio
 	using otherModel = new TextModel("two");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using otherSelections = new CursorsController(otherModel, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

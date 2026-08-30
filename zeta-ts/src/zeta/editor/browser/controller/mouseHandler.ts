@@ -8,8 +8,8 @@ import { Range } from "../../common/core/range.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type TrackedRange } from "../../common/model/trackedRange.js";
 import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
-import { type EditorViewport } from "../view.js";
-import { DragScrolling } from "./dragScrolling.js";
+import { type View } from "../view.js";
+import { BidirectionalDragScrolling } from "./bidirectionalDragScrolling.js";
 import { PointerEventRouter } from "./pointerEventRouter.js";
 import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from "./semanticMouseTarget.js";
 import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
@@ -65,10 +65,10 @@ export class MouseHandler extends Disposable {
 	private readonly multiCursorModifier: PointerMultiCursorModifier;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private activeSelection: ActiveMouseSelection | undefined;
-	private autoScroller: DragScrolling | undefined;
+	private autoScroller: BidirectionalDragScrolling | undefined;
 
 	constructor(
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		options: MouseHandlerOptions = {},
 	) {
@@ -128,7 +128,7 @@ export class MouseHandler extends Disposable {
 
 			const targetWindow = this.pointerHandler.targetWindow;
 			this.autoScroller = this.dragListeners.add(
-				new DragScrolling(
+				new BidirectionalDragScrolling(
 					targetWindow,
 					this.viewport,
 					target => this.applyHitTarget(target),

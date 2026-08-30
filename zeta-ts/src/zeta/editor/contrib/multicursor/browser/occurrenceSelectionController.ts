@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences } from "../common/occurrenceSelection.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 export interface OccurrenceSelectionControllerOptions {
 	readonly wordPattern?: () => RegExp | undefined;
@@ -12,7 +12,7 @@ export interface OccurrenceSelectionControllerOptions {
 export class OccurrenceSelectionController extends Disposable {
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		options: OccurrenceSelectionControllerOptions = {},
 	) {

@@ -1,7 +1,7 @@
 import "./media/stickyScroll.css";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -10,7 +10,7 @@ import { h } from "../../../../base/browser/dom.js";
 export class StickyScrollController extends Disposable {
 	private readonly element: HTMLDivElement;
 
-	constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
+	constructor(private readonly viewport: View, private readonly folding: EditorFoldingModel) {
 		super();
 		if (folding.model !== viewport.textModel) throw new TypeError("Stanza sticky scroll dependencies must share a text model");
 		this.element = h(viewport.element.ownerDocument, "div");

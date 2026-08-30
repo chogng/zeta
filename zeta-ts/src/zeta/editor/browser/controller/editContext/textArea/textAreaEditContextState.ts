@@ -1,11 +1,9 @@
 import { commonPrefixLength, commonSuffixLength } from '../../../../../base/common/strings.js';
 import { type Position } from '../../../../common/core/position.js';
 import { type Range } from '../../../../common/core/range.js';
-import { SelectionDirection } from '../../../../common/core/selection.js';
 import { type ISimpleScreenReaderContentState } from '../screenReaderUtils.js';
 
 export const _debugComposition = false;
-export const debugTextAreaComposition = _debugComposition;
 
 export interface ITextAreaWrapper {
 	getValue(): string;
@@ -71,7 +69,7 @@ export class TextAreaState {
 	}
 
 	writeToTextArea(reason: string, textArea: ITextAreaWrapper, select: boolean): void {
-		if (debugTextAreaComposition) console.log(`writeToTextArea ${reason}: ${this.toString()}`);
+		if (_debugComposition) console.log(`writeToTextArea ${reason}: ${this.toString()}`);
 		textArea.setValue(reason, this.value);
 		if (select) textArea.setSelectionRange(reason, this.selectionStart, this.selectionEnd);
 	}
@@ -102,7 +100,7 @@ export class TextAreaState {
 		if (!previousState) {
 			return { text: '', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 };
 		}
-		if (debugTextAreaComposition) {
+		if (_debugComposition) {
 			console.log('------------------------deduceInput');
 			console.log(`PREVIOUS STATE: ${previousState.toString()}`);
 			console.log(`CURRENT STATE: ${currentState.toString()}`);
@@ -167,22 +165,10 @@ export class TextAreaState {
 	}
 
 	static fromScreenReaderContentState(state: ISimpleScreenReaderContentState) {
-		let selectionStart: number;
-		let selectionEnd: number;
-		switch (state.selection.getDirection()) {
-			case SelectionDirection.LTR:
-				selectionStart = state.selectionStart;
-				selectionEnd = state.selectionEnd;
-				break;
-			case SelectionDirection.RTL:
-				selectionStart = state.selectionEnd;
-				selectionEnd = state.selectionStart;
-				break;
-		}
 		return new TextAreaState(
 			state.value,
-			selectionStart,
-			selectionEnd,
+			state.selectionStart,
+			state.selectionEnd,
 			state.selection,
 			state.newlineCountBeforeSelection,
 		);

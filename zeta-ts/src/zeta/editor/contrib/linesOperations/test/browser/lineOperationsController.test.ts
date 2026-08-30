@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { LineOperationsController, resolveStanzaDuplicateLineDirection } = await import("../../browser/lineOperationsController.js");
 
 test("Line operation shortcuts duplicate and delete through Stanza commands", () => {
@@ -33,7 +33,7 @@ test("Line operation shortcuts duplicate and delete through Stanza commands", ()
 	using selections = new CursorsController(model, SelectionSet.single(
 		Selection.fromPositions(new Position((1) + 1, (1) + 1)),
 	));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -62,7 +62,7 @@ test("Line operation shortcuts insert blank lines above and below selected group
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
@@ -85,7 +85,7 @@ test("Line operation shortcuts move selected lines without duplicating them", ()
 	using selections = new CursorsController(model, SelectionSet.single(
 		Selection.fromPositions(new Position((1) + 1, (1) + 1)),
 	));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -116,7 +116,7 @@ test("Line operation controller rejects cross-model wiring and leaves unrelated 
 	using other = new TextModel("beta");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using otherSelections = new CursorsController(other, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using controller = new LineOperationsController(input, viewport, selections);

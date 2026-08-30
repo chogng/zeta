@@ -6,7 +6,7 @@ import { EditorFoldingModel } from "./foldingModel.js";
 import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
 import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
-import { FoldingDecorationProvider } from "./foldingDecorations.js";
+import { EditorFoldingDecorationSource } from './editorFoldingDecorationSource.js';
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { FoldingRangeService } from '../common/languageFoldingRanges.js';
 
@@ -52,7 +52,7 @@ registerTextEditorCapabilityContribution({
 		context.provideCapability(TextEditorCapability.folding, folding);
 		if (hiddenRanges) {
 			context.setLineProjection({ visibilitySource: hiddenRanges });
-			context.addDecorationSource(context.register(new FoldingDecorationProvider(folding)));
+			context.addDecorationSource(context.register(new EditorFoldingDecorationSource(folding)));
 		}
 	},
 	runtime: {

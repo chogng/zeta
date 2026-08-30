@@ -3,7 +3,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createRemoveMatchingBracketsCommand } from "../common/bracketEditing.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 
 export const RemoveBracketsCommandId = 'editor.action.removeBrackets';
@@ -12,7 +12,7 @@ export const RemoveBracketsCommandId = 'editor.action.removeBrackets';
 export class BracketEditingController extends Disposable {
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly bracketPairs: LanguageBracketPairs,
 		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),

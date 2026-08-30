@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from "../../../browser/controller/semanticMouseTarget.js";
 import { PartFingerprint, PartFingerprints } from '../../../browser/view/viewPart.js';
 import { Position } from "../../../common/core/position.js";
@@ -20,7 +20,7 @@ test("SemanticMouseTargetFactory preserves editor targets and classifies browser
 		element: container,
 		getTargetAtClientPoint: () => editorTarget,
 		getNearestTargetAtClientPoint: () => editorTarget,
-	} as unknown as EditorViewport;
+	} as unknown as View;
 	const factory = new SemanticMouseTargetFactory(viewport);
 	const node = (className: string): HTMLElement => {
 		const element = h(dom.window.document, "span");

@@ -3,11 +3,11 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { EditorInteractionStateStore } from "../common/editorInteractionState.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Binds browser focus, selection, and scroll events into the common editor-state model. */
 export class EditorStateController extends Disposable {
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly state: EditorInteractionStateStore) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly state: EditorInteractionStateStore) {
 		super();
 		this._register(addDisposableListener(input, "focus", () => state.setFocused(true)));
 		this._register(addDisposableListener(input, "blur", () => state.setFocused(false)));

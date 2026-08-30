@@ -22,7 +22,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			dragAndDrop: {
 				canDrop: (event) => delegate.isDragging() || containsExternalEditorDrop(event),
 				onDragStart: (editor, event) => {
-					event.dataTransfer?.setData(DataTransfers.Text, editor.instanceId);
+					event.dataTransfer?.setData(DataTransfers.TEXT, editor.instanceId);
 					if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 					delegate.startDrag(editor.input);
 				},

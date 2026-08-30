@@ -43,7 +43,7 @@ export const enum PartFingerprint {
 	TextArea,
 	ViewLines,
 	Minimap,
-	ViewLinesGpu,
+	StyledViewLinesGpu,
 }
 
 export class PartFingerprints {

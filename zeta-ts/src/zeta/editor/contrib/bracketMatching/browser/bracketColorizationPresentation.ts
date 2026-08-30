@@ -1,8 +1,8 @@
 import { type LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
-import { type BracketColorizationSource as EditorBracketColorizationSource, type BracketColorizationSpan, type BracketGuide } from '../../../browser/viewparts/viewLines/viewLine.js';
+import { type BracketColorizationSource, type BracketColorizationSpan, type BracketGuide } from '../../../browser/viewParts/viewLines/viewLine.js';
 
 /** Adapts common structural bracket levels into the editor's closed DOM vocabulary. */
-export class BracketColorizationSource implements EditorBracketColorizationSource {
+export class LanguageBracketColorizationSource implements BracketColorizationSource {
 	constructor(private readonly bracketPairs: LanguageBracketPairs, private readonly colorizeBrackets = true) {}
 
 	get textModel() {

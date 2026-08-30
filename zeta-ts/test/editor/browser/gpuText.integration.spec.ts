@@ -149,7 +149,7 @@ async function gpuFrameLayeringState(page: Page): Promise<GpuFrameLayeringState>
 			const textPass = passes[index + 1]!;
 			everyFrameIsAtomic = rectanglePass.label === 'Stanza rectangle pass'
 				&& rectanglePass.loadOp === 'clear'
-				&& textPass.label === 'Stanza ViewLinesGpu pass'
+				&& textPass.label === 'Stanza StyledViewLinesGpu pass'
 				&& textPass.loadOp === 'load'
 				&& rectanglePass.viewId === textPass.viewId
 				&& rectanglePass.submissionId === textPass.submissionId;

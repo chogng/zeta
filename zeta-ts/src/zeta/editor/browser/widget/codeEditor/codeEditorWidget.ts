@@ -10,8 +10,8 @@ import { type Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
 import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from '../../editorBrowser.js';
-import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
-import { type EditorViewport } from "../../view.js";
+import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from '../../editorView.js';
+import { type View } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../view/viewController.js";
 import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -63,7 +63,7 @@ export class CodeEditorWidget extends Disposable {
 	private readonly selectionController: CursorsController;
 	readonly ownerId: string;
 	readonly view: EditorView;
-	readonly viewport: EditorViewport;
+	readonly viewport: View;
 	readonly userInputEvents: EditorView['userInputEvents'];
 	readonly contributions: CodeEditorContributions;
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationPresentation, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewParts/decorations/decorations.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { Position } from "../../common/core/position.js";

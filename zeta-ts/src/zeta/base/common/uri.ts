@@ -54,7 +54,8 @@ export class URI {
 	}
 
 	/** Parses and canonicalizes an absolute URI. */
-	static parse(value: string): URI {
+	static parse(value: string, _strict = false): URI {
+		void _strict;
 		return new URI(parseUrl(value));
 	}
 

@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { ToggleTabFocusModeController } = await import("../../browser/toggleTabFocusModeController.js");
 const { TabFocus } = await import("../../../../browser/config/tabFocus.js");
 
@@ -26,7 +26,7 @@ test("Tab focus mode exposes state through Stanza-owned data and an accessibilit
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("text");
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using tabFocus = new TabFocus();

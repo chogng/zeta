@@ -1,6 +1,6 @@
 import { type Event } from "../../../../base/common/event.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { EditorBrowser, type EditorBrowserOptions } from "../../../../editor/browser/editorBrowser.js";
+import { ConfiguredCodeEditor, type ConfiguredCodeEditorOptions } from '../../../../editor/browser/configuredCodeEditor.js';
 import { createEditorBrowserServices } from '../../../../editor/browser/services/contribution.js';
 import { BrowserTextMateService } from "../../../services/textMate/browser/browserTextMateService.js";
 import { type TextMateGrammarCatalog } from "../../../services/textMate/common/textMateGrammarCatalog.js";
@@ -9,7 +9,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type TextMateScopeThemeSource } from "../../../services/textMate/common/textMateScopeTheme.js";
 
 /** Creates the product browser editor part with Workbench TextMate and completion workers. */
-export interface BrowserEditorPartOptions extends EditorBrowserOptions {
+export interface BrowserEditorPartOptions extends ConfiguredCodeEditorOptions {
 	/** Shared Workbench TextMate service. Direct callers may omit it to get a private browser service. */
 	readonly textMateService?: ITextMateService;
 	/** Product or extension grammar contributions owned by this browser editor part. */
@@ -19,7 +19,7 @@ export interface BrowserEditorPartOptions extends EditorBrowserOptions {
 }
 
 /** Creates the product browser editor part with Workbench TextMate and completion workers. */
-export function createBrowserEditorPart(options: BrowserEditorPartOptions): EditorBrowser {
+export function createBrowserEditorPart(options: BrowserEditorPartOptions): ConfiguredCodeEditor {
 	const textMateService = options.textMateService ?? new BrowserTextMateService(options.textMateGrammars, options.textMateScopeTheme);
 	const browserServices = createEditorBrowserServices();
 	const editorWorkers = browserServices.workers;
@@ -31,7 +31,7 @@ export function createBrowserEditorPart(options: BrowserEditorPartOptions): Edit
 		return subscriptions;
 	};
 	try {
-		const editor = new EditorBrowser({
+		const editor = new ConfiguredCodeEditor({
 			...options,
 			codeEditorService: browserServices.codeEditors,
 			editorWorkerFactory: editorWorkers.editorWorkerFactory,

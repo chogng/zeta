@@ -3,7 +3,7 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 export interface ReadOnlyMessageControllerOptions {
 	readonly message?: string;
@@ -18,7 +18,7 @@ export class ReadOnlyMessageController extends Disposable {
 
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		options: ReadOnlyMessageControllerOptions = {},
 	) {
 		super();

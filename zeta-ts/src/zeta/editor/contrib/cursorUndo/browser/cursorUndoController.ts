@@ -3,7 +3,7 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 export interface CursorUndoControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -13,7 +13,7 @@ export interface CursorUndoControllerOptions {
 export class CursorUndoController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 
-	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, options: CursorUndoControllerOptions = {}) {
+	constructor(input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, options: CursorUndoControllerOptions = {}) {
 		super();
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);

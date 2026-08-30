@@ -6,7 +6,7 @@ import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.j
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "../../browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../browser/hiddenRangeModel.js";
-import { FoldingDecorationProvider } from "../../browser/foldingDecorations.js";
+import { EditorFoldingDecorationSource } from '../../browser/editorFoldingDecorationSource.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
@@ -24,11 +24,16 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 	MouseEvent: browserEnvironment.window.MouseEvent,
+	ResizeObserver: class {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { FoldingCommand, FoldingController, resolveStanzaFoldingCommand } = await import("../../browser/folding.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -41,8 +46,8 @@ test("Folding controller routes platform chords and gutter toggles through the f
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
-	using decorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({
+	using decorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -90,8 +95,8 @@ test("Folding controller routes macOS Command+K chords without accepting Control
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
-	using decorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
+	using decorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
 	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
@@ -116,8 +121,8 @@ test("Folding controller collapses and expands every range through Ctrl+K chords
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
-	using decorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
+	using decorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
 	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Windows });
@@ -140,8 +145,8 @@ test("Folding controller recursively folds nested regions through platform prefi
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 4 }, { startLineIndex: 1, endLineIndex: 3 }, { startLineIndex: 2, endLineIndex: 3 }]);
-	using decorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
+	using decorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
 	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
@@ -166,8 +171,8 @@ test("Folding controller creates and removes manual ranges through macOS prefix 
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (0) + 1), new Position((4) + 1, (0) + 1))));
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using decorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
+	using decorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
 	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
@@ -191,8 +196,8 @@ test("Folding controller collapses macOS prefix levels without hiding shallower 
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 5 }, { startLineIndex: 1, endLineIndex: 4 }, { startLineIndex: 2, endLineIndex: 3 }]);
-	using decorations = new FoldingDecorationProvider(folding);
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
+	using decorations = new EditorFoldingDecorationSource(folding);
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, decorationSources: [decorations] });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	viewport.element.append(input);
 	using controller = new FoldingController(foldingControllerContext(input, viewport, selections, folding), { operatingSystem: OperatingSystem.Macintosh });
@@ -211,7 +216,7 @@ function renderedLogicalLines(root: ParentNode): readonly string[] {
 
 function foldingControllerContext(
 	input: HTMLTextAreaElement,
-	viewport: InstanceType<typeof EditorViewport>,
+	viewport: InstanceType<typeof View>,
 	selections: CursorsController,
 	folding: EditorFoldingModel,
 ): TextEditorContributionContext {

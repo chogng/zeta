@@ -8,7 +8,7 @@ import { Range } from "../../../../common/core/range.js";
 import { type CursorsController } from "../../../../common/cursor/cursor.js";
 import { InlineCompletionProviderService } from "../../../../browser/services/inlineCompletionProviderService.js";
 import { type LanguageInlineCompletionItem } from "../../common/inlineCompletions.js";
-import { type EditorViewport } from "../../../../browser/view.js";
+import { type View } from "../../../../browser/view.js";
 import { isCompletionsEnablementEnabled } from "../../../../common/services/ownedCompletionsEnablement.js";
 import { type Event } from '../../../../../base/common/event.js';
 import { type EditorCommandEvent } from '../../../../browser/editorExtensions.js';
@@ -20,7 +20,7 @@ export class InlineCompletionsController extends Disposable {
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: InlineCompletionProviderService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: InlineCompletionProviderService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
 		super();
 		const element = this.element = h(viewport.element.ownerDocument, "span");
 		element.className = "stanza-editor-inline-completion";

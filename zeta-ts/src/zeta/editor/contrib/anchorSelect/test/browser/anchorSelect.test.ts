@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-const { EditorViewport } = await import('../../../../browser/view.js');
+const { View } = await import('../../../../browser/view.js');
 const { SelectionAnchorController } = await import('../../browser/anchorSelect.js');
 
 test.after(() => browserEnvironment.window.close());
@@ -87,7 +87,7 @@ function createFixture(text: string): {
 	readonly model: TextModel;
 	readonly selections: CursorsController;
 	readonly decorations: TextDecorationCollection<void>;
-	readonly viewport: InstanceType<typeof EditorViewport>;
+	readonly viewport: InstanceType<typeof View>;
 	readonly input: HTMLTextAreaElement;
 	readonly controller: InstanceType<typeof SelectionAnchorController>;
 	readonly resources: DisposableStore;
@@ -97,7 +97,7 @@ function createFixture(text: string): {
 	const model = new TextModel(text);
 	const selections = new CursorsController(model, singleCaret(0, 0));
 	const decorations = new TextDecorationCollection<void>(model);
-	const viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	const viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;
 	container.append(input);
 	const controller = new SelectionAnchorController(input, viewport, selections, decorations);

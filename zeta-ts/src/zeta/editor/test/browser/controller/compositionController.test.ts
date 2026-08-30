@@ -41,8 +41,8 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view.js");
-const { EditorView } = await import("../../../browser/view.js");
+const { View } = await import("../../../browser/view.js");
+const { EditorView } = await import('../../../browser/editorView.js');
 
 test("Textarea composition commits one revision and positions the IME input", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -51,7 +51,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
 	using model = new TextModel("hello");
 	const initial = SelectionSet.single(selection(0, 1, 0, 4));
 	using selections = new CursorsController(model, initial);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -148,7 +148,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
 	using model = new TextModel("abc");
 	const initial = SelectionSet.single(caret(0, 1));
 	using selections = new CursorsController(model, initial);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -209,7 +209,7 @@ test("Empty composition end commits deletion while a stray end is ignored", () =
 	using model = new TextModel("abc");
 	const initial = SelectionSet.single(selection(0, 1, 0, 2));
 	using selections = new CursorsController(model, initial);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -251,7 +251,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
 		model,
 		SelectionSet.withPrimary([caret(1, 1), caret(0, 0)], 0),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,

@@ -31,7 +31,7 @@ import "./contrib/linesOperations/browser/linesOperations.contribution.js";
 import "./contrib/lineSelection/browser/lineSelectionController.js";
 import "./contrib/linkedEditing/browser/linkedEditingController.js";
 import "./contrib/links/browser/linksController.js";
-import "./contrib/message/browser/messageController.js";
+import "./contrib/message/browser/editorStatusMessage.js";
 import "./contrib/middleScroll/browser/middleScrollController.js";
 import "./contrib/multicursor/browser/multicursor.contribution.js";
 import "./contrib/parameterHints/browser/parameterHintsController.js";

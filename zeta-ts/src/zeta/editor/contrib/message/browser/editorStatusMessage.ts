@@ -1,16 +1,16 @@
-import "./media/message.css";
+import "./media/editorStatusMessage.css";
 import { h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Owns transient editor-local messages without replacing host notifications. */
-export class MessageController extends Disposable {
+export class EditorStatusMessage extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly timer = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly viewport: EditorViewport) {
+	constructor(private readonly viewport: View) {
 		super();
 		this.element = h(viewport.element.ownerDocument, "div");
 		this.element.className = "stanza-editor-message";
@@ -38,6 +38,6 @@ registerTextEditorCapabilityContribution({
 	id: "editor.contrib.message",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new MessageController(context.viewport));
+		context.register(new EditorStatusMessage(context.viewport));
 	},
 });

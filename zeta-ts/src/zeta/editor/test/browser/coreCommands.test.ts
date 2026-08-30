@@ -22,10 +22,10 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../browser/view.js");
+const { View } = await import("../../browser/view.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
 const { LineSelectionController } = await import("../../contrib/lineSelection/browser/lineSelectionController.js");
-const { EditorView } = await import("../../browser/view.js");
+const { EditorView } = await import('../../browser/editorView.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -34,7 +34,7 @@ test("core commands select all", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -58,7 +58,7 @@ test("line selection remains an independent editor extension", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 400, height: 100 });
 	using input = new EditorView(viewport, selections);
 	using commands = new LineSelectionController(input.element, viewport, selections);
@@ -79,7 +79,7 @@ test("core commands reject dependencies from different text models", () => {
 	using otherModel = new TextModel("two");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using otherSelections = new CursorsController(otherModel, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: dom.window.document.querySelector<HTMLElement>("main")!,
 		model,
 		lineHeight: 20,

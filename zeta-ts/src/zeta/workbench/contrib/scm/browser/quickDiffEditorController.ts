@@ -5,7 +5,7 @@ import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/d
 import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorExtensions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
-import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
+import { EditorPeekViewWidget } from '../../../../editor/contrib/peekView/browser/editorPeekViewWidget.js';
 import { type IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import { type IQuickDiffEditorController, type IQuickDiffEditorControllerService, type IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
@@ -136,7 +136,7 @@ class QuickDiffPeekView extends Disposable {
 		super();
 		const document = context.viewport.element.ownerDocument;
 		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
-		const peek = this._register(new PeekViewWidget(context.viewport, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
+		const peek = this._register(new EditorPeekViewWidget(context.viewport, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
 		peek.element.classList.add('zeta-quick-diff-peek');
 		const body = h(document, 'div');
 		body.className = 'zeta-quick-diff-peek-body';

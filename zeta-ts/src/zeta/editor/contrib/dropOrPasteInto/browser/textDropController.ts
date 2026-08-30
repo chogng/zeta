@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.j
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createReadableClipboardData, readEditorClipboardText } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
-import { type EditorViewport } from '../../../browser/view.js';
+import { type View } from '../../../browser/view.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TypeOperations } from '../../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../../common/core/selection.js';
@@ -14,7 +14,7 @@ import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from './textFile
 export class TextDropController extends Disposable {
 	private asynchronousDropRequest = 0;
 
-	constructor(private readonly viewport: EditorViewport, private readonly selections: CursorsController) {
+	constructor(private readonly viewport: View, private readonly selections: CursorsController) {
 		super();
 		if (viewport.textModel !== selections.textModel) {
 			this.dispose();

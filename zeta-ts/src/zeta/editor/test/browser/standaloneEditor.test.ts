@@ -171,7 +171,7 @@ test("standalone completion providers execute in a live editor", async () => {
 		},
 	});
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	const editor = stanza.editor.create(container, { languageId: "stanza-completion-test" });
+	const editor = stanza.editor.create(container, { language: "stanza-completion-test" });
 
 	editor.view.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
@@ -206,7 +206,7 @@ test("standalone API registers URI and language identity with model lifecycle ev
 	stanza.editor.setModelLanguage(model, "javascript");
 	assert.deepEqual(languages, ["typescript->javascript"]);
 	model.dispose();
-	assert.equal(stanza.editor.getModel(resource), undefined);
+	assert.equal(stanza.editor.getModel(resource), null);
 	assert.deepEqual(disposed, [resource.toString()]);
 });
 
@@ -236,7 +236,7 @@ test("standalone editor owns only the implicit model it creates", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const editor = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {
 		value: "owned",
-		languageId: "plaintext",
+		language: "plaintext",
 		resource: URI.parse("inmemory://stanza/owned.txt"),
 	});
 	const model = editor.getModel();
@@ -244,7 +244,7 @@ test("standalone editor owns only the implicit model it creates", () => {
 	editor.dispose();
 	assert.equal(model.isDisposed, true);
 	assert.equal(createdWorkerCount, terminatedWorkerCount);
-	assert.equal(stanza.editor.getModel(URI.parse("inmemory://stanza/owned.txt")), undefined);
+	assert.equal(stanza.editor.getModel(URI.parse("inmemory://stanza/owned.txt")), null);
 	dom.window.close();
 });
 

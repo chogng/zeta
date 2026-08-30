@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { projectStanzaSemanticTokenLine } from "../../browser/viewparts/viewLines/viewLine.js";
+import { projectStanzaSemanticTokenLine } from "../../browser/viewParts/viewLines/viewLine.js";
 import { LanguageTokenStylingResolver, resolveSemanticTokenModifiers, resolveSemanticTokenPresentation } from '../../common/services/languageTokenStylingResolver.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../common/services/resolvedSemanticTokens.js';
 import { ResolvedSemanticTokensService } from '../../common/services/resolvedSemanticTokensService.js';

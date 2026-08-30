@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
+import { containsRTL, isBasicASCII } from '../../../base/common/strings.js';
 import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
 import { TextEdit } from '../core/edits/textEdit.js';
 import { countEOL } from "../core/misc/eolCounter.js";
@@ -25,7 +26,7 @@ import type { DocumentTransaction } from "./documentTransaction.js";
 import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
-import { EndOfLinePreference, TrackedRangeStickiness, type ITextModel } from '../model.js';
+import { EndOfLinePreference, EndOfLineSequence, PositionAffinity, TrackedRangeStickiness, isITextSnapshot, type ITextModel, type ITextSnapshot } from '../model.js';
 import * as languages from '../languages.js';
 import type { IModelLanguageChangedEvent } from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
@@ -125,6 +126,7 @@ export class TextModel extends Disposable implements ITextModel {
 	private nextTransactionId = 1;
 	private _version = 1;
 	private languageId: string;
+	private bom = '';
 
 	readonly id: string;
 	readonly uri: URI;
@@ -164,7 +166,9 @@ export class TextModel extends Disposable implements ITextModel {
 		this.lineIdGenerator = options.lineIdGenerator ?? (() => `line:${this.nextGeneratedLineIdentity++}`);
 		const blockDocument = options.blocks?.document ?? options.blocks?.schema.createDocument();
 		const blockSnapshot = blockDocument && options.blocks ? projectDocumentToLines(options.blocks.schema, blockDocument) : undefined;
-		const normalizedInitialText = blockSnapshot?.getText() ?? normalizeTextLineEndings(initialText);
+		const normalizedInitialValue = blockSnapshot?.getText() ?? normalizeTextLineEndings(initialText);
+		const normalizedInitialText = normalizedInitialValue.startsWith('\uFEFF') ? normalizedInitialValue.slice(1) : normalizedInitialValue;
+		this.bom = normalizedInitialValue.startsWith('\uFEFF') ? '\uFEFF' : '';
 		this.buffer = createPieceTreeTextBuffer(normalizedInitialText);
 		if (!options.blocks) {
 			this.plainLineIds = this.initializeLineIds(options.lineIds);
@@ -354,12 +358,12 @@ export class TextModel extends Disposable implements ITextModel {
 		return new TextLength(this.buffer.lineCount - 1, this.buffer.getLineLength(this.buffer.lineCount - 1));
 	}
 
-	get canUndo(): boolean {
+	canUndo(): boolean {
 		this.assertNotDisposed();
 		return this.history.canUndo;
 	}
 
-	get canRedo(): boolean {
+	canRedo(): boolean {
 		this.assertNotDisposed();
 		return this.history.canRedo;
 	}
@@ -376,7 +380,7 @@ export class TextModel extends Disposable implements ITextModel {
 	restoreUndoRedoSnapshot(snapshot: TextModelUndoRedoSnapshot): boolean {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
-		if (this._version !== 1 || this.canUndo || this.canRedo) throw new Error('Undo and redo history can only be restored into a new TextModel');
+		if (this._version !== 1 || this.canUndo() || this.canRedo()) throw new Error('Undo and redo history can only be restored into a new TextModel');
 		if (snapshot.text !== this.getText()) return false;
 		this.history.restoreSnapshot(snapshot.history);
 		this.nextTransactionId = Math.max(this.nextTransactionId, snapshot.nextTransactionId);
@@ -392,11 +396,65 @@ export class TextModel extends Disposable implements ITextModel {
 		return this.version;
 	}
 
-	getValue(): string {
-		return this.getText();
+	mightContainRTL(): boolean {
+		return containsRTL(this.getText());
 	}
 
-	createSnapshot(): TextSnapshot {
+	mightContainUnusualLineTerminators(): boolean {
+		this.assertNotDisposed();
+		return false;
+	}
+
+	removeUnusualLineTerminators(): void {
+		this.assertNotDisposed();
+	}
+
+	mightContainNonBasicASCII(): boolean {
+		return !isBasicASCII(this.getText());
+	}
+
+	setValue(newValue: string | ITextSnapshot): void {
+		if (typeof newValue === 'string') {
+			this.reset(newValue);
+			return;
+		}
+		if (!isITextSnapshot(newValue)) throw new TypeError('TextModel value must be a string or ITextSnapshot');
+		const chunks: string[] = [];
+		for (let chunk = newValue.read(); chunk !== null; chunk = newValue.read()) chunks.push(chunk);
+		this.reset(chunks.join(''));
+	}
+
+	getValue(eol = EndOfLinePreference.TextDefined, preserveBOM = false): string {
+		const value = this.getValueInRange(this.getFullModelRange(), eol);
+		return preserveBOM ? this.bom + value : value;
+	}
+
+	createSnapshot(preserveBOM = false): ITextSnapshot {
+		this.assertNotDisposed();
+		const snapshot = this.buffer.createSnapshot();
+		const prefix = preserveBOM ? this.bom : '';
+		let offset = 0;
+		return {
+			read: (): string | null => {
+				if (offset === 0 && prefix) {
+					offset = -1;
+					return prefix;
+				}
+				if (offset < 0) offset = 0;
+				if (offset >= snapshot.length) return null;
+				const endOffset = Math.min(snapshot.length, offset + 64 * 1_024);
+				const value = snapshot.getTextBetweenOffsets(offset, endOffset);
+				offset = endOffset;
+				return value;
+			},
+		};
+	}
+
+	getValueLength(eol = EndOfLinePreference.TextDefined, preserveBOM = false): number {
+		return this.getValueLengthInRange(this.getFullModelRange(), eol) + (preserveBOM ? this.bom.length : 0);
+	}
+
+	createVersionedSnapshot(): TextSnapshot {
 		this.assertNotDisposed();
 		const version = this._version;
 		const snapshot = this.buffer.createSnapshot();
@@ -427,12 +485,27 @@ export class TextModel extends Disposable implements ITextModel {
 		return eol === EndOfLinePreference.CRLF ? lineFeedValue.replace(/\n/g, '\r\n') : lineFeedValue;
 	}
 
-	getValueLengthInRange(range: Range, eol: EndOfLinePreference): number {
+	getValueLengthInRange(range: IRange, eol = EndOfLinePreference.TextDefined): number {
 		return this.getValueInRange(range, eol).length;
 	}
 
-	modifyPosition(position: Position, offset: number): Position {
-		return this.positionAt(Math.min(this.length, Math.max(0, this.offsetAt(position) + offset)));
+	getCharacterCountInRange(range: IRange, eol = EndOfLinePreference.TextDefined): number {
+		return [...this.getValueInRange(range, eol)].length;
+	}
+
+	modifyPosition(position: IPosition, offset: number): Position {
+		if (!Number.isSafeInteger(offset)) throw new RangeError('TextModel offset must be a safe integer');
+		const targetOffset = this.getOffsetAt(position) + offset;
+		if (targetOffset < 0 || targetOffset > this.length) throw new RangeError('TextModel position offset is outside the document');
+		if (targetOffset > 0 && targetOffset < this.length) {
+			const text = this.getText();
+			const previous = text.charCodeAt(targetOffset - 1);
+			const current = text.charCodeAt(targetOffset);
+			if (previous >= 0xD800 && previous <= 0xDBFF && current >= 0xDC00 && current <= 0xDFFF) {
+				throw new RangeError('TextModel position offset splits a surrogate pair');
+			}
+		}
+		return this.positionAt(targetOffset);
 	}
 
 	getLineCount(): number {
@@ -449,8 +522,41 @@ export class TextModel extends Disposable implements ITextModel {
 		return this.buffer.getLineLength(lineNumber - 1);
 	}
 
+	getLinesContent(): string[] {
+		this.assertNotDisposed();
+		return Array.from({ length: this.lineCount }, (_, index) => this.buffer.getLineContent(index));
+	}
+
+	getEOL(): string {
+		this.assertNotDisposed();
+		return '\n';
+	}
+
+	getEndOfLineSequence(): EndOfLineSequence {
+		this.assertNotDisposed();
+		return EndOfLineSequence.LF;
+	}
+
+	getLineMinColumn(_lineNumber: number): number {
+		this.assertNotDisposed();
+		return 1;
+	}
+
 	getLineMaxColumn(lineNumber: number): number {
 		return this.getLineLength(lineNumber) + 1;
+	}
+
+	getLineFirstNonWhitespaceColumn(lineNumber: number): number {
+		const index = this.getLineContent(lineNumber).search(/\S/u);
+		return index < 0 ? 0 : index + 1;
+	}
+
+	getLineLastNonWhitespaceColumn(lineNumber: number): number {
+		const content = this.getLineContent(lineNumber);
+		for (let index = content.length - 1; index >= 0; index -= 1) {
+			if (/\S/u.test(content[index])) return index + 2;
+		}
+		return 0;
 	}
 
 	getFullModelRange(): Range {
@@ -489,6 +595,30 @@ export class TextModel extends Disposable implements ITextModel {
 	validateRange(range: IRange): Range {
 		const lifted = Range.lift(range);
 		return Range.fromPositions(this.validatePosition(lifted.getStartPosition()), this.validatePosition(lifted.getEndPosition()));
+	}
+
+	isValidRange(range: IRange): boolean {
+		this.assertNotDisposed();
+		const lifted = Range.lift(range);
+		if (lifted.startLineNumber < 1 || lifted.endLineNumber > this.lineCount) return false;
+		if (lifted.startColumn < 1 || lifted.endColumn < 1) return false;
+		if (lifted.startColumn > this.getLineMaxColumn(lifted.startLineNumber)) return false;
+		if (lifted.endColumn > this.getLineMaxColumn(lifted.endLineNumber)) return false;
+		return !lifted.getStartPosition().isAfter(lifted.getEndPosition());
+	}
+
+	getLanguageIdAtPosition(lineNumber: number, column: number): string {
+		this.validatePosition({ lineNumber, column });
+		return this.getLanguageId();
+	}
+
+	normalizePosition(position: Position, _affinity: PositionAffinity): Position {
+		return position;
+	}
+
+	getLineIndentColumn(lineNumber: number): number {
+		const firstNonWhitespaceColumn = this.getLineFirstNonWhitespaceColumn(lineNumber);
+		return firstNonWhitespaceColumn === 0 ? this.getLineMaxColumn(lineNumber) : firstNonWhitespaceColumn;
 	}
 
 	trackRange(
@@ -638,10 +768,12 @@ export class TextModel extends Disposable implements ITextModel {
 		if (typeof text !== "string") {
 			throw new TypeError("TextModel reset text must be a string");
 		}
+		const normalizedValue = normalizeTextLineEndings(text);
+		this.bom = normalizedValue.startsWith('\uFEFF') ? '\uFEFF' : '';
 		const result = this.commitOffsetEdits([{
 			startOffset: 0,
 			endOffset: this.buffer.length,
-			text: normalizeTextLineEndings(text),
+			text: this.bom ? normalizedValue.slice(1) : normalizedValue,
 		}], { reason: TextModelChangeReason.Reset });
 		this.history.reset();
 		if (!result) return undefined;

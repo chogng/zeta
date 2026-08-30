@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../browser/view.js");
+const { View } = await import("../../browser/view.js");
 const { EditorLineWrapping } = await import("../../common/config/editorOptions.js");
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
@@ -43,7 +43,7 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
 	using index = new LanguageTokenLineIndex(store);
 	using styling = new ResolvedSemanticTokensService();
 	const source = styling.createSource(index);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -75,7 +75,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
 	using index = new LanguageTokenLineIndex(store);
 	using styling = new ResolvedSemanticTokensService();
 	const source = styling.createSource(index);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -119,7 +119,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 	}]);
 	using index = new LanguageTokenLineIndex(store);
 	using styling = new ResolvedSemanticTokensService();
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
@@ -162,14 +162,14 @@ test("Viewport rejects cross-model token sources and owns none of their common s
 	const source = styling.createSource(index);
 	const otherSource = styling.createSource(otherIndex);
 
-	assert.throws(() => new EditorViewport({
+	assert.throws(() => new View({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		semanticTokenSource: otherSource,
 	}), /must share one text model/);
-	const viewport = new EditorViewport({
+	const viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -201,7 +201,7 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
 		resolverCalls += 1;
 		return SemanticTokenPresentation.Keyword;
 	}));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,

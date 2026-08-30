@@ -4,11 +4,11 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { type TextModelChange } from '../core/textChange.js';
 import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewZoneLayout, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
-import { LinesLayout, type EditorViewportVerticalPadding } from './linesLayout.js';
+import { EditorViewportLinesLayout, type EditorViewportVerticalPadding } from './editorViewportLinesLayout.js';
 import { type CustomLineHeightData } from './lineHeights.js';
 
 export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition, EditorViewportLineSource, EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
-export type { EditorViewportVerticalPadding } from './linesLayout.js';
+export type { EditorViewportVerticalPadding } from './editorViewportLinesLayout.js';
 
 export interface EditorViewportLayout {
 	readonly modelVersion: number;
@@ -51,13 +51,14 @@ export interface EditorViewportOptions {
 /**
  * Owns the immutable layout snapshot shared by the browser view and view-model.
  *
- * Horizontal measurement and scroll state stay here, while `LinesLayout` owns
- * line heights, padding, and visible/render line projection.
+ * Horizontal measurement and scroll state stay here, while
+ * `EditorViewportLinesLayout` owns line heights, padding, and visible/render
+ * line projection for Zeta's immutable viewport snapshots.
  */
 export class ViewLayout extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<EditorViewportChange>());
 	private readonly lineSource: EditorViewportLineSource;
-	private readonly linesLayout: LinesLayout;
+	private readonly linesLayout: EditorViewportLinesLayout;
 	private viewportSize: ISize = Object.freeze({ width: 0, height: 0 });
 	private measuredContentWidth = 0;
 	private requestedScrollPosition: EditorScrollPosition = Object.freeze({ left: 0, top: 0 });
@@ -73,7 +74,7 @@ export class ViewLayout extends Disposable {
 		const overscanLineCount = nonNegativeSafeInteger(options.overscanLineCount ?? 2, 'overscanLineCount');
 		this.lineSource = options.lineSource ?? createTextModelLineSource(model);
 		const padding = readPadding(options.padding);
-		this.linesLayout = new LinesLayout(
+		this.linesLayout = new EditorViewportLinesLayout(
 			this.lineSource,
 			lineHeight,
 			padding.top,

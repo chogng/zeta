@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BracketColorizationSource } from "../../browser/bracketColorizationPresentation.js";
+import { LanguageBracketColorizationSource } from '../../browser/bracketColorizationPresentation.js';
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
@@ -15,7 +15,7 @@ test("Bracket colorization follows lexical nesting and excludes brackets in stri
 	});
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	const colors = new BracketColorizationSource(bracketPairs);
+	const colors = new LanguageBracketColorizationSource(bracketPairs);
 
 	assert.deepEqual(colors.getLineBrackets(0), [{ startColumn: 0, endColumn: 1, level: 1 }]);
 	assert.deepEqual(colors.getLineBrackets(1), [
@@ -31,7 +31,7 @@ test("Bracket colorization invalidates its cached nesting after model edits", ()
 	using registration = configurations.register("typescript", { brackets: [{ open: "{", close: "}" }] });
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	const colors = new BracketColorizationSource(bracketPairs);
+	const colors = new LanguageBracketColorizationSource(bracketPairs);
 	assert.deepEqual(colors.getLineBrackets(1), [{ startColumn: 0, endColumn: 1, level: 1 }]);
 	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0)), text: "{\n" }]);
 	assert.deepEqual(colors.getLineBrackets(2), [{ startColumn: 0, endColumn: 1, level: 2 }]);
@@ -43,7 +43,7 @@ test('Bracket guide projection remains available when bracket colors are disable
 	using registration = configurations.register('typescript', { brackets: [{ open: '{', close: '}' }] });
 	using lexical = new LanguageLexicalContextIndex(model, 'typescript', configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	const guides = new BracketColorizationSource(bracketPairs, false);
+	const guides = new LanguageBracketColorizationSource(bracketPairs, false);
 
 	assert.deepEqual(guides.getLineBrackets(0), []);
 	assert.deepEqual(guides.getBracketGuides(1, 1), [{

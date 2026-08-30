@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ViewLineOptions, ViewLineTextDirection } from '../../browser/viewparts/viewLines/viewLineOptions.js';
+import { EditorTextDirection, ViewLineOptions } from '../../browser/viewParts/viewLines/viewLineOptions.js';
 
 test('ViewLineOptions snapshots the configuration shared by line renderers', () => {
 	const options = new ViewLineOptions({
-		textDirection: ViewLineTextDirection.RightToLeft,
+		textDirection: EditorTextDirection.RightToLeft,
 		fontLigatures: true,
 		useGpu: true,
 		useMonospaceOptimizations: false,
@@ -29,7 +29,7 @@ test('ViewLineOptions snapshots the configuration shared by line renderers', () 
 
 test('ViewLineOptions rejects invalid renderer configuration', () => {
 	assert.throws(() => new ViewLineOptions({
-		textDirection: 'diagonal' as ViewLineTextDirection,
+		textDirection: 'diagonal' as EditorTextDirection,
 		fontLigatures: false,
 		useGpu: false,
 		useMonospaceOptimizations: false,
@@ -39,7 +39,7 @@ test('ViewLineOptions rejects invalid renderer configuration', () => {
 });
 
 test('ViewLineOptions compares every renderer-owned field', () => {
-	const options = new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 4 });
-	assert.equal(options.equals(new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 4 })), true);
-	assert.equal(options.equals(new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 2 })), false);
+	const options = new ViewLineOptions({ textDirection: EditorTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 4 });
+	assert.equal(options.equals(new ViewLineOptions({ textDirection: EditorTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 4 })), true);
+	assert.equal(options.equals(new ViewLineOptions({ textDirection: EditorTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 2 })), false);
 });

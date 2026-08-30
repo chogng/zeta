@@ -8,17 +8,17 @@ import { Selection } from "../../../../common/core/selection.js";
 import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
-import { type EditorViewport } from "../../../view.js";
+import { type View } from "../../../view.js";
 import { RichScreenReaderContent } from "./screenReaderContentRich.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 import { createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, screenReaderLineOffsetAtModelOffset, type NativeScreenReaderContent } from "./screenReaderUtils.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewparts/viewLines/viewLine.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 
 export interface NativeScreenReaderSupportOptions {
 	readonly element: HTMLElement;
 	readonly model: TextModel;
-	readonly viewport: EditorViewport;
+	readonly viewport: View;
 	readonly selectionController: CursorsController;
 	/** Logical focus events from NativeEditContext; they hide the IME bridge hop. */
 	readonly onDidFocus?: Event<void>;

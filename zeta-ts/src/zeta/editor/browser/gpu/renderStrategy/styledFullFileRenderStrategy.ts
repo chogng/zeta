@@ -1,11 +1,11 @@
 import { type GpuRenderFrame, type GpuRenderStrategyInput } from '../gpuFrameStrategy.js';
-import { type GlyphRasterizer } from '../raster/glyphRasterizer.js';
+import { type StyledGlyphRasterizer } from '../raster/styledGlyphRasterizer.js';
 import { createGpuRenderFrame } from '../gpuUtils.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { BaseRenderStrategy } from './baseRenderStrategy.js';
+import { StyledBaseRenderStrategy } from './styledBaseRenderStrategy.js';
 import { fullFileRenderStrategyWgsl } from './fullFileRenderStrategy.wgsl.js';
 
-export class FullFileRenderStrategy extends BaseRenderStrategy {
+export class StyledFullFileRenderStrategy extends StyledBaseRenderStrategy {
 	public static readonly maxSupportedLines = 3_000;
 	public static readonly maxSupportedColumns = 200;
 	public readonly type = 'fullfile';
@@ -16,7 +16,7 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 	private cachedVertices: Float32Array<ArrayBuffer> | undefined;
 	private cachedGpuLineIndexes: ReadonlySet<number> = new Set();
 
-	constructor(glyphRasterizer: GlyphRasterizer) { super(glyphRasterizer); }
+	constructor(glyphRasterizer: StyledGlyphRasterizer) { super(glyphRasterizer); }
 
 	public reset(): void {
 		this.cacheKey = undefined;

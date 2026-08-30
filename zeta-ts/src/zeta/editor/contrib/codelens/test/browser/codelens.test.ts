@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import('../../../../browser/view.js');
+const { View } = await import('../../../../browser/view.js');
 const { CodeLensContribution } = await import('../../browser/codelensController.js');
 
 test('CodeLens model preserves provider ownership, provider rank, and independent failures', async () => {
@@ -99,7 +99,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 		},
 	};
 	using registration = providers.register(provider);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
@@ -157,7 +157,7 @@ test('CodeLens model waits for every visible resolve batch in the current reques
 		provideCodeLenses: () => [lens(0, 0, undefined, 'first'), lens(10, 0, undefined, 'second')],
 		resolveCodeLens: value => new Promise(resolve => requests.push({ value, resolve })),
 	});
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
@@ -263,7 +263,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		const restoredDom = new JSDOM('<!doctype html><body><main></main></body>');
 		using restoredModel = new TextModel('first\nsecond\nthird');
 		using restoredProviders = new OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
-		using restoredViewport = new EditorViewport({
+		using restoredViewport = new View({
 			container: requiredElement<HTMLElement>(restoredDom.window.document, 'main'),
 			model: restoredModel,
 			lineHeight: 20,
@@ -337,8 +337,8 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	return element;
 }
 
-function createViewport(dom: JSDOM, model: TextModel): InstanceType<typeof EditorViewport> {
-	const viewport = new EditorViewport({
+function createViewport(dom: JSDOM, model: TextModel): InstanceType<typeof View> {
+	const viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,

@@ -1,77 +1,87 @@
+import { Color } from '../../../../base/common/color.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { RGBA8 } from '../../../common/core/misc/rgba.js';
-import { type LanguageColorPresentation } from '../common/languageColors.js';
+import { type IColorPresentation } from '../../../common/languages.js';
 
-/** Owns the editable color and the provider-backed text representation selected for insertion. */
 export class ColorPickerModel extends Disposable {
-	private readonly changeColorEmitter = this._register(new Emitter<RGBA8>());
-	private readonly changePresentationsEmitter = this._register(new Emitter<readonly LanguageColorPresentation[]>());
-	private readonly changeSelectedPresentationEmitter = this._register(new Emitter<LanguageColorPresentation | undefined>());
-	private currentColor: RGBA8;
-	private presentations: readonly LanguageColorPresentation[] = Object.freeze([]);
-	private selectedIndex = 0;
+	readonly originalColor: Color;
+	private _color: Color;
 
-	readonly onDidChangeColor: Event<RGBA8> = this.changeColorEmitter.event;
-	readonly onDidChangePresentations: Event<readonly LanguageColorPresentation[]> = this.changePresentationsEmitter.event;
-	readonly onDidChangeSelectedPresentation: Event<LanguageColorPresentation | undefined> = this.changeSelectedPresentationEmitter.event;
+	get color(): Color {
+		return this._color;
+	}
 
-	constructor(readonly originalColor: RGBA8) {
+	set color(color: Color) {
+		if (this._color.equals(color)) return;
+		this._color = color;
+		this._onDidChangeColor.fire(color);
+	}
+
+	get presentation(): IColorPresentation {
+		return this.colorPresentations[this.presentationIndex]!;
+	}
+
+	private _colorPresentations: IColorPresentation[];
+
+	get colorPresentations(): IColorPresentation[] {
+		return this._colorPresentations;
+	}
+
+	set colorPresentations(colorPresentations: IColorPresentation[]) {
+		this._colorPresentations = colorPresentations;
+		if (this.presentationIndex > colorPresentations.length - 1) this.presentationIndex = 0;
+		this._onDidChangePresentation.fire(this.presentation);
+	}
+
+	private readonly _onColorFlushed = this._register(new Emitter<Color>());
+	readonly onColorFlushed: Event<Color> = this._onColorFlushed.event;
+
+	private readonly _onDidChangeColor = this._register(new Emitter<Color>());
+	readonly onDidChangeColor: Event<Color> = this._onDidChangeColor.event;
+
+	private readonly _onDidChangePresentation = this._register(new Emitter<IColorPresentation>());
+	readonly onDidChangePresentation: Event<IColorPresentation> = this._onDidChangePresentation.event;
+
+	constructor(color: Color, availableColorPresentations: IColorPresentation[], private presentationIndex: number) {
 		super();
-		this.currentColor = originalColor;
+		this.originalColor = color;
+		this._color = color;
+		this._colorPresentations = availableColorPresentations;
 	}
 
-	get color(): RGBA8 {
-		return this.currentColor;
+	selectNextColorPresentation(): void {
+		this.presentationIndex = (this.presentationIndex + 1) % this.colorPresentations.length;
+		this.flushColor();
+		this._onDidChangePresentation.fire(this.presentation);
 	}
 
-	get colorPresentations(): readonly LanguageColorPresentation[] {
-		return this.presentations;
+	guessColorPresentation(color: Color, originalText: string): void {
+		void color;
+		let presentationIndex = -1;
+		for (let i = 0; i < this.colorPresentations.length; i++) {
+			if (originalText.toLowerCase() === this.colorPresentations[i]!.label) {
+				presentationIndex = i;
+				break;
+			}
+		}
+
+		if (presentationIndex === -1) {
+			const originalTextPrefix = originalText.split('(')[0]!.toLowerCase();
+			for (let i = 0; i < this.colorPresentations.length; i++) {
+				if (this.colorPresentations[i]!.label.toLowerCase().startsWith(originalTextPrefix)) {
+					presentationIndex = i;
+					break;
+				}
+			}
+		}
+
+		if (presentationIndex !== -1 && presentationIndex !== this.presentationIndex) {
+			this.presentationIndex = presentationIndex;
+			this._onDidChangePresentation.fire(this.presentation);
+		}
 	}
 
-	get selectedPresentation(): LanguageColorPresentation | undefined {
-		return this.presentations[this.selectedIndex];
+	flushColor(): void {
+		this._onColorFlushed.fire(this._color);
 	}
-
-	setColor(color: RGBA8): void {
-		this.assertNotDisposed();
-		if (this.currentColor.equals(color)) return;
-		this.currentColor = color;
-		this.changeColorEmitter.fire(color);
-	}
-
-	setColorPresentations(presentations: readonly LanguageColorPresentation[], originalText?: string): void {
-		this.assertNotDisposed();
-		this.presentations = Object.freeze([...presentations]);
-		this.selectedIndex = selectPresentationIndex(this.presentations, originalText, this.selectedIndex);
-		this.changePresentationsEmitter.fire(this.presentations);
-		this.changeSelectedPresentationEmitter.fire(this.selectedPresentation);
-	}
-
-	selectPresentation(index: number): void {
-		this.assertNotDisposed();
-		if (!Number.isSafeInteger(index) || index < 0 || index >= this.presentations.length) throw new RangeError('Color presentation index is out of range');
-		if (this.selectedIndex === index) return;
-		this.selectedIndex = index;
-		this.changeSelectedPresentationEmitter.fire(this.selectedPresentation);
-	}
-
-	selectNextPresentation(): void {
-		this.assertNotDisposed();
-		if (this.presentations.length === 0) return;
-		this.selectPresentation((this.selectedIndex + 1) % this.presentations.length);
-	}
-}
-
-function selectPresentationIndex(presentations: readonly LanguageColorPresentation[], originalText: string | undefined, previousIndex: number): number {
-	if (presentations.length === 0) return 0;
-	if (originalText) {
-		const normalized = originalText.trim().toLowerCase();
-		const exact = presentations.findIndex(presentation => presentation.label.toLowerCase() === normalized);
-		if (exact >= 0) return exact;
-		const prefix = normalized.slice(0, normalized.indexOf('(') >= 0 ? normalized.indexOf('(') : normalized.startsWith('#') ? 1 : normalized.length);
-		const matchingPrefix = presentations.findIndex(presentation => presentation.label.toLowerCase().startsWith(prefix));
-		if (matchingPrefix >= 0) return matchingPrefix;
-	}
-	return Math.min(previousIndex, presentations.length - 1);
 }

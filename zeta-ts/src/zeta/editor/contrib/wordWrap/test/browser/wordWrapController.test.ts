@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { EditorLineWrapping } = await import("../../../../common/config/editorOptions.js");
 const { WordWrapController } = await import("../../browser/wordWrapController.js");
 
@@ -26,7 +26,7 @@ test("Word-wrap shortcut switches Stanza's visual projection without editing tex
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("abcdef");
-	using viewport = new EditorViewport({ container, model, glyphMargin: false, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), minimap: { enabled: false } });
+	using viewport = new View({ container, model, glyphMargin: false, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), minimap: { enabled: false } });
 	viewport.layout({ width: 70, height: 40 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

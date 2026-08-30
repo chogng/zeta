@@ -3,7 +3,7 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { observableValue } from "../../../../base/common/observable.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Provides a reusable inline progress presentation for asynchronous editor requests. */
 export class InlineProgressController extends Disposable {
@@ -11,7 +11,7 @@ export class InlineProgressController extends Disposable {
 	private readonly label = observableValue(this, "");
 	private active = 0;
 
-	constructor(private readonly viewport: EditorViewport) {
+	constructor(private readonly viewport: View) {
 		super();
 		const n = createReactiveDom(viewport.element.ownerDocument);
 		const view = this._register(n.div({

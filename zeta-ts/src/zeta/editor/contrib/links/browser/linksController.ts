@@ -4,7 +4,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { LinkService, type LanguageLink } from "../common/languageLinks.js";
 import { type Position } from "../../../common/core/position.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 /** Resolves provider links on demand and delegates opening to the host callback. */
 export class LinksController extends Disposable {
@@ -13,7 +13,7 @@ export class LinksController extends Disposable {
 	private activeLink: LanguageLink | undefined;
 	private hoverPosition: Position | undefined;
 
-	constructor(private readonly viewport: EditorViewport, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza link opening failed", error)) {
+	constructor(private readonly viewport: View, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza link opening failed", error)) {
 		super();
 		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.update(event)));
 		this._register(addDisposableListener(viewport.element, "pointerleave", () => this.clear()));

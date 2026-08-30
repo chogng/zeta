@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { BlockCommentController } = await import("../../browser/blockCommentController.js");
 
 test("Block comment shortcut toggles the active language pair locally", () => {
@@ -37,7 +37,7 @@ test("Block comment shortcut toggles the active language pair locally", () => {
 	using registration = configurations.register("typescript", {
 		comments: { blockComment: { open: "/*", close: "*/" } },
 	});
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 20 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
@@ -59,7 +59,7 @@ test("Block comment shortcut leaves languages without a block pair alone", () =>
 	using model = new TextModel("alpha");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using configurations = new OwnedLanguageConfigurationContributions();
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using controller = new BlockCommentController(input, viewport, selections, { languageId: "plaintext", configurations });

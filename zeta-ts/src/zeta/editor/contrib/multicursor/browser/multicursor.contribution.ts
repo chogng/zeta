@@ -3,7 +3,7 @@ import { MultiCursorController } from "./multiCursorController.js";
 import { OccurrenceSelectionController } from "./occurrenceSelectionController.js";
 import { SelectionHighlighter } from "./multicursor.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
+import { createStanzaDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 import { resolveSelectionHighlightPresentation } from "../../wordHighlighter/browser/highlightDecorations.js";
 
 const selectionHighlightDecorations: EditorCapability<TextDecorationCollection<boolean>> = Object.freeze({ id: "editor.capability.selectionHighlightDecorations" });

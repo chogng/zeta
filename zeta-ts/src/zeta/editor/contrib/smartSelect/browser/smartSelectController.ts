@@ -7,7 +7,7 @@ import { CursorChangeReason } from "../../../common/cursorEvents.js";
 import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type Range } from "../../../common/core/range.js";
 import { type TextSnapshot } from "../../../common/core/textChange.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { expandSmartSelection } from "../common/smartSelectionExpansion.js";
 import { SelectionRangeService } from "../common/selectionRanges.js";
@@ -17,7 +17,7 @@ export class SmartSelectController extends Disposable {
 	private readonly history: SelectionSet[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
@@ -35,11 +35,11 @@ export class SmartSelectController extends Disposable {
 			this.request?.abort();
 			this.request = undefined;
 			if (before.selections.every(selection => selection.isEmpty())) {
-				this.commitExpansion(before, this.viewport.textModel.createSnapshot(), []);
+				this.commitExpansion(before, this.viewport..createVersionedSnapshot(), []);
 				return;
 			}
 			const request = this.request = new AbortController();
-			const snapshot = this.viewport.textModel.createSnapshot();
+			const snapshot = this.viewport..createVersionedSnapshot();
 			void this.expand(request, before, snapshot);
 		} else if (event.key === "ArrowLeft") {
 			stopEvent(event, { immediate: true });

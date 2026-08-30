@@ -16,6 +16,11 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	ResizeObserver: class {
+		observe(): void {}
+		unobserve(): void {}
+		disconnect(): void {}
+	},
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -23,7 +28,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import('../../browser/view.js');
+const { View } = await import('../../browser/view.js');
 const { StableEditorBottomScrollState, StableEditorScrollState } = await import('../../browser/stableEditorScroll.js');
 
 test('StableEditorScrollState preserves the first visible row offset', () => {
@@ -38,7 +43,7 @@ test('StableEditorScrollState preserves the first visible row offset', () => {
 		'five',
 		'six',
 	].join('\n'));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -57,9 +62,9 @@ test('StableEditorScrollState preserves the first visible row offset', () => {
 	const initialDelta = initialLayout.scrollPosition.top - initialAnchorTop;
 	const initialLeft = initialLayout.scrollPosition.left;
 
-	const state = StableEditorScrollState.capture({ viewport });
+	const state = StableEditorScrollState.capture(viewport);
 	viewport.setLineHeight(30);
-	state.restore({ viewport });
+	state.restore(viewport);
 
 	const restoredLayout = viewport.currentLayout;
 	assert.equal(restoredLayout.scrollPosition.left, initialLeft);
@@ -83,7 +88,7 @@ test('StableEditorBottomScrollState preserves the last visible row offset', () =
 		'seven',
 		'eight',
 	].join('\n'));
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -131,7 +136,7 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 		model,
 		SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (0) + 1))),
 	);
-	using viewport = new EditorViewport({
+	using viewport = new View({
 		container,
 		model,
 		lineHeight: 20,
@@ -141,12 +146,12 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 	viewport.layout({ width: 200, height: 60 });
 	viewport.scrollTo({ left: 0, top: 40 });
 
-	const state = StableEditorScrollState.capture({ viewport, selections });
+	const state = StableEditorScrollState.capture(viewport, selections);
 	selections.setSelections(SelectionSet.single(
 		Selection.fromPositions(new Position((4) + 1, (0) + 1)),
 	));
 	viewport.setLineHeight(30);
-	state.restoreRelativeVerticalPositionOfCursor({ viewport, selections });
+	state.restoreRelativeVerticalPositionOfCursor(viewport, selections);
 
 	assert.equal(viewport.currentLayout.scrollPosition.top, 150);
 	dom.window.close();

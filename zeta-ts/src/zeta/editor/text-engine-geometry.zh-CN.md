@@ -128,11 +128,11 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 | DOM 字体应用 | Current / 已实现 | `browser/config/domFontInfo.ts` 为 viewport 和 diff surface 应用统一的编辑器字体词汇；zoom 仍由 feature 自己拥有，并显式使测量失效 |
 | Tab-focus 状态 | Current / 已实现 | `browser/config/tabFocus.ts` 拥有可由 host 注入的状态和变更事件；`toggleTabFocusMode` contribution 拥有快捷键、DOM 状态和播报 |
 | 浏览器字体测量 | Current / 已实现 | `browser/config/fontMeasurements.ts` 拥有 `DomTextMeasurer` 和字体环境快照；`browser/config/charWidthReader.ts` 拥有 Canvas 宽度读取 |
-| 惰性行宽聚合 | Current / 已实现 | `browser/viewparts/viewLines/viewLines.ts` 提供有界初始工作、可取消分片、编辑增量更新和 lower-bound 最大值 |
-| 可见行虚拟化 | Current / 已实现 | `browser/viewparts/viewLines/viewLines.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层 |
+| 惰性行宽聚合 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 提供有界初始工作、可取消分片、编辑增量更新和 lower-bound 最大值 |
+| 可见行虚拟化 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层 |
 | 浏览器 shaping 后的可见几何 | Current / 部分具备 | `viewLine.ts` 负责单行读取，`CharacterMapping` 把 UTF-16 列映射到子 span，`rangeUtil.ts` 读取并整理浏览器范围，`domReadingContext.ts` 缓存布局基准 |
 | 统一的渲染器感知几何契约 | Proposed / 计划设计 | 光标、选区、composition、pointer、decoration 和输入消费者应使用一个显式提供者，并携带精确/fallback 状态 |
-| 可选择的 DOM/WebGPU 文本渲染器 | Current / 实验性 | `browser/gpu` 拥有 device、DPR、glyph rasterization、分页 atlas 分配、矩形缓冲区，以及有界的整文件/可见区域策略；`experimentalGpuAcceleration` 为 `on` 时，`browser/viewparts/viewLinesGpu` 协调上传与绘制。DOM 行继续承担几何与无障碍表面，超出 GPU 适用范围的行仍由 DOM 绘制。 |
+| 可选择的 DOM/WebGPU 文本渲染器 | Current / 实验性 | `browser/gpu` 拥有 device、DPR、glyph rasterization、分页 atlas 分配、矩形缓冲区，以及有界的整文件/可见区域策略；`experimentalGpuAcceleration` 为 `on` 时，`browser/viewParts/viewLinesGpu` 协调上传与绘制。DOM 行继续承担几何与无障碍表面，超出 GPU 适用范围的行仍由 DOM 绘制。 |
 
 不能因为存在 fallback 就把当前行为描述为完整。只有当 fallback 的精度、失效和降级行为明确时，它才是有效契约。
 

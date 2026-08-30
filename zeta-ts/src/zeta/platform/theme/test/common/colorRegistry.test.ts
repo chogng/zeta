@@ -13,8 +13,8 @@ test("ColorRegistry resolves aliases and transforms deterministically", () => {
 
 	const dark = registry.resolve(ColorScheme.Dark);
 	assert.equal(dark[0]?.value?.toString(), "#000000");
-	assert.equal(dark[1]?.value?.toString(), "#00000080");
-	assert.equal(registry.resolve(ColorScheme.Light)[1]?.value?.toString(), "#ffffff40");
+	assert.equal(dark[1]?.value?.toString(), 'rgba(0, 0, 0, 0.5)');
+	assert.equal(registry.resolve(ColorScheme.Light)[1]?.value?.toString(), 'rgba(255, 255, 255, 0.25)');
 });
 
 test("ColorRegistry rejects duplicates, cycles, unknown references, and unknown overrides", () => {

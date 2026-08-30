@@ -2,27 +2,27 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, dispose, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ITaskQueue } from '../taskQueue.js';
 import { WindowIdleTaskQueue } from '../windowIdleTaskQueue.js';
-import { type IGpuGlyphStyle, type IStyledGlyphRasterizer } from '../raster/raster.js';
-import { type IGpuReadableTextureAtlasPage, type IGpuTextureAtlasPageGlyph } from './atlas.js';
-import { type AllocatorType, type GpuAllocatorType, TextureAtlasPage } from './textureAtlasPage.js';
+import { type IStyledGlyphStyle, type IStyledGlyphRasterizer } from '../raster/raster.js';
+import { type IStyledReadableTextureAtlasPage, type IStyledTextureAtlasPageGlyph } from './atlas.js';
+import { type AllocatorType, type StyledAllocatorType, StyledTextureAtlasPage } from './styledTextureAtlasPage.js';
 
 export interface ITextureAtlasOptions {
 	readonly allocatorType: AllocatorType;
 }
 
-export interface IGpuTextureAtlasOptions {
-	readonly allocatorType?: GpuAllocatorType;
+export interface IStyledTextureAtlasOptions {
+	readonly allocatorType?: StyledAllocatorType;
 }
 
-export class TextureAtlas extends Disposable {
+export class StyledTextureAtlas extends Disposable {
 	public static readonly maximumPageCount = 16;
-	private readonly mutablePages: TextureAtlasPage[] = [];
+	private readonly mutablePages: StyledTextureAtlasPage[] = [];
 	private readonly warmUpTask = this._register(new MutableDisposable<ITaskQueue>());
 	private warmedRasterizers = new WeakSet<IStyledGlyphRasterizer>();
 	private readonly deleteGlyphsEmitter = this._register(new Emitter<void>());
 	public readonly onDidDeleteGlyphs: Event<void> = this.deleteGlyphsEmitter.event;
 
-	constructor(private readonly host: HTMLElement, public readonly pageSize: number, private readonly options: IGpuTextureAtlasOptions = {}) {
+	constructor(private readonly host: HTMLElement, public readonly pageSize: number, private readonly options: IStyledTextureAtlasOptions = {}) {
 		super();
 		if (!Number.isSafeInteger(pageSize) || pageSize < 64) throw new RangeError('WebGPU texture atlas page size must be an integer of at least 64 pixels');
 		this.mutablePages.push(this.createPage(0));
@@ -32,11 +32,11 @@ export class TextureAtlas extends Disposable {
 		}));
 	}
 
-	public get pages(): readonly IGpuReadableTextureAtlasPage[] {
+	public get pages(): readonly IStyledReadableTextureAtlasPage[] {
 		return this.mutablePages;
 	}
 
-	public getGlyph(rasterizer: IStyledGlyphRasterizer, chars: string, style: IGpuGlyphStyle, deviceX: number): Readonly<IGpuTextureAtlasPageGlyph> {
+	public getGlyph(rasterizer: IStyledGlyphRasterizer, chars: string, style: IStyledGlyphStyle, deviceX: number): Readonly<IStyledTextureAtlasPageGlyph> {
 		if (!this.warmedRasterizers.has(rasterizer)) {
 			this.warmedRasterizers.add(rasterizer);
 			this.warmUp(rasterizer, style);
@@ -47,7 +47,7 @@ export class TextureAtlas extends Disposable {
 			const glyph = page.getGlyph(rasterizer, chars, styleKey, () => rasterizer.rasterizeGlyph(chars, style, subPixelBucket / 10));
 			if (glyph) return glyph;
 		}
-		if (this.mutablePages.length >= TextureAtlas.maximumPageCount) throw new RangeError('WebGPU texture atlas exhausted its page limit');
+		if (this.mutablePages.length >= StyledTextureAtlas.maximumPageCount) throw new RangeError('WebGPU texture atlas exhausted its page limit');
 		const page = this.createPage(this.mutablePages.length);
 		this.mutablePages.push(page);
 		const glyph = page.getGlyph(rasterizer, chars, styleKey, () => rasterizer.rasterizeGlyph(chars, style, subPixelBucket / 10));
@@ -63,11 +63,11 @@ export class TextureAtlas extends Disposable {
 		this.deleteGlyphsEmitter.fire();
 	}
 
-	private createPage(index: number): TextureAtlasPage {
-		return new TextureAtlasPage(this.host, index, this.pageSize, this.options.allocatorType);
+	private createPage(index: number): StyledTextureAtlasPage {
+		return new StyledTextureAtlasPage(this.host, index, this.pageSize, this.options.allocatorType);
 	}
 
-	private warmUp(rasterizer: IStyledGlyphRasterizer, style: IGpuGlyphStyle): void {
+	private warmUp(rasterizer: IStyledGlyphRasterizer, style: IStyledGlyphStyle): void {
 		const ownerWindow = this.host.ownerDocument.defaultView;
 		if (!ownerWindow) return;
 		this.warmUpTask.value?.clear();

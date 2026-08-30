@@ -1,3 +1,14 @@
+import { CharCode } from './charCode.js';
+
+/** Produces `a`-`z`, then `A`-`Z`, and repeats. */
+export function singleLetterHash(n: number): string {
+	const letterCount = CharCode.Z - CharCode.A + 1;
+	n %= 2 * letterCount;
+	return n < letterCount
+		? String.fromCharCode(CharCode.a + n)
+		: String.fromCharCode(CharCode.A + n - letterCount);
+}
+
 /** Escapes every regular-expression metacharacter in a literal string. */
 export function escapeRegExpCharacters(value: string): string {
 	return value.replace(/[\\^$.*+?()[\]{}|]/gu, '\\$&');

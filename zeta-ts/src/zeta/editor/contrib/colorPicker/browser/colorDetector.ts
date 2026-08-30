@@ -4,7 +4,7 @@ import { type Position } from '../../../common/core/position.js';
 import { type TextDecorationId, TextDecorationCollection, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { ColorService, type ColorData, type DefaultColorDecoratorsEnablement } from '../common/languageColors.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
@@ -100,8 +100,8 @@ export class ColorDetector extends Disposable {
 	}
 }
 
-function colorToHex8(color: { readonly r: number; readonly g: number; readonly b: number; readonly a: number }): string {
-	return `#${[color.r, color.g, color.b, color.a].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+function colorToHex8(color: { readonly red: number; readonly green: number; readonly blue: number; readonly alpha: number }): string {
+	return `#${[color.red, color.green, color.blue, color.alpha].map(channel => Math.round(channel * 255).toString(16).padStart(2, '0')).join('')}`;
 }
 
 function colorDataAtCurrentRange(decoration: TextDecorationSnapshot<ColorData>): ColorData {

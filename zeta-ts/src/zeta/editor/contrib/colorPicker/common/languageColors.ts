@@ -2,40 +2,28 @@ import { type Event } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../common/core/range.js';
 
-import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
 import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type TextEdit } from '../../../common/languages.js';
-
-export interface LanguageColorInformation {
-	readonly range: Range;
-	readonly color: RGBA8;
-}
-
-export interface LanguageColorPresentation {
-	readonly label: string;
-	readonly textEdit?: TextEdit;
-	readonly additionalTextEdits?: readonly TextEdit[];
-}
+import { type IColor, type IColorInformation, type IColorPresentation } from '../../../common/languages.js';
 
 export interface LanguageColorRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
 }
 
 export interface LanguageColorPresentationRequest extends LanguageFeatureRequest {
-	readonly color: RGBA8;
+	readonly color: IColor;
 	readonly range: Range;
 	readonly resource?: URI;
 }
 
 export interface LanguageColorProvider extends LanguageFeatureProviderMetadata {
-	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly LanguageColorInformation[] | undefined | Promise<readonly LanguageColorInformation[] | undefined>;
-	provideColorPresentations(request: LanguageColorPresentationRequest, signal: AbortSignal): readonly LanguageColorPresentation[] | undefined | Promise<readonly LanguageColorPresentation[] | undefined>;
+	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | undefined | Promise<readonly IColorInformation[] | undefined>;
+	provideColorPresentations(request: LanguageColorPresentationRequest, signal: AbortSignal): readonly IColorPresentation[] | undefined | Promise<readonly IColorPresentation[] | undefined>;
 }
 
 export interface ColorData {
-	readonly information: LanguageColorInformation;
+	readonly information: IColorInformation & { readonly range: Range };
 	readonly provider: LanguageColorProvider;
 }
 
@@ -74,7 +62,7 @@ export class ColorService {
 		return Object.freeze(result);
 	}
 
-	async provideColorPresentations(languageId: string, data: ColorData, color: RGBA8, signal: AbortSignal): Promise<readonly LanguageColorPresentation[]> {
+	async provideColorPresentations(languageId: string, data: ColorData, color: IColor, signal: AbortSignal): Promise<readonly IColorPresentation[]> {
 		const request: LanguageColorPresentationRequest = Object.freeze({
 			...this.createRequest(languageId, signal),
 			color,
@@ -98,7 +86,7 @@ export class ColorService {
 		});
 	}
 
-	private async requestDocumentColors(provider: LanguageColorProvider, request: LanguageColorRequest, signal: AbortSignal): Promise<readonly LanguageColorInformation[] | undefined> {
+	private async requestDocumentColors(provider: LanguageColorProvider, request: LanguageColorRequest, signal: AbortSignal): Promise<readonly IColorInformation[] | undefined> {
 		try {
 			return await provider.provideDocumentColors(request, signal);
 		} catch (error) {
@@ -107,13 +95,14 @@ export class ColorService {
 		}
 	}
 
-	private normalizeColors(values: readonly LanguageColorInformation[], provider: LanguageColorProvider): readonly ColorData[] {
+	private normalizeColors(values: readonly IColorInformation[], provider: LanguageColorProvider): readonly ColorData[] {
 		return values.map(value => {
-			this.model.offsetAt(value.range.getStartPosition());
-			this.model.offsetAt(value.range.getEndPosition());
-			if (!(value.color instanceof RGBA8)) throw new TypeError('Language color provider must return RGBA8 values');
+			const range = Range.lift(value.range);
+			this.model.offsetAt(range.getStartPosition());
+			this.model.offsetAt(range.getEndPosition());
+			assertColor(value.color);
 			return Object.freeze({
-				information: Object.freeze({ range: value.range, color: value.color }),
+				information: Object.freeze({ range, color: normalizedColor(value.color.red, value.color.green, value.color.blue, value.color.alpha) }),
 				provider,
 			});
 		});
@@ -125,9 +114,9 @@ export class DefaultDocumentColorProvider implements LanguageColorProvider {
 	readonly languageIds = Object.freeze(['*']);
 	readonly providerId = 'stanza.defaultDocumentColorProvider';
 
-	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly LanguageColorInformation[] {
+	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] {
 		const text = request.snapshot.getText();
-		const colors: LanguageColorInformation[] = [];
+		const colors: IColorInformation[] = [];
 		for (const match of text.matchAll(COLOR_LITERAL_PATTERN)) {
 			signal.throwIfAborted();
 			const value = parseColorLiteral(match[0]);
@@ -140,44 +129,44 @@ export class DefaultDocumentColorProvider implements LanguageColorProvider {
 		return Object.freeze(colors);
 	}
 
-	provideColorPresentations(request: LanguageColorPresentationRequest): readonly LanguageColorPresentation[] {
+	provideColorPresentations(request: LanguageColorPresentationRequest): readonly IColorPresentation[] {
 		return createColorPresentations(request.range, request.color);
 	}
 }
 
 const COLOR_LITERAL_PATTERN = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-f])|\b(?:rgba?|hsla?)\([^)]*\)|\btransparent\b/giu;
 
-function parseColorLiteral(value: string): RGBA8 | undefined {
+function parseColorLiteral(value: string): IColor | undefined {
 	const normalized = value.trim().toLowerCase();
-	if (normalized === 'transparent') return new RGBA8(0, 0, 0, 0);
+	if (normalized === 'transparent') return normalizedColor(0, 0, 0, 0);
 	if (normalized.startsWith('#')) return parseHex(normalized);
 	if (normalized.startsWith('rgb')) return parseRgb(normalized);
 	if (normalized.startsWith('hsl')) return parseHsl(normalized);
 	return undefined;
 }
 
-function parseHex(value: string): RGBA8 | undefined {
+function parseHex(value: string): IColor | undefined {
 	const hex = value.slice(1);
 	if (![3, 4, 6, 8].includes(hex.length) || !/^[0-9a-f]+$/u.test(hex)) return undefined;
 	const expanded = hex.length <= 4 ? [...hex].map(digit => digit + digit).join('') : hex;
-	return new RGBA8(
-		Number.parseInt(expanded.slice(0, 2), 16),
-		Number.parseInt(expanded.slice(2, 4), 16),
-		Number.parseInt(expanded.slice(4, 6), 16),
-		expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) : 255,
+	return normalizedColor(
+		Number.parseInt(expanded.slice(0, 2), 16) / 255,
+		Number.parseInt(expanded.slice(2, 4), 16) / 255,
+		Number.parseInt(expanded.slice(4, 6), 16) / 255,
+		expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) / 255 : 1,
 	);
 }
 
-function parseRgb(value: string): RGBA8 | undefined {
+function parseRgb(value: string): IColor | undefined {
 	const parts = colorFunctionParts(value);
 	if (!parts || parts.channels.length !== 3) return undefined;
 	const channels = parts.channels.map(parseRgbChannel);
 	const alpha = parseAlpha(parts.alpha);
 	if (channels.some(channel => channel === undefined) || alpha === undefined) return undefined;
-	return new RGBA8(channels[0]!, channels[1]!, channels[2]!, alpha);
+	return normalizedColor(channels[0]! / 255, channels[1]! / 255, channels[2]! / 255, alpha / 255);
 }
 
-function parseHsl(value: string): RGBA8 | undefined {
+function parseHsl(value: string): IColor | undefined {
 	const parts = colorFunctionParts(value);
 	if (!parts || parts.channels.length !== 3) return undefined;
 	const hue = parseHue(parts.channels[0]!);
@@ -195,12 +184,7 @@ function parseHsl(value: string): RGBA8 | undefined {
 					: section < 5 ? [secondary, 0, chroma]
 						: [chroma, 0, secondary];
 	const match = lightness - chroma / 2;
-	return new RGBA8(
-		Math.round((red + match) * 255),
-		Math.round((green + match) * 255),
-		Math.round((blue + match) * 255),
-		alpha,
-	);
+	return normalizedColor(red + match, green + match, blue + match, alpha / 255);
 }
 
 function colorFunctionParts(value: string): { readonly channels: readonly string[]; readonly alpha?: string } | undefined {
@@ -259,19 +243,23 @@ function parseNumber(value: string): number {
 	return /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/iu.test(value) ? Number(value) : Number.NaN;
 }
 
-function createColorPresentations(range: Range, color: RGBA8): readonly LanguageColorPresentation[] {
-	const alpha = rounded(color.a / 255, 3);
-	const rgb = color.a === 255 ? `rgb(${color.r}, ${color.g}, ${color.b})` : `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+function createColorPresentations(range: Range, color: IColor): readonly IColorPresentation[] {
+	const red = Math.round(color.red * 255);
+	const green = Math.round(color.green * 255);
+	const blue = Math.round(color.blue * 255);
+	const alphaByte = Math.round(color.alpha * 255);
+	const alpha = rounded(color.alpha, 3);
+	const rgb = alphaByte === 255 ? `rgb(${red}, ${green}, ${blue})` : `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 	const [hue, saturation, lightness] = rgbToHsl(color);
-	const hsl = color.a === 255 ? `hsl(${hue}, ${saturation}%, ${lightness}%)` : `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-	const hex = `#${[color.r, color.g, color.b, ...(color.a === 255 ? [] : [color.a])].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+	const hsl = alphaByte === 255 ? `hsl(${hue}, ${saturation}%, ${lightness}%)` : `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+	const hex = `#${[red, green, blue, ...(alphaByte === 255 ? [] : [alphaByte])].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
 	return Object.freeze([rgb, hsl, hex].map(label => Object.freeze({ label, textEdit: Object.freeze({ range, text: label }) })));
 }
 
-function rgbToHsl(color: RGBA8): readonly [number, number, number] {
-	const red = color.r / 255;
-	const green = color.g / 255;
-	const blue = color.b / 255;
+function rgbToHsl(color: IColor): readonly [number, number, number] {
+	const red = color.red;
+	const green = color.green;
+	const blue = color.blue;
 	const maximum = Math.max(red, green, blue);
 	const minimum = Math.min(red, green, blue);
 	const delta = maximum - minimum;
@@ -286,13 +274,23 @@ function rgbToHsl(color: RGBA8): readonly [number, number, number] {
 	return Object.freeze([Math.round((hue + 360) % 360), Math.round(saturation * 100), Math.round(lightness * 100)]);
 }
 
-function normalizePresentation(value: LanguageColorPresentation): LanguageColorPresentation {
+function normalizePresentation(value: IColorPresentation): IColorPresentation {
 	if (!value || typeof value.label !== 'string' || value.label.trim().length === 0) throw new TypeError('Language color presentation must provide a label');
-	return Object.freeze({
+	return {
 		label: value.label,
-		...(value.textEdit ? { textEdit: Object.freeze({ range: value.textEdit.range, text: value.textEdit.text }) } : {}),
-		...(value.additionalTextEdits ? { additionalTextEdits: Object.freeze([...value.additionalTextEdits]) } : {}),
-	});
+		...(value.textEdit ? { textEdit: { range: value.textEdit.range, text: value.textEdit.text } } : {}),
+		...(value.additionalTextEdits ? { additionalTextEdits: [...value.additionalTextEdits] } : {}),
+	};
+}
+
+function assertColor(value: IColor): void {
+	for (const component of [value?.red, value?.green, value?.blue, value?.alpha]) {
+		if (!Number.isFinite(component) || component < 0 || component > 1) throw new TypeError('Language color provider must return color components in the range [0, 1]');
+	}
+}
+
+function normalizedColor(red: number, green: number, blue: number, alpha: number): IColor {
+	return Object.freeze({ red, green, blue, alpha });
 }
 
 function rounded(value: number, digits: number): number {

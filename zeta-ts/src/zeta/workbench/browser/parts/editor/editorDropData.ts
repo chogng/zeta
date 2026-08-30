@@ -1,17 +1,18 @@
 import { containsDragType, DataTransfers } from "../../../../base/browser/dnd.js";
+import { Mimes } from "../../../../base/common/mime.js";
 import { URI } from "../../../../base/common/uri.js";
 import { createUuid } from "../../../../base/common/uuid.js";
-import type { ISandboxGlobals } from "../../../../base/parts/sandbox/common/sandboxTypes.js";
+import { getPathForFile } from "../../../../platform/dnd/browser/dnd.js";
 import type { EditorInput } from "./editorInput.js";
 
 /** Returns whether a native drag exposes resources the editor can open. */
 export function containsExternalEditorDrop(event: DragEvent): boolean {
-	return containsDragType(event, DataTransfers.UriList) || containsDragType(event, DataTransfers.Files);
+	return containsDragType(event, Mimes.uriList) || containsDragType(event, DataTransfers.FILES);
 }
 
 /** Converts native URI and file transfers into frontend-owned editor inputs. */
 export async function extractExternalEditorInputs(dataTransfer: DataTransfer): Promise<readonly EditorInput[]> {
-	const uriList = dataTransfer.getData(DataTransfers.UriList);
+	const uriList = dataTransfer.getData(Mimes.uriList);
 	const files = [...dataTransfer.files];
 	const inputs: EditorInput[] = [];
 	const resources = new Set<string>();
@@ -24,7 +25,7 @@ export async function extractExternalEditorInputs(dataTransfer: DataTransfer): P
 		inputs.push({ resource });
 	}
 	for (const file of files) {
-		const nativePath = nativeFilePath(file);
+		const nativePath = getPathForFile(file);
 		const resource = typeof nativePath === "string" && nativePath.length > 0
 			? URI.file(nativePath)
 			: URI.parse(`untitled:/dropped/${createUuid()}/${encodeURIComponent(file.name || "Dropped file")}`);
@@ -38,13 +39,4 @@ export async function extractExternalEditorInputs(dataTransfer: DataTransfer): P
 		});
 	}
 	return inputs;
-}
-
-function nativeFilePath(file: File): string | undefined {
-	const legacyPath = (file as File & { readonly path?: unknown }).path;
-	if (typeof legacyPath === "string" && legacyPath.length > 0) return legacyPath;
-	const globals = (globalThis as typeof globalThis & { readonly zeta?: ISandboxGlobals }).zeta;
-	if (!globals?.webUtils) return undefined;
-	const path = globals.webUtils.getPathForFile(file);
-	return path.length > 0 ? path : undefined;
 }

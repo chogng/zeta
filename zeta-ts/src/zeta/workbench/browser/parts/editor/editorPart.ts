@@ -39,7 +39,7 @@ import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 import type { IBulkEditService } from "../../../contrib/bulkEdit/common/bulkEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorations.js";
+import type { OwnedDecorationSource } from "../../../../editor/browser/viewParts/decorations/decorations.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";

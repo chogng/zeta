@@ -3,7 +3,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { CursorMoveCommands } from '../../../common/cursor/cursorMoveCommands.js';
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 export interface MultiCursorControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -15,7 +15,7 @@ export class MultiCursorController extends Disposable {
 
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		options: MultiCursorControllerOptions = {},
 	) {

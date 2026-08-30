@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view.js");
+const { View } = await import("../../../../browser/view.js");
 const { LineJoinController, isStanzaJoinLinesChord } = await import("../../browser/lineJoinController.js");
 
 test("Join-lines shortcut runs locally and leaves unrelated chords alone", () => {
@@ -31,7 +31,7 @@ test("Join-lines shortcut runs locally and leaves unrelated chords alone", () =>
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("first\n  second");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
@@ -53,7 +53,7 @@ test("Join-lines uses Command+J on macOS", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("first\nsecond");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
 	using controller = new LineJoinController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });

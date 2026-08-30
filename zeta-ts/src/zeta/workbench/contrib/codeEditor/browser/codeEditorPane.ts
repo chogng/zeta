@@ -15,7 +15,7 @@ import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
 import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
-import { EditorBrowser, isEditorTextViewState, type EditorBrowserOptions, type EditorTextViewState } from "../../../../editor/browser/editorBrowser.js";
+import { ConfiguredCodeEditor, isEditorTextViewState, type ConfiguredCodeEditorOptions, type EditorTextViewState } from '../../../../editor/browser/configuredCodeEditor.js';
 import { type ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
@@ -24,7 +24,7 @@ import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorations.js";
+import { type OwnedDecorationSource } from "../../../../editor/browser/viewParts/decorations/decorations.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import type { CursorsController } from "../../../../editor/common/cursor/cursor.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
@@ -43,13 +43,13 @@ export interface EditorPanePart extends IDisposable {
 	prepareSave?(): Promise<void>;
 }
 
-export interface EditorPanePartOptions extends EditorBrowserOptions {
+export interface EditorPanePartOptions extends ConfiguredCodeEditorOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
+	readonly instantiationService?: ConfiguredCodeEditorOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 }
 
@@ -62,7 +62,7 @@ export interface EditorPaneOptions {
 	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
+	readonly instantiationService?: ConfiguredCodeEditorOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: WrappingIndent;
@@ -70,44 +70,44 @@ export interface EditorPaneOptions {
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
-	readonly experimentalGpuAcceleration?: EditorBrowserOptions["experimentalGpuAcceleration"];
-	readonly minimap?: EditorBrowserOptions["minimap"];
-	readonly renderLineHighlight?: EditorBrowserOptions['renderLineHighlight'];
-	readonly renderLineHighlightOnlyWhenFocus?: EditorBrowserOptions['renderLineHighlightOnlyWhenFocus'];
-	readonly cursorStyle?: EditorBrowserOptions['cursorStyle'];
-	readonly cursorBlinking?: EditorBrowserOptions['cursorBlinking'];
-	readonly cursorSmoothCaretAnimation?: EditorBrowserOptions['cursorSmoothCaretAnimation'];
-	readonly cursorWidth?: EditorBrowserOptions['cursorWidth'];
-	readonly cursorHeight?: EditorBrowserOptions['cursorHeight'];
-	readonly lineNumbers?: EditorBrowserOptions['lineNumbers'];
-	readonly guides?: EditorBrowserOptions['guides'];
+	readonly experimentalGpuAcceleration?: ConfiguredCodeEditorOptions["experimentalGpuAcceleration"];
+	readonly minimap?: ConfiguredCodeEditorOptions["minimap"];
+	readonly renderLineHighlight?: ConfiguredCodeEditorOptions['renderLineHighlight'];
+	readonly renderLineHighlightOnlyWhenFocus?: ConfiguredCodeEditorOptions['renderLineHighlightOnlyWhenFocus'];
+	readonly cursorStyle?: ConfiguredCodeEditorOptions['cursorStyle'];
+	readonly cursorBlinking?: ConfiguredCodeEditorOptions['cursorBlinking'];
+	readonly cursorSmoothCaretAnimation?: ConfiguredCodeEditorOptions['cursorSmoothCaretAnimation'];
+	readonly cursorWidth?: ConfiguredCodeEditorOptions['cursorWidth'];
+	readonly cursorHeight?: ConfiguredCodeEditorOptions['cursorHeight'];
+	readonly lineNumbers?: ConfiguredCodeEditorOptions['lineNumbers'];
+	readonly guides?: ConfiguredCodeEditorOptions['guides'];
 	readonly bracketPairColorization?: boolean;
-	readonly matchBrackets?: EditorBrowserOptions["matchBrackets"];
+	readonly matchBrackets?: ConfiguredCodeEditorOptions["matchBrackets"];
 	readonly stickyScroll?: boolean;
-	readonly suggestions?: EditorBrowserOptions["suggestions"];
-	readonly inlineCompletions?: EditorBrowserOptions["inlineCompletions"];
+	readonly suggestions?: ConfiguredCodeEditorOptions["suggestions"];
+	readonly inlineCompletions?: ConfiguredCodeEditorOptions["inlineCompletions"];
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: boolean;
 	readonly codeLens?: boolean;
-	readonly colorDecorators?: EditorBrowserOptions["colorDecorators"];
-	readonly colorDecoratorsActivatedOn?: EditorBrowserOptions["colorDecoratorsActivatedOn"];
-	readonly colorDecoratorsLimit?: EditorBrowserOptions["colorDecoratorsLimit"];
-	readonly defaultColorDecorators?: EditorBrowserOptions["defaultColorDecorators"];
+	readonly colorDecorators?: ConfiguredCodeEditorOptions["colorDecorators"];
+	readonly colorDecoratorsActivatedOn?: ConfiguredCodeEditorOptions["colorDecoratorsActivatedOn"];
+	readonly colorDecoratorsLimit?: ConfiguredCodeEditorOptions["colorDecoratorsLimit"];
+	readonly defaultColorDecorators?: ConfiguredCodeEditorOptions["defaultColorDecorators"];
 	readonly formatOnSave?: boolean;
-	readonly find?: EditorBrowserOptions["find"];
-	readonly indentation?: EditorBrowserOptions["indentation"];
+	readonly find?: ConfiguredCodeEditorOptions["find"];
+	readonly indentation?: ConfiguredCodeEditorOptions["indentation"];
 	/** Browser paragraph direction forwarded to every created editor part. */
 	readonly textDirection?: EditorTextDirection;
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
-	readonly onShowContextMenu?: EditorBrowserOptions["onShowContextMenu"];
-	readonly onExecuteEditorCommand?: EditorBrowserOptions["onExecuteEditorCommand"];
+	readonly onShowContextMenu?: ConfiguredCodeEditorOptions["onShowContextMenu"];
+	readonly onExecuteEditorCommand?: ConfiguredCodeEditorOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly insertFinalNewLine?: boolean;
-	readonly fontZoom?: EditorBrowserOptions["fontZoom"];
+	readonly fontZoom?: ConfiguredCodeEditorOptions["fontZoom"];
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly onSaveError?: (error: unknown) => void;
 }
@@ -143,7 +143,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			throw new TypeError("Code editor pane requires a text model service");
 		}
 		this.modelService = options.modelService;
-		this.createPart = options.createPart ?? (partOptions => new EditorBrowser(partOptions));
+		this.createPart = options.createPart ?? (partOptions => new ConfiguredCodeEditor(partOptions));
 	}
 
 	create(parent: HTMLElement): void {
@@ -201,7 +201,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				stickyScroll: this.options.stickyScroll,
 				suggestions: this.options.suggestions,
 				inlineCompletions: this.options.inlineCompletions,
-				parameterHints: this.options.parameterHints,
+				parameterHints: this.options.parameterHints === undefined ? undefined : { enabled: this.options.parameterHints },
 				inlayHints: this.options.inlayHints,
 				codeLens: this.options.codeLens,
 				colorDecorators: this.options.colorDecorators,

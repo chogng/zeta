@@ -4,7 +4,7 @@ import { Range } from "../../../common/core/range.js";
 import { TextDecorationCollection, type TextDecorationId } from "../../../common/model/decorationCollection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/languageDocumentSymbols.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
 

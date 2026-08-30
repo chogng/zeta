@@ -2,7 +2,7 @@ import "./media/fontZoom.css";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 
 export interface FontZoomControllerOptions { readonly baseFontSize?: number; readonly baseLineHeight?: number; readonly initialScale?: number; }
 
@@ -12,7 +12,7 @@ export class FontZoomController extends Disposable {
 	private readonly baseFontSize: number;
 	private scale: number;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, options: FontZoomControllerOptions = {}) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, options: FontZoomControllerOptions = {}) {
 		super();
 		this.baseLineHeight = readPositive(options.baseLineHeight ?? viewport.viewportLayout.lineHeight, "baseLineHeight");
 		this.baseFontSize = readPositive(options.baseFontSize ?? readFontSize(viewport.element), "baseFontSize");

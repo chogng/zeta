@@ -1,17 +1,17 @@
 import "./media/peekView.css";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 import { ZoneWidget } from "../../zoneWidget/browser/zoneWidget.js";
 
 const DEFAULT_PEEK_HEIGHT_IN_LINES = 18;
 
 /** A preview surface anchored in reserved editor space. */
-export class PeekViewWidget extends ZoneWidget {
+export class EditorPeekViewWidget extends ZoneWidget {
 	private body: HTMLDivElement | undefined;
 
-	constructor(viewport: EditorViewport, private readonly initialPosition: Position, private readonly title = "Preview") {
+	constructor(viewport: View, private readonly initialPosition: Position, private readonly title = "Preview") {
 		viewport.textModel.offsetAt(initialPosition);
 		super({
 			viewport,

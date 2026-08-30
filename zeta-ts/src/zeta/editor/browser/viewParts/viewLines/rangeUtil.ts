@@ -14,13 +14,15 @@ export class RangeUtil {
 	 * because IE is buggy and constantly freezes when using a large number
 	 * of ranges and calling .detach on them
 	 */
-	private static _handyReadyRange: Range;
+	private static readonly _handyReadyRanges = new WeakMap<Document, Range>();
 
-	private static _createRange(): Range {
-		if (!this._handyReadyRange) {
-			this._handyReadyRange = document.createRange();
+	private static _createRange(ownerDocument: Document): Range {
+		let range = this._handyReadyRanges.get(ownerDocument);
+		if (!range) {
+			range = ownerDocument.createRange();
+			this._handyReadyRanges.set(ownerDocument, range);
 		}
-		return this._handyReadyRange;
+		return range;
 	}
 
 	private static _detachRange(range: Range, endNode: HTMLElement): void {
@@ -30,7 +32,7 @@ export class RangeUtil {
 	}
 
 	private static _readClientRects(startElement: Node, startOffset: number, endElement: Node, endOffset: number, endNode: HTMLElement): DOMRectList | null {
-		const range = this._createRange();
+		const range = this._createRange(endNode.ownerDocument);
 		try {
 			range.setStart(startElement, startOffset);
 			range.setEnd(endElement, endOffset);

@@ -44,6 +44,33 @@ export abstract class TextEdit {
 	}
 }
 
+/** A color in RGBA format. */
+export interface IColor {
+	readonly red: number;
+	readonly green: number;
+	readonly blue: number;
+	readonly alpha: number;
+}
+
+/** String representations for a color. */
+export interface IColorPresentation {
+	label: string;
+	textEdit?: TextEdit;
+	additionalTextEdits?: TextEdit[];
+}
+
+/** A color range in a text model. */
+export interface IColorInformation {
+	range: IRange;
+	color: IColor;
+}
+
+/** A provider of colors for editor models. */
+export interface DocumentColorProvider {
+	provideDocumentColors(model: model.ITextModel, token: CancellationToken): ProviderResult<IColorInformation[]>;
+	provideColorPresentations(model: model.ITextModel, colorInfo: IColorInformation, token: CancellationToken): ProviderResult<IColorPresentation[]>;
+}
+
 export enum DocumentHighlightKind {
 	Text,
 	Read,

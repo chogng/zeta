@@ -1,8 +1,8 @@
 import { Position } from "../../../common/core/position.js";
 import "./media/linkedEditing.css";
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
-import { type EditorView } from "../../../browser/view.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type EditorView } from '../../../browser/editorView.js';
+import { type View } from "../../../browser/view.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { extendEditorEditCommand } from "../../../common/commands/editorCommand.js";
@@ -23,7 +23,7 @@ export class LinkedEditingController extends Disposable {
 	private request: AbortController | undefined;
 	private wordPattern: RegExp | undefined;
 
-	constructor(private readonly view: EditorView, private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
+	constructor(private readonly view: EditorView, private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel || service.textModel !== selections.textModel) throw new TypeError("Stanza linked editing dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "l") return; stopEvent(event); void this.activate(); }, true));

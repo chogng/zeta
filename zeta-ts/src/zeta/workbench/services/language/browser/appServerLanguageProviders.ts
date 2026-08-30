@@ -22,7 +22,6 @@ import { type LanguageCodeLens, type LanguageCodeLensProvider, type LanguageCode
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js";
 import { type LanguageLink, type LanguageLinkProvider, type LanguageLinkRequest } from "../../../../editor/contrib/links/common/languageLinks.js";
 import { type LanguageColorProvider, type LanguageColorPresentationRequest, type LanguageColorRequest } from "../../../../editor/contrib/colorPicker/common/languageColors.js";
-import { RGBA8 } from "../../../../editor/common/core/misc/rgba.js";
 import { type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/languageFoldingRanges.js";
 import { LanguageDiagnosticSeverity } from "../../../../editor/common/languages/languageResults.js";
 import { type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from "../../../../../../generated/app-server/types.js";
@@ -349,17 +348,17 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		signal.throwIfAborted();
 		const result = await this.api.documentColors({ document }, { signal });
 		signal.throwIfAborted();
-		return result.revision === request.snapshot.version ? Object.freeze(result.colors.map(item => Object.freeze({ range: range(item.range), color: new RGBA8(item.color.red, item.color.green, item.color.blue, item.color.alpha) }))) : Object.freeze([]);
+		return result.revision === request.snapshot.version ? Object.freeze(result.colors.map(item => Object.freeze({ range: range(item.range), color: Object.freeze({ red: item.color.red / 255, green: item.color.green / 255, blue: item.color.blue / 255, alpha: item.color.alpha / 255 }) }))) : Object.freeze([]);
 	}
 
 	async provideColorPresentations(request: LanguageColorPresentationRequest, signal: AbortSignal) {
 		const document = this.documentForRequest(request);
 		if (!document) return Object.freeze([]);
 		signal.throwIfAborted();
-		const result = await this.api.colorPresentations({ document, range: dtoRange(request.range), color: { red: request.color.r, green: request.color.g, blue: request.color.b, alpha: request.color.a } }, { signal });
+		const result = await this.api.colorPresentations({ document, range: dtoRange(request.range), color: { red: Math.round(request.color.red * 255), green: Math.round(request.color.green * 255), blue: Math.round(request.color.blue * 255), alpha: Math.round(request.color.alpha * 255) } }, { signal });
 		signal.throwIfAborted();
 		if (result.revision !== request.snapshot.version) return Object.freeze([]);
-		return Object.freeze(result.presentations.map(item => Object.freeze({ label: item.label, ...(item.textEdit ? { textEdit: { range: range(item.textEdit.range), text: item.textEdit.newText } } : {}), ...(item.additionalTextEdits.length > 0 ? { additionalTextEdits: Object.freeze(item.additionalTextEdits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))) } : {}) })));
+		return Object.freeze(result.presentations.map(item => ({ label: item.label, ...(item.textEdit ? { textEdit: { range: range(item.textEdit.range), text: item.textEdit.newText } } : {}), ...(item.additionalTextEdits.length > 0 ? { additionalTextEdits: item.additionalTextEdits.map(edit => ({ range: range(edit.range), text: edit.newText })) } : {}) })));
 	}
 
 	async provideFoldingRanges(request: LanguageFoldingRangeRequest, signal: AbortSignal) {

@@ -10,10 +10,10 @@ import { type Position } from "../../../common/core/position.js";
 import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type IEditorAriaOptions } from '../../editorBrowser.js';
-import { type EditorViewport } from "../../view.js";
+import { type View } from "../../view.js";
 import { type EditorViewTextUpdateEvent, type ViewController } from "../../view/viewController.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewparts/viewLines/viewLine.js';
-import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
+import { createEditorClipboardCopyEvent, createClipboardPasteEvent, type IEditorClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
 
 /** The state that the browser editing surface mirrors from the common editor. */
 export interface EditContextState {
@@ -73,7 +73,7 @@ export interface EditContextOptions {
 		modelOffset: number,
 	) => EditContextCharacterBounds | undefined;
 	readonly viewController: ViewController;
-	readonly viewport: EditorViewport;
+	readonly viewport: View;
 	readonly selectionController: CursorsController;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly renderRichScreenReaderContent?: boolean;
@@ -101,8 +101,8 @@ export interface EditContextPosition {
 export abstract class AbstractEditContext extends Disposable {
 	abstract readonly domNode: HTMLElement;
 	abstract readonly textArea: HTMLTextAreaElement | undefined;
-	private readonly willCopyEmitter = this._register(new Emitter<IClipboardCopyEvent>());
-	private readonly willCutEmitter = this._register(new Emitter<IClipboardCopyEvent>());
+	private readonly willCopyEmitter = this._register(new Emitter<IEditorClipboardCopyEvent>());
+	private readonly willCutEmitter = this._register(new Emitter<IEditorClipboardCopyEvent>());
 	private readonly willPasteEmitter = this._register(new Emitter<IClipboardPasteEvent>());
 	private readonly willBeforeInputEmitter = this._register(new Emitter<InputEvent>());
 	private readonly willTextUpdateEmitter = this._register(new Emitter<EditorViewTextUpdateEvent>());
@@ -125,8 +125,8 @@ export abstract class AbstractEditContext extends Disposable {
 	abstract readonly onDidCompositionUpdate: EditorEvent<EditContextCompositionEvent>;
 	abstract readonly onDidCompositionEnd: EditorEvent<EditContextCompositionEvent>;
 	/** Clipboard events are emitted before the editor's clipboard contribution handles them. */
-	readonly onWillCopy: EditorEvent<IClipboardCopyEvent> = this.willCopyEmitter.event;
-	readonly onWillCut: EditorEvent<IClipboardCopyEvent> = this.willCutEmitter.event;
+	readonly onWillCopy: EditorEvent<IEditorClipboardCopyEvent> = this.willCopyEmitter.event;
+	readonly onWillCut: EditorEvent<IEditorClipboardCopyEvent> = this.willCutEmitter.event;
 	readonly onWillPaste: EditorEvent<IClipboardPasteEvent> = this.willPasteEmitter.event;
 
 	abstract get readOnly(): boolean;
@@ -172,7 +172,7 @@ export abstract class AbstractEditContext extends Disposable {
 	}
 
 	protected fireWillCopy(browserEvent: ClipboardEvent, isCut: boolean): void {
-		const event = createClipboardCopyEvent(browserEvent, isCut);
+		const event = createEditorClipboardCopyEvent(browserEvent, isCut);
 		(isCut ? this.willCutEmitter : this.willCopyEmitter).fire(event);
 	}
 
@@ -342,7 +342,7 @@ export class CompositionController extends Disposable {
 
 	constructor(
 		input: AbstractEditContext,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 	) {
 		super();

@@ -1,6 +1,6 @@
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
-import { DecorationPresentation, createStanzaDecorationSource, type DecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, createStanzaDecorationSource, type DecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
 
 /**
  * Creates Stanza's underline projection for caller-owned language diagnostics.

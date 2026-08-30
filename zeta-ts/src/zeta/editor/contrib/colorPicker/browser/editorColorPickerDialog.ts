@@ -1,16 +1,16 @@
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { RGBA8 } from '../../../common/core/misc/rgba.js';
+import { Color, RGBA } from '../../../../base/common/color.js';
 import { type ColorPickerModel } from './colorPickerModel.js';
 
-export interface ColorPickerWidgetPosition {
+export interface EditorColorPickerDialogPosition {
 	readonly left: number;
 	readonly top: number;
 }
 
 /** Owns the retained color controls and projects one replaceable ColorPickerModel. */
-export class ColorPickerWidget extends Disposable {
+export class EditorColorPickerDialog extends Disposable {
 	readonly domNode: HTMLDivElement;
 	private readonly preview: HTMLDivElement;
 	private readonly presentationSelect: HTMLSelectElement;
@@ -23,7 +23,7 @@ export class ColorPickerWidget extends Disposable {
 	private model: ColorPickerModel | undefined;
 	private updating = false;
 
-	constructor(host: HTMLElement, private readonly onColorChange: (color: RGBA8) => void, private readonly onApply: () => void, private readonly onCancel: () => void) {
+	constructor(host: HTMLElement, private readonly onColorChange: (color: Color) => void, private readonly onApply: () => void, private readonly onCancel: () => void) {
 		super();
 		const ownerDocument = host.ownerDocument;
 		this.preview = h(ownerDocument, 'div', {
@@ -71,7 +71,7 @@ export class ColorPickerWidget extends Disposable {
 		for (const input of [this.hueInput, this.saturationInput, this.lightnessInput, this.alphaInput]) {
 			this._register(addDisposableListener(input, 'input', () => this.handleColorInput()));
 		}
-		this._register(addDisposableListener(this.presentationSelect, 'change', () => this.model?.selectPresentation(this.presentationSelect.selectedIndex)));
+		this._register(addDisposableListener(this.presentationSelect, 'change', () => this.selectPresentation(this.presentationSelect.selectedIndex)));
 		this._register(addDisposableListener(closeButton, 'click', () => this.onCancel()));
 		this._register(addDisposableListener(cancelButton, 'click', () => this.onCancel()));
 		this._register(addDisposableListener(this.applyButton, 'click', () => this.onApply()));
@@ -87,12 +87,14 @@ export class ColorPickerWidget extends Disposable {
 		return !this.domNode.hidden;
 	}
 
-	show(model: ColorPickerModel, position: ColorPickerWidgetPosition, focus: boolean): void {
+	show(model: ColorPickerModel, position: EditorColorPickerDialogPosition, focus: boolean): void {
 		this.modelListeners.clear();
 		this.model = model;
 		this.modelListeners.add(model.onDidChangeColor(color => this.renderColor(color)));
-		this.modelListeners.add(model.onDidChangePresentations(() => this.renderPresentations()));
-		this.modelListeners.add(model.onDidChangeSelectedPresentation(() => this.renderSelectedPresentation()));
+		this.modelListeners.add(model.onDidChangePresentation(() => {
+			this.renderPresentations();
+			this.renderSelectedPresentation();
+		}));
 		this.renderColor(model.color);
 		this.renderPresentations();
 		this.domNode.style.left = `${position.left}px`;
@@ -115,22 +117,30 @@ export class ColorPickerWidget extends Disposable {
 			Number(this.lightnessInput.value) / 100,
 			Number(this.alphaInput.value),
 		);
-		this.model.setColor(color);
+		this.model.color = color;
 		this.onColorChange(color);
 	}
 
-	private renderColor(color: RGBA8): void {
+	private renderColor(color: Color): void {
 		const [hue, saturation, lightness] = rgbToHsl(color);
 		this.updating = true;
 		this.hueInput.value = String(hue);
 		this.saturationInput.value = String(saturation);
 		this.lightnessInput.value = String(lightness);
-		this.alphaInput.value = String(color.a);
+		this.alphaInput.value = String(Math.round(color.rgba.a * 255));
 		this.updating = false;
 		const value = colorToHex8(color);
 		this.preview.style.setProperty('--stanza-editor-color-picker-value', value);
 		this.saturationInput.style.setProperty('--stanza-editor-color-picker-hue', colorToHex8(hslToRgb(hue, 1, 0.5, 255)));
-		this.alphaInput.style.setProperty('--stanza-editor-color-picker-opaque', colorToHex8(new RGBA8(color.r, color.g, color.b, 255)));
+		this.alphaInput.style.setProperty('--stanza-editor-color-picker-opaque', colorToHex8(new Color(new RGBA(color.rgba.r, color.rgba.g, color.rgba.b, 1))));
+	}
+
+	private selectPresentation(index: number): void {
+		if (!this.model || index < 0 || index >= this.model.colorPresentations.length) return;
+		let remaining = this.model.colorPresentations.length;
+		while (remaining-- > 0 && this.model.presentation !== this.model.colorPresentations[index]) {
+			this.model.selectNextColorPresentation();
+		}
 	}
 
 	private renderPresentations(): void {
@@ -141,7 +151,7 @@ export class ColorPickerWidget extends Disposable {
 	}
 
 	private renderSelectedPresentation(): void {
-		const selected = this.model?.selectedPresentation;
+		const selected = this.model?.colorPresentations.length ? this.model.presentation : undefined;
 		if (!selected) return;
 		const index = this.model!.colorPresentations.indexOf(selected);
 		if (index >= 0) this.presentationSelect.selectedIndex = index;
@@ -164,10 +174,10 @@ function colorControl(ownerDocument: Document, label: string, input: HTMLInputEl
 	return h(ownerDocument, 'label', { className: 'stanza-editor-color-picker-control' }, h(ownerDocument, 'span', {}, label), input);
 }
 
-function rgbToHsl(color: RGBA8): readonly [number, number, number] {
-	const red = color.r / 255;
-	const green = color.g / 255;
-	const blue = color.b / 255;
+function rgbToHsl(color: Color): readonly [number, number, number] {
+	const red = color.rgba.r / 255;
+	const green = color.rgba.g / 255;
+	const blue = color.rgba.b / 255;
 	const maximum = Math.max(red, green, blue);
 	const minimum = Math.min(red, green, blue);
 	const delta = maximum - minimum;
@@ -182,7 +192,7 @@ function rgbToHsl(color: RGBA8): readonly [number, number, number] {
 	return Object.freeze([Math.round((hue + 360) % 360), Math.round(saturation * 100), Math.round(lightness * 100)]);
 }
 
-function hslToRgb(hue: number, saturation: number, lightness: number, alpha: number): RGBA8 {
+function hslToRgb(hue: number, saturation: number, lightness: number, alpha: number): Color {
 	const normalizedHue = (hue % 360 + 360) % 360;
 	const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
 	const section = normalizedHue / 60;
@@ -194,14 +204,14 @@ function hslToRgb(hue: number, saturation: number, lightness: number, alpha: num
 					: section < 5 ? [secondary, 0, chroma]
 						: [chroma, 0, secondary];
 	const match = lightness - chroma / 2;
-	return new RGBA8(
+	return new Color(new RGBA(
 		Math.round((red + match) * 255),
 		Math.round((green + match) * 255),
 		Math.round((blue + match) * 255),
-		alpha,
-	);
+		alpha / 255,
+	));
 }
 
-function colorToHex8(color: RGBA8): string {
-	return `#${[color.r, color.g, color.b, color.a].map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+function colorToHex8(color: Color): string {
+	return Color.Format.CSS.formatHexA(color);
 }

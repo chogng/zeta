@@ -10,13 +10,13 @@ import type { IResolvedSemanticTokensService } from '../common/services/resolved
 import { type DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
-import { type EditorBrowserOptions } from "./editorBrowser.js";
-import { type EditorView } from "./view.js";
-import { type EditorViewport } from "./view.js";
-import { type DecorationSource } from "./viewparts/decorations/decorations.js";
+import { type ConfiguredCodeEditorOptions } from './configuredCodeEditor.js';
+import { type EditorView } from './editorView.js';
+import { type View } from "./view.js";
+import { type DecorationSource } from "./viewParts/decorations/decorations.js";
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/viewLine.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "./viewParts/viewLines/viewLine.js";
 import { type TabFocus } from "./config/tabFocus.js";
 import { type IVersionedEditorWorkerClient } from "./services/versionedEditorWorkerClient.js";
 import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
@@ -41,7 +41,7 @@ export interface EditorCapability<T> {
 /** Pre-widget assembly seam for extensions that supply model projection inputs. */
 export interface TextEditorContributionConfigurationContext {
 	readonly kind: "text";
-	readonly options: EditorBrowserOptions;
+	readonly options: ConfiguredCodeEditorOptions;
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
@@ -64,14 +64,14 @@ export interface TextEditorContributionConfigurationContext {
 
 export interface TextEditorContributionContext {
 	readonly kind: "text";
-	readonly options: EditorBrowserOptions;
+	readonly options: ConfiguredCodeEditorOptions;
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: LanguageConfigurationSource;
 	readonly view: EditorView;
-	readonly viewport: EditorViewport;
+	readonly viewport: View;
 	readonly selections: CursorsController;
 	readonly tabFocus: TabFocus;
 	readonly onLanguageError: (error: unknown) => void;

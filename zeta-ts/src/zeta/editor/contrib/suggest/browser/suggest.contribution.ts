@@ -1,4 +1,4 @@
-import type { EditorResourceInput } from "../../../browser/editorBrowser.js";
+import type { EditorResourceInput } from '../../../browser/editorInput.js';
 import { registerTextEditorCapabilityContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { isCompletionsEnablementEnabled } from "../../../common/services/ownedCompletionsEnablement.js";

@@ -6,7 +6,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from '../../../../editor/browser/controller/semanticMouseTarget.js';
 import { type TextEditorContributionContext } from '../../../../editor/browser/editorExtensions.js';
-import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../../editor/browser/viewparts/decorations/decorations.js';
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../../editor/browser/viewParts/decorations/decorations.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';

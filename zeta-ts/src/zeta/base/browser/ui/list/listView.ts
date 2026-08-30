@@ -2,6 +2,7 @@ import { addDisposableListener, isNode, h } from "../../dom.js";
 import { DataTransfers } from "../../dnd.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
+import { Mimes } from '../../../common/mime.js';
 import { isFiniteNumber } from "../../../common/numbers.js";
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
@@ -192,9 +193,9 @@ class ListViewDragAndDrop<T> extends Disposable {
 		this.sourceRow?.classList.add(DndCssClasses.Dragging);
 		if (event.dataTransfer) {
 			event.dataTransfer.effectAllowed = "copyMove";
-			event.dataTransfer.setData(DataTransfers.UriList, uri);
+			event.dataTransfer.setData(Mimes.uriList, uri);
 			const label = this.dnd.getDragLabel?.(elements, event);
-			if (label) event.dataTransfer.setData(DataTransfers.Text, label);
+			if (label) event.dataTransfer.setData(DataTransfers.TEXT, label);
 			data.update(event.dataTransfer);
 		}
 		this.dnd.onDragStart?.(data, event);

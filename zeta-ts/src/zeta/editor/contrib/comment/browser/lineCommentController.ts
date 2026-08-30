@@ -3,7 +3,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { createToggleLineCommentCommand } from "../common/lineCommentCommands.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 
@@ -20,7 +20,7 @@ export interface LineCommentControllerOptions {
 export class LineCommentController extends Disposable {
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly options: LineCommentControllerOptions,
 		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),

@@ -2,10 +2,10 @@ import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type TextModel } from '../../common/model/textModel.js';
-import { type BracketColorizationSource, type SemanticTokenSource } from '../viewparts/viewLines/viewLine.js';
-import { type TextureAtlas } from './atlas/textureAtlas.js';
-import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
-import { type ViewLineTextDirection } from '../viewparts/viewLines/viewLineOptions.js';
+import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
+import { type StyledTextureAtlas } from './atlas/styledTextureAtlas.js';
+import { type StyledGlyphRasterizer } from './raster/styledGlyphRasterizer.js';
+import { type EditorTextDirection } from '../viewParts/viewLines/viewLineOptions.js';
 
 export interface GpuRenderStrategyInput {
 	readonly layout: EditorViewportLayout;
@@ -16,10 +16,10 @@ export interface GpuRenderStrategyInput {
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly textLeft: number;
 	readonly paddingTop: number;
-	readonly textDirection: ViewLineTextDirection;
+	readonly textDirection: EditorTextDirection;
 	readonly fontLigatures: boolean;
 	readonly rootStyle: CSSStyleDeclaration;
-	readonly atlas: TextureAtlas;
+	readonly atlas: StyledTextureAtlas;
 }
 
 export interface GpuRenderFrame {
@@ -31,7 +31,7 @@ export interface IGpuFrameRenderStrategy extends IDisposable {
 	readonly type: string;
 	readonly wgsl: string;
 	readonly bindGroupEntries: readonly GPUBindGroupEntry[];
-	readonly glyphRasterizer: GlyphRasterizer;
+	readonly glyphRasterizer: StyledGlyphRasterizer;
 	reset(): void;
 	update(input: GpuRenderStrategyInput): GpuRenderFrame;
 	draw(pass: GPURenderPassEncoder, frame: GpuRenderFrame): void;

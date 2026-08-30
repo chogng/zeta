@@ -3,7 +3,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { createJoinLinesCommand } from "../common/lineJoin.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type EditorViewport } from "../../../browser/view.js";
+import { type View } from "../../../browser/view.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 
 export const JoinLinesCommandId = 'editor.action.joinLines';
@@ -17,7 +17,7 @@ export interface LineJoinControllerOptions {
 export class LineJoinController extends Disposable {
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		options: LineJoinControllerOptions = {},
 	) {

@@ -3,8 +3,8 @@ import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.j
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
-import { type EditorViewport } from '../../../browser/view.js';
-import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
+import { type View } from '../../../browser/view.js';
+import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Selection } from '../../../common/core/selection.js';
 import { SelectionSet } from '../../../common/cursor/selectionSet.js';
@@ -24,7 +24,7 @@ export class SelectionAnchorController extends Disposable {
 
 	constructor(
 		input: HTMLElement,
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<void>,
 	) {

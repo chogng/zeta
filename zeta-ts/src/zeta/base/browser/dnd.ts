@@ -1,10 +1,13 @@
 import { Disposable } from "../common/lifecycle.js";
+import { Mimes } from "../common/mime.js";
 import { addDisposableListener } from "./dom.js";
 
 export const DataTransfers = {
-	Text: "text/plain",
-	UriList: "text/uri-list",
-	Files: "Files",
+	RESOURCES: "ResourceURLs",
+	DOWNLOAD_URL: "DownloadURL",
+	FILES: "Files",
+	TEXT: Mimes.text,
+	INTERNAL_URI_LIST: "application/vnd.code.uri-list",
 } as const;
 
 export interface DragAndDropObserverCallbacks {

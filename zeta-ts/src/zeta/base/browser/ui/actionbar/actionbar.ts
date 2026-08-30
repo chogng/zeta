@@ -218,7 +218,7 @@ export class ActionBar extends Disposable {
 			container.draggable = true;
 			container.classList.add(DndCssClasses.Draggable);
 			store.add(addDisposableListener(container, "dragstart", (event: DragEvent) => {
-				event.dataTransfer?.setData(DataTransfers.Text, action.label);
+				event.dataTransfer?.setData(DataTransfers.TEXT, action.label);
 			}));
 		}
 		if (this.dragAndDrop) {

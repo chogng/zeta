@@ -4,7 +4,7 @@ import { Position } from "../position.js";
 import { Range } from "../range.js";
 import { splitLines } from '../../../../base/common/strings.js';
 import { PositionOffsetTransformer } from "./positionToOffsetImpl.js";
-import { TextLength } from "./textLength.js";
+import { TextLength } from '../text/textLength.js';
 
 /** A DOM-free text value that can expose slices in editor coordinates. */
 export abstract class AbstractText {

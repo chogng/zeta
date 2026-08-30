@@ -23,7 +23,7 @@ import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '
 import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
-import { type EditorViewport } from '../view.js';
+import { type View } from '../view.js';
 import { type EditContextTextUpdate } from '../controller/editContext/editContext.js';
 import { ViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
 
@@ -87,7 +87,7 @@ export class ViewController extends Disposable {
 	readonly onDidEdit: Event<EditorViewDidEditEvent> = this.didEditEmitter.event;
 
 	constructor(
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		options: ViewControllerOptions = {},
 	) {
@@ -357,7 +357,7 @@ export class KeyboardNavigationController extends Disposable {
 	private applyingNavigation = false;
 
 	constructor(
-		private readonly viewport: EditorViewport,
+		private readonly viewport: View,
 		private readonly selectionController: CursorsController,
 		userInputEvents: ViewUserInputEvents,
 		options: KeyboardNavigationControllerOptions = {},
