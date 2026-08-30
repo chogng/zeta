@@ -38,16 +38,14 @@ use crate::{
     WorkbenchTab, WorkbenchTabGroup, mounted_tab_element_id, pane_group_element_id,
     tab_input_element_id, workbench_tab_groups,
 };
+use zeta_files::FILE_SEARCH_INPUT;
 use zeta_files::FilesLayout;
 use zeta_files::FilesPane;
 use zeta_files::FilesState;
 use zeta_files::FilesToolbar;
-use zeta_files::{
-    DIRECTORY_SEARCH_INPUT, DirectoryPicker, DirectoryPickerState, FILE_SEARCH_INPUT,
-};
 use zeta_scm::EditorPane;
 use zeta_scm::ScmState;
-use zeta_scm::{GIT_BRANCH_SEARCH_INPUT, GitBranchContextMenu, GitBranchContextMenuState};
+use zeta_scm::{GIT_BRANCH_SEARCH_INPUT, GitBranchPicker, GitBranchPickerState};
 use zeta_session::SessionPaneContext;
 use zeta_session::SessionPaneLayout;
 use zeta_session::SessionPaneState;
@@ -55,6 +53,10 @@ use zeta_session::SessionPaneView;
 use zeta_session::draw_session_pane;
 use zeta_terminal_runtime::TerminalSelectionRange;
 use zeta_ui_theme::UiTheme;
+
+use crate::directory_picker::DIRECTORY_SEARCH_INPUT;
+use crate::directory_picker::DirectoryPicker;
+use crate::directory_picker::DirectoryPickerState;
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
 use crate::InspectorLayoutSpec;
@@ -247,8 +249,8 @@ pub fn inspector_resize_snapshot_for_viewport(
 pub struct WorkbenchPresentation {
     pub frame: UiFrame<InteractionFrame>,
     pub ime_cursor_area: Option<Rect>,
-    pub path_picker_scroll_metrics: Option<ScrollMetrics>,
-    pub path_picker_item_viewport: Option<Rect>,
+    pub directory_picker_scroll_metrics: Option<ScrollMetrics>,
+    pub directory_picker_item_viewport: Option<Rect>,
     pub remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
     pub remote_connection_picker_item_viewport: Option<Rect>,
     pub remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
@@ -291,8 +293,8 @@ struct WorkbenchBaseCheckpoint {
 
 struct WorkbenchOverlayPresentation {
     ime_cursor_area: Option<Rect>,
-    path_picker_scroll_metrics: Option<ScrollMetrics>,
-    path_picker_item_viewport: Option<Rect>,
+    directory_picker_scroll_metrics: Option<ScrollMetrics>,
+    directory_picker_item_viewport: Option<Rect>,
     remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
     remote_connection_picker_item_viewport: Option<Rect>,
     remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
@@ -344,8 +346,8 @@ pub struct WorkbenchPresentationModel<'a> {
     pub files: &'a FilesState,
     pub scm: &'a ScmState,
     pub tab_context_menu: TabContextMenuState,
-    pub git_branch_context_menu: &'a GitBranchContextMenuState,
-    pub path_picker: &'a DirectoryPickerState,
+    pub git_branch_picker: &'a GitBranchPickerState,
+    pub directory_picker: &'a DirectoryPickerState,
     pub remote_connection_picker: &'a RemoteConnectionPickerState,
     pub remote_connection_manager: &'a RemoteConnectionManagerState,
     pub remote_tunnel_manager: &'a RemoteTunnelManagerState,
@@ -482,8 +484,8 @@ fn build_workbench_presentation_with_bindings(
         return WorkbenchPresentation {
             frame,
             ime_cursor_area: None,
-            path_picker_scroll_metrics: None,
-            path_picker_item_viewport: None,
+            directory_picker_scroll_metrics: None,
+            directory_picker_item_viewport: None,
             remote_connection_picker_scroll_metrics: None,
             remote_connection_picker_item_viewport: None,
             remote_connection_manager_scroll_metrics: None,
@@ -690,8 +692,8 @@ fn build_workbench_presentation_with_bindings(
     WorkbenchPresentation {
         frame,
         ime_cursor_area: overlay.ime_cursor_area,
-        path_picker_scroll_metrics: overlay.path_picker_scroll_metrics,
-        path_picker_item_viewport: overlay.path_picker_item_viewport,
+        directory_picker_scroll_metrics: overlay.directory_picker_scroll_metrics,
+        directory_picker_item_viewport: overlay.directory_picker_item_viewport,
         remote_connection_picker_scroll_metrics: overlay.remote_connection_picker_scroll_metrics,
         remote_connection_picker_item_viewport: overlay.remote_connection_picker_item_viewport,
         remote_connection_manager_scroll_metrics: overlay
@@ -728,8 +730,8 @@ pub fn rebuild_workbench_overlays(
         base.ime_cursor_area,
     );
     presentation.ime_cursor_area = overlay.ime_cursor_area;
-    presentation.path_picker_scroll_metrics = overlay.path_picker_scroll_metrics;
-    presentation.path_picker_item_viewport = overlay.path_picker_item_viewport;
+    presentation.directory_picker_scroll_metrics = overlay.directory_picker_scroll_metrics;
+    presentation.directory_picker_item_viewport = overlay.directory_picker_item_viewport;
     presentation.remote_connection_picker_scroll_metrics =
         overlay.remote_connection_picker_scroll_metrics;
     presentation.remote_connection_picker_item_viewport =
@@ -754,8 +756,8 @@ fn draw_workbench_overlays(
     mut ime_cursor_area: Option<Rect>,
 ) -> WorkbenchOverlayPresentation {
     let palette = model.palette;
-    let mut path_picker_scroll_metrics = None;
-    let mut path_picker_item_viewport = None;
+    let mut directory_picker_scroll_metrics = None;
+    let mut directory_picker_item_viewport = None;
     let mut remote_connection_picker_scroll_metrics = None;
     let mut remote_connection_picker_item_viewport = None;
     let mut remote_connection_manager_scroll_metrics = None;
@@ -774,20 +776,20 @@ fn draw_workbench_overlays(
     ) {
         frame.draw_component(&context_menu);
     }
-    if let Some(path_picker) = DirectoryPicker::new(
+    if let Some(directory_picker) = DirectoryPicker::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
-        model.path_picker,
+        model.directory_picker,
         model.caret_visibility,
         palette,
         text_layout,
         model.dispatch,
     ) {
-        path_picker_scroll_metrics = path_picker.scroll_metrics();
-        path_picker_item_viewport = Some(path_picker.item_viewport_bounds());
+        directory_picker_scroll_metrics = directory_picker.scroll_metrics();
+        directory_picker_item_viewport = Some(directory_picker.item_viewport_bounds());
         if model.dispatch.is_focused(DIRECTORY_SEARCH_INPUT) {
-            ime_cursor_area = path_picker.search_caret_bounds();
+            ime_cursor_area = directory_picker.search_caret_bounds();
         }
-        frame.draw_component(&path_picker);
+        frame.draw_component(&directory_picker);
     }
     if let Some(connection_picker) = RemoteConnectionPicker::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
@@ -843,18 +845,18 @@ fn draw_workbench_overlays(
         }
         frame.draw_component(&tunnel_manager);
     }
-    if let Some(branch_menu) = GitBranchContextMenu::new(
+    if let Some(branch_picker) = GitBranchPicker::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
-        model.git_branch_context_menu,
+        model.git_branch_picker,
         model.caret_visibility,
         palette,
         text_layout,
         model.dispatch,
     ) {
         if model.dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT) {
-            ime_cursor_area = branch_menu.search_caret_bounds();
+            ime_cursor_area = branch_picker.search_caret_bounds();
         }
-        frame.draw_component(&branch_menu);
+        frame.draw_component(&branch_picker);
     }
     let viewport_bounds = Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height);
     if let Some((keybinding, entered)) = model.keybindings.pending_keybinding() {
@@ -896,8 +898,8 @@ fn draw_workbench_overlays(
     }
     WorkbenchOverlayPresentation {
         ime_cursor_area,
-        path_picker_scroll_metrics,
-        path_picker_item_viewport,
+        directory_picker_scroll_metrics,
+        directory_picker_item_viewport,
         remote_connection_picker_scroll_metrics,
         remote_connection_picker_item_viewport,
         remote_connection_manager_scroll_metrics,

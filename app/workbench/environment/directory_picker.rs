@@ -1,44 +1,54 @@
 use std::path::{Path, PathBuf};
 
-use zeta_ui_components::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, ContextViewAnchorPosition, ContextViewPlacement,
-    Dropdown, DropdownItem, DropdownScrollConfiguration, DropdownSelection, DropdownStyle,
-    InputBoxState, InteractionRegion, ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState,
-    SearchBox,
-};
-use zui::ui::{
-    AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
-    NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
-};
-use zui::ui::{
-    CaretVisibility, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii,
-    Edges, Element, Rect, Size, TextInput, TextInputCommand, TextInputCompositionEvent,
-    TextInputLayoutEngine, TextStyle, UiScene,
-};
-
-use crate::display_working_directory;
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonStyle;
+use zeta_ui_components::Picker;
+use zeta_ui_components::PickerIds;
+use zeta_ui_components::PickerItem;
+use zeta_ui_components::PickerStyle;
+use zeta_ui_components::ScrollAxis;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollMetrics;
+use zeta_ui_components::ScrollState;
 use zeta_ui_theme::UiTheme;
+use zui::ui::CaretVisibility;
+use zui::ui::Color;
+use zui::ui::Component;
+use zui::ui::ComponentContext;
+use zui::ui::ComponentElement;
+use zui::ui::ComputedElement;
+use zui::ui::CornerRadii;
+use zui::ui::Edges;
+use zui::ui::ElementId;
+use zui::ui::Rect;
+use zui::ui::Size;
+use zui::ui::TextInput;
+use zui::ui::TextInputCommand;
+use zui::ui::TextInputCompositionEvent;
+use zui::ui::TextInputLayoutEngine;
+use zui::ui::TextStyle;
+use zui::ui::UiDispatch;
+use zui::ui::UiNode;
+use zui::ui::UiScene;
+
+use crate::environment_context::display_working_directory;
 
 const WINDOW: ElementId = ElementId::scoped(1, 1);
 
-#[path = "dir_picker_path.rs"]
+#[path = "directory_picker_path.rs"]
 mod path_support;
 use path_support::{
     canonical_directory, directory_name, home_directory, read_child_directories,
     resolve_directory_query,
 };
 
-const PATH_PICKER_SCOPE: u32 = 2;
-const DIRECTORY_PICKER: ElementId = ElementId::scoped(PATH_PICKER_SCOPE, 1);
-pub const DIRECTORY_SEARCH_INPUT: ElementId = ElementId::scoped(PATH_PICKER_SCOPE, 2);
+const DIRECTORY_PICKER_SCOPE: u32 = 2;
+const DIRECTORY_PICKER: ElementId = ElementId::scoped(DIRECTORY_PICKER_SCOPE, 1);
+pub const DIRECTORY_SEARCH_INPUT: ElementId = ElementId::scoped(DIRECTORY_PICKER_SCOPE, 2);
 const FIRST_DIRECTORY_ITEM: u32 = 3;
 const PICKER_VISIBLE_ITEM_COUNT: usize = 8;
 const PICKER_CONTENT_WIDTH: f32 = 320.0;
 pub const PICKER_ITEM_HEIGHT: f32 = 30.0;
-const PICKER_SEARCH_ROW_HEIGHT: f32 = 36.0;
-const PICKER_SEARCH_INSET: f32 = 4.0;
-const PICKER_VIEWPORT_MARGIN: f32 = 6.0;
-const PICKER_ANCHOR_GAP: f32 = 4.0;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum DirectoryPickerAction {
@@ -154,7 +164,7 @@ impl DirectoryPickerState {
         self.items()
             .iter()
             .enumerate()
-            .find_map(|(index, item)| item.action.as_ref().map(|_| path_item_id(index)))
+            .find_map(|(index, item)| item.action.as_ref().map(|_| directory_item_id(index)))
     }
 
     pub fn is_picker_element(&self, id: ElementId) -> bool {
@@ -164,14 +174,14 @@ impl DirectoryPickerState {
                 .items()
                 .iter()
                 .enumerate()
-                .any(|(index, _)| path_item_id(index) == id)
+                .any(|(index, _)| directory_item_id(index) == id)
     }
 
     pub fn item_index(&self, id: ElementId) -> Option<usize> {
         self.items()
             .iter()
             .enumerate()
-            .find_map(|(index, _)| (path_item_id(index) == id).then_some(index))
+            .find_map(|(index, _)| (directory_item_id(index) == id).then_some(index))
     }
 
     pub fn activate(&mut self, index: usize) -> std::io::Result<Option<DirectoryPickerActivation>> {
@@ -276,10 +286,7 @@ impl DirectoryPickerState {
 }
 
 pub struct DirectoryPicker {
-    dropdown: Dropdown,
-    search_box: SearchBox,
-    search_value: String,
-    items: Vec<DirectoryPickerItem>,
+    picker: Picker,
 }
 
 impl DirectoryPicker {
@@ -293,202 +300,97 @@ impl DirectoryPicker {
     ) -> Option<Self> {
         let open = state.open.as_ref()?;
         let items = state.items();
-        let resting_backgrounds = ButtonBackgrounds::new(zui::ui::Color::TRANSPARENT);
         let selected_backgrounds = ButtonBackgrounds::new(palette.list_active_background)
             .with_hovered(palette.list_active_background)
             .with_focused(palette.list_active_background)
             .with_pressed(palette.border);
         let button_style = ButtonStyle::new(
-            resting_backgrounds,
+            ButtonBackgrounds::new(Color::TRANSPARENT),
             TextStyle::new(13.0, palette.foreground).with_line_height(18.0),
         )
         .with_selected_backgrounds(selected_backgrounds)
         .with_corner_radii(CornerRadii::uniform(2.0))
         .with_padding(Edges::new(0.0, 10.0, 0.0, 10.0));
-        let dropdown_items = items
+        let picker_items = items
             .iter()
             .enumerate()
             .map(|(index, entry)| {
-                let id = path_item_id(index);
-                let state = if entry.action.is_none() {
-                    ButtonState::Disabled
-                } else if dispatch.is_pressed(id) {
-                    ButtonState::Pressed
-                } else if dispatch.is_focused(id) {
-                    ButtonState::Focused
-                } else if dispatch.is_hovered(id) {
-                    ButtonState::Hovered
+                let item = PickerItem::new(directory_item_id(index), entry.label.clone());
+                if entry.action.is_some() {
+                    item
                 } else {
-                    ButtonState::Resting
-                };
-                DropdownItem::new(entry.label.clone(), state)
+                    item.disabled()
+                }
             })
             .collect();
-        let selection = items
-            .iter()
-            .enumerate()
-            .find_map(|(index, _)| {
-                let id = path_item_id(index);
-                (dispatch.is_pressed(id) || dispatch.is_hovered(id) || dispatch.is_focused(id))
-                    .then_some(index)
-            })
-            .map(DropdownSelection::Item)
-            .unwrap_or(DropdownSelection::None);
-        let dropdown = Dropdown::new_scrollable(
+        let picker = Picker::new(
             viewport,
             open.anchor,
-            dropdown_items,
-            DropdownStyle::new(
+            "Choose folder",
+            "Search folders...",
+            state.search_input(),
+            caret_visibility,
+            picker_items,
+            state.scroll_state(),
+            PickerIds::new(WINDOW, DIRECTORY_PICKER, DIRECTORY_SEARCH_INPUT),
+            PickerStyle::new(
                 palette.content_background,
                 button_style,
-                Size::new(PICKER_CONTENT_WIDTH, PICKER_ITEM_HEIGHT),
-            )
-            .with_corner_radii(CornerRadii::uniform(4.0))
-            .with_header_height(PICKER_SEARCH_ROW_HEIGHT)
-            .with_placement(
-                ContextViewPlacement::new()
-                    .with_position(ContextViewAnchorPosition::Before)
-                    .with_gap(PICKER_ANCHOR_GAP)
-                    .with_viewport_margin(PICKER_VIEWPORT_MARGIN),
-            ),
-            DropdownScrollConfiguration::new(
-                state.scroll_state(),
-                PICKER_VISIBLE_ITEM_COUNT,
+                palette.search_box_style(),
                 palette.picker_scroll_view_style(),
+                Size::new(PICKER_CONTENT_WIDTH, PICKER_ITEM_HEIGHT),
+                PICKER_VISIBLE_ITEM_COUNT,
             ),
-        )
-        .with_selection(selection);
-        let header_bounds = dropdown
-            .header_bounds()
-            .expect("directory picker reserves a search row");
-        let search_bounds = Rect::from_xywh(
-            header_bounds.origin.x + PICKER_SEARCH_INSET,
-            header_bounds.origin.y + PICKER_SEARCH_INSET,
-            (header_bounds.size.width - PICKER_SEARCH_INSET * 2.0).max(1.0),
-            (header_bounds.size.height - PICKER_SEARCH_INSET * 2.0).max(1.0),
-        );
-        let search_state = if dispatch.is_focused(DIRECTORY_SEARCH_INPUT) {
-            InputBoxState::Focused(caret_visibility)
-        } else if dispatch.is_hovered(DIRECTORY_SEARCH_INPUT) {
-            InputBoxState::Hovered
-        } else {
-            InputBoxState::Resting
-        };
-        let search_box = SearchBox::new(
-            search_bounds,
-            "Search folders...",
-            search_state,
-            palette.search_box_style(),
-            state.search_input(),
             text_layout,
+            dispatch,
         );
-        Some(Self {
-            dropdown,
-            search_box,
-            search_value: state.search_input().text().to_string(),
-            items,
-        })
-    }
-
-    fn child_interaction_regions(&self) -> Vec<InteractionRegion> {
-        let navigation_group = NavigationGroupId::new(DIRECTORY_PICKER);
-        let mut regions = vec![
-            InteractionRegion::new(
-                "DirectoryPathSearchInput",
-                DIRECTORY_SEARCH_INPUT,
-                self.search_box.bounds(),
-                AccessibilityRole::TextInput,
-                "Search folders",
-            )
-            .with_cursor(CursorFeedback::Text)
-            .with_focus(FocusBehavior::TabStop)
-            .with_navigation(navigation_group, NavigationAxis::Vertical)
-            .with_value(&self.search_value),
-        ];
-        for (index, item) in self.items.iter().enumerate() {
-            let Some(bounds) = self.dropdown.interactive_item_bounds(index) else {
-                continue;
-            };
-            regions.push(
-                InteractionRegion::new(
-                    "WorkspacePathItem",
-                    path_item_id(index),
-                    bounds,
-                    AccessibilityRole::MenuItem,
-                    item.label.clone(),
-                )
-                .with_cursor(CursorFeedback::Pointer)
-                .with_focus(FocusBehavior::TabStop)
-                .with_action(NodeAction::Activate)
-                .with_navigation(navigation_group, NavigationAxis::Vertical)
-                .with_selection(if self.dropdown.selected_index() == Some(index) {
-                    AccessibilitySelection::Selected
-                } else {
-                    AccessibilitySelection::Unselected
-                }),
-            );
-        }
-        regions
+        Some(Self { picker })
     }
 
     #[cfg(test)]
     pub const fn bounds(&self) -> Rect {
-        self.dropdown.bounds()
+        self.picker.bounds()
     }
 
     pub const fn search_caret_bounds(&self) -> Option<Rect> {
-        self.search_box.caret_bounds()
+        self.picker.search_caret_bounds()
     }
 
     pub const fn item_viewport_bounds(&self) -> Rect {
-        self.dropdown.item_viewport_bounds()
+        self.picker.item_viewport_bounds()
     }
 
     pub fn scroll_metrics(&self) -> Option<ScrollMetrics> {
-        self.dropdown.scroll_metrics()
+        self.picker.scroll_metrics()
+    }
+
+    #[cfg(test)]
+    fn item_bounds(&self, index: usize) -> Option<Rect> {
+        self.picker.item_bounds(index)
     }
 }
 
 impl Component for DirectoryPicker {
     fn element(&self) -> ComponentElement {
-        Element::leaf("DirectoryPicker")
-            .in_bounds(self.dropdown.bounds())
-            .with_identity(DIRECTORY_PICKER)
+        self.picker.element()
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
-        Some(
-            UiNode::new(
-                DIRECTORY_PICKER,
-                element.bounds(),
-                AccessibilityRole::Menu,
-                "Choose folder",
-            )
-            .with_parent(WINDOW),
-        )
+        self.picker.interaction_node(element)
     }
 
-    fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        context.set_modal_root(DIRECTORY_PICKER);
-        for region in self.child_interaction_regions() {
-            context.draw_component(&region);
-        }
-        self.dropdown
-            .draw_components_with_header(context, |context, _bounds| {
-                context.draw_component(&self.search_box);
-            });
+    fn compose(&self, context: &mut ComponentContext<'_, '_>, element: &ComputedElement) {
+        self.picker.compose(context, element);
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        self.dropdown.paint_with_header(scene, |scene, _bounds| {
-            scene.draw_component(&self.search_box)
-        });
+        self.picker.paint(scene);
     }
 }
 
-pub fn path_item_id(index: usize) -> ElementId {
+pub fn directory_item_id(index: usize) -> ElementId {
     ElementId::scoped(
-        PATH_PICKER_SCOPE,
+        DIRECTORY_PICKER_SCOPE,
         FIRST_DIRECTORY_ITEM.saturating_add(index as u32),
     )
 }
@@ -501,5 +403,5 @@ fn directory_item(directory: &PathBuf) -> DirectoryPickerItem {
 }
 
 #[cfg(test)]
-#[path = "dir_picker_tests.rs"]
+#[path = "directory_picker_tests.rs"]
 mod tests;

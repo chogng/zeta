@@ -7,16 +7,16 @@ use zui::ui::{
 };
 
 use crate::ProductApp;
-use crate::git_branch_context_menu::{
-    GIT_BRANCH_SEARCH_INPUT, GitBranchContextMenuState, GitBranchMenuActivation,
+use crate::git_branch_picker::{
+    GIT_BRANCH_SEARCH_INPUT, GitBranchPickerActivation, GitBranchPickerState,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use zeta_session::interaction::CONTEXT_GIT_BRANCH;
 
 impl ProductApp {
-    pub(super) fn toggle_git_branch_context_menu(&mut self) {
-        if self.git_branch_context_menu.is_open() {
-            self.dismiss_git_branch_context_menu();
+    pub(super) fn toggle_git_branch_picker(&mut self) {
+        if self.git_branch_picker.is_open() {
+            self.dismiss_git_branch_picker();
             return;
         }
         let anchor = self
@@ -29,66 +29,65 @@ impl ProductApp {
         let branches = match self.local_git_branches() {
             Ok(branches) => branches,
             Err(error) => {
-                eprintln!("could not open Git branch menu: {error}");
+                eprintln!("could not open Git branch picker: {error}");
                 return;
             }
         };
         let restore_focus = self.ui_dispatch.focused();
-        self.git_branch_context_menu
-            .open(anchor, branches, restore_focus);
+        self.git_branch_picker.open(anchor, branches, restore_focus);
         self.workbench.dismiss_tab_context_menu();
-        self.path_picker.dismiss();
+        self.directory_picker.dismiss();
         self.remote_connection_picker.dismiss();
         self.dismiss_remote_connection_manager();
         self.dismiss_remote_tunnel_manager();
         self.rebuild_and_focus_git_branch_search();
     }
 
-    pub(super) fn activate_git_branch_context_menu_element(&mut self, id: ElementId) -> bool {
-        let Some(index) = self.git_branch_context_menu.item_index(id) else {
+    pub(super) fn activate_git_branch_picker_element(&mut self, id: ElementId) -> bool {
+        let Some(index) = self.git_branch_picker.item_index(id) else {
             return false;
         };
-        let Some(activation) = self.git_branch_context_menu.activate(index) else {
+        let Some(activation) = self.git_branch_picker.activate(index) else {
             return true;
         };
         match activation {
-            GitBranchMenuActivation::PageChanged => {
-                self.rebuild_and_focus_git_branch_context_menu();
+            GitBranchPickerActivation::PageChanged => {
+                self.rebuild_and_focus_git_branch_picker();
             }
-            GitBranchMenuActivation::SelectBranch(branch) => {
+            GitBranchPickerActivation::SelectBranch(branch) => {
                 if branch.is_current() {
-                    self.dismiss_git_branch_context_menu();
+                    self.dismiss_git_branch_picker();
                     return true;
                 }
                 let snapshot = match self.switch_git_branch(branch.name().into()) {
                     Ok(snapshot) => snapshot,
                     Err(error) => {
                         eprintln!("could not switch Git branch: {error}");
-                        self.git_branch_context_menu.set_switch_error();
-                        self.rebuild_and_focus_git_branch_context_menu();
+                        self.git_branch_picker.set_switch_error();
+                        self.rebuild_and_focus_git_branch_picker();
                         return true;
                     }
                 };
                 self.env.apply_git_snapshot(Some(&snapshot));
                 self.refresh_dir_capabilities();
                 self.refresh_files_from_app_server();
-                self.dismiss_git_branch_context_menu();
+                self.dismiss_git_branch_picker();
             }
         }
         true
     }
 
-    pub(super) fn route_git_branch_context_menu_pointer_move(&mut self, point: Point) -> bool {
-        if !self.git_branch_context_menu.is_open() {
+    pub(super) fn route_git_branch_picker_pointer_move(&mut self, point: Point) -> bool {
+        if !self.git_branch_picker.is_open() {
             return false;
         }
         let outcome =
             self.presentation
                 .as_ref()
                 .map_or_else(DispatchOutcome::default, |presentation| {
-                    update_git_branch_context_menu_pointer(
+                    update_git_branch_picker_pointer(
                         &mut self.ui_dispatch,
-                        &self.git_branch_context_menu,
+                        &self.git_branch_picker,
                         point,
                         presentation.interaction_frame(),
                     )
@@ -98,17 +97,17 @@ impl ProductApp {
         true
     }
 
-    pub(super) fn route_git_branch_context_menu_button(
+    pub(super) fn route_git_branch_picker_button(
         &mut self,
         state: ElementState,
         button: MouseButton,
     ) -> bool {
-        if !self.git_branch_context_menu.is_open() {
+        if !self.git_branch_picker.is_open() {
             return false;
         }
         if button != MouseButton::Left {
             if state == ElementState::Pressed {
-                self.dismiss_git_branch_context_menu();
+                self.dismiss_git_branch_picker();
             }
             return true;
         }
@@ -118,12 +117,12 @@ impl ProductApp {
             .and_then(|(point, presentation)| presentation.interaction_frame().target_at(point));
         match state {
             ElementState::Pressed
-                if target.is_some_and(|id| self.git_branch_context_menu.is_menu_element(id)) =>
+                if target.is_some_and(|id| self.git_branch_picker.is_picker_element(id)) =>
             {
                 self.primary_button_changed(state);
             }
             ElementState::Pressed => {
-                self.dismiss_git_branch_context_menu();
+                self.dismiss_git_branch_picker();
             }
             ElementState::Released => {
                 self.primary_button_changed(state);
@@ -132,8 +131,8 @@ impl ProductApp {
         true
     }
 
-    pub(super) fn route_git_branch_context_menu_keyboard(&mut self, event: &KeyEvent) -> bool {
-        if !self.git_branch_context_menu.is_open() {
+    pub(super) fn route_git_branch_picker_keyboard(&mut self, event: &KeyEvent) -> bool {
+        if !self.git_branch_picker.is_open() {
             return false;
         }
         let Some(presentation) = self.presentation.as_ref() else {
@@ -143,7 +142,7 @@ impl ProductApp {
         if self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT) {
             match &event.logical_key {
                 Key::Named(NamedKey::Escape) => {
-                    self.dismiss_git_branch_context_menu();
+                    self.dismiss_git_branch_picker();
                 }
                 Key::Named(NamedKey::ArrowDown) => {
                     let outcome = self.ui_dispatch.focus_within_group(
@@ -175,14 +174,14 @@ impl ProductApp {
                     self.apply_dispatch_outcome(outcome);
                 }
                 Key::Named(NamedKey::Enter) => {
-                    if let Some(id) = self.git_branch_context_menu.first_action_id() {
-                        self.activate_git_branch_context_menu_element(id);
+                    if let Some(id) = self.git_branch_picker.first_action_id() {
+                        self.activate_git_branch_picker_element(id);
                     }
                 }
                 Key::Character(text)
                     if is_shortcut(self.modifiers) && text.eq_ignore_ascii_case("c") =>
                 {
-                    if let Some(text) = self.git_branch_context_menu.selected_search_text()
+                    if let Some(text) = self.git_branch_picker.selected_search_text()
                         && let Err(error) = write_clipboard_text(&self.clipboard, text.to_string())
                     {
                         eprintln!("could not copy Git branch search text: {error}");
@@ -193,7 +192,7 @@ impl ProductApp {
                 {
                     match read_clipboard_text(&self.clipboard) {
                         Ok(text) => self
-                            .git_branch_context_menu
+                            .git_branch_picker
                             .apply_search(zui::ui::TextInputCommand::Insert(text)),
                         Err(error) => eprintln!("could not paste Git branch search text: {error}"),
                     }
@@ -203,7 +202,7 @@ impl ProductApp {
                     if let Some(command) =
                         crate::terminal_input::text_input_command(event, self.modifiers)
                     {
-                        self.git_branch_context_menu.apply_search(command);
+                        self.git_branch_picker.apply_search(command);
                         self.git_branch_search_changed();
                     }
                 }
@@ -212,7 +211,7 @@ impl ProductApp {
         }
         let outcome = match &event.logical_key {
             Key::Named(NamedKey::Escape) => {
-                self.dismiss_git_branch_context_menu();
+                self.dismiss_git_branch_picker();
                 return true;
             }
             Key::Named(NamedKey::ArrowUp) => self.ui_dispatch.focus_within_group(
@@ -242,11 +241,11 @@ impl ProductApp {
         true
     }
 
-    pub(super) fn dismiss_git_branch_context_menu(&mut self) -> bool {
-        if !self.git_branch_context_menu.is_open() {
+    pub(super) fn dismiss_git_branch_picker(&mut self) -> bool {
+        if !self.git_branch_picker.is_open() {
             return false;
         }
-        let restore_focus = self.git_branch_context_menu.dismiss();
+        let restore_focus = self.git_branch_picker.dismiss();
         self.rebuild_presentation();
         if let Some(restore_focus) = restore_focus {
             let focus_outcome = self
@@ -266,10 +265,10 @@ impl ProductApp {
         true
     }
 
-    fn rebuild_and_focus_git_branch_context_menu(&mut self) {
+    fn rebuild_and_focus_git_branch_picker(&mut self) {
         self.rebuild_presentation();
         let focus_outcome = self
-            .git_branch_context_menu
+            .git_branch_picker
             .first_action_id()
             .zip(self.presentation.as_ref())
             .map(|(id, presentation)| {
@@ -314,9 +313,9 @@ fn is_shortcut(modifiers: zui::input::ModifiersState) -> bool {
     modifiers.control_key() || modifiers.super_key()
 }
 
-fn update_git_branch_context_menu_pointer(
+fn update_git_branch_picker_pointer(
     dispatch: &mut UiDispatch,
-    state: &GitBranchContextMenuState,
+    state: &GitBranchPickerState,
     point: Point,
     frame: &InteractionFrame,
 ) -> DispatchOutcome {

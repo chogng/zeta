@@ -11,11 +11,11 @@ use crate::MainSurface;
 use crate::PaneBinding;
 use crate::SessionSearchState;
 use crate::app_server::{AppServerHost, AppServerRequestHandle, local_profile_root};
+use crate::directory_picker::DirectoryPickerState;
 use crate::environment_context::EnvironmentContext;
-use crate::git_branch_context_menu::GitBranchContextMenuState;
+use crate::git_branch_picker::GitBranchPickerState;
 use crate::keybindings::{KeybindingsResource, KeybindingsResourcePoll};
 use crate::launch::AppLaunch;
-use crate::path_picker::DirectoryPickerState;
 use crate::product_event::ProductEvent;
 use crate::remote_connection_cli::AppInvocation;
 use crate::remote_tunnel_process::ProductRemoteTunnelHost;
@@ -98,37 +98,37 @@ pub(crate) mod app_server;
 pub(crate) mod command_dispatch;
 #[path = "product/events.rs"]
 mod events;
-#[path = "features/editor/file_editor_input.rs"]
+#[path = "editor/file_editor_input.rs"]
 pub(crate) mod file_editor_input;
 pub(crate) use zeta_editor_host as file_editor_pane;
 #[path = "product/frame.rs"]
 mod frame;
-pub(crate) use zeta_scm as git_branch_context_menu;
-#[path = "features/environment/git_branch_context_menu_input.rs"]
-pub(crate) mod git_branch_context_menu_input;
+pub(crate) use zeta_scm as git_branch_picker;
+#[path = "environment/git_branch_picker_input.rs"]
+pub(crate) mod git_branch_picker_input;
 #[path = "platform/input_method.rs"]
 pub(crate) mod input_method;
 #[path = "product/interaction.rs"]
 mod interaction;
 #[path = "platform/keybindings.rs"]
 pub(crate) mod keybindings;
-#[path = "features/editor/language_service_adapter.rs"]
+#[path = "editor/language_service_adapter.rs"]
 pub(crate) mod language_service_adapter;
-#[path = "features/remote/launch.rs"]
+#[path = "remote/launch.rs"]
 pub(crate) mod launch;
 #[cfg(test)]
-#[path = "features/remote/launch_profile_tests.rs"]
+#[path = "remote/launch_profile_tests.rs"]
 pub(crate) mod launch_profile_tests;
-#[path = "features/remote/launch_progress.rs"]
+#[path = "remote/launch_progress.rs"]
 pub(crate) mod launch_progress;
 #[cfg(test)]
-#[path = "features/remote/launch_progress_tests.rs"]
+#[path = "remote/launch_progress_tests.rs"]
 pub(crate) mod launch_progress_tests;
 #[cfg(test)]
-#[path = "features/remote/launch_test_support.rs"]
+#[path = "remote/launch_test_support.rs"]
 pub(crate) mod launch_test_support;
 #[cfg(test)]
-#[path = "features/remote/launch_tests.rs"]
+#[path = "remote/launch_tests.rs"]
 pub(crate) mod launch_tests;
 #[path = "product/lifecycle.rs"]
 mod lifecycle;
@@ -138,33 +138,33 @@ pub(crate) mod mouse_wheel;
 mod presentation;
 #[path = "platform/product_event.rs"]
 pub(crate) mod product_event;
-#[path = "features/remote/remote_connection_cli.rs"]
+#[path = "remote/remote_connection_cli.rs"]
 pub(crate) mod remote_connection_cli;
 #[cfg(test)]
-#[path = "features/remote/remote_connection_cli_tests.rs"]
+#[path = "remote/remote_connection_cli_tests.rs"]
 pub(crate) mod remote_connection_cli_tests;
-#[path = "features/remote/remote_connection_launch_input.rs"]
+#[path = "remote/remote_connection_launch_input.rs"]
 pub(crate) mod remote_connection_launch_input;
-#[path = "features/remote/remote_connection_manager_input.rs"]
+#[path = "remote/remote_connection_manager_input.rs"]
 pub(crate) mod remote_connection_manager_input;
-#[path = "features/remote/remote_connection_picker_input.rs"]
+#[path = "remote/remote_connection_picker_input.rs"]
 pub(crate) mod remote_connection_picker_input;
-#[path = "features/remote/remote_connection_process.rs"]
+#[path = "remote/remote_connection_process.rs"]
 pub(crate) mod remote_connection_process;
-#[path = "features/remote/remote_connection_tunnel.rs"]
+#[path = "remote/remote_connection_tunnel.rs"]
 pub(crate) mod remote_connection_tunnel;
 #[cfg(test)]
-#[path = "features/remote/remote_connection_tunnel_tests.rs"]
+#[path = "remote/remote_connection_tunnel_tests.rs"]
 pub(crate) mod remote_connection_tunnel_tests;
-#[path = "features/remote/remote_tunnel_manager_input.rs"]
+#[path = "remote/remote_tunnel_manager_input.rs"]
 pub(crate) mod remote_tunnel_manager_input;
-#[path = "features/remote/remote_tunnel_process.rs"]
+#[path = "remote/remote_tunnel_process.rs"]
 pub(crate) mod remote_tunnel_process;
 #[path = "product/run.rs"]
 mod run;
 #[path = "product/runtime.rs"]
 mod runtime;
-#[path = "features/agent/session_host.rs"]
+#[path = "agent/session_host.rs"]
 pub(crate) mod session_host;
 #[path = "product/state.rs"]
 mod state;
@@ -172,24 +172,25 @@ mod state;
 pub(crate) mod tab_context_menu;
 pub(crate) use zeta_terminal_runtime as terminal_blocks;
 pub(crate) use zeta_terminal_runtime as terminal_history;
-#[path = "features/terminal/terminal_input.rs"]
+#[path = "terminal/terminal_input.rs"]
 pub(crate) mod terminal_input;
 pub(crate) use zeta_terminal_runtime as terminal_output_scroll_view;
-#[path = "features/terminal/terminal_pointer.rs"]
+#[path = "terminal/terminal_pointer.rs"]
 pub(crate) mod terminal_pointer;
-#[path = "features/terminal/terminal_selection.rs"]
+#[path = "terminal/terminal_selection.rs"]
 pub(crate) mod terminal_selection;
 pub(crate) use zeta_terminal_runtime as terminal_session;
-#[path = "features/environment/environment_context.rs"]
+#[path = "environment/directory_picker.rs"]
+pub(crate) mod directory_picker;
+#[path = "environment/directory_picker_input.rs"]
+pub(crate) mod directory_picker_input;
+#[path = "environment/environment_context.rs"]
 pub(crate) mod environment_context;
-#[path = "features/agent/thread_timeline_scroll.rs"]
+#[path = "agent/thread_timeline_scroll.rs"]
 pub(crate) mod thread_timeline_scroll;
 mod workbench;
 mod workbench_resize;
 mod workbench_tabs_resize;
-pub(crate) use zeta_files as path_picker;
-#[path = "features/environment/path_picker_input.rs"]
-pub(crate) mod path_picker_input;
 pub use run::run;
 pub(crate) use state::ProductApp;
 

@@ -4,13 +4,12 @@ use zeta_editor::DiffEditorDocument;
 use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 
-mod branch_menu;
+mod branch_picker;
 #[path = "scm/pane.rs"]
 mod pane;
 
-pub use branch_menu::{
-    GIT_BRANCH_SEARCH_INPUT, GitBranchContextMenu, GitBranchContextMenuState,
-    GitBranchMenuActivation,
+pub use branch_picker::{
+    GIT_BRANCH_SEARCH_INPUT, GitBranchPicker, GitBranchPickerActivation, GitBranchPickerState,
 };
 pub use pane::EditorPane;
 pub use pane::EditorPaneState;

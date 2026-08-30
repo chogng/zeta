@@ -10,6 +10,7 @@ use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::common::DirPermissionsHostCapability;
+use zeta_app_server_protocol::protocol::common::WorkCoordinationHostCapability;
 use zeta_remote::RemoteDirPath;
 use zeta_remote::RemoteProfile;
 use zeta_remote::SshHost;
@@ -201,6 +202,7 @@ fn development_daemon_executable(app_executable: &Path) -> Option<PathBuf> {
 fn local_client_capabilities() -> ClientCapabilities {
     ClientCapabilities {
         dir_permissions_host: Some(DirPermissionsHostCapability { version: 1 }),
+        work_coordination_host: Some(WorkCoordinationHostCapability { version: 1 }),
         ..ClientCapabilities::default()
     }
 }

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::PaneBinding;
 use crate::QuickAccess;
+use crate::directory_picker::DirectoryPickerState;
 use crate::{
     ADD_SESSION, EnvironmentContextView, INSPECTOR_RESIZE_HANDLE, InspectorPartState,
     LogicalViewport, PaneGroupId, PaneInput, PanePart, PaneSplitDirection, SESSION_SEARCH_INPUT,
@@ -20,12 +21,11 @@ use zeta_editor::{CodeEditorLanguage, CodeEditorStyle, DiffEditorDocument};
 use zeta_editor_host::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FileEditorHost,
 };
-use zeta_files::DirectoryPickerState;
 use zeta_files::{
     DirectoryEntry, FILES_PANE, FILES_REFRESH, FILES_SEARCH, FILES_TOOLBAR, FilesState,
 };
 use zeta_keybinding::{HostPlatform, KeySequence};
-use zeta_scm::GitBranchContextMenuState;
+use zeta_scm::GitBranchPickerState;
 use zeta_scm::{CHANGES_PANE, MULTI_DIFF_EDITOR, ScmDiff, ScmState};
 use zeta_session::SessionPaneState;
 use zeta_session::interaction::{
@@ -349,8 +349,8 @@ fn presentation_with_active_tab_input(
             files,
             scm,
             tab_context_menu: tab_context_menu.clone(),
-            git_branch_context_menu: &GitBranchContextMenuState::default(),
-            path_picker: &DirectoryPickerState::default(),
+            git_branch_picker: &GitBranchPickerState::default(),
+            directory_picker: &DirectoryPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
@@ -406,8 +406,8 @@ fn presentation_with_active_tab_input(
             files,
             scm,
             tab_context_menu,
-            git_branch_context_menu: &GitBranchContextMenuState::default(),
-            path_picker: &DirectoryPickerState::default(),
+            git_branch_picker: &GitBranchPickerState::default(),
+            directory_picker: &DirectoryPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
@@ -604,8 +604,8 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             files: &files,
             scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
-            git_branch_context_menu: &GitBranchContextMenuState::default(),
-            path_picker: &DirectoryPickerState::default(),
+            git_branch_picker: &GitBranchPickerState::default(),
+            directory_picker: &DirectoryPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
@@ -894,8 +894,8 @@ fn session_search_filters_tabs_by_session_name() {
             files: &files,
             scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
-            git_branch_context_menu: &GitBranchContextMenuState::default(),
-            path_picker: &DirectoryPickerState::default(),
+            git_branch_picker: &GitBranchPickerState::default(),
+            directory_picker: &DirectoryPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
@@ -1091,8 +1091,8 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             files: &files,
             scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
-            git_branch_context_menu: &GitBranchContextMenuState::default(),
-            path_picker: &DirectoryPickerState::default(),
+            git_branch_picker: &GitBranchPickerState::default(),
+            directory_picker: &DirectoryPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
@@ -1296,11 +1296,12 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         TestEnvironmentContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let files = FilesState::default();
     let scm = ScmState::default();
-    let git_branch_context_menu = GitBranchContextMenuState::default();
-    let path_picker = DirectoryPickerState::default();
+    let git_branch_picker = GitBranchPickerState::default();
+    let directory_picker = DirectoryPickerState::default();
     let remote_connection_picker = RemoteConnectionPickerState::default();
     let remote_connection_manager = RemoteConnectionManagerState::default();
     let keybindings = TestKeybindings;
+    let quick_access = QuickAccess::default();
     let settings = SettingsState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
@@ -1338,8 +1339,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         files: &files,
         scm: &scm,
         tab_context_menu: TabContextMenuState::default(),
-        git_branch_context_menu: &git_branch_context_menu,
-        path_picker: &path_picker,
+        git_branch_picker: &git_branch_picker,
+        directory_picker: &directory_picker,
         remote_connection_picker: &remote_connection_picker,
         remote_connection_manager: &remote_connection_manager,
         remote_tunnel_manager: &RemoteTunnelManagerState::default(),
@@ -1519,8 +1520,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             files: &files,
             scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
-            git_branch_context_menu: &GitBranchContextMenuState::default(),
-            path_picker: &DirectoryPickerState::default(),
+            git_branch_picker: &GitBranchPickerState::default(),
+            directory_picker: &DirectoryPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),

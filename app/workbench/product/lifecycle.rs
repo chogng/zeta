@@ -145,8 +145,8 @@ impl App<ProductEvent> for ProductApp {
                 self.scm.editor_mut().cancel_scrollbar_interaction();
                 self.terminal_view_mut().scroll.cancel_scrollbar();
                 self.workbench.dismiss_tab_context_menu();
-                self.git_branch_context_menu.dismiss();
-                self.path_picker.dismiss();
+                self.git_branch_picker.dismiss();
+                self.directory_picker.dismiss();
                 self.ui_dispatch.window_blurred();
                 self.sync_input_focus();
                 self.rebuild_presentation();

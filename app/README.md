@@ -26,7 +26,8 @@ main.rs                         binary 入口，只调用 zeta_workbench::run()
 workbench/product.rs            产品组合模块入口、产品状态与能力接线
 workbench/product/              生命周期、事件、帧、交互和运行入口
 workbench/app_server.rs         App Server 适配入口
-workbench/features/             Agent、Editor、Environment、Remote、Terminal 的产品事件与效果适配
+workbench/{agent,editor,environment,remote,terminal}/
+                                按职责组织的产品事件与效果适配
 workbench/platform/             键盘、IME 和窗口事件适配
 ```
 

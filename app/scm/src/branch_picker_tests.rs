@@ -1,5 +1,5 @@
 use super::{
-    GitBranchContextMenu, GitBranchContextMenuState, GitBranchMenuAction, GitBranchMenuActivation,
+    GitBranchPicker, GitBranchPickerAction, GitBranchPickerActivation, GitBranchPickerState,
 };
 use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_ui_theme::DEFAULT_UI_THEME;
@@ -9,8 +9,8 @@ use zui::ui::{CaretVisibility, Rect, TextInputCommand, TextInputLayoutEngine};
 const COMPOSER: zui::ui::ElementId = zui::ui::ElementId::scoped(91, 1);
 
 #[test]
-fn branch_menu_places_the_current_branch_first_and_marks_it() {
-    let mut state = GitBranchContextMenuState::default();
+fn branch_picker_places_the_current_branch_first_and_marks_it() {
+    let mut state = GitBranchPickerState::default();
 
     state.open(
         Rect::from_xywh(240.0, 640.0, 90.0, 24.0),
@@ -24,19 +24,19 @@ fn branch_menu_places_the_current_branch_first_and_marks_it() {
     assert_eq!(items[2].label, "zulu");
     assert!(matches!(
         items[0].action,
-        Some(GitBranchMenuAction::Select(_))
+        Some(GitBranchPickerAction::Select(_))
     ));
     assert_eq!(state.dismiss(), Some(COMPOSER));
 }
 
 #[test]
-fn branch_menu_reuses_context_menu_geometry_and_modal_semantics() {
+fn branch_picker_uses_shared_picker_geometry_and_modal_semantics() {
     let anchor = Rect::from_xywh(240.0, 640.0, 90.0, 24.0);
-    let mut state = GitBranchContextMenuState::default();
+    let mut state = GitBranchPickerState::default();
     state.open(anchor, branches(&["main", "topic"]), None);
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
-    let menu = GitBranchContextMenu::new(
+    let menu = GitBranchPicker::new(
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
         &state,
         CaretVisibility::Visible,
@@ -57,7 +57,7 @@ fn branch_menu_reuses_context_menu_geometry_and_modal_semantics() {
 
 #[test]
 fn search_row_filters_branches_and_resets_to_the_first_page() {
-    let mut state = GitBranchContextMenuState::default();
+    let mut state = GitBranchPickerState::default();
     state.open(
         Rect::from_xywh(240.0, 640.0, 90.0, 24.0),
         branches(&["main", "feature/search", "topic"]),
@@ -72,11 +72,11 @@ fn search_row_filters_branches_and_resets_to_the_first_page() {
 }
 
 #[test]
-fn branch_menu_pages_large_branch_lists_and_surfaces_switch_errors() {
+fn branch_picker_pages_large_branch_lists_and_surfaces_switch_errors() {
     let mut branch_names = vec!["main".to_string()];
     branch_names.extend((0..12).map(|index| format!("topic-{index:02}")));
     let branch_names = branch_names.iter().map(String::as_str).collect::<Vec<_>>();
-    let mut state = GitBranchContextMenuState::default();
+    let mut state = GitBranchPickerState::default();
     state.open(
         Rect::from_xywh(240.0, 640.0, 90.0, 24.0),
         branches(&branch_names),
@@ -86,7 +86,7 @@ fn branch_menu_pages_large_branch_lists_and_surfaces_switch_errors() {
 
     assert_eq!(
         state.activate(more_index),
-        Some(GitBranchMenuActivation::PageChanged)
+        Some(GitBranchPickerActivation::PageChanged)
     );
     assert!(
         state

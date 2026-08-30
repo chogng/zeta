@@ -19,7 +19,7 @@ Native UI 的 crate 从共享 workspace 中分离。
 | `app` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeta-workbench` + `zeta-session` | Workbench 管完整产品组合与窗口场景，Session Pane 的 Thread/Composer state、input、interaction、layout 由 `zeta-session` 拥有 |
 | 通用 icon asset contract | 旧 Native icon types | `app/zui::ui` | 已收入单一 `zui` crate；产品 catalog 保留在 `app/icons` |
 | Element、Scene、Interaction、Animation、Retained Runtime | `app/zui` | app-owned crates in root workspace | 已迁入 app |
-| Button、Tree、List、Editor/Environment pane presentation | `app/ui-components`、`editor`、`features/environment` | app-owned modules and crates in root workspace | 已迁入 app |
+| Button、Tree、List、Editor/Environment pane presentation | `app/ui-components`、`editor`、`workbench/environment` | app-owned modules and crates in root workspace | 已迁入 app |
 | Renderer、wgpu、winit | 历史 `app/renderer`、`wgpu`、`winit` | private `app/zui` modules | 已收入单一 `zui` crate |
 | App Server、Core、Protocol、Session、File/Git、Diff、Terminal model | `zeta-rs/*` | `zeta-rs` | 保留 |
 | 纯 Rust editor transaction、syntax、LSP manager | `zeta-rs/editor-core`、`syntax`、`lsp-manager` | `zeta-rs` | 保留；presentation 与底层分离 |
@@ -184,7 +184,7 @@ boundary CI 均已通过。
 - 不复制 `zeta-rs/native` 形成第二个并行宿主；迁移必须保持单一运行入口。
 - 不在旧 Native 中修建新功能；若迁移过程中发现缺少通用能力，先在正确的下层 owner 实现，再由
   app 做最小接线。
-- 不把 `app/editor` 或 `app/workbench/features/environment` 等 presentation owner 直接误判为 shared backend；
+- 不把 `app/editor` 或 `app/workbench/environment` 等 presentation owner 直接误判为 shared backend；
   先按“headless model/core”和“Native presentation”拆分。
 - 不让 `app` 类型、产品命令、窗口事件或布局类型进入 `zeta-rs`。
 - 每个迁移阶段都必须保留 deterministic unit tests 和至少一个产品 targeted test；测试失败时先区分

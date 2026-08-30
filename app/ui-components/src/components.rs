@@ -18,6 +18,8 @@ mod interaction_region;
 mod keycap;
 #[path = "components/list_view/list_view.rs"]
 mod list_view;
+#[path = "components/picker/picker.rs"]
+mod picker;
 #[path = "components/quick_input/quick_input.rs"]
 mod quick_input;
 #[path = "components/quick_pick/quick_pick.rs"]
@@ -55,6 +57,7 @@ pub use input_box::{InputBox, InputBoxState, InputBoxStateColors, InputBoxStyle}
 pub use interaction_region::InteractionRegion;
 pub use keycap::{Keycap, KeycapSequence, KeycapStyle};
 pub use list_view::{ListContentPadding, ListItemLayout, ListView, VirtualListLayout};
+pub use picker::{Picker, PickerIds, PickerItem, PickerStyle};
 pub use quick_input::{QuickInput, QuickInputIds, QuickInputMessageKind, QuickInputStyle};
 pub use quick_pick::{
     QuickPick, QuickPickItem, QuickPickItemLayout, QuickPickSelection, QuickPickStyle,

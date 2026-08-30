@@ -56,11 +56,11 @@ pub(crate) use tabpart::*;
 
 #[allow(unused_imports)]
 pub(crate) use product::{
-    PRODUCT_DISPLAY_NAME, ProductApp, app_server, command_dispatch, environment_context,
-    file_editor_input, file_editor_pane, git_branch_context_menu, git_branch_context_menu_input,
-    input_method, keybindings, language_service_adapter, launch, launch_progress, mouse_wheel,
-    path_picker, path_picker_input, product_event, remote_connection_cli,
-    remote_connection_launch_input, remote_connection_manager_input,
+    PRODUCT_DISPLAY_NAME, ProductApp, app_server, command_dispatch, directory_picker,
+    directory_picker_input, environment_context, file_editor_input, file_editor_pane,
+    git_branch_picker, git_branch_picker_input, input_method, keybindings,
+    language_service_adapter, launch, launch_progress, mouse_wheel, product_event,
+    remote_connection_cli, remote_connection_launch_input, remote_connection_manager_input,
     remote_connection_picker_input, remote_connection_process, remote_connection_tunnel,
     remote_tunnel_manager_input, remote_tunnel_process, session_host, tab_context_menu,
     terminal_blocks, terminal_history, terminal_input, terminal_output_scroll_view,

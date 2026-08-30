@@ -9,7 +9,7 @@
 > [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键设置组合由
 > [`zeta-settings`](../settings/README.md) 管，工作界面的组合键提示由 [`zeta-workbench`](../workbench/README.md) 管。
 
-`zeta-ui-components` 基于 `zui` 提供 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
+`zeta-ui-components` 基于 `zui` 提供 Button、Switch、ActionBar、ContextMenu、Dropdown、Picker、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
 ## 1. 边界与依赖方向
@@ -37,6 +37,7 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui-components::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
 | 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
 | 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui-components::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
+| 带搜索框的锚定候选列表、滚动、选择展示与 accessibility | `zeta-ui-components::Picker` | ✅；调用界面保留打开状态、查询、过滤、输入路由和选择结果执行 |
 | Icon+text label 的内部布局 | `zeta-ui-components::IconLabel` | ✅ |
 | 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui-components::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
 | Renderer-independent icon identity、SVG definition 与 rendering mode | `zui::{Icon,IconDefinition}` | 委托 |
@@ -105,6 +106,7 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item；可滚动模式只为 visible/overscan range 构建 ActionBar，同时以 O(1) 固定高度几何公开全部 item/interactive bounds，供 host 保留键盘与 accessibility identity |
 | `components::dropdown::{DropdownSelection, DropdownStyle}` | public | 默认选择首个 enabled item，并定义 borderless surface、item size/style、可选 header height、圆角和锚点 placement |
 | `components::dropdown::DropdownScrollConfiguration` | public | 让 host 以 retained `ScrollState`、最大可见项数与 `ScrollViewStyle` 为 Dropdown 的 item region 启用独立滚动；header 保持固定 |
+| `components::picker::{Picker, PickerIds, PickerItem, PickerStyle}` | public | 组合 Dropdown 与 SearchBox，统一锚定 picker 的浮层几何、候选行、滚动、选择展示和 accessibility；不拥有业务候选、查询状态或 action |
 | `components::icon_label::{IconLabel, IconLabelStyle}` | public | 对齐 semantic icon 与单行 text；不选择产品 icon |
 | `components::keycap::{Keycap, KeycapSequence, KeycapStyle}` | public | 绘制 caller 提供 label 的按键块，并区分同一 Chord 内按键间距与多段 Chord 间距；不解析快捷键或选择平台 label |
 | `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
@@ -147,6 +149,8 @@ host
           │   └─ soft BoxShadow + 2px padding + 4px radius + selected MenuItem presentation
           ├─ Dropdown → ContextView + ListView projected range + vertical ActionBar
           │   └─ visible/overscan selected item → Button selection presentation
+          ├─ Picker → Dropdown + SearchBox + host-owned item identities
+          │   └─ anchored searchable candidates + Menu accessibility
           ├─ ScrollView → viewport clip + translated content geometry + interactive scrollbar chrome
           ├─ ListView → ScrollView + fixed/variable-extent visible/overscan item projection
           ├─ TreeView → fixed ListView + depth/disclosure/content item projection

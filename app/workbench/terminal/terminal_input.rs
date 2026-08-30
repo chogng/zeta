@@ -94,10 +94,10 @@ impl ProductApp {
         if self.route_remote_connection_picker_keyboard(&event) {
             return;
         }
-        if self.route_git_branch_context_menu_keyboard(&event) {
+        if self.route_git_branch_picker_keyboard(&event) {
             return;
         }
-        if self.route_path_picker_keyboard(&event) {
+        if self.route_directory_picker_keyboard(&event) {
             return;
         }
         if self.route_tab_context_menu_keyboard(&event) {

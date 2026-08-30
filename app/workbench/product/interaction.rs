@@ -172,10 +172,10 @@ impl ProductApp {
         if self.activate_remote_connection_picker_element(id) {
             return;
         }
-        if self.activate_git_branch_context_menu_element(id) {
+        if self.activate_git_branch_picker_element(id) {
             return;
         }
-        if self.activate_path_picker_element(id) {
+        if self.activate_directory_picker_element(id) {
             return;
         }
         if self.activate_tab_context_menu_element(id) {
@@ -268,10 +268,10 @@ impl ProductApp {
         if self.route_remote_connection_picker_pointer_move(point) {
             return;
         }
-        if self.route_git_branch_context_menu_pointer_move(point) {
+        if self.route_git_branch_picker_pointer_move(point) {
             return;
         }
-        if self.route_path_picker_pointer_move(point) {
+        if self.route_directory_picker_pointer_move(point) {
             return;
         }
         if self.route_tab_context_menu_pointer_move(point) {
@@ -388,10 +388,10 @@ impl ProductApp {
         if self.route_remote_connection_picker_button(state, button) {
             return;
         }
-        if self.route_git_branch_context_menu_button(state, button) {
+        if self.route_git_branch_picker_button(state, button) {
             return;
         }
-        if self.route_path_picker_button(state, button) {
+        if self.route_directory_picker_button(state, button) {
             return;
         }
         if self.route_tab_context_menu_button(state, button) {

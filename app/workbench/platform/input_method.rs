@@ -12,8 +12,8 @@ use crate::MainSurfaceKind;
 use crate::ProductApp;
 use crate::SESSION_SEARCH_INPUT;
 use crate::TAB_RENAME_INPUT;
-use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
-use crate::path_picker::DIRECTORY_SEARCH_INPUT;
+use crate::directory_picker::DIRECTORY_SEARCH_INPUT;
+use crate::git_branch_picker::GIT_BRANCH_SEARCH_INPUT;
 use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
 use zeta_files::FILE_SEARCH_INPUT;
 use zeta_session::interaction::COMPOSER;
@@ -174,8 +174,7 @@ impl ProductApp {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.git_branch_context_menu
-                    .apply_search_composition(composition);
+                self.git_branch_picker.apply_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -184,7 +183,7 @@ impl ProductApp {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.path_picker.apply_search_composition(composition);
+                self.directory_picker.apply_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -331,10 +330,10 @@ impl ProductApp {
             self.files.cancel_search_composition();
         }
         if target != InputMethodTarget::GitBranchSearch {
-            self.git_branch_context_menu.cancel_search_composition();
+            self.git_branch_picker.cancel_search_composition();
         }
         if target != InputMethodTarget::DirectoryPathSearch {
-            self.path_picker.cancel_search_composition();
+            self.directory_picker.cancel_search_composition();
         }
         if target != InputMethodTarget::RemoteConnectionSearch {
             self.remote_connection_picker.cancel_search_composition();

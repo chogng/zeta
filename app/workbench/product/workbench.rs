@@ -378,8 +378,8 @@ impl ProductApp {
         let remote_is_mounted = self.remote_connection_manager.is_settings();
         self.settings.reopen();
         let _ = self.workbench.activate_settings();
-        let _ = self.git_branch_context_menu.dismiss();
-        let _ = self.path_picker.dismiss();
+        let _ = self.git_branch_picker.dismiss();
+        let _ = self.directory_picker.dismiss();
         let _ = self.remote_connection_picker.dismiss();
         if !remote_selected || !remote_is_mounted {
             self.dismiss_remote_connection_manager();

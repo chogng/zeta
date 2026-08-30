@@ -290,11 +290,11 @@ fn execute_pick_execution_location(app: &mut ProductApp, _request: &CommandReque
 }
 
 fn execute_pick_working_directory(app: &mut ProductApp, _request: &CommandRequest) {
-    app.toggle_path_picker();
+    app.toggle_directory_picker();
 }
 
 fn execute_pick_git_branch(app: &mut ProductApp, _request: &CommandRequest) {
-    app.toggle_git_branch_context_menu();
+    app.toggle_git_branch_picker();
 }
 
 fn execute_show_git_diff(app: &mut ProductApp, _request: &CommandRequest) {

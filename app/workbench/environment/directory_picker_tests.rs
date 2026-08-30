@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::{
     DirectoryPicker, DirectoryPickerAction, DirectoryPickerActivation, DirectoryPickerState,
-    path_item_id,
+    directory_item_id,
 };
 use zeta_ui_components::{ScrollAxis, ScrollCommand};
 use zeta_ui_theme::DEFAULT_UI_THEME;
@@ -75,13 +75,7 @@ fn picker_scrolls_all_children_without_paging() {
     .unwrap();
     let metrics = picker.scroll_metrics().unwrap();
     assert!(metrics.maximum_offset().y > 0.0);
-    assert!(
-        picker
-            .dropdown
-            .item_bounds(items.len() - 1)
-            .unwrap()
-            .is_empty()
-    );
+    assert!(picker.item_bounds(items.len() - 1).unwrap().is_empty());
 
     assert!(state.apply_scroll(ScrollCommand::ToEnd(ScrollAxis::Vertical), metrics));
     let picker = DirectoryPicker::new(
@@ -93,13 +87,7 @@ fn picker_scrolls_all_children_without_paging() {
         &dispatch,
     )
     .unwrap();
-    assert!(
-        !picker
-            .dropdown
-            .item_bounds(items.len() - 1)
-            .unwrap()
-            .is_empty()
-    );
+    assert!(!picker.item_bounds(items.len() - 1).unwrap().is_empty());
     let child_index = state
         .items()
         .iter()
@@ -164,15 +152,9 @@ fn picker_is_anchored_above_the_toolbar_and_registers_modal_menu_semantics() {
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        vec![
-            "DirectoryPicker",
-            "Dropdown",
-            "ContextView",
-            "SearchBox",
-            "InputBox"
-        ]
+        vec!["Picker", "Dropdown", "ContextView", "SearchBox", "InputBox"]
     );
-    assert_eq!(state.first_action_id(), Some(path_item_id(0)));
+    assert_eq!(state.first_action_id(), Some(directory_item_id(0)));
     std::fs::remove_dir_all(root).unwrap();
 }
 
