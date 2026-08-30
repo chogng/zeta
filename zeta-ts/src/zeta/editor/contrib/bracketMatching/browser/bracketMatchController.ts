@@ -34,7 +34,7 @@ export class BracketMatchController extends Disposable {
 			return;
 		}
 		const ranges = new Map<string, Range>();
-		for (const selection of this.selections.selections.selections) {
+		for (const selection of this.selections.selections) {
 			if (!selection.isEmpty()) continue;
 			const match = this.bracketPairs.matchBracket(selection.getPosition())
 				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);

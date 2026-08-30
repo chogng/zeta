@@ -4,10 +4,9 @@ import { JSDOM } from "jsdom";
 import { EditorIndentationKind } from "../../../../common/core/misc/indentation.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -33,7 +32,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({
 		container,
 		model,
@@ -48,7 +47,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 	});
 
 	const range = Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (5) + 1));
-	selections.setSelections(SelectionSet.single(range));
+	selections.setSelections([range]);
 
 	const indent = keyboardEvent(dom.window, "Tab");
 	input.element.dispatchEvent(indent);
@@ -67,8 +66,8 @@ test("Line operations controller validates model ownership and indentation optio
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one");
 	using otherModel = new TextModel("two");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using otherSelections = new CursorsController(otherModel, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using otherSelections = new CursorsController(otherModel, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({
 		container,
 		model,

@@ -1,5 +1,5 @@
 import { regExpLeadsToEndlessLoop } from '../../../base/common/strings.js';
-import { type IRange } from '../core/range.js';
+import { type IRange, Range } from '../core/range.js';
 import { type FoldingRules } from '../languages/languageConfiguration.js';
 import { isMultilineRegexSource } from '../model/textModelSearch.js';
 
@@ -39,7 +39,7 @@ function collectRegionHeaders(model: ISectionHeaderFinderTarget, options: FindSe
 		const lineContent = model.getLineContent(lineNumber);
 		const match = lineContent.match(options.foldingRules!.markers!.start);
 		if (!match) continue;
-		const range = { startLineNumber: lineNumber, startColumn: match[0].length + 1, endLineNumber: lineNumber, endColumn: lineContent.length + 1 };
+		const range = new Range(lineNumber, match[0].length + 1, lineNumber, lineContent.length + 1);
 		if (range.endColumn <= range.startColumn) continue;
 		const header = { range, ...getHeaderText(lineContent.substring(match[0].length)), shouldBeInComments: false };
 		if (header.text || header.hasSeparatorLine) headers.push(header);
@@ -66,12 +66,12 @@ export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: F
 			const matchLines = match[0].split('\n');
 			const startColumn = match.index - precedingText.lastIndexOf('\n');
 			const lastMatchLine = matchLines[matchLines.length - 1]!;
-			const range = {
-				startLineNumber: lineNumber,
+			const range = new Range(
+				lineNumber,
 				startColumn,
-				endLineNumber: lineNumber + matchLines.length - 1,
-				endColumn: matchLines.length === 1 ? startColumn + match[0].length : lastMatchLine.length + 1,
-			};
+				lineNumber + matchLines.length - 1,
+				matchLines.length === 1 ? startColumn + match[0].length : lastMatchLine.length + 1,
+			);
 			const header = {
 				range,
 				text: (match.groups ?? {})['label'] ?? '',

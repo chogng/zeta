@@ -1,39 +1,17 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { clampOffset, createNativeTextWindow, isNativeTextUpdateEvent, NATIVE_TEXT_WINDOW_LENGTH } from '../../../browser/controller/editContext/native/nativeEditContextUtils.js';
 
-import assert from 'assert';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { NullLogService } from '../../../../platform/log/common/log.js';
-import { FocusTracker } from '../../../browser/controller/editContext/native/nativeEditContextUtils.js';
+test('native edit-context offsets are clamped and validated', () => {
+	assert.equal(clampOffset(-4, 10), 0);
+	assert.equal(clampOffset(20, 10), 10);
+	assert.equal(isNativeTextUpdateEvent({ text: 'x', updateRangeStart: 0, updateRangeEnd: 1 }), true);
+	assert.equal(isNativeTextUpdateEvent({ text: 'x', updateRangeStart: -1, updateRangeEnd: 1 }), false);
+});
 
-suite('NativeEditContextUtils', () => {
-
-	const disposables = ensureNoDisposablesAreLeakedInTestSuite();
-
-	test('tracks focus in the DOM node owner document', () => {
-		const iframe = document.createElement('iframe');
-		document.body.appendChild(iframe);
-		disposables.add(toDisposable(() => iframe.remove()));
-
-		const target = iframe.contentDocument!.createElement('div');
-		target.tabIndex = 0;
-		iframe.contentDocument!.body.appendChild(target);
-
-		let focused = false;
-		const tracker = disposables.add(new FocusTracker(new NullLogService(), target, value => focused = value));
-		tracker.focus();
-
-		assert.deepStrictEqual({
-			activeElement: iframe.contentDocument!.activeElement === target,
-			focused,
-			trackerFocused: tracker.isFocused,
-		}, {
-			activeElement: true,
-			focused: true,
-			trackerFocused: true,
-		});
-	});
+test('native text window remains bounded around the selection', () => {
+	const text = 'a'.repeat(NATIVE_TEXT_WINDOW_LENGTH * 2);
+	const window = createNativeTextWindow(text, NATIVE_TEXT_WINDOW_LENGTH, NATIVE_TEXT_WINDOW_LENGTH);
+	assert.equal(window.endOffset - window.startOffset, NATIVE_TEXT_WINDOW_LENGTH);
+	assert.ok(window.startOffset <= NATIVE_TEXT_WINDOW_LENGTH && window.endOffset >= NATIVE_TEXT_WINDOW_LENGTH);
 });

@@ -1,17 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { DefaultEndOfLine } from '../../common/model.js';
 import { ModelService } from '../../common/services/modelService.js';
 import { createPieceTreeTextBuffer } from '../../common/model/textBufferFactory.js';
 import { EditSources } from '../../common/textModelEditSource.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { EditorModelConfiguration } from '../../common/config/editorModelConfiguration.js';
 import type { ITextResourcePropertiesService } from '../../common/services/textResourceConfiguration.js';
+import {
+	ConfigurationTarget,
+	type IConfigurationChangeEvent,
+	type IConfigurationData,
+	type IConfigurationOverrides,
+	type IConfigurationService,
+	type IConfigurationUpdateOptions,
+	type IConfigurationUpdateOverrides,
+	type IConfigurationValue,
+} from '../../../platform/configuration/common/configuration.js';
+import type { IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 
 test('ModelService owns model creation options and applies indentation detection', () => {
-	using configuration = new InMemoryConfigurationService();
+	using configuration = new TestResourceConfigurationService();
 	using service = new ModelService(configuration, new TestTextResourcePropertiesService(configuration));
 	const resource = URI.parse('inmemory://model-service/indentation.txt');
 	const options = service.getCreationOptions('plaintext', resource, true);
@@ -38,7 +49,7 @@ test('ModelService owns model creation options and applies indentation detection
 });
 
 test('ModelService consumes ITextBufferFactory values and releases factory ownership', () => {
-	using configuration = new InMemoryConfigurationService();
+	using configuration = new TestResourceConfigurationService();
 	using service = new ModelService(configuration, new TestTextResourcePropertiesService(configuration));
 	let disposalCount = 0;
 	const factory = {
@@ -75,11 +86,11 @@ test('ModelService consumes ITextBufferFactory values and releases factory owner
 });
 
 test('ModelService restores closed file history only for identical content', () => {
-	using configuration = new InMemoryConfigurationService();
+	using configuration = new TestResourceConfigurationService();
 	using service = new ModelService(configuration, new TestTextResourcePropertiesService(configuration));
 	const resource = URI.file('/workspace/history.txt');
 	const first = service.createModel('before', null, resource);
-	first.applyEdits([{ range: first.getFullModelRange(), text: 'after' }]);
+	first.pushEditOperations(null, [{ range: first.getFullModelRange(), text: 'after' }], () => null);
 	assert.equal(first.canUndo(), true);
 	first.dispose();
 
@@ -94,13 +105,13 @@ test('ModelService restores closed file history only for identical content', () 
 });
 
 test('ModelService reapplies model options when platform configuration changes', async () => {
-	using configuration = new InMemoryConfigurationService();
+	using configuration = new TestResourceConfigurationService();
 	using service = new ModelService(configuration, new TestTextResourcePropertiesService(configuration));
 	const model = service.createModel('root\n\tchild', null, URI.parse('inmemory://model-service/configuration.txt'));
-	await configuration.updateValue(EditorModelConfiguration.detectIndentation, false);
-	await configuration.updateValue(EditorModelConfiguration.tabSize, 2);
-	await configuration.updateValue(EditorModelConfiguration.indentSize, 'tabSize');
-	await configuration.updateValue(EditorModelConfiguration.insertSpaces, false);
+	await configuration.updateValue('editor.detectIndentation', false);
+	await configuration.updateValue('editor.tabSize', 2);
+	await configuration.updateValue('editor.indentSize', 'tabSize');
+	await configuration.updateValue('editor.insertSpaces', false);
 	assert.equal(model.getOptions().tabSize, 2);
 	assert.equal(model.getOptions().indentSize, 2);
 	assert.equal(model.getOptions().insertSpaces, false);
@@ -109,10 +120,83 @@ test('ModelService reapplies model options when platform configuration changes',
 class TestTextResourcePropertiesService implements ITextResourcePropertiesService {
 	readonly _serviceBrand: undefined;
 
-	constructor(private readonly configuration: InMemoryConfigurationService) {}
+	constructor(private readonly configuration: IConfigurationService) {}
 
 	getEOL(resource: URI, language?: string): string {
-		const eol = this.configuration.getValue<string>(EditorModelConfiguration.filesEol, { resource, overrideIdentifier: language });
+		const eol = this.configuration.getValue<string>('files.eol', { resource, overrideIdentifier: language });
 		return eol === 'auto' ? (process.platform === 'win32' ? '\r\n' : '\n') : eol;
 	}
+}
+
+class TestResourceConfigurationService extends Disposable implements IConfigurationService {
+	readonly _serviceBrand = undefined;
+	private readonly configuration = this._register(new InMemoryConfigurationService());
+	readonly onDidChangeConfiguration: Event<IConfigurationChangeEvent> = (listener, thisArgs, disposables) => (
+		this.configuration.onDidChangeConfiguration(
+			event => listener.call(thisArgs, resourceIndependentEvent(event)),
+			undefined,
+			disposables,
+		)
+	);
+
+	getValue<T>(): T;
+	getValue<T>(section: string): T;
+	getValue<T>(overrides: IConfigurationOverrides): T;
+	getValue<T>(section: string, overrides: IConfigurationOverrides): T;
+	getValue<T>(arg1?: string | IConfigurationOverrides, arg2?: IConfigurationOverrides): T {
+		if (typeof arg1 === 'string') {
+			return arg2 === undefined
+				? this.configuration.getValue<T>(arg1)
+				: this.configuration.getValue<T>(arg1, withoutResource(arg2));
+		}
+		return arg1 === undefined
+			? this.configuration.getValue<T>()
+			: this.configuration.getValue<T>(withoutResource(arg1));
+	}
+
+	updateValue(key: string, value: unknown): Promise<void>;
+	updateValue(key: string, value: unknown, target: ConfigurationTarget): Promise<void>;
+	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): Promise<void>;
+	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
+	updateValue(key: string, value: unknown, arg3?: ConfigurationTarget | IConfigurationOverrides | IConfigurationUpdateOverrides, target?: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void> {
+		if (arg3 === undefined) return this.configuration.updateValue(key, value);
+		if (typeof arg3 === 'number') return this.configuration.updateValue(key, value, arg3);
+		const overrides = withoutUpdateResource(arg3);
+		return target === undefined
+			? this.configuration.updateValue(key, value, overrides)
+			: this.configuration.updateValue(key, value, overrides, target, options);
+	}
+
+	getConfigurationData(): IConfigurationData | null {
+		return this.configuration.getConfigurationData();
+	}
+
+	inspect<T>(key: string, overrides: IConfigurationOverrides = {}): IConfigurationValue<Readonly<T>> {
+		return this.configuration.inspect<T>(key, withoutResource(overrides));
+	}
+
+	reloadConfiguration(target?: ConfigurationTarget | IWorkspaceFolder): Promise<void> {
+		return this.configuration.reloadConfiguration(target);
+	}
+
+	keys(): ReturnType<IConfigurationService['keys']> {
+		return this.configuration.keys();
+	}
+}
+
+function withoutResource(overrides: IConfigurationOverrides): IConfigurationOverrides {
+	return { overrideIdentifier: overrides.overrideIdentifier };
+}
+
+function withoutUpdateResource(overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): IConfigurationOverrides | IConfigurationUpdateOverrides {
+	return 'overrideIdentifiers' in overrides
+		? { overrideIdentifiers: overrides.overrideIdentifiers }
+		: withoutResource(overrides);
+}
+
+function resourceIndependentEvent(event: IConfigurationChangeEvent): IConfigurationChangeEvent {
+	return {
+		...event,
+		affectsConfiguration: (section, overrides) => event.affectsConfiguration(section, overrides ? withoutResource(overrides) : undefined),
+	};
 }

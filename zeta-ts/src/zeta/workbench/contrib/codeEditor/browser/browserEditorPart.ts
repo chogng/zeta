@@ -10,7 +10,7 @@ export function createBrowserEditorPart(options: BrowserEditorPartOptions): Code
 	const editorWorkers = browserServices.workers;
 	return new CodeEditorWidget({
 		...options,
-		codeEditorService: browserServices.codeEditors,
+		codeEditorService: browserServices.codeEditorService,
 		editorWorkerFactory: editorWorkers.editorWorkerFactory,
 		...(options.languageFeaturesService ? {} : { completionWorkerFactory: editorWorkers.completionWorkerFactory }),
 	});

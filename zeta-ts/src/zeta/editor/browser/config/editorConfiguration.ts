@@ -1,358 +1,292 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
 import * as browser from '../../../base/browser/browser.js';
-import * as arrays from '../../../base/common/arrays.js';
-import { Emitter, Event } from '../../../base/common/event.js';
+import { getWindow } from '../../../base/browser/dom.js';
+import { PixelRatio } from '../../../base/browser/pixelRatio.js';
+import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import * as objects from '../../../base/common/objects.js';
-import * as platform from '../../../base/common/platform.js';
+import { isMacintosh } from '../../../base/common/platform.js';
+import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
+import { type IEditorConfiguration } from '../../common/config/editorConfiguration.js';
+import { EditorZoom } from '../../common/config/editorZoom.js';
+import {
+	ComputeOptionsMemory,
+	ConfigurationChangedEvent,
+	EditorOption,
+	editorOptionsRegistry,
+	type FindComputedEditorOptionValueById,
+	type IComputedEditorOptions,
+	type IEditorOptions,
+	type IEnvironmentalOptions,
+} from '../../common/config/editorOptions.js';
+import { type BareFontInfo, type FontInfo, type IValidatedEditorOptions } from '../../common/config/fontInfo.js';
+import { createBareFontInfoFromValidatedSettings } from '../../common/config/fontInfoFromSettings.js';
+import { type IDimension } from '../../common/core/2d/dimension.js';
+import { InputMode } from '../../common/inputMode.js';
 import { ElementSizeObserver } from './elementSizeObserver.js';
 import { FontMeasurements } from './fontMeasurements.js';
 import { migrateOptions } from './migrateOptions.js';
 import { TabFocus } from './tabFocus.js';
-import { ComputeOptionsMemory, ConfigurationChangedEvent, EditorOption, editorOptionsRegistry, FindComputedEditorOptionValueById, IComputedEditorOptions, IEditorOptions, IEnvironmentalOptions } from '../../common/config/editorOptions.js';
-import { EditorZoom } from '../../common/config/editorZoom.js';
-import { BareFontInfo, FontInfo, IValidatedEditorOptions } from '../../common/config/fontInfo.js';
-import { createBareFontInfoFromValidatedSettings } from '../../common/config/fontInfoFromSettings.js';
-import { IDimension } from '../../common/core/2d/dimension.js';
-import { IEditorConfiguration } from '../../common/config/editorConfiguration.js';
-import { AccessibilitySupport, IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
-import { getWindow, getWindowById } from '../../../base/browser/dom.js';
-import { PixelRatio } from '../../../base/browser/pixelRatio.js';
-import { MenuId } from '../../../platform/actions/common/actions.js';
-import { InputMode } from '../../common/inputMode.js';
 
+/** Options supplied while constructing a browser code editor. */
 export interface IEditorConstructionOptions extends IEditorOptions {
-	/**
-	 * The initial editor dimension (to avoid measuring the container).
-	 */
-	dimension?: IDimension;
-	/**
-	 * Place overflow widgets inside an external DOM node.
-	 * Defaults to an internal DOM node.
-	 */
-	overflowWidgetsDomNode?: HTMLElement;
+	readonly dimension?: IDimension;
+	readonly overflowWidgetsDomNode?: HTMLElement;
 }
 
+/** Browser values used to compute editor options. */
+export interface IEnvConfiguration {
+	readonly extraEditorClassName: string;
+	readonly outerWidth: number;
+	readonly outerHeight: number;
+	readonly emptySelectionClipboard: boolean;
+	readonly pixelRatio: number;
+	readonly accessibilitySupport: AccessibilitySupport;
+	readonly editContextSupported: boolean;
+}
+
+/** Dense option storage shared by configuration consumers. */
+export class ComputedEditorOptions implements IComputedEditorOptions {
+	private readonly values: unknown[] = [];
+
+	_read<T>(id: EditorOption): T {
+		if (id >= this.values.length) throw new RangeError(`Editor option ${id} has not been computed`);
+		return this.values[id] as T;
+	}
+
+	get<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
+		return this._read(id);
+	}
+
+	_write<T>(id: EditorOption, value: T): void {
+		this.values[id] = value;
+	}
+}
+
+class ValidatedEditorOptions implements IValidatedEditorOptions {
+	private readonly values: unknown[] = [];
+
+	_read<T>(id: EditorOption): T {
+		return this.values[id] as T;
+	}
+
+	get<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
+		return this._read(id);
+	}
+
+	_write<T>(id: EditorOption, value: T): void {
+		this.values[id] = value;
+	}
+}
+
+/** Owns browser-derived editor options and publishes complete configuration changes. */
 export class EditorConfiguration extends Disposable implements IEditorConfiguration {
+	private readonly changeEmitter = this._register(new Emitter<ConfigurationChangedEvent>());
+	private readonly fastChangeEmitter = this._register(new Emitter<ConfigurationChangedEvent>());
+	private readonly containerObserver: ElementSizeObserver;
+	private readonly targetWindow: Window;
+	private readonly computeMemory = new ComputeOptionsMemory();
+	private readonly rawOptions: IEditorOptions;
+	private validatedOptions: ValidatedEditorOptions;
+	private reservedHeight = 0;
+	private isDominatedByLongLines = false;
+	private lineNumbersDigitCount = 1;
+	private viewLineCount = 1;
+	private glyphMarginDecorationLaneCount = 1;
 
-	private _onDidChange = this._register(new Emitter<ConfigurationChangedEvent>());
-	public readonly onDidChange: Event<ConfigurationChangedEvent> = this._onDidChange.event;
+	readonly isSimpleWidget = false;
+	readonly contextMenuId = undefined;
+	readonly onDidChange = this.changeEmitter.event;
+	readonly onDidChangeFast = this.fastChangeEmitter.event;
+	options: ComputedEditorOptions;
 
-	private _onDidChangeFast = this._register(new Emitter<ConfigurationChangedEvent>());
-	public readonly onDidChangeFast: Event<ConfigurationChangedEvent> = this._onDidChangeFast.event;
-
-	public readonly isSimpleWidget: boolean;
-	public readonly contextMenuId: MenuId;
-	private readonly _containerObserver: ElementSizeObserver;
-
-	private _isDominatedByLongLines: boolean = false;
-	private _viewLineCount: number = 1;
-	private _lineNumbersDigitCount: number = 1;
-	private _reservedHeight: number = 0;
-	private _glyphMarginDecorationLaneCount: number = 1;
-	private _targetWindowId: number;
-
-	private readonly _computeOptionsMemory: ComputeOptionsMemory = new ComputeOptionsMemory();
-	/**
-	 * Raw options as they were passed in and merged with all calls to `updateOptions`.
-	 */
-	private readonly _rawOptions: IEditorOptions;
-	/**
-	 * Validated version of `_rawOptions`.
-	 */
-	private _validatedOptions: ValidatedEditorOptions;
-	/**
-	 * Complete options which are a combination of passed in options and env values.
-	 */
-	public options: ComputedEditorOptions;
-
-	constructor(
-		isSimpleWidget: boolean,
-		contextMenuId: MenuId,
-		options: Readonly<IEditorConstructionOptions>,
-		container: HTMLElement | null,
-		@IAccessibilityService private readonly _accessibilityService: IAccessibilityService
-	) {
+	constructor(options: Readonly<IEditorConstructionOptions>, container: HTMLElement) {
 		super();
-		this.isSimpleWidget = isSimpleWidget;
-		this.contextMenuId = contextMenuId;
-		this._containerObserver = this._register(new ElementSizeObserver(container, options.dimension));
-		this._targetWindowId = getWindow(container).vscodeWindowId;
+		this.targetWindow = getWindow(container);
+		const { dimension, overflowWidgetsDomNode: _overflowWidgetsDomNode, ...editorOptions } = options;
+		this.rawOptions = cloneAndMigrate(editorOptions);
+		this.validatedOptions = validateOptions(this.rawOptions);
+		this.containerObserver = this._register(new ElementSizeObserver(container, dimension));
+		this.options = this.computeOptions();
+		if (this.options.get(EditorOption.automaticLayout)) this.containerObserver.startObserving();
 
-		this._rawOptions = deepCloneAndMigrateOptions(options);
-		this._validatedOptions = EditorOptionsUtil.validateOptions(this._rawOptions);
-		this.options = this._computeOptions();
-
-		if (this.options.get(EditorOption.automaticLayout)) {
-			this._containerObserver.startObserving();
-		}
-
-		this._register(EditorZoom.onDidChangeZoomLevel(() => this._recomputeOptions()));
-		this._register(TabFocus.onDidChangeTabFocus(() => this._recomputeOptions()));
-		this._register(this._containerObserver.onDidChange(() => this._recomputeOptions()));
-		this._register(FontMeasurements.onDidChange(() => this._recomputeOptions()));
-		this._register(PixelRatio.getInstance(getWindow(container)).onDidChange(() => this._recomputeOptions()));
-		this._register(this._accessibilityService.onDidChangeScreenReaderOptimized(() => this._recomputeOptions()));
-		this._register(InputMode.onDidChangeInputMode(() => this._recomputeOptions()));
+		this._register(EditorZoom.onDidChangeZoomLevel(() => this.recomputeOptions()));
+		this._register(TabFocus.onDidChangeTabFocus(() => this.recomputeOptions()));
+		this._register(InputMode.onDidChangeInputMode(() => this.recomputeOptions()));
+		this._register(FontMeasurements.onDidChange(() => this.recomputeOptions()));
+		this._register(PixelRatio.getInstance(this.targetWindow).onDidChange(() => this.recomputeOptions()));
+		this._register(this.containerObserver.onDidChange(() => this.recomputeOptions()));
 	}
 
-	private _recomputeOptions(): void {
-		const newOptions = this._computeOptions();
-		const changeEvent = EditorOptionsUtil.checkEquals(this.options, newOptions);
-		if (changeEvent === null) {
-			// nothing changed!
-			return;
-		}
-
-		this.options = newOptions;
-		this._onDidChangeFast.fire(changeEvent);
-		this._onDidChange.fire(changeEvent);
+	getRawOptions(): IEditorOptions {
+		return this.rawOptions;
 	}
 
-	private _computeOptions(): ComputedEditorOptions {
-		const partialEnv = this._readEnvConfiguration();
-		const bareFontInfo = createBareFontInfoFromValidatedSettings(this._validatedOptions, partialEnv.pixelRatio, this.isSimpleWidget);
-		const fontInfo = this._readFontInfo(bareFontInfo);
-		const env: IEnvironmentalOptions = {
-			memory: this._computeOptionsMemory,
-			outerWidth: partialEnv.outerWidth,
-			outerHeight: partialEnv.outerHeight - this._reservedHeight,
-			fontInfo: fontInfo,
-			extraEditorClassName: partialEnv.extraEditorClassName,
-			isDominatedByLongLines: this._isDominatedByLongLines,
-			viewLineCount: this._viewLineCount,
-			lineNumbersDigitCount: this._lineNumbersDigitCount,
-			emptySelectionClipboard: partialEnv.emptySelectionClipboard,
-			pixelRatio: partialEnv.pixelRatio,
-			tabFocusMode: this._validatedOptions.get(EditorOption.tabFocusMode) || TabFocus.getTabFocusMode(),
-			inputMode: InputMode.getInputMode(),
-			accessibilitySupport: partialEnv.accessibilitySupport,
-			glyphMarginDecorationLaneCount: this._glyphMarginDecorationLaneCount,
-			editContextSupported: partialEnv.editContextSupported
-		};
-		return EditorOptionsUtil.computeOptions(this._validatedOptions, env);
+	updateOptions(newOptions: Readonly<IEditorOptions>): void {
+		const update = cloneAndMigrate(newOptions);
+		const wasAutomatic = this.options.get(EditorOption.automaticLayout);
+		let changed = false;
+		for (const option of editorOptionsRegistry) {
+			if (!Object.prototype.hasOwnProperty.call(update, option.name)) continue;
+			const result = option.applyUpdate(
+				(this.rawOptions as Record<string, unknown>)[option.name],
+				(update as Record<string, unknown>)[option.name],
+			);
+			(this.rawOptions as Record<string, unknown>)[option.name] = result.newValue;
+			changed ||= result.didChange;
+		}
+		if (!changed) return;
+		this.validatedOptions = validateOptions(this.rawOptions);
+		this.recomputeOptions();
+		const isAutomatic = this.options.get(EditorOption.automaticLayout);
+		if (wasAutomatic === isAutomatic) return;
+		if (isAutomatic) this.containerObserver.startObserving();
+		else this.containerObserver.stopObserving();
+	}
+
+	observeContainer(dimension?: IDimension): void {
+		this.containerObserver.observe(dimension);
+	}
+
+	setIsDominatedByLongLines(value: boolean): void {
+		if (this.isDominatedByLongLines === value) return;
+		this.isDominatedByLongLines = value;
+		this.recomputeOptions();
+	}
+
+	setModelLineCount(count: number): void {
+		const digits = digitCount(count);
+		if (this.lineNumbersDigitCount === digits) return;
+		this.lineNumbersDigitCount = digits;
+		this.recomputeOptions();
+	}
+
+	setViewLineCount(count: number): void {
+		if (this.viewLineCount === count) return;
+		this.viewLineCount = count;
+		this.recomputeOptions();
+	}
+
+	setReservedHeight(height: number): void {
+		if (this.reservedHeight === height) return;
+		this.reservedHeight = height;
+		this.recomputeOptions();
+	}
+
+	setGlyphMarginDecorationLaneCount(count: number): void {
+		if (this.glyphMarginDecorationLaneCount === count) return;
+		this.glyphMarginDecorationLaneCount = count;
+		this.recomputeOptions();
 	}
 
 	protected _readEnvConfiguration(): IEnvConfiguration {
 		return {
-			extraEditorClassName: getExtraEditorClassName(),
-			outerWidth: this._containerObserver.getWidth(),
-			outerHeight: this._containerObserver.getHeight(),
+			extraEditorClassName: editorClassName(),
+			outerWidth: this.containerObserver.getWidth(),
+			outerHeight: this.containerObserver.getHeight(),
 			emptySelectionClipboard: browser.isWebKit || browser.isFirefox,
-			pixelRatio: PixelRatio.getInstance(getWindowById(this._targetWindowId, true).window).value,
-			// eslint-disable-next-line local/code-no-any-casts, @typescript-eslint/no-explicit-any
-			editContextSupported: typeof (globalThis as any).EditContext === 'function',
-			accessibilitySupport: (
-				this._accessibilityService.isScreenReaderOptimized()
-					? AccessibilitySupport.Enabled
-					: this._accessibilityService.getAccessibilitySupport()
-			)
+			pixelRatio: PixelRatio.getInstance(this.targetWindow).value,
+			accessibilitySupport: AccessibilitySupport.Unknown,
+			editContextSupported: typeof (globalThis as { EditContext?: unknown }).EditContext === 'function',
 		};
 	}
 
-	protected _readFontInfo(bareFontInfo: BareFontInfo): FontInfo {
-		return FontMeasurements.readFontInfo(getWindowById(this._targetWindowId, true).window, bareFontInfo);
+	protected _readFontInfo(font: BareFontInfo): FontInfo {
+		return FontMeasurements.readFontInfo(this.targetWindow, font);
 	}
 
-	public getRawOptions(): IEditorOptions {
-		return this._rawOptions;
+	private recomputeOptions(): void {
+		const next = this.computeOptions();
+		const event = changedOptions(this.options, next);
+		if (!event) return;
+		this.options = next;
+		this.fastChangeEmitter.fire(event);
+		this.changeEmitter.fire(event);
 	}
 
-	public updateOptions(_newOptions: Readonly<IEditorOptions>): void {
-		const newOptions = deepCloneAndMigrateOptions(_newOptions);
-
-		const didChange = EditorOptionsUtil.applyUpdate(this._rawOptions, newOptions);
-		if (!didChange) {
-			return;
-		}
-
-		this._validatedOptions = EditorOptionsUtil.validateOptions(this._rawOptions);
-		this._recomputeOptions();
-	}
-
-	public observeContainer(dimension?: IDimension): void {
-		this._containerObserver.observe(dimension);
-	}
-
-	public setIsDominatedByLongLines(isDominatedByLongLines: boolean): void {
-		if (this._isDominatedByLongLines === isDominatedByLongLines) {
-			return;
-		}
-		this._isDominatedByLongLines = isDominatedByLongLines;
-		this._recomputeOptions();
-	}
-
-	public setModelLineCount(modelLineCount: number): void {
-		const lineNumbersDigitCount = digitCount(modelLineCount);
-		if (this._lineNumbersDigitCount === lineNumbersDigitCount) {
-			return;
-		}
-		this._lineNumbersDigitCount = lineNumbersDigitCount;
-		this._recomputeOptions();
-	}
-
-	public setViewLineCount(viewLineCount: number): void {
-		if (this._viewLineCount === viewLineCount) {
-			return;
-		}
-		this._viewLineCount = viewLineCount;
-		this._recomputeOptions();
-	}
-
-	public setReservedHeight(reservedHeight: number) {
-		if (this._reservedHeight === reservedHeight) {
-			return;
-		}
-		this._reservedHeight = reservedHeight;
-		this._recomputeOptions();
-	}
-
-	public setGlyphMarginDecorationLaneCount(decorationLaneCount: number): void {
-		if (this._glyphMarginDecorationLaneCount === decorationLaneCount) {
-			return;
-		}
-		this._glyphMarginDecorationLaneCount = decorationLaneCount;
-		this._recomputeOptions();
-	}
-}
-
-function digitCount(n: number): number {
-	let r = 0;
-	while (n) {
-		n = Math.floor(n / 10);
-		r++;
-	}
-	return r ? r : 1;
-}
-
-function getExtraEditorClassName(): string {
-	let extra = '';
-	if (browser.isSafari || browser.isWebkitWebView) {
-		// See https://github.com/microsoft/vscode/issues/108822
-		extra += 'no-minimap-shadow ';
-		extra += 'enable-user-select ';
-	} else {
-		// Use user-select: none in all browsers except Safari and native macOS WebView
-		extra += 'no-user-select ';
-	}
-	if (platform.isMacintosh) {
-		extra += 'mac ';
-	}
-	return extra;
-}
-
-export interface IEnvConfiguration {
-	extraEditorClassName: string;
-	outerWidth: number;
-	outerHeight: number;
-	emptySelectionClipboard: boolean;
-	pixelRatio: number;
-	accessibilitySupport: AccessibilitySupport;
-	editContextSupported: boolean;
-}
-
-class ValidatedEditorOptions implements IValidatedEditorOptions {
-	private readonly _values: unknown[] = [];
-	public _read<T>(option: EditorOption): T {
-		return this._values[option] as T;
-	}
-	public get<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
-		return this._values[id] as FindComputedEditorOptionValueById<T>;
-	}
-	public _write<T>(option: EditorOption, value: T): void {
-		this._values[option] = value;
-	}
-}
-
-export class ComputedEditorOptions implements IComputedEditorOptions {
-	private readonly _values: unknown[] = [];
-	public _read<T>(id: EditorOption): T {
-		if (id >= this._values.length) {
-			throw new Error('Cannot read uninitialized value');
-		}
-		return this._values[id] as T;
-	}
-	public get<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
-		return this._read(id);
-	}
-	public _write<T>(id: EditorOption, value: T): void {
-		this._values[id] = value;
-	}
-}
-
-class EditorOptionsUtil {
-
-	public static validateOptions(options: IEditorOptions): ValidatedEditorOptions {
-		const result = new ValidatedEditorOptions();
-		for (const editorOption of editorOptionsRegistry) {
-			const value = (editorOption.name === '_never_' ? undefined : (options as Record<string, unknown>)[editorOption.name]);
-			result._write(editorOption.id, editorOption.validate(value));
-		}
-		return result;
-	}
-
-	public static computeOptions(options: ValidatedEditorOptions, env: IEnvironmentalOptions): ComputedEditorOptions {
+	private computeOptions(): ComputedEditorOptions {
+		const browserEnv = this._readEnvConfiguration();
+		const fontInfo = this._readFontInfo(createBareFontInfoFromValidatedSettings(
+			this.validatedOptions,
+			browserEnv.pixelRatio,
+			this.isSimpleWidget,
+		));
+		const env: IEnvironmentalOptions = {
+			memory: this.computeMemory,
+			outerWidth: browserEnv.outerWidth,
+			outerHeight: Math.max(0, browserEnv.outerHeight - this.reservedHeight),
+			fontInfo,
+			extraEditorClassName: browserEnv.extraEditorClassName,
+			isDominatedByLongLines: this.isDominatedByLongLines,
+			viewLineCount: this.viewLineCount,
+			lineNumbersDigitCount: this.lineNumbersDigitCount,
+			emptySelectionClipboard: browserEnv.emptySelectionClipboard,
+			pixelRatio: browserEnv.pixelRatio,
+			tabFocusMode: this.validatedOptions.get(EditorOption.tabFocusMode) || TabFocus.getTabFocusMode(),
+			inputMode: InputMode.getInputMode(),
+			accessibilitySupport: browserEnv.accessibilitySupport,
+			glyphMarginDecorationLaneCount: this.glyphMarginDecorationLaneCount,
+			editContextSupported: browserEnv.editContextSupported,
+		};
 		const result = new ComputedEditorOptions();
-		for (const editorOption of editorOptionsRegistry) {
-			result._write(editorOption.id, editorOption.compute(env, result, options._read(editorOption.id)));
+		for (const option of editorOptionsRegistry) {
+			result._write(option.id, option.compute(env, result, this.validatedOptions._read(option.id)));
 		}
 		return result;
 	}
-
-	private static _deepEquals<T>(a: T, b: T): boolean {
-		if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) {
-			return a === b;
-		}
-		if (Array.isArray(a) || Array.isArray(b)) {
-			return (Array.isArray(a) && Array.isArray(b) ? arrays.equals(a, b) : false);
-		}
-		if (Object.keys(a as unknown as object).length !== Object.keys(b as unknown as object).length) {
-			return false;
-		}
-		for (const key in a) {
-			if (!EditorOptionsUtil._deepEquals(a[key], b[key])) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	public static checkEquals(a: ComputedEditorOptions, b: ComputedEditorOptions): ConfigurationChangedEvent | null {
-		const result: boolean[] = [];
-		let somethingChanged = false;
-		for (const editorOption of editorOptionsRegistry) {
-			const changed = !EditorOptionsUtil._deepEquals(a._read(editorOption.id), b._read(editorOption.id));
-			result[editorOption.id] = changed;
-			if (changed) {
-				somethingChanged = true;
-			}
-		}
-		return (somethingChanged ? new ConfigurationChangedEvent(result) : null);
-	}
-
-	/**
-	 * Returns true if something changed.
-	 * Modifies `options`.
-	*/
-	public static applyUpdate(options: IEditorOptions, update: Readonly<IEditorOptions>): boolean {
-		let changed = false;
-		for (const editorOption of editorOptionsRegistry) {
-			if (update.hasOwnProperty(editorOption.name)) {
-				const result = editorOption.applyUpdate((options as Record<string, unknown>)[editorOption.name], (update as Record<string, unknown>)[editorOption.name]);
-				(options as Record<string, unknown>)[editorOption.name] = result.newValue;
-				changed = changed || result.didChange;
-			}
-		}
-		return changed;
-	}
 }
 
-function deepCloneAndMigrateOptions(_options: Readonly<IEditorOptions>): IEditorOptions {
-	const options = objects.deepClone(_options);
-	migrateOptions(options);
-	return options;
+function validateOptions(options: IEditorOptions): ValidatedEditorOptions {
+	const result = new ValidatedEditorOptions();
+	for (const option of editorOptionsRegistry) {
+		result._write(option.id, option.validate((options as Record<string, unknown>)[option.name]));
+	}
+	return result;
+}
+
+function changedOptions(previous: ComputedEditorOptions, next: ComputedEditorOptions): ConfigurationChangedEvent | undefined {
+	const changed: boolean[] = [];
+	let anyChanged = false;
+	for (const option of editorOptionsRegistry) {
+		const didChange = !sameValue(previous._read(option.id), next._read(option.id));
+		changed[option.id] = didChange;
+		anyChanged ||= didChange;
+	}
+	return anyChanged ? new ConfigurationChangedEvent(changed) : undefined;
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+	if (Object.is(left, right)) return true;
+	if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+	if (Array.isArray(left) || Array.isArray(right)) {
+		return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((value, index) => sameValue(value, right[index]));
+	}
+	const leftEntries = Object.entries(left);
+	const rightRecord = right as Record<string, unknown>;
+	return leftEntries.length === Object.keys(rightRecord).length && leftEntries.every(([key, value]) => sameValue(value, rightRecord[key]));
+}
+
+function cloneAndMigrate(options: Readonly<IEditorOptions>): IEditorOptions {
+	const result = cloneValue(options) as IEditorOptions;
+	migrateOptions(result);
+	return result;
+}
+
+function cloneValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(cloneValue);
+	if (!value || typeof value !== 'object') return value;
+	const prototype = Object.getPrototypeOf(value);
+	if (prototype !== Object.prototype && prototype !== null) return value;
+	return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]));
+}
+
+function digitCount(value: number): number {
+	if (!Number.isFinite(value) || value < 1) return 1;
+	return Math.floor(value).toString().length;
+}
+
+function editorClassName(): string {
+	const classes: string[] = [];
+	if (browser.isSafari || browser.isWebkitWebView) classes.push('no-minimap-shadow', 'enable-user-select');
+	else classes.push('no-user-select');
+	if (isMacintosh) classes.push('mac');
+	return `${classes.join(' ')} `;
 }

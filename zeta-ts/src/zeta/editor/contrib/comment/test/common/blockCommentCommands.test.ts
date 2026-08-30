@@ -3,26 +3,23 @@ import test from "node:test";
 import { createToggleBlockCommentCommand } from "../../common/blockCommentCommands.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Block comments wrap and unwrap directional selections in isolated undo steps", () => {
 	using model = new TextModel("alpha beta");
-	using selections = new CursorsController(model, SelectionSet.single(
-		Selection.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (6) + 1)),
-	));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (6) + 1))]);
 	const options = { open: "/*", close: "*/" };
 
 	selections.execute(createToggleBlockCommentCommand(model, selections.selections, options));
 	assert.equal(model.getText(), "alpha /* beta */");
-	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(
 		new Position((0) + 1, (13) + 1),
 		new Position((0) + 1, (9) + 1),
 	));
 	selections.execute(createToggleBlockCommentCommand(model, selections.selections, options));
 	assert.equal(model.getText(), "alpha beta");
-	assert.deepEqual(selections.selections.primary, Selection.fromPositions(
+	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(
 		new Position((0) + 1, (10) + 1),
 		new Position((0) + 1, (6) + 1),
 	));
@@ -32,7 +29,7 @@ test("Block comments wrap and unwrap directional selections in isolated undo ste
 
 test("Block comments place collapsed carets inside the generated pair and support independent cursors", () => {
 	using model = new TextModel("one two");
-	using selections = new CursorsController(model, SelectionSet.withPrimary([
+	using selections = new CursorsController(model, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
 	], 1));
@@ -41,7 +38,7 @@ test("Block comments place collapsed carets inside the generated pair and suppor
 		close: "*/",
 	}));
 	assert.equal(model.getText(), "/* */one /* */two");
-	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (3) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (12) + 1)),
 	], 1));
@@ -50,14 +47,19 @@ test("Block comments place collapsed carets inside the generated pair and suppor
 test("Block comments reject overlapping selections and invalid tokens before mutation", () => {
 	using model = new TextModel("alpha");
 	const options = { open: "/*", close: "*/" };
-	const overlap = SelectionSet.withPrimary([
+	const overlap = primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (2) + 1), new Position((0) + 1, (5) + 1)),
 	], 0);
 	assert.throws(() => createToggleBlockCommentCommand(model, overlap, options), /must not overlap/);
-	assert.throws(() => createToggleBlockCommentCommand(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))), {
+	assert.throws(() => createToggleBlockCommentCommand(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))], {
 		open: "",
 		close: "*/",
 	}), /non-empty/);
 	assert.equal(model.getText(), "alpha");
 });
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
+}

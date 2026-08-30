@@ -19,7 +19,7 @@ registerTextEditorCapabilityContribution({
 		context.provideCapability(TextEditorCapability.bracketPairs, bracketPairs);
 		context.provideCapability(TextEditorCapability.bracketDecorations, decorations);
 		context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.BracketMatch));
-		const colorizeBrackets = context.options.bracketPairColorization !== false;
+		const colorizeBrackets = context.options.bracketPairColorization?.enabled !== false;
 		const renderBracketGuides = context.options.guides?.bracketPairs !== undefined && context.options.guides.bracketPairs !== false;
 		if (!largeFile && (colorizeBrackets || renderBracketGuides)) {
 			context.setBracketColorizationSource(new LanguageBracketColorizationSource(bracketPairs, colorizeBrackets));

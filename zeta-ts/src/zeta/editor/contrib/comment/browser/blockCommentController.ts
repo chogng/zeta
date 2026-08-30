@@ -40,7 +40,7 @@ export class BlockCommentController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if (event.ctrlKey || event.metaKey || !event.shiftKey || !event.altKey || event.key.toLowerCase() !== "a") return;
-		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections.primary.getPosition()) ?? this.options.languageId;
+		const languageId = this.options.lexicalContext?.getLanguageIdAt(this.selections.selections[0]!.getPosition()) ?? this.options.languageId;
 		const comments = this.options.configurations.getLanguageConfiguration(languageId).comments;
 		if (!comments?.blockCommentStartToken || !comments.blockCommentEndToken) return;
 		const blockComment = { open: comments.blockCommentStartToken, close: comments.blockCommentEndToken };
@@ -51,7 +51,7 @@ export class BlockCommentController extends Disposable {
 			blockComment,
 		);
 		this.executeCommand(ToggleBlockCommentCommandId, () => this.selections.execute(command));
-		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
+		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
 	}
 }
 

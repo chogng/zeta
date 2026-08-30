@@ -1,8 +1,3 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
 import * as objects from '../../../../base/common/objects.js';
 import { ICodeEditor } from '../../editorBrowser.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
@@ -19,14 +14,13 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { IUserInteractionService } from '../../../../platform/userInteraction/browser/userInteractionService.js';
 
 export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
-	private readonly _parentEditor: ICodeEditor;
-	private readonly _overwriteOptions: IEditorOptions;
+	private readonly overwriteOptions: IEditorOptions;
 
 	constructor(
 		domElement: HTMLElement,
 		options: IEditorOptions,
 		codeEditorWidgetOptions: ICodeEditorWidgetOptions,
-		parentEditor: ICodeEditor,
+		private readonly parentEditor: ICodeEditor,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ICodeEditorService codeEditorService: ICodeEditorService,
 		@ICommandService commandService: ICommandService,
@@ -40,34 +34,27 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 	) {
 		super(domElement, { ...parentEditor.getRawOptions(), overflowWidgetsDomNode: parentEditor.getOverflowWidgetsDomNode() }, codeEditorWidgetOptions, instantiationService, codeEditorService, commandService, contextKeyService, themeService, notificationService, accessibilityService, languageConfigurationService, languageFeaturesService, userInteractionService);
 
-		this._parentEditor = parentEditor;
-		this._overwriteOptions = options;
-
-		// Overwrite parent's options
-		super.updateOptions(this._overwriteOptions);
-
-		this._register(parentEditor.onDidChangeConfiguration((e: ConfigurationChangedEvent) => this._onParentConfigurationChanged(e)));
+		this.overwriteOptions = { ...options };
+		super.updateOptions(this.overwriteOptions);
+		this._register(parentEditor.onDidChangeConfiguration((event: ConfigurationChangedEvent) => this.onParentConfigurationChanged(event)));
 	}
 
 	getParentEditor(): ICodeEditor {
-		return this._parentEditor;
+		return this.parentEditor;
 	}
 
-	private _onParentConfigurationChanged(e: ConfigurationChangedEvent): void {
-		super.updateOptions(this._parentEditor.getRawOptions());
-		super.updateOptions(this._overwriteOptions);
+	private onParentConfigurationChanged(_event: ConfigurationChangedEvent): void {
+		super.updateOptions(this.parentEditor.getRawOptions());
+		super.updateOptions(this.overwriteOptions);
 	}
 
 	override updateOptions(newOptions: IEditorOptions): void {
-		objects.mixin(this._overwriteOptions, newOptions, true);
-		super.updateOptions(this._overwriteOptions);
+		objects.mixin(this.overwriteOptions, newOptions, true);
+		super.updateOptions(this.overwriteOptions);
 	}
 }
 
 export function getOuterEditor(accessor: ServicesAccessor): ICodeEditor | null {
 	const editor = accessor.get(ICodeEditorService).getFocusedCodeEditor();
-	if (editor instanceof EmbeddedCodeEditorWidget) {
-		return editor.getParentEditor();
-	}
-	return editor;
+	return editor instanceof EmbeddedCodeEditorWidget ? editor.getParentEditor() : editor;
 }

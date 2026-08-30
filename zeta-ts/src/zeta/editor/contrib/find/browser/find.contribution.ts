@@ -1,5 +1,5 @@
 import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
-import { EditorFindController } from "./findController.js";
+import { FindController } from "./findController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewParts/decorations/decorations.js";
@@ -13,6 +13,6 @@ registerTextEditorCapabilityContribution({
 	},
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new EditorFindController(context.view.element, context.viewport, context.viewModel, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
+		context.register(new FindController(context.view.element, context.viewport, context.viewModel, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
 	},
 });

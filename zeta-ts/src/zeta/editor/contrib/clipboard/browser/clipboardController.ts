@@ -5,12 +5,11 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isWindows } from '../../../../base/common/platform.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { type IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { SelectionSetDeleteOperations } from '../../../common/cursor/selectionSetDeleteOperations.js';
+import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.js';
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type Selection } from "../../../common/core/selection.js";
-import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -171,7 +170,7 @@ export class ClipboardController extends Disposable {
 		);
 		if (event.hasClipboardData && this.writeClipboard(event.clipboardData, entries)) {
 			event.setHandled();
-			this.executeCut(entries);
+			this.executeCut();
 			return;
 		}
 		this.writeSystemClipboard(event, entries, true);
@@ -187,7 +186,7 @@ export class ClipboardController extends Disposable {
 		const text = readEditorClipboardText(nativeClipboard, this.element.ownerDocument);
 		const clipboardData = readEditorClipboardPasteData(
 			nativeClipboard,
-			this.selectionController.selections.selections.length,
+			this.selectionController.selections.length,
 		);
 		if (text.length === 0 && !clipboardData?.texts.some(value => value.length > 0)) {
 			const uriList = readUriList(nativeClipboard.getData('text/uri-list'));
@@ -252,18 +251,22 @@ export class ClipboardController extends Disposable {
 		event.setHandled();
 		void this.clipboardService.writeText(payload.plainText).then(() => {
 			if (!cut || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
-			this.executeCut(entries);
+			this.executeCut();
 		}).catch(() => {
 			// Permission failures must never mutate the model, especially for cut.
 		});
 		return true;
 	}
 
-	private executeCut(entries: readonly EditorClipboardEntry[]): void {
-		this.selectionController.execute(SelectionSetDeleteOperations.cut(
+	private executeCut(): void {
+		this.selectionController.execute(DeleteOperations.cut(
 			this.viewport.textModel,
 			this.selectionController.selections,
-			entries.map(entry => entry.sourceRange),
+			this.selectionController.selections.map(selection => createClipboardEntry(
+				this.viewport.textModel,
+				selection,
+				this.emptySelectionPolicy,
+			).sourceRange),
 		));
 		this.afterEdit();
 	}
@@ -328,16 +331,20 @@ export class ClipboardController extends Disposable {
 			(this.element as HTMLTextAreaElement).value = "";
 		}
 		this.viewport.revealPosition(
-			this.selectionController.selections.primary.getPosition(),
+			this.selectionController.selections[0]!.getPosition(),
 		);
 	}
 }
 
-function getEditorClipboardEntries(model: TextModel, selections: SelectionSet, policy: EditorEmptySelectionClipboardPolicy): readonly EditorClipboardEntry[] {
+function getEditorClipboardEntries(model: TextModel, selections: readonly Selection[], policy: EditorEmptySelectionClipboardPolicy): readonly EditorClipboardEntry[] {
 	if (!Object.values(EditorEmptySelectionClipboardPolicy).includes(policy)) {
 		throw new TypeError('Unknown editor empty-selection clipboard policy');
 	}
-	return Object.freeze(selections.selections.map(selection => createClipboardEntry(model, selection, policy)));
+	return Object.freeze(
+		selections
+			.map(selection => createClipboardEntry(model, selection, policy))
+			.sort((left, right) => Range.compareRangesUsingStarts(left.sourceRange, right.sourceRange)),
+	);
 }
 
 function createClipboardEntry(model: TextModel, selection: Selection, policy: EditorEmptySelectionClipboardPolicy): EditorClipboardEntry {
@@ -527,15 +534,15 @@ function readUriList(value: string): string | undefined {
 	return entries.length > 0 ? entries.join('\n') : undefined;
 }
 
-function createMetadataPasteCommand(model: TextModel, selections: SelectionSet, data: EditorClipboardPasteData): EditorEditCommand {
+function createMetadataPasteCommand(model: TextModel, selections: readonly Selection[], data: EditorClipboardPasteData): EditorEditCommand {
 	return data.modes.every(mode => mode === EditorClipboardPasteMode.Line) &&
 		canPasteCompleteLines(selections)
 		? TypeOperations.linePaste(model, selections, data.texts)
 		: TypeOperations.distributedPaste(model, selections, data.texts);
 }
 
-function canPasteCompleteLines(selections: SelectionSet): boolean {
-	return selections.selections.every(selection => selection.isEmpty());
+function canPasteCompleteLines(selections: readonly Selection[]): boolean {
+	return selections.every(selection => selection.isEmpty());
 }
 
 function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | undefined): EditorEmptySelectionClipboardPolicy {
@@ -546,11 +553,11 @@ function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | 
 	return resolved;
 }
 
-function selectionSetsEqual(left: SelectionSet, right: SelectionSet): boolean {
-	return left.primaryIndex === right.primaryIndex &&
-		left.selections.length === right.selections.length &&
-		left.selections.every((selection, index) => {
-			const expected = right.selections[index]!;
+function selectionSetsEqual(left: readonly Selection[], right: readonly Selection[]): boolean {
+	return 0 === 0 &&
+		left.length === right.length &&
+		left.every((selection, index) => {
+			const expected = right[index]!;
 			return Position.compare(selection.getSelectionStart(), expected.getSelectionStart()) === 0 &&
 				Position.compare(selection.getPosition(), expected.getPosition()) === 0;
 		});

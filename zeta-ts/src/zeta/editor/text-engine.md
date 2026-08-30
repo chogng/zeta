@@ -102,14 +102,14 @@ VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效
 flowchart LR
     Change[Model / layout / decoration change] --> Project[View.project]
     Layout[Current EditorViewportLayout] --> Project
-    Project --> Lines[EditorViewLines]
+    Project --> Lines[ViewLines]
     Lines --> Context[EditorRenderingContext]
     Context --> Prepare[Part prepareRender]
     Prepare --> Parts[Part render]
     Parts --> DOM[DOM / GPU mutation]
 ```
 
-- 当前 `EditorViewportLayoutManager`、`EditorViewportLinesLayout`、`EditorViewContext`、`EditorViewPartCollection` 和 `EditorOverlayCoordinator` 组成一套本地手动调度链。
+- 当前 `EditorViewportLayoutManager`、`EditorViewportLinesLayout`、`EditorViewContext`、`EditorViewPartCollection` 和 `ViewOverlays` 组成一套本地手动调度链。
 - 这套链可以渲染现有界面，但不等同于 VS Code 的 `ViewContext → ViewPart → View` 事件、失效和释放生命周期，不能据此把同路径 View Part 记为已对齐。
 - 目标实现由 `ViewContext` 注册和移除事件处理器，`ViewPart` 统一接收配置、滚动、行映射和装饰事件，`View` 只负责组装、帧调度与 DOM 层级。
 - 迁移完成后删除手动 coordinator 及同职责的 `Editor*` owner；不会让两套调度链长期并存。
@@ -140,7 +140,7 @@ flowchart LR
 
 没有这些条件时，直接使用 frame context 中的当前值。
 
-`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且同步 scheduler 会重复写入相同样式的节点。`EditorViewLine` 只对文字行根节点使用 wrapper；line number、diagnostic marker、indent guide、decoration、selection、cursor 和 composition 由各自 Part 通过 `ViewPartRows` 拥有独立 DOM。`SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 projection DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
+`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且同步 scheduler 会重复写入相同样式的节点。`ViewLine` 只对文字行根节点使用 wrapper；line number、diagnostic marker、indent guide、decoration、selection、cursor 和 composition 由各自 Part 通过 `ViewPartRows` 拥有独立 DOM。`SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 projection DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
 
 ## 输入与 Controller
 

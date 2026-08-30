@@ -3,7 +3,7 @@ import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { EDITOR_FONT_DEFAULTS } from './fontInfo.js';
 import { diffEditorDefaultOptions } from './diffEditor.js';
 import { editorOptionsRegistry, EditorLineWrapping } from './editorOptions.js';
-import type { IConfigurationPropertySchema } from '../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationsRegistry, type IConfigurationPropertySchema } from '../../../platform/configuration/common/configurationRegistry.js';
 
 /** The common configuration node shape used by VS Code settings tooling. */
 export interface EditorConfigurationNode {
@@ -362,4 +362,56 @@ function schemaForDefault(value: unknown): JsonSchema {
 	if (Array.isArray(value)) return { type: 'array', default: Object.freeze([...value]) };
 	if (value && typeof value === 'object') return { type: 'object' };
 	return {};
+}
+
+// The schema owner also registers the model settings consumed by editor services.
+ConfigurationsRegistry.registerConfiguration({
+	key: 'editor.tabSize',
+	defaultValue: EDITOR_MODEL_DEFAULTS.tabSize,
+	parse: value => modelInteger(value, 'editor.tabSize'),
+	setting: { title: 'Tab size', description: 'Set the number of columns represented by one tab.', valueType: 'number', minimum: 1, maximum: 100 },
+});
+ConfigurationsRegistry.registerConfiguration<number | 'tabSize'>({
+	key: 'editor.indentSize',
+	defaultValue: 'tabSize',
+	parse: value => value === 'tabSize' ? value : modelInteger(value, 'editor.indentSize'),
+});
+for (const [key, defaultValue] of [
+	['editor.insertSpaces', EDITOR_MODEL_DEFAULTS.insertSpaces],
+	['editor.detectIndentation', EDITOR_MODEL_DEFAULTS.detectIndentation],
+	['editor.trimAutoWhitespace', EDITOR_MODEL_DEFAULTS.trimAutoWhitespace],
+	['editor.largeFileOptimizations', EDITOR_MODEL_DEFAULTS.largeFileOptimizations],
+	['editor.bracketPairColorization.enabled', EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.enabled],
+	['editor.bracketPairColorization.independentColorPoolPerBracketType', EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType],
+] as const) {
+	ConfigurationsRegistry.registerConfiguration({
+		key,
+		defaultValue,
+		parse: value => modelBoolean(value, key),
+	});
+}
+ConfigurationsRegistry.registerConfiguration<'auto' | '\n' | '\r\n'>({
+	key: 'files.eol',
+	defaultValue: 'auto',
+	parse(value) {
+		if (value === 'auto' || value === '\n' || value === '\r\n') return value;
+		throw new TypeError('files.eol must be auto, LF, or CRLF');
+	},
+});
+ConfigurationsRegistry.registerConfiguration({
+	key: 'files.restoreUndoStack',
+	defaultValue: true,
+	parse: value => modelBoolean(value, 'files.restoreUndoStack'),
+});
+
+function modelBoolean(value: unknown, key: string): boolean {
+	if (typeof value !== 'boolean') throw new TypeError(`${key} must be boolean`);
+	return value;
+}
+
+function modelInteger(value: unknown, key: string): number {
+	if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > 100) {
+		throw new RangeError(`${key} must be an integer between 1 and 100`);
+	}
+	return value as number;
 }

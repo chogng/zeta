@@ -1,26 +1,37 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import type { BrowserEditContext } from "./nativeEditContext.js";
 
-import { IDisposable } from '../../../../../base/common/lifecycle.js';
-import { NativeEditContext } from './nativeEditContext.js';
+type NativeEditContextOwner = string | HTMLElement;
 
+/**
+ * Finds an active native edit context without making clipboard or host code
+ * depend on the concrete editor view instance.
+ */
 class NativeEditContextRegistryImpl {
+	private readonly byId = new Map<string, BrowserEditContext>();
+	private readonly byElement = new WeakMap<HTMLElement, BrowserEditContext>();
 
-	private _nativeEditContextMapping: Map<string, NativeEditContext> = new Map();
-
-	register(ownerID: string, nativeEditContext: NativeEditContext): IDisposable {
-		this._nativeEditContextMapping.set(ownerID, nativeEditContext);
-		return {
-			dispose: () => {
-				this._nativeEditContextMapping.delete(ownerID);
+	register(owner: NativeEditContextOwner, context: BrowserEditContext): IDisposable {
+		if (typeof owner === "string") {
+			const previous = this.byId.get(owner);
+			if (previous && previous !== context) throw new Error(`Native EditContext owner '${owner}' is already registered`);
+			this.byId.set(owner, context);
+		} else {
+			const previous = this.byElement.get(owner);
+			if (previous && previous !== context) throw new Error("Native EditContext element is already registered");
+			this.byElement.set(owner, context);
+		}
+		return toDisposable(() => {
+			if (typeof owner === "string") {
+				if (this.byId.get(owner) === context) this.byId.delete(owner);
+			} else if (this.byElement.get(owner) === context) {
+				this.byElement.delete(owner);
 			}
-		};
+		});
 	}
 
-	get(ownerID: string): NativeEditContext | undefined {
-		return this._nativeEditContextMapping.get(ownerID);
+	get(owner: NativeEditContextOwner): BrowserEditContext | undefined {
+		return typeof owner === "string" ? this.byId.get(owner) : this.byElement.get(owner);
 	}
 }
 

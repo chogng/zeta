@@ -6,7 +6,6 @@ import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import type { EditorResourceInput } from '../../editorInput.js';
 import type { IDimension } from '../../../common/core/2d/dimension.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import type { DocumentPlugin } from '../../../common/model/documentPlugin.js';
@@ -111,6 +110,12 @@ const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: 
 
 type CommandFocusBehavior = "focus-editor" | "preserve-focus";
 
+interface RichTextEditorInput {
+	readonly resource: URI;
+	readonly initialText?: string;
+	readonly readOnly?: boolean;
+}
+
 /**
  * One browser editor projected over a line-first TextModel with schema-backed rich semantics.
  *
@@ -132,7 +137,7 @@ export class RichTextEditorWidget extends Disposable {
 	private formattingContribution: DocumentFormattingContribution | undefined;
 	private collaborationContribution: DocumentCollaborationContribution | undefined;
 	private outlineNavigator: DocumentOutlineNavigator | undefined;
-	private input: EditorResourceInput | undefined;
+	private input: RichTextEditorInput | undefined;
 	private activeBlockId: string | undefined;
 	private composition: DocumentComposition | undefined;
 	private collaborationStart: AbortController | undefined;
@@ -215,7 +220,7 @@ export class RichTextEditorWidget extends Disposable {
 		}));
 	}
 
-	async setInput(input: EditorResourceInput, signal: AbortSignal): Promise<void> {
+	async setInput(input: RichTextEditorInput, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
 		this.cancelCollaborationStart();
 		throwIfCancelled(signal, "Document editor input loading was cancelled");
@@ -1448,7 +1453,7 @@ export class RichTextEditorWidget extends Disposable {
 		return workingCopy;
 	}
 
-	private requireInput(): EditorResourceInput {
+	private requireInput(): RichTextEditorInput {
 		const input = this.input;
 		assertDefined(input, new ReferenceError("Document editor has no active input"));
 		return input;

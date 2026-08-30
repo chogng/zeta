@@ -6,7 +6,6 @@ import { CODE_EDITOR_ID, matchCodeEditor } from "./codeEditorInput.js";
 import { CodeEditorPane } from "./codeEditorPane.js";
 import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
 import { DiffEditorPane } from "./diffEditorPane.js";
-import { WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
 import { bindCodeLensCacheStorage } from "../../../../editor/contrib/codelens/browser/codeLensCache.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
@@ -37,7 +36,7 @@ registerEditorPane({
 			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
 			experimentalGpuAcceleration: configuration?.getValue(CodeEditorConfiguration.experimentalGpuAcceleration),
 			lineWrapping: configuration?.getValue(CodeEditorConfiguration.wordWrap),
-			wrappingIndent: toWrappingIndent(configuration?.getValue(CodeEditorConfiguration.wrappingIndent)),
+			wrappingIndent: configuration?.getValue(CodeEditorConfiguration.wrappingIndent),
 			minimap: { enabled: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) !== false },
 			renderLineHighlight: configuration?.getValue(CodeEditorConfiguration.renderLineHighlight),
 			renderLineHighlightOnlyWhenFocus: configuration?.getValue(CodeEditorConfiguration.renderLineHighlightOnlyWhenFocus),
@@ -54,9 +53,9 @@ registerEditorPane({
 				highlightActiveBracketPair: configuration?.getValue(CodeEditorConfiguration.highlightActiveBracketPairGuide),
 				highlightActiveIndentation: configuration?.getValue(CodeEditorConfiguration.highlightActiveIndentationGuide),
 			},
-			bracketPairColorization: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization),
+			bracketPairColorization: { enabled: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization) !== false },
 			matchBrackets: configuration?.getValue(CodeEditorConfiguration.matchBrackets),
-			stickyScroll: configuration?.getValue(CodeEditorConfiguration.stickyScroll),
+			stickyScroll: { enabled: configuration?.getValue(CodeEditorConfiguration.stickyScroll) !== false },
 			indentation: {
 				kind: configuration?.getValue(CodeEditorConfiguration.indentationKind),
 				tabSize: configuration?.getValue(CodeEditorConfiguration.tabSize),
@@ -65,7 +64,7 @@ registerEditorPane({
 			suggestions: configuration?.getValue(CodeEditorConfiguration.suggestions),
 			inlineCompletions: configuration?.getValue(CodeEditorConfiguration.inlineCompletions),
 			parameterHints: configuration?.getValue(CodeEditorConfiguration.parameterHints),
-			inlayHints: configuration?.getValue(CodeEditorConfiguration.inlayHints),
+			inlayHints: { enabled: configuration?.getValue(CodeEditorConfiguration.inlayHints) === false ? 'off' : 'on' },
 			codeLens: configuration?.getValue(CodeEditorConfiguration.codeLens),
 			colorDecorators: configuration?.getValue(CodeEditorConfiguration.colorDecorators),
 			colorDecoratorsActivatedOn: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsActivatedOn),
@@ -78,9 +77,6 @@ registerEditorPane({
 				seedSearchStringFromSelection: configuration.getValue(CodeEditorConfiguration.findSeedFromSelection),
 				autoFindInSelection: configuration.getValue(CodeEditorConfiguration.findAutoFindInSelection),
 				loop: configuration.getValue(CodeEditorConfiguration.findLoop),
-				matchCase: configuration.getValue(CodeEditorConfiguration.findMatchCase),
-				wholeWord: configuration.getValue(CodeEditorConfiguration.findWholeWord),
-				regularExpression: configuration.getValue(CodeEditorConfiguration.findRegularExpression),
 			} : undefined,
 			insertFinalNewLine: configuration?.getValue(CodeEditorConfiguration.insertFinalNewLine),
 			onSave: options.onSave,
@@ -90,16 +86,6 @@ registerEditorPane({
 		});
 	},
 });
-
-function toWrappingIndent(value: WrappingIndentSetting | undefined): WrappingIndent | undefined {
-	switch (value) {
-		case "none": return WrappingIndent.None;
-		case "same": return WrappingIndent.Same;
-		case "indent": return WrappingIndent.Indent;
-		case "deepIndent": return WrappingIndent.DeepIndent;
-		default: return undefined;
-	}
-}
 
 registerEditorPane({
 	id: DIFF_EDITOR_ID,

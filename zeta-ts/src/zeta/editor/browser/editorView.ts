@@ -24,7 +24,7 @@ export interface EditorViewOptions {
 	readonly container: HTMLElement;
 	readonly model: TextModel;
 	readonly selectionController: CursorsController;
-	readonly lineHeight: number;
+	readonly lineHeight?: number;
 	readonly ariaLabel?: string;
 	/** Stable identity used by host code that needs to address this view. */
 	readonly ownerId?: string;
@@ -224,7 +224,7 @@ export class EditorView extends Disposable {
 	}
 
 	private synchronizeEditContext(): void {
-		const selection = this.selectionController.selections.primary;
+		const selection = this.selectionController.selections[0]!;
 		this.editContext.syncState({
 			text: this.viewport.textModel.getText(),
 			selectionStart: this.viewport.textModel.offsetAt(selection.getStartPosition()),

@@ -21,7 +21,7 @@ interface SelectionHighlighterOptions {
 }
 
 /** Owns textual matches for non-empty editor selections. */
-export class EditorSelectionHighlighter extends Disposable {
+export class SelectionHighlighter extends Disposable {
 	private readonly enabled: boolean;
 	private readonly multiline: boolean;
 	private readonly maxLength: number;
@@ -64,9 +64,9 @@ export class EditorSelectionHighlighter extends Disposable {
 
 	private findRanges(): readonly Range[] {
 		if (!this.enabled) return Object.freeze([]);
-		const selected = this.selections.selections.selections;
+		const selected = this.selections.selections;
 		if (selected.some(selection => selection.isEmpty())) return Object.freeze([]);
-		const source = selected[this.selections.selections.primaryIndex]!;
+		const source = selected[0]!;
 		if (!this.multiline && source.getStartPosition().lineNumber !== source.getEndPosition().lineNumber) return Object.freeze([]);
 		const text = this.selections.textModel.getTextInRange(source);
 		if (!text || /^\s+$/u.test(text) || (this.maxLength > 0 && text.length > this.maxLength)) return Object.freeze([]);

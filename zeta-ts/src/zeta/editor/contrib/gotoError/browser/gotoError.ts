@@ -4,7 +4,6 @@ import { TextDecorationCollection } from "../../../common/model/decorationCollec
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
 import { type View } from "../../../browser/view.js";
@@ -25,13 +24,13 @@ export class DiagnosticNavigationController extends Disposable {
 		const diagnostics = this.diagnostics.decorations;
 		if (diagnostics.length === 0) return;
 		stopEvent(event);
-		const active = this.selections.selections.primary.getPosition();
+		const active = this.selections.selections[0]!.getPosition();
 		const direction = event.shiftKey ? -1 : 1;
 		const index = direction > 0
 			? diagnostics.findIndex(diagnostic => Position.compare(diagnostic.range.getStartPosition(), active) > 0)
 			: findPreviousDiagnostic(diagnostics, active);
 		const target = diagnostics[index === -1 ? (direction > 0 ? 0 : diagnostics.length - 1) : index]!;
-		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition())));
+		this.selections.setSelections([Selection.fromPositions(target.range.getStartPosition(), target.range.getEndPosition())]);
 		this.viewport.revealPosition(target.range.getStartPosition());
 		this.viewport.announceAccessibilityStatus(describeDiagnostic(target.metadata));
 	}

@@ -3,10 +3,9 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
+import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
-import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
@@ -43,7 +42,7 @@ test('Selection anchor follows edits and supports set, go to, select, and cancel
 
 	fixture.selections.setSelections(singleCaret(0, 5));
 	fixture.controller.selectFromAnchorToCursor();
-	assert.deepEqual(fixture.selections.selections, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (5) + 1))));
+	assert.deepEqual(fixture.selections.selections, [Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (5) + 1))]);
 	assert.equal(fixture.controller.selectionAnchorSet, false);
 	assert.deepEqual(fixture.decorations.decorations, []);
 
@@ -71,7 +70,7 @@ test('Selection anchor keybindings use the two-key commands and leave navigation
 	const select = keydown(fixture.dom.window, 'k', { ctrlKey: true });
 	fixture.input.dispatchEvent(select);
 	assert.equal(select.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (4) + 1)));
+	assert.deepEqual(fixture.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (4) + 1)));
 	assert.equal(fixture.controller.selectionAnchorSet, false);
 
 	fixture.controller.setSelectionAnchor();
@@ -117,8 +116,8 @@ class FixedTextMeasurer implements TextMeasurer {
 	measureLineWidth(text: string): number { return text.length * 10; }
 }
 
-function singleCaret(lineIndex: number, columnIndex: number): SelectionSet {
-	return SelectionSet.single(Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1)));
+function singleCaret(lineIndex: number, columnIndex: number): readonly Selection[] {
+	return [Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1))];
 }
 
 function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {

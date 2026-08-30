@@ -2,7 +2,6 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type Position } from "../../../common/core/position.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type View } from "../../../browser/view.js";
@@ -45,7 +44,7 @@ export class LanguageHierarchyController extends Disposable {
 	private async prepare(kind: HierarchyKind): Promise<void> {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
-		const anchor = this.selections.selections.primary.getPosition();
+		const anchor = this.selections.selections[0]!.getPosition();
 		try {
 			const sessions = kind === "call"
 				? (await this.service.prepareCallHierarchy(this.languageId, anchor, request.signal)).map(callSession)
@@ -136,7 +135,7 @@ export class LanguageHierarchyController extends Disposable {
 	private async open(item: LanguageHierarchyItem): Promise<void> {
 		const location = { resource: item.resource, range: item.range, selectionRange: item.selectionRange };
 		if (item.resource.toString() === this.resource.toString()) {
-			this.selections.setSelections(SelectionSet.single(Selection.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition())));
+			this.selections.setSelections([Selection.fromPositions(item.selectionRange.getStartPosition(), item.selectionRange.getEndPosition())]);
 			this.viewport.revealPosition(item.selectionRange.getStartPosition());
 			this.input.focus({ preventScroll: true });
 			return;

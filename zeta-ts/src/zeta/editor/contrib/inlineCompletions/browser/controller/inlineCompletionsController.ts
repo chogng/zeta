@@ -6,23 +6,25 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { createEditorEditCommand } from "../../../../common/commands/editorCommand.js";
 import { Range } from "../../../../common/core/range.js";
 import { type CursorsController } from "../../../../common/cursor/cursor.js";
-import { InlineCompletionProviderService } from "../../../../browser/services/inlineCompletionProviderService.js";
 import { InlineCompletionsService, InlineCompletionsServiceCapability, type IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
-import { type LanguageInlineCompletionItem } from "../../common/inlineCompletions.js";
+import { type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider } from "../../common/inlineCompletions.js";
 import { type View } from "../../../../browser/view.js";
 import { isCompletionsEnablementEnabled } from "../../../../common/services/ownedCompletionsEnablement.js";
 import { type Event } from '../../../../../base/common/event.js';
 import { type EditorCommandEvent } from '../../../../browser/editorExtensions.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
+import { type TextModel } from '../../../../common/model/textModel.js';
+import { type LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
+import { provideInlineCompletions } from '../model/provideInlineCompletions.js';
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
-export class EditorInlineCompletionsController extends Disposable {
+export class InlineCompletionsController extends Disposable {
 	private readonly element: HTMLSpanElement;
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
 	private completionRequestId = 0;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly service: InlineCompletionProviderService, private readonly inlineCompletionsService: IInlineCompletionsService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: View, private readonly selections: CursorsController, private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>, private readonly inlineCompletionsService: IInlineCompletionsService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
 		super();
 		const element = this.element = h(viewport.element.ownerDocument, "span");
 		element.className = "stanza-editor-inline-completion";
@@ -56,12 +58,12 @@ export class EditorInlineCompletionsController extends Disposable {
 			this.clear();
 			return;
 		}
-		const selection = this.selections.selections.primary;
+		const selection = this.selections.selections[0]!;
 		if (!selection.isEmpty()) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
 		try {
-			const items = await this.service.provideInlineCompletions(this.languageId, selection.getPosition(), triggerKind, request.signal);
+			const items = await provideInlineCompletions(this.model, this.providers, this.languageId, selection.getPosition(), triggerKind, request.signal);
 			if (request.signal.aborted) return;
 			this.item = items[0];
 			if (this.item) this.inlineCompletionsService.reportNewCompletion(`editor-inline-${++this.completionRequestId}`);
@@ -77,7 +79,7 @@ export class EditorInlineCompletionsController extends Disposable {
 			this.element.hidden = true;
 			return;
 		}
-		const selection = this.selections.selections.primary;
+		const selection = this.selections.selections[0]!;
 		const range = item.range ?? Range.fromPositions(selection.getPosition());
 		const coordinates = this.viewport.getPositionContentCoordinates(range.getStartPosition());
 		const scroll = this.viewport.viewportLayout.scrollPosition;
@@ -90,7 +92,7 @@ export class EditorInlineCompletionsController extends Disposable {
 	private accept(): void {
 		const item = this.item;
 		if (!item) return;
-		const selection = this.selections.selections.primary;
+		const selection = this.selections.selections[0]!;
 		const edits = [...(item.additionalTextEdits ?? []), { range: item.range ?? Range.fromPositions(selection.getPosition()), text: item.insertText }].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()));
 		const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edits);
 		if (command) this.selections.execute(command);
@@ -111,6 +113,5 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.inlineCompletions
 	context.provideCapability(InlineCompletionsServiceCapability, context.register(new InlineCompletionsService()));
 }, install: context => {
 	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnablementEnabled(context.options.inlineCompletions, context.languageId))) return;
-	const service = context.register(new InlineCompletionProviderService(context.model, context.languageFeaturesService.inlineCompletionsProvider));
-	context.register(new EditorInlineCompletionsController(context.view.element, context.viewport, context.viewModel, service, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
+	context.register(new InlineCompletionsController(context.view.element, context.viewport, context.viewModel, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
 } });

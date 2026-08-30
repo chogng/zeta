@@ -16,10 +16,11 @@ import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
 import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
-import { CodeEditorWidget, isCodeEditorViewState, type CodeEditorViewState, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { type ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
 import { type ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
-import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
+import { type EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
@@ -41,8 +42,8 @@ export interface EditorPanePart extends IDisposable {
 	focus(): void;
 	getValue(): string;
 	revealRange?(range: Range): void;
-	saveViewState?(): CodeEditorViewState;
-	restoreViewState?(state: CodeEditorViewState): void;
+	saveViewState?(): ICodeEditorViewState;
+	restoreViewState?(state: ICodeEditorViewState): void;
 	announceAccessibilityStatus?(message: string): void;
 }
 
@@ -68,7 +69,7 @@ export interface EditorPaneOptions {
 	readonly instantiationService?: CodeEditorWidgetOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
-	readonly wrappingIndent?: WrappingIndent;
+	readonly wrappingIndent?: CodeEditorWidgetOptions['wrappingIndent'];
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
@@ -84,13 +85,13 @@ export interface EditorPaneOptions {
 	readonly cursorHeight?: CodeEditorWidgetOptions['cursorHeight'];
 	readonly lineNumbers?: CodeEditorWidgetOptions['lineNumbers'];
 	readonly guides?: CodeEditorWidgetOptions['guides'];
-	readonly bracketPairColorization?: boolean;
+	readonly bracketPairColorization?: CodeEditorWidgetOptions['bracketPairColorization'];
 	readonly matchBrackets?: CodeEditorWidgetOptions["matchBrackets"];
-	readonly stickyScroll?: boolean;
+	readonly stickyScroll?: CodeEditorWidgetOptions['stickyScroll'];
 	readonly suggestions?: CodeEditorWidgetOptions["suggestions"];
 	readonly inlineCompletions?: CodeEditorWidgetOptions["inlineCompletions"];
 	readonly parameterHints?: boolean;
-	readonly inlayHints?: boolean;
+	readonly inlayHints?: CodeEditorWidgetOptions['inlayHints'];
 	readonly codeLens?: boolean;
 	readonly colorDecorators?: CodeEditorWidgetOptions["colorDecorators"];
 	readonly colorDecoratorsActivatedOn?: CodeEditorWidgetOptions["colorDecoratorsActivatedOn"];
@@ -238,7 +239,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			});
 			if (this.options.trimTrailingWhitespace) {
 				beforeSaveHooks.unshift(() => {
-					const selections = part?.selections?.getSelections() ?? [];
+					const selections = [...(part?.selections?.selections ?? [])];
 					const operations = trimTrailingWhitespace(modelReference.model, [], this.options.trimTrailingWhitespaceInRegexAndStrings ?? true);
 					if (operations.length > 0) modelReference.model.pushEditOperations(selections, operations, () => selections);
 				});
@@ -248,7 +249,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 					const model = modelReference.model;
 					const lineCount = model.getLineCount();
 					if (!lineCount || strings.lastNonWhitespaceIndex(model.getLineContent(lineCount)) === -1) return;
-					const selections = part?.selections?.getSelections() ?? [];
+					const selections = [...(part?.selections?.selections ?? [])];
 					const operations = [EditOperation.insert(new Position(lineCount, model.getLineMaxColumn(lineCount)), model.getEOL())];
 					model.pushEditOperations(selections, operations, () => selections);
 				});
@@ -349,14 +350,14 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	}
 
 	restoreViewState(state: unknown): void {
-		if (!isCodeEditorViewState(state)) throw new TypeError("Invalid Stanza code editor view state");
+		if (!isCodeEditorViewState(state)) throw new TypeError("Invalid code editor view state");
 		const part = this.part.value;
 		if (!part?.restoreViewState) throw new Error("Stanza code editor view-state restoration is unavailable");
 		part.restoreViewState(state);
 	}
 
 	getStatus(): EditorPaneStatus {
-		const selections = this.part.value?.selections?.getSelections();
+		const selections = this.part.value?.selections?.selections;
 		const active = selections?.[0]?.getPosition();
 		return Object.freeze({
 			...(active ? { lineNumber: active.lineNumber, columnNumber: active.column } : {}),
@@ -388,6 +389,15 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		assertDefined(this.container, new ReferenceError("EditorPane has not been created"));
 		return this.container;
 	}
+}
+
+function isCodeEditorViewState(value: unknown): value is ICodeEditorViewState {
+	if (!value || typeof value !== 'object') return false;
+	const state = value as Partial<ICodeEditorViewState>;
+	return Array.isArray(state.cursorState)
+		&& Boolean(state.viewState)
+		&& typeof state.viewState?.scrollLeft === 'number'
+		&& Boolean(state.viewState?.firstPosition);
 }
 
 function reportSaveError(error: unknown): void {

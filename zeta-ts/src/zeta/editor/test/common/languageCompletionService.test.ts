@@ -7,7 +7,6 @@ import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, crea
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
 import { Selection } from "../../common/core/selection.js";
-import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -181,7 +180,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	using service = new LanguageCompletionService(model, registry);
 	using selections = new CursorsController(
 		model,
-		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1))),
+		[Selection.fromPositions(new Position((0) + 1, (3) + 1))],
 	);
 	using session = new LanguageCompletionSessionController(service.results, selections);
 
@@ -193,7 +192,7 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 
 	selections.undo();
 	assert.equal(model.getText(), "con");
-	assert.equal(Position.compare(selections.selections.primary.getPosition(), new Position((0) + 1, (3) + 1)), 0);
+	assert.equal(Position.compare(selections.selections[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
 
 test("Completion service disposal owns neither registry nor model", () => {

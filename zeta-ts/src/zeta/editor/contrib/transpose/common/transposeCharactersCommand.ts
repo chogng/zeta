@@ -1,5 +1,5 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 
@@ -21,18 +21,18 @@ interface TransposeOperation {
  * line end swaps the two preceding graphemes. Crossing a physical-line start
  * treats its preceding line break as the left unit, matching VS Code.
  */
-export function createTransposeCharactersCommand(model: TextModel, selections: SelectionSet): EditorEditCommand | undefined {
-	const candidates = selections.selections.flatMap((selection, selectionIndex) => {
+export function createTransposeCharactersCommand(model: TextModel, selections: readonly Selection[]): EditorEditCommand | undefined {
+	const candidates = selections.flatMap((selection, selectionIndex) => {
 		if (!selection.isEmpty()) return [];
 		const operation = createTransposeOperation(model, selection.getPosition(), selectionIndex);
 		return operation ? [operation] : [];
 	});
-	const operations = selectNonOverlappingOperations(candidates, selections.primaryIndex);
+	const operations = selectNonOverlappingOperations(candidates, 0);
 	if (operations.length === 0) return undefined;
 	const operationBySelection = new Map(operations.map(operation => [operation.selectionIndex, operation]));
 	return Object.freeze({
 		edits: Object.freeze(operations.map(operation => operation.edit)),
-		selectionsAfter: Object.freeze(selections.selections.map((selection, selectionIndex) => {
+		selectionsAfter: Object.freeze(selections.map((selection, selectionIndex) => {
 			const operation = operationBySelection.get(selectionIndex);
 			const activeOffset = operation?.endOffset ?? model.offsetAt(selection.getPosition());
 			return Object.freeze({
@@ -40,14 +40,14 @@ export function createTransposeCharactersCommand(model: TextModel, selections: S
 				activeOffset,
 			});
 		})),
-		primarySelectionIndex: selections.primaryIndex,
+		primarySelectionIndex: 0,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
 }
 
 function createTransposeOperation(model: TextModel, position: Position, selectionIndex: number): TransposeOperation | undefined {
 	const line = model.getLineContent(position.lineNumber);
-	const end = position.column === line.length + 1 ? position : MoveOperations.rightPosition(model, position.lineNumber, position.column);
+	const end = position.column === line.length + 1 ? position : MoveOperations.rightPosition(model, position);
 	const middle = MoveOperations.leftPosition(model, end);
 	const begin = MoveOperations.leftPosition(model, middle);
 	if (Position.compare(begin, middle) === 0 || Position.compare(middle, end) === 0) return undefined;

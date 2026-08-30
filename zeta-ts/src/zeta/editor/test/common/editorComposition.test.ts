@@ -3,7 +3,6 @@ import test from "node:test";
 import { IME } from "../../../base/common/ime.js";
 import { CursorsController } from "../../common/cursor/cursor.js";
 import { Selection } from "../../common/core/selection.js";
-import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModelChangeReason } from "../../common/core/textChange.js";
@@ -20,10 +19,10 @@ const range = (
 const selection = (
 	anchorOffset: number,
 	activeOffset: number,
-): SelectionSet => SelectionSet.single(Selection.fromPositions(
+): readonly Selection[] => [Selection.fromPositions(
 	position(0, anchorOffset),
 	position(0, activeOffset),
-));
+)];
 
 test("Composition revisions commit as one selection-aware undo step", () => {
 	using model = new TextModel("hello");
@@ -92,10 +91,10 @@ test("Composition exposes only its active provisional model range", () => {
 	using model = new TextModel("a\nbc");
 	using controller = new CursorsController(
 		model,
-		SelectionSet.single(Selection.fromPositions(
+		[Selection.fromPositions(
 			position(1, 1),
 			position(1, 2),
-		)),
+		)],
 	);
 	const composition = controller.beginComposition();
 	assert.deepEqual(
@@ -361,7 +360,7 @@ test("Composition rejects ambiguous ownership and invalid relative offsets", () 
 
 	using multiController = new CursorsController(
 		model,
-		SelectionSet.withPrimary([
+		primaryFirst([
 			Selection.fromPositions(position(0, 0)),
 			Selection.fromPositions(position(0, 2)),
 		], 0),
@@ -391,3 +390,8 @@ test("Composition observes the shared base IME coordination state", () => {
 		IME.enable();
 	}
 });
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
+}

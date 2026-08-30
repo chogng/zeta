@@ -8,7 +8,8 @@ import { isFiniteNumber, isNonNegativeSafeInteger, rot } from "../../../../base/
 import { DiffModel } from "../../../common/diff/diffModel.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
-import { applyEditorFontInfo } from "../../config/domFontInfo.js";
+import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
+import { applyFontInfo } from "../../config/domFontInfo.js";
 import { DiffOverviewRuler } from "./diffOverviewRuler.js";
 import { createDiffEditorRow } from "./diffEditorRows.js";
 
@@ -37,7 +38,7 @@ export interface DiffEditorWidgetOptions {
  * inline change ranges. This browser component owns only scroll geometry and
  * DOM projection; it never owns source text or diff computation.
  */
-export class EditorDiffWidget extends Disposable {
+export class DiffEditorWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly contentElement: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
@@ -76,11 +77,12 @@ export class EditorDiffWidget extends Disposable {
 		this.accessibilityStatusElement = h(ownerDocument, "div");
 		this.element.className = "stanza-diff-editor";
 		this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
-		applyEditorFontInfo(this.element, {
+		applyFontInfo(this.element, createBareFontInfoFromRawSettings({
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
-			fontLigatures: options.fontLigatures ?? false,
-		});
+			fontLigatures: options.fontLigatures,
+			lineHeight: this.lineHeight,
+		}, getWindow(options.container).devicePixelRatio));
 		this.element.tabIndex = 0;
 		this.element.setAttribute("role", "region");
 		this.element.setAttribute("aria-label", `Side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);

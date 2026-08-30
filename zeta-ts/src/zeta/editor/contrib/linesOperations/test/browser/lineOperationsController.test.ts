@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -30,9 +29,7 @@ test("Line operation shortcuts duplicate and delete through Stanza commands", ()
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new CursorsController(model, SelectionSet.single(
-		Selection.fromPositions(new Position((1) + 1, (1) + 1)),
-	));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
 	using viewport = new View({
 		container,
 		model,
@@ -61,7 +58,7 @@ test("Line operation shortcuts insert blank lines above and below selected group
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -82,9 +79,7 @@ test("Line operation shortcuts move selected lines without duplicating them", ()
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new CursorsController(model, SelectionSet.single(
-		Selection.fromPositions(new Position((1) + 1, (1) + 1)),
-	));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
 	using viewport = new View({
 		container,
 		model,
@@ -101,10 +96,10 @@ test("Line operation shortcuts move selected lines without duplicating them", ()
 	input.dispatchEvent(moveDown);
 	assert.equal(moveDown.defaultPrevented, true);
 	assert.equal(model.getText(), "zero\ntwo\none");
-	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
+	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1)));
 	input.dispatchEvent(keydown(dom.window, "ArrowUp", { altKey: true }));
 	assert.equal(model.getText(), "zero\none\ntwo");
-	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((1) + 1, (1) + 1)));
+	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((1) + 1, (1) + 1)));
 
 	dom.window.close();
 });
@@ -114,8 +109,8 @@ test("Line operation controller rejects cross-model wiring and leaves unrelated 
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("alpha");
 	using other = new TextModel("beta");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using otherSelections = new CursorsController(other, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using otherSelections = new CursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

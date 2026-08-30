@@ -2,14 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewParts/decorations/decorations.js";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
@@ -36,9 +35,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	using registration = configurations.register("typescript", {
 		brackets: [["(", ")"], ["{", "}"]],
 	});
-	using selections = new CursorsController(model, SelectionSet.single(
-		Selection.fromPositions(new Position((0) + 1, (17) + 1)),
-	));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (17) + 1))]);
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using decorations = new TextDecorationCollection<void>(model);
@@ -71,9 +68,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 		width: "10px",
 	}]);
 
-	selections.setSelections(SelectionSet.single(
-		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
-	));
+	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))]);
 	assert.equal(viewport.element.querySelectorAll(".bracket-match").length, 0);
 	dom.window.close();
 });
@@ -84,7 +79,7 @@ test("Bracket match controller distinguishes near, always, and never modes", () 
 	using registration = configurations.register("typescript", { brackets: [["{", "}"]] });
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
 
 	using nearDecorations = new TextDecorationCollection<void>(model);
 	using near = new BracketMatchController(selections, bracketPairs, nearDecorations, "near");

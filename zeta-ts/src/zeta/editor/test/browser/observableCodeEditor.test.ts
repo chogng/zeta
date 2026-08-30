@@ -2,10 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { autorun } from '../../../base/common/observable.js';
-import { CursorsController } from '../../common/cursor/cursor.js';
-import { Selection } from '../../common/core/selection.js';
-import { SelectionSet } from '../../common/cursor/selectionSet.js';
 import { Position } from '../../common/core/position.js';
+import { Selection } from '../../common/core/selection.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -38,8 +36,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha');
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 });
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 
 	assert.strictEqual(observableCodeEditor(editor), observableEditor);
@@ -55,7 +52,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	assert.equal(observableEditor.value.get(), 'beta');
 	assert.equal(observableEditor.valueIsEmpty.get(), false);
 
-	selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
+	editor.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (2) + 1))]);
 	assert.equal(observableEditor.cursorPosition.get().column, 3);
 
 	observableEditor.value.set('');
@@ -76,8 +73,7 @@ test('observable code editor line APIs use one-based line numbers', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha\nbeta');
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position(1, 1))));
-	using editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 });
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 	editor.layout({ width: 320, height: 80 });
 

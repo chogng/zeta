@@ -37,7 +37,7 @@ export class LinkedEditingController extends Disposable {
 		if (this.isDisposed) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
-		const primary = this.selections.selections.primary;
+		const primary = this.selections.selections[0]!;
 		if (!primary.isEmpty()) { this.clear(); return; }
 		try {
 			const result = await this.service.provideLinkedEditingRanges(this.languageId, primary.getPosition(), request.signal);

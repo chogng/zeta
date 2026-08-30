@@ -1,11 +1,10 @@
 import { h } from '../../../../base/browser/dom.js';
-import { type IStyledGlyphStyle, type IStyledGlyphRasterizer, type IStyledRasterizedGlyph } from './raster.js';
-import { createCanvasFontShorthand } from '../../config/fontMeasurements.js';
+import { type IStyledGlyphRasterizer, type IStyledGlyphStyle, type IStyledRasterizedGlyph } from './raster.js';
 
 let nextId = 0;
 
-/** Rasterizes one grapheme using the browser canvas font stack selected by the editor. */
-export class StyledGlyphRasterizer implements IStyledGlyphRasterizer {
+/** Rasterizes a grapheme with the resolved font and color of the editor row. */
+export class GlyphRasterizer implements IStyledGlyphRasterizer {
 	public readonly id = nextId++;
 	public readonly cacheKey: string;
 	private readonly canvas: HTMLCanvasElement;
@@ -14,7 +13,7 @@ export class StyledGlyphRasterizer implements IStyledGlyphRasterizer {
 	constructor(host: HTMLElement, public readonly devicePixelRatio: number) {
 		this.cacheKey = String(devicePixelRatio);
 		this.canvas = h(host.ownerDocument, 'canvas');
-		const context = this.canvas.getContext('2d', { alpha: true, willReadFrequently: false });
+		const context = this.canvas.getContext('2d', { alpha: true });
 		if (!context) throw new Error('WebGPU glyph rasterization requires a 2D canvas context');
 		this.context = context;
 	}
@@ -31,47 +30,35 @@ export class StyledGlyphRasterizer implements IStyledGlyphRasterizer {
 	public rasterizeGlyph(chars: string, style: IStyledGlyphStyle, subPixelX: number): IStyledRasterizedGlyph {
 		if (!chars) throw new TypeError('WebGPU glyph text must not be empty');
 		const advance = this.getTextMetrics(chars, style).width + style.letterSpacing * this.devicePixelRatio;
-		this.applyRasterFont(style);
+		this.applyFont(style, Math.ceil(style.fontSize * this.devicePixelRatio));
 		const metrics = this.context.measureText(chars);
-		const actualAscent = Math.max(0, metrics.actualBoundingBoxAscent);
-		const actualDescent = Math.max(0, metrics.actualBoundingBoxDescent);
-		const actualLeft = Math.max(0, metrics.actualBoundingBoxLeft);
-		const actualRight = Math.max(0, metrics.actualBoundingBoxRight);
+		const ascent = Math.max(0, metrics.actualBoundingBoxAscent);
+		const descent = Math.max(0, metrics.actualBoundingBoxDescent);
+		const left = Math.max(0, metrics.actualBoundingBoxLeft);
+		const right = Math.max(0, metrics.actualBoundingBoxRight);
 		const padding = 2;
-		const width = Math.max(1, Math.ceil(actualLeft + actualRight + padding * 2 + 1));
-		const height = Math.max(1, Math.ceil(actualAscent + actualDescent + padding * 2 + 1));
+		const width = Math.max(1, Math.ceil(left + right + padding * 2 + 1));
+		const height = Math.max(1, Math.ceil(ascent + descent + padding * 2 + 1));
 		if (this.canvas.width !== width || this.canvas.height !== height) {
 			this.canvas.width = width;
 			this.canvas.height = height;
 		}
 		this.context.clearRect(0, 0, width, height);
-		this.applyRasterFont(style);
+		this.applyFont(style, Math.ceil(style.fontSize * this.devicePixelRatio));
 		this.context.textBaseline = 'alphabetic';
 		this.context.fillStyle = style.color;
-		this.context.fillText(chars, padding + actualLeft + subPixelX, padding + actualAscent);
-		const fontAscent = Math.max(actualAscent, metrics.fontBoundingBoxAscent || 0);
-		const fontDescent = Math.max(actualDescent, metrics.fontBoundingBoxDescent || 0);
+		this.context.fillText(chars, padding + left + subPixelX, padding + ascent);
 		return Object.freeze({
 			source: this.canvas,
 			boundingBox: Object.freeze({ left: 0, top: 0, right: width - 1, bottom: height - 1 }),
-			originOffset: Object.freeze({ x: -actualLeft - padding, y: -actualAscent - padding }),
+			originOffset: Object.freeze({ x: -left - padding, y: -ascent - padding }),
 			advance,
-			fontBoundingBoxAscent: fontAscent,
-			fontBoundingBoxDescent: fontDescent,
+			fontBoundingBoxAscent: Math.max(ascent, metrics.fontBoundingBoxAscent || 0),
+			fontBoundingBoxDescent: Math.max(descent, metrics.fontBoundingBoxDescent || 0),
 		});
-	}
-
-	private applyRasterFont(style: IStyledGlyphStyle): void {
-		this.applyFont(style, Math.ceil(style.fontSize * this.devicePixelRatio));
 	}
 
 	private applyFont(style: IStyledGlyphStyle, fontSize: number): void {
-		this.context.font = createCanvasFontShorthand({
-			style: style.fontStyle,
-			variant: style.fontVariant,
-			weight: style.fontWeight,
-			size: `${fontSize}px`,
-			family: style.fontFamily,
-		});
+		this.context.font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
 	}
 }

@@ -1,10 +1,4 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import { IBrowser } from '../../../browser/controller/editContext/textArea/textAreaEditContextInput.js';
 
 export interface IRecordedTextareaState {
 	selectionDirection: 'forward' | 'backward' | 'none';
@@ -51,7 +45,7 @@ export type IRecordedEvent = IRecordedKeyboardEvent | IRecordedCompositionEvent 
 export interface IRecorded {
 	env: {
 		OS: OperatingSystem;
-		browser: IBrowser;
+		browser: string;
 	};
 	initial: IRecordedTextareaState;
 	events: IRecordedEvent[];

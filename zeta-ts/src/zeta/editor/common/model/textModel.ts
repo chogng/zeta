@@ -71,7 +71,7 @@ interface ModelDecorationEntry {
 	readonly id: string;
 	readonly ownerId: number;
 	readonly trackedRange: TrackedRange;
-	readonly options: ModelDecorationOptions;
+	readonly options: IModelDecorationOptions;
 }
 
 interface CommitContext {
@@ -1938,6 +1938,12 @@ function validateDecorationOptions(options: IModelDecorationOptions): IModelDeco
 		throw new RangeError('Unknown model decoration stickiness');
 	}
 	return Object.freeze({ ...options });
+}
+
+function isValidationDecoration(options: IModelDecorationOptions): boolean {
+	return options.className === 'squiggly-error' ||
+		options.className === 'squiggly-warning' ||
+		options.className === 'squiggly-info';
 }
 
 function inverseEditsFromTextChanges(changes: readonly TextChange[]): OffsetEdit[] {

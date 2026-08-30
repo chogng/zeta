@@ -1,5 +1,5 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "./editorEditCommand.js";
-import type { SelectionSet } from "../cursor/selectionSet.js";
+import { type Selection } from "../core/selection.js";
 import { Range } from "../core/range.js";
 import { normalizeTextLineEndings } from "../core/textChange.js";
 
@@ -9,7 +9,7 @@ import { type TextModel } from "../model/textModel.js";
 import { type TextEdit } from '../languages.js';
 
 /** Converts current-version text edits and selections into one editor command. */
-export function createEditorEditCommand(model: TextModel, selections: SelectionSet, edits: readonly TextEdit[], historyMode = EditorCommandHistoryMode.Isolated): EditorEditCommand | undefined {
+export function createEditorEditCommand(model: TextModel, selections: readonly Selection[], edits: readonly TextEdit[], historyMode = EditorCommandHistoryMode.Isolated): EditorEditCommand | undefined {
 	if (edits.length === 0) return undefined;
 	const normalized = edits.map(edit => Object.freeze({ range: Range.lift(edit.range), text: normalizeTextLineEndings(edit.text) }));
 	const offsets = normalized.map(edit => ({ start: model.offsetAt(edit.range.getStartPosition()), end: model.offsetAt(edit.range.getEndPosition()), length: edit.text.length }));
@@ -27,8 +27,8 @@ export function createEditorEditCommand(model: TextModel, selections: SelectionS
 	};
 	return Object.freeze({
 		edits: Object.freeze(normalized),
-		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({ anchorOffset: mapOffset(model.offsetAt(selection.getSelectionStart())), activeOffset: mapOffset(model.offsetAt(selection.getPosition())) }))),
-		primarySelectionIndex: selections.primaryIndex,
+		selectionsAfter: Object.freeze(selections.map(selection => Object.freeze({ anchorOffset: mapOffset(model.offsetAt(selection.getSelectionStart())), activeOffset: mapOffset(model.offsetAt(selection.getPosition())) }))),
+		primarySelectionIndex: 0,
 		historyMode,
 	});
 }

@@ -1,80 +1,48 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
+import { type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
+import { type EditorRuler, validateRuler } from '../rulers/rulers.js';
 
-import { ViewPart } from '../../view/viewPart.js';
-import { RenderingContext, RestrictedRenderingContext } from '../../view/renderingContext.js';
-import { ViewContext } from '../../../common/viewModel/viewContext.js';
-import * as viewEvents from '../../../common/viewEvents.js';
-import { EditorOption } from '../../../common/config/editorOptions.js';
-import type { ViewGpuContext } from '../../gpu/viewGpuContext.js';
-import type { IObjectCollectionBufferEntry } from '../../gpu/objectCollectionBuffer.js';
-import type { RectangleRenderer, RectangleRendererEntrySpec } from '../../gpu/rectangleRenderer.js';
-import { Color } from '../../../../base/common/color.js';
-import { editorRuler } from '../../../common/core/editorColorRegistry.js';
-import { autorun, type IReader } from '../../../../base/common/observable.js';
+/** Projects configured rulers into the shared GPU rectangle buffer. */
+export class RulersGpu extends EditorViewPart {
+	private readonly entries = this._register(new DisposableStore());
+	private readonly rulers: readonly EditorRuler[];
 
-/**
- * Rulers are vertical lines that appear at certain columns in the editor. There can be >= 0 rulers
- * at a time.
- */
-export class RulersGpu extends ViewPart {
-
-	private readonly _gpuShapes: IObjectCollectionBufferEntry<RectangleRendererEntrySpec>[] = [];
-
-	constructor(
-		context: ViewContext,
-		private readonly _viewGpuContext: ViewGpuContext
-	) {
-		super(context);
-		this._register(autorun(reader => this._updateEntries(reader)));
+	constructor(private readonly gpuContext: ViewGpuContext, rulers: readonly EditorRuler[], private readonly measureColumn: (column: number) => number) {
+		super();
+		this.rulers = Object.freeze(rulers.map(validateRuler));
 	}
 
-	// --- begin event handlers
-
-	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
-		this._updateEntries(undefined);
-		return true;
-	}
-
-	// --- end event handlers
-
-	public prepareRender(ctx: RenderingContext): void {
-		// Nothing to read
-	}
-
-	public render(ctx: RestrictedRenderingContext): void {
-		// Rendering is handled by RectangleRenderer
-	}
-
-	private _updateEntries(reader: IReader | undefined) {
-		const options = this._context.configuration.options;
-		const rulers = options.get(EditorOption.rulers);
-		const typicalHalfwidthCharacterWidth = options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
-		const devicePixelRatio = this._viewGpuContext.devicePixelRatio.read(reader);
-		for (let i = 0, len = rulers.length; i < len; i++) {
-			const ruler = rulers[i];
-			const shape = this._gpuShapes[i];
-			const color = ruler.color ? Color.fromHex(ruler.color) : this._context.theme.getColor(editorRuler) ?? Color.white;
-			const rulerData: Parameters<RectangleRenderer['register']> = [
-				ruler.column * typicalHalfwidthCharacterWidth * devicePixelRatio,
+	public render(context: EditorRenderingContext): void {
+		this.entries.clear();
+		if (this.gpuContext.status !== 'ready') return;
+		const devicePixelRatio = this.gpuContext.devicePixelRatio;
+		for (const ruler of this.rulers) {
+			const color = parseColor(ruler.color);
+			this.entries.add(this.gpuContext.rectangleRenderer.register(
+				this.measureColumn(ruler.column) * devicePixelRatio,
 				0,
 				Math.max(1, Math.ceil(devicePixelRatio)),
-				Number.MAX_SAFE_INTEGER,
-				color.rgba.r / 255,
-				color.rgba.g / 255,
-				color.rgba.b / 255,
-				color.rgba.a,
-			];
-			if (!shape) {
-				this._gpuShapes[i] = this._viewGpuContext.rectangleRenderer.register(...rulerData);
-			} else {
-				shape.setRaw(rulerData);
-			}
-		}
-		while (this._gpuShapes.length > rulers.length) {
-			this._gpuShapes.splice(-1, 1)[0].dispose();
+				Math.min(context.layout.contentSize.height * devicePixelRatio, 1_000_000),
+				color[0], color[1], color[2], color[3],
+			));
 		}
 	}
+}
+
+function parseColor(value: string | undefined): readonly [number, number, number, number] {
+	if (!value) {
+		return [0.5, 0.5, 0.5, 0.35];
+	}
+	const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/iu.exec(value);
+	if (!match) {
+		throw new TypeError('GPU ruler colors must use hexadecimal RGB or RGBA');
+	}
+	const rgb = match[1]!;
+	return [
+		Number.parseInt(rgb.slice(0, 2), 16) / 255,
+		Number.parseInt(rgb.slice(2, 4), 16) / 255,
+		Number.parseInt(rgb.slice(4, 6), 16) / 255,
+		match[2] ? Number.parseInt(match[2], 16) / 255 : 1,
+	];
 }

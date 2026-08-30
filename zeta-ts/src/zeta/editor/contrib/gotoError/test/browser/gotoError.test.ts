@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -23,7 +22,7 @@ test("F8 navigates current diagnostics in both directions", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
 	diagnostics.add({ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("first") });
 	diagnostics.add({ range: Range.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("last") });
@@ -32,15 +31,15 @@ test("F8 navigates current diagnostics in both directions", () => {
 	container.append(input);
 	using controller = new DiagnosticNavigationController(input, viewport, selections, diagnostics);
 	const next = key(dom.window, false); input.dispatchEvent(next);
-	assert.equal(next.defaultPrevented, true); assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)));
+	assert.equal(next.defaultPrevented, true); assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)));
 	assert.equal(viewport.element.querySelector(".stanza-editor-accessibility-status")?.textContent, "warning: first");
 	input.dispatchEvent(key(dom.window, false));
-	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)));
+	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)));
 	const previous = key(dom.window, true);
 	assert.equal(previous.shiftKey, true);
 	input.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)));
+	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)));
 	dom.window.close();
 });
 

@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -37,7 +36,7 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (1) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -47,10 +46,10 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 	const addBelow = keydown(dom.window, "ArrowDown", { ctrlKey: true, altKey: true });
 	input.dispatchEvent(addBelow);
 	assert.equal(addBelow.defaultPrevented, true);
-	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, [
 		Selection.fromPositions(new Position((1) + 1, (1) + 1)),
 		Selection.fromPositions(new Position((2) + 1, (1) + 1)),
-	], 1));
+	]);
 
 	dom.window.close();
 });
@@ -59,7 +58,7 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo\nthree");
-	using selections = new CursorsController(model, SelectionSet.withPrimary([
+	using selections = new CursorsController(model, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((2) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((2) + 1, (0) + 1), new Position((3) + 1, (2) + 1)),
 	], 1));
@@ -72,14 +71,14 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const addEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
 	input.dispatchEvent(addEnds);
 	assert.equal(addEnds.defaultPrevented, true);
-	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
-		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
-		Selection.fromPositions(new Position((1) + 1, (3) + 1)),
+	assert.deepEqual(selections.selections, [
 		Selection.fromPositions(new Position((2) + 1, (3) + 1)),
 		Selection.fromPositions(new Position((3) + 1, (2) + 1)),
-	], 2));
+		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
+		Selection.fromPositions(new Position((1) + 1, (3) + 1)),
+	]);
 
-	const collapsed = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1)));
+	const collapsed = [Selection.fromPositions(new Position((0) + 1, (0) + 1))];
 	selections.setSelections(collapsed);
 	const ignoredAddEnds = keydown(dom.window, "i", { shiftKey: true, altKey: true });
 	input.dispatchEvent(ignoredAddEnds);
@@ -113,8 +112,8 @@ test("Multi-cursor controller rejects cross-model wiring", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one");
 	using other = new TextModel("two");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using otherSelections = new CursorsController(other, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using otherSelections = new CursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	assert.throws(() => new MultiCursorController(input, viewport, otherSelections), /must share one text model/);
@@ -145,4 +144,9 @@ function keydown(targetWindow: typeof browserEnvironment.window, key: string, op
 		key,
 		...options,
 	}) as unknown as KeyboardEvent;
+}
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }

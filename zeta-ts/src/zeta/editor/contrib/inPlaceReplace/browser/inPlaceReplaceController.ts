@@ -3,6 +3,7 @@ import { registerTextEditorCapabilityContribution } from "../../../browser/edito
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
+import { CursorCollection } from "../../../common/cursor/cursorCollection.js";
 import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { DEFAULT_WORD_REGEXP } from "../../../common/core/wordHelper.js";
@@ -23,10 +24,10 @@ export class InPlaceReplaceController extends Disposable {
 	async replace(direction: 1 | -1): Promise<boolean> {
 		const model = this.viewport.textModel;
 		const selectionState = this.selections.selections;
-		const selection = selectionState.primary;
+		const selection = selectionState[0]!;
 		if (selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return false;
 		const result = await this.editorWorker.navigateValueSet(selection, direction > 0, this.wordDefinition());
-		if (!result || !this.selections.selections.equals(selectionState)) return false;
+		if (!result || !CursorCollection.selectionsEqual(this.selections.selections, selectionState)) return false;
 		const command = createEditorEditCommand(model, this.selections.selections, [{ range: result.range, text: result.value }]);
 		if (!command) return false;
 		this.selections.execute(command);

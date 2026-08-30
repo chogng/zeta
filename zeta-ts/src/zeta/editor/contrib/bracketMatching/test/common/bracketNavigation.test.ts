@@ -5,7 +5,6 @@ import { TestLanguageConfigurationService } from '../../../../test/common/modes/
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
@@ -14,17 +13,17 @@ test("Bracket navigation jumps and selects lexical configured pairs without chan
 	using configurations = bracketConfigurations();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	const selections = SelectionSet.withPrimary([
+	const selections = primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((1) + 1, (8) + 1)),
 	], 1);
 
 	const jumped = jumpToMatchingBrackets(bracketPairs, selections);
-	assert.deepEqual(jumped, SelectionSet.withPrimary([
+	assert.deepEqual(jumped, primaryFirst([
 		Selection.fromPositions(new Position((2) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((1) + 1, (2) + 1)),
 	], 1));
-	assert.deepEqual(selectToMatchingBrackets(bracketPairs, jumped), SelectionSet.withPrimary([
+	assert.deepEqual(selectToMatchingBrackets(bracketPairs, jumped), primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
 		Selection.fromPositions(new Position((1) + 1, (2) + 1), new Position((1) + 1, (9) + 1)),
 	], 1));
@@ -36,7 +35,7 @@ test("Bracket navigation leaves selections without a lexical match unchanged", (
 	using configurations = bracketConfigurations();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	const selections = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1)));
+	const selections = [Selection.fromPositions(new Position((0) + 1, (3) + 1))];
 	assert.equal(jumpToMatchingBrackets(bracketPairs, selections), selections);
 	assert.equal(selectToMatchingBrackets(bracketPairs, selections), selections);
 });
@@ -48,4 +47,9 @@ function bracketConfigurations(): TestLanguageConfigurationService {
 		brackets: [["(", ")"], ["{", "}"]],
 	});
 	return configurations;
+}
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }

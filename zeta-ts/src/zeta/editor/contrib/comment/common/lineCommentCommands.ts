@@ -1,5 +1,5 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 
@@ -19,7 +19,7 @@ interface OffsetEdit {
 }
 
 /** Toggles one language line-comment token over every selected physical line. */
-export function createToggleLineCommentCommand(model: TextModel, selections: SelectionSet, options: EditorLineCommentOptions): EditorEditCommand {
+export function createToggleLineCommentCommand(model: TextModel, selections: readonly Selection[], options: EditorLineCommentOptions): EditorEditCommand {
 	const lineComment = readLineComment(options);
 	const lineIndices = selectedLineIndices(selections);
 	const remove = shouldRemoveLineComments(model, lineIndices, lineComment);
@@ -53,11 +53,11 @@ export function createToggleLineCommentCommand(model: TextModel, selections: Sel
 	});
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
-		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({
+		selectionsAfter: Object.freeze(selections.map(selection => Object.freeze({
 			anchorOffset: mapOffsetThroughEdits(model.offsetAt(selection.getSelectionStart()), edits),
 			activeOffset: mapOffsetThroughEdits(model.offsetAt(selection.getPosition()), edits),
 		}))),
-		primarySelectionIndex: selections.primaryIndex,
+		primarySelectionIndex: 0,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
 }
@@ -74,9 +74,9 @@ function shouldRemoveLineComments(model: TextModel, lineIndices: readonly number
 	});
 }
 
-function selectedLineIndices(selections: SelectionSet): readonly number[] {
+function selectedLineIndices(selections: readonly Selection[]): readonly number[] {
 	const indices = new Set<number>();
-	for (const selection of selections.selections) {
+	for (const selection of selections) {
 		const range = selection;
 		let endLineIndex = range.endLineNumber - 1;
 		if (!selection.isEmpty() && range.endColumn === 1 && endLineIndex > range.startLineNumber - 1) {

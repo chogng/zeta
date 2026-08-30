@@ -1,6 +1,6 @@
 import { URI } from '../../../base/common/uri.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
-import type { IWidgetCodeEditorRegistry } from '../../browser/services/codeEditorService.js';
+import type { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import type { ILanguageSelection, ILanguageService } from '../../common/languages/language.js';
 import type { ITextModel } from '../../common/model.js';
@@ -13,12 +13,10 @@ export interface IStandaloneCodeEditor extends CodeEditorWidget {
 
 /** Standalone editor owner whose identity is shared by create(), editor events, and the editor registry. */
 export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCodeEditor {
-	constructor(options: CodeEditorWidgetOptions, private readonly model: TextModel, ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorRegistry: IWidgetCodeEditorRegistry) {
-		super(options);
+	constructor(options: CodeEditorWidgetOptions, private readonly model: TextModel, private readonly ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorService: ICodeEditorService) {
+		super({ ...options, codeEditorService });
 		try {
-			if (ownsModel) this._register(model);
 			this._register(bindColorTheme(themeService, options.container));
-			this._register(codeEditorRegistry.addCodeEditor(this));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -26,6 +24,14 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 	}
 
 	public getModel(): TextModel { return this.model; }
+
+	protected override disposeCore(): void {
+		try {
+			super.disposeCore();
+		} finally {
+			if (this.ownsModel) this.model.dispose();
+		}
+	}
 }
 
 /** @internal */

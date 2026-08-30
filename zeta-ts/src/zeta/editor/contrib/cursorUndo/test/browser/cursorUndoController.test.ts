@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -30,12 +29,12 @@ test("Cursor undo restores macOS multi-cursor history without changing text", ()
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
 	container.append(input);
 	using controller = new CursorUndoController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
-	selections.setCursorSelections(SelectionSet.withPrimary([
+	selections.setCursorSelections(primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((1) + 1, (0) + 1)),
 	], 1));
@@ -43,7 +42,7 @@ test("Cursor undo restores macOS multi-cursor history without changing text", ()
 	const undo = keydown(dom.window, "u", { metaKey: true });
 	input.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
-	assert.deepEqual(selections.selections, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	assert.deepEqual(selections.selections, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	assert.equal(model.getText(), "one\ntwo");
 	assert.equal(keydown(dom.window, "u", { ctrlKey: true }).defaultPrevented, false);
 	dom.window.close();
@@ -64,4 +63,9 @@ class FixedTextMeasurer implements TextMeasurer {
 
 function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key, ...options }) as unknown as KeyboardEvent;
+}
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }

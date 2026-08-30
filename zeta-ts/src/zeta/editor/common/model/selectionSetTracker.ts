@@ -1,34 +1,31 @@
 import { AbstractDisposable, Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import { SelectionDirection, Selection } from '../core/selection.js';
 import { TrackedRangeStickiness } from '../model.js';
-import { SelectionSet } from '../cursor/selectionSet.js';
 import { type TextModel } from './textModel.js';
 import { type TrackedRange } from './trackedRange.js';
 
-/** Tracks Zeta's explicit-primary `SelectionSet` through text-model edits. */
+/** Tracks one primary-first selection array through text-model edits. */
 export class SelectionSetTracker extends Disposable {
 	private readonly resources = this._register(new DisposableStore());
 	private trackedSelections: TrackedSelection[] = [];
-	private primaryIndex = 0;
 
-	constructor(private readonly model: TextModel, selections: SelectionSet) {
+	constructor(private readonly model: TextModel, selections: readonly Selection[]) {
 		super();
 		this.setSelections(selections);
 	}
 
-	getSelections(): SelectionSet {
-		return SelectionSet.withPrimary(this.trackedSelections.map(selection => selection.selection), this.primaryIndex);
+	getSelections(): readonly Selection[] {
+		return Object.freeze(this.trackedSelections.map(selection => selection.selection));
 	}
 
-	setSelections(selections: SelectionSet): void {
-		validateSelectionSet(this.model, selections);
+	setSelections(selections: readonly Selection[]): void {
+		validateSelections(this.model, selections);
 		this.resources.clear();
-		this.trackedSelections = selections.selections.map(selection => {
+		this.trackedSelections = selections.map(selection => {
 			const trackedSelection = new TrackedSelection(this.model, selection);
 			this.resources.add(trackedSelection);
 			return trackedSelection;
 		});
-		this.primaryIndex = selections.primaryIndex;
 	}
 }
 
@@ -54,8 +51,9 @@ class TrackedSelection extends AbstractDisposable {
 	}
 }
 
-export function validateSelectionSet(model: TextModel, selections: SelectionSet): void {
-	for (const selection of selections.selections) {
+export function validateSelections(model: TextModel, selections: readonly Selection[]): void {
+	if (selections.length === 0) throw new RangeError('Selections must not be empty');
+	for (const selection of selections) {
 		model.offsetAt(selection.getSelectionStart());
 		model.offsetAt(selection.getPosition());
 	}

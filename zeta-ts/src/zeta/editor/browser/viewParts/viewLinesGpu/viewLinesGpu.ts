@@ -1,797 +1,316 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
-import { getActiveWindow } from '../../../../base/browser/dom.js';
-import { BugIndicatingError } from '../../../../base/common/errors.js';
-import { autorun, runOnChange } from '../../../../base/common/observable.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ILogService } from '../../../../platform/log/common/log.js';
-import { EditorOption } from '../../../common/config/editorOptions.js';
-import { Position } from '../../../common/core/position.js';
-import { Range } from '../../../common/core/range.js';
-import type { ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
-import type { ViewContext } from '../../../common/viewModel/viewContext.js';
-import { TextureAtlasPage } from '../../gpu/atlas/textureAtlasPage.js';
-import { BindingId, type IGpuRenderStrategy } from '../../gpu/gpu.js';
-import { GPULifecycle } from '../../gpu/gpuDisposable.js';
-import { quadVertices } from '../../gpu/gpuUtils.js';
+import { Disposable, MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
-import { FloatHorizontalRange, HorizontalPosition, HorizontalRange, IViewLines, LineVisibleRanges, RenderingContext, RestrictedRenderingContext, VisibleRanges } from '../../view/renderingContext.js';
-import { ViewPart } from '../../view/viewPart.js';
-import { ViewLineOptions } from '../viewLines/viewLineOptions.js';
-import type * as viewEvents from '../../../common/viewEvents.js';
-import { CursorColumns } from '../../../common/core/cursorColumns.js';
-import { TextureAtlas } from '../../gpu/atlas/textureAtlas.js';
-import { createContentSegmenter, type IContentSegmenter } from '../../gpu/contentSegmenter.js';
-import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
-import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
-import { MutableDisposable } from '../../../../base/common/lifecycle.js';
-import type { ViewLineRenderingData } from '../../../common/viewModel.js';
+import { GPULifecycle } from '../../gpu/gpuDisposable.js';
 import { GlyphRasterizer } from '../../gpu/raster/glyphRasterizer.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
+import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { type BracketColorizationSource, type SemanticTokenSource, type ViewLine } from '../viewLines/viewLine.js';
+import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
+import { type ViewLines } from '../viewLines/viewLines.js';
+import { BindingId, type GpuFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
+import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
+import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
+import { type EditorRenderingContext } from '../../view/renderingContext.js';
 
-const enum GlyphStorageBufferInfo {
-	FloatsPerEntry = 2 + 2 + 2,
-	BytesPerEntry = GlyphStorageBufferInfo.FloatsPerEntry * 4,
-	Offset_TexturePosition = 0,
-	Offset_TextureSize = 2,
-	Offset_OriginPosition = 4,
+export interface ViewLinesGpuOptions {
+	readonly host: HTMLElement;
+	readonly model: TextModel;
+	readonly semanticTokenSource: SemanticTokenSource | undefined;
+	readonly bracketColorizationSource: BracketColorizationSource | undefined;
+	readonly paddingTop: number;
+	readonly viewLineOptions: ViewLineOptions;
+	readonly viewLines: ViewLines;
+	readonly requestRender: () => void;
 }
 
-/**
- * The GPU implementation of the ViewLines part.
- */
-export class ViewLinesGpu extends ViewPart implements IViewLines {
+interface PreparedGpuFrame {
+	readonly frame: GpuFrame;
+	readonly renderedLines: ReadonlyMap<number, ViewLine>;
+}
 
-	private readonly canvas: HTMLCanvasElement;
+const VERTEX_FLOAT_COUNT = 5;
 
-	private _initViewportData?: ViewportData[];
-	private _lastViewportData?: ViewportData;
-	private _lastViewLineOptions?: ViewLineOptions;
+/** Draws eligible visible text rows through the VS Code-aligned WebGPU glyph-atlas path. */
+export class ViewLinesGpu extends Disposable {
+	private readonly context: ViewGpuContext;
+	private readonly vertexBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
+	private readonly uniformBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
+	private readonly atlasTexture = this._register(new MutableDisposable<IReference<GPUTexture>>());
+	private readonly renderStrategy = this._register(new MutableDisposable<IGpuRenderStrategy>());
+	private pipeline: GPURenderPipeline | undefined;
+	private sampler: GPUSampler | undefined;
+	private bindGroup: GPUBindGroup | undefined;
+	private vertexBufferSize = 0;
+	private atlasRevision = -1;
+	private uploadedPageVersions: number[] = [];
+	private rasterizer: GlyphRasterizer | undefined;
+	private lastRenderingContext: EditorRenderingContext | undefined;
+	private pendingRenderingContext: EditorRenderingContext | undefined;
+	private rendering = false;
+	private renderedGpuLineIndexes = new Set<number>();
 
-	/**
-	 * Tracks the maximum line width seen so far for horizontal scrollbar sizing.
-	 * This is needed because GPU-rendered lines don't have DOM nodes to measure.
-	 */
-	private _maxLineWidth: number = 0;
-
-	private _device!: GPUDevice;
-	private _renderPassDescriptor!: GPURenderPassDescriptor;
-	private _renderPassColorAttachment!: GPURenderPassColorAttachment;
-	private _bindGroup!: GPUBindGroup;
-	private _pipeline!: GPURenderPipeline;
-
-	private _vertexBuffer!: GPUBuffer;
-
-	private _glyphStorageBuffer!: GPUBuffer;
-	private _atlasGpuTexture!: GPUTexture;
-	private readonly _atlasGpuTextureVersions: number[] = [];
-
-	private _initialized = false;
-
-	private readonly _glyphRasterizer: MutableDisposable<GlyphRasterizer> = this._register(new MutableDisposable());
-	private readonly _renderStrategy: MutableDisposable<IGpuRenderStrategy> = this._register(new MutableDisposable());
-	private _rebuildBindGroup?: () => void;
-
-	constructor(
-		context: ViewContext,
-		private readonly _viewGpuContext: ViewGpuContext,
-		@IInstantiationService private readonly _instantiationService: IInstantiationService,
-		@ILogService private readonly _logService: ILogService,
-	) {
-		super(context);
-
-		this.canvas = this._viewGpuContext.canvas.domNode;
-
-		// Re-render the following frame after canvas device pixel dimensions change, provided a
-		// new render does not occur.
-		this._register(autorun(reader => {
-			this._viewGpuContext.canvasDevicePixelDimensions.read(reader);
-			const lastViewportData = this._lastViewportData;
-			if (lastViewportData) {
-				setTimeout(() => {
-					if (lastViewportData === this._lastViewportData) {
-						this.renderText(lastViewportData);
-					}
-				});
-			}
+	constructor(private readonly options: ViewLinesGpuOptions) {
+		super();
+		this.context = this._register(new ViewGpuContext({ host: options.host }));
+		this._register(this.context.onDidChange(() => {
+			if (this.lastRenderingContext) options.requestRender();
 		}));
-
-		this.initWebgpu();
 	}
 
-	async initWebgpu() {
-		// #region General
+	public get gpuContext(): ViewGpuContext {
+		return this.context;
+	}
 
-		this._device = ViewGpuContext.deviceSync || await ViewGpuContext.device;
+	public get gpuLineIndexes(): ReadonlySet<number> {
+		return this.renderedGpuLineIndexes;
+	}
 
-		if (this._store.isDisposed) {
+	public render(context: EditorRenderingContext): void {
+		this.lastRenderingContext = context;
+		this.pendingRenderingContext = context;
+		if (this.rendering) return;
+		this.rendering = true;
+		try {
+			while (this.pendingRenderingContext) {
+				const next = this.pendingRenderingContext;
+				this.pendingRenderingContext = undefined;
+				this.renderFrame(next);
+			}
+		} catch (error) {
+			this.showDomText();
+			this.context.hideCanvas();
+			this.context.markUnavailable(asError(error));
+		} finally {
+			this.rendering = false;
+		}
+	}
+
+	private renderFrame(context: EditorRenderingContext): void {
+		const layout = context.layout;
+		this.context.layout(layout.viewportSize.width, layout.viewportSize.height, layout.scrollPosition.left, layout.scrollPosition.top);
+		const overlay = context.overlay;
+		if (layout.viewZones || this.context.status !== 'ready' || this.isForcedColors() || !overlay || !this.isRenderingContextCurrent(context, overlay.visualLineProjection)) {
+			this.showDomText();
+			this.context.hideCanvas();
 			return;
 		}
+		const visualLines = overlay.visualLineProjection;
+		this.validateRenderedLines(visualLines, this.options.viewLines.renderedLines);
+		this.ensureResources(visualLines);
+		const prepared = this.createFrame(context, visualLines);
+		this.uploadAtlas();
+		this.draw(prepared.frame, layout);
+		this.applyRenderedLines(prepared.renderedLines, prepared.frame.gpuLineIndexes);
+		this.context.showCanvas();
+	}
 
-		const atlas = ViewGpuContext.atlas;
+	public invalidateFont(): void {
+		this.rasterizer = undefined;
+		this.renderStrategy.clear();
+		this.context.clearAtlas();
+	}
 
-		// Rerender when the texture atlas deletes glyphs
-		this._register(atlas.onDidDeleteGlyphs(() => {
-			this._atlasGpuTextureVersions.length = 0;
-			this._atlasGpuTextureVersions[0] = 0;
-			this._atlasGpuTextureVersions[1] = 0;
-			this._renderStrategy.value!.reset();
-		}));
+	public invalidateTokens(): void {
+		this.renderStrategy.value?.reset();
+	}
 
-		const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-		this._viewGpuContext.ctx.configure({
-			device: this._device,
-			format: presentationFormat,
-			alphaMode: 'premultiplied',
-		});
-
-		this._renderPassColorAttachment = {
-			view: null!, // Will be filled at render time
-			loadOp: 'load',
-			storeOp: 'store',
-		};
-		this._renderPassDescriptor = {
-			label: 'Monaco render pass',
-			colorAttachments: [this._renderPassColorAttachment],
-		};
-
-		// #endregion General
-
-		// #region Uniforms
-
-		let layoutInfoUniformBuffer: GPUBuffer;
-		{
-			const enum Info {
-				FloatsPerEntry = 6,
-				BytesPerEntry = Info.FloatsPerEntry * 4,
-				Offset_CanvasWidth____ = 0,
-				Offset_CanvasHeight___ = 1,
-				Offset_ViewportOffsetX = 2,
-				Offset_ViewportOffsetY = 3,
-				Offset_ViewportWidth__ = 4,
-				Offset_ViewportHeight_ = 5,
-			}
-			const bufferValues = new Float32Array(Info.FloatsPerEntry);
-			const updateBufferValues = (canvasDevicePixelWidth: number = this.canvas.width, canvasDevicePixelHeight: number = this.canvas.height) => {
-				bufferValues[Info.Offset_CanvasWidth____] = canvasDevicePixelWidth;
-				bufferValues[Info.Offset_CanvasHeight___] = canvasDevicePixelHeight;
-				bufferValues[Info.Offset_ViewportOffsetX] = Math.ceil(this._context.configuration.options.get(EditorOption.layoutInfo).contentLeft * getActiveWindow().devicePixelRatio);
-				bufferValues[Info.Offset_ViewportOffsetY] = 0;
-				bufferValues[Info.Offset_ViewportWidth__] = bufferValues[Info.Offset_CanvasWidth____] - bufferValues[Info.Offset_ViewportOffsetX];
-				bufferValues[Info.Offset_ViewportHeight_] = bufferValues[Info.Offset_CanvasHeight___] - bufferValues[Info.Offset_ViewportOffsetY];
-				return bufferValues;
-			};
-			layoutInfoUniformBuffer = this._register(GPULifecycle.createBuffer(this._device, {
-				label: 'Monaco uniform buffer',
-				size: Info.BytesPerEntry,
-				usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-			}, () => updateBufferValues())).object;
-			this._register(runOnChange(this._viewGpuContext.canvasDevicePixelDimensions, ({ width, height }) => {
-				this._device.queue.writeBuffer(layoutInfoUniformBuffer, 0, updateBufferValues(width, height));
-			}));
-			this._register(runOnChange(this._viewGpuContext.contentLeft, () => {
-				this._device.queue.writeBuffer(layoutInfoUniformBuffer, 0, updateBufferValues());
-			}));
+	private ensureResources(visualLines: EditorVisualLineProjection): void {
+		const device = this.context.device;
+		if (!this.rasterizer || this.rasterizer.devicePixelRatio !== this.context.devicePixelRatio) {
+			this.rasterizer = new GlyphRasterizer(this.context.canvas, this.context.devicePixelRatio);
+			this.renderStrategy.value = this.createRenderStrategy(this.rasterizer, visualLines);
 		}
-
-		let atlasInfoUniformBuffer: GPUBuffer;
-		{
-			const enum Info {
-				FloatsPerEntry = 2,
-				BytesPerEntry = Info.FloatsPerEntry * 4,
-				Offset_Width_ = 0,
-				Offset_Height = 1,
-			}
-			atlasInfoUniformBuffer = this._register(GPULifecycle.createBuffer(this._device, {
-				label: 'Monaco atlas info uniform buffer',
-				size: Info.BytesPerEntry,
-				usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-			}, () => {
-				const values = new Float32Array(Info.FloatsPerEntry);
-				values[Info.Offset_Width_] = atlas.pageSize;
-				values[Info.Offset_Height] = atlas.pageSize;
-				return values;
-			})).object;
-		}
-
-		// #endregion Uniforms
-
-		// #region Storage buffers
-
-		const fontFamily = this._context.configuration.options.get(EditorOption.fontFamily);
-		const fontSize = this._context.configuration.options.get(EditorOption.fontSize);
-		this._glyphRasterizer.value = this._register(new GlyphRasterizer(fontSize, fontFamily, this._viewGpuContext.devicePixelRatio.get(), ViewGpuContext.decorationStyleCache));
-		this._register(runOnChange(this._viewGpuContext.devicePixelRatio, () => {
-			this._refreshGlyphRasterizer();
-		}));
-
-
-		this._renderStrategy.value = this._instantiationService.createInstance(FullFileRenderStrategy, this._context, this._viewGpuContext, this._device, this._glyphRasterizer as { value: GlyphRasterizer });
-		// this._renderStrategy.value = this._instantiationService.createInstance(ViewportRenderStrategy, this._context, this._viewGpuContext, this._device);
-
-		this._glyphStorageBuffer = this._register(GPULifecycle.createBuffer(this._device, {
-			label: 'Monaco glyph storage buffer',
-			size: TextureAtlas.maximumPageCount * (TextureAtlasPage.maximumGlyphCount * GlyphStorageBufferInfo.BytesPerEntry),
-			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-		})).object;
-		this._atlasGpuTextureVersions[0] = 0;
-		this._atlasGpuTextureVersions[1] = 0;
-		this._atlasGpuTexture = this._register(GPULifecycle.createTexture(this._device, {
-			label: 'Monaco atlas texture',
-			format: 'rgba8unorm',
-			size: { width: atlas.pageSize, height: atlas.pageSize, depthOrArrayLayers: TextureAtlas.maximumPageCount },
-			dimension: '2d',
-			usage: GPUTextureUsage.TEXTURE_BINDING |
-				GPUTextureUsage.COPY_DST |
-				GPUTextureUsage.RENDER_ATTACHMENT,
-		})).object;
-
-		this._updateAtlasStorageBufferAndTexture();
-
-		// #endregion Storage buffers
-
-		// #region Vertex buffer
-
-		this._vertexBuffer = this._register(GPULifecycle.createBuffer(this._device, {
-			label: 'Monaco vertex buffer',
-			size: quadVertices.byteLength,
-			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-		}, quadVertices)).object;
-
-		// #endregion Vertex buffer
-
-		// #region Shader module
-
-		const module = this._device.createShaderModule({
-			label: 'Monaco shader module',
-			code: this._renderStrategy.value.wgsl,
-		});
-
-		// #endregion Shader module
-
-		// #region Pipeline
-
-		this._pipeline = this._device.createRenderPipeline({
-			label: 'Monaco render pipeline',
-			layout: 'auto',
-			vertex: {
-				module,
-				buffers: [
-					{
-						arrayStride: 2 * Float32Array.BYTES_PER_ELEMENT, // 2 floats, 4 bytes each
+		if (!this.pipeline) {
+			const presentationFormat = this.context.canvas.ownerDocument.defaultView!.navigator.gpu.getPreferredCanvasFormat();
+			const shader = device.createShaderModule({ label: 'Stanza ViewLinesGpu shader', code: this.renderStrategy.value!.wgsl });
+			this.pipeline = device.createRenderPipeline({
+				label: 'Stanza ViewLinesGpu pipeline',
+				layout: 'auto',
+				vertex: {
+					module: shader,
+					entryPoint: 'vertexMain',
+					buffers: [{
+						arrayStride: VERTEX_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT,
 						attributes: [
-							{ shaderLocation: 0, offset: 0, format: 'float32x2' },  // position
+							{ shaderLocation: 0, offset: 0, format: 'float32x2' },
+							{ shaderLocation: 1, offset: 2 * Float32Array.BYTES_PER_ELEMENT, format: 'float32x2' },
+							{ shaderLocation: 2, offset: 4 * Float32Array.BYTES_PER_ELEMENT, format: 'float32' },
 						],
-					}
-				]
-			},
-			fragment: {
-				module,
-				targets: [
-					{
+					}],
+				},
+				fragment: {
+					module: shader,
+					entryPoint: 'fragmentMain',
+					targets: [{
 						format: presentationFormat,
 						blend: {
-							color: {
-								srcFactor: 'src-alpha',
-								dstFactor: 'one-minus-src-alpha'
-							},
-							alpha: {
-								srcFactor: 'src-alpha',
-								dstFactor: 'one-minus-src-alpha'
-							},
+							color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+							alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
 						},
-					}
-				],
-			},
-		});
-
-		// #endregion Pipeline
-
-		// #region Bind group
-
-		this._rebuildBindGroup = () => {
-			this._bindGroup = this._device.createBindGroup({
-				label: 'Monaco bind group',
-				layout: this._pipeline.getBindGroupLayout(0),
-				entries: [
-					// TODO: Pass in generically as array?
-					{ binding: BindingId.GlyphInfo, resource: { buffer: this._glyphStorageBuffer } },
-					{
-						binding: BindingId.TextureSampler, resource: this._device.createSampler({
-							label: 'Monaco atlas sampler',
-							magFilter: 'nearest',
-							minFilter: 'nearest',
-						})
-					},
-					{ binding: BindingId.Texture, resource: this._atlasGpuTexture.createView() },
-					{ binding: BindingId.LayoutInfoUniform, resource: { buffer: layoutInfoUniformBuffer } },
-					{ binding: BindingId.AtlasDimensionsUniform, resource: { buffer: atlasInfoUniformBuffer } },
-					...this._renderStrategy.value!.bindGroupEntries
-				],
+					}],
+				},
+				primitive: { topology: 'triangle-list' },
 			});
-		};
-		this._rebuildBindGroup();
-
-		// endregion Bind group
-
-		this._initialized = true;
-
-		// Render the initial viewport immediately after initialization
-		if (this._initViewportData) {
-			// HACK: Rendering multiple times in the same frame like this isn't ideal, but there
-			//       isn't an easy way to merge viewport data
-			for (const viewportData of this._initViewportData) {
-				this.renderText(viewportData);
-			}
-			this._initViewportData = undefined;
+			this.sampler = device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
+			this.uniformBuffer.value = GPULifecycle.createBuffer(device, {
+				label: 'Stanza ViewLinesGpu dimensions',
+				size: 6 * Float32Array.BYTES_PER_ELEMENT,
+				usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+			});
 		}
+		if (this.atlasRevision !== this.context.textureAtlasRevision) this.createAtlasTexture();
 	}
 
-	private _refreshRenderStrategy(viewportData: ViewportData) {
-		if (this._renderStrategy.value?.type === 'viewport') {
-			return;
-		}
-		if (viewportData.endLineNumber < FullFileRenderStrategy.maxSupportedLines && this._viewportMaxColumn(viewportData) < FullFileRenderStrategy.maxSupportedColumns) {
-			return;
-		}
-		this._logService.trace(`File is larger than ${FullFileRenderStrategy.maxSupportedLines} lines or ${FullFileRenderStrategy.maxSupportedColumns} columns, switching to viewport render strategy`);
-		const viewportRenderStrategy = this._instantiationService.createInstance(ViewportRenderStrategy, this._context, this._viewGpuContext, this._device, this._glyphRasterizer as { value: GlyphRasterizer });
-		this._renderStrategy.value = viewportRenderStrategy;
-		this._register(viewportRenderStrategy.onDidChangeBindGroupEntries(() => this._rebuildBindGroup?.()));
-		this._rebuildBindGroup?.();
+	private createAtlasTexture(): void {
+		const atlas = this.context.atlas;
+		this.renderStrategy.value?.reset();
+		this.atlasTexture.value = GPULifecycle.createTexture(this.context.device, {
+			label: 'Stanza ViewLinesGpu glyph atlas',
+			size: { width: atlas.pageSize, height: atlas.pageSize, depthOrArrayLayers: atlas.pages.length },
+			format: 'rgba8unorm',
+			usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+		});
+		this.atlasRevision = this.context.textureAtlasRevision;
+		this.uploadedPageVersions = [];
+		this.bindGroup = this.context.device.createBindGroup({
+			label: 'Stanza ViewLinesGpu bindings',
+			layout: this.pipeline!.getBindGroupLayout(0),
+			entries: [
+				{ binding: BindingId.Texture, resource: this.atlasTexture.value.object.createView({ dimension: '2d-array' }) },
+				{ binding: BindingId.TextureSampler, resource: this.sampler! },
+				{ binding: BindingId.LayoutInfoUniform, resource: { buffer: this.uniformBuffer.value!.object } },
+				...this.renderStrategy.value!.bindGroupEntries,
+			],
+		});
 	}
 
-	private _viewportMaxColumn(viewportData: ViewportData): number {
-		let maxColumn = 0;
-		let lineData: ViewLineRenderingData;
-		for (let i = viewportData.startLineNumber; i <= viewportData.endLineNumber; i++) {
-			lineData = viewportData.getViewLineRenderingData(i);
-			maxColumn = Math.max(maxColumn, lineData.maxColumn);
-		}
-		return maxColumn;
+	private createFrame(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): PreparedGpuFrame {
+		const overlay = context.overlay;
+		if (!overlay) throw new Error('WebGPU frame requires a version-bound overlay snapshot');
+		const rootStyle = this.context.canvas.ownerDocument.defaultView!.getComputedStyle(this.options.host);
+		this.ensureRenderStrategy(visualLines);
+		const renderedLines = new Map(this.options.viewLines.renderedLines);
+		const frame = this.renderStrategy.value!.update({
+			layout: context.layout,
+			model: this.options.model,
+			visualLines,
+			visibleLineIndexes: new Set(renderedLines.keys()),
+			semanticTokenSource: this.options.semanticTokenSource,
+			bracketColorizationSource: this.options.bracketColorizationSource,
+			textLeft: overlay.textLeft,
+			paddingTop: this.options.paddingTop,
+			textDirection: this.options.viewLineOptions.textDirection,
+			fontLigatures: this.options.viewLineOptions.fontLigatures,
+			rootStyle,
+			atlas: this.context.atlas,
+		});
+		return Object.freeze({ frame, renderedLines });
 	}
 
-	private _updateAtlasStorageBufferAndTexture() {
-		for (const [layerIndex, page] of ViewGpuContext.atlas.pages.entries()) {
-			if (layerIndex >= TextureAtlas.maximumPageCount) {
-				console.log(`Attempt to upload atlas page [${layerIndex}], only ${TextureAtlas.maximumPageCount} are supported currently`);
-				continue;
-			}
-
-			// Skip the update if it's already the latest version
-			if (page.version === this._atlasGpuTextureVersions[layerIndex]) {
-				continue;
-			}
-
-			this._logService.trace('Updating atlas page[', layerIndex, '] from version ', this._atlasGpuTextureVersions[layerIndex], ' to version ', page.version);
-
-			const entryCount = GlyphStorageBufferInfo.FloatsPerEntry * TextureAtlasPage.maximumGlyphCount;
-			const values = new Float32Array(entryCount);
-			let entryOffset = 0;
-			for (const glyph of page.glyphs) {
-				values[entryOffset + GlyphStorageBufferInfo.Offset_TexturePosition] = glyph.x;
-				values[entryOffset + GlyphStorageBufferInfo.Offset_TexturePosition + 1] = glyph.y;
-				values[entryOffset + GlyphStorageBufferInfo.Offset_TextureSize] = glyph.w;
-				values[entryOffset + GlyphStorageBufferInfo.Offset_TextureSize + 1] = glyph.h;
-				values[entryOffset + GlyphStorageBufferInfo.Offset_OriginPosition] = glyph.originOffsetX;
-				values[entryOffset + GlyphStorageBufferInfo.Offset_OriginPosition + 1] = glyph.originOffsetY;
-				entryOffset += GlyphStorageBufferInfo.FloatsPerEntry;
-			}
-			if (entryOffset / GlyphStorageBufferInfo.FloatsPerEntry > TextureAtlasPage.maximumGlyphCount) {
-				throw new Error(`Attempting to write more glyphs (${entryOffset / GlyphStorageBufferInfo.FloatsPerEntry}) than the GPUBuffer can hold (${TextureAtlasPage.maximumGlyphCount})`);
-			}
-			this._device.queue.writeBuffer(
-				this._glyphStorageBuffer,
-				layerIndex * GlyphStorageBufferInfo.FloatsPerEntry * TextureAtlasPage.maximumGlyphCount * Float32Array.BYTES_PER_ELEMENT,
-				values,
-				0,
-				GlyphStorageBufferInfo.FloatsPerEntry * TextureAtlasPage.maximumGlyphCount
+	private uploadAtlas(): void {
+		const atlas = this.context.atlas;
+		if (this.atlasTexture.value && this.uploadedPageVersions.length !== atlas.pages.length) this.createAtlasTexture();
+		for (const page of atlas.pages) {
+			if (this.uploadedPageVersions[page.index] === page.version) continue;
+			this.context.device.queue.copyExternalImageToTexture(
+				{ source: page.source },
+				{ texture: this.atlasTexture.value!.object, origin: { x: 0, y: 0, z: page.index } },
+				{ width: page.usedArea.right, height: page.usedArea.bottom },
 			);
-			if (page.usedArea.right - page.usedArea.left > 0 && page.usedArea.bottom - page.usedArea.top > 0) {
-				this._device.queue.copyExternalImageToTexture(
-					{ source: page.source },
-					{
-						texture: this._atlasGpuTexture,
-						origin: {
-							x: page.usedArea.left,
-							y: page.usedArea.top,
-							z: layerIndex
-						}
-					},
-					{
-						width: page.usedArea.right - page.usedArea.left + 1,
-						height: page.usedArea.bottom - page.usedArea.top + 1
-					},
-				);
-			}
-			this._atlasGpuTextureVersions[layerIndex] = page.version;
+			this.uploadedPageVersions[page.index] = page.version;
 		}
 	}
 
-	public prepareRender(ctx: RenderingContext): void {
-		throw new BugIndicatingError('Should not be called');
-	}
-
-	public override render(ctx: RestrictedRenderingContext): void {
-		throw new BugIndicatingError('Should not be called');
-	}
-
-	// #region Event handlers
-
-	// Since ViewLinesGpu currently coordinates rendering to the canvas, it must listen to all
-	// changed events that any GPU part listens to. This is because any drawing to the canvas will
-	// clear it for that frame, so all parts must be rendered every time.
-	//
-	// Additionally, since this is intrinsically linked to ViewLines, it must also listen to events
-	// from that side. Luckily rendering is cheap, it's only when uploaded data changes does it
-	// start to cost.
-
-	override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
-		this._refreshGlyphRasterizer();
-		this._maxLineWidth = 0;
-		return true;
-	}
-	override onCursorStateChanged(e: viewEvents.ViewCursorStateChangedEvent): boolean { return true; }
-	override onDecorationsChanged(e: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
-	override onFlushed(e: viewEvents.ViewFlushedEvent): boolean {
-		this._maxLineWidth = 0;
-		return true;
-	}
-
-	override onLinesChanged(e: viewEvents.ViewLinesChangedEvent): boolean { return true; }
-	override onLinesDeleted(e: viewEvents.ViewLinesDeletedEvent): boolean {
-		this._maxLineWidth = 0;
-		return true;
-	}
-	override onLinesInserted(e: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
-	override onLineMappingChanged(e: viewEvents.ViewLineMappingChangedEvent): boolean { return true; }
-	override onRevealRangeRequest(e: viewEvents.ViewRevealRangeRequestEvent): boolean { return true; }
-	override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean { return true; }
-	override onThemeChanged(e: viewEvents.ViewThemeChangedEvent): boolean { return true; }
-	override onZonesChanged(e: viewEvents.ViewZonesChangedEvent): boolean { return true; }
-
-	// #endregion
-
-	private _refreshGlyphRasterizer() {
-		const glyphRasterizer = this._glyphRasterizer.value;
-		if (!glyphRasterizer) {
-			return;
+	private draw(frame: GpuFrame, layout: EditorViewportLayout): void {
+		const vertices = frame.vertices;
+		const dimensions = this.context.devicePixelDimensions;
+		const atlasSize = this.context.atlas.pageSize;
+		this.context.device.queue.writeBuffer(this.uniformBuffer.value!.object, 0, new Float32Array([
+			dimensions.width,
+			dimensions.height,
+			atlasSize,
+			atlasSize,
+			layout.scrollPosition.left * this.context.devicePixelRatio,
+			layout.scrollPosition.top * this.context.devicePixelRatio,
+		]));
+		if (vertices.byteLength > this.vertexBufferSize) {
+			this.vertexBufferSize = Math.max(vertices.byteLength, 4_096);
+			this.vertexBuffer.value = GPULifecycle.createBuffer(this.context.device, {
+				label: 'Stanza ViewLinesGpu vertices',
+				size: this.vertexBufferSize,
+				usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+			});
 		}
-		const fontFamily = this._context.configuration.options.get(EditorOption.fontFamily);
-		const fontSize = this._context.configuration.options.get(EditorOption.fontSize);
-		const devicePixelRatio = this._viewGpuContext.devicePixelRatio.get();
-		if (
-			glyphRasterizer.fontFamily !== fontFamily ||
-			glyphRasterizer.fontSize !== fontSize ||
-			glyphRasterizer.devicePixelRatio !== devicePixelRatio
-		) {
-			this._glyphRasterizer.value = new GlyphRasterizer(fontSize, fontFamily, devicePixelRatio, ViewGpuContext.decorationStyleCache);
+		if (vertices.byteLength > 0) this.context.device.queue.writeBuffer(this.vertexBuffer.value!.object, 0, vertices as Float32Array<ArrayBuffer>);
+		const encoder = this.context.device.createCommandEncoder({ label: 'Stanza ViewLinesGpu frame' });
+		const textureView = this.context.context.getCurrentTexture().createView();
+		this.context.rectangleRenderer.encode(encoder, textureView, dimensions.width, dimensions.height, layout.scrollPosition.left * this.context.devicePixelRatio, layout.scrollPosition.top * this.context.devicePixelRatio);
+		const pass = encoder.beginRenderPass({
+			label: 'Stanza ViewLinesGpu pass',
+			colorAttachments: [{
+				view: textureView,
+				clearValue: { r: 0, g: 0, b: 0, a: 0 },
+				loadOp: 'load',
+				storeOp: 'store',
+			}],
+		});
+		if (vertices.byteLength > 0) {
+			pass.setPipeline(this.pipeline!);
+			pass.setBindGroup(0, this.bindGroup!);
+			pass.setVertexBuffer(0, this.vertexBuffer.value!.object);
+			this.renderStrategy.value!.draw(pass, frame);
 		}
-	}
-
-	public renderText(viewportData: ViewportData): void {
-		if (this._initialized) {
-			this._refreshRenderStrategy(viewportData);
-			return this._renderText(viewportData);
-		} else {
-			this._initViewportData = this._initViewportData ?? [];
-			this._initViewportData.push(viewportData);
-		}
-	}
-
-	private _renderText(viewportData: ViewportData): void {
-		this._viewGpuContext.rectangleRenderer.draw(viewportData);
-
-		const options = new ViewLineOptions(this._context.configuration, this._context.theme.type);
-
-		this._renderStrategy.value!.update(viewportData, options);
-
-		this._updateAtlasStorageBufferAndTexture();
-
-		const encoder = this._device.createCommandEncoder({ label: 'Monaco command encoder' });
-
-		this._renderPassColorAttachment.view = this._viewGpuContext.ctx.getCurrentTexture().createView({ label: 'Monaco canvas texture view' });
-		const pass = encoder.beginRenderPass(this._renderPassDescriptor);
-		pass.setPipeline(this._pipeline);
-		pass.setVertexBuffer(0, this._vertexBuffer);
-
-		// Only draw the content area
-		const contentLeft = Math.ceil(this._viewGpuContext.contentLeft.get() * this._viewGpuContext.devicePixelRatio.get());
-		pass.setScissorRect(contentLeft, 0, this.canvas.width - contentLeft, this.canvas.height);
-
-		pass.setBindGroup(0, this._bindGroup);
-
-		this._renderStrategy.value!.draw(pass, viewportData);
-
 		pass.end();
-
-		const commandBuffer = encoder.finish();
-
-		this._device.queue.submit([commandBuffer]);
-
-		this._lastViewportData = viewportData;
-		this._lastViewLineOptions = options;
-
-		// Update max line width for horizontal scrollbar
-		this._updateMaxLineWidth(viewportData, options);
+		this.context.device.queue.submit([encoder.finish()]);
 	}
 
-	/**
-	 * Update the max line width based on GPU-rendered lines.
-	 * This is needed because GPU-rendered lines don't have DOM nodes to measure.
-	 */
-	private _updateMaxLineWidth(viewportData: ViewportData, viewLineOptions: ViewLineOptions): void {
-		const dpr = getActiveWindow().devicePixelRatio;
-		let localMaxLineWidth = 0;
+	private applyRenderedLines(renderedLines: ReadonlyMap<number, ViewLine>, gpuLineIndexes: ReadonlySet<number>): void {
+		this.renderedGpuLineIndexes = new Set(gpuLineIndexes);
+		for (const [visualLineIndex, line] of renderedLines) line.domNode.domNode.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
+	}
 
-		for (let lineNumber = viewportData.startLineNumber; lineNumber <= viewportData.endLineNumber; lineNumber++) {
-			if (!this._viewGpuContext.canRender(viewLineOptions, viewportData, lineNumber)) {
-				continue;
-			}
+	private showDomText(): void {
+		this.renderedGpuLineIndexes.clear();
+		for (const line of this.options.viewLines.renderedLines.values()) line.domNode.domNode.classList.remove('gpu-rendered');
+	}
 
-			const lineData = viewportData.getViewLineRenderingData(lineNumber);
-			const lineWidth = this._computeLineWidth(lineData, viewLineOptions, dpr);
-			localMaxLineWidth = Math.max(localMaxLineWidth, lineWidth);
-		}
+	private isForcedColors(): boolean {
+		const ownerWindow = this.context.canvas.ownerDocument.defaultView;
+		return typeof ownerWindow?.matchMedia === 'function' && ownerWindow.matchMedia('(forced-colors: active)').matches;
+	}
 
-		// Only update if we found a larger width (use ceil to match DOM behavior)
-		const iLineWidth = Math.ceil(localMaxLineWidth);
-		if (iLineWidth > this._maxLineWidth) {
-			this._maxLineWidth = iLineWidth;
-			this._context.viewModel.viewLayout.setMaxLineWidth(this._maxLineWidth);
+	private ensureRenderStrategy(visualLines: EditorVisualLineProjection): void {
+		const expectedType = this.canUseFullFileStrategy(visualLines) ? 'fullfile' : 'viewport';
+		if (this.renderStrategy.value?.type === expectedType) return;
+		this.renderStrategy.value = this.createRenderStrategy(this.rasterizer!, visualLines);
+	}
+
+	private createRenderStrategy(rasterizer: GlyphRasterizer, visualLines: EditorVisualLineProjection): IGpuRenderStrategy {
+		return this.canUseFullFileStrategy(visualLines)
+			? new FullFileRenderStrategy(rasterizer)
+			: new ViewportRenderStrategy(rasterizer);
+	}
+
+	private isRenderingContextCurrent(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): boolean {
+		return context.layout.modelVersion === this.options.model.version && visualLines.modelVersion === this.options.model.version;
+	}
+
+	private validateRenderedLines(visualLines: EditorVisualLineProjection, renderedLines: ReadonlyMap<number, ViewLine>): void {
+		for (const visualLineIndex of renderedLines.keys()) {
+			if (!visualLines.lineAt(visualLineIndex)) throw new Error('WebGPU rendered row is outside the visual-line projection');
 		}
 	}
 
-	/**
-	 * Compute the width of a line in CSS pixels.
-	 */
-	private _computeLineWidth(lineData: ViewLineRenderingData, viewLineOptions: ViewLineOptions, dpr: number): number {
-		const content = lineData.content;
-		let contentSegmenter: IContentSegmenter | undefined;
-		if (!(lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations)) {
-			contentSegmenter = createContentSegmenter(lineData, viewLineOptions);
+	private canUseFullFileStrategy(visualLines: EditorVisualLineProjection): boolean {
+		if (visualLines.visualLineCount > FullFileRenderStrategy.maxSupportedLines) return false;
+		for (let lineIndex = 0; lineIndex < this.options.model.lineCount; lineIndex += 1) {
+			if (this.options.model.getLineContent((lineIndex) + 1).length > FullFileRenderStrategy.maxSupportedColumns) return false;
 		}
-
-		let width = 0;
-		let tabXOffset = 0;
-
-		for (let x = 0; x < content.length; x++) {
-			let chars: string;
-			if (lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations) {
-				chars = content.charAt(x);
-			} else {
-				const segment = contentSegmenter!.getSegmentAtIndex(x);
-				if (segment === undefined) {
-					continue;
-				}
-				chars = segment;
-			}
-
-			if (chars === '\t') {
-				const offsetBefore = x + tabXOffset;
-				tabXOffset = CursorColumns.nextRenderTabStop(x + tabXOffset, lineData.tabSize);
-				width += viewLineOptions.spaceWidth * (tabXOffset - offsetBefore);
-				tabXOffset -= x + 1;
-			} else if (lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations) {
-				width += viewLineOptions.spaceWidth;
-			} else {
-				width += this._renderStrategy.value!.glyphRasterizer.getTextMetrics(chars).width / dpr;
-			}
-		}
-
-		return width;
+		return true;
 	}
+}
 
-	linesVisibleRangesForRange(_range: Range, includeNewLines: boolean): LineVisibleRanges[] | null {
-		if (!this._lastViewportData) {
-			return null;
-		}
-		const originalEndLineNumber = _range.endLineNumber;
-		const range = Range.intersectRanges(_range, this._lastViewportData.visibleRange);
-		if (!range) {
-			return null;
-		}
-
-		const rendStartLineNumber = this._lastViewportData.startLineNumber;
-		const rendEndLineNumber = this._lastViewportData.endLineNumber;
-
-		const viewportData = this._lastViewportData;
-		const viewLineOptions = this._lastViewLineOptions;
-
-		if (!viewportData || !viewLineOptions) {
-			return null;
-		}
-
-		const visibleRanges: LineVisibleRanges[] = [];
-
-		let nextLineModelLineNumber: number = 0;
-		if (includeNewLines) {
-			nextLineModelLineNumber = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(range.startLineNumber, 1)).lineNumber;
-		}
-
-		for (let lineNumber = range.startLineNumber; lineNumber <= range.endLineNumber; lineNumber++) {
-
-			if (lineNumber < rendStartLineNumber || lineNumber > rendEndLineNumber) {
-				continue;
-			}
-			const startColumn = lineNumber === range.startLineNumber ? range.startColumn : 1;
-			const continuesInNextLine = lineNumber !== originalEndLineNumber;
-			const endColumn = continuesInNextLine ? this._context.viewModel.getLineMaxColumn(lineNumber) : range.endColumn;
-
-			const visibleRangesForLine = this._visibleRangesForLineRange(lineNumber, startColumn, endColumn);
-
-			if (!visibleRangesForLine) {
-				continue;
-			}
-
-			if (includeNewLines && lineNumber < originalEndLineNumber) {
-				const currentLineModelLineNumber = nextLineModelLineNumber;
-				nextLineModelLineNumber = this._context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber + 1, 1)).lineNumber;
-
-				if (currentLineModelLineNumber !== nextLineModelLineNumber) {
-					visibleRangesForLine.ranges[visibleRangesForLine.ranges.length - 1].width += viewLineOptions.spaceWidth;
-				}
-			}
-
-			visibleRanges.push(new LineVisibleRanges(visibleRangesForLine.outsideRenderedLine, lineNumber, HorizontalRange.from(visibleRangesForLine.ranges), continuesInNextLine));
-		}
-
-		if (visibleRanges.length === 0) {
-			return null;
-		}
-
-		return visibleRanges;
-	}
-
-	private _visibleRangesForLineRange(lineNumber: number, startColumn: number, endColumn: number): VisibleRanges | null {
-		if (this.shouldRender()) {
-			// Cannot read from the DOM because it is dirty
-			// i.e. the model & the dom are out of sync, so I'd be reading something stale
-			return null;
-		}
-
-		const viewportData = this._lastViewportData;
-		const viewLineOptions = this._lastViewLineOptions;
-
-		if (!viewportData || !viewLineOptions || lineNumber < viewportData.startLineNumber || lineNumber > viewportData.endLineNumber) {
-			return null;
-		}
-
-		// Resolve tab widths for this line
-		const lineData = viewportData.getViewLineRenderingData(lineNumber);
-		const content = lineData.content;
-
-		let contentSegmenter: IContentSegmenter | undefined;
-		if (!(lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations)) {
-			contentSegmenter = createContentSegmenter(lineData, viewLineOptions);
-		}
-
-		let chars: string | undefined = '';
-
-		let resolvedStartColumn = 0;
-		let resolvedStartCssPixelOffset = 0;
-		for (let x = 0; x < startColumn - 1; x++) {
-			if (lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations) {
-				chars = content.charAt(x);
-			} else {
-				chars = contentSegmenter!.getSegmentAtIndex(x);
-				if (chars === undefined) {
-					continue;
-				}
-				resolvedStartCssPixelOffset += (this._renderStrategy.value!.glyphRasterizer.getTextMetrics(chars).width / getActiveWindow().devicePixelRatio) - viewLineOptions.spaceWidth;
-			}
-			if (chars === '\t') {
-				resolvedStartColumn = CursorColumns.nextRenderTabStop(resolvedStartColumn, lineData.tabSize);
-			} else {
-				resolvedStartColumn++;
-			}
-		}
-		let resolvedEndColumn = resolvedStartColumn;
-		let resolvedEndCssPixelOffset = 0;
-		for (let x = startColumn - 1; x < endColumn - 1; x++) {
-			if (lineData.isBasicASCII && viewLineOptions.useMonospaceOptimizations) {
-				chars = content.charAt(x);
-			} else {
-				chars = contentSegmenter!.getSegmentAtIndex(x);
-				if (chars === undefined) {
-					continue;
-				}
-				resolvedEndCssPixelOffset += (this._renderStrategy.value!.glyphRasterizer.getTextMetrics(chars).width / getActiveWindow().devicePixelRatio) - viewLineOptions.spaceWidth;
-			}
-			if (chars === '\t') {
-				resolvedEndColumn = CursorColumns.nextRenderTabStop(resolvedEndColumn, lineData.tabSize);
-			} else {
-				resolvedEndColumn++;
-			}
-		}
-
-		// Visible horizontal range in _scaled_ pixels
-		const result = new VisibleRanges(false, [new FloatHorizontalRange(
-			resolvedStartColumn * viewLineOptions.spaceWidth + resolvedStartCssPixelOffset,
-			(resolvedEndColumn - resolvedStartColumn) * viewLineOptions.spaceWidth + resolvedEndCssPixelOffset)
-		]);
-
-		return result;
-	}
-
-	visibleRangeForPosition(position: Position): HorizontalPosition | null {
-		const visibleRanges = this._visibleRangesForLineRange(position.lineNumber, position.column, position.column);
-		if (!visibleRanges) {
-			return null;
-		}
-		return new HorizontalPosition(visibleRanges.outsideRenderedLine, visibleRanges.ranges[0].left);
-	}
-
-	getLineWidth(lineNumber: number): number | undefined {
-		if (!this._lastViewportData || !this._lastViewLineOptions) {
-			return undefined;
-		}
-		if (!this._viewGpuContext.canRender(this._lastViewLineOptions, this._lastViewportData, lineNumber)) {
-			return undefined;
-		}
-
-		const lineData = this._lastViewportData.getViewLineRenderingData(lineNumber);
-		const lineRange = this._visibleRangesForLineRange(lineNumber, 1, lineData.maxColumn);
-		const lastRange = lineRange?.ranges.at(-1);
-		if (lastRange) {
-			// Total line width is the left offset plus width of the last range
-			return lastRange.left + lastRange.width;
-		}
-
-		return undefined;
-	}
-
-	getPositionAtCoordinate(lineNumber: number, mouseContentHorizontalOffset: number): Position | undefined {
-		if (!this._lastViewportData || !this._lastViewLineOptions) {
-			return undefined;
-		}
-		if (!this._viewGpuContext.canRender(this._lastViewLineOptions, this._lastViewportData, lineNumber)) {
-			return undefined;
-		}
-		const lineData = this._lastViewportData.getViewLineRenderingData(lineNumber);
-		const content = lineData.content;
-		const dpr = getActiveWindow().devicePixelRatio;
-		const mouseContentHorizontalOffsetDevicePixels = mouseContentHorizontalOffset * dpr;
-		const spaceWidthDevicePixels = this._lastViewLineOptions.spaceWidth * dpr;
-		const contentSegmenter = createContentSegmenter(lineData, this._lastViewLineOptions);
-
-		let widthSoFar = 0;
-		let charWidth = 0;
-		let tabXOffset = 0;
-		let column = 0;
-		for (let x = 0; x < content.length; x++) {
-			const chars = contentSegmenter.getSegmentAtIndex(x);
-
-			// Part of an earlier segment
-			if (chars === undefined) {
-				column++;
-				continue;
-			}
-
-			// Get the width of the character
-			if (chars === '\t') {
-				// Find the pixel offset between the current position and the next tab stop
-				const offsetBefore = x + tabXOffset;
-				tabXOffset = CursorColumns.nextRenderTabStop(x + tabXOffset, lineData.tabSize);
-				charWidth = spaceWidthDevicePixels * (tabXOffset - offsetBefore);
-				// Convert back to offset excluding x and the current character
-				tabXOffset -= x + 1;
-			} else if (lineData.isBasicASCII && this._lastViewLineOptions.useMonospaceOptimizations) {
-				charWidth = spaceWidthDevicePixels;
-			} else {
-				charWidth = this._renderStrategy.value!.glyphRasterizer.getTextMetrics(chars).width;
-			}
-
-			if (mouseContentHorizontalOffsetDevicePixels < widthSoFar + charWidth / 2) {
-				break;
-			}
-
-			widthSoFar += charWidth;
-			column++;
-		}
-
-		return new Position(lineNumber, column + 1);
-	}
+function asError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
 }

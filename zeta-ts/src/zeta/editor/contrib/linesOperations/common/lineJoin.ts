@@ -1,5 +1,5 @@
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 
@@ -27,7 +27,7 @@ interface JoinOperation {
  * edit. Leading indentation on subsequent non-empty lines is removed and one
  * separating space is retained when both adjacent fragments contain text.
  */
-export function createJoinLinesCommand(model: TextModel, selections: SelectionSet): EditorEditCommand {
+export function createJoinLinesCommand(model: TextModel, selections: readonly Selection[]): EditorEditCommand {
 	const reduced = reduceJoinSelections(selections);
 	const operations = reduced.map(selection => createJoinOperation(model, selection));
 	if (operations.every(operation => operation.startOffset === operation.endOffset)) {
@@ -63,12 +63,12 @@ export function createJoinLinesCommand(model: TextModel, selections: SelectionSe
 	});
 }
 
-function reduceJoinSelections(selections: SelectionSet): readonly JoinSelection[] {
-	const ordered = selections.selections.map((selection, index) => Object.freeze({
+function reduceJoinSelections(selections: readonly Selection[]): readonly JoinSelection[] {
+	const ordered = selections.map((selection, index) => Object.freeze({
 		start: selection.getStartPosition(),
 		end: selection.getEndPosition(),
 		collapsed: selection.isEmpty(),
-		containsPrimary: index === selections.primaryIndex,
+		containsPrimary: index === 0,
 	})).sort((left, right) => Position.compare(left.start, right.start) || Position.compare(left.end, right.end));
 	const reduced: JoinSelection[] = [];
 	for (const current of ordered) {
@@ -158,14 +158,14 @@ function joinLineContents(model: TextModel, startLineNumber: number, endLineNumb
 	return Object.freeze({ text, finalSegmentLength });
 }
 
-function unchangedCommand(model: TextModel, selections: SelectionSet): EditorEditCommand {
+function unchangedCommand(model: TextModel, selections: readonly Selection[]): EditorEditCommand {
 	return Object.freeze({
 		edits: Object.freeze([]),
-		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({
+		selectionsAfter: Object.freeze(selections.map(selection => Object.freeze({
 			anchorOffset: model.offsetAt(selection.getSelectionStart()),
 			activeOffset: model.offsetAt(selection.getPosition()),
 		}))),
-		primarySelectionIndex: selections.primaryIndex,
+		primarySelectionIndex: 0,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
 }

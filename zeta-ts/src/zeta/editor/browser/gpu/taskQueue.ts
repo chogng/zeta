@@ -104,6 +104,69 @@ class IdleTaskQueueInternal extends TaskQueue {
 
 export const IdleTaskQueue = ('requestIdleCallback' in getActiveWindow()) ? IdleTaskQueueInternal : PriorityTaskQueue;
 
+/** Creates an idle queue bound to the editor view's own window. */
+export function createIdleTaskQueue(ownerWindow: Window): ITaskQueue {
+	return new WindowTaskQueue(ownerWindow);
+}
+
+class WindowTaskQueue extends Disposable implements ITaskQueue {
+	private readonly tasks: (() => boolean | void)[] = [];
+	private callback: number | undefined;
+	private index = 0;
+
+	constructor(private readonly ownerWindow: Window) {
+		super();
+		this._register(toDisposable(() => this.clear()));
+	}
+
+	public enqueue(task: () => boolean | void): void {
+		this.tasks.push(task);
+		this.start();
+	}
+
+	public flush(): void {
+		while (this.index < this.tasks.length) {
+			if (!this.tasks[this.index]()) this.index++;
+		}
+		this.clear();
+	}
+
+	public clear(): void {
+		if (this.callback !== undefined) this.cancel(this.callback);
+		this.callback = undefined;
+		this.index = 0;
+		this.tasks.length = 0;
+	}
+
+	private start(): void {
+		if (this.callback === undefined) {
+			this.callback = this.request(deadline => this.process(deadline));
+		}
+	}
+
+	private process(deadline: ITaskDeadline): void {
+		this.callback = undefined;
+		while (this.index < this.tasks.length && deadline.timeRemaining() > 0) {
+			if (!this.tasks[this.index]()) this.index++;
+		}
+		if (this.index < this.tasks.length) this.start();
+		else this.clear();
+	}
+
+	private request(callback: CallbackWithDeadline): number {
+		const requestIdleCallback = (this.ownerWindow as Window & { requestIdleCallback?: (callback: CallbackWithDeadline) => number }).requestIdleCallback;
+		return requestIdleCallback
+			? requestIdleCallback.call(this.ownerWindow, callback)
+			: this.ownerWindow.setTimeout(() => callback({ timeRemaining: () => 1 }), 0);
+	}
+
+	private cancel(identifier: number): void {
+		const cancelIdleCallback = (this.ownerWindow as Window & { cancelIdleCallback?: (identifier: number) => void }).cancelIdleCallback;
+		if (cancelIdleCallback) cancelIdleCallback.call(this.ownerWindow, identifier);
+		else this.ownerWindow.clearTimeout(identifier);
+	}
+}
+
 export class DebouncedIdleTask {
 	private _queue: ITaskQueue;
 

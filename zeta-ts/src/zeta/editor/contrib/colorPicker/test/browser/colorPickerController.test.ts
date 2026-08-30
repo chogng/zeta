@@ -7,7 +7,7 @@ import { Range } from '../../../../common/core/range.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { ColorService, type LanguageColorProvider } from '../../common/languageColors.js';
-import { EditorColorDetector } from '../../browser/colorDetector.js';
+import { ColorDetector } from '../../browser/colorDetector.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -76,7 +76,7 @@ test('color detector returns the tracked range before its debounced provider ref
 	using model = new TextModel('#f00');
 	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
 	const service = new ColorService(model, providers);
-	using detector = new EditorColorDetector(model, service, 'css', dom.window as unknown as Window, {
+	using detector = new ColorDetector(model, service, 'css', dom.window as unknown as Window, {
 		enabled: true,
 		limit: 500,
 		defaultColorDecorators: 'auto',

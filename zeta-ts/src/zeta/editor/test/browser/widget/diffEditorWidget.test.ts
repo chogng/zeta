@@ -18,10 +18,10 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorDiffWidget } = await import("../../../browser/widget/diffEditor/diffEditorWidget.js");
+const { DiffEditorWidget } = await import("../../../browser/widget/diffEditor/diffEditorWidget.js");
 const { DiffModel } = await import("../../../common/diff/diffModel.js");
 
-test("EditorDiffWidget presents side-by-side changed lines and inline ranges", async () => {
+test("DiffEditorWidget presents side-by-side changed lines and inline ranges", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using original = new TextModel("same\nold value\nremoved\ntail");
@@ -29,7 +29,7 @@ test("EditorDiffWidget presents side-by-side changed lines and inline ranges", a
 	using computationService = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, computationService });
 	await waitForReady(model);
-	using editor = new EditorDiffWidget({ container, model, lineHeight: 20 });
+	using editor = new DiffEditorWidget({ container, model, lineHeight: 20 });
 	editor.layout({ width: 400, height: 80 });
 
 	const rows = [...editor.element.querySelectorAll<HTMLElement>(".stanza-diff-editor-row")];
@@ -58,7 +58,7 @@ test("EditorDiffWidget presents side-by-side changed lines and inline ranges", a
 	dom.window.close();
 });
 
-test("EditorDiffWidget refreshes on either source model and virtualizes diff rows", async () => {
+test("DiffEditorWidget refreshes on either source model and virtualizes diff rows", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using original = new TextModel(lines("old", 100));
@@ -66,7 +66,7 @@ test("EditorDiffWidget refreshes on either source model and virtualizes diff row
 	using computationService = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, computationService });
 	await waitForReady(model);
-	using editor = new EditorDiffWidget({ container, model, lineHeight: 20, overscanRowCount: 1 });
+	using editor = new DiffEditorWidget({ container, model, lineHeight: 20, overscanRowCount: 1 });
 	editor.layout({ width: 400, height: 40 });
 
 	assert.equal(editor.element.querySelectorAll(".stanza-diff-editor-row").length, 3);
@@ -96,7 +96,7 @@ test("EditorDiffWidget refreshes on either source model and virtualizes diff row
 	dom.window.close();
 });
 
-test("EditorDiffWidget applies presentation settings and clamps change navigation when looping is disabled", async () => {
+test("DiffEditorWidget applies presentation settings and clamps change navigation when looping is disabled", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using original = new TextModel("old\nsame\nold again");
@@ -104,13 +104,15 @@ test("EditorDiffWidget applies presentation settings and clamps change navigatio
 	using computationService = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, computationService });
 	await waitForReady(model);
-	using editor = new EditorDiffWidget({ container, model, lineHeight: 24, fontFamily: "Test Mono", fontSize: 15, fontLigatures: true, showLineNumbers: false, showInlineChanges: false, loopChanges: false });
+	using editor = new DiffEditorWidget({ container, model, lineHeight: 24, fontFamily: "Test Mono", fontSize: 15, fontLigatures: true, showLineNumbers: false, showInlineChanges: false, loopChanges: false });
 	editor.layout({ width: 400, height: 80 });
 
 	assert.equal(editor.element.classList.contains("hide-line-numbers"), true);
-	assert.equal(editor.element.style.fontFamily, '"Test Mono"');
+	assert.equal(editor.element.style.fontFamily.startsWith('"Test Mono", '), true);
+	assert.equal(editor.element.style.fontFamily.endsWith('monospace'), true);
 	assert.equal(editor.element.style.fontSize, "15px");
-	assert.equal(editor.element.style.fontVariantLigatures, "normal");
+	assert.equal(editor.element.style.fontFeatureSettings.includes('"liga" on'), true);
+	assert.equal(editor.element.style.lineHeight, '24px');
 	assert.equal(editor.element.querySelectorAll(".stanza-diff-editor-inline").length, 0);
 	assert.equal(editor.nextChange(), 0);
 	assert.equal(editor.nextChange(), 2);

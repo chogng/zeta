@@ -12,7 +12,7 @@ import { type CodeActionService, type LanguageCodeAction } from "../common/langu
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
-export class EditorCodeActionController extends Disposable {
+export class CodeActionController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly actionListeners = this._register(new DisposableStore());
 	private request: AbortController | undefined;
@@ -47,7 +47,7 @@ export class EditorCodeActionController extends Disposable {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
 		try {
-			const range = this.selections.selections.primary;
+			const range = this.selections.selections[0]!;
 			const diagnostics = this.diagnostics.decorations.filter(decoration => Range.areIntersectingOrTouching(decoration.range, range)).map(decoration => decoration.metadata);
 			const actions = await this.service.provideCodeActions(this.languageId, range.isEmpty() ? Range.fromPositions(range.getStartPosition()) : range, diagnostics, undefined, request.signal);
 			if (request.signal.aborted || actions.length === 0) {
@@ -74,7 +74,7 @@ export class EditorCodeActionController extends Disposable {
 			this.actionListeners.add(addDisposableListener(button, "click", () => void this.apply(index)));
 			return button;
 		}));
-		const coordinates = this.viewport.getPositionContentCoordinates(this.selections.selections.primary.getStartPosition());
+		const coordinates = this.viewport.getPositionContentCoordinates(this.selections.selections[0]!.getStartPosition());
 		this.element.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;
 		this.element.style.top = `${Math.max(8, coordinates.top - this.viewport.viewportLayout.scrollPosition.top + coordinates.height + 4)}px`;
 		this.element.hidden = false;

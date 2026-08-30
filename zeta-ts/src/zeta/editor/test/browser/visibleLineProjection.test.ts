@@ -4,7 +4,7 @@ import { EditorLineWrapping } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
-import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { TextModel } from "../../common/model/textModel.js";

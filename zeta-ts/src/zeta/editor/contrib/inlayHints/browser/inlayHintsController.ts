@@ -8,7 +8,7 @@ import { type View } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Projects versioned inlay hints into lightweight editor-local inline nodes. */
-export class EditorInlayHintsController extends Disposable {
+export class InlayHintsController extends Disposable {
 	private hints: readonly LanguageInlayHint[] = [];
 	private request: AbortController | undefined;
 
@@ -56,7 +56,7 @@ export class EditorInlayHintsController extends Disposable {
 }
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.inlayHints", install: context => {
-	if (context.kind !== "text" || context.options.inlayHints === false || context.model.largeFile.tooLargeForTokenization) return;
+	if (context.kind !== "text" || context.options.inlayHints?.enabled === 'off' || context.model.largeFile.tooLargeForTokenization) return;
 	const service = context.register(new InlayHintsService(context.model, context.languageFeaturesService.inlayHintsProvider, context.options.input.resource));
-	context.register(new EditorInlayHintsController(context.viewport, service, context.languageId, context.onLanguageError));
+	context.register(new InlayHintsController(context.viewport, service, context.languageId, context.onLanguageError));
 } });

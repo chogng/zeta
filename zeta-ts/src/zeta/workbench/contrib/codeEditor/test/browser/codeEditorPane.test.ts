@@ -281,13 +281,13 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		cursorHeight: 18,
 		lineNumbers: 'off',
 		guides: { indentation: false },
-		bracketPairColorization: false,
+		bracketPairColorization: { enabled: false },
 		matchBrackets: "near",
-		stickyScroll: false,
+		stickyScroll: { enabled: false },
 		suggestions: false,
 		inlineCompletions: false,
 		parameterHints: false,
-		inlayHints: false,
+		inlayHints: { enabled: 'off' },
 		codeLens: false,
 		colorDecorators: false,
 		colorDecoratorsActivatedOn: "click",
@@ -295,12 +295,9 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		defaultColorDecorators: "always",
 		formatOnSave: true,
 		find: {
-			seedSearchStringFromSelection: false,
-			autoFindInSelection: true,
+			seedSearchStringFromSelection: 'never',
+			autoFindInSelection: 'always',
 			loop: false,
-			matchCase: true,
-			wholeWord: true,
-			regularExpression: true,
 		},
 		indentation: { kind: EditorIndentationKind.Tabs, tabSize: 2 },
 		showUnicodeHighlights: false,
@@ -329,13 +326,13 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.cursorHeight, 18);
 	assert.equal(received?.lineNumbers, 'off');
 	assert.deepEqual(received?.guides, { indentation: false });
-	assert.equal(received?.bracketPairColorization, false);
+	assert.deepEqual(received?.bracketPairColorization, { enabled: false });
 	assert.equal(received?.matchBrackets, "near");
-	assert.equal(received?.stickyScroll, false);
+	assert.deepEqual(received?.stickyScroll, { enabled: false });
 	assert.equal(received?.suggestions, false);
 	assert.equal(received?.inlineCompletions, false);
 	assert.deepEqual(received?.parameterHints, { enabled: false });
-	assert.equal(received?.inlayHints, false);
+	assert.deepEqual(received?.inlayHints, { enabled: 'off' });
 	assert.equal(received?.codeLens, false);
 	assert.equal(received?.colorDecorators, false);
 	assert.equal(received?.colorDecoratorsActivatedOn, "click");
@@ -343,12 +340,9 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.defaultColorDecorators, "always");
 	assert.equal(received?.formatOnSave, true);
 	assert.deepEqual(received?.find, {
-		seedSearchStringFromSelection: false,
-		autoFindInSelection: true,
+		seedSearchStringFromSelection: 'never',
+		autoFindInSelection: 'always',
 		loop: false,
-		matchCase: true,
-		wholeWord: true,
-		regularExpression: true,
 	});
 	assert.deepEqual(received?.indentation, { kind: EditorIndentationKind.Tabs, tabSize: 2 });
 	assert.equal(received?.showUnicodeHighlights, false);

@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -30,9 +29,7 @@ test("Block comment shortcut toggles the active language pair locally", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("alpha beta");
-	using selections = new CursorsController(model, SelectionSet.single(
-		Selection.fromPositions(new Position((0) + 1, (6) + 1), new Position((0) + 1, (10) + 1)),
-	));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (6) + 1), new Position((0) + 1, (10) + 1))]);
 	using configurations = new TestLanguageConfigurationService();
 	using registration = configurations.register("typescript", {
 		comments: { blockComment: ["/*", "*/"] },
@@ -57,7 +54,7 @@ test("Block comment shortcut leaves languages without a block pair alone", () =>
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("alpha");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using configurations = new TestLanguageConfigurationService();
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");

@@ -4,7 +4,6 @@ import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import { EditorCommandHistoryMode } from '../../common/commands/editorEditCommand.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
 import { Selection } from "../../common/core/selection.js";
-import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import type { TextModelChange } from '../../common/core/textChange.js';
@@ -22,22 +21,16 @@ const range = (
 const cursors = (
 	offsets: readonly number[],
 	primaryIndex = 0,
-): SelectionSet => SelectionSet.withPrimary(
-	offsets.map(offset => Selection.fromPositions(
+): readonly Selection[] => primaryFirst(offsets.map(offset => Selection.fromPositions(
 		position(0, offset),
-	)),
-	primaryIndex,
-);
+	)), primaryIndex);
 const selections = (
 	offsets: readonly (readonly [number, number])[],
 	primaryIndex = 0,
-): SelectionSet => SelectionSet.withPrimary(
-	offsets.map(([anchorOffset, activeOffset]) => Selection.fromPositions(
+): readonly Selection[] => primaryFirst(offsets.map(([anchorOffset, activeOffset]) => Selection.fromPositions(
 		position(0, anchorOffset),
 		position(0, activeOffset),
-	)),
-	primaryIndex,
-);
+	)), primaryIndex);
 
 function pushEdits(model: TextModel, edits: IIdentifiedSingleEditOperation[], group?: UndoRedoGroup): TextModelChange | undefined {
 	let change: TextModelChange | undefined;
@@ -344,10 +337,10 @@ test("Typing coalesces replacements independently at multiple selections", () =>
 
 test("TextModel normalizes converged inverse insertions", () => {
 	using model = new TextModel("abc");
-	model.applyEdits([
+	model.pushEditOperations(null, [
 		{ range: range(0, 1), text: "" },
 		{ range: range(1, 2), text: "" },
-	]);
+	], () => null);
 	assert.equal(model.getText(), "c");
 
 	model.undo();
@@ -507,3 +500,8 @@ test("Backspace coalescing adjusts separated multi-cursor offsets", () => {
 		selections: cursors([2, 6]),
 	});
 });
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
+}

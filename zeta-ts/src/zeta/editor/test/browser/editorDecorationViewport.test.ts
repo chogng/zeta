@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DecorationPresentation, createStanzaDecorationSource } from "../../browser/viewParts/decorations/decorations.js";
-import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { createStanzaLanguageDiagnosticSource, resolveStanzaLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
@@ -38,6 +38,7 @@ const { EditorLineWrapping } = await import(
 
 test("Decoration sources project, update, and follow tracked model ranges", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const minimapPaint = recordCanvasPaint(dom);
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abcd\nefgh\nij");
 	using matches = new TextDecorationCollection<string>(model);
@@ -111,10 +112,9 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(errorMarker.classList.contains("error"), true);
 	const errorOverview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-marker");
 	assert.equal(errorOverview.classList.contains(DecorationPresentation.ErrorUnderline), true);
-	const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
-	assert.equal(errorMinimap.classList.contains(DecorationPresentation.ErrorUnderline), true);
-	assert.equal(errorMinimap.style.top, "4px");
+	assert.deepEqual(minimapMarkers(minimapPaint), [{ fill: '#f14c4c', top: 40 }]);
 
+	minimapPaint.length = 0;
 	diagnostics.update(diagnosticId, {
 		range: Range.fromPositions(new Position((1) + 1, (1) + 1), new Position((1) + 1, (3) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
@@ -139,9 +139,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(warningMarker.classList.contains("warning"), true);
 	const warningOverview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-marker");
 	assert.equal(warningOverview.classList.contains(DecorationPresentation.WarningUnderline), true);
-	const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
-	assert.equal(warningMinimap.classList.contains(DecorationPresentation.WarningUnderline), true);
-	assert.equal(warningMinimap.style.top, "2px");
+	assert.deepEqual(minimapMarkers(minimapPaint), [{ fill: '#cca700', top: 20 }]);
 	assert.equal(matchResolutionCount, 1);
 
 	model.applyEdits([{
@@ -239,6 +237,7 @@ test("Line and block decoration parts project source presentation details", () =
 
 test("Quick Diff decorations project into the overview ruler and minimap gutter", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const minimapPaint = recordCanvasPaint(dom);
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("same\nadded\nmodified\nafter delete");
 	using decorations = new TextDecorationCollection<DecorationPresentation>(model);
@@ -264,9 +263,9 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 		DecorationPresentation.DiffModified,
 		DecorationPresentation.DiffDeleted,
 	]);
-	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-minimap-diagnostic-marker")].map(marker => marker.classList[1]), [
-		DecorationPresentation.DiffAdded,
-		DecorationPresentation.DiffDeleted,
+	assert.deepEqual(minimapMarkers(minimapPaint), [
+		{ fill: '#73c991', top: 20 },
+		{ fill: '#f14c4c', top: 60 },
 	]);
 	dom.window.close();
 });
@@ -492,6 +491,37 @@ function decorationElements(container: ParentNode): HTMLElement[] {
 
 function testRectangle(left: number, top: number, width: number): DOMRect {
 	return { left, top, width, height: 20, right: left + width, bottom: top + 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
+}
+
+interface CanvasPaint {
+	readonly frame: number;
+	readonly fill: string;
+	readonly left: number;
+	readonly top: number;
+	readonly width: number;
+	readonly height: number;
+}
+
+function recordCanvasPaint(dom: JSDOM): CanvasPaint[] {
+	const paint: CanvasPaint[] = [];
+	let frame = 0;
+	dom.window.HTMLCanvasElement.prototype.getContext = function () {
+		const context = {
+			fillStyle: '',
+			globalAlpha: 1,
+			clearRect(): void { frame += 1; },
+			fillRect(left: number, top: number, width: number, height: number): void {
+				paint.push({ frame, fill: String(this.fillStyle), left, top, width, height });
+			},
+		};
+		return context as unknown as CanvasRenderingContext2D;
+	} as unknown as typeof dom.window.HTMLCanvasElement.prototype.getContext;
+	return paint;
+}
+
+function minimapMarkers(paint: readonly CanvasPaint[]): readonly { readonly fill: string; readonly top: number }[] {
+	const frame = paint.at(-1)?.frame;
+	return paint.filter(entry => entry.frame === frame && entry.width === 3).map(entry => ({ fill: entry.fill, top: entry.top }));
 }
 
 class FixedTextMeasurer implements TextMeasurer {

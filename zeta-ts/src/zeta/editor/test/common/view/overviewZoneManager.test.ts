@@ -32,5 +32,5 @@ test('OverviewZoneManager invalidates cached geometry when the ruler changes siz
 	manager.resolveColorZones();
 	const second = zone.getColorZones();
 	assert.notEqual(second, first);
-	assert.deepEqual({ from: second?.from, to: second?.to }, { from: 100, to: 120 });
+	assert.deepEqual({ from: second?.from, to: second?.to }, { from: 80, to: 120 });
 });

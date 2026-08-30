@@ -116,7 +116,7 @@ test('TextModel preserves logical line identity through edits and history withou
 	const initialSnapshot = model.lineDocument;
 	assert.equal(model.lineDocument, initialSnapshot);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (1) + 1)), text: 'X\nY' }]);
+	model.pushEditOperations(null, [{ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (1) + 1)), text: 'X\nY' }], () => null);
 	assert.notEqual(model.lineDocument, initialSnapshot);
 	assert.equal(initialSnapshot.getText(), 'a\nb');
 	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'inserted:1', 'second']);

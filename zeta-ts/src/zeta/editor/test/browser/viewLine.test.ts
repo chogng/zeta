@@ -15,12 +15,12 @@ for (const [name, value] of Object.entries({
 }
 
 const { SemanticTokenPresentation } = await import('../../browser/viewParts/viewLines/viewLine.js');
-const { EditorViewLine } = await import('../../browser/viewParts/viewLines/viewLine.js');
-const { EditorTextDirection, EditorViewLineOptions } = await import('../../browser/viewParts/viewLines/viewLineOptions.js');
+const { ViewLine } = await import('../../browser/viewParts/viewLines/viewLine.js');
+const { EditorTextDirection, ViewLineOptions } = await import('../../browser/viewParts/viewLines/viewLineOptions.js');
 
-test('EditorViewLine owns rendering, character mapping, geometry, and DOM hit conversion', () => {
+test('ViewLine owns rendering, character mapping, geometry, and DOM hit conversion', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const line = new EditorViewLine(dom.window.document.body, 0, new EditorViewLineOptions({
+	const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions({
 		textDirection: EditorTextDirection.Auto,
 		fontLigatures: false,
 		useGpu: false,

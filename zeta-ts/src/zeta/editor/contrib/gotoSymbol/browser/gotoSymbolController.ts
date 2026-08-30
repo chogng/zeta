@@ -2,7 +2,6 @@ import "./media/gotoSymbol.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/languageDocumentSymbolSearch.js";
 import { type View } from "../../../browser/view.js";
@@ -86,7 +85,7 @@ export class GotoSymbolController extends Disposable {
 	}
 
 	private select(match: LanguageSymbolMatch): void {
-		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(match.symbol.selectionRange.getStartPosition(), match.symbol.selectionRange.getEndPosition())));
+		this.selections.setSelections([Selection.fromPositions(match.symbol.selectionRange.getStartPosition(), match.symbol.selectionRange.getEndPosition())]);
 		this.viewport.revealPosition(match.position);
 		this.close();
 	}

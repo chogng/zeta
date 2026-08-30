@@ -1,25 +1,32 @@
 import { safeIntl } from '../../../base/common/date.js';
 import type { GraphemeIterator } from '../../../base/common/strings.js';
 import type { ViewLineRenderingData } from '../../common/viewModel.js';
-import type { EditorViewLineOptions } from '../viewParts/viewLines/viewLineOptions.js';
+import type { ViewLineOptions } from '../viewParts/viewLines/viewLineOptions.js';
 
 export interface IContentSegmenter {
 	getSegmentAtIndex(index: number): string | undefined;
 	getSegmentData(index: number): Intl.SegmentData | undefined;
 }
 
-export function createContentSegmenter(lineData: ViewLineRenderingData, options: EditorViewLineOptions): IContentSegmenter {
+export function createContentSegmenter(lineData: ViewLineRenderingData, options: ViewLineOptions): IContentSegmenter {
 	if (lineData.isBasicASCII && options.useMonospaceOptimizations) {
-		return new AsciiContentSegmenter(lineData);
+		return segmentContent(lineData.content, true, true);
 	}
-	return new GraphemeContentSegmenter(lineData);
+	return segmentContent(lineData.content, false, false);
+}
+
+/** Creates the same segment view when a renderer already owns the line text. */
+export function segmentContent(content: string, isBasicASCII: boolean, useMonospaceOptimizations: boolean): IContentSegmenter {
+	return isBasicASCII && useMonospaceOptimizations
+		? new AsciiContentSegmenter(content)
+		: new GraphemeContentSegmenter(content);
 }
 
 class AsciiContentSegmenter implements IContentSegmenter {
 	private readonly _content: string;
 
-	constructor(lineData: ViewLineRenderingData) {
-		this._content = lineData.content;
+	constructor(content: string) {
+		this._content = content;
 	}
 
 	getSegmentAtIndex(index: number): string {
@@ -38,8 +45,7 @@ class AsciiContentSegmenter implements IContentSegmenter {
 class GraphemeContentSegmenter implements IContentSegmenter {
 	private readonly _segments: (Intl.SegmentData | undefined)[] = [];
 
-	constructor(lineData: ViewLineRenderingData) {
-		const content = lineData.content;
+	constructor(content: string) {
 		const segmenter = safeIntl.Segmenter(undefined, { granularity: 'grapheme' }).value;
 		const segmentedContent = Array.from(segmenter.segment(content));
 		let segmenterIndex = 0;

@@ -1,7 +1,7 @@
 import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
-import { EditorModelConfiguration } from '../../../../editor/common/config/editorModelConfiguration.js';
+import '../../../../editor/common/config/editorConfigurationSchema.js';
 
 export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
 export type MatchBracketsSetting = "never" | "near" | "always";
@@ -127,7 +127,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, 'editor.guides.highlightActiveIndentation'),
 		setting: booleanSetting('Active indentation guide', 'Emphasize the indentation guide containing the primary cursor.'),
 	}),
-	bracketPairColorization: EditorModelConfiguration.bracketPairColorizationEnabled,
+	bracketPairColorization: 'editor.bracketPairColorization.enabled',
 	cursorStyle: ConfigurationsRegistry.registerConfiguration<CursorStyleSetting>({
 		key: 'editor.cursorStyle',
 		defaultValue: 'line',
@@ -229,7 +229,7 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: EditorIndentationKind.Tabs, label: "Tabs" },
 		]),
 	}),
-	tabSize: EditorModelConfiguration.tabSize,
+	tabSize: 'editor.tabSize',
 	formatOnSave: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "editor.formatOnSave",
 		defaultValue: false,

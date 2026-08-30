@@ -4,7 +4,6 @@ import { DisposableTracker, installDisposableTracker } from "../../../base/commo
 import { CursorsController } from "../../common/cursor/cursor.js";
 import { CursorChangeReason } from "../../common/cursorEvents.js";
 import { Selection } from "../../common/core/selection.js";
-import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -20,12 +19,10 @@ const range = (
 const single = (
 	anchorColumn: number,
 	activeColumn: number,
-): SelectionSet => SelectionSet.single(
-	Selection.fromPositions(
+): readonly Selection[] => [Selection.fromPositions(
 		position(0, anchorColumn),
 		position(0, activeColumn),
-	),
-);
+	)];
 
 test("CursorsController restores command selections", () => {
 	using model = new TextModel("hello");
@@ -98,11 +95,11 @@ test("Cursor-only selection history restores multi-cursor operations without cha
 	using controller = new CursorsController(model, single(0, 0), { cursorHistoryLimit: 1 });
 	const reasons: CursorChangeReason[] = [];
 	using listener = controller.onDidChange(event => reasons.push(event.reason));
-	const first = SelectionSet.withPrimary([
+	const first = primaryFirst([
 		Selection.fromPositions(position(0, 0)),
 		Selection.fromPositions(position(0, 1)),
 	], 1);
-	const second = SelectionSet.withPrimary([
+	const second = primaryFirst([
 		Selection.fromPositions(position(0, 0)),
 		Selection.fromPositions(position(0, 1)),
 		Selection.fromPositions(position(0, 2)),
@@ -156,14 +153,14 @@ test("CursorsController projects tracked selections before downstream command li
 	using model = new TextModel("const value = 1;\n");
 	using controller = new CursorsController(
 		model,
-		SelectionSet.single(Selection.fromPositions(
+		[Selection.fromPositions(
 			new Position((0) + 1, (0) + 1),
 			model.positionAt(model.length),
-		)),
+		)],
 	);
 	const observed: Selection[] = [];
 	using listener = model.onDidChangeContent(() => {
-		const selection = controller.selections.primary;
+		const selection = controller.selections[0]!;
 		assert.doesNotThrow(() => {
 			model.offsetAt(selection.getSelectionStart());
 			model.offsetAt(selection.getPosition());
@@ -178,7 +175,7 @@ test("CursorsController projects tracked selections before downstream command li
 	});
 
 	assert.deepEqual(observed, [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))]);
-	assert.deepEqual(controller.selections, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
+	assert.deepEqual(controller.selections, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 });
 
 test("CursorsController releases tracked ranges without taking their model ownership", () => {
@@ -314,3 +311,8 @@ test("CursorsController rejects stale post-command selections", () => {
 		reasons: [CursorChangeReason.RecoverFromMarkers],
 	});
 });
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
+}

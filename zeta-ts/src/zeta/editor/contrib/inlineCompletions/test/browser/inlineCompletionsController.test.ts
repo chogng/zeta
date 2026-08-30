@@ -3,12 +3,11 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../../../base/common/event.js';
 import { h } from '../../../../../base/browser/dom.js';
-import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
+import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
-import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageInlineCompletionsProvider } from '../../common/inlineCompletions.js';
@@ -35,8 +34,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { View } = await import('../../../../browser/view.js');
-const { InlineCompletionProviderService } = await import('../../../../browser/services/inlineCompletionProviderService.js');
-const { EditorInlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
+const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -44,7 +42,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('abc');
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const input = h(dom.window.document, 'textarea');
@@ -57,12 +55,11 @@ test('Registered editor commands retrigger inline completions after their edit',
 			return [{ insertText: ' completion' }];
 		},
 	});
-	using service = new InlineCompletionProviderService(model, providers);
 	using inlineCompletionsService = new InlineCompletionsService();
 	using commands = new Emitter<{ readonly commandId: string }>();
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
-	using controller = new EditorInlineCompletionsController(input, viewport, selections, service, inlineCompletionsService, 'plaintext', commands.event);
+	using controller = new InlineCompletionsController(input, viewport, selections, model, providers, inlineCompletionsService, 'plaintext', commands.event);
 
 	commands.fire({ commandId: 'editor.test.unrelatedCommand' });
 	await flushPromises();

@@ -6,7 +6,6 @@ import { TestLanguageConfigurationService } from '../../../../test/common/modes/
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
@@ -15,7 +14,7 @@ test("Remove matching brackets deletes distinct lexical pairs atomically and res
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using selections = new CursorsController(model, SelectionSet.withPrimary([
+	using selections = new CursorsController(model, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (1) + 1)),
 	], 1));
@@ -23,7 +22,7 @@ test("Remove matching brackets deletes distinct lexical pairs atomically and res
 	assert.ok(command);
 	selections.execute(command);
 	assert.equal(model.getText(), "value");
-	assert.deepEqual(selections.selections, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	assert.deepEqual(selections.selections, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	selections.undo();
 	assert.equal(model.getText(), "{(value)}");
 });
@@ -33,9 +32,9 @@ test("Remove matching brackets leaves non-bracket or range selections alone", ()
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	const cursor = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (3) + 1)));
+	const cursor = [Selection.fromPositions(new Position((0) + 1, (3) + 1))];
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, cursor), undefined);
-	const range = SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)));
+	const range = [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1))];
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, range), undefined);
 });
 
@@ -46,4 +45,9 @@ function configurationsForBrackets(): TestLanguageConfigurationService {
 		brackets: [["(", ")"], ["{", "}"]],
 	});
 	return configurations;
+}
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }

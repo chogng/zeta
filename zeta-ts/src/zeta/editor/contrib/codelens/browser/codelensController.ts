@@ -8,18 +8,18 @@ import { type LanguageFeatureRegistry } from '../../../common/languageFeatureReg
 import { type LanguageCodeLensCommand, type LanguageCodeLensProvider } from '../common/languageCodeLenses.js';
 import { codeLensCache } from './codeLensCache.js';
 import { LanguageCodeLensModel, getLanguageCodeLensModel, resolveLanguageCodeLensItem, type LanguageCodeLensItem } from './codelens.js';
-import { EditorCodeLensWidget } from './codelensWidget.js';
+import { CodeLensWidget } from './codelensWidget.js';
 
 export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 
 /** Coordinates provider requests, visible deferred resolves, and line-owned CodeLens widgets. */
-export class EditorCodeLensContribution extends Disposable {
+export class CodeLensContribution extends Disposable {
 	public static readonly ID = 'editor.contrib.codelens';
 
-	private readonly widgets = this._register(new DisposableMap<number, EditorCodeLensWidget>());
+	private readonly widgets = this._register(new DisposableMap<number, CodeLensWidget>());
 	private readonly providerListeners = this._register(new DisposableStore());
 	private readonly cacheExpiry = this._register(new TimeoutTimer());
-	private readonly resolvingWidgets = new Map<EditorCodeLensWidget, AbortController>();
+	private readonly resolvingWidgets = new Map<CodeLensWidget, AbortController>();
 	private request: AbortController | undefined;
 	private currentModel = LanguageCodeLensModel.Empty;
 	private cachedModel: LanguageCodeLensModel | undefined;
@@ -145,7 +145,7 @@ export class EditorCodeLensContribution extends Disposable {
 					current.updateCodeLensItems(lineItems);
 					continue;
 				}
-				this.widgets.set(lineNumber, new EditorCodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
+				this.widgets.set(lineNumber, new CodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
 			}
 		} finally {
 			scrollState.restore(this.viewport);
@@ -181,7 +181,7 @@ export class EditorCodeLensContribution extends Disposable {
 		});
 	}
 
-	private async resolveWidget(widget: EditorCodeLensWidget, request: AbortController): Promise<void> {
+	private async resolveWidget(widget: CodeLensWidget, request: AbortController): Promise<void> {
 		this.resolvingWidgets.set(widget, request);
 		const items = widget.codeLensItems;
 		try {
@@ -235,10 +235,10 @@ function groupCodeLensItems(items: readonly LanguageCodeLensItem[]): ReadonlyMap
 }
 
 registerTextEditorCapabilityContribution({
-	id: EditorCodeLensContribution.ID,
+	id: CodeLensContribution.ID,
 	install: context => {
 		if (context.kind !== 'text' || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
-		context.register(new EditorCodeLensContribution(
+		context.register(new CodeLensContribution(
 			context.viewport,
 			context.languageFeaturesService.codeLensProvider,
 			context.languageId,

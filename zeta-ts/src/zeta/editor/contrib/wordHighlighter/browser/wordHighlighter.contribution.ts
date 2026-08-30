@@ -7,10 +7,9 @@ import { type EditorCapability, registerTextEditorCapabilityContribution } from 
 import { type EditorView } from '../../../browser/editorView.js';
 import { createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../common/core/selection.js';
-import { SelectionSet } from '../../../common/cursor/selectionSet.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
-import { type CursorSelectionSetChange, type CursorsController } from '../../../common/cursor/cursor.js';
+import { type CursorSelectionChange, type CursorsController } from '../../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../../common/languages.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
@@ -148,7 +147,7 @@ class WordHighlighter extends Disposable {
 		return this.decorations.size > 0;
 	}
 
-	private handleSelectionChange(change: CursorSelectionSetChange): void {
+	private handleSelectionChange(change: CursorSelectionChange): void {
 		if (this.changingSelection) return;
 		this.cancelRequest();
 		this.coordinator.clear();
@@ -205,8 +204,8 @@ class WordHighlighter extends Disposable {
 	}
 
 	private highlightPosition(): Position | undefined {
-		if (this.selections.selections.selections.length !== 1) return undefined;
-		const selection = this.selections.selections.primary;
+		if (this.selections.selections.length !== 1) return undefined;
+		const selection = this.selections.selections[0]!;
 		if (!selectionFitsModel(this.textModel, selection) || selection.getStartPosition().lineNumber !== selection.getEndPosition().lineNumber) return undefined;
 		const word = this.textModel.getWordAtPosition(selection.getStartPosition());
 		if (!word) return undefined;
@@ -230,13 +229,13 @@ class WordHighlighter extends Disposable {
 	private move(direction: 1 | -1): boolean {
 		const ranges = [...this.decorations.decorations].map(decoration => decoration.range).sort((left, right) => Position.compare(left.getStartPosition(), right.getStartPosition()));
 		if (ranges.length === 0) return false;
-		const activeOffset = this.textModel.offsetAt(this.selections.selections.primary.getPosition());
+		const activeOffset = this.textModel.offsetAt(this.selections.selections[0]!.getPosition());
 		const currentIndex = ranges.findIndex(range => this.textModel.offsetAt(range.getStartPosition()) <= activeOffset && this.textModel.offsetAt(range.getEndPosition()) >= activeOffset);
 		const nextIndex = direction === 1 ? (currentIndex + 1) % ranges.length : (currentIndex - 1 + ranges.length) % ranges.length;
 		const destination = ranges[nextIndex]!;
 		this.changingSelection = true;
 		try {
-			this.selections.setCursorSelections(SelectionSet.single(Selection.fromPositions(destination.getStartPosition())));
+			this.selections.setCursorSelections([Selection.fromPositions(destination.getStartPosition())]);
 			this.view.revealPosition(destination.getStartPosition());
 		} finally {
 			this.changingSelection = false;

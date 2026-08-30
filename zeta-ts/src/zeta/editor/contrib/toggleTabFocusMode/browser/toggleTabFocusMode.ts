@@ -1,8 +1,3 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
 import { alert } from '../../../../base/browser/ui/aria/aria.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { TabFocus } from '../../../browser/config/tabFocus.js';
@@ -11,7 +6,6 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 
 export class ToggleTabFocusModeAction extends Action2 {
-
 	public static readonly ID = 'editor.action.toggleTabFocusMode';
 
 	constructor() {
@@ -32,14 +26,11 @@ export class ToggleTabFocusModeAction extends Action2 {
 	}
 
 	public run(): void {
-		const oldValue = TabFocus.getTabFocusMode();
-		const newValue = !oldValue;
-		TabFocus.setTabFocusMode(newValue);
-		if (newValue) {
-			alert(nls.localize('toggle.tabMovesFocus.on', "Pressing Tab will now move focus to the next focusable element"));
-		} else {
-			alert(nls.localize('toggle.tabMovesFocus.off', "Pressing Tab will now insert the tab character"));
-		}
+		const movesFocus = !TabFocus.getTabFocusMode();
+		TabFocus.setTabFocusMode(movesFocus);
+		alert(movesFocus
+			? nls.localize('toggle.tabMovesFocus.on', "Pressing Tab will now move focus to the next focusable element")
+			: nls.localize('toggle.tabMovesFocus.off', "Pressing Tab will now insert the tab character"));
 	}
 }
 

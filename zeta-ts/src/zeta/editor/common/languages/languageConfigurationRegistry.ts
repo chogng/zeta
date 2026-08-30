@@ -15,6 +15,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { ILanguageService } from './language.js';
 import { registerSingleton } from '../../../platform/instantiation/common/extensions.js';
 import { LanguageBracketsConfiguration } from './supports/languageBracketsConfiguration.js';
+import { ConfigurationsRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 
 /**
  * Interface used to support insertion of mode specific comments.
@@ -134,10 +135,31 @@ function computeConfig(
 	return config;
 }
 
-const customizedLanguageConfigKeys = {
-	brackets: 'editor.language.brackets',
-	colorizedBracketPairs: 'editor.language.colorizedBracketPairs'
-};
+const customizedLanguageConfigKeys = Object.freeze({
+	brackets: ConfigurationsRegistry.registerConfiguration<CharacterPair[] | null>({
+		key: 'editor.language.brackets',
+		defaultValue: null,
+		parse: value => parseConfiguredBracketPairs(value, 'editor.language.brackets'),
+	}),
+	colorizedBracketPairs: ConfigurationsRegistry.registerConfiguration<CharacterPair[] | null>({
+		key: 'editor.language.colorizedBracketPairs',
+		defaultValue: null,
+		parse: value => parseConfiguredBracketPairs(value, 'editor.language.colorizedBracketPairs'),
+	}),
+});
+
+function parseConfiguredBracketPairs(value: unknown, key: string): CharacterPair[] | null {
+	if (value === null) return null;
+	if (!Array.isArray(value) || value.some(pair => (
+		!Array.isArray(pair) ||
+		pair.length !== 2 ||
+		typeof pair[0] !== 'string' ||
+		typeof pair[1] !== 'string'
+	))) {
+		throw new TypeError(`${key} must be null or an array of string pairs`);
+	}
+	return value.map(pair => [pair[0], pair[1]] as CharacterPair);
+}
 
 function getCustomizedLanguageConfig(languageId: string, configurationService: IConfigurationService): LanguageConfiguration {
 	const brackets = configurationService.getValue(customizedLanguageConfigKeys.brackets, {
@@ -471,4 +493,3 @@ export class ResolvedLanguageConfiguration {
 registerSingleton(ILanguageConfigurationService, new ServiceConstructionDescriptor(LanguageConfigurationService, {
 	serviceDependencies: [IConfigurationService, ILanguageService],
 }));
-

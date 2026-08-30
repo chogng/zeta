@@ -1,5 +1,5 @@
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
-import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 
@@ -43,11 +43,11 @@ interface RemoveRangePlan extends BasePlan {
 }
 
 /** Toggles one configured block-comment pair around each non-overlapping selection. */
-export function createToggleBlockCommentCommand(model: TextModel, selections: SelectionSet, options: EditorBlockCommentOptions): EditorEditCommand {
+export function createToggleBlockCommentCommand(model: TextModel, selections: readonly Selection[], options: EditorBlockCommentOptions): EditorEditCommand {
 	const tokens = readTokens(options);
 	const snapshot = model.createVersionedSnapshot();
 	const text = snapshot.getText();
-	const plans = selections.selections.map(selection => createPlan(
+	const plans = selections.map(selection => createPlan(
 		model,
 		text,
 		model.offsetAt(selection.getSelectionStart()),
@@ -60,7 +60,7 @@ export function createToggleBlockCommentCommand(model: TextModel, selections: Se
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
 		selectionsAfter,
-		primarySelectionIndex: selections.primaryIndex,
+		primarySelectionIndex: 0,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
 }

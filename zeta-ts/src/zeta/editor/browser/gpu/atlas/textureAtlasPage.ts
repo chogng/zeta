@@ -2,15 +2,13 @@ import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { NKeyMap } from '../../../../base/common/map.js';
 import { type IStyledGlyphRasterizer, type IStyledRasterizedGlyph } from '../raster/raster.js';
-import { type IStyledReadableTextureAtlasPage, type IStyledTextureAtlasAllocator, type IStyledTextureAtlasPageGlyph, type ITextureAtlasAllocator } from './atlas.js';
-import { StyledTextureAtlasShelfAllocator } from './styledTextureAtlasShelfAllocator.js';
-import { StyledTextureAtlasSlabAllocator } from './styledTextureAtlasSlabAllocator.js';
+import { type IStyledReadableTextureAtlasPage, type IStyledTextureAtlasAllocator, type IStyledTextureAtlasPageGlyph } from './atlas.js';
+import { TextureAtlasShelfAllocator } from './textureAtlasShelfAllocator.js';
+import { TextureAtlasSlabAllocator } from './textureAtlasSlabAllocator.js';
 
-export type AllocatorType = 'shelf' | 'slab' | ((canvas: OffscreenCanvas, textureIndex: number) => ITextureAtlasAllocator);
+export type AllocatorType = 'shelf' | 'slab' | ((canvas: HTMLCanvasElement, pageIndex: number) => IStyledTextureAtlasAllocator);
 
-export type StyledAllocatorType = 'shelf' | 'slab' | ((canvas: HTMLCanvasElement, textureIndex: number) => IStyledTextureAtlasAllocator);
-
-export class StyledTextureAtlasPage extends Disposable implements IStyledReadableTextureAtlasPage {
+export class TextureAtlasPage extends Disposable implements IStyledReadableTextureAtlasPage {
 	public static readonly maximumGlyphCount = 2_500;
 	public readonly source: HTMLCanvasElement;
 	public readonly glyphs = new Set<Readonly<IStyledTextureAtlasPageGlyph>>();
@@ -19,7 +17,7 @@ export class StyledTextureAtlasPage extends Disposable implements IStyledReadabl
 	private currentVersion = 0;
 	private mutableUsedArea = { left: 0, top: 0, right: 0, bottom: 0 };
 
-	constructor(host: HTMLElement, public readonly index: number, pageSize: number, allocatorType: StyledAllocatorType = 'slab') {
+	constructor(host: HTMLElement, public readonly index: number, pageSize: number, allocatorType: AllocatorType = 'slab') {
 		super();
 		this.source = h(host.ownerDocument, 'canvas');
 		this.source.width = pageSize;
@@ -27,17 +25,15 @@ export class StyledTextureAtlasPage extends Disposable implements IStyledReadabl
 		this.allocator = typeof allocatorType === 'function'
 			? allocatorType(this.source, index)
 			: allocatorType === 'shelf'
-				? new StyledTextureAtlasShelfAllocator(this.source, index)
-				: new StyledTextureAtlasSlabAllocator(this.source, index);
+				? new TextureAtlasShelfAllocator(this.source, index)
+				: new TextureAtlasSlabAllocator(this.source, index);
 		this._register(toDisposable(() => {
 			this.source.width = 1;
 			this.source.height = 1;
 		}));
 	}
 
-	public get version(): number {
-		return this.currentVersion;
-	}
+	public get version(): number { return this.currentVersion; }
 
 	public get usedArea(): Readonly<{ readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }> {
 		return this.mutableUsedArea;
@@ -46,12 +42,12 @@ export class StyledTextureAtlasPage extends Disposable implements IStyledReadabl
 	public getGlyph(rasterizer: IStyledGlyphRasterizer, chars: string, styleKey: string, rasterize: () => IStyledRasterizedGlyph): Readonly<IStyledTextureAtlasPageGlyph> | undefined {
 		const existing = this.glyphMap.get(rasterizer.cacheKey, styleKey, chars);
 		if (existing) return existing;
-		if (this.glyphs.size >= StyledTextureAtlasPage.maximumGlyphCount) return undefined;
+		if (this.glyphs.size >= TextureAtlasPage.maximumGlyphCount) return undefined;
 		const glyph = this.allocator.allocate(rasterize());
 		if (!glyph) return undefined;
 		this.glyphMap.set(glyph, rasterizer.cacheKey, styleKey, chars);
 		this.glyphs.add(glyph);
-		this.currentVersion += 1;
+		this.currentVersion++;
 		this.mutableUsedArea = Object.freeze({
 			left: 0,
 			top: 0,
@@ -61,11 +57,6 @@ export class StyledTextureAtlasPage extends Disposable implements IStyledReadabl
 		return glyph;
 	}
 
-	public getUsagePreview(): Promise<Blob> {
-		return this.allocator.getUsagePreview();
-	}
-
-	public getStats(): string {
-		return this.allocator.getStats();
-	}
+	public getUsagePreview(): Promise<Blob> { return this.allocator.getUsagePreview(); }
+	public getStats(): string { return this.allocator.getStats(); }
 }

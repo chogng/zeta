@@ -6,7 +6,6 @@ import { operatingSystem, OperatingSystem } from "../../../../base/common/platfo
 import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../common/gotoLocation.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
 import { type View } from "../../../browser/view.js";
 
@@ -71,7 +70,7 @@ export class GotoLineController extends Disposable {
 		if (!this.visible) this.initialScrollPosition = this.viewport.viewportLayout.scrollPosition;
 		this.element.hidden = false;
 		this.element.classList.add("visible");
-		const current = this.selections.selections.primary.getPosition();
+		const current = this.selections.selections[0]!.getPosition();
 		this.input.value = `${current.lineNumber}:${current.column}`;
 		this.position();
 		this.preview();
@@ -107,7 +106,7 @@ export class GotoLineController extends Disposable {
 		const result = this.readResult();
 		if (result.kind !== "location") return;
 		stopEvent(event);
-		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(result.location.position)));
+		this.selections.setSelections([Selection.fromPositions(result.location.position)]);
 		this.viewport.revealPosition(result.location.position);
 		this.initialScrollPosition = undefined;
 		this.close();

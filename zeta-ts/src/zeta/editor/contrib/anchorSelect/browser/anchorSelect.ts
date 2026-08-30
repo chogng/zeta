@@ -7,7 +7,6 @@ import { type View } from '../../../browser/view.js';
 import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewParts/decorations/decorations.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Selection } from '../../../common/core/selection.js';
-import { SelectionSet } from '../../../common/cursor/selectionSet.js';
 import { type Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
@@ -46,7 +45,7 @@ export class SelectionAnchorController extends Disposable {
 	}
 
 	setSelectionAnchor(): void {
-		const position = this.selections.selections.primary.getPosition();
+		const position = this.selections.selections[0]!.getPosition();
 		const [decorationId] = this.decorations.replaceAll([{
 			range: Range.fromPositions(position),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
@@ -59,15 +58,15 @@ export class SelectionAnchorController extends Disposable {
 	goToSelectionAnchor(): void {
 		const position = this.selectionAnchorPosition;
 		if (!position) return;
-		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(position)));
+		this.selections.setSelections([Selection.fromPositions(position)]);
 		this.viewport.revealPosition(position);
 	}
 
 	selectFromAnchorToCursor(): void {
 		const anchor = this.selectionAnchorPosition;
 		if (!anchor) return;
-		const cursor = this.selections.selections.primary.getPosition();
-		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(anchor, cursor)));
+		const cursor = this.selections.selections[0]!.getPosition();
+		this.selections.setSelections([Selection.fromPositions(anchor, cursor)]);
 		this.cancelSelectionAnchor();
 		this.viewport.revealPosition(cursor);
 	}

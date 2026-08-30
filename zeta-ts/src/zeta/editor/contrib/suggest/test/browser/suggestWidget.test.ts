@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/languageCompletionSessionController.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
@@ -9,11 +9,10 @@ import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createL
 import { LanguageCompletionProviderRegistry } from "../../../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { EditorSuggestController } from "../../browser/suggestController.js";
+import { SuggestController } from "../../browser/suggestController.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -53,7 +52,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	});
 	viewport.layout({ width: 300, height: 40 });
 	using input = new EditorView(viewport, selections);
-	using suggest = new EditorSuggestController(input, selections, service, session, "plaintext");
+	using suggest = new SuggestController(input, selections, service, session, "plaintext");
 	input.focus();
 	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword, "declaration"),
@@ -102,7 +101,7 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 	fixture.input.element.dispatchEvent(enter);
 	assert.equal(enter.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console");
-	assert.equal(Position.compare(fixture.selections.selections.primary.getPosition(), new Position((0) + 1, (7) + 1)), 0);
+	assert.equal(Position.compare(fixture.selections.selections[0]!.getPosition(), new Position((0) + 1, (7) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "both");
 	assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
@@ -124,7 +123,7 @@ test("Typing a declared completion commit character accepts it atomically before
 
 	assert.equal(commit.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console.");
-	assert.equal(Position.compare(fixture.selections.selections.primary.getPosition(), new Position((0) + 1, (8) + 1)), 0);
+	assert.equal(Position.compare(fixture.selections.selections[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	fixture.selections.undo();
 	assert.equal(fixture.model.getText(), "con");
@@ -133,7 +132,7 @@ test("Typing a declared completion commit character accepts it atomically before
 test("Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeholder navigation", () => {
 	const fixture = createFixture("fn");
 	using resources = fixture;
-	fixture.selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (2) + 1))));
+	fixture.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (2) + 1))]);
 	assert.equal(fixture.store.accept({
 		requestId: 1,
 		textModel: fixture.model,
@@ -155,11 +154,11 @@ test("Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeh
 	const next = keyboardEvent(fixture.dom.window, "Tab");
 	fixture.input.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
+	assert.deepEqual(fixture.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
 	const previous = keyboardEvent(fixture.dom.window, "Tab", true);
 	fixture.input.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
+	assert.deepEqual(fixture.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
 	const escape = keyboardEvent(fixture.dom.window, "Escape");
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
@@ -237,8 +236,8 @@ test("Completion widget validates ownership and clears its active descendant on 
 		selectionController: selections,
 	});
 	using input = new EditorView(viewport, selections);
-	assert.throws(() => new EditorSuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
-	using suggest = new EditorSuggestController(input, selections, service, session, "plaintext");
+	assert.throws(() => new SuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
+	using suggest = new SuggestController(input, selections, service, session, "plaintext");
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
 	suggest.dispose();
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
@@ -309,7 +308,7 @@ interface CompletionFixture extends Disposable {
 	readonly session: LanguageCompletionSessionController;
 	readonly viewport: InstanceType<typeof View>;
 	readonly input: InstanceType<typeof EditorView>;
-	readonly suggest: EditorSuggestController;
+	readonly suggest: SuggestController;
 }
 
 function createFixture(text: string, sessionOptions: LanguageCompletionSessionOptions = {}): CompletionFixture {
@@ -328,7 +327,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const input = new EditorView(viewport, selections);
-	const suggest = new EditorSuggestController(input, selections, service, session, "plaintext");
+	const suggest = new SuggestController(input, selections, service, session, "plaintext");
 	input.focus();
 	return {
 		dom,
@@ -387,7 +386,7 @@ function completion(id: string, label: string, kind: LanguageCompletionItemKind,
 function controllerAt(model: TextModel, position: Position): CursorsController {
 	return new CursorsController(
 		model,
-		SelectionSet.single(Selection.fromPositions(position)),
+		[Selection.fromPositions(position)],
 	);
 }
 

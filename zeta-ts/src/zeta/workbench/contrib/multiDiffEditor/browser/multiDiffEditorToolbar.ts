@@ -7,9 +7,6 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { Selection } from '../../../../editor/common/core/selection.js';
-import { CursorsController } from '../../../../editor/common/cursor/cursor.js';
-import { SelectionSet } from '../../../../editor/common/cursor/selectionSet.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
@@ -334,7 +331,6 @@ export class MultiDiffEditorToolbar extends Disposable {
 
 class CommitMessageEditor extends Disposable {
 	readonly model = this._register(new TextModel());
-	private readonly selections = this._register(new CursorsController(this.model, SelectionSet.single(Selection.fromPositions(new Position(1, 1)))));
 	private readonly editor: CodeEditorWidget;
 
 	constructor(private readonly container: HTMLElement) {
@@ -342,10 +338,11 @@ class CommitMessageEditor extends Disposable {
 		this.editor = this._register(new CodeEditorWidget({
 			container,
 			model: this.model,
+			input: { resource: this.model.uri },
+			languageId: this.model.getLanguageId(),
 			lineHeight: 20,
 			ariaLabel: 'Commit message',
 			placeholder: 'Commit message',
-			selectionController: this.selections,
 		}));
 	}
 

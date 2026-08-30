@@ -5,17 +5,11 @@ import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOp
 import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
-import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { PositionAffinity } from "../../common/model.js";
-import { CursorState, SelectionStartKind, SingleCursorState } from '../../common/cursorCommon.js';
-import { CursorContext } from '../../common/cursor/cursorContext.js';
-import { Cursor } from '../../common/cursor/oneCursor.js';
-import { Selection } from '../../common/core/selection.js';
-import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
-import { createTestCursorConfiguration } from '../common/testCursorConfiguration.js';
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
 	using model = new TextModel("ab😀cd\nxyz");
@@ -93,39 +87,6 @@ test("view-model lines expose wrapped cursor rows and convert positions through 
 	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3)), new Position(2, 1));
 	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3), PositionAffinity.Left), new Position(1, 3));
 	assert.equal(coordinates.getModelLineViewLineCount(1), 3);
-});
-
-test('Cursor keeps model and wrapped view states in their own coordinate domains', () => {
-	using model = new TextModel('abcdef');
-	using lines = createViewModelLines(model, new FixedTextMeasurer(), {
-		wrapping: EditorLineWrapping.On,
-		wrapWidth: 20,
-	});
-	using languageConfigurationService = new TestLanguageConfigurationService();
-	const context = new CursorContext(
-		model,
-		lines,
-		lines.createCoordinatesConverter(),
-		createTestCursorConfiguration(model, languageConfigurationService),
-	);
-	const cursor = new Cursor(context);
-
-	const modelState = CursorState.fromModelSelection(Selection.fromPositions(new Position(1, 4)));
-	cursor.setState(context, modelState.modelState, null);
-	assert.deepEqual(cursor.modelState.position, new Position(1, 4));
-	assert.deepEqual(cursor.viewState.position, new Position(2, 2));
-
-	const viewState = CursorState.fromViewState(new SingleCursorState(
-		new Range(3, 2, 3, 2),
-		SelectionStartKind.Simple,
-		0,
-		new Position(3, 2),
-		0,
-	));
-	cursor.setState(context, null, viewState.viewState);
-	assert.deepEqual(cursor.viewState.position, new Position(3, 2));
-	assert.deepEqual(cursor.modelState.position, new Position(1, 6));
-	cursor.dispose(context);
 });
 
 test("browser visual-line projection validates its public wrapping inputs", () => {

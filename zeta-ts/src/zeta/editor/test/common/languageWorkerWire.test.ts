@@ -12,6 +12,7 @@ import { LanguageRequestStatus, type LanguageWorkerRequest } from "../../common/
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { type TextModelChange } from '../../common/core/textChange.js';
 
 test("Completion service crosses a structured-clone worker boundary", async () => {
 	const text = "console\nconst connection = con";
@@ -92,10 +93,12 @@ test("A skipped model version makes the next wire request send a full snapshot",
 	);
 	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
+	let skipped: TextModelChange | undefined;
+	using listener = model.onDidChangeContent(change => { skipped = change; });
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (8) + 1)), text: "p" }]);
-	const skipped = model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (9) + 1)), text: "h" }])!;
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (9) + 1)), text: "h" }]);
 
-	client.synchronizeModel(skipped);
+	client.synchronizeModel(skipped!);
 	await client.run(request(model, 2), new AbortController().signal);
 
 	const messages = clientPort.sentMessages as WireMessage[];

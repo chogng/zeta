@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import ts from '../../../../zeta-ts/node_modules/typescript/lib/typescript.js';
 
@@ -10,8 +10,28 @@ const ledger = readFileSync(ledgerPath, 'utf8');
 const declarations = readDeclarations(ledger, '尚未补齐的同名契约');
 
 const results = declarations.map(({ file, declaration }) => {
-	const local = readDeclaration(resolve(zetaEditorRoot, file), declaration);
-	const upstream = readDeclaration(resolve(vscodeEditorRoot, file), declaration);
+	const localFile = resolve(zetaEditorRoot, file);
+	const upstreamFile = resolve(vscodeEditorRoot, file);
+	if (!existsSync(localFile) || !existsSync(upstreamFile)) {
+		return {
+			file,
+			declaration,
+			kind: !existsSync(localFile) ? 'missing-local-file' : 'missing-upstream-file',
+			missing: [],
+			extra: [],
+		};
+	}
+	const local = readDeclaration(localFile, declaration);
+	const upstream = readDeclaration(upstreamFile, declaration);
+	if (!local || !upstream) {
+		return {
+			file,
+			declaration,
+			kind: !local ? 'missing-local-declaration' : 'missing-upstream-declaration',
+			missing: [],
+			extra: [],
+		};
+	}
 	const missing = upstream.members.filter(member => !local.members.includes(member));
 	const extra = local.members.filter(member => !upstream.members.includes(member));
 	return { file, declaration, kind: `${local.kind}/${upstream.kind}`, missing, extra };
@@ -34,9 +54,7 @@ function readDeclaration(file, declarationName) {
 		.map(node => ({ kind: ts.SyntaxKind[node.kind], members: readMembers(node) }));
 	const preferred = declarations.filter(declaration => declaration.kind !== 'VariableDeclaration');
 	const candidates = preferred.length > 0 ? preferred : declarations;
-	if (candidates.length !== 1) {
-		throw new Error(`Expected one declaration named ${declarationName} in ${file}, got ${candidates.length}`);
-	}
+	if (candidates.length !== 1) return undefined;
 	return candidates[0];
 
 }

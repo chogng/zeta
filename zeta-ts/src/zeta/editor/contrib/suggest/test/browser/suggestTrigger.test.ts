@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
@@ -10,11 +10,10 @@ import { LanguageCompletionService } from "../../../../common/languages/completi
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionItemKind } from "../../../../common/languages/completion/languageCompletions.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { EditorSuggestController } from "../../browser/suggestController.js";
+import { SuggestController } from "../../browser/suggestController.js";
 import { LanguageEditingAdapter } from "../../../../browser/view/viewController.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -177,7 +176,7 @@ test("Completion request wiring rejects a same-model session from another servic
 	});
 
 	using input = new EditorView(viewport, selections);
-	assert.throws(() => new EditorSuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
+	assert.throws(() => new SuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
 	dom.window.close();
 });
 
@@ -187,7 +186,7 @@ interface TriggerFixture extends Disposable {
 	readonly service: LanguageCompletionService;
 	readonly session: LanguageCompletionSessionController;
 	readonly input: InstanceType<typeof EditorView>;
-	readonly suggest: EditorSuggestController;
+	readonly suggest: SuggestController;
 }
 
 function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
@@ -210,7 +209,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	viewport.layout({ width: 300, height: 40 });
 	const languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
 	const input = new EditorView(viewport, selections, { languageEditing });
-	const suggest = new EditorSuggestController(input, selections, service, session, "typescript");
+	const suggest = new SuggestController(input, selections, service, session, "typescript");
 	input.focus();
 	return {
 		dom,
@@ -256,7 +255,7 @@ function completionResult(request: LanguageCompletionProviderRequest, label: str
 function controllerAt(model: TextModel, position: Position): CursorsController {
 	return new CursorsController(
 		model,
-		SelectionSet.single(Selection.fromPositions(position)),
+		[Selection.fromPositions(position)],
 	);
 }
 

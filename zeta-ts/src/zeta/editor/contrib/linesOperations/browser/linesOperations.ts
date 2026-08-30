@@ -1,6 +1,5 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 
@@ -31,14 +30,14 @@ interface OffsetEdit {
 }
 
 /** Deletes the union of physical lines selected by every cursor. */
-export function createDeleteLinesCommand(model: TextModel, selections: SelectionSet): EditorEditCommand {
+export function createDeleteLinesCommand(model: TextModel, selections: readonly Selection[]): EditorEditCommand {
 	const groups = contiguousLineGroups(selectedLineIndices(selections));
 	const edits = groups.flatMap<OffsetEdit>(group => deleteLineGroup(model, group));
 	return createLineOperationCommand(model, selections, edits);
 }
 
 /** Duplicates the union of physical lines selected by every cursor. */
-export function createDuplicateLinesCommand(model: TextModel, selections: SelectionSet, direction: EditorLineDuplicateDirection): EditorEditCommand {
+export function createDuplicateLinesCommand(model: TextModel, selections: readonly Selection[], direction: EditorLineDuplicateDirection): EditorEditCommand {
 	if (!Object.values(EditorLineDuplicateDirection).includes(direction)) {
 		throw new TypeError("Unknown editor line duplicate direction");
 	}
@@ -48,7 +47,7 @@ export function createDuplicateLinesCommand(model: TextModel, selections: Select
 }
 
 /** Moves the union of selected physical lines by one neighboring line. */
-export function createMoveLinesCommand(model: TextModel, selections: SelectionSet, direction: EditorLineMoveDirection): EditorEditCommand {
+export function createMoveLinesCommand(model: TextModel, selections: readonly Selection[], direction: EditorLineMoveDirection): EditorEditCommand {
 	if (!Object.values(EditorLineMoveDirection).includes(direction)) {
 		throw new TypeError("Unknown editor line move direction");
 	}
@@ -60,17 +59,17 @@ export function createMoveLinesCommand(model: TextModel, selections: SelectionSe
 	const finalText = applyOffsetEdits(model.createVersionedSnapshot().getText(), edits);
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
-		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({
+		selectionsAfter: Object.freeze(selections.map(selection => Object.freeze({
 			anchorOffset: offsetInText(finalText, movePosition(selection.getSelectionStart(), movableGroups, direction)),
 			activeOffset: offsetInText(finalText, movePosition(selection.getPosition(), movableGroups, direction)),
 		}))),
-		primarySelectionIndex: selections.primaryIndex,
+		primarySelectionIndex: 0,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
 }
 
 /** Inserts one blank line adjacent to each contiguous selected physical-line group. */
-export function createInsertLineCommand(model: TextModel, selections: SelectionSet, direction: EditorLineInsertDirection): EditorEditCommand {
+export function createInsertLineCommand(model: TextModel, selections: readonly Selection[], direction: EditorLineInsertDirection): EditorEditCommand {
 	if (!Object.values(EditorLineInsertDirection).includes(direction)) {
 		throw new TypeError("Unknown editor line insertion direction");
 	}
@@ -160,8 +159,8 @@ function insertedLineIndex(group: EditorLineGroup, precedingInsertions: number, 
 		: group.endLineIndex + precedingInsertions + 1;
 }
 
-function primaryInsertedGroupIndex(selections: SelectionSet, groups: readonly EditorLineGroup[]): number {
-	const primaryLines = selectedLineIndices(SelectionSet.single(selections.primary));
+function primaryInsertedGroupIndex(selections: readonly Selection[], groups: readonly EditorLineGroup[]): number {
+	const primaryLines = selectedLineIndices([selections[0]!]);
 	for (const lineIndex of primaryLines) {
 		const groupIndex = groups.findIndex(group =>
 			lineIndex >= group.startLineIndex && lineIndex <= group.endLineIndex
@@ -178,14 +177,14 @@ function lineGroupText(model: TextModel, group: EditorLineGroup): string {
 	).join("\n");
 }
 
-function createLineOperationCommand(model: TextModel, selections: SelectionSet, edits: readonly OffsetEdit[]): EditorEditCommand {
+function createLineOperationCommand(model: TextModel, selections: readonly Selection[], edits: readonly OffsetEdit[]): EditorEditCommand {
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
-		selectionsAfter: Object.freeze(selections.selections.map(selection => Object.freeze({
+		selectionsAfter: Object.freeze(selections.map(selection => Object.freeze({
 			anchorOffset: mapOffsetThroughEdits(model.offsetAt(selection.getSelectionStart()), edits),
 			activeOffset: mapOffsetThroughEdits(model.offsetAt(selection.getPosition()), edits),
 		}))),
-		primarySelectionIndex: selections.primaryIndex,
+		primarySelectionIndex: 0,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
 }
@@ -204,9 +203,9 @@ interface EditorLineGroup {
 	readonly endLineIndex: number;
 }
 
-function selectedLineIndices(selections: SelectionSet): readonly number[] {
+function selectedLineIndices(selections: readonly Selection[]): readonly number[] {
 	const indices = new Set<number>();
-	for (const selection of selections.selections) {
+	for (const selection of selections) {
 		const range = selection;
 		let endLineIndex = range.endLineNumber - 1;
 		if (!selection.isEmpty() && range.endColumn === 1 && endLineIndex > range.startLineNumber - 1) {

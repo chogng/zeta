@@ -1,114 +1,104 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { CursorsController } from "../../../common/cursor/cursor.js";
-import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
+import { DeleteOperations } from "../../../common/cursor/cursorDeleteOperations.js";
+import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
-import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../../../common/cursor/languagePairEditing.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
+import { Range } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel("call");
-	using selections = new CursorsController(model, SelectionSet.single(caret(4)));
+	using selections = new CursorsController(model, [caret(4)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
 
-	const opening = createLanguagePairTypeCommand(model, selections.selections, "(", configuration)!;
-	assert.equal(opening.didInsertText, true);
-	const openingChange = selections.execute(opening.command);
-	assert.ok(openingChange);
-	tracker.record(opening.autoClosingActions, openingChange.version);
+	const opening = typeCommand(model, selections, "(", configuration)!;
+	assert.equal(opening.insertedText, true);
+	executeAndRecord(model, selections, opening);
 	assert.equal(model.getText(), "call()");
-	assert.deepEqual(selections.selections.primary, caret(5));
+	assert.deepEqual(selections.selections[0]!, caret(5));
 	const version = model.version;
 
-	const closing = createLanguagePairTypeCommand(model, selections.selections, ")", configuration, { autoClosingTrust: tracker })!;
-	assert.equal(closing.didInsertText, false);
+	const closing = typeCommand(model, selections, ")", configuration)!;
+	assert.equal(closing.insertedText, false);
 	selections.execute(closing.command);
 	assert.equal(model.getText(), "call()");
 	assert.equal(model.version, version);
-	assert.deepEqual(selections.selections.primary, caret(6));
+	assert.deepEqual(selections.selections[0]!, caret(6));
 
 	selections.undo();
 	assert.equal(model.getText(), "call");
-	assert.deepEqual(selections.selections.primary, caret(4));
+	assert.deepEqual(selections.selections[0]!, caret(4));
 });
 
 test("Language pair backspace removes both empty sides and remains one undo step", () => {
 	using model = new TextModel("");
-	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("typescript");
-	const opening = createLanguagePairTypeCommand(model, selections.selections, "[", configuration)!;
-	const openingChange = selections.execute(opening.command);
-	assert.ok(openingChange);
-	tracker.record(opening.autoClosingActions, openingChange.version);
+	const opening = typeCommand(model, selections, "[", configuration)!;
+	executeAndRecord(model, selections, opening);
 
-	const deletion = createLanguagePairBackspaceCommand(model, selections.selections, configuration, tracker);
-	assert.ok(deletion);
+	const deletion = DeleteOperations.deleteLeft(model, selections.selections, configuration, selections.getAutoClosedCharacters());
 	selections.execute(deletion);
 	assert.equal(model.getText(), "");
-	assert.deepEqual(selections.selections.primary, caret(0));
+	assert.deepEqual(selections.selections[0]!, caret(0));
 
 	selections.undo();
 	assert.equal(model.getText(), "[]");
-	assert.deepEqual(selections.selections.primary, caret(1));
+	assert.deepEqual(selections.selections[0]!, caret(1));
 });
 
 test("Language pair typing surrounds directional selections and auto-closes collapsed cursors", () => {
 	using model = new TextModel("alpha beta");
 	const backward = Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (0) + 1));
-	using selections = new CursorsController(model, SelectionSet.withPrimary([backward, caret(10)], 1));
+	using selections = new CursorsController(model, primaryFirst([backward, caret(10)], 1));
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	const result = createLanguagePairTypeCommand(model, selections.selections, "\"", configurations.getLanguageConfiguration("typescript"));
+	const result = typeCommand(model, selections, "\"", configurations.getLanguageConfiguration("typescript"));
 
 	assert.ok(result);
 	selections.execute(result.command);
 	assert.equal(model.getText(), "\"alpha\" beta\"\"");
-	assert.deepEqual(selections.selections, SelectionSet.withPrimary([
+	assert.deepEqual(selections.selections, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (6) + 1), new Position((0) + 1, (1) + 1)),
 		caret(13),
 	], 1));
 
 	selections.undo();
 	assert.equal(model.getText(), "alpha beta");
-	assert.deepEqual(selections.selections, SelectionSet.withPrimary([backward, caret(10)], 1));
+	assert.deepEqual(selections.selections, primaryFirst([backward, caret(10)], 1));
 });
 
 test("Auto-closing respects following text and supports multi-token pairs", () => {
 	using model = new TextModel("name");
-	using selections = new CursorsController(model, SelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, [caret(0)]);
 	using configurations = new TestLanguageConfigurationService();
 	using custom = configurations.register("template", {
 		autoClosingPairs: [{ open: "<%", close: "%>" }],
 		surroundingPairs: [{ open: "<%", close: "%>" }],
 		autoCloseBefore: " ",
 	});
-	using tracker = new LanguageAutoClosingTracker(model, selections);
 	const configuration = configurations.getLanguageConfiguration("template");
 
-	const beforeText = createLanguagePairTypeCommand(model, selections.selections, "<%", configuration)!;
+	const beforeText = typeCommand(model, selections, "<%", configuration)!;
 	selections.execute(beforeText.command);
 	assert.equal(model.getText(), "<%name");
-	assert.deepEqual(selections.selections.primary, caret(2));
+	assert.deepEqual(selections.selections[0]!, caret(2));
 
-	selections.setSelections(SelectionSet.single(caret(6)));
-	const atEnd = createLanguagePairTypeCommand(model, selections.selections, "<%", configuration)!;
-	const change = selections.execute(atEnd.command);
-	assert.ok(change);
-	tracker.record(atEnd.autoClosingActions, change.version);
+	selections.setSelections([caret(6)]);
+	const atEnd = typeCommand(model, selections, "<%", configuration)!;
+	executeAndRecord(model, selections, atEnd);
 	assert.equal(model.getText(), "<%name<%%>");
-	assert.deepEqual(selections.selections.primary, caret(8));
-	selections.execute(createLanguagePairBackspaceCommand(model, selections.selections, configuration, tracker)!);
+	assert.deepEqual(selections.selections[0]!, caret(8));
+	selections.execute(DeleteOperations.deleteLeft(model, selections.selections, configuration, selections.getAutoClosedCharacters()));
 	assert.equal(model.getText(), "<%name");
 });
 
@@ -118,35 +108,58 @@ test("Auto-closing notIn keeps string and comment input single while code still 
 	const configuration = configurations.getLanguageConfiguration("typescript");
 
 	using stringModel = new TextModel("\"value \"");
-	using stringSelections = new CursorsController(stringModel, SelectionSet.single(caret(7)));
+	using stringSelections = new CursorsController(stringModel, [caret(7)]);
 	using stringContext = new LanguageLexicalContextIndex(stringModel, "typescript", configurations);
-	const stringQuote = createLanguagePairTypeCommand(stringModel, stringSelections.selections, "'", configuration, {
-		lexicalContext: stringContext,
-	})!;
+	const stringQuote = typeCommand(stringModel, stringSelections, "'", configuration, stringContext)!;
 	stringSelections.execute(stringQuote.command);
 	assert.equal(stringModel.getText(), "\"value '\"");
-	assert.deepEqual(stringQuote.autoClosingActions, []);
+	assert.deepEqual(stringQuote.autoClosedCharacters, []);
 
 	using commentModel = new TextModel("// note ");
-	using commentSelections = new CursorsController(commentModel, SelectionSet.single(caret(8)));
+	using commentSelections = new CursorsController(commentModel, [caret(8)]);
 	using commentContext = new LanguageLexicalContextIndex(commentModel, "typescript", configurations);
-	const commentQuote = createLanguagePairTypeCommand(commentModel, commentSelections.selections, "'", configuration, {
-		lexicalContext: commentContext,
-	})!;
+	const commentQuote = typeCommand(commentModel, commentSelections, "'", configuration, commentContext)!;
 	commentSelections.execute(commentQuote.command);
 	assert.equal(commentModel.getText(), "// note '");
 
 	using codeModel = new TextModel("");
-	using codeSelections = new CursorsController(codeModel, SelectionSet.single(caret(0)));
+	using codeSelections = new CursorsController(codeModel, [caret(0)]);
 	using codeContext = new LanguageLexicalContextIndex(codeModel, "typescript", configurations);
-	const codeQuote = createLanguagePairTypeCommand(codeModel, codeSelections.selections, "'", configuration, {
-		lexicalContext: codeContext,
-	})!;
+	const codeQuote = typeCommand(codeModel, codeSelections, "'", configuration, codeContext)!;
 	codeSelections.execute(codeQuote.command);
 	assert.equal(codeModel.getText(), "''");
-	assert.equal(codeQuote.autoClosingActions.length, 1);
+	assert.equal(codeQuote.autoClosedCharacters.length, 1);
 });
+
+function typeCommand(
+	model: TextModel,
+	selections: CursorsController,
+	text: string,
+	configuration: Parameters<typeof TypeOperations.typeWithInterceptors>[3],
+	lexicalContext?: Parameters<typeof TypeOperations.typeWithInterceptors>[5],
+) {
+	return TypeOperations.typeWithInterceptors(model, selections.selections, text, configuration, selections.getAutoClosedCharacters(), lexicalContext);
+}
+
+function executeAndRecord(
+	model: TextModel,
+	selections: CursorsController,
+	result: NonNullable<ReturnType<typeof TypeOperations.typeWithInterceptors>>,
+): void {
+	const change = selections.execute(result.command);
+	assert.ok(change);
+	selections.recordAutoClosedCharacters(
+		result.autoClosedCharacters.map(range => Range.fromPositions(model.positionAt(range.startOffset), model.positionAt(range.endOffset))),
+		result.autoClosedEnclosing.map(range => Range.fromPositions(model.positionAt(range.startOffset), model.positionAt(range.endOffset))),
+		change.version,
+	);
+}
 
 function caret(columnIndex: number): Selection {
 	return Selection.fromPositions(new Position((0) + 1, (columnIndex) + 1));
+}
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }

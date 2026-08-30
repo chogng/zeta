@@ -20,9 +20,9 @@ for (const [name, value] of Object.entries({
 }
 
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
-const { EditorMultiDiffWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
+const { MultiDiffEditorWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
 
-test('EditorMultiDiffWidget presents ordered file sections with one outer viewport', async () => {
+test('MultiDiffEditorWidget presents ordered file sections with one outer viewport', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using firstOriginal = new TextModel('old\nsame');
@@ -34,7 +34,7 @@ test('EditorMultiDiffWidget presents ordered file sections with one outer viewpo
 	using secondModel = new DiffModel({ original: secondOriginal, modified: secondModified, computationService });
 	await Promise.all([waitForReady(firstModel), waitForReady(secondModel)]);
 	let disposedItemActions = 0;
-	using editor = new EditorMultiDiffWidget({
+	using editor = new MultiDiffEditorWidget({
 		container,
 		items: [
 			{ id: 'first', label: 'src/first.ts', originalLabel: 'HEAD', modifiedLabel: 'Working Tree', model: firstModel },

@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -36,7 +35,7 @@ test("Occurrence shortcuts select a word, add its next match, and select every m
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("echo echo\necho");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -46,11 +45,11 @@ test("Occurrence shortcuts select a word, add its next match, and select every m
 	const selectWord = keydown(dom.window, "d", { ctrlKey: true });
 	input.dispatchEvent(selectWord);
 	assert.equal(selectWord.defaultPrevented, true);
-	assert.deepEqual(selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
+	assert.deepEqual(selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 	input.dispatchEvent(keydown(dom.window, "d", { ctrlKey: true }));
-	assert.equal(selections.selections.selections.length, 2);
+	assert.equal(selections.selections.length, 2);
 	input.dispatchEvent(keydown(dom.window, "l", { ctrlKey: true, shiftKey: true }));
-	assert.equal(selections.selections.selections.length, 3);
+	assert.equal(selections.selections.length, 3);
 
 	dom.window.close();
 });
@@ -60,8 +59,8 @@ test("Occurrence controller rejects cross-model wiring and leaves unrelated chor
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("echo");
 	using other = new TextModel("echo");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using otherSelections = new CursorsController(other, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	using otherSelections = new CursorsController(other, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
-import { type EditorViewportData } from '../../common/viewLayout/editorViewportData.js';
+import { type EditorViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 import { createEditorRenderingContext, type EditorOverlayContext, type EditorRenderingContext } from '../../browser/view/renderingContext.js';
 import { EditorViewContext, EditorViewPart, EditorViewPartCollection } from '../../browser/view/viewPart.js';
 

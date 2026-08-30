@@ -1,4 +1,5 @@
 import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { URI } from '../../../base/common/uri.js';
 
 /** Lifecycle shared by editor models whose backing data resolves asynchronously. */
 export interface IResolvableEditorModel extends IDisposable {
@@ -17,4 +18,18 @@ export interface EditorActivationOptions {
 	readonly pinned?: boolean;
 	/** Leaves DOM focus with the navigation surface that requested the open. */
 	readonly preserveFocus?: boolean;
+}
+
+export interface ITextEditorOptions extends EditorActivationOptions {
+	readonly selection?: {
+		readonly startLineNumber: number;
+		readonly startColumn: number;
+		readonly endLineNumber?: number;
+		readonly endColumn?: number;
+	};
+}
+
+export interface ITextResourceEditorInput {
+	readonly resource: URI;
+	readonly options?: ITextEditorOptions;
 }

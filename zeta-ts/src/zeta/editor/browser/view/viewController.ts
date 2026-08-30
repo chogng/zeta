@@ -1,441 +1,588 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
-import { IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
-import { CoreNavigationCommands, NavigationCommandRevealType } from '../coreCommands.js';
-import { IEditorMouseEvent, IPartialEditorMouseEvent } from '../editorBrowser.js';
-import { ViewUserInputEvents } from './viewUserInputEvents.js';
-import { Position } from '../../common/core/position.js';
+import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
+import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
+import { EditorLineWrapping } from '../../common/config/editorOptions.js';
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from '../../common/cursor/cursorMoveOperations.js';
+import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
+import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
+import { type CursorsController } from '../../common/cursor/cursor.js';
+import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
+import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../common/core/selection.js';
-import { IEditorConfiguration } from '../../common/config/editorConfiguration.js';
-import { IViewModel } from '../../common/viewModel.js';
-import { IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
-import { EditorOption } from '../../common/config/editorOptions.js';
-import * as platform from '../../../base/common/platform.js';
-import { StandardTokenType } from '../../common/encodedTokenAttributes.js';
-import { ITextModel } from '../../common/model.js';
-import { containsRTL } from '../../../base/common/strings.js';
+import { type Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { type TextModelChange } from '../../common/core/textChange.js';
+import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
+import { type ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
+import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '../../common/languages/languageLexicalContext.js';
+import { assertLanguageId } from '../../common/languages/languageId.js';
+import { type TextModel } from '../../common/model/textModel.js';
+import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
+import { type View } from '../view.js';
+import { type EditContextTextUpdate } from '../controller/editContext/editContext.js';
+import { EditorViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
 
-export interface IMouseDispatchData {
-	position: Position;
-	/**
-	 * Desired mouse column (e.g. when position.column gets clamped to text length -- clicking after text on a line).
-	 */
-	mouseColumn: number;
-	revealType: NavigationCommandRevealType;
-	startedOnLineNumbers: boolean;
-
-	inSelectionMode: boolean;
-	mouseDownCount: number;
-	altKey: boolean;
-	ctrlKey: boolean;
-	metaKey: boolean;
-	shiftKey: boolean;
-
-	leftButton: boolean;
-	middleButton: boolean;
-	onInjectedText: boolean;
+export interface EditorCommandContext {
+	readonly inputType: string;
 }
 
-export interface ICommandDelegate {
-	paste(text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, mode: string | null): void;
-	type(text: string): void;
-	compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): void;
-	startComposition(): void;
-	endComposition(): void;
-	cut(): void;
+/** Extends one browser edit command before it becomes an atomic model transaction. */
+export type EditorCommandTransformer = (command: EditorEditCommand, context: EditorCommandContext) => EditorEditCommand;
+
+export interface EditorLanguageTypeCommand {
+	readonly command: EditorEditCommand;
+	readonly insertedText: boolean;
+	afterExecute?(change: TextModelChange): void;
 }
 
-export class ViewController {
+/** Optional language-aware editing seam implemented by editor contributions. */
+export interface EditorLanguageEditingAdapter extends IDisposable {
+	readonly textModel: TextModel;
+	createTypeCommand(selections: readonly Selection[], text: string): EditorLanguageTypeCommand | undefined;
+	createEnterCommand(selections: readonly Selection[]): EditorEditCommand | undefined;
+	createBackspaceCommand(selections: readonly Selection[]): EditorEditCommand | undefined;
+}
 
-	private readonly configuration: IEditorConfiguration;
-	private readonly viewModel: IViewModel;
-	private readonly userInputEvents: ViewUserInputEvents;
-	private readonly commandDelegate: ICommandDelegate;
+/** A native text update that can be consumed by an editor contribution before model routing. */
+export interface EditorViewTextUpdateEvent extends EditContextTextUpdate {
+	readonly defaultPrevented: boolean;
+	preventDefault(): void;
+}
+
+/** One committed browser edit reported to editor contributions. */
+export interface EditorViewDidEditEvent {
+	readonly inputType: string;
+	readonly insertedText: string | undefined;
+	readonly change: TextModelChange;
+}
+
+export interface ViewControllerOptions {
+	readonly languageEditing?: EditorLanguageEditingAdapter;
+	readonly wordPattern?: () => RegExp | undefined;
+	readonly userInputEvents?: EditorViewUserInputEvents;
+}
+
+/**
+ * Routes semantic editor commands into common editing operations.
+ *
+ * This is the Stanza equivalent of VS Code's EditorViewInputController: browser input
+ * adapters normalize raw events, while this class owns command execution,
+ * command transformation, overtype, and contribution-facing edit events.
+ */
+export class EditorViewInputController extends Disposable {
+	private readonly didChangeOvertypeEmitter = this._register(new Emitter<boolean>());
+	private readonly didEditEmitter = this._register(new Emitter<EditorViewDidEditEvent>());
+	private readonly commandTransformers: EditorCommandTransformer[] = [];
+	private readonly languageEditing: EditorLanguageEditingAdapter | undefined;
+	private readonly wordPattern: (() => RegExp | undefined) | undefined;
+	private readonly userInputEvents: EditorViewUserInputEvents;
+	private overtype = false;
+
+	readonly onDidChangeOvertype: Event<boolean> = this.didChangeOvertypeEmitter.event;
+	readonly onDidEdit: Event<EditorViewDidEditEvent> = this.didEditEmitter.event;
 
 	constructor(
-		configuration: IEditorConfiguration,
-		viewModel: IViewModel,
-		userInputEvents: ViewUserInputEvents,
-		commandDelegate: ICommandDelegate
+		private readonly viewport: View,
+		private readonly selectionController: CursorsController,
+		options: ViewControllerOptions = {},
 	) {
-		this.configuration = configuration;
-		this.viewModel = viewModel;
-		this.userInputEvents = userInputEvents;
-		this.commandDelegate = commandDelegate;
+		super();
+		try {
+			if (viewport.textModel !== selectionController.textModel) {
+				throw new TypeError('Stanza view and selection controllers must share one text model');
+			}
+			if (options.languageEditing && options.languageEditing.textModel !== viewport.textModel) {
+				throw new TypeError('Stanza view language editing must share its text model');
+			}
+			if (options.wordPattern !== undefined && typeof options.wordPattern !== 'function') {
+				throw new TypeError('Stanza view word pattern resolver must be a function');
+			}
+			this.languageEditing = options.languageEditing;
+			this.wordPattern = options.wordPattern;
+			this.userInputEvents = options.userInputEvents ?? new EditorViewUserInputEvents();
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
 	}
 
-	public paste(text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, mode: string | null): void {
-		this.commandDelegate.paste(text, pasteOnNewLine, multicursorText, mode);
+	get overtyping(): boolean {
+		return this.overtype;
 	}
 
-	public type(text: string): void {
-		this.commandDelegate.type(text);
+	get hasExpandedSelections(): boolean {
+		return this.selectionController.selections.some(selection => !selection.isEmpty());
 	}
 
-	public compositionType(text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): void {
-		this.commandDelegate.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta);
-	}
-
-	public compositionStart(): void {
-		this.commandDelegate.startComposition();
-	}
-
-	public compositionEnd(): void {
-		this.commandDelegate.endComposition();
-	}
-
-	public cut(): void {
-		this.commandDelegate.cut();
-	}
-
-	public setSelection(modelSelection: Selection): void {
-		CoreNavigationCommands.SetSelection.runCoreEditorCommand(this.viewModel, {
-			source: 'keyboard',
-			selection: modelSelection
+	registerCommandTransformer(transformer: EditorCommandTransformer): IDisposable {
+		if (typeof transformer !== 'function') throw new TypeError('Stanza view command transformer must be a function');
+		this.commandTransformers.push(transformer);
+		return toDisposable(() => {
+			const index = this.commandTransformers.indexOf(transformer);
+			if (index >= 0) this.commandTransformers.splice(index, 1);
 		});
 	}
 
-	private _validateViewColumn(viewPosition: Position): Position {
-		const minColumn = this.viewModel.getLineMinColumn(viewPosition.lineNumber);
-		if (viewPosition.column < minColumn) {
-			return new Position(viewPosition.lineNumber, minColumn);
+	toggleOvertype(): boolean {
+		this.overtype = !this.overtype;
+		this.didChangeOvertypeEmitter.fire(this.overtype);
+		return this.overtype;
+	}
+
+	public type(text: string, inputType = 'insertText'): TextModelChange | undefined {
+		return this.executeType(this.selectionController.selections, text, inputType);
+	}
+
+	public enter(inputType = 'insertLineBreak'): TextModelChange | undefined {
+		return this.executeEnter(this.selectionController.selections, inputType);
+	}
+
+	public deleteBackward(inputType = 'deleteContentBackward'): TextModelChange | undefined {
+		return this.execute(
+			this.languageEditing?.createBackspaceCommand(this.selectionController.selections) ?? DeleteOperations.deleteLeft(this.viewport.textModel, this.selectionController.selections),
+			inputType,
+		);
+	}
+
+	public deleteForward(inputType = 'deleteContentForward'): TextModelChange | undefined {
+		return this.execute(DeleteOperations.deleteRight(this.viewport.textModel, this.selectionController.selections), inputType);
+	}
+
+	public deleteWordBackward(inputType = 'deleteWordBackward'): TextModelChange | undefined {
+		return this.execute(WordOperations.deleteWordLeft(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+	}
+
+	public deleteWordForward(inputType = 'deleteWordForward'): TextModelChange | undefined {
+		return this.execute(WordOperations.deleteWordRight(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+	}
+
+	public deleteSoftLineBackward(inputType = 'deleteSoftLineBackward'): TextModelChange | undefined {
+		return this.execute(DeleteOperations.deleteToBeginningOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
+	}
+
+	public deleteSoftLineForward(inputType = 'deleteSoftLineForward'): TextModelChange | undefined {
+		return this.execute(DeleteOperations.deleteToEndOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
+	}
+
+	public insertTab(): TextModelChange | undefined {
+		return this.execute(TypeOperations.typeWithoutInterceptors(this.viewport.textModel, this.selectionController.selections, '\t'), 'insertText', '\t', undefined, false);
+	}
+
+	public applyTextUpdate(update: EditContextTextUpdate): TextModelChange | undefined {
+		const model = this.viewport.textModel;
+		const selections = this.selectionsForTextUpdate(update);
+		const inputType = update.inputType ?? (update.text.length > 0 ? 'insertText' : 'deleteContentBackward');
+		if (update.text.length > 0) {
+			if (inputType === 'insertLineBreak' || inputType === 'insertParagraph') return this.executeEnter(selections, inputType, update.text);
+			return this.executeType(selections, update.text, inputType);
 		}
-		return viewPosition;
-	}
-
-	private _hasMulticursorModifier(data: IMouseDispatchData): boolean {
-		switch (this.configuration.options.get(EditorOption.multiCursorModifier)) {
-			case 'altKey':
-				return data.altKey;
-			case 'ctrlKey':
-				return data.ctrlKey;
-			case 'metaKey':
-				return data.metaKey;
-			default:
-				return false;
+		if (inputType === 'deleteContentForward') return this.execute(DeleteOperations.deleteRight(model, selections), inputType);
+		if (inputType === 'deleteContentBackward') {
+			return this.execute(
+				this.languageEditing?.createBackspaceCommand(selections) ?? DeleteOperations.deleteLeft(model, selections),
+				inputType,
+			);
 		}
+		return this.execute(TypeOperations.typeWithoutInterceptors(model, selections, ''), inputType);
 	}
 
-	private _hasNonMulticursorModifier(data: IMouseDispatchData): boolean {
-		switch (this.configuration.options.get(EditorOption.multiCursorModifier)) {
-			case 'altKey':
-				return data.ctrlKey || data.metaKey;
-			case 'ctrlKey':
-				return data.altKey || data.metaKey;
-			case 'metaKey':
-				return data.ctrlKey || data.altKey;
-			default:
-				return false;
+	public undo(): void {
+		this.selectionController.undo();
+		this.revealPrimary();
+	}
+
+	public redo(): void {
+		this.selectionController.redo();
+		this.revealPrimary();
+	}
+
+	private executeType(selections: readonly Selection[], text: string, inputType: string): TextModelChange | undefined {
+		const languageTypeCommand = this.languageEditing?.createTypeCommand(selections, text);
+		const insertedText = languageTypeCommand?.insertedText === false ? undefined : text;
+		const command = languageTypeCommand?.command ?? (this.overtype
+			? AutoClosingOvertypeOperation.getEdits(this.viewport.textModel, selections, text)
+			: TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text));
+		return this.execute(command, inputType, insertedText, languageTypeCommand?.afterExecute);
+	}
+
+	private executeEnter(selections: readonly Selection[], inputType: string, text = '\n'): TextModelChange | undefined {
+		const command = this.languageEditing?.createEnterCommand(selections) ?? TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text);
+		return this.execute(command, inputType);
+	}
+
+	private selectionsForTextUpdate(update: EditContextTextUpdate): readonly Selection[] {
+		const current = this.selectionController.selections;
+		const primary = current[0]!;
+		const primaryStart = this.viewport.textModel.offsetAt(primary.getStartPosition());
+		const primaryEnd = this.viewport.textModel.offsetAt(primary.getEndPosition());
+		if (primaryStart === update.previousSelectionStart && primaryEnd === update.previousSelectionEnd) return current;
+		return [Selection.fromPositions(
+			this.viewport.textModel.positionAt(update.updateRangeStart),
+			this.viewport.textModel.positionAt(update.updateRangeEnd),
+		)];
+	}
+
+	private execute(command: EditorEditCommand, inputType: string, insertedText: string | undefined = undefined, afterExecute?: (change: TextModelChange) => void, emitDidEdit = true): TextModelChange | undefined {
+		for (const transformer of this.commandTransformers) command = transformer(command, { inputType });
+		const change = this.selectionController.execute(command);
+		this.revealPrimary();
+		if (change) {
+			afterExecute?.(change);
+			if (emitDidEdit) this.didEditEmitter.fire(Object.freeze({ inputType, insertedText, change }));
 		}
+		return change;
 	}
 
-	/**
-	 * Selects content inside brackets if the position is right after an opening bracket or right before a closing bracket.
-	 * @param pos The position in the model.
-	 * @param model The text model.
-	 */
-	private static _trySelectBracketContent(model: ITextModel, pos: Position): Selection | undefined {
-		// Try to find bracket match if we're right after an opening bracket.
-		if (pos.column > 1) {
-			const pair = model.bracketPairs.matchBracket(pos.with(undefined, pos.column - 1));
-			if (pair && pair[0].getEndPosition().equals(pos)) {
-				return Selection.fromPositions(pair[0].getEndPosition(), pair[1].getStartPosition());
-			}
-		}
-
-		// Try to find bracket match if we're right before a closing bracket.
-		if (pos.column <= model.getLineMaxColumn(pos.lineNumber)) {
-			const pair = model.bracketPairs.matchBracket(pos);
-			if (pair && pair[1].getStartPosition().equals(pos)) {
-				return Selection.fromPositions(pair[0].getEndPosition(), pair[1].getStartPosition());
-			}
-		}
-
-		return undefined;
+	private revealPrimary(): void {
+		this.viewport.revealPosition(this.selectionController.selections[0]!.getPosition());
 	}
 
-	/**
-	 * Selects content inside a string if the position is right after an opening quote or right before a closing quote.
-	 * @param pos The position in the model.
-	 * @param model The text model.
-	 */
-	private static _trySelectStringContent(model: ITextModel, pos: Position): Selection | undefined {
-		const { lineNumber, column } = pos;
-		const { tokenization: tokens } = model;
-
-		// Ensure we have accurate tokens for the line.
-		if (!tokens.hasAccurateTokensForLine(lineNumber)) {
-			if (tokens.isCheapToTokenize(lineNumber)) {
-				tokens.forceTokenization(lineNumber);
-			} else {
-				return undefined;
-			}
-		}
-
-		// Expand to the contiguous run of string tokens (StandardTokenType.String) around the click position.
-		const lineTokens = tokens.getLineTokens(lineNumber);
-		let startIndex = lineTokens.findTokenIndexAtOffset(column - 1);
-		let endIndex = startIndex;
-		while (startIndex > 0 &&
-			lineTokens.getStandardTokenType(startIndex - 1) === StandardTokenType.String) {
-			startIndex--;
-		}
-		while (endIndex + 1 < lineTokens.getCount() &&
-			lineTokens.getStandardTokenType(endIndex + 1) === StandardTokenType.String) {
-			endIndex++;
-		}
-
-		// Verify the click is after starting or before closing quote.
-		const tokenStart = lineTokens.getStartOffset(startIndex);
-		const tokenEnd = lineTokens.getEndOffset(endIndex);
-		if (column !== tokenStart + 2 && column !== tokenEnd) {
-			return undefined;
-		}
-
-		// Verify the token looks like a complete quoted string (quote ... quote).
-		const lineContent = model.getLineContent(lineNumber);
-		const firstChar = lineContent.charAt(tokenStart);
-		if (firstChar !== '"' && firstChar !== '\'' && firstChar !== '`') {
-			return undefined;
-		}
-		if (lineContent.charAt(tokenEnd - 1) !== firstChar) {
-			return undefined;
-		}
-
-		// Skip if string contains RTL characters.
-		const content = lineContent.substring(tokenStart + 1, tokenEnd - 1);
-		if (containsRTL(content)) {
-			return undefined;
-		}
-
-		return new Selection(lineNumber, tokenStart + 2, lineNumber, tokenEnd);
+	private get currentWordPattern(): RegExp | undefined {
+		return this.wordPattern?.();
 	}
 
-	public dispatchMouse(data: IMouseDispatchData): void {
-		const options = this.configuration.options;
-		const selectionClipboardIsOn = (platform.isLinux && options.get(EditorOption.selectionClipboard));
-		const columnSelection = options.get(EditorOption.columnSelection);
-		const scrollOnMiddleClick = options.get(EditorOption.scrollOnMiddleClick);
-		if (data.middleButton && !selectionClipboardIsOn) {
-			if (scrollOnMiddleClick) {
-				// nothing to do here, handled in the contribution
-			} else {
-				this._columnSelect(data.position, data.mouseColumn, data.inSelectionMode);
-			}
-		} else if (data.startedOnLineNumbers) {
-			// If the dragging started on the gutter, then have operations work on the entire line
-			if (this._hasMulticursorModifier(data)) {
-				if (data.inSelectionMode) {
-					this._lastCursorLineSelect(data.position, data.revealType);
-				} else {
-					this._createCursor(data.position, true);
-				}
-			} else {
-				if (data.inSelectionMode) {
-					this._lineSelectDrag(data.position, data.revealType);
-				} else {
-					this._lineSelect(data.position, data.revealType);
-				}
-			}
-		} else if (data.mouseDownCount >= 4) {
-			this._selectAll();
-		} else if (data.mouseDownCount === 3) {
-			if (this._hasMulticursorModifier(data)) {
-				if (data.inSelectionMode) {
-					this._lastCursorLineSelectDrag(data.position, data.revealType);
-				} else {
-					this._lastCursorLineSelect(data.position, data.revealType);
-				}
-			} else {
-				if (data.inSelectionMode) {
-					this._lineSelectDrag(data.position, data.revealType);
-				} else {
-					this._lineSelect(data.position, data.revealType);
-				}
-			}
-		} else if (data.mouseDownCount === 2) {
-			if (!data.onInjectedText) {
-				if (this._hasMulticursorModifier(data)) {
-					this._lastCursorWordSelect(data.position, data.revealType);
-				} else {
-					if (data.inSelectionMode) {
-						this._wordSelectDrag(data.position, data.revealType);
-					} else {
-						let selection: Selection | undefined;
-						if (options.get(EditorOption.doubleClickSelectsBlock)) {
-							const model = this.viewModel.model;
-							const modelPos = this._convertViewToModelPosition(data.position);
-							selection = ViewController._trySelectBracketContent(model, modelPos) || ViewController._trySelectStringContent(model, modelPos);
-						}
-						if (selection) {
-							this._select(selection);
-						} else {
-							this._wordSelect(data.position, data.revealType);
-						}
-					}
-				}
-			}
-		} else {
-			if (this._hasMulticursorModifier(data)) {
-				if (!this._hasNonMulticursorModifier(data)) {
-					if (data.shiftKey) {
-						this._columnSelect(data.position, data.mouseColumn, true);
-					} else {
-						// Do multi-cursor operations only when purely alt is pressed
-						if (data.inSelectionMode) {
-							this._lastCursorMoveToSelect(data.position, data.revealType);
-						} else {
-							this._createCursor(data.position, false);
-						}
-					}
-				}
-			} else {
-				if (data.inSelectionMode) {
-					if (data.altKey) {
-						this._columnSelect(data.position, data.mouseColumn, true);
-					} else {
-						if (columnSelection) {
-							this._columnSelect(data.position, data.mouseColumn, true);
-						} else {
-							this._moveToSelect(data.position, data.revealType);
-						}
-					}
-				} else {
-					this.moveTo(data.position, data.revealType);
-				}
-			}
-		}
+	/** Forwards view-originated input without taking ownership of its policy. */
+	emitKeyDown(event: IKeyboardEvent): void {
+		this.userInputEvents.emitKeyDown(event);
 	}
 
-	private _usualArgs(viewPosition: Position, revealType: NavigationCommandRevealType): CoreNavigationCommands.MoveCommandOptions {
-		viewPosition = this._validateViewColumn(viewPosition);
-		return {
-			source: 'mouse',
-			position: this._convertViewToModelPosition(viewPosition),
-			viewPosition,
-			revealType
-		};
+	emitKeyUp(event: KeyboardEvent): void {
+		this.userInputEvents.emitKeyUp(event);
 	}
 
-	public moveTo(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.MoveTo.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
+	emitContextMenu(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitContextMenu(event);
 	}
 
-	private _moveToSelect(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.MoveToSelect.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
+	emitMouseMove(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseMove(event);
 	}
 
-	private _columnSelect(viewPosition: Position, mouseColumn: number, doColumnSelect: boolean): void {
-		viewPosition = this._validateViewColumn(viewPosition);
-		CoreNavigationCommands.ColumnSelect.runCoreEditorCommand(this.viewModel, {
-			source: 'mouse',
-			position: this._convertViewToModelPosition(viewPosition),
-			viewPosition: viewPosition,
-			mouseColumn: mouseColumn,
-			doColumnSelect: doColumnSelect
-		});
+	emitMouseLeave(event: EditorViewPartialMouseEvent): void {
+		this.userInputEvents.emitMouseLeave(event);
 	}
 
-	private _createCursor(viewPosition: Position, wholeLine: boolean): void {
-		viewPosition = this._validateViewColumn(viewPosition);
-		CoreNavigationCommands.CreateCursor.runCoreEditorCommand(this.viewModel, {
-			source: 'mouse',
-			position: this._convertViewToModelPosition(viewPosition),
-			viewPosition: viewPosition,
-			wholeLine: wholeLine
-		});
+	emitMouseDown(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseDown(event);
 	}
 
-	private _lastCursorMoveToSelect(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.LastCursorMoveToSelect.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
+	emitMouseUp(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseUp(event);
 	}
 
-	private _wordSelect(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.WordSelect.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
+	emitMouseDrag(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseDrag(event);
 	}
 
-	private _wordSelectDrag(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.WordSelectDrag.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
+	emitMouseDrop(event: EditorViewPartialMouseEvent): void {
+		this.userInputEvents.emitMouseDrop(event);
 	}
 
-	private _lastCursorWordSelect(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.LastCursorWordSelect.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
-	}
-
-	private _lineSelect(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.LineSelect.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
-	}
-
-	private _lineSelectDrag(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.LineSelectDrag.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
-	}
-
-	private _lastCursorLineSelect(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.LastCursorLineSelect.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
-	}
-
-	private _lastCursorLineSelectDrag(viewPosition: Position, revealType: NavigationCommandRevealType): void {
-		CoreNavigationCommands.LastCursorLineSelectDrag.runCoreEditorCommand(this.viewModel, this._usualArgs(viewPosition, revealType));
-	}
-
-	private _select(selection: Selection): void {
-		CoreNavigationCommands.SetSelection.runCoreEditorCommand(this.viewModel, { source: 'mouse', selection });
-	}
-
-	private _selectAll(): void {
-		CoreNavigationCommands.SelectAll.runCoreEditorCommand(this.viewModel, { source: 'mouse' });
-	}
-
-	// ----------------------
-
-	private _convertViewToModelPosition(viewPosition: Position): Position {
-		return this.viewModel.coordinatesConverter.convertViewPositionToModelPosition(viewPosition);
-	}
-
-	public emitKeyDown(e: IKeyboardEvent): void {
-		this.userInputEvents.emitKeyDown(e);
-	}
-
-	public emitKeyUp(e: IKeyboardEvent): void {
-		this.userInputEvents.emitKeyUp(e);
-	}
-
-	public emitContextMenu(e: IEditorMouseEvent): void {
-		this.userInputEvents.emitContextMenu(e);
-	}
-
-	public emitMouseMove(e: IEditorMouseEvent): void {
-		this.userInputEvents.emitMouseMove(e);
-	}
-
-	public emitMouseLeave(e: IPartialEditorMouseEvent): void {
-		this.userInputEvents.emitMouseLeave(e);
-	}
-
-	public emitMouseUp(e: IEditorMouseEvent): void {
-		this.userInputEvents.emitMouseUp(e);
-	}
-
-	public emitMouseDown(e: IEditorMouseEvent): void {
-		this.userInputEvents.emitMouseDown(e);
-	}
-
-	public emitMouseDrag(e: IEditorMouseEvent): void {
-		this.userInputEvents.emitMouseDrag(e);
-	}
-
-	public emitMouseDrop(e: IPartialEditorMouseEvent): void {
-		this.userInputEvents.emitMouseDrop(e);
-	}
-
-	public emitMouseDropCanceled(): void {
+	emitMouseDropCanceled(): void {
 		this.userInputEvents.emitMouseDropCanceled();
 	}
 
-	public emitMouseWheel(e: IMouseWheelEvent): void {
-		this.userInputEvents.emitMouseWheel(e);
+	emitMouseWheel(event: WheelEvent): void {
+		this.userInputEvents.emitMouseWheel(event);
 	}
+}
+
+/** Browser input adapter for DOM-free language editing commands. */
+export class LanguageEditingAdapter extends Disposable implements EditorLanguageEditingAdapter {
+	private readonly lexicalContext: LanguageLexicalContextSource;
+
+	constructor(readonly textModel: TextModel, private readonly selections: CursorsController, private readonly languageId: string, private readonly configurations: ILanguageConfigurationService, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
+		super();
+		assertLanguageId(languageId);
+		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");
+		resolveEditorIndentationOptions(indentation);
+		if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Stanza text input lexical context must match its model and language");
+		this.lexicalContext = lexicalContext ?? this._register(new LanguageLexicalContextIndex(textModel, languageId, configurations));
+	}
+
+	createTypeCommand(selections: readonly Selection[], text: string): EditorLanguageTypeCommand | undefined {
+		const result = TypeOperations.typeWithInterceptors(
+			this.textModel,
+			selections,
+			text,
+			this.configurationAt(selections[0]!.getPosition()),
+			this.selections.getAutoClosedCharacters(),
+			this.lexicalContext,
+		);
+		if (!result) return undefined;
+		return Object.freeze({
+			command: result.command,
+			insertedText: result.insertedText,
+			afterExecute: (change: TextModelChange) => {
+				if (result.autoClosedCharacters.length === 0) return;
+				this.selections.recordAutoClosedCharacters(
+					result.autoClosedCharacters.map(range => Range.fromPositions(this.textModel.positionAt(range.startOffset), this.textModel.positionAt(range.endOffset))),
+					result.autoClosedEnclosing.map(range => Range.fromPositions(this.textModel.positionAt(range.startOffset), this.textModel.positionAt(range.endOffset))),
+					change.version,
+				);
+			},
+		});
+	}
+
+	createEnterCommand(selections: readonly Selection[]): EditorEditCommand {
+		return TypeOperations.enter(this.textModel, selections, this.configurationAt(selections[0]!.getPosition()), this.indentation, this.lexicalContext);
+	}
+
+	createBackspaceCommand(selections: readonly Selection[]): EditorEditCommand {
+		return DeleteOperations.deleteLeft(
+			this.textModel,
+			selections,
+			this.configurationAt(selections[0]!.getPosition()),
+			this.selections.getAutoClosedCharacters(),
+		);
+	}
+
+	private configurationAt(position: Position) {
+		return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
+	}
+}
+
+export interface KeyboardNavigationControllerOptions {
+	readonly operatingSystem?: OperatingSystem;
+	/** Resolves the active language word matcher for word navigation. */
+	readonly wordPattern?: () => RegExp | undefined;
+	readonly stickyTabStops?: boolean;
+	readonly tabSize?: number;
+}
+
+export interface KeyboardNavigationCommand {
+	readonly command: EditorCursorNavigationCommand;
+	readonly mode: EditorCursorNavigationMode;
+}
+
+/**
+ * Routes browser keydown navigation into Stanza common selection commands.
+ */
+export class KeyboardNavigationController extends Disposable {
+	private readonly targetOperatingSystem: OperatingSystem;
+	private readonly wordPattern: (() => RegExp | undefined) | undefined;
+	private readonly atomicTabSize: number | undefined;
+	private preferredColumns: readonly number[] | undefined;
+	private preferredVisualHorizontalOffsets: readonly number[] | undefined;
+	private applyingNavigation = false;
+
+	constructor(
+		private readonly viewport: View,
+		private readonly selectionController: CursorsController,
+		userInputEvents: EditorViewUserInputEvents,
+		options: KeyboardNavigationControllerOptions = {},
+	) {
+		super();
+		try {
+			this.targetOperatingSystem = readOperatingSystem(
+				options.operatingSystem,
+			);
+			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
+				throw new TypeError("Stanza keyboard word pattern resolver must be a function");
+			}
+			if (options.stickyTabStops !== undefined && typeof options.stickyTabStops !== 'boolean') {
+				throw new TypeError('Stanza sticky tab stops must be boolean');
+			}
+			if (options.tabSize !== undefined && (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1)) {
+				throw new RangeError('Stanza keyboard tab size must be a positive safe integer');
+			}
+			this.wordPattern = options.wordPattern;
+			this.atomicTabSize = options.stickyTabStops ? options.tabSize ?? 4 : undefined;
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+		if (viewport.textModel !== selectionController.textModel) {
+			this.dispose();
+			throw new TypeError(
+				"Stanza keyboard and selection controllers must share one text model",
+			);
+		}
+		const previousKeyDownHandler = userInputEvents.onKeyDown;
+		const keyDownHandler = (event: IKeyboardEvent): void => {
+			previousKeyDownHandler?.(event);
+			if (!event.browserEvent.defaultPrevented) {
+				this.handleKeyDown(event);
+			}
+		};
+		userInputEvents.onKeyDown = keyDownHandler;
+		this._register(toDisposable(() => {
+			if (userInputEvents.onKeyDown === keyDownHandler) {
+				userInputEvents.onKeyDown = previousKeyDownHandler;
+			}
+		}));
+		this._register(selectionController.onDidChange(() => {
+			if (!this.applyingNavigation) {
+				this.preferredColumns = undefined;
+				this.preferredVisualHorizontalOffsets = undefined;
+			}
+		}));
+	}
+
+	private handleKeyDown(event: IKeyboardEvent): void {
+		const navigation = resolveStanzaKeyboardNavigation(
+			event,
+			this.targetOperatingSystem,
+		);
+		if (!navigation) return;
+		event.stop();
+		const layout = this.viewport.viewportLayout;
+		const pageLineCount = Math.max(
+			1,
+			Math.floor(layout.viewportSize.height / layout.lineHeight),
+		);
+		const visualCommand = isVisualVerticalCommand(navigation.command)
+			? navigation.command
+			: undefined;
+		const result = this.viewport.lineWrapping === EditorLineWrapping.On &&
+			visualCommand !== undefined
+			? navigateStanzaVisualCursors(
+				this.viewport.textModel,
+				this.viewport.getVisualLineProjection(),
+				this.selectionController.selections,
+				{
+					command: visualCommand,
+					mode: navigation.mode,
+					pageLineCount,
+					preferredHorizontalOffsets: this.preferredVisualHorizontalOffsets,
+				},
+				text => this.viewport.measureTextWidth(text),
+				{
+					getHorizontalOffset: position => this.viewport.getVisualHorizontalOffset(position),
+					getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
+				},
+			)
+			: MoveOperations.navigate(
+				this.viewport.textModel,
+				this.selectionController.selections,
+				{
+					...navigation,
+					pageLineCount,
+					...(this.wordPattern ? { wordPattern: this.wordPattern() } : {}),
+					...(this.atomicTabSize === undefined ? {} : { atomicTabSize: this.atomicTabSize }),
+					preferredColumns: this.preferredColumns,
+				},
+			);
+		this.applyingNavigation = true;
+		try {
+			this.selectionController.setSelections(result.selections);
+		} finally {
+			this.applyingNavigation = false;
+		}
+		if ("preferredHorizontalOffsets" in result) {
+			this.preferredColumns = undefined;
+			this.preferredVisualHorizontalOffsets = result.preferredHorizontalOffsets;
+		} else {
+			this.preferredColumns = result.preferredColumns;
+			this.preferredVisualHorizontalOffsets = undefined;
+		}
+		this.viewport.revealPosition(result.selections[0]!.getPosition());
+	}
+}
+
+function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown {
+	return command === EditorCursorNavigationCommand.LineUp ||
+		command === EditorCursorNavigationCommand.LineDown ||
+		command === EditorCursorNavigationCommand.PageUp ||
+		command === EditorCursorNavigationCommand.PageDown;
+}
+
+export function resolveStanzaKeyboardNavigation(event: Pick<IKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
+	if (event.isComposing || event.altGraphKey) return undefined;
+	const mode = event.shiftKey
+		? EditorCursorNavigationMode.Extend
+		: EditorCursorNavigationMode.Move;
+	const noCommandModifier =
+		!event.ctrlKey && !event.altKey && !event.metaKey;
+	if (noCommandModifier) {
+		const command = unmodifiedCommand(event.key);
+		return command ? { command, mode } : undefined;
+	}
+
+	if (targetOperatingSystem === OperatingSystem.Macintosh) {
+		if (event.altKey && !event.ctrlKey && !event.metaKey) {
+			if (event.key === "ArrowLeft") {
+				return { command: EditorCursorNavigationCommand.WordLeft, mode };
+			}
+			if (event.key === "ArrowRight") {
+				return { command: EditorCursorNavigationCommand.WordRight, mode };
+			}
+		}
+		if (event.metaKey && !event.ctrlKey && !event.altKey) {
+			const command = macCommandCommand(event.key);
+			return command ? { command, mode } : undefined;
+		}
+		return undefined;
+	}
+
+	if (event.ctrlKey && !event.altKey && !event.metaKey) {
+		const command = controlCommand(event.key);
+		return command ? { command, mode } : undefined;
+	}
+	return undefined;
+}
+
+function unmodifiedCommand(key: string): EditorCursorNavigationCommand | undefined {
+	switch (key) {
+		case "ArrowLeft":
+			return EditorCursorNavigationCommand.CharacterLeft;
+		case "ArrowRight":
+			return EditorCursorNavigationCommand.CharacterRight;
+		case "ArrowUp":
+			return EditorCursorNavigationCommand.LineUp;
+		case "ArrowDown":
+			return EditorCursorNavigationCommand.LineDown;
+		case "Home":
+			return EditorCursorNavigationCommand.LineStart;
+		case "End":
+			return EditorCursorNavigationCommand.LineEnd;
+		case "PageUp":
+			return EditorCursorNavigationCommand.PageUp;
+		case "PageDown":
+			return EditorCursorNavigationCommand.PageDown;
+		default:
+			return undefined;
+	}
+}
+
+function controlCommand(key: string): EditorCursorNavigationCommand | undefined {
+	switch (key) {
+		case "ArrowLeft":
+			return EditorCursorNavigationCommand.WordLeft;
+		case "ArrowRight":
+			return EditorCursorNavigationCommand.WordRight;
+		case "Home":
+			return EditorCursorNavigationCommand.DocumentStart;
+		case "End":
+			return EditorCursorNavigationCommand.DocumentEnd;
+		default:
+			return undefined;
+	}
+}
+
+function macCommandCommand(key: string): EditorCursorNavigationCommand | undefined {
+	switch (key) {
+		case "ArrowLeft":
+			return EditorCursorNavigationCommand.LineStart;
+		case "ArrowRight":
+			return EditorCursorNavigationCommand.LineEnd;
+		case "ArrowUp":
+		case "Home":
+			return EditorCursorNavigationCommand.DocumentStart;
+		case "ArrowDown":
+		case "End":
+			return EditorCursorNavigationCommand.DocumentEnd;
+		default:
+			return undefined;
+	}
+}
+
+function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
+	const resolved = value ?? operatingSystem;
+	if (!Object.values(OperatingSystem).includes(resolved)) {
+		throw new TypeError("Unknown Stanza keyboard operating system");
+	}
+	return resolved;
 }

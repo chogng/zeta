@@ -4,7 +4,7 @@ import { Disposable, DisposableMap, type IDisposable } from "../../../base/commo
 import { URI } from "../../../base/common/uri.js";
 import { isLinux, isMacintosh } from '../../../base/common/platform.js';
 import type { IConfigurationChangeEvent, IConfigurationOverrides, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
-import { EditorModelConfiguration } from '../config/editorModelConfiguration.js';
+import '../config/editorConfigurationSchema.js';
 import { EditOperation, type ISingleEditOperation } from '../core/editOperation.js';
 import { Range } from '../core/range.js';
 import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, type ITextBuffer, type ITextBufferFactory, type ITextModel, type ITextModelCreationOptions } from '../model.js';
@@ -136,14 +136,14 @@ export class ModelService extends Disposable implements IModelService {
 		if (!options) {
 			const overrides: IConfigurationOverrides = { overrideIdentifier: language, resource };
 			options = ModelService._readModelOptions({
-				tabSize: this._configurationService.getValue<number>(EditorModelConfiguration.tabSize, overrides),
-				indentSize: this._configurationService.getValue<number | 'tabSize'>(EditorModelConfiguration.indentSize, overrides),
-				insertSpaces: this._configurationService.getValue<boolean>(EditorModelConfiguration.insertSpaces, overrides),
-				detectIndentation: this._configurationService.getValue<boolean>(EditorModelConfiguration.detectIndentation, overrides),
-				trimAutoWhitespace: this._configurationService.getValue<boolean>(EditorModelConfiguration.trimAutoWhitespace, overrides),
-				largeFileOptimizations: this._configurationService.getValue<boolean>(EditorModelConfiguration.largeFileOptimizations, overrides),
-				bracketPairColorizationEnabled: this._configurationService.getValue<boolean>(EditorModelConfiguration.bracketPairColorizationEnabled, overrides),
-				bracketPairColorizationIndependentColorPool: this._configurationService.getValue<boolean>(EditorModelConfiguration.bracketPairColorizationIndependentColorPool, overrides),
+				tabSize: this._configurationService.getValue<number>(modelConfiguration.tabSize, overrides),
+				indentSize: this._configurationService.getValue<number | 'tabSize'>(modelConfiguration.indentSize, overrides),
+				insertSpaces: this._configurationService.getValue<boolean>(modelConfiguration.insertSpaces, overrides),
+				detectIndentation: this._configurationService.getValue<boolean>(modelConfiguration.detectIndentation, overrides),
+				trimAutoWhitespace: this._configurationService.getValue<boolean>(modelConfiguration.trimAutoWhitespace, overrides),
+				largeFileOptimizations: this._configurationService.getValue<boolean>(modelConfiguration.largeFileOptimizations, overrides),
+				bracketPairColorizationEnabled: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationEnabled, overrides),
+				bracketPairColorizationIndependentColorPool: this._configurationService.getValue<boolean>(modelConfiguration.bracketPairColorizationIndependentColorPool, overrides),
 				eol: this._getEOL(resource, language),
 			}, isForSimpleWidget);
 			this._modelCreationOptionsByLanguageAndResource[cacheKey] = options;
@@ -170,12 +170,12 @@ export class ModelService extends Disposable implements IModelService {
 
 	private _getEOL(resource: URI | undefined, language: string): string {
 		if (resource) return this._resourcePropertiesService.getEOL(resource, language);
-		const configured = this._configurationService.getValue<'auto' | '\n' | '\r\n'>(EditorModelConfiguration.filesEol, { overrideIdentifier: language });
+		const configured = this._configurationService.getValue<'auto' | '\n' | '\r\n'>(modelConfiguration.filesEol, { overrideIdentifier: language });
 		return configured === 'auto' ? (isLinux || isMacintosh ? '\n' : '\r\n') : configured;
 	}
 
 	private _shouldRestoreUndoStack(): boolean {
-		return this._configurationService.getValue<boolean>(EditorModelConfiguration.restoreUndoStack);
+		return this._configurationService.getValue<boolean>(modelConfiguration.restoreUndoStack);
 	}
 
 	private _updateModelOptions(event: IConfigurationChangeEvent): void {
@@ -335,16 +335,29 @@ interface RawModelConfiguration {
 	readonly eol: string;
 }
 
+const modelConfiguration = Object.freeze({
+	tabSize: 'editor.tabSize',
+	indentSize: 'editor.indentSize',
+	insertSpaces: 'editor.insertSpaces',
+	detectIndentation: 'editor.detectIndentation',
+	trimAutoWhitespace: 'editor.trimAutoWhitespace',
+	largeFileOptimizations: 'editor.largeFileOptimizations',
+	bracketPairColorizationEnabled: 'editor.bracketPairColorization.enabled',
+	bracketPairColorizationIndependentColorPool: 'editor.bracketPairColorization.independentColorPoolPerBracketType',
+	filesEol: 'files.eol',
+	restoreUndoStack: 'files.restoreUndoStack',
+});
+
 const MODEL_CONFIGURATION_KEYS: readonly string[] = Object.freeze([
-	EditorModelConfiguration.tabSize,
-	EditorModelConfiguration.indentSize,
-	EditorModelConfiguration.insertSpaces,
-	EditorModelConfiguration.detectIndentation,
-	EditorModelConfiguration.trimAutoWhitespace,
-	EditorModelConfiguration.largeFileOptimizations,
-	EditorModelConfiguration.bracketPairColorizationEnabled,
-	EditorModelConfiguration.bracketPairColorizationIndependentColorPool,
-	EditorModelConfiguration.filesEol,
+	modelConfiguration.tabSize,
+	modelConfiguration.indentSize,
+	modelConfiguration.insertSpaces,
+	modelConfiguration.detectIndentation,
+	modelConfiguration.trimAutoWhitespace,
+	modelConfiguration.largeFileOptimizations,
+	modelConfiguration.bracketPairColorizationEnabled,
+	modelConfiguration.bracketPairColorizationIndependentColorPool,
+	modelConfiguration.filesEol,
 ]);
 
 function isTextBufferFactory(value: unknown): value is ITextBufferFactory {

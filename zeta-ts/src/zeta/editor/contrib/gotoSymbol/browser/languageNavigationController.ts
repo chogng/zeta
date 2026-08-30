@@ -3,7 +3,6 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { type URI } from "../../../../base/common/uri.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
@@ -45,7 +44,7 @@ export class LanguageNavigationController extends Disposable {
 	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
-		const position = this.selections.selections.primary.getPosition();
+		const position = this.selections.selections[0]!.getPosition();
 		try {
 			const locations = await this.provide(kind, position, options.includeDeclaration ?? true, request.signal);
 			if (request.signal.aborted) return;
@@ -105,7 +104,7 @@ export class LanguageNavigationController extends Disposable {
 		this.closePeek();
 		const range = location.selectionRange ?? location.range;
 		if (location.resource.toString() === this.resource.toString()) {
-			this.selections.setSelections(SelectionSet.single(Selection.fromPositions(range.getStartPosition(), range.getEndPosition())));
+			this.selections.setSelections([Selection.fromPositions(range.getStartPosition(), range.getEndPosition())]);
 			this.viewport.revealPosition(range.getStartPosition());
 			this.input.focus({ preventScroll: true });
 			return;

@@ -153,7 +153,7 @@ test("TrackedRange updates before events and follows undo and redo", () => {
 		observedText.push(model.getTextInRange(tracked.range));
 	});
 
-	model.applyEdits([{ range: range(2, 4), text: "XYZ" }]);
+	model.pushEditOperations(null, [{ range: range(2, 4), text: "XYZ" }], () => null);
 	model.undo();
 	model.redo();
 
@@ -167,7 +167,7 @@ test("TrackedRange validates model positions and disposal", () => {
 			Range.fromPositions(position(1, 0)),
 			TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		),
-		/lineIndex/,
+		/lineNumber/,
 	);
 
 	const explicitlyDisposed = model.trackRange(

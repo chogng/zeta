@@ -1,6 +1,6 @@
 import { getEditorIndentationUnit, resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../../common/core/misc/indentation.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
+import { type Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 
@@ -20,7 +20,7 @@ interface OffsetEdit {
 }
 
 /** Indents or outdents the union of physical lines touched by the current selections. */
-export function createLineIndentCommand(model: TextModel, selections: SelectionSet, direction: EditorLineIndentDirection, options: EditorIndentationOptions = {}): EditorEditCommand {
+export function createLineIndentCommand(model: TextModel, selections: readonly Selection[], direction: EditorLineIndentDirection, options: EditorIndentationOptions = {}): EditorEditCommand {
 	if (!Object.values(EditorLineIndentDirection).includes(direction)) {
 		throw new TypeError("Unknown editor line indentation direction");
 	}
@@ -53,21 +53,21 @@ export function createLineIndentCommand(model: TextModel, selections: SelectionS
 			}),
 		}];
 	});
-	const selectionsAfter = selections.selections.map(selection => Object.freeze({
+	const selectionsAfter = selections.map(selection => Object.freeze({
 		anchorOffset: mapOffsetThroughEdits(model.offsetAt(selection.getSelectionStart()), edits),
 		activeOffset: mapOffsetThroughEdits(model.offsetAt(selection.getPosition()), edits),
 	}));
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => edit.edit)),
 		selectionsAfter: Object.freeze(selectionsAfter),
-		primarySelectionIndex: selections.primaryIndex,
+		primarySelectionIndex: 0,
 		historyMode: EditorCommandHistoryMode.Isolated,
 	});
 }
 
-function selectedLineIndices(selections: SelectionSet): readonly number[] {
+function selectedLineIndices(selections: readonly Selection[]): readonly number[] {
 	const indices = new Set<number>();
-	for (const selection of selections.selections) {
+	for (const selection of selections) {
 		const range = selection;
 		let endLineIndex = range.endLineNumber - 1;
 		if (!selection.isEmpty() && range.endColumn === 1 && endLineIndex > range.startLineNumber - 1) {

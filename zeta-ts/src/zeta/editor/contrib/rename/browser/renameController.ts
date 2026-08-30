@@ -48,7 +48,7 @@ export class RenameController extends Disposable {
 		this.cancelRequest();
 		const request = this.request = new AbortController();
 		try {
-			const active = this.selections.selections.primary.getPosition();
+			const active = this.selections.selections[0]!.getPosition();
 			const preparation = await this.service.prepareRename(this.languageId, active, request.signal);
 			if (request.signal.aborted) return;
 			if (!preparation) {
@@ -88,7 +88,7 @@ export class RenameController extends Disposable {
 		}
 		const request = this.request = new AbortController();
 		try {
-			const active = this.selections.selections.primary.getPosition();
+			const active = this.selections.selections[0]!.getPosition();
 			const edit = await this.service.provideRenameEdits(this.languageId, active, newName, request.signal);
 			if (request.signal.aborted) return;
 			await this.executeCommand(RenameCommandId, async () => {

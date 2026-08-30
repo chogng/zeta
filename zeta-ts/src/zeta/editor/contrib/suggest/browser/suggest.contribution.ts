@@ -1,9 +1,9 @@
-import type { EditorResourceInput } from '../../../browser/editorInput.js';
 import { registerTextEditorCapabilityContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
+import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { isCompletionsEnablementEnabled } from "../../../common/services/ownedCompletionsEnablement.js";
 import { LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
-import { EditorSuggestController } from "./suggestController.js";
+import { SuggestController } from "./suggestController.js";
 
 interface SuggestContributionState {
 	readonly service: LanguageCompletionService;
@@ -34,7 +34,7 @@ registerTextEditorCapabilityContribution({
 		if (context.kind !== "text") return;
 		const state = context.getOptionalCapability(suggestState);
 		if (!state) return;
-		context.register(new EditorSuggestController(
+		context.register(new SuggestController(
 			context.view,
 			context.viewModel,
 			state.service,
@@ -45,7 +45,7 @@ registerTextEditorCapabilityContribution({
 	},
 });
 
-function createSnippetVariables(input: EditorResourceInput): { readonly resolveVariable: (name: string) => string | undefined } {
+function createSnippetVariables(input: ICodeEditorWidgetOptions['input']): { readonly resolveVariable: (name: string) => string | undefined } {
 	const filePath = decodeURIComponent(input.resource.path);
 	const separator = filePath.lastIndexOf("/");
 	const filename = filePath.slice(separator + 1);

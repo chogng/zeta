@@ -136,6 +136,14 @@ export interface IModelDecoration {
 	readonly options: IModelDecorationOptions;
 }
 
+export interface IModelDecorationsChangeAccessor {
+	addDecoration(range: IRange, options: IModelDecorationOptions): string;
+	changeDecoration(id: string, range: IRange): void;
+	changeDecorationOptions(id: string, options: IModelDecorationOptions): void;
+	removeDecoration(id: string): void;
+	deltaDecorations(oldDecorations: readonly string[], newDecorations: readonly IModelDeltaDecoration[]): string[];
+}
+
 /** Describes how a tracked range grows when typing at its edges. */
 export enum TrackedRangeStickiness {
 	AlwaysGrowsWhenTypingAtEdges = 0,

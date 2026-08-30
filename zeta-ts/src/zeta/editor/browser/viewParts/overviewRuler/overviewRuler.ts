@@ -1,172 +1,98 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+import { h, reset, fragment as createFragment } from '../../../../base/browser/dom.js';
+import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { OverviewRulerZone, OverviewZoneManager } from '../../../common/viewModel/overviewZoneManager.js';
+import { type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
+import { type DecorationPresentation } from '../decorations/decorations.js';
 
-import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { IOverviewRuler } from '../../editorBrowser.js';
-import { OverviewRulerPosition, EditorOption } from '../../../common/config/editorOptions.js';
-import { ColorZone, OverviewRulerZone, OverviewZoneManager } from '../../../common/viewModel/overviewZoneManager.js';
-import { ViewContext } from '../../../common/viewModel/viewContext.js';
-import * as viewEvents from '../../../common/viewEvents.js';
-import { ViewEventHandler } from '../../../common/viewEventHandler.js';
+export interface DiagnosticOverviewMarker {
+	readonly startLineIndex: number;
+	readonly endLineIndexExclusive: number;
+	readonly presentation: DecorationPresentation;
+	readonly hoverText: string | undefined;
+}
 
-/**
- * The overview ruler appears underneath the editor scroll bar and shows things
- * like the cursor, various decorations, etc.
- */
-export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
+export interface DiffOverviewMarker {
+	readonly startLineIndex: number;
+	readonly endLineIndexExclusive: number;
+	readonly presentation: DecorationPresentation.DiffAdded | DecorationPresentation.DiffModified | DecorationPresentation.DiffDeleted;
+	readonly hoverText: string | undefined;
+}
 
-	private readonly _context: ViewContext;
-	private readonly _domNode: FastDomNode<HTMLCanvasElement>;
-	private readonly _zoneManager: OverviewZoneManager;
+export interface OverviewRulerEntry {
+	readonly startLineIndex: number;
+	readonly endLineIndexExclusive: number;
+	readonly heightInLines?: number;
+	readonly className: string;
+	readonly hoverText?: string;
+}
 
-	constructor(context: ViewContext, cssClassName: string) {
+export interface OverviewRulerOptions {
+	readonly host: HTMLElement;
+	readonly className: string;
+	readonly width: number;
+	readonly verticalScrollbarWidth: number;
+	readonly getVerticalOffsetForLineIndex: (lineIndex: number) => number;
+	readonly readEntries: () => readonly OverviewRulerEntry[];
+	readonly readEntriesRevision: () => number;
+}
+
+/** Owns overview-ruler layout and line-to-pixel zone projection. */
+export class OverviewRuler extends EditorViewPart {
+	public readonly domNode: HTMLDivElement;
+	private readonly root: FastDomNode<HTMLDivElement>;
+	private readonly zoneManager: OverviewZoneManager;
+	private entries: readonly { readonly entry: OverviewRulerEntry; readonly zone: OverviewRulerZone }[] = [];
+	private renderedRevision = -1;
+
+	constructor(private readonly options: OverviewRulerOptions) {
 		super();
-		this._context = context;
-		const options = this._context.configuration.options;
-
-		this._domNode = createFastDomNode(document.createElement('canvas'));
-		this._domNode.setClassName(cssClassName);
-		this._domNode.setPosition('absolute');
-		this._domNode.setLayerHinting(true);
-		this._domNode.setContain('strict');
-
-		this._zoneManager = new OverviewZoneManager((lineNumber: number) => this._context.viewLayout.getVerticalOffsetForLineNumber(lineNumber));
-		this._zoneManager.setDOMWidth(0);
-		this._zoneManager.setDOMHeight(0);
-		this._zoneManager.setOuterHeight(this._context.viewLayout.getScrollHeight());
-		this._zoneManager.setLineHeight(options.get(EditorOption.lineHeight));
-
-		this._zoneManager.setPixelRatio(options.get(EditorOption.pixelRatio));
-
-		this._context.addEventHandler(this);
+		if (!Number.isFinite(options.width) || options.width <= 0) throw new RangeError('Overview ruler width must be finite and positive');
+		this.zoneManager = new OverviewZoneManager(lineNumber => options.getVerticalOffsetForLineIndex(lineNumber - 1));
+		this.domNode = h(options.host.ownerDocument, 'div');
+		this._register(toDisposable(() => this.domNode.remove()));
+		this.root = new FastDomNode(this.domNode);
+		this.root.setClassName(options.className);
+		this.domNode.setAttribute('role', 'presentation');
+		this.domNode.setAttribute('aria-hidden', 'true');
 	}
 
-	public override dispose(): void {
-		this._context.removeEventHandler(this);
-		super.dispose();
-	}
-
-	// ---- begin view event handlers
-
-	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
-		const options = this._context.configuration.options;
-
-		if (e.hasChanged(EditorOption.lineHeight)) {
-			this._zoneManager.setLineHeight(options.get(EditorOption.lineHeight));
-			this._render();
+	public render(context: EditorRenderingContext): void {
+		const layout = context.layout;
+		this.root.setLeft(layout.scrollPosition.left + Math.max(
+			0,
+			layout.viewportSize.width - this.options.verticalScrollbarWidth + (this.options.verticalScrollbarWidth - this.options.width) / 2,
+		));
+		this.root.setTop(layout.scrollPosition.top);
+		this.root.setWidth(this.options.width);
+		this.root.setHeight(layout.viewportSize.height);
+		let geometryChanged = this.zoneManager.setLineHeight(layout.lineHeight);
+		geometryChanged = this.zoneManager.setDOMWidth(this.options.width) || geometryChanged;
+		geometryChanged = this.zoneManager.setDOMHeight(layout.viewportSize.height) || geometryChanged;
+		geometryChanged = this.zoneManager.setOuterHeight(layout.contentSize.height) || geometryChanged;
+		const revision = this.options.readEntriesRevision();
+		if (revision !== this.renderedRevision) {
+			this.entries = Object.freeze(this.options.readEntries().map(entry => Object.freeze({
+				entry,
+				zone: new OverviewRulerZone(entry.startLineIndex + 1, entry.endLineIndexExclusive, entry.heightInLines ?? 0, entry.className),
+			})));
+			this.zoneManager.setZones(this.entries.map(({ zone }) => zone));
 		}
-
-		if (e.hasChanged(EditorOption.pixelRatio)) {
-			this._zoneManager.setPixelRatio(options.get(EditorOption.pixelRatio));
-			this._domNode.setWidth(this._zoneManager.getDOMWidth());
-			this._domNode.setHeight(this._zoneManager.getDOMHeight());
-			this._domNode.domNode.width = this._zoneManager.getCanvasWidth();
-			this._domNode.domNode.height = this._zoneManager.getCanvasHeight();
-			this._render();
+		if (!geometryChanged && revision === this.renderedRevision) return;
+		this.zoneManager.resolveColorZones();
+		const fragment = createFragment(this.domNode.ownerDocument);
+		for (const { entry, zone } of this.entries) {
+			const colorZone = zone.getColorZones();
+			if (!colorZone) continue;
+			const element = h(this.domNode.ownerDocument, 'span');
+			element.className = 'stanza-editor-overview-marker';
+			element.classList.add(entry.className);
+			element.style.top = `${colorZone.from}px`;
+			element.style.height = `${Math.max(1, colorZone.to - colorZone.from)}px`;
+			if (entry.hoverText !== undefined) element.title = entry.hoverText;
+			fragment.append(element);
 		}
-
-		return true;
-	}
-	public override onFlushed(e: viewEvents.ViewFlushedEvent): boolean {
-		this._render();
-		return true;
-	}
-	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
-		if (e.scrollHeightChanged) {
-			this._zoneManager.setOuterHeight(e.scrollHeight);
-			this._render();
-		}
-		return true;
-	}
-	public override onZonesChanged(e: viewEvents.ViewZonesChangedEvent): boolean {
-		this._render();
-		return true;
-	}
-
-	// ---- end view event handlers
-
-	public getDomNode(): HTMLElement {
-		return this._domNode.domNode;
-	}
-
-	public setLayout(position: OverviewRulerPosition): void {
-		this._domNode.setTop(position.top);
-		this._domNode.setRight(position.right);
-
-		let hasChanged = false;
-		hasChanged = this._zoneManager.setDOMWidth(position.width) || hasChanged;
-		hasChanged = this._zoneManager.setDOMHeight(position.height) || hasChanged;
-
-		if (hasChanged) {
-			this._domNode.setWidth(this._zoneManager.getDOMWidth());
-			this._domNode.setHeight(this._zoneManager.getDOMHeight());
-			this._domNode.domNode.width = this._zoneManager.getCanvasWidth();
-			this._domNode.domNode.height = this._zoneManager.getCanvasHeight();
-
-			this._render();
-		}
-	}
-
-	public setZones(zones: OverviewRulerZone[]): void {
-		this._zoneManager.setZones(zones);
-		this._render();
-	}
-
-	private _render(): boolean {
-		if (this._zoneManager.getOuterHeight() === 0) {
-			return false;
-		}
-
-		const width = this._zoneManager.getCanvasWidth();
-		const height = this._zoneManager.getCanvasHeight();
-
-		const colorZones = this._zoneManager.resolveColorZones();
-		const id2Color = this._zoneManager.getId2Color();
-
-		const ctx = this._domNode.domNode.getContext('2d')!;
-		ctx.clearRect(0, 0, width, height);
-		if (colorZones.length > 0) {
-			this._renderOneLane(ctx, colorZones, id2Color, width);
-		}
-
-		return true;
-	}
-
-	private _renderOneLane(ctx: CanvasRenderingContext2D, colorZones: ColorZone[], id2Color: string[], width: number): void {
-
-		let currentColorId = 0; // will never match a real color id which is > 0
-		let currentFrom = 0;
-		let currentTo = 0;
-
-		for (const zone of colorZones) {
-
-			const zoneColorId = zone.colorId;
-			const zoneFrom = zone.from;
-			const zoneTo = zone.to;
-
-			if (zoneColorId !== currentColorId) {
-				if (currentColorId !== 0) {
-					ctx.fillRect(0, currentFrom, width, currentTo - currentFrom);
-				}
-
-				currentColorId = zoneColorId;
-				ctx.fillStyle = id2Color[currentColorId];
-				currentFrom = zoneFrom;
-				currentTo = zoneTo;
-			} else {
-				if (currentTo >= zoneFrom) {
-					currentTo = Math.max(currentTo, zoneTo);
-				} else {
-					ctx.fillRect(0, currentFrom, width, currentTo - currentFrom);
-					currentFrom = zoneFrom;
-					currentTo = zoneTo;
-				}
-			}
-		}
-
-		ctx.fillRect(0, currentFrom, width, currentTo - currentFrom);
-
+		reset(this.domNode, fragment);
+		this.renderedRevision = revision;
 	}
 }

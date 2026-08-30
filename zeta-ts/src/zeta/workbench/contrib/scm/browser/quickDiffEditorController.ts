@@ -1,7 +1,7 @@
 import './media/quickDiff.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { EditorDiffWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorExtensions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
@@ -30,7 +30,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	showNextChange(): void {
 		const model = this.modelReference?.object;
 		if (!model) return;
-		const lineIndex = this.currentChange?.lineIndex ?? this.context.selections.selections.primary.getPosition().lineNumber - 1;
+		const lineIndex = this.currentChange?.lineIndex ?? this.context.viewModel.selections[0]!.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findNextChange(lineIndex) : model.findNextChange(lineIndex, true);
 		if (change) this.showChange(change);
 		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');
@@ -39,7 +39,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	showPreviousChange(): void {
 		const model = this.modelReference?.object;
 		if (!model) return;
-		const lineIndex = this.currentChange?.lineIndex ?? this.context.selections.selections.primary.getPosition().lineNumber - 1;
+		const lineIndex = this.currentChange?.lineIndex ?? this.context.viewModel.selections[0]!.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findPreviousChange(lineIndex) : model.findPreviousChange(lineIndex, true);
 		if (change) this.showChange(change);
 		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');
@@ -153,13 +153,13 @@ class QuickDiffPeekView extends Disposable {
 		this._register(addDisposableListener(previous, 'click', showPrevious));
 		this._register(addDisposableListener(next, 'click', showNext));
 		this._register(addDisposableListener(closeButton, 'click', close));
-		const diffWidget = this._register(new EditorDiffWidget({
+		const diffWidget = this._register(new DiffEditorWidget({
 			container: diffContainer,
 			model: change.comparison.model,
 			lineHeight: context.options.lineHeight,
 			fontFamily: context.options.fontFamily,
 			fontSize: context.options.fontSize,
-			fontLigatures: context.options.fontLigatures,
+			fontLigatures: context.options.fontLigatures === true,
 			showLineNumbers: context.options.lineNumbers === undefined ? undefined : context.options.lineNumbers !== 'off',
 			originalAriaLabel: change.comparison.original.label,
 			modifiedAriaLabel: context.options.input.label ?? context.options.input.resource.toString(),

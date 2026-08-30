@@ -103,7 +103,7 @@ export class CompletionWidget extends Disposable {
 
 	private accept(): void {
 		if (!this.session.acceptSelected()) return;
-		this.viewport.revealPosition(this.selectionController.selections.primary.getPosition());
+		this.viewport.revealPosition(this.selectionController.selections[0]!.getPosition());
 		this.view.focus();
 	}
 

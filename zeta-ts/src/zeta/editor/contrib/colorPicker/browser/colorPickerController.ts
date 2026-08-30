@@ -12,13 +12,13 @@ import { type IColor } from '../../../common/languages.js';
 import { type View } from '../../../browser/view.js';
 import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { ColorService, type ColorData } from '../common/languageColors.js';
-import { EditorColorDetector } from './colorDetector.js';
+import { ColorDetector } from './colorDetector.js';
 import { ColorPickerModel } from './colorPickerModel.js';
 import { EditorColorPickerDialog } from './editorColorPickerDialog.js';
 
 interface ColorPickerCapabilityValue {
 	readonly service: ColorService;
-	readonly detector: EditorColorDetector;
+	readonly detector: ColorDetector;
 }
 
 const ColorPickerCapability: EditorCapability<ColorPickerCapabilityValue> = Object.freeze({ id: 'editor.colorPicker' });
@@ -40,7 +40,7 @@ export class ColorPickerController extends Disposable {
 		private readonly viewport: View,
 		private readonly selections: CursorsController,
 		private readonly service: ColorService,
-		private readonly detector: EditorColorDetector,
+		private readonly detector: ColorDetector,
 		private readonly languageId: string,
 		private readonly activatedOn: ColorDecoratorsActivatedOn,
 		private readonly readOnly: boolean,
@@ -107,7 +107,7 @@ export class ColorPickerController extends Disposable {
 		}
 		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c') return;
 		stopEvent(event);
-		void this.showAtPosition(this.selections.selections.primary.getPosition());
+		void this.showAtPosition(this.selections.selections[0]!.getPosition());
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
@@ -248,7 +248,7 @@ registerTextEditorCapabilityContribution({
 		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource, context.onLanguageError);
 		const targetWindow = context.options.container.ownerDocument.defaultView;
 		if (!targetWindow) throw new Error('Color picker requires an attached browser window');
-		const detector = context.register(new EditorColorDetector(
+		const detector = context.register(new ColorDetector(
 			context.model,
 			service,
 			context.languageId,

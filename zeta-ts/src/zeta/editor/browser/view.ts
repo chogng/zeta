@@ -1,992 +1,1216 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
-import * as dom from '../../base/browser/dom.js';
-import { FastDomNode, createFastDomNode } from '../../base/browser/fastDomNode.js';
-import { IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
-import { inputLatency } from '../../base/browser/performance.js';
-import { CodeWindow } from '../../base/browser/window.js';
-import { BugIndicatingError, onUnexpectedError } from '../../base/common/errors.js';
-import { Disposable, DisposableStore, IDisposable } from '../../base/common/lifecycle.js';
-import { IPointerHandlerHelper } from './controller/mouseHandler.js';
-import { PointerHandlerLastRenderData } from './controller/mouseTarget.js';
-import { PointerHandler } from './controller/pointerHandler.js';
-import { IContentWidget, IContentWidgetPosition, IEditorAriaOptions, IGlyphMarginWidget, IGlyphMarginWidgetPosition, IMouseTarget, IOverlayWidget, IOverlayWidgetPosition, IViewZoneChangeAccessor } from './editorBrowser.js';
-import { LineVisibleRanges, RenderingContext, RestrictedRenderingContext } from './view/renderingContext.js';
-import { ICommandDelegate, ViewController } from './view/viewController.js';
-import { ContentViewOverlays, MarginViewOverlays } from './view/viewOverlays.js';
-import { PartFingerprint, PartFingerprints, ViewPart } from './view/viewPart.js';
-import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
-import { BlockDecorations } from './viewParts/blockDecorations/blockDecorations.js';
-import { ViewContentWidgets } from './viewParts/contentWidgets/contentWidgets.js';
-import { CurrentLineHighlightOverlay, CurrentLineMarginHighlightOverlay } from './viewParts/currentLineHighlight/currentLineHighlight.js';
-import { DecorationsOverlay } from './viewParts/decorations/decorations.js';
-import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
-import { GlyphMarginWidgets } from './viewParts/glyphMargin/glyphMargin.js';
-import { IndentGuidesOverlay } from './viewParts/indentGuides/indentGuides.js';
-import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
-import { ViewLines } from './viewParts/viewLines/viewLines.js';
-import { LinesDecorationsOverlay } from './viewParts/linesDecorations/linesDecorations.js';
-import { Margin } from './viewParts/margin/margin.js';
-import { MarginViewLineDecorationsOverlay } from './viewParts/marginDecorations/marginDecorations.js';
-import { Minimap } from './viewParts/minimap/minimap.js';
-import { ViewOverlayWidgets } from './viewParts/overlayWidgets/overlayWidgets.js';
-import { DecorationsOverviewRuler } from './viewParts/overviewRuler/decorationsOverviewRuler.js';
-import { OverviewRuler } from './viewParts/overviewRuler/overviewRuler.js';
-import { Rulers } from './viewParts/rulers/rulers.js';
-import { ScrollDecorationViewPart } from './viewParts/scrollDecoration/scrollDecoration.js';
-import { SelectionsOverlay } from './viewParts/selections/selections.js';
-import { ViewCursors } from './viewParts/viewCursors/viewCursors.js';
-import { ViewZones } from './viewParts/viewZones/viewZones.js';
-import { WhitespaceOverlay } from './viewParts/whitespace/whitespace.js';
-import { IEditorConfiguration } from '../common/config/editorConfiguration.js';
-import { EditorOption } from '../common/config/editorOptions.js';
+import { Event } from '../../base/common/event.js';
+import { getClientArea } from '../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../base/browser/dom.js';
+import { FastDomNode } from '../../base/browser/fastDomNode.js';
+import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
+import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
+import { runWhenWindowIdle } from '../../base/browser/dom.js';
+import { type ISize } from '../../base/common/layout.js';
+import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
+import { type CursorsController } from '../common/cursor/cursor.js';
+import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
 import { Position } from '../common/core/position.js';
-import { Range } from '../common/core/range.js';
-import { Selection } from '../common/core/selection.js';
-import { ScrollType } from '../common/editorCommon.js';
-import { GlyphMarginLane, IGlyphMarginLanesModel } from '../common/model.js';
-import { ViewEventHandler } from '../common/viewEventHandler.js';
-import * as viewEvents from '../common/viewEvents.js';
-import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
-import { IViewModel } from '../common/viewModel.js';
-import { ViewContext } from '../common/viewModel/viewContext.js';
-import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
-import { IColorTheme, getThemeTypeSelector } from '../../platform/theme/common/themeService.js';
-import { ViewGpuContext } from './gpu/viewGpuContext.js';
-import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
-import { AbstractEditContext } from './controller/editContext/editContext.js';
-import { IClipboardCopyEvent, IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
-import { IVisibleRangeProvider, TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
-import { NativeEditContext } from './controller/editContext/native/nativeEditContext.js';
+import { type IDimension } from '../common/core/2d/dimension.js';
+import { type Range } from '../common/core/range.js';
+import { type TextModel } from '../common/model/textModel.js';
+import { type IAttachedView } from '../common/model.js';
+import { CursorConfiguration } from '../common/cursorCommon.js';
+import { createBuiltinLanguageConfigurationService } from '../common/languages/languageBuiltinConfigurations.js';
+import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
+import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
+import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
+import { type FontInfo } from '../common/config/fontInfo.js';
+import { createBareFontInfoFromRawSettings } from '../common/config/fontInfoFromSettings.js';
+import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
+import { type TextMeasurer } from '../common/viewModel/textMeasurer.js';
+import { type EditorViewportChange, type EditorViewportLayout, EditorViewportLayoutManager } from '../common/viewLayout/viewLayout.js';
+import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
+import { applyFontInfo } from './config/domFontInfo.js';
+import { EditorConfiguration } from './config/editorConfiguration.js';
+import { type DecorationSource } from './viewParts/decorations/decorations.js';
+import { type BracketColorizationSource, type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
+import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
+import { Margin } from './viewParts/margin/margin.js';
+import { GlyphMarginWidgets, resolveGlyphMarginLanes } from './viewParts/glyphMargin/glyphMargin.js';
+import { Rulers, type EditorRuler } from './viewParts/rulers/rulers.js';
 import { RulersGpu } from './viewParts/rulersGpu/rulersGpu.js';
-import { GpuMarkOverlay } from './viewParts/gpuMark/gpuMark.js';
-import { AccessibilitySupport } from '../../platform/accessibility/common/accessibility.js';
-import { Event, Emitter } from '../../base/common/event.js';
-import { IUserInteractionService } from '../../platform/userInteraction/browser/userInteractionService.js';
+import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
+import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
+import { Minimap } from './viewParts/minimap/minimap.js';
+import { DecorationsOverviewRuler } from './viewParts/overviewRuler/decorationsOverviewRuler.js';
+import { ScrollDecorationViewPart } from './viewParts/scrollDecoration/scrollDecoration.js';
+import { ViewContentWidgets } from './viewParts/contentWidgets/contentWidgets.js';
+import { ViewOverlayWidgets } from './viewParts/overlayWidgets/overlayWidgets.js';
+import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
+import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
+import { ViewOverlays } from './view/viewOverlays.js';
+import { LineWidthIndex, ViewLines } from './viewParts/viewLines/viewLines.js';
+import { EditorTextDirection, ViewLineOptions } from './viewParts/viewLines/viewLineOptions.js';
+import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
+import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './viewParts/viewZones/viewZones.js';
+import { linesDecorationsWidth } from './viewParts/linesDecorations/linesDecorations.js';
+import { createEditorRenderingContext, createEditorViewportData, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
+import { DOMLineBreaksComputerFactory } from './view/domLineBreaksComputer.js';
+import './widget/codeEditor/editor.css';
 
+const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
 
-export interface IContentWidgetData {
-	widget: IContentWidget;
-	position: IContentWidgetPosition | null;
+export type EditorViewportPresentation = "document" | "embedded";
+
+/** Chooses which component renders the visible focus outline for an Stanza viewport. */
+export type EditorFocusOutlineOwner = "editor" | "host";
+
+/** Space reserved around the editor's projected text rows. */
+export interface EditorViewportPadding {
+	readonly top: number;
+	readonly right: number;
+	readonly bottom: number;
+	readonly left: number;
 }
 
-export interface IOverlayWidgetData {
-	widget: IOverlayWidget;
-	position: IOverlayWidgetPosition | null;
+export type { EditorRuler } from "./viewParts/rulers/rulers.js";
+
+/** Controls the browser paragraph direction used to shape Stanza's rendered text. */
+export { EditorTextDirection };
+
+export interface EditorViewportOptions {
+	readonly container: HTMLElement;
+	readonly model: TextModel;
+	readonly lineHeight?: number;
+	readonly dimension?: IDimension;
+	readonly automaticLayout?: boolean;
+	readonly padding?: EditorViewportPadding;
+	readonly overscanLineCount?: number;
+	readonly ariaLabel?: string;
+	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean };
+	readonly selectionController?: CursorsController;
+	readonly decorationSources?: readonly DecorationSource[];
+	readonly semanticTokenSource?: SemanticTokenSource;
+	readonly bracketColorizationSource?: BracketColorizationSource;
+	readonly lineVisibilitySource?: EditorLineVisibilitySource;
+	readonly presentation?: EditorViewportPresentation;
+	/** `host` delegates the visible focus outline to the viewport's direct host. */
+	readonly focusOutlineOwner?: EditorFocusOutlineOwner;
+	readonly renderLineHighlight?: IEditorOptions['renderLineHighlight'];
+	readonly renderLineHighlightOnlyWhenFocus?: IEditorOptions['renderLineHighlightOnlyWhenFocus'];
+	readonly lineWrapping?: EditorLineWrapping;
+	readonly wrappingIndent?: WrappingIndent;
+	readonly fontFamily?: string;
+	readonly fontSize?: number;
+	readonly fontLigatures?: boolean;
+	readonly lineNumbers?: IEditorOptions['lineNumbers'];
+	readonly glyphMargin?: boolean;
+	readonly rulers?: readonly EditorRuler[];
+	readonly guides?: IEditorOptions['guides'];
+	readonly minimap?: IEditorMinimapOptions;
+	readonly indentation?: EditorIndentationOptions;
+	/** Browser text-direction input; automatic direction is the default. */
+	readonly textDirection?: EditorTextDirection;
+	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
+	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
+	readonly mouseStyle?: IEditorOptions['mouseStyle'];
+	readonly cursorStyle?: IEditorOptions['cursorStyle'];
+	readonly overtypeCursorStyle?: IEditorOptions['overtypeCursorStyle'];
+	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
+	readonly cursorSmoothCaretAnimation?: IEditorOptions['cursorSmoothCaretAnimation'];
+	readonly cursorWidth?: IEditorOptions['cursorWidth'];
+	readonly cursorHeight?: IEditorOptions['cursorHeight'];
+	readonly allowOverflow?: IEditorOptions['allowOverflow'];
+	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
+	readonly cursorOptions?: IEditorOptions;
+	readonly languageId?: string;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 }
 
-export interface IGlyphMarginWidgetData {
-	widget: IGlyphMarginWidget;
-	position: IGlyphMarginWidgetPosition;
+export interface EditorContentPosition {
+	readonly left: number;
+	readonly top: number;
+	readonly height: number;
 }
 
-export class View extends ViewEventHandler {
+/** A caller-owned DOM root placed in vertical space between visual lines. */
+export type { EditorViewZone, EditorViewZoneHandle } from './viewParts/viewZones/viewZones.js';
 
-	private _widgetFocusTracker: CodeEditorWidgetFocusTracker;
+/**
+ * Read-only browser projection of one Stanza text model.
+ *
+ * The common viewport owns layout math. This component owns the scroll host,
+ * measurement inputs, and ordered visual-part lifecycle; individual parts own
+ * their projected DOM and canvas surfaces.
+ */
+export class View extends Disposable {
+	readonly element: HTMLDivElement;
+	readonly onDidChangeLayout: Event<EditorViewportChange>;
+	private _fontInfo: FontInfo;
+	private readonly model: TextModel;
+	private readonly viewport: EditorViewportLayoutManager;
+	private readonly contentElement: HTMLDivElement;
+	private readonly contentNode: FastDomNode<HTMLDivElement>;
+	private readonly textMetricsElement: HTMLSpanElement;
+	private readonly accessibilityStatusElement: HTMLDivElement;
+	private readonly viewContext: EditorViewContext;
+	private readonly viewParts: EditorViewPartCollection;
+	private readonly viewLines: ViewLines;
+	private readonly viewLinesGpu: ViewLinesGpu | undefined;
+	private readonly viewZones: ViewZones;
+	private readonly contentWidgets: ViewContentWidgets;
+	private readonly overlayWidgets: ViewOverlayWidgets;
+	private readonly margin: Margin;
+	private readonly viewOverlays: ViewOverlays;
+	private readonly textMeasurer: TextMeasurer & { refresh?(): boolean };
+	private readonly lineWidths: LineWidthIndex;
+	private readonly viewModelLines: ViewModelLines;
+	readonly coordinatesConverter: ReturnType<ViewModelLines['createCoordinatesConverter']>;
+	readonly cursorConfig: CursorConfiguration;
+	private readonly attachedView: IAttachedView;
+	private readonly selectionController: CursorsController | undefined;
+	private readonly presentation: EditorViewportPresentation;
+	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
+	private readonly renderLineHighlight: NonNullable<IEditorOptions['renderLineHighlight']>;
+	private readonly renderLineHighlightOnlyWhenFocus: boolean;
+	private readonly cursorStyle: TextEditorCursorStyle;
+	private readonly overtypeCursorStyle: TextEditorCursorStyle;
+	private readonly configuredCursorWidth: number;
+	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
+	private readonly showGlyphMargin: boolean;
+	private readonly guides: InternalGuidesOptions;
+	private readonly padding: EditorViewportPadding;
+	private readonly indentation: ResolvedEditorIndentationOptions;
+	private readonly minimap: EditorMinimapOptions;
+	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
+	private readonly viewLineOptions: ViewLineOptions;
+	private readonly editorConfiguration: EditorConfiguration;
+	private readonly pixelRatio: IPixelRatioMonitor;
+	private changingLayout = false;
+	private overlayWidgetsMinimumContentWidth = 0;
+	private viewZonesMinimumContentWidth = 0;
+	private softWrapping: boolean;
 
-	private readonly _scrollbar: EditorScrollbar;
-	private readonly _context: ViewContext;
-	private readonly _viewGpuContext?: ViewGpuContext;
-	private _selections: Selection[];
+	get currentLayout(): EditorViewportLayout {
+		return this.viewport.layout;
+	}
 
-	// The view lines
-	private readonly _viewLines: ViewLines;
-	private readonly _viewLinesGpu?: ViewLinesGpu;
+	get fontInfo(): FontInfo {
+		return this._fontInfo;
+	}
 
-	// These are parts, but we must do some API related calls on them, so we keep a reference
-	private readonly _viewZones: ViewZones;
-	private readonly _contentWidgets: ViewContentWidgets;
-	private readonly _overlayWidgets: ViewOverlayWidgets;
-	private readonly _glyphMarginWidgets: GlyphMarginWidgets;
-	private readonly _viewCursors: ViewCursors;
-	private readonly _viewParts: ViewPart[];
-	private readonly _viewController: ViewController;
-
-	private _editContextEnabled: boolean;
-	private _accessibilitySupport: AccessibilitySupport;
-	private _editContext: AbstractEditContext;
-	private readonly _editContextClipboardListeners = new DisposableStore();
-	private readonly _pointerHandler: PointerHandler;
-
-	// Clipboard events relayed from editContext
-	private readonly _onWillCopy = this._register(new Emitter<IClipboardCopyEvent>());
-	public readonly onWillCopy: Event<IClipboardCopyEvent> = this._onWillCopy.event;
-
-	private readonly _onWillCut = this._register(new Emitter<IClipboardCopyEvent>());
-	public readonly onWillCut: Event<IClipboardCopyEvent> = this._onWillCut.event;
-
-	private readonly _onWillPaste = this._register(new Emitter<IClipboardPasteEvent>());
-	public readonly onWillPaste: Event<IClipboardPasteEvent> = this._onWillPaste.event;
-
-	// Dom nodes
-	private readonly _linesContent: FastDomNode<HTMLElement>;
-	public readonly domNode: FastDomNode<HTMLElement>;
-	private readonly _overflowGuardContainer: FastDomNode<HTMLElement>;
-
-	// Actual mutable state
-	private _shouldRecomputeGlyphMarginLanes: boolean = false;
-	private _renderAnimationFrame: IDisposable | null;
-	private _ownerID: string;
-
-	constructor(
-		editorContainer: HTMLElement,
-		ownerID: string,
-		commandDelegate: ICommandDelegate,
-		configuration: IEditorConfiguration,
-		colorTheme: IColorTheme,
-		model: IViewModel,
-		userInputEvents: ViewUserInputEvents,
-		overflowWidgetsDomNode: HTMLElement | undefined,
-		@IInstantiationService private readonly _instantiationService: IInstantiationService,
-		@IUserInteractionService private readonly _userInteractionService: IUserInteractionService,
-	) {
+	constructor(options: EditorViewportOptions) {
 		super();
-		this._ownerID = ownerID;
-
-		this._widgetFocusTracker = this._register(
-			new CodeEditorWidgetFocusTracker(editorContainer, overflowWidgetsDomNode, this._userInteractionService)
+		const ownerDocument = options.container.ownerDocument;
+		const ownerWindow = ownerDocument.defaultView;
+		if (!ownerWindow) throw new ReferenceError('Editor viewport requires a browser window');
+		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
+		const bareFontInfo = createBareFontInfoFromRawSettings({
+			fontFamily: options.fontFamily ?? options.cursorOptions?.fontFamily,
+			fontWeight: options.cursorOptions?.fontWeight,
+			fontSize: options.fontSize ?? options.cursorOptions?.fontSize,
+			fontLigatures: options.fontLigatures ?? options.cursorOptions?.fontLigatures,
+			fontVariations: options.cursorOptions?.fontVariations,
+			lineHeight: options.lineHeight,
+			letterSpacing: options.cursorOptions?.letterSpacing,
+		}, this.pixelRatio.value, true);
+		const lineHeight = bareFontInfo.lineHeight;
+		this.model = options.model;
+		this.element = h(ownerDocument, "div");
+		this.contentElement = h(ownerDocument, "div");
+		this.contentNode = new FastDomNode(this.contentElement);
+		this.textMetricsElement = h(ownerDocument, "span");
+		this.accessibilityStatusElement = h(ownerDocument, "div");
+		this.selectionController = options.selectionController;
+		this.presentation = options.presentation ?? "document";
+		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
+		this.renderLineHighlight = options.renderLineHighlight ?? (this.presentation === 'embedded' ? 'none' : 'line');
+		this.renderLineHighlightOnlyWhenFocus = options.renderLineHighlightOnlyWhenFocus ?? false;
+		const mouseStyle = EditorOptions.mouseStyle.validate(options.mouseStyle);
+		this.cursorStyle = EditorOptions.cursorStyle.validate(options.cursorStyle);
+		this.overtypeCursorStyle = EditorOptions.overtypeCursorStyle.validate(options.overtypeCursorStyle);
+		const cursorBlinking = EditorOptions.cursorBlinking.validate(options.cursorBlinking);
+		const cursorSmoothCaretAnimation = EditorOptions.cursorSmoothCaretAnimation.validate(
+			options.cursorSmoothCaretAnimation,
+		) as NonNullable<IEditorOptions['cursorSmoothCaretAnimation']>;
+		this.configuredCursorWidth = EditorOptions.cursorWidth.validate(options.cursorWidth);
+		const cursorHeight = EditorOptions.cursorHeight.validate(options.cursorHeight);
+		this.lineNumbers = EditorOptions.lineNumbers.validate(options.lineNumbers ?? (this.presentation === 'embedded' ? 'off' : 'on'));
+		this.showGlyphMargin = this.presentation !== 'embedded' && (options.glyphMargin ?? true);
+		this.guides = EditorOptions.guides.validate({
+			...options.guides,
+			indentation: options.guides?.indentation ?? this.presentation !== 'embedded',
+		});
+		this.padding = resolveEditorViewportPadding(options.padding);
+		this.minimap = EditorOptions.minimap.validate({
+			...options.minimap,
+			enabled: options.minimap?.enabled ?? this.presentation === 'document',
+		}) as EditorMinimapOptions;
+		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
+		try {
+			this.indentation = resolveEditorIndentationOptions(options.indentation);
+			this.viewLineOptions = new ViewLineOptions({
+				textDirection: options.textDirection ?? EditorTextDirection.Auto,
+				fontLigatures: options.fontLigatures ?? false,
+				useGpu: options.experimentalGpuAcceleration === 'on',
+				useMonospaceOptimizations: false,
+				lineHeight,
+				tabSize: this.indentation.tabSize,
+			});
+			if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
+				throw new TypeError("Unknown Stanza editor GPU acceleration mode");
+			}
+			if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
+				throw new TypeError("Unknown Stanza editor focus outline owner");
+			}
+			if (!['none', 'gutter', 'line', 'all'].includes(this.renderLineHighlight)) {
+				throw new TypeError('Unknown Stanza editor line highlight mode');
+			}
+			if (typeof this.renderLineHighlightOnlyWhenFocus !== 'boolean') {
+				throw new TypeError('Stanza editor line highlight focus option must be boolean');
+			}
+			if (this.selectionController && this.selectionController.textModel !== this.model) {
+				throw new TypeError(
+					"Stanza viewport and selection controller must share one text model",
+				);
+			}
+			if (options.semanticTokenSource && options.semanticTokenSource.textModel !== this.model) {
+				throw new TypeError("Stanza viewport and semantic token source must share one text model");
+			}
+			if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== this.model) {
+				throw new TypeError("Stanza viewport and bracket colorization source must share one text model");
+			}
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+		this.element.className = "stanza-editor";
+		this.element.classList.add(`stanza-editor-${this.presentation}`);
+		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
+		this.element.classList.add(`stanza-editor-direction-${this.viewLineOptions.textDirection}`);
+		this.element.classList.add(`stanza-editor-mouse-${mouseStyle}`);
+		this.element.classList.toggle("hide-line-numbers", this.lineNumbers.renderType === RenderLineNumbersType.Off);
+		applyFontInfo(this.element, bareFontInfo);
+		this.element.style.tabSize = String(this.indentation.tabSize);
+		this.element.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
+		this.element.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
+		this.element.dir = this.viewLineOptions.textDirection;
+		this.element.classList.toggle("word-wrapped", this.softWrapping);
+		this.element.tabIndex = 0;
+		this.element.setAttribute("role", "region");
+		this.element.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor");
+		this.contentNode.setClassName("stanza-editor-content");
+		this.textMetricsElement.className =
+			"stanza-editor-text-metrics";
+		this.textMetricsElement.setAttribute("aria-hidden", "true");
+		this.accessibilityStatusElement.className = "stanza-editor-accessibility-status";
+		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
+		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
+		this.element.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
+		options.container.append(this.element);
+		this._register(toDisposable(() => this.element.remove()));
+		this.textMeasurer =
+			options.textMeasurer ??
+			new BrowserTextMeasurer(this.textMetricsElement);
+		const languageConfigurationService = options.languageConfigurationService ?? this._register(createBuiltinLanguageConfigurationService());
+		this.editorConfiguration = this._register(new EditorConfiguration({
+			...options.cursorOptions,
+			dimension: options.dimension,
+			automaticLayout: options.automaticLayout,
+			fontFamily: bareFontInfo.fontFamily,
+			fontWeight: bareFontInfo.fontWeight,
+			fontSize: bareFontInfo.fontSize,
+			fontLigatures: bareFontInfo.fontFeatureSettings,
+			fontVariations: bareFontInfo.fontVariationSettings,
+			lineHeight: bareFontInfo.lineHeight,
+			letterSpacing: bareFontInfo.letterSpacing,
+		}, this.element));
+		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
+		applyFontInfo(this.element, this.fontInfo);
+		const spaceWidth = this.fontInfo.spaceWidth;
+		this.cursorConfig = new CursorConfiguration(options.languageId ?? this.model.getLanguageId(), this.model.getOptions(), this.editorConfiguration, languageConfigurationService);
+		const cursorWidth = Math.min(
+			this.configuredCursorWidth,
+			spaceWidth,
 		);
-		this._register(this._widgetFocusTracker.onChange(() => {
-			this._context.viewModel.setHasWidgetFocus(this._widgetFocusTracker.hasFocus());
+		this.lineWidths = this._register(new LineWidthIndex(
+			this.model,
+			this.textMeasurer,
+			{
+				initialMeasurement: {
+					...(this.model.largeFile.tooLargeForTokenization ? { maximumMeasuredLineCount: 2_048 } : {}),
+					schedule: callback => runWhenWindowIdle(
+						ownerWindow,
+						() => callback(),
+						250,
+					),
+				},
+			},
+		));
+		this.viewModelLines = this._register(new ViewModelLines(
+			this.model,
+			new DOMLineBreaksComputerFactory(new WeakRef(ownerWindow), this.textMeasurer),
+			this.fontInfo,
+			this.indentation.tabSize,
+			{
+				wrapping: options.lineWrapping,
+				wrappingIndent: options.wrappingIndent,
+				initialWrappingMeasurement: {
+					schedule: callback => runWhenWindowIdle(
+						ownerWindow,
+						() => callback(),
+						250,
+					),
+				},
+				visibilitySource: options.lineVisibilitySource,
+			},
+		));
+		this.coordinatesConverter = this.viewModelLines.createCoordinatesConverter();
+		this.attachedView = this.model.onBeforeAttached();
+		this._register(toDisposable(() => this.model.onBeforeDetached(this.attachedView)));
+		const viewport = this._register(new EditorViewportLayoutManager(this.model, {
+			lineHeight: this.fontInfo.lineHeight,
+			overscanLineCount: options.overscanLineCount,
+			lineSource: this.viewModelLines.lineSource,
+			padding: { top: this.padding.top, bottom: this.padding.bottom },
 		}));
-
-		this._selections = [new Selection(1, 1, 1, 1)];
-		this._renderAnimationFrame = null;
-
-		this._overflowGuardContainer = createFastDomNode(document.createElement('div'));
-		PartFingerprints.write(this._overflowGuardContainer, PartFingerprint.OverflowGuard);
-		this._overflowGuardContainer.setClassName('overflow-guard');
-
-		this._viewController = new ViewController(configuration, model, userInputEvents, commandDelegate);
-
-		// The view context is passed on to most classes (basically to reduce param. counts in ctors)
-		this._context = new ViewContext(configuration, colorTheme, model);
-
-		// Ensure the view is the first event handler in order to update the layout
-		this._context.addEventHandler(this);
-
-		this._viewParts = [];
-
-		// Keyboard handler
-		this._editContextEnabled = this._context.configuration.options.get(EditorOption.effectiveEditContext);
-		this._accessibilitySupport = this._context.configuration.options.get(EditorOption.accessibilitySupport);
-		this._editContext = this._instantiateEditContext();
-		this._connectEditContextClipboardEvents();
-
-		this._viewParts.push(this._editContext);
-
-		// These two dom nodes must be constructed up front, since references are needed in the layout provider (scrolling & co.)
-		this._linesContent = createFastDomNode(document.createElement('div'));
-		this._linesContent.setClassName('lines-content' + ' monaco-editor-background');
-		this._linesContent.setPosition('absolute');
-
-		this.domNode = createFastDomNode(document.createElement('div'));
-		this.domNode.setClassName(this._getEditorClassName());
-		// Set role 'code' for better screen reader support https://github.com/microsoft/vscode/issues/93438
-		this.domNode.setAttribute('role', 'code');
-
-		if (this._context.configuration.options.get(EditorOption.experimentalGpuAcceleration) === 'on') {
-			this._viewGpuContext = this._instantiationService.createInstance(ViewGpuContext, this._context);
-		}
-
-		this._scrollbar = new EditorScrollbar(this._context, this._linesContent, this.domNode, this._overflowGuardContainer);
-		this._viewParts.push(this._scrollbar);
-
-		// View Lines
-		this._viewLines = new ViewLines(this._context, this._viewGpuContext, this._linesContent);
-		if (this._viewGpuContext) {
-			this._viewLinesGpu = this._instantiationService.createInstance(ViewLinesGpu, this._context, this._viewGpuContext);
-		}
-
-		// View Zones
-		this._viewZones = new ViewZones(this._context);
-		this._viewParts.push(this._viewZones);
-
-		// Decorations overview ruler
-		const decorationsOverviewRuler = new DecorationsOverviewRuler(this._context);
-		this._viewParts.push(decorationsOverviewRuler);
-
-
-		const scrollDecoration = new ScrollDecorationViewPart(this._context);
-		this._viewParts.push(scrollDecoration);
-
-		const contentViewOverlays = new ContentViewOverlays(this._context);
-		this._viewParts.push(contentViewOverlays);
-		contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this._context));
-		contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this._context));
-		contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this._context));
-		contentViewOverlays.addDynamicOverlay(new DecorationsOverlay(this._context));
-		contentViewOverlays.addDynamicOverlay(new WhitespaceOverlay(this._context));
-
-		const marginViewOverlays = new MarginViewOverlays(this._context);
-		this._viewParts.push(marginViewOverlays);
-		marginViewOverlays.addDynamicOverlay(new CurrentLineMarginHighlightOverlay(this._context));
-		marginViewOverlays.addDynamicOverlay(new MarginViewLineDecorationsOverlay(this._context));
-		marginViewOverlays.addDynamicOverlay(new LinesDecorationsOverlay(this._context));
-		marginViewOverlays.addDynamicOverlay(new LineNumbersOverlay(this._context));
-		if (this._viewGpuContext) {
-			marginViewOverlays.addDynamicOverlay(new GpuMarkOverlay(this._context, this._viewGpuContext));
-		}
-
-		// Glyph margin widgets
-		this._glyphMarginWidgets = new GlyphMarginWidgets(this._context);
-		this._viewParts.push(this._glyphMarginWidgets);
-
-		const margin = new Margin(this._context);
-		margin.getDomNode().appendChild(this._viewZones.marginDomNode);
-		margin.getDomNode().appendChild(marginViewOverlays.getDomNode());
-		margin.getDomNode().appendChild(this._glyphMarginWidgets.domNode);
-		this._viewParts.push(margin);
-
-		// Content widgets
-		this._contentWidgets = new ViewContentWidgets(this._context, this.domNode);
-		this._viewParts.push(this._contentWidgets);
-
-		this._viewCursors = new ViewCursors(this._context);
-		this._viewParts.push(this._viewCursors);
-
-		// Overlay widgets
-		this._overlayWidgets = new ViewOverlayWidgets(this._context, this.domNode);
-		this._viewParts.push(this._overlayWidgets);
-
-		const rulers = this._viewGpuContext
-			? new RulersGpu(this._context, this._viewGpuContext)
-			: new Rulers(this._context);
-		this._viewParts.push(rulers);
-
-		const blockOutline = new BlockDecorations(this._context);
-		this._viewParts.push(blockOutline);
-
-		const minimap = new Minimap(this._context);
-		this._viewParts.push(minimap);
-
-		// -------------- Wire dom nodes up
-
-		if (decorationsOverviewRuler) {
-			const overviewRulerData = this._scrollbar.getOverviewRulerLayoutInfo();
-			overviewRulerData.parent.insertBefore(decorationsOverviewRuler.getDomNode(), overviewRulerData.insertBefore);
-		}
-
-		this._linesContent.appendChild(contentViewOverlays.getDomNode());
-		if ('domNode' in rulers) {
-			this._linesContent.appendChild(rulers.domNode);
-		}
-		this._linesContent.appendChild(this._viewZones.domNode);
-		this._linesContent.appendChild(this._viewLines.getDomNode());
-		this._linesContent.appendChild(this._contentWidgets.domNode);
-		this._linesContent.appendChild(this._viewCursors.getDomNode());
-		this._overflowGuardContainer.appendChild(margin.getDomNode());
-		this._overflowGuardContainer.appendChild(this._scrollbar.getDomNode());
-		if (this._viewGpuContext) {
-			this._overflowGuardContainer.appendChild(this._viewGpuContext.canvas);
-		}
-		this._overflowGuardContainer.appendChild(scrollDecoration.getDomNode());
-		this._overflowGuardContainer.appendChild(this._overlayWidgets.getDomNode());
-		this._overflowGuardContainer.appendChild(minimap.getDomNode());
-		this._overflowGuardContainer.appendChild(blockOutline.domNode);
-		this.domNode.appendChild(this._overflowGuardContainer);
-
-		if (overflowWidgetsDomNode) {
-			overflowWidgetsDomNode.appendChild(this._contentWidgets.overflowingContentWidgetsDomNode.domNode);
-			overflowWidgetsDomNode.appendChild(this._overlayWidgets.overflowingOverlayWidgetsDomNode.domNode);
+		this.viewport = viewport;
+		this.onDidChangeLayout = viewport.onDidChange;
+		this.viewContext = new EditorViewContext(
+			() => viewport.layout,
+			layout => this.createRenderingContext(layout),
+		);
+		this.viewParts = this._register(new EditorViewPartCollection());
+		this.viewZones = this.viewParts.register(new ViewZones({
+			host: this.element,
+			viewLayout: this.viewport,
+			readVisualLineCount: () => this.visualProjection.visualLineCount,
+			readContentLeft: () => this.contentOffsetLeft + this.textLeft,
+			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft - this.textLeft),
+			setMinimumContentWidth: width => this.setViewZonesMinimumContentWidth(width),
+		}));
+		this.contentWidgets = this.viewParts.register(new ViewContentWidgets({
+			viewDomNode: this.element,
+			allowOverflow: options.allowOverflow ?? true,
+			fixedOverflowWidgets: options.fixedOverflowWidgets ?? false,
+			readContentLeft: () => this.contentOffsetLeft,
+			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft),
+		}));
+		this.overlayWidgets = this.viewParts.register(new ViewOverlayWidgets({
+			viewDomNode: this.element,
+			allowOverflow: options.allowOverflow ?? true,
+			fixedOverflowWidgets: options.fixedOverflowWidgets ?? false,
+			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
+			horizontalScrollbarHeight: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
+			readMinimapWidth: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height).minimapWidth,
+			setMinimumContentWidth: width => this.setOverlayWidgetsMinimumContentWidth(width),
+			requestRender: () => {
+				if (!this.isDisposed) this.project(this.viewport.layout);
+			},
+		}));
+		this.viewLines = this._register(new ViewLines({
+			host: this.contentElement,
+			model: this.model,
+			readVisualProjection: () => this.visualProjection,
+			readProjectionRevision: () => this.viewModelLines.revision,
+			semanticTokenSource: options.semanticTokenSource,
+			bracketColorizationSource: options.bracketColorizationSource,
+			viewLineOptions: this.viewLineOptions,
+			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth(' ')),
+		}));
+		this.viewLinesGpu = this.viewLineOptions.useGpu
+			? this._register(new ViewLinesGpu({
+				host: this.element,
+				model: this.model,
+				semanticTokenSource: options.semanticTokenSource,
+				bracketColorizationSource: options.bracketColorizationSource,
+				paddingTop: this.padding.top,
+				viewLineOptions: this.viewLineOptions,
+				viewLines: this.viewLines,
+				requestRender: () => {
+					if (!this.isDisposed) this.project(this.viewport.layout);
+				},
+			}))
+			: undefined;
+		const decorationSources = Object.freeze([...(options.decorationSources ?? [])]);
+		const glyphMarginSources = this.showGlyphMargin ? decorationSources : Object.freeze([]);
+		const glyphMarginLanes = resolveGlyphMarginLanes(glyphMarginSources, this.showGlyphMargin);
+		this.viewOverlays = this._register(new ViewOverlays(this.viewContext, {
+			contentElement: this.contentElement,
+			model: this.model,
+			selectionController: this.selectionController,
+			semanticTokenSource: options.semanticTokenSource,
+			bracketColorizationSource: options.bracketColorizationSource,
+			decorationSources,
+			guides: this.guides,
+			indentationTabSize: this.indentation.tabSize,
+			renderWhitespace: options.renderWhitespace ?? 'none',
+			cursorStyle: this.cursorStyle,
+			cursorBlinking,
+			cursorSmoothCaretAnimation,
+			cursorWidth,
+			cursorHeight,
+			fontInfo: this.fontInfo,
+		}));
+		this.margin = this.viewParts.register(new Margin({
+			host: this.element,
+			contentElement: this.contentElement,
+			model: this.model,
+			textMeasurer: this.textMeasurer,
+			presentation: this.presentation,
+			showLineNumbers: this.lineNumbers.renderType !== RenderLineNumbersType.Off,
+			glyphMarginLaneCount: glyphMarginLanes.length,
+			lineHeight: this.fontInfo.lineHeight,
+			lineDecorationsWidth: linesDecorationsWidth(decorationSources),
+		}));
+		this.margin.domNode.append(this.viewZones.marginDomNode);
+		const glyphMarginWidgets = this.viewParts.register(new GlyphMarginWidgets({
+			host: this.contentElement,
+			lanes: glyphMarginLanes,
+			decorations: this.viewOverlays.decorations,
+			readVisualLines: () => this.visualProjection,
+			readLeft: () => this.margin.glyphMarginLeft,
+			readLaneWidth: () => this.margin.glyphMarginLaneWidth,
+		}));
+		const lineNumbersOverlay = this.viewParts.register(new LineNumbersOverlay({
+			host: this.contentElement,
+			lineNumbers: this.lineNumbers,
+			selectionController: this.selectionController,
+			readVisualProjection: () => this.visualProjection,
+		}));
+		let rulersDomNode: HTMLElement | undefined;
+		if (this.viewLinesGpu) {
+			this.viewParts.register(new RulersGpu(
+				this.viewLinesGpu.gpuContext,
+				Object.freeze([...(options.rulers ?? [])]),
+				column => this.textLeft + this.textMeasurer.measureLineWidth('0'.repeat(column)),
+			));
 		} else {
-			this.domNode.appendChild(this._contentWidgets.overflowingContentWidgetsDomNode);
-			this.domNode.appendChild(this._overlayWidgets.overflowingOverlayWidgetsDomNode);
+			rulersDomNode = this.viewParts.register(new Rulers({
+				host: this.contentElement,
+				textMeasurer: this.textMeasurer,
+				readTextLeft: () => this.textLeft,
+				rulers: options.rulers,
+			})).domNode;
 		}
-
-		this._applyLayout();
-
-		// Pointer handler
-		this._pointerHandler = this._register(new PointerHandler(this._context, this._viewController, this._createPointerHandlerHelper()));
-	}
-
-	private _instantiateEditContext(): AbstractEditContext {
-		const usingExperimentalEditContext = this._context.configuration.options.get(EditorOption.effectiveEditContext);
-		if (usingExperimentalEditContext) {
-			return this._instantiationService.createInstance(NativeEditContext, this._ownerID, this._context, this._overflowGuardContainer, this._viewController, this._createTextAreaHandlerHelper());
-		} else {
-			return this._instantiationService.createInstance(TextAreaEditContext, this._ownerID, this._context, this._overflowGuardContainer, this._viewController, this._createTextAreaHandlerHelper());
-		}
-	}
-
-	private _updateEditContext(): void {
-		const editContextEnabled = this._context.configuration.options.get(EditorOption.effectiveEditContext);
-		const accessibilitySupport = this._context.configuration.options.get(EditorOption.accessibilitySupport);
-		if (this._editContextEnabled === editContextEnabled && this._accessibilitySupport === accessibilitySupport) {
-			return;
-		}
-		this._editContextEnabled = editContextEnabled;
-		this._accessibilitySupport = accessibilitySupport;
-		const isEditContextFocused = this._editContext.isFocused();
-		const indexOfEditContext = this._viewParts.indexOf(this._editContext);
-		this._editContext.dispose();
-		this._editContext = this._instantiateEditContext();
-		this._connectEditContextClipboardEvents();
-		if (isEditContextFocused) {
-			this._editContext.focus();
-		}
-		if (indexOfEditContext !== -1) {
-			this._viewParts.splice(indexOfEditContext, 1, this._editContext);
-		}
-	}
-
-	private _connectEditContextClipboardEvents(): void {
-		// Dispose old listeners
-		this._editContextClipboardListeners.clear();
-
-		// Connect to current edit context's clipboard events
-		this._editContextClipboardListeners.add(this._editContext.onWillCopy(e => this._onWillCopy.fire(e)));
-		this._editContextClipboardListeners.add(this._editContext.onWillCut(e => this._onWillCut.fire(e)));
-		this._editContextClipboardListeners.add(this._editContext.onWillPaste(e => this._onWillPaste.fire(e)));
-	}
-
-	private _computeGlyphMarginLanes(): IGlyphMarginLanesModel {
-		const model = this._context.viewModel.model;
-		const laneModel = this._context.viewModel.glyphLanes;
-		type Glyph = { range: Range; lane: GlyphMarginLane; persist?: boolean };
-		let glyphs: Glyph[] = [];
-		let maxLineNumber = 0;
-
-		// Add all margin decorations
-		glyphs = glyphs.concat(model.getAllMarginDecorations().map((decoration) => {
-			const lane = decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center;
-			maxLineNumber = Math.max(maxLineNumber, decoration.range.endLineNumber);
-			return { range: decoration.range, lane, persist: decoration.options.glyphMargin?.persistLane };
+		this.viewParts.register(new EditorScrollbar({
+			container: this.element,
+			viewport: this.element,
+			scrollTo: position => this.scrollTo(position),
+			horizontalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
+			verticalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 		}));
-
-		// Add all glyph margin widgets
-		glyphs = glyphs.concat(this._glyphMarginWidgets.getWidgets().map((widget) => {
-			const range = model.validateRange(widget.preference.range);
-			maxLineNumber = Math.max(maxLineNumber, range.endLineNumber);
-			return { range, lane: widget.preference.lane };
+		const minimapPart = this.viewParts.register(new Minimap({
+			host: this.element,
+			model: this.model,
+			options: this.minimap,
+			semanticTokenSource: options.semanticTokenSource,
+			tabSize: this.indentation.tabSize,
+			paddingTop: this.padding.top,
+			paddingBottom: this.padding.bottom,
+			readLayout: () => this.viewport.layout,
+			readMinimapLayout: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height),
+			readVisualProjection: () => this.visualProjection,
+			readProjectionRevision: () => this.viewModelLines.revision,
+			scrollTo: position => this.scrollTo(position),
+			readMarkers: () => this.viewOverlays.decorations.minimapMarkers(),
+			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
 		}));
+		const decorationsOverviewRuler = this.viewParts.register(new DecorationsOverviewRuler({
+			host: this.element,
+			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
+			getVerticalOffsetForLineIndex: lineIndex => this.viewport.getVerticalOffsetForLineIndex(
+				lineIndex >= this.model.lineCount
+					? this.visualProjection.visualLineCount
+					: this.visualProjection.visualLineIndexAt(new Position((lineIndex) + 1, (0) + 1)),
+			),
+			readMarkers: () => this.viewOverlays.decorations.overviewMarkers(),
+			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
+		}));
+		const scrollDecoration = this.viewParts.register(new ScrollDecorationViewPart(this.element));
 
-		// Sorted by their start position
-		glyphs.sort((a, b) => Range.compareRangesUsingStarts(a.range, b.range));
+		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
+		this.contentElement.append(
+			this.viewLines.domNode,
+			...this.viewOverlays.domNodes,
+			this.contentWidgets.domNode.domNode,
+			lineNumbersOverlay.domNode,
+			this.margin.domNode,
+			glyphMarginWidgets.domNode,
+			this.viewOverlays.blockDecorations.domNode,
+			...(rulersDomNode ? [rulersDomNode] : []),
+		);
+		this.element.append(
+			this.overlayWidgets.getDomNode().domNode,
+			minimapPart.domNode,
+			decorationsOverviewRuler.domNode,
+			scrollDecoration.domNode,
+			this.viewZones.domNode,
+		);
+		ownerDocument.body.append(
+			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
+			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
+		);
+		this._register(this.viewModelLines.onDidChange(() => this.project(viewport.layout)));
+		this._register(this.viewOverlays.onDidChangeDecorations(() => this.project(viewport.layout)));
+		viewport.setContentWidth(this.measuredContentWidth);
 
-		laneModel.reset(maxLineNumber);
-		for (const glyph of glyphs) {
-			laneModel.push(glyph.lane, glyph.range, glyph.persist);
+		this._register(viewport.onDidChange(({ layout }) => this.project(layout)));
+		this._register(this.lineWidths.onDidChange(() => {
+			viewport.setContentWidth(this.measuredContentWidth);
+		}));
+		this._register(addDisposableListener(this.element, "scroll", () => {
+			const scrollPosition = {
+				left: this.element.scrollLeft,
+				top: this.element.scrollTop,
+			};
+			const layout = viewport.setScrollPosition(scrollPosition);
+			this.syncScrollPosition(layout);
+		}));
+		this._register(this.model.onDidChangeContent(change => {
+			this.lineWidths.applyModelChange(change);
+			if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
+			viewport.setContentWidth(this.measuredContentWidth);
+		}));
+		if (this.selectionController) {
+			this._register(this.selectionController.onDidChange(change => {
+				const context = this.createRenderingContext(viewport.layout);
+				lineNumbersOverlay.renderNow(context);
+				this.viewOverlays.renderSelection(context, change.reason);
+				this.updateAccessibilityStatus();
+			}));
+			this.updateAccessibilityStatus();
+		}
+		const semanticTokenSource = options.semanticTokenSource;
+		if (semanticTokenSource) {
+			this._register(semanticTokenSource.onDidChange(() => {
+				this.viewLines.renderVisibleLineText();
+				this.viewLinesGpu?.invalidateTokens();
+				const context = this.createRenderingContext(this.viewport.layout);
+				this.viewLinesGpu?.render(context);
+				this.viewOverlays.renderCursorTokens(context);
+				minimapPart.renderNow(context);
+			}));
+		}
+		const fontSet = ownerDocument.fonts;
+		if (fontSet) {
+			this._register(addDisposableListener(fontSet, "loadingdone", () => {
+				this.refreshFontMetrics();
+			}));
 		}
 
-		return laneModel;
-	}
-
-	private _createPointerHandlerHelper(): IPointerHandlerHelper {
-		return {
-			viewDomNode: this.domNode.domNode,
-			linesContentDomNode: this._linesContent.domNode,
-			viewLinesDomNode: this._viewLines.getDomNode().domNode,
-			viewLinesGpu: this._viewLinesGpu,
-
-			focusTextArea: () => {
-				this.focus();
-			},
-
-			dispatchTextAreaEvent: (event: CustomEvent) => {
-				this._editContext.domNode.domNode.dispatchEvent(event);
-			},
-
-			getLastRenderData: (): PointerHandlerLastRenderData => {
-				const lastViewCursorsRenderData = this._viewCursors.getLastRenderData() || [];
-				const lastTextareaPosition = this._editContext.getLastRenderData();
-				return new PointerHandlerLastRenderData(lastViewCursorsRenderData, lastTextareaPosition);
-			},
-			renderNow: (): void => {
-				this.render(true, false);
-			},
-			shouldSuppressMouseDownOnViewZone: (viewZoneId: string) => {
-				return this._viewZones.shouldSuppressMouseDownOnViewZone(viewZoneId);
-			},
-			shouldSuppressMouseDownOnWidget: (widgetId: string) => {
-				return this._contentWidgets.shouldSuppressMouseDownOnWidget(widgetId);
-			},
-			getPositionFromDOMInfo: (spanNode: HTMLElement, offset: number) => {
-				this._flushAccumulatedAndRenderNow();
-				return this._viewLines.getPositionFromDOMInfo(spanNode, offset);
-			},
-
-			visibleRangeForPosition: (lineNumber: number, column: number) => {
-				this._flushAccumulatedAndRenderNow();
-				const position = new Position(lineNumber, column);
-				return this._viewLines.visibleRangeForPosition(position) ?? this._viewLinesGpu?.visibleRangeForPosition(position) ?? null;
-			},
-
-			getLineWidth: (lineNumber: number) => {
-				this._flushAccumulatedAndRenderNow();
-				if (this._viewLinesGpu) {
-					const result = this._viewLinesGpu.getLineWidth(lineNumber);
-					if (result !== undefined) {
-						return result;
-					}
-				}
-				return this._viewLines.getLineWidth(lineNumber);
+		this._register(this.editorConfiguration.onDidChange(event => {
+			if (event.hasChanged(EditorOption.fontInfo)) this.applyFontConfiguration();
+			if (!this.changingLayout && event.hasChanged(EditorOption.layoutInfo)) {
+				const { width, height } = this.editorConfiguration.options.get(EditorOption.layoutInfo);
+				this.layoutViewport({ width, height });
 			}
-		};
+		}));
+		this._register(this.pixelRatio.onDidChange(() => this.project(viewport.layout)));
+		this.layout(options.dimension ?? getClientArea(this.element));
 	}
 
-	private _createTextAreaHandlerHelper(): IVisibleRangeProvider {
-		return {
-			visibleRangeForPosition: (position: Position) => {
-				this._flushAccumulatedAndRenderNow();
-				return this._viewLines.visibleRangeForPosition(position);
+	get viewportLayout(): EditorViewportLayout {
+		return this.viewport.layout;
+	}
+
+	get textModel(): TextModel {
+		return this.model;
+	}
+
+	get lineWrapping(): EditorLineWrapping {
+		return this.softWrapping
+			? EditorLineWrapping.On
+			: EditorLineWrapping.Off;
+	}
+
+	get wrappingIndent(): WrappingIndent {
+		return this.viewModelLines.wrappingIndent;
+	}
+
+	/** Returns the browser paragraph direction used by the text projection. */
+	get editorTextDirection(): EditorTextDirection {
+		return this.viewLineOptions.textDirection;
+	}
+
+	/** Changes only this viewport's visual row projection; document text is unaffected. */
+	setLineWrapping(lineWrapping: EditorLineWrapping): EditorViewportLayout {
+		if (!Object.values(EditorLineWrapping).includes(lineWrapping)) {
+			throw new TypeError("Unknown Stanza editor line wrapping mode");
+		}
+		const nextSoftWrapping = lineWrapping === EditorLineWrapping.On;
+		if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
+		this.softWrapping = nextSoftWrapping;
+		if (nextSoftWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
+		this.viewModelLines.setWrapping(lineWrapping);
+		this.element.classList.toggle("word-wrapped", nextSoftWrapping);
+		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
+		this.project(layout);
+		return layout;
+	}
+
+	setWrappingIndent(wrappingIndent: WrappingIndent): EditorViewportLayout {
+		if (!isWrappingIndent(wrappingIndent)) {
+			throw new TypeError("Unknown Stanza wrapping indent mode");
+		}
+		if (wrappingIndent === this.wrappingIndent) return this.viewport.layout;
+		this.viewModelLines.setWrappingIndent(wrappingIndent);
+		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
+		this.project(layout);
+		return layout;
+	}
+
+	/** Returns the current measured visual-row mapping for browser interactions. */
+	getVisualLineProjection(): EditorVisualLineProjection {
+		return this.visualProjection;
+	}
+
+	/** Measures text with the same font metrics used by the rendered viewport. */
+	measureTextWidth(text: string): number {
+		return this.textMeasurer.measureLineWidth(text);
+	}
+
+	layout(size: ISize = getClientArea(this.element)): EditorViewportLayout {
+		this.changingLayout = true;
+		try {
+			this.editorConfiguration.observeContainer(size);
+		} finally {
+			this.changingLayout = false;
+		}
+		return this.layoutViewport(size);
+	}
+
+	private layoutViewport(size: ISize): EditorViewportLayout {
+		this.refreshFontMetrics();
+		if (this.softWrapping) this.updateWrapWidth(size.width);
+		const layout = this.viewport.setViewportSize(size);
+		this.project(layout);
+		return layout;
+	}
+
+	/** Announces one editor status message through the viewport's live region. */
+	announceAccessibilityStatus(message: string): void {
+		if (typeof message !== "string" || message.trim().length === 0) {
+			throw new TypeError("Stanza accessibility status must be a non-empty string");
+		}
+		this.accessibilityStatusElement.textContent = message.trim();
+	}
+
+	refreshFontMetrics(force = false): EditorViewportLayout {
+		if (!this.textMeasurer.refresh?.() && !force) return this.viewport.layout;
+		this.viewLinesGpu?.invalidateFont();
+		this.viewOverlays.setCursorLineWidth(Math.min(
+			this.configuredCursorWidth,
+			Math.max(1, this.textMeasurer.measureLineWidth(' ')),
+		));
+		this.lineWidths.refresh();
+		if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
+		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
+		this.project(layout);
+		return layout;
+	}
+
+	private applyFontConfiguration(): void {
+		const previousLineHeight = this._fontInfo.lineHeight;
+		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
+		applyFontInfo(this.element, this._fontInfo);
+		if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width, true);
+		if (previousLineHeight !== this._fontInfo.lineHeight) this.setLineHeight(this._fontInfo.lineHeight);
+		this.refreshFontMetrics(true);
+	}
+
+	setLineHeight(lineHeight: number): EditorViewportLayout {
+		this.margin.setLineHeight(lineHeight);
+		const lineHeightLayout = this.viewport.setLineHeight(lineHeight);
+		this.viewZones.setLineHeight(lineHeight);
+		if (this.softWrapping) this.updateWrapWidth(lineHeightLayout.viewportSize.width);
+		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
+		this.project(layout);
+		return layout;
+	}
+
+	/** Mounts one caller-owned view zone and returns its layout lifetime. */
+	addViewZone(zone: EditorViewZone): EditorViewZoneHandle {
+		return this.viewZones.addZone(zone);
+	}
+
+	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void {
+		this.viewZones.changeViewZones(callback);
+	}
+
+	addContentWidget(widget: IContentWidget): void {
+		this.contentWidgets.addWidget(widget);
+		this.layoutContentWidget(widget);
+	}
+
+	layoutContentWidget(widget: IContentWidget): void {
+		this.contentWidgets.setWidgetPosition(widget, widget.getPosition());
+		this.project(this.viewport.layout);
+	}
+
+	removeContentWidget(widget: IContentWidget): void {
+		this.contentWidgets.removeWidget(widget);
+	}
+
+	addOverlayWidget(widget: IOverlayWidget): void {
+		this.overlayWidgets.addWidget(widget);
+		this.layoutOverlayWidget(widget);
+	}
+
+	layoutOverlayWidget(widget: IOverlayWidget): void {
+		this.overlayWidgets.setWidgetPosition(widget, widget.getPosition());
+		this.project(this.viewport.layout);
+	}
+
+	removeOverlayWidget(widget: IOverlayWidget): void {
+		this.overlayWidgets.removeWidget(widget);
+	}
+
+	scrollTo(position: EditorScrollPosition): EditorViewportLayout {
+		const layout = this.viewport.setScrollPosition(position);
+		this.project(layout);
+		return layout;
+	}
+
+	revealPosition(position: Position): EditorViewportLayout {
+		this.model.offsetAt(position);
+		const layout = this.viewport.layout;
+		const visualProjection = this.visualProjection;
+		const visualLineIndex = visualProjection.visualLineIndexAt(position);
+		const visualLine = visualProjection.lineAt(visualLineIndex)!;
+		const lineTop = this.viewport.getVerticalOffsetForLineIndex(visualLineIndex);
+		const lineBottom = lineTop + layout.lineHeight;
+		let top = layout.scrollPosition.top;
+		if (lineTop < top) {
+			top = lineTop;
+		} else if (lineBottom > top + layout.viewportSize.height) {
+			top = lineBottom - layout.viewportSize.height;
+		}
+
+		const line = this.model.getLineContent((visualLine.logicalLineIndex) + 1);
+		const columnIndex = position.column - 1;
+		const domCaretLeft = this.domCaretLeft(visualLineIndex, columnIndex - visualLine.startColumn);
+		const caretLeft = domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) +
+			this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, columnIndex)));
+		const caretRight = caretLeft + Math.max(
+			1,
+			this.textMeasurer.measureLineWidth(" "),
+		);
+		let left = this.softWrapping ? 0 : layout.scrollPosition.left;
+		if (caretLeft < left + this.contentTextLeft) {
+			left = caretLeft - this.contentTextLeft;
+		} else if (caretRight > left + layout.viewportSize.width) {
+			left = caretRight - layout.viewportSize.width;
+		}
+		return this.scrollTo({ left, top });
+	}
+
+	getPositionContentCoordinates(position: Position): EditorContentPosition {
+		this.model.offsetAt(position);
+		const visualProjection = this.visualProjection;
+		const visualLineIndex = visualProjection.visualLineIndexAt(position);
+		const visualLine = visualProjection.lineAt(visualLineIndex)!;
+		const columnIndex = position.column - 1;
+		const domCaretLeft = this.domCaretLeft(visualLineIndex, columnIndex - visualLine.startColumn);
+		return Object.freeze({
+			left: domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) + this.textMeasurer.measureLineWidth(
+				this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, columnIndex),
+			)),
+			top: this.viewport.getVerticalOffsetForLineIndex(visualLineIndex),
+			height: this.viewport.layout.lineHeight,
+		});
+	}
+
+	/** Returns a browser-shaped x-coordinate for one rendered visual cursor, when available. */
+	getVisualHorizontalOffset(position: Position): number | undefined {
+		this.model.offsetAt(position);
+		const visualLineIndex = this.visualProjection.visualLineIndexAt(position);
+		const visualLine = this.visualProjection.lineAt(visualLineIndex);
+		return visualLine
+			? this.domCaretLeft(visualLineIndex, position.column - 1 - visualLine.startColumn)
+			: undefined;
+	}
+
+	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
+	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): Position | undefined {
+		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
+		if (this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight) return undefined;
+		const visualLine = this.visualProjection.lineAt(visualLineIndex);
+		const line = this.viewLines.renderedLines.get(visualLineIndex);
+		if (!visualLine || !line) return undefined;
+		const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
+		if (line.textElement.textContent?.length !== text.length) return undefined;
+		let nearestColumn: number | undefined;
+		let nearestDistance = Number.POSITIVE_INFINITY;
+		for (const column of getTextGraphemeBoundaries(text)) {
+			const left = line.getCaretLeft(column);
+			if (left === undefined) return undefined;
+			const distance = Math.abs(left - horizontalOffset);
+			if (distance < nearestDistance) {
+				nearestColumn = column;
+				nearestDistance = distance;
+			}
+		}
+		return nearestColumn === undefined
+			? undefined
+			: new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + nearestColumn) + 1);
+	}
+
+	setCompositionRange(range: Range | undefined): void {
+		this.viewOverlays.setCompositionRange(range);
+	}
+
+	setOvertype(overtyping: boolean): void {
+		this.viewOverlays.setCursorStyle(overtyping ? this.overtypeCursorStyle : this.cursorStyle);
+	}
+
+	getTargetAtClientPoint(
+		point: ClientPoint,
+	): EditorHitTarget | undefined {
+		validateClientPoint(point);
+		const domTarget = this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight
+			? undefined
+			: this.getDomTargetAtClientPoint(point);
+		if (domTarget) return domTarget;
+		const bounds = this.element.getBoundingClientRect();
+		return this.hitTestViewportPoint(
+			point.clientX - bounds.left,
+			point.clientY - bounds.top,
+		);
+	}
+
+	getNearestTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
+		validateClientPoint(point);
+		const domTarget = this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight
+			? undefined
+			: this.getDomTargetAtClientPoint(point);
+		if (domTarget) return domTarget;
+		const layout = this.viewport.layout;
+		if (
+			layout.viewportSize.width === 0 ||
+			layout.viewportSize.height === 0
+		) {
+			return undefined;
+		}
+		const bounds = this.element.getBoundingClientRect();
+		return this.hitTestViewportPoint(
+			clamp(point.clientX - bounds.left, 0, layout.viewportSize.width - 0.5),
+			clamp(point.clientY - bounds.top, 0, layout.viewportSize.height - 0.5),
+		);
+	}
+
+	private hitTestViewportPoint(left: number, top: number): EditorHitTarget | undefined {
+		return hitTestStanzaVisualEditorPoint(
+			this.model,
+			this.visualProjection,
+			this.viewport.layout,
+			{ left: left - this.contentOffsetLeft, top },
+			{
+				gutterWidth: this.gutterWidth,
+				textLeft: this.textLeft,
+				paddingTop: this.padding.top,
+				getLineIndexAtVerticalOffset: offset => this.viewport.getLineIndexAtVerticalOffset(offset),
 			},
-			linesVisibleRangesForRange: (range: Range, includeNewLines: boolean): LineVisibleRanges[] | null => {
-				this._flushAccumulatedAndRenderNow();
-				return this._viewLines.linesVisibleRangesForRange(range, includeNewLines);
-			}
-		};
+			this.textMeasurer,
+		);
 	}
 
-	private _applyLayout(): void {
-		const options = this._context.configuration.options;
-		const layoutInfo = options.get(EditorOption.layoutInfo);
-
-		this.domNode.setWidth(layoutInfo.width);
-		this.domNode.setHeight(layoutInfo.height);
-
-		this._overflowGuardContainer.setWidth(layoutInfo.width);
-		this._overflowGuardContainer.setHeight(layoutInfo.height);
-
-		// https://stackoverflow.com/questions/38905916/content-in-google-chrome-larger-than-16777216-px-not-being-rendered
-		this._linesContent.setWidth(16777216);
-		this._linesContent.setHeight(16777216);
-	}
-
-	private _getEditorClassName() {
-		const focused = this._editContext.isFocused() ? ' focused' : '';
-		return this._context.configuration.options.get(EditorOption.editorClassName) + ' ' + getThemeTypeSelector(this._context.theme.type) + focused;
-	}
-
-	// --- begin event handlers
-	public override handleEvents(events: viewEvents.ViewEvent[]): void {
-		super.handleEvents(events);
-		this._scheduleRender();
-	}
-	public override onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
-		this.domNode.setClassName(this._getEditorClassName());
-		this._updateEditContext();
-		this._applyLayout();
-		return false;
-	}
-	public override onCursorStateChanged(e: viewEvents.ViewCursorStateChangedEvent): boolean {
-		this._selections = e.selections;
-		return false;
-	}
-	public override onDecorationsChanged(e: viewEvents.ViewDecorationsChangedEvent): boolean {
-		if (e.affectsGlyphMargin) {
-			this._shouldRecomputeGlyphMarginLanes = true;
-		}
-		return false;
-	}
-	public override onFocusChanged(e: viewEvents.ViewFocusChangedEvent): boolean {
-		this.domNode.setClassName(this._getEditorClassName());
-		return false;
-	}
-	public override onThemeChanged(e: viewEvents.ViewThemeChangedEvent): boolean {
-		this._context.theme.update(e.theme);
-		this.domNode.setClassName(this._getEditorClassName());
-		return false;
-	}
-
-	// --- end event handlers
-
-	public override dispose(): void {
-		if (this._renderAnimationFrame !== null) {
-			this._renderAnimationFrame.dispose();
-			this._renderAnimationFrame = null;
-		}
-
-		// Dispose clipboard event listeners
-		this._editContextClipboardListeners.dispose();
-
-		this._contentWidgets.overflowingContentWidgetsDomNode.domNode.remove();
-		this._overlayWidgets.overflowingOverlayWidgetsDomNode.domNode.remove();
-
-		this._context.removeEventHandler(this);
-		this._viewGpuContext?.dispose();
-
-		this._viewLines.dispose();
-		this._viewLinesGpu?.dispose();
-
-		// Destroy view parts
-		for (const viewPart of this._viewParts) {
-			viewPart.dispose();
-		}
-
-		super.dispose();
-	}
-
-	private _scheduleRender(): void {
-		if (this._store.isDisposed) {
-			throw new BugIndicatingError();
-		}
-		if (this._renderAnimationFrame === null) {
-			// TODO: workaround fix for https://github.com/microsoft/vscode/issues/229825
-			if (this._editContext instanceof NativeEditContext) {
-				this._editContext.setEditContextOnDomNode();
-			}
-			const rendering = this._createCoordinatedRendering();
-			this._renderAnimationFrame = EditorRenderingCoordinator.INSTANCE.scheduleCoordinatedRendering({
-				window: dom.getWindow(this.domNode?.domNode),
-				prepareRenderText: () => {
-					if (this._store.isDisposed) {
-						throw new BugIndicatingError();
-					}
-					try {
-						return rendering.prepareRenderText();
-					} finally {
-						this._renderAnimationFrame = null;
-					}
-				},
-				renderText: (viewportData: ViewportData) => {
-					if (this._store.isDisposed) {
-						throw new BugIndicatingError();
-					}
-					return rendering.renderText(viewportData);
-				},
-				prepareRender: (viewParts: ViewPart[], ctx: RenderingContext) => {
-					if (this._store.isDisposed) {
-						throw new BugIndicatingError();
-					}
-					return rendering.prepareRender(viewParts, ctx);
-				},
-				render: (viewParts: ViewPart[], ctx: RestrictedRenderingContext) => {
-					if (this._store.isDisposed) {
-						throw new BugIndicatingError();
-					}
-					return rendering.render(viewParts, ctx);
-				}
+	private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
+		for (const [visualLineIndex, renderedLine] of this.viewLines.renderedLines) {
+			const offset = renderedLine.getOffsetAtClientPoint(point.clientX, point.clientY);
+			if (offset === undefined) continue;
+			const visualLine = this.visualProjection.lineAt(visualLineIndex);
+			if (!visualLine) continue;
+			return Object.freeze({
+				kind: EditorHitTargetKind.Text,
+				position: new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + offset) + 1),
 			});
 		}
+		return undefined;
 	}
 
-	private _flushAccumulatedAndRenderNow(): void {
-		const rendering = this._createCoordinatedRendering();
-		const viewportData = safeInvokeNoArg(() => rendering.prepareRenderText());
-		if (!viewportData) {
+	private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
+		if (this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight) return undefined;
+		const line = this.viewLines.renderedLines.get(visualLineIndex);
+		return line?.hasTextOffset(offset)
+			? line.getCaretLeft(offset)
+			: undefined;
+	}
+
+	private get measuredContentWidth(): number {
+		const textContentWidth = this.softWrapping ? 0 : Math.ceil(
+			this.gutterWidth +
+			this.lineWidths.maximumLineWidth +
+			this.textMeasurer.horizontalPadding,
+		);
+		return Math.max(textContentWidth, this.overlayWidgetsMinimumContentWidth, this.viewZonesMinimumContentWidth);
+	}
+
+	private setOverlayWidgetsMinimumContentWidth(width: number): void {
+		if (width === this.overlayWidgetsMinimumContentWidth) return;
+		this.overlayWidgetsMinimumContentWidth = width;
+		this.viewport.setContentWidth(this.measuredContentWidth);
+	}
+
+	private setViewZonesMinimumContentWidth(width: number): void {
+		if (width === this.viewZonesMinimumContentWidth) return;
+		this.viewZonesMinimumContentWidth = width;
+		this.viewport.setContentWidth(this.measuredContentWidth);
+	}
+
+	private get gutterWidth(): number {
+		return this.margin.gutterWidth;
+	}
+
+	private get textLeft(): number {
+		return this.margin.textLeft;
+	}
+
+	private get contentTextLeft(): number {
+		return this.contentOffsetLeft + this.textLeft;
+	}
+
+	private get contentOffsetLeft(): number {
+		const layout = this.viewport.layout;
+		const minimapLayout = this.computeMinimapLayout(layout.viewportSize.width, layout.viewportSize.height);
+		return this.minimap.side === 'left' ? minimapLayout.minimapWidth : 0;
+	}
+
+	private updateWrapWidth(viewportWidth: number, force = false): void {
+		const minimapWidth = this.computeMinimapLayout(viewportWidth, this.viewport.layout.viewportSize.height).minimapWidth;
+		const rightControlWidth = minimapWidth > 0
+			? minimapWidth + DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize
+			: 0;
+		this.viewModelLines.setWrapWidth(Math.max(
+			0,
+			viewportWidth - this.gutterWidth - this.textMeasurer.horizontalPadding - rightControlWidth,
+		), force);
+	}
+
+	private computeMinimapLayout(viewportWidth: number, viewportHeight: number): EditorMinimapLayoutInfo {
+		return EditorLayoutInfoComputer._computeMinimapLayout({
+			outerWidth: viewportWidth,
+			outerHeight: viewportHeight,
+			lineHeight: this.viewport.layout.lineHeight,
+			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth('n')),
+			pixelRatio: this.pixelRatio.value,
+			scrollBeyondLastLine: false,
+			paddingTop: this.padding.top,
+			paddingBottom: this.padding.bottom,
+			minimap: this.minimap,
+			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
+			viewLineCount: this.visualProjection.visualLineCount,
+			remainingWidth: Math.max(0, viewportWidth - this.gutterWidth),
+			isViewportWrapping: this.softWrapping,
+		}, this.minimapLayoutMemory);
+	}
+
+	private project(layout: EditorViewportLayout): void {
+		this.observeRenderedLineWidths(layout);
+		if (layout !== this.viewport.layout) return;
+		const firstVisibleLine = this.visualProjection.lineAt(layout.visibleLines.startLineIndex);
+		const lastVisibleLine = this.visualProjection.lineAt(layout.visibleLines.endLineIndexExclusive - 1);
+		this.attachedView.setVisibleLines(firstVisibleLine && lastVisibleLine ? [{
+			startLineNumber: firstVisibleLine.logicalLineIndex + 1,
+			endLineNumber: lastVisibleLine.logicalLineIndex + 1,
+		}] : [], false);
+		const viewportData = createEditorViewportData(layout);
+		this.viewLines.render(viewportData);
+		const context = this.createRenderingContext(layout, viewportData);
+		this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
+		this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
+		this.contentNode.setWidth(layout.contentSize.width);
+		this.contentNode.setHeight(layout.contentSize.height);
+		const contentOffsetLeft = this.contentOffsetLeft;
+		this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
+		this.viewParts.prepareRender(context);
+		this.viewOverlays.prepareRender(context);
+		this.viewParts.render(context);
+		this.viewLinesGpu?.render(context);
+		this.viewOverlays.render(context);
+		this.syncScrollPosition(layout);
+	}
+
+	private observeRenderedLineWidths(layout: EditorViewportLayout): void {
+		if (this.lineWidths.complete) return;
+		const projection = this.visualProjection;
+		const logicalLineIndexes = new Set<number>();
+		for (let visualLineIndex = layout.renderLines.startLineIndex; visualLineIndex < layout.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
+			const visualLine = projection.lineAt(visualLineIndex);
+			if (visualLine) logicalLineIndexes.add(visualLine.logicalLineIndex);
+		}
+		this.lineWidths.observeLines([...logicalLineIndexes]);
+	}
+
+	private updateAccessibilityStatus(): void {
+		const selectionSet = this.selectionController?.selections;
+		if (!selectionSet) return;
+		const selection = selectionSet[0]!;
+		if (!selection) return;
+		const position = selection.getPosition();
+		const selectedLength = this.model.offsetAt(selection.getEndPosition()) - this.model.offsetAt(selection.getStartPosition());
+		if (selectionSet.length > 1) {
+			const totalSelectedLength = selectionSet.reduce((length, current) =>
+				length + this.model.offsetAt(current.getEndPosition()) - this.model.offsetAt(current.getStartPosition()), 0);
+			const summary = totalSelectedLength === 0
+				? `${selectionSet.length} cursors`
+				: `${selectionSet.length} selections, ${totalSelectedLength} characters selected`;
+			this.announceAccessibilityStatus(`${summary}; primary at Line ${position.lineNumber}, column ${position.column}`);
 			return;
 		}
-		const data = safeInvokeNoArg(() => rendering.renderText(viewportData));
-		if (!data) {
-			return;
-		}
-		const [viewParts, ctx] = data;
-		safeInvokeNoArg(() => rendering.prepareRender(viewParts, ctx));
-		safeInvokeNoArg(() => rendering.render(viewParts, ctx));
+		this.announceAccessibilityStatus(selectedLength === 0
+			? `Line ${position.lineNumber}, column ${position.column}`
+			: `Line ${position.lineNumber}, column ${position.column}, ${selectedLength} characters selected`);
 	}
 
-	private _getViewPartsToRender(): ViewPart[] {
-		const result: ViewPart[] = [];
-		let resultLen = 0;
-		for (const viewPart of this._viewParts) {
-			if (viewPart.shouldRender()) {
-				result[resultLen++] = viewPart;
-			}
-		}
-		return result;
-	}
-
-	private _createCoordinatedRendering() {
-		return {
-			prepareRenderText: () => {
-				if (this._shouldRecomputeGlyphMarginLanes) {
-					this._shouldRecomputeGlyphMarginLanes = false;
-					const model = this._computeGlyphMarginLanes();
-					this._context.configuration.setGlyphMarginDecorationLaneCount(model.requiredLanes);
-				}
-				inputLatency.onRenderStart();
-
-				if (!this.domNode.domNode.isConnected) {
-					return null;
-				}
-
-				const viewPartsToRender = this._getViewPartsToRender();
-				const viewLinesShouldRender = this._viewLines.shouldRender();
-				if (!viewLinesShouldRender && viewPartsToRender.length === 0) {
-					// Nothing to render
-					return null;
-				}
-
-				const partialViewportData = this._context.viewLayout.getLinesViewportData();
-				this._context.viewModel.setViewport(partialViewportData.startLineNumber, partialViewportData.endLineNumber, partialViewportData.centeredLineNumber);
-
-				const viewportData = new ViewportData(
-					this._selections,
-					partialViewportData,
-					this._context.viewLayout.getWhitespaceViewportData(),
-					this._context.viewModel
-				);
-
-				for (const viewPart of this._viewParts) {
-					if (viewPart.shouldRender()) {
-						viewPart.onBeforeRender(viewportData);
-					}
-				}
-
-				return viewportData;
-			},
-			renderText: (viewportData: ViewportData): [ViewPart[], RenderingContext] => {
-
-				if (this._viewLines.shouldRender()) {
-					this._viewLines.renderText(viewportData);
-					this._viewLines.onDidRender();
-				}
-
-				if (this._viewLinesGpu?.shouldRender()) {
-					this._viewLinesGpu.renderText(viewportData);
-					this._viewLinesGpu.onDidRender();
-				}
-
-				// Rendering of viewLines might cause scroll events to occur, so collect view parts to render again
-				const viewPartsToRender = this._getViewPartsToRender();
-
-				return [viewPartsToRender, new RenderingContext(this._context.viewLayout, viewportData, this._viewLines, this._viewLinesGpu)];
-			},
-			prepareRender: (viewPartsToRender: ViewPart[], ctx: RenderingContext) => {
-				for (const viewPart of viewPartsToRender) {
-					viewPart.prepareRender(ctx);
-				}
-			},
-			render: (viewPartsToRender: ViewPart[], ctx: RestrictedRenderingContext) => {
-				for (const viewPart of viewPartsToRender) {
-					viewPart.render(ctx);
-					viewPart.onDidRender();
-				}
-			}
+	private createRenderingContext(layout: EditorViewportLayout, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
+		const useDomTextGeometry = this.viewLineOptions.textDirection !== EditorTextDirection.LeftToRight;
+		const overlay: EditorOverlayContext = {
+			ownerDocument: this.element.ownerDocument,
+			model: this.model,
+			visualLineProjection: this.visualProjection,
+			renderLines: layout.renderLines,
+			textLeft: this.textLeft,
+			textMeasurer: this.textMeasurer,
+			renderLineHighlight: this.renderLineHighlight,
+			renderLineHighlightOnlyWhenFocus: this.renderLineHighlightOnlyWhenFocus,
+			linesVisibleRangesForRange: (range, includeNewLines) => useDomTextGeometry
+				? this.viewLines.linesVisibleRangesForRange(range, includeNewLines)
+				: undefined,
+			visibleRangeForPosition: position => useDomTextGeometry
+				? this.viewLines.visibleRangeForPosition(position)
+				: undefined,
 		};
+		return createEditorRenderingContext(layout, overlay, viewportData);
 	}
 
-	// --- BEGIN CodeEditor helpers
-
-	public delegateVerticalScrollbarPointerDown(browserEvent: PointerEvent): void {
-		this._scrollbar.delegateVerticalScrollbarPointerDown(browserEvent);
+	private get visualProjection() {
+		return this.viewModelLines.ensureCurrent();
 	}
 
-	public delegateScrollFromMouseWheelEvent(browserEvent: IMouseWheelEvent) {
-		this._scrollbar.delegateScrollFromMouseWheelEvent(browserEvent);
-	}
-
-	public restoreState(scrollPosition: { scrollLeft: number; scrollTop: number }): void {
-		this._context.viewModel.viewLayout.setScrollPosition({
-			scrollTop: scrollPosition.scrollTop,
-			scrollLeft: scrollPosition.scrollLeft
-		}, ScrollType.Immediate);
-		this._context.viewModel.visibleLinesStabilized();
-	}
-
-	public getOffsetForColumn(modelLineNumber: number, modelColumn: number): number {
-		const modelPosition = this._context.viewModel.model.validatePosition({
-			lineNumber: modelLineNumber,
-			column: modelColumn
-		});
-		const viewPosition = this._context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(modelPosition);
-		this._flushAccumulatedAndRenderNow();
-		const visibleRange = this._viewLines.visibleRangeForPosition(new Position(viewPosition.lineNumber, viewPosition.column));
-		if (!visibleRange) {
-			return -1;
+	private syncScrollPosition(layout: EditorViewportLayout): void {
+		if (this.element.scrollLeft !== layout.scrollPosition.left) {
+			this.element.scrollLeft = layout.scrollPosition.left;
 		}
-		return visibleRange.left;
+		if (this.element.scrollTop !== layout.scrollPosition.top) {
+			this.element.scrollTop = layout.scrollPosition.top;
+		}
 	}
 
-	public getLineWidth(modelLineNumber: number): number {
-		const model = this._context.viewModel.model;
-		const viewLine = this._context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(new Position(modelLineNumber, model.getLineMaxColumn(modelLineNumber))).lineNumber;
-		this._flushAccumulatedAndRenderNow();
-		const width = this._viewLines.getLineWidth(viewLine);
+	get cursorModel(): ViewModelLines {
+		return this.viewModelLines;
+	}
+}
 
+interface BrowserTextMetrics {
+	readonly signature: string;
+	readonly font: string;
+	readonly fontSize: number;
+	readonly letterSpacing: number;
+	readonly spaceWidth: number;
+	readonly tabSize: number;
+	readonly horizontalPadding: number;
+	readonly contentLeftPadding: number;
+}
+
+class BrowserTextMeasurer implements TextMeasurer {
+	private readonly context: CanvasRenderingContext2D | undefined;
+	private metrics: BrowserTextMetrics;
+
+	constructor(private readonly referenceElement: HTMLElement) {
+		try {
+			this.context = h(referenceElement.ownerDocument, 'canvas').getContext('2d') ?? undefined;
+		} catch {
+			this.context = undefined;
+		}
+		this.metrics = this.readMetrics();
+	}
+
+	get horizontalPadding(): number { return this.metrics.horizontalPadding; }
+	get contentLeftPadding(): number { return this.metrics.contentLeftPadding; }
+
+	refresh(): boolean {
+		const metrics = this.readMetrics();
+		if (metrics.signature === this.metrics.signature) return false;
+		this.metrics = metrics;
+		return true;
+	}
+
+	measureLineWidth(text: string): number {
+		const tabStopWidth = Math.max(1, this.metrics.spaceWidth * this.metrics.tabSize);
+		let width = 0;
+		const segments = text.split('\t');
+		for (let index = 0; index < segments.length; index += 1) {
+			width += this.measureSegment(segments[index]!);
+			if (index + 1 < segments.length) width = (Math.floor(width / tabStopWidth) + 1) * tabStopWidth;
+		}
 		return width;
 	}
 
-	public resetLineWidthCaches(): void {
-		this._viewLines.resetLineWidthCaches();
-	}
-
-	public getTargetAtClientPoint(clientX: number, clientY: number): IMouseTarget | null {
-		const mouseTarget = this._pointerHandler.getTargetAtClientPoint(clientX, clientY);
-		if (!mouseTarget) {
-			return null;
+	private readMetrics(): BrowserTextMetrics {
+		const ownerWindow = this.referenceElement.ownerDocument.defaultView;
+		if (!ownerWindow) throw new ReferenceError('Editor text measurement requires a browser window');
+		const style = ownerWindow.getComputedStyle(this.referenceElement);
+		const fontSize = cssNumber(style.fontSize, 14);
+		const letterSpacing = style.letterSpacing === 'normal' ? 0 : cssNumber(style.letterSpacing, 0);
+		const tabSize = Math.max(1, cssNumber(style.tabSize, 4));
+		const contentLeftPadding = cssNumber(style.paddingLeft, 0);
+		const horizontalPadding = contentLeftPadding + cssNumber(style.paddingRight, 0);
+		const font = `${style.fontStyle || 'normal'} ${style.fontVariantCaps || 'normal'} ${style.fontWeight || '400'} ${style.fontSize || `${fontSize}px`} ${style.fontFamily || 'monospace'}`;
+		if (this.context) {
+			this.context.font = font;
+			this.context.textBaseline = 'alphabetic';
 		}
-		return ViewUserInputEvents.convertViewToModelMouseTarget(mouseTarget, this._context.viewModel.coordinatesConverter);
+		const spaceWidth = positiveNumber(this.context?.measureText(' ').width, fontSize * 0.6);
+		return Object.freeze({
+			signature: JSON.stringify([font, letterSpacing, style.fontFeatureSettings, style.fontVariationSettings, tabSize, horizontalPadding, spaceWidth]),
+			font,
+			fontSize,
+			letterSpacing,
+			spaceWidth,
+			tabSize,
+			horizontalPadding,
+			contentLeftPadding,
+		});
 	}
 
-	public createOverviewRuler(cssClassName: string): OverviewRuler {
-		return new OverviewRuler(this._context, cssClassName);
+	private measureSegment(text: string): number {
+		if (!text) return 0;
+		const characterCount = [...text].length;
+		const width = this.context?.measureText(text).width ?? characterCount * this.metrics.fontSize * 0.6;
+		return Math.max(0, width + characterCount * this.metrics.letterSpacing);
 	}
+}
 
-	public change(callback: (changeAccessor: IViewZoneChangeAccessor) => unknown): void {
-		this._viewZones.changeViewZones(callback);
-		this._scheduleRender();
-	}
+function cssNumber(value: string, fallback: number): number {
+	const parsed = Number.parseFloat(value);
+	return Number.isFinite(parsed) ? parsed : fallback;
+}
 
-	public render(now: boolean, everything: boolean): void {
-		if (everything) {
-			// Force everything to render...
-			this._viewLines.forceShouldRender();
-			for (const viewPart of this._viewParts) {
-				viewPart.forceShouldRender();
-			}
-		}
-		if (now) {
-			this._flushAccumulatedAndRenderNow();
-		} else {
-			this._scheduleRender();
-		}
-	}
+function positiveNumber(value: number | undefined, fallback: number): number {
+	return value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback;
+}
 
-	public writeScreenReaderContent(reason: string): void {
-		this._editContext.writeScreenReaderContent(reason);
-	}
-
-	public focus(): void {
-		this._editContext.focus();
-	}
-
-	public isFocused(): boolean {
-		return this._editContext.isFocused();
-	}
-
-	public isWidgetFocused(): boolean {
-		return this._widgetFocusTracker.hasFocus();
-	}
-
-	public refreshFocusState() {
-		this._editContext.refreshFocusState();
-		this._widgetFocusTracker.refreshState();
-	}
-
-	public setAriaOptions(options: IEditorAriaOptions): void {
-		this._editContext.setAriaOptions(options);
-	}
-
-	public addContentWidget(widgetData: IContentWidgetData): void {
-		this._contentWidgets.addWidget(widgetData.widget);
-		this.layoutContentWidget(widgetData);
-		this._scheduleRender();
-	}
-
-	public layoutContentWidget(widgetData: IContentWidgetData): void {
-		this._contentWidgets.setWidgetPosition(
-			widgetData.widget,
-			widgetData.position?.position ?? null,
-			widgetData.position?.secondaryPosition ?? null,
-			widgetData.position?.preference ?? null,
-			widgetData.position?.positionAffinity ?? null
+function validateClientPoint(point: ClientPoint): void {
+	if (
+		!point ||
+		!isFiniteNumber(point.clientX) ||
+		!isFiniteNumber(point.clientY)
+	) {
+		throw new RangeError(
+			"Stanza client point must contain finite coordinates",
 		);
-		if (this._contentWidgets.shouldRender()) {
-			this._scheduleRender();
-		}
-	}
-
-	public removeContentWidget(widgetData: IContentWidgetData): void {
-		this._contentWidgets.removeWidget(widgetData.widget);
-		this._scheduleRender();
-	}
-
-	public addOverlayWidget(widgetData: IOverlayWidgetData): void {
-		this._overlayWidgets.addWidget(widgetData.widget);
-		this.layoutOverlayWidget(widgetData);
-		this._scheduleRender();
-	}
-
-	public layoutOverlayWidget(widgetData: IOverlayWidgetData): void {
-		const shouldRender = this._overlayWidgets.setWidgetPosition(widgetData.widget, widgetData.position);
-		if (shouldRender) {
-			this._scheduleRender();
-		}
-	}
-
-	public removeOverlayWidget(widgetData: IOverlayWidgetData): void {
-		this._overlayWidgets.removeWidget(widgetData.widget);
-		this._scheduleRender();
-	}
-
-	public addGlyphMarginWidget(widgetData: IGlyphMarginWidgetData): void {
-		this._glyphMarginWidgets.addWidget(widgetData.widget);
-		this._shouldRecomputeGlyphMarginLanes = true;
-		this._scheduleRender();
-	}
-
-	public layoutGlyphMarginWidget(widgetData: IGlyphMarginWidgetData): void {
-		const newPreference = widgetData.position;
-		const shouldRender = this._glyphMarginWidgets.setWidgetPosition(widgetData.widget, newPreference);
-		if (shouldRender) {
-			this._shouldRecomputeGlyphMarginLanes = true;
-			this._scheduleRender();
-		}
-	}
-
-	public removeGlyphMarginWidget(widgetData: IGlyphMarginWidgetData): void {
-		this._glyphMarginWidgets.removeWidget(widgetData.widget);
-		this._shouldRecomputeGlyphMarginLanes = true;
-		this._scheduleRender();
-	}
-
-	// --- END CodeEditor helpers
-
-}
-
-function safeInvokeNoArg<T>(func: () => T): T | null {
-	try {
-		return func();
-	} catch (e) {
-		onUnexpectedError(e);
-		return null;
 	}
 }
 
-interface ICoordinatedRendering {
-	readonly window: CodeWindow;
-	prepareRenderText(): ViewportData | null;
-	renderText(viewportData: ViewportData): [ViewPart[], RenderingContext];
-	prepareRender(viewParts: ViewPart[], ctx: RenderingContext): void;
-	render(viewParts: ViewPart[], ctx: RestrictedRenderingContext): void;
+function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined): EditorViewportPadding {
+	return Object.freeze({
+		top: nonNegativePaddingValue(padding?.top ?? 0, "top"),
+		right: nonNegativePaddingValue(padding?.right ?? 12, "right"),
+		bottom: nonNegativePaddingValue(padding?.bottom ?? 0, "bottom"),
+		left: nonNegativePaddingValue(padding?.left ?? 12, "left"),
+	});
 }
 
-class EditorRenderingCoordinator {
-
-	public static INSTANCE = new EditorRenderingCoordinator();
-
-	private _coordinatedRenderings: ICoordinatedRendering[] = [];
-	private _animationFrameRunners = new Map<CodeWindow, IDisposable>();
-
-	private constructor() { }
-
-	scheduleCoordinatedRendering(rendering: ICoordinatedRendering): IDisposable {
-		this._coordinatedRenderings.push(rendering);
-		this._scheduleRender(rendering.window);
-		return {
-			dispose: () => {
-				const renderingIndex = this._coordinatedRenderings.indexOf(rendering);
-				if (renderingIndex === -1) {
-					return;
-				}
-				this._coordinatedRenderings.splice(renderingIndex, 1);
-
-				if (this._coordinatedRenderings.length === 0) {
-					// There are no more renderings to coordinate => cancel animation frames
-					for (const [_, disposable] of this._animationFrameRunners) {
-						disposable.dispose();
-					}
-					this._animationFrameRunners.clear();
-				}
-			}
-		};
+function nonNegativePaddingValue(value: number, side: keyof EditorViewportPadding): number {
+	if (!isFiniteNumber(value) || value < 0) {
+		throw new RangeError(`Stanza editor padding.${side} must be non-negative and finite`);
 	}
-
-	private _scheduleRender(window: CodeWindow): void {
-		if (!this._animationFrameRunners.has(window)) {
-			const runner = () => {
-				this._animationFrameRunners.delete(window);
-				this._onRenderScheduled();
-			};
-			this._animationFrameRunners.set(window, dom.runAtThisOrScheduleAtNextAnimationFrame(window, runner, 100));
-		}
-	}
-
-	private _onRenderScheduled(): void {
-		const coordinatedRenderings = this._coordinatedRenderings.slice(0);
-		this._coordinatedRenderings = [];
-
-		const viewportDatas: (ViewportData | null)[] = [];
-		for (let i = 0, len = coordinatedRenderings.length; i < len; i++) {
-			const rendering = coordinatedRenderings[i];
-			viewportDatas[i] = safeInvokeNoArg(() => rendering.prepareRenderText());
-		}
-
-		const datas: ([ViewPart[], RenderingContext] | null)[] = [];
-		for (let i = 0, len = coordinatedRenderings.length; i < len; i++) {
-			const rendering = coordinatedRenderings[i];
-			const viewportData = viewportDatas[i];
-			if (!viewportData) {
-				datas[i] = null;
-				continue;
-			}
-			datas[i] = safeInvokeNoArg(() => rendering.renderText(viewportData));
-		}
-
-		for (let i = 0, len = coordinatedRenderings.length; i < len; i++) {
-			const rendering = coordinatedRenderings[i];
-			const data = datas[i];
-			if (!data) {
-				continue;
-			}
-			const [viewParts, ctx] = data;
-			safeInvokeNoArg(() => rendering.prepareRender(viewParts, ctx));
-		}
-
-		for (let i = 0, len = coordinatedRenderings.length; i < len; i++) {
-			const rendering = coordinatedRenderings[i];
-			const data = datas[i];
-			if (!data) {
-				continue;
-			}
-			const [viewParts, ctx] = data;
-			safeInvokeNoArg(() => rendering.render(viewParts, ctx));
-		}
-	}
-}
-
-class CodeEditorWidgetFocusTracker extends Disposable {
-
-	private _hasDomElementFocus: boolean;
-	private readonly _domFocusTracker: dom.IFocusTracker;
-	private readonly _overflowWidgetsDomNode: dom.IFocusTracker | undefined;
-
-	private readonly _onChange: Emitter<void> = this._register(new Emitter<void>());
-	public readonly onChange: Event<void> = this._onChange.event;
-
-	private _overflowWidgetsDomNodeHasFocus: boolean;
-
-	private _hadFocus: boolean | undefined = undefined;
-
-	constructor(domElement: HTMLElement, overflowWidgetsDomNode: HTMLElement | undefined, userInteractionService: IUserInteractionService) {
-		super();
-
-		this._hasDomElementFocus = false;
-		this._domFocusTracker = this._register(userInteractionService.createDomFocusTracker(domElement));
-
-		this._overflowWidgetsDomNodeHasFocus = false;
-
-		this._register(this._domFocusTracker.onDidFocus(() => {
-			this._hasDomElementFocus = true;
-			this._update();
-		}));
-		this._register(this._domFocusTracker.onDidBlur(() => {
-			this._hasDomElementFocus = false;
-			this._update();
-		}));
-
-		if (overflowWidgetsDomNode) {
-			this._overflowWidgetsDomNode = this._register(userInteractionService.createDomFocusTracker(overflowWidgetsDomNode));
-			this._register(this._overflowWidgetsDomNode.onDidFocus(() => {
-				this._overflowWidgetsDomNodeHasFocus = true;
-				this._update();
-			}));
-			this._register(this._overflowWidgetsDomNode.onDidBlur(() => {
-				this._overflowWidgetsDomNodeHasFocus = false;
-				this._update();
-			}));
-		}
-	}
-
-	private _update() {
-		const focused = this._hasDomElementFocus || this._overflowWidgetsDomNodeHasFocus;
-		if (this._hadFocus !== focused) {
-			this._hadFocus = focused;
-			this._onChange.fire(undefined);
-		}
-	}
-
-	public hasFocus(): boolean {
-		return this._hadFocus ?? false;
-	}
-
-	public refreshState(): void {
-		this._domFocusTracker.refreshState();
-		this._overflowWidgetsDomNode?.refreshState?.();
-	}
+	return value;
 }

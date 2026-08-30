@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorNavigation.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorMoveOperations.js";
 import { Selection } from "../../common/core/selection.js";
-import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -18,7 +17,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	const first = navigateStanzaVisualCursors(
 		model,
 		projection,
-		SelectionSet.single(caret(0, 1)),
+		[caret(0, 1)],
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -26,7 +25,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 		},
 		text => [...text].length * 10,
 	);
-	assert.deepEqual(first.selections.primary, caret(0, 3));
+	assert.deepEqual(first.selections[0]!, caret(0, 3));
 	assert.deepEqual(first.preferredHorizontalOffsets, [10]);
 
 	const second = navigateStanzaVisualCursors(
@@ -41,13 +40,13 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 		},
 		text => [...text].length * 10,
 	);
-	assert.deepEqual(second.selections.primary, caret(1, 1));
+	assert.deepEqual(second.selections[0]!, caret(1, 1));
 	assert.deepEqual(second.preferredHorizontalOffsets, [10]);
 
 	const extended = navigateStanzaVisualCursors(
 		model,
 		projection,
-		SelectionSet.single(caret(0, 1)),
+		[caret(0, 1)],
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Extend,
@@ -56,7 +55,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 		text => [...text].length * 10,
 	);
 	assert.deepEqual(
-		extended.selections.primary,
+		extended.selections[0]!,
 		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (3) + 1)),
 	);
 });
@@ -67,7 +66,7 @@ test("Visual cursor navigation removes continuation indentation before resolving
 	const result = navigateStanzaVisualCursors(
 		model,
 		projection,
-		SelectionSet.single(caret(0, 1)),
+		[caret(0, 1)],
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -76,7 +75,7 @@ test("Visual cursor navigation removes continuation indentation before resolving
 		text => [...text].length * 10,
 	);
 
-	assert.deepEqual(result.selections.primary, caret(0, 2));
+	assert.deepEqual(result.selections[0]!, caret(0, 2));
 	assert.deepEqual(result.preferredHorizontalOffsets, [10]);
 });
 
@@ -86,7 +85,7 @@ test("Visual cursor navigation uses browser geometry when bidirectional layout p
 	const result = navigateStanzaVisualCursors(
 		model,
 		projection,
-		SelectionSet.single(caret(0, 1)),
+		[caret(0, 1)],
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -102,7 +101,7 @@ test("Visual cursor navigation uses browser geometry when bidirectional layout p
 			},
 		},
 	);
-	assert.deepEqual(result.selections.primary, caret(0, 5));
+	assert.deepEqual(result.selections[0]!, caret(0, 5));
 	assert.deepEqual(result.preferredHorizontalOffsets, [91]);
 });
 
@@ -117,7 +116,7 @@ test("Visual cursor navigation rejects stale projections and invalid preferred o
 	assert.throws(() => navigateStanzaVisualCursors(
 		model,
 		projection,
-		SelectionSet.single(caret(0, 0)),
+		[caret(0, 0)],
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,
@@ -130,7 +129,7 @@ test("Visual cursor navigation rejects stale projections and invalid preferred o
 	assert.throws(() => navigateStanzaVisualCursors(
 		model,
 		current,
-		SelectionSet.single(caret(0, 0)),
+		[caret(0, 0)],
 		{
 			command: EditorCursorNavigationCommand.LineDown,
 			mode: EditorCursorNavigationMode.Move,

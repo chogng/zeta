@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CursorNavigation, EditorCursorNavigationCommand, EditorCursorNavigationMode, type EditorCursorNavigationResult } from "../../common/cursor/cursorNavigation.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations, type EditorCursorNavigationResult } from "../../common/cursor/cursorMoveOperations.js";
 import { Selection } from "../../common/core/selection.js";
-import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 
@@ -11,22 +10,22 @@ test("Character navigation preserves graphemes and crosses line boundaries", () 
 
 	assert.deepEqual(
 		navigate(model, caret(0, 1), EditorCursorNavigationCommand.CharacterRight)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 3),
 	);
 	assert.deepEqual(
 		navigate(model, caret(0, 3), EditorCursorNavigationCommand.CharacterLeft)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 1),
 	);
 	assert.deepEqual(
 		navigate(model, caret(0, 4), EditorCursorNavigationCommand.CharacterRight)
-			.selections.primary,
+			.selections[0]!,
 		caret(1, 0),
 	);
 	assert.deepEqual(
 		navigate(model, caret(1, 0), EditorCursorNavigationCommand.CharacterLeft)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 4),
 	);
 });
@@ -40,12 +39,12 @@ test("Horizontal movement collapses ranges and Shift preserves the anchor", () =
 
 	assert.deepEqual(
 		navigate(model, selection, EditorCursorNavigationCommand.CharacterLeft)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 2),
 	);
 	assert.deepEqual(
 		navigate(model, selection, EditorCursorNavigationCommand.CharacterRight)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 5),
 	);
 	assert.deepEqual(
@@ -54,7 +53,7 @@ test("Horizontal movement collapses ranges and Shift preserves the anchor", () =
 			caret(0, 1),
 			EditorCursorNavigationCommand.CharacterRight,
 			EditorCursorNavigationMode.Extend,
-		).selections.primary,
+		).selections[0]!,
 		Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)),
 	);
 });
@@ -68,23 +67,23 @@ test("Vertical navigation retains preferred columns across short lines", () => {
 	);
 	const second = navigate(
 		model,
-		first.selections.primary,
+		first.selections[0]!,
 		EditorCursorNavigationCommand.LineDown,
 		EditorCursorNavigationMode.Move,
 		first.preferredColumns,
 	);
 	const third = navigate(
 		model,
-		second.selections.primary,
+		second.selections[0]!,
 		EditorCursorNavigationCommand.LineDown,
 		EditorCursorNavigationMode.Move,
 		second.preferredColumns,
 	);
 
 	assert.deepEqual({
-		first: first.selections.primary,
-		second: second.selections.primary,
-		third: third.selections.primary,
+		first: first.selections[0]!,
+		second: second.selections[0]!,
+		third: third.selections[0]!,
 		preferred: third.preferredColumns,
 	}, {
 		first: caret(1, 1),
@@ -99,7 +98,7 @@ test("Vertical navigation retains preferred columns across short lines", () => {
 			EditorCursorNavigationCommand.LineUp,
 			EditorCursorNavigationMode.Move,
 			[5],
-		).selections.primary,
+		).selections[0]!,
 		caret(0, 1),
 	);
 });
@@ -109,87 +108,87 @@ test("Word navigation uses word-like segments across lines", () => {
 
 	assert.deepEqual(
 		navigate(model, caret(0, 2), EditorCursorNavigationCommand.WordRight)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 7),
 	);
 	assert.deepEqual(
 		navigate(model, caret(0, 9), EditorCursorNavigationCommand.WordLeft)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 7),
 	);
 	assert.deepEqual(
 		navigate(model, caret(0, 7), EditorCursorNavigationCommand.WordLeft)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 0),
 	);
 	assert.deepEqual(
 		navigate(model, caret(0, 7), EditorCursorNavigationCommand.WordRight)
-			.selections.primary,
+			.selections[0]!,
 		caret(1, 3),
 	);
 });
 
 test("Line, page, document, and multi-selection navigation remain explicit", () => {
 	using model = new TextModel("abcd\nx\nabcdef\nlast");
-	const selections = SelectionSet.withPrimary([
+	const selections = primaryFirst([
 		caret(0, 3),
 		caret(1, 1),
 	], 1);
-	const page = CursorNavigation.navigate(model, selections, {
+	const page = MoveOperations.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.PageDown,
 		mode: EditorCursorNavigationMode.Extend,
 		pageLineCount: 2,
 	});
 
-	assert.deepEqual(page.selections, SelectionSet.withPrimary([
+	assert.deepEqual(page.selections, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((2) + 1, (3) + 1)),
 		Selection.fromPositions(new Position((1) + 1, (1) + 1), new Position((3) + 1, (1) + 1)),
 	], 1));
 	assert.deepEqual(
 		navigate(model, caret(2, 4), EditorCursorNavigationCommand.LineStart)
-			.selections.primary,
+			.selections[0]!,
 		caret(2, 0),
 	);
 	assert.deepEqual(
 		navigate(model, caret(2, 4), EditorCursorNavigationCommand.LineEnd)
-			.selections.primary,
+			.selections[0]!,
 		caret(2, 6),
 	);
 	assert.deepEqual(
 		navigate(model, caret(2, 4), EditorCursorNavigationCommand.DocumentStart)
-			.selections.primary,
+			.selections[0]!,
 		caret(0, 0),
 	);
 	assert.deepEqual(
 		navigate(model, caret(2, 4), EditorCursorNavigationCommand.DocumentEnd)
-			.selections.primary,
+			.selections[0]!,
 		caret(3, 4),
 	);
 });
 
 test("Navigation coalesces exact duplicate results and validates requests", () => {
 	using model = new TextModel("abc");
-	const selections = SelectionSet.withPrimary([
+	const selections = primaryFirst([
 		caret(0, 1),
 		caret(0, 2),
 	], 1);
-	const result = CursorNavigation.navigate(model, selections, {
+	const result = MoveOperations.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.DocumentStart,
 		mode: EditorCursorNavigationMode.Move,
 	});
 
-	assert.deepEqual(result.selections, SelectionSet.single(caret(0, 0)));
-	assert.throws(() => CursorNavigation.navigate(model, selections, {
+	assert.deepEqual(result.selections, [caret(0, 0)]);
+	assert.throws(() => MoveOperations.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.PageDown,
 		mode: EditorCursorNavigationMode.Move,
 		pageLineCount: 0,
 	}), /pageLineCount/);
-	assert.throws(() => CursorNavigation.navigate(model, selections, {
+	assert.throws(() => MoveOperations.navigate(model, selections, {
 		command: EditorCursorNavigationCommand.LineDown,
 		mode: EditorCursorNavigationMode.Move,
 		preferredColumns: [1],
 	}), /preferredColumns/);
-	assert.throws(() => CursorNavigation.navigate(model, selections, {
+	assert.throws(() => MoveOperations.navigate(model, selections, {
 		command: "unknown" as EditorCursorNavigationCommand,
 		mode: EditorCursorNavigationMode.Move,
 	}), /Unknown editor cursor navigation command/);
@@ -197,20 +196,20 @@ test("Navigation coalesces exact duplicate results and validates requests", () =
 
 test('Character navigation honors configured atomic tab stops in indentation', () => {
 	using model = new TextModel('        value');
-	const left = CursorNavigation.navigate(model, SelectionSet.single(caret(0, 8)), {
+	const left = MoveOperations.navigate(model, [caret(0, 8)], {
 		command: EditorCursorNavigationCommand.CharacterLeft,
 		mode: EditorCursorNavigationMode.Move,
 		atomicTabSize: 4,
 	});
-	const right = CursorNavigation.navigate(model, SelectionSet.single(caret(0, 0)), {
+	const right = MoveOperations.navigate(model, [caret(0, 0)], {
 		command: EditorCursorNavigationCommand.CharacterRight,
 		mode: EditorCursorNavigationMode.Move,
 		atomicTabSize: 4,
 	});
 
-	assert.deepEqual(left.selections.primary, caret(0, 4));
-	assert.deepEqual(right.selections.primary, caret(0, 4));
-	assert.throws(() => CursorNavigation.navigate(model, SelectionSet.single(caret(0, 0)), {
+	assert.deepEqual(left.selections[0]!, caret(0, 4));
+	assert.deepEqual(right.selections[0]!, caret(0, 4));
+	assert.throws(() => MoveOperations.navigate(model, [caret(0, 0)], {
 		command: EditorCursorNavigationCommand.CharacterRight,
 		mode: EditorCursorNavigationMode.Move,
 		atomicTabSize: 0,
@@ -224,13 +223,18 @@ function navigate(
 	mode = EditorCursorNavigationMode.Move,
 	preferredColumns?: readonly number[],
 ): EditorCursorNavigationResult {
-	return CursorNavigation.navigate(
+	return MoveOperations.navigate(
 		model,
-		SelectionSet.single(selection),
+		[selection],
 		{ command, mode, preferredColumns },
 	);
 }
 
 function caret(lineIndex: number, columnIndex: number): Selection {
 	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
+}
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }

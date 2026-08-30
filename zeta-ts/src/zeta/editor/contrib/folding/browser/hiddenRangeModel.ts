@@ -1,150 +1,64 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+import { Emitter, type Event } from "../../../../base/common/event.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
+import { type EditorLineVisibilitySource } from "../../../common/viewModel/viewModelLines.js";
+import { type TextModel } from "../../../common/model/textModel.js";
+import { EditorFoldingModel } from "./foldingModel.js";
 
-import { findFirstIdxMonotonousOrArrLen } from '../../../../base/common/arraysFind.js';
+/** Derives hidden physical lines from collapsed folding regions for visual consumers. */
+export class EditorHiddenRangeModel extends Disposable implements EditorLineVisibilitySource {
+	private readonly changeEmitter = this._register(new Emitter<void>());
+	private hiddenLines: readonly boolean[] = Object.freeze([]);
+	private visibleLineIndexes: readonly number[] = Object.freeze([]);
 
-import { Emitter, Event } from '../../../../base/common/event.js';
-import { IDisposable } from '../../../../base/common/lifecycle.js';
-import { IRange, Range } from '../../../common/core/range.js';
-import { Selection } from '../../../common/core/selection.js';
-import { IModelContentChangedEvent } from '../../../common/textModelEvents.js';
-import { countEOL } from '../../../common/core/misc/eolCounter.js';
-import { FoldingModel } from './foldingModel.js';
+	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-export class HiddenRangeModel implements IDisposable {
-
-	private readonly _foldingModel: FoldingModel;
-	private _hiddenRanges: IRange[];
-	private _foldingModelListener: IDisposable | null;
-	private readonly _updateEventEmitter = new Emitter<IRange[]>();
-	private _hasLineChanges: boolean = false;
-
-	public get onDidChange(): Event<IRange[]> { return this._updateEventEmitter.event; }
-	public get hiddenRanges() { return this._hiddenRanges; }
-
-	public constructor(model: FoldingModel) {
-		this._foldingModel = model;
-		this._foldingModelListener = model.onDidChange(_ => this.updateHiddenRanges());
-		this._hiddenRanges = [];
-		if (model.regions.length) {
-			this.updateHiddenRanges();
-		}
+	constructor(private readonly textModel: TextModel, private readonly folding: EditorFoldingModel) {
+		super();
+		if (folding.model !== textModel) throw new TypeError("Hidden range and folding models must share one text model");
+		this.rebuild();
+		this._register(folding.onDidChange(() => this.rebuild()));
+		this._register(textModel.onDidChangeContent(() => this.rebuild()));
 	}
 
-	public notifyChangeModelContent(e: IModelContentChangedEvent) {
-		if (this._hiddenRanges.length && !this._hasLineChanges) {
-			this._hasLineChanges = e.changes.some(change => {
-				return change.range.endLineNumber !== change.range.startLineNumber || countEOL(change.text)[0] !== 0;
-			});
-		}
+	get model(): TextModel {
+		return this.textModel;
 	}
 
-	private updateHiddenRanges(): void {
-		let updateHiddenAreas = false;
-		const newHiddenAreas: IRange[] = [];
-		let i = 0; // index into hidden
-		let k = 0;
-
-		let lastCollapsedStart = Number.MAX_VALUE;
-		let lastCollapsedEnd = -1;
-
-		const ranges = this._foldingModel.regions;
-		for (; i < ranges.length; i++) {
-			if (!ranges.isCollapsed(i)) {
-				continue;
-			}
-
-			const startLineNumber = ranges.getStartLineNumber(i) + 1; // the first line is not hidden
-			const endLineNumber = ranges.getEndLineNumber(i);
-			if (lastCollapsedStart <= startLineNumber && endLineNumber <= lastCollapsedEnd) {
-				// ignore ranges contained in collapsed regions
-				continue;
-			}
-
-			if (!updateHiddenAreas && k < this._hiddenRanges.length && this._hiddenRanges[k].startLineNumber === startLineNumber && this._hiddenRanges[k].endLineNumber === endLineNumber) {
-				// reuse the old ranges
-				newHiddenAreas.push(this._hiddenRanges[k]);
-				k++;
-			} else {
-				updateHiddenAreas = true;
-				newHiddenAreas.push(new Range(startLineNumber, 1, endLineNumber, 1));
-			}
-			lastCollapsedStart = startLineNumber;
-			lastCollapsedEnd = endLineNumber;
-		}
-		if (this._hasLineChanges || updateHiddenAreas || k < this._hiddenRanges.length) {
-			this.applyHiddenRanges(newHiddenAreas);
-		}
+	get lineCount(): number {
+		return this.textModel.lineCount;
 	}
 
-	private applyHiddenRanges(newHiddenAreas: IRange[]) {
-		this._hiddenRanges = newHiddenAreas;
-		this._hasLineChanges = false;
-		this._updateEventEmitter.fire(newHiddenAreas);
+	isLineVisible(lineIndex: number): boolean {
+		validateLineIndex(this.textModel, lineIndex);
+		return !this.hiddenLines[lineIndex];
 	}
 
-	public hasRanges() {
-		return this._hiddenRanges.length > 0;
+	isLineHidden(lineIndex: number): boolean {
+		return !this.isLineVisible(lineIndex);
 	}
 
-	public isHidden(line: number): boolean {
-		return findRange(this._hiddenRanges, line) !== null;
+	getVisibleLineIndexes(): readonly number[] {
+		return this.visibleLineIndexes;
 	}
 
-	public adjustSelections(selections: Selection[]): boolean {
-		let hasChanges = false;
-		const editorModel = this._foldingModel.textModel;
-		let lastRange: IRange | null = null;
-
-		const adjustLine = (line: number) => {
-			if (!lastRange || !isInside(line, lastRange)) {
-				lastRange = findRange(this._hiddenRanges, line);
-			}
-			if (lastRange) {
-				return lastRange.startLineNumber - 1;
-			}
-			return null;
-		};
-		for (let i = 0, len = selections.length; i < len; i++) {
-			let selection = selections[i];
-			const adjustedStartLine = adjustLine(selection.startLineNumber);
-			if (adjustedStartLine) {
-				selection = selection.setStartPosition(adjustedStartLine, editorModel.getLineMaxColumn(adjustedStartLine));
-				hasChanges = true;
-			}
-			const adjustedEndLine = adjustLine(selection.endLineNumber);
-			if (adjustedEndLine) {
-				selection = selection.setEndPosition(adjustedEndLine, editorModel.getLineMaxColumn(adjustedEndLine));
-				hasChanges = true;
-			}
-			selections[i] = selection;
+	private rebuild(): void {
+		const hiddenLines = Array.from({ length: this.textModel.lineCount }, () => false);
+		for (const region of this.folding.regions) {
+			if (!region.collapsed) continue;
+			for (let lineIndex = region.startLineIndex + 1; lineIndex <= region.endLineIndex; lineIndex += 1) hiddenLines[lineIndex] = true;
 		}
-		return hasChanges;
-	}
-
-
-	public dispose() {
-		if (this.hiddenRanges.length > 0) {
-			this._hiddenRanges = [];
-			this._updateEventEmitter.fire(this._hiddenRanges);
-		}
-		if (this._foldingModelListener) {
-			this._foldingModelListener.dispose();
-			this._foldingModelListener = null;
-		}
-		this._updateEventEmitter.dispose();
+		const visibleLineIndexes = hiddenLines.flatMap((hidden, lineIndex) => hidden ? [] : [lineIndex]);
+		if (sameBooleanArray(this.hiddenLines, hiddenLines)) return;
+		this.hiddenLines = Object.freeze(hiddenLines);
+		this.visibleLineIndexes = Object.freeze(visibleLineIndexes);
+		this.changeEmitter.fire();
 	}
 }
 
-function isInside(line: number, range: IRange) {
-	return line >= range.startLineNumber && line <= range.endLineNumber;
+function sameBooleanArray(left: readonly boolean[], right: readonly boolean[]): boolean {
+	return left.length === right.length && left.every((value, index) => value === right[index]);
 }
-function findRange(ranges: IRange[], line: number): IRange | null {
-	const i = findFirstIdxMonotonousOrArrLen(ranges, r => line < r.startLineNumber) - 1;
-	if (i >= 0 && ranges[i].endLineNumber >= line) {
-		return ranges[i];
-	}
-	return null;
+
+function validateLineIndex(model: TextModel, lineIndex: number): void {
+	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= model.lineCount) throw new RangeError("Hidden line index is outside the text model");
 }

@@ -290,9 +290,9 @@ export class LanguageCompletionSessionController extends Disposable {
 
 	private selectionMatches(position: Position): boolean {
 		const selections = this.selectionController.selections;
-		return selections.selections.length === 1 &&
-			selections.primary.isEmpty() &&
-			Position.compare(selections.primary.getPosition(), position) === 0;
+		return selections.length === 1 &&
+			selections[0]!.isEmpty() &&
+			Position.compare(selections[0]!.getPosition(), position) === 0;
 	}
 
 	private close(reason: LanguageCompletionSessionChangeReason): boolean {
@@ -353,10 +353,10 @@ export function createLanguageCompletionAcceptCommand(model: TextModel, selectio
 		throw new TypeError("Language completion command and selection controller must share one text model");
 	}
 	const selections = selectionController.selections;
-	if (selections.selections.length !== 1 || !selections.primary.isEmpty()) {
+	if (selections.length !== 1 || !selections[0]!.isEmpty()) {
 		throw new Error("Language completion acceptance requires one collapsed selection");
 	}
-	const position = selections.primary.getPosition();
+	const position = selections[0]!.getPosition();
 	if (Position.compare(item.range.getStartPosition(), position) > 0 || Position.compare(item.range.getEndPosition(), position) < 0) {
 		throw new RangeError("Language completion item range must contain the active position");
 	}

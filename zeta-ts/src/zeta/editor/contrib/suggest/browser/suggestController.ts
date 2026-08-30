@@ -20,9 +20,9 @@ export interface SuggestControllerOptions {
  * The common session and completion service are supplied by the contribution
  * composition root. This controller owns only browser request cancellation,
  * keyboard/input interception, and the completion widget, matching VS Code's
- * separation between View and EditorSuggestController.
+ * separation between View and SuggestController.
  */
-export class EditorSuggestController extends Disposable {
+export class SuggestController extends Disposable {
 	readonly widget: CompletionWidget;
 	private readonly onRequestError: (error: unknown) => void;
 	private completionRequest: AbortController | undefined;
@@ -78,7 +78,7 @@ export class EditorSuggestController extends Disposable {
 		if (!this.session.acceptSelectedWithCommitCharacter(event.data)) return;
 		stopEvent(event);
 		this.view.clearInput();
-		this.view.revealPosition(this.selectionController.selections.primary.getPosition());
+		this.view.revealPosition(this.selectionController.selections[0]!.getPosition());
 		this.requestAfterInsert(event.data, false);
 	}
 
@@ -86,7 +86,7 @@ export class EditorSuggestController extends Disposable {
 		if (event.defaultPrevented || !event.text || !this.session.acceptSelectedWithCommitCharacter(event.text)) return;
 		event.preventDefault();
 		this.view.clearInput();
-		this.view.revealPosition(this.selectionController.selections.primary.getPosition());
+		this.view.revealPosition(this.selectionController.selections[0]!.getPosition());
 		this.requestAfterInsert(event.text, false);
 	}
 
@@ -178,7 +178,7 @@ export class EditorSuggestController extends Disposable {
 
 	private acceptSelected(): void {
 		if (!this.session.acceptSelected()) return;
-		this.view.revealPosition(this.selectionController.selections.primary.getPosition());
+		this.view.revealPosition(this.selectionController.selections[0]!.getPosition());
 		this.view.focus();
 	}
 
@@ -215,11 +215,11 @@ export class EditorSuggestController extends Disposable {
 	private requestAfterInsert(insertedText: string, refreshIncomplete: boolean): void {
 		if ([...insertedText].length === 1) {
 			const selections = this.selectionController.selections;
-			if (selections.selections.length !== 1 || !selections.primary.isEmpty()) {
+			if (selections.length !== 1 || !selections[0]!.isEmpty()) {
 				this.session.cancel();
 				return;
 			}
-			const position = selections.primary.getPosition();
+			const position = selections[0]!.getPosition();
 			const modelVersion = this.view.viewport.textModel.version;
 			const request = this.beginCompletionRequest();
 			void this.service.requestTriggerCharacter(
@@ -233,9 +233,9 @@ export class EditorSuggestController extends Disposable {
 					outcome === undefined &&
 					refreshIncomplete &&
 					this.view.viewport.textModel.version === modelVersion &&
-					this.selectionController.selections.selections.length === 1 &&
-					this.selectionController.selections.primary.isEmpty() &&
-					Position.compare(this.selectionController.selections.primary.getPosition(), position) === 0
+					this.selectionController.selections.length === 1 &&
+					this.selectionController.selections[0]!.isEmpty() &&
+					Position.compare(this.selectionController.selections[0]!.getPosition(), position) === 0
 				) {
 					this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
 				}
@@ -249,7 +249,7 @@ export class EditorSuggestController extends Disposable {
 
 	private requestCompletion(context: LanguageCompletionContext): void {
 		const selections = this.selectionController.selections;
-		if (selections.selections.length !== 1 || !selections.primary.isEmpty()) {
+		if (selections.length !== 1 || !selections[0]!.isEmpty()) {
 			this.session.cancel();
 			return;
 		}
@@ -257,7 +257,7 @@ export class EditorSuggestController extends Disposable {
 		try {
 			void this.service.request(
 				this.languageId,
-				selections.primary.getPosition(),
+				selections[0]!.getPosition(),
 				context,
 				{ signal: request.signal },
 			).catch(error => {

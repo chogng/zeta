@@ -12,7 +12,8 @@ import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
-import { applyEditorFontInfo } from '../../config/domFontInfo.js';
+import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
+import { applyFontInfo } from '../../config/domFontInfo.js';
 import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
 
 const DEFAULT_LINE_HEIGHT = 20;
@@ -58,7 +59,7 @@ interface MultiDiffSectionLayout {
 }
 
 /** Read-only, vertically virtualized presentation of multiple DiffModels. */
-export class EditorMultiDiffWidget extends Disposable {
+export class MultiDiffEditorWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
@@ -87,11 +88,12 @@ export class EditorMultiDiffWidget extends Disposable {
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'stanza-multi-diff-editor';
 		this.domNode.classList.toggle('hide-line-numbers', options.showLineNumbers === false);
-		applyEditorFontInfo(this.domNode, {
+		applyFontInfo(this.domNode, createBareFontInfoFromRawSettings({
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
-			fontLigatures: options.fontLigatures ?? false,
-		});
+			fontLigatures: options.fontLigatures,
+			lineHeight: this.lineHeight,
+		}, getWindow(options.container).devicePixelRatio));
 		this.domNode.tabIndex = 0;
 		this.domNode.setAttribute('role', 'region');
 		this.domNode.setAttribute('aria-label', options.ariaLabel ?? `Multi-file diff editor with ${this.items.length} files`);

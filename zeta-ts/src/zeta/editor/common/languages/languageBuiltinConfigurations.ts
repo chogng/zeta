@@ -139,9 +139,18 @@ export function registerBuiltinLanguageConfigurations(service: ILanguageConfigur
 }
 
 export function createBuiltinLanguageConfigurationService(): LanguageConfigurationService {
-	const service = new LanguageConfigurationService(new InMemoryConfigurationService(), new LanguageService());
-	registerBuiltinLanguageConfigurations(service);
-	return service;
+	return new BuiltinLanguageConfigurationService();
+}
+
+class BuiltinLanguageConfigurationService extends LanguageConfigurationService {
+	constructor() {
+		const configurationService = new InMemoryConfigurationService();
+		const languageService = new LanguageService();
+		super(configurationService, languageService);
+		this._register(configurationService);
+		this._register(languageService);
+		this._register(registerBuiltinLanguageConfigurations(this));
+	}
 }
 
 function pairsFromBrackets(brackets: readonly CharacterPair[]): IAutoClosingPairConditional[] {

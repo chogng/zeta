@@ -2,10 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
-import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
+import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { createStanzaDecorationSource } from '../../../../browser/viewParts/decorations/decorations.js';
 import { Selection } from '../../../../common/core/selection.js';
-import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
@@ -96,7 +95,7 @@ test('Word highlighter cancels a stale provider request when the selection chang
 
 	harness.controller.restoreViewState(true);
 	await new Promise(resolve => setTimeout(resolve, 1));
-	harness.selections.setSelections(SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (6) + 1))));
+	harness.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (6) + 1))]);
 	await settleHighlights();
 
 	assert.equal(aborted, true);
@@ -114,16 +113,16 @@ test('Word highlighter obeys the off mode and navigates existing highlights', as
 	enabled.controller.restoreViewState(true);
 	await settleHighlights();
 	enabled.controller.moveNext();
-	assert.deepEqual(enabled.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
+	assert.deepEqual(enabled.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
 	enabled.controller.moveBack();
-	assert.deepEqual(enabled.selections.selections.primary, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
+	assert.deepEqual(enabled.selections.selections[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 });
 
 function createHarness(text: string, languages: TestLanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile'): EditorHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text, { languageId: 'typescript', resource });
-	const selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (1) + 1))));
+	const selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
 	const textualProvider = new TextualHighlightTargetRegistration(languages, { resource, model });
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
 	const viewport = new View({

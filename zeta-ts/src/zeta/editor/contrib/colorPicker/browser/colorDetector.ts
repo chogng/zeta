@@ -15,7 +15,7 @@ export interface ColorDetectorOptions {
 }
 
 /** Owns provider refresh, version cancellation, tracked ranges, and color-swatch metadata. */
-export class EditorColorDetector extends Disposable {
+export class ColorDetector extends Disposable {
 	private readonly decorations: TextDecorationCollection<ColorData>;
 	private readonly refreshTimer = this._register(new MutableDisposable<IDisposable>());
 	private request: AbortController | undefined;

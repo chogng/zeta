@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { type TextMeasurer } from '../../browser/config/fontMeasurements.js';
+import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
 import { Position } from '../../common/core/position.js';
 import { Selection } from '../../common/core/selection.js';
-import { SelectionSet } from '../../common/cursor/selectionSet.js';
 import { TextModel } from '../../common/model/textModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -134,7 +133,7 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 	].join('\n'));
 	using selections = new CursorsController(
 		model,
-		SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (0) + 1))),
+		[Selection.fromPositions(new Position((1) + 1, (0) + 1))],
 	);
 	using viewport = new View({
 		container,
@@ -147,9 +146,7 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 	viewport.scrollTo({ left: 0, top: 40 });
 
 	const state = ViewStableEditorScrollState.capture(viewport, selections);
-	selections.setSelections(SelectionSet.single(
-		Selection.fromPositions(new Position((4) + 1, (0) + 1)),
-	));
+	selections.setSelections([Selection.fromPositions(new Position((4) + 1, (0) + 1))]);
 	viewport.setLineHeight(30);
 	state.restoreRelativeVerticalPositionOfCursor(viewport, selections);
 
@@ -170,7 +167,6 @@ function fixedTextMeasurer(): TextMeasurer {
 	return {
 		horizontalPadding: 24,
 		contentLeftPadding: 12,
-		refresh: () => false,
 		measureLineWidth: text => [...text].length * 8,
 	};
 }

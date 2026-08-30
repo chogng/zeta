@@ -5,7 +5,6 @@ import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageCompletionSnippet } from "./languageCompletionSnippetParser.js";
 import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "./snippetTransform.js";
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TrackedRange } from "../../../common/model/trackedRange.js";
@@ -106,7 +105,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 		if (this.currentGroupIndex === this.groups.length - 1) {
 			this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
 			this.currentGroupIndex += 1;
-			this.selections.setSelections(SelectionSet.single(Selection.fromPositions(this.finalRange.range.getEndPosition())));
+			this.selections.setSelections([Selection.fromPositions(this.finalRange.range.getEndPosition())]);
 			return true;
 		}
 		this.dispose();
@@ -147,10 +146,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 	private selectGroup(index: number): void {
 		const group = this.groups[index];
 		if (!group) throw new RangeError("Language completion snippet tabstop index is outside its session");
-		this.selections.setSelections(SelectionSet.withPrimary(
-			group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())),
-			0,
-		));
+		this.selections.setSelections(group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())));
 	}
 
 	private selectRelativeChoice(delta: number): boolean {

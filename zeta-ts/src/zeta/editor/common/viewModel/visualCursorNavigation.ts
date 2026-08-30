@@ -1,7 +1,6 @@
 import { clamp } from "../../../base/common/numbers.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorNavigation.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorMoveOperations.js";
 import { Selection } from "../core/selection.js";
-import { SelectionSet } from "../cursor/selectionSet.js";
 import { Position } from "../core/position.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 import { type TextModel } from "../model/textModel.js";
@@ -15,7 +14,7 @@ export interface VisualCursorNavigationRequest {
 }
 
 export interface VisualCursorNavigationResult {
-	readonly selections: SelectionSet;
+	readonly selections: readonly Selection[];
 	readonly preferredHorizontalOffsets: readonly number[];
 }
 
@@ -26,7 +25,7 @@ export interface VisualCursorGeometry {
 }
 
 /** Navigates selections by browser-measured wrapped visual rows. */
-export function navigateStanzaVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: SelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: VisualCursorGeometry): VisualCursorNavigationResult {
+export function navigateStanzaVisualCursors(model: TextModel, projection: EditorVisualLineProjection, selections: readonly Selection[], request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number, geometry?: VisualCursorGeometry): VisualCursorNavigationResult {
 	validateRequest(model, projection, selections, request, measureTextWidth);
 	const preferredHorizontalOffsets = resolvePreferredHorizontalOffsets(
 		model,
@@ -36,7 +35,7 @@ export function navigateStanzaVisualCursors(model: TextModel, projection: Editor
 		measureTextWidth,
 		geometry,
 	);
-	const navigated = selections.selections.map((selection, index) => {
+	const navigated = selections.map((selection, index) => {
 		const target = visualVerticalTarget(
 			model,
 			projection,
@@ -50,7 +49,7 @@ export function navigateStanzaVisualCursors(model: TextModel, projection: Editor
 			? Selection.fromPositions(selection.getSelectionStart(), target)
 			: Selection.fromPositions(target);
 	});
-	return normalizeResult(navigated, selections.primaryIndex, preferredHorizontalOffsets);
+	return normalizeResult(navigated, 0, preferredHorizontalOffsets);
 }
 
 function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProjection, position: Position, lineDelta: number, preferredHorizontalOffset: number, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): Position {
@@ -78,11 +77,11 @@ function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProj
 		)) + 1);
 }
 
-function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorVisualLineProjection, selections: SelectionSet, preferredHorizontalOffsets: readonly number[] | undefined, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): readonly number[] {
-	if (preferredHorizontalOffsets?.length === selections.selections.length) {
+function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorVisualLineProjection, selections: readonly Selection[], preferredHorizontalOffsets: readonly number[] | undefined, measureTextWidth: (text: string) => number, geometry: VisualCursorGeometry | undefined): readonly number[] {
+	if (preferredHorizontalOffsets?.length === selections.length) {
 		return Object.freeze([...preferredHorizontalOffsets]);
 	}
-	return Object.freeze(selections.selections.map(selection => {
+	return Object.freeze(selections.map(selection => {
 		const visualLine = projection.lineAt(
 			projection.visualLineIndexAt(selection.getPosition()),
 		)!;
@@ -142,12 +141,17 @@ function normalizeResult(selections: readonly Selection[], primaryIndex: number,
 		sourceToNormalized.push(targetIndex);
 	}
 	return Object.freeze({
-		selections: SelectionSet.withPrimary(normalized, sourceToNormalized[primaryIndex]!),
+		selections: primaryFirst(normalized, sourceToNormalized[primaryIndex]!),
 		preferredHorizontalOffsets: Object.freeze(normalizedOffsets),
 	});
 }
 
-function validateRequest(model: TextModel, projection: EditorVisualLineProjection, selections: SelectionSet, request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number): void {
+function primaryFirst(selections: readonly Selection[], primaryIndex: number): readonly Selection[] {
+	if (primaryIndex === 0) return Object.freeze([...selections]);
+	return Object.freeze([selections[primaryIndex]!, ...selections.slice(0, primaryIndex), ...selections.slice(primaryIndex + 1)]);
+}
+
+function validateRequest(model: TextModel, projection: EditorVisualLineProjection, selections: readonly Selection[], request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number): void {
 	if (projection.modelVersion !== model.version) {
 		throw new Error("Visual cursor navigation requires the current text model projection");
 	}
@@ -163,10 +167,10 @@ function validateRequest(model: TextModel, projection: EditorVisualLineProjectio
 	if (typeof measureTextWidth !== "function") {
 		throw new TypeError("Visual cursor navigation requires a text measurement function");
 	}
-	if (request.preferredHorizontalOffsets && (request.preferredHorizontalOffsets.length !== selections.selections.length || request.preferredHorizontalOffsets.some(offset => !Number.isFinite(offset) || offset < 0))) {
+	if (request.preferredHorizontalOffsets && (request.preferredHorizontalOffsets.length !== selections.length || request.preferredHorizontalOffsets.some(offset => !Number.isFinite(offset) || offset < 0))) {
 		throw new RangeError("Visual cursor navigation preferred horizontal offsets must match selections");
 	}
-	for (const selection of selections.selections) model.offsetAt(selection.getPosition());
+	for (const selection of selections) model.offsetAt(selection.getPosition());
 }
 
 function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is VisualCursorNavigationRequest["command"] {

@@ -1,17 +1,85 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
-import { EndOfLinePreference } from '../../../common/model.js';
+import { AccessibilitySupport } from '../../../../platform/accessibility/common/accessibility.js';
+import { type IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import * as nls from '../../../../nls.js';
+import { type IComputedEditorOptions, EditorOption } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection, SelectionDirection } from '../../../common/core/selection.js';
-import { EditorOption, IComputedEditorOptions } from '../../../common/config/editorOptions.js';
-import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import { AccessibilitySupport } from '../../../../platform/accessibility/common/accessibility.js';
-import * as nls from '../../../../nls.js';
-import { ISimpleModel } from '../../../common/viewModel/screenReaderSimpleModel.js';
+import { EndOfLinePreference } from '../../../common/model.js';
+import { type ISimpleModel } from '../../../common/viewModel/screenReaderSimpleModel.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+
+export interface ScreenReaderSegment {
+	readonly modelStartOffset: number;
+	readonly modelEndOffset: number;
+	readonly contentStartOffset: number;
+	readonly contentEndOffset: number;
+}
+
+export interface MappedScreenReaderContentState extends ISimpleScreenReaderContentState {
+	readonly startOffset: number;
+	readonly endOffset: number;
+	readonly segments: readonly ScreenReaderSegment[];
+}
+
+/** Creates a bounded text projection while retaining model/content offset mappings. */
+export class MappedScreenReaderStrategy {
+	fromEditorSelection(model: TextModel, selection: Selection, linesPerPage: number, trimLongText: boolean): MappedScreenReaderContentState {
+		const pageSize = Math.max(1, Math.floor(linesPerPage));
+		const firstLine = Math.max(1, selection.startLineNumber - pageSize);
+		const lastLine = Math.min(model.lineCount, selection.endLineNumber + pageSize);
+		let startOffset = model.offsetAt(new Position(firstLine, 1));
+		let endOffset = lastLine === model.lineCount ? model.length : model.offsetAt(new Position(lastLine + 1, 1));
+		const selectionStart = model.offsetAt(selection.getStartPosition());
+		const selectionEnd = model.offsetAt(selection.getEndPosition());
+		if (trimLongText) {
+			startOffset = Math.max(startOffset, selectionStart - 500);
+			endOffset = Math.min(endOffset, selectionEnd + 500);
+		}
+		const value = model.createVersionedSnapshot().getTextBetweenOffsets(startOffset, endOffset);
+		const segment: ScreenReaderSegment = {
+			modelStartOffset: startOffset,
+			modelEndOffset: endOffset,
+			contentStartOffset: 0,
+			contentEndOffset: value.length,
+		};
+		const start = selectionStart - startOffset;
+		const end = selectionEnd - startOffset;
+		const rtl = selection.getDirection() === SelectionDirection.RTL;
+		return {
+			value,
+			selection,
+			selectionStart: rtl ? end : start,
+			selectionEnd: rtl ? start : end,
+			startPositionWithinEditor: model.positionAt(startOffset),
+			newlineCountBeforeSelection: newlinecount(value.slice(0, start)),
+			startOffset,
+			endOffset,
+			segments: [segment],
+		};
+	}
+}
+
+export function modelOffsetAtContentOffset(
+	state: Pick<MappedScreenReaderContentState, 'value' | 'segments'>,
+	offset: number,
+	affinity: 'start' | 'end' = 'start',
+): number {
+	if (state.segments.length === 0) return 0;
+	const valueOffset = Math.max(0, Math.min(state.value.length, offset));
+	for (let index = 0; index < state.segments.length; index += 1) {
+		const segment = state.segments[index]!;
+		if (valueOffset < segment.contentStartOffset) {
+			return affinity === 'end' && index > 0
+				? state.segments[index - 1]!.modelEndOffset
+				: segment.modelStartOffset;
+		}
+		if (valueOffset < segment.contentEndOffset || valueOffset === segment.contentEndOffset && affinity === 'end') {
+			return segment.modelStartOffset + Math.max(0, valueOffset - segment.contentStartOffset);
+		}
+	}
+	return state.segments.at(-1)!.modelEndOffset;
+}
 
 export interface IPagedScreenReaderStrategy<T> {
 	fromEditorSelection(model: ISimpleModel, selection: Selection, linesPerPage: number, trimLongText: boolean): T;
@@ -19,20 +87,10 @@ export interface IPagedScreenReaderStrategy<T> {
 
 export interface ISimpleScreenReaderContentState {
 	value: string;
-
-	/** the offset where selection starts inside `value` */
 	selectionStart: number;
-
-	/** the offset where selection ends inside `value` */
 	selectionEnd: number;
-
-	/** the editor range in the view coordinate system that matches the selection inside `value` */
 	selection: Selection;
-
-	/** the position of the start of the `value` in the editor */
 	startPositionWithinEditor: Position;
-
-	/** the visible line count (wrapped, not necessarily matching \n characters) for the text in `value` before `selectionStart` */
 	newlineCountBeforeSelection: number;
 }
 
@@ -43,70 +101,47 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 
 	private _getRangeForPage(page: number, linesPerPage: number): Range {
 		const offset = page * linesPerPage;
-		const startLineNumber = offset + 1;
-		const endLineNumber = offset + linesPerPage;
-		return new Range(startLineNumber, 1, endLineNumber + 1, 1);
+		return new Range(offset + 1, 1, offset + linesPerPage + 1, 1);
 	}
 
 	public fromEditorSelection(model: ISimpleModel, selection: Selection, linesPerPage: number, trimLongText: boolean): ISimpleScreenReaderContentState {
-		// Chromium handles very poorly text even of a few thousand chars
-		// Cut text to avoid stalling the entire UI
-		const LIMIT_CHARS = 500;
-
+		const limitCharacters = 500;
 		const selectionStartPage = this._getPageOfLine(selection.startLineNumber, linesPerPage);
 		const selectionStartPageRange = this._getRangeForPage(selectionStartPage, linesPerPage);
-
 		const selectionEndPage = this._getPageOfLine(selection.endLineNumber, linesPerPage);
 		const selectionEndPageRange = this._getRangeForPage(selectionEndPage, linesPerPage);
 
 		let pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn))!;
-		if (trimLongText && model.getValueLengthInRange(pretextRange, EndOfLinePreference.LF) > LIMIT_CHARS) {
-			const pretextStart = model.modifyPosition(pretextRange.getEndPosition(), -LIMIT_CHARS);
-			pretextRange = Range.fromPositions(pretextStart, pretextRange.getEndPosition());
+		if (trimLongText && model.getValueLengthInRange(pretextRange, EndOfLinePreference.LF) > limitCharacters) {
+			pretextRange = Range.fromPositions(model.modifyPosition(pretextRange.getEndPosition(), -limitCharacters), pretextRange.getEndPosition());
 		}
 		const pretext = model.getValueInRange(pretextRange, EndOfLinePreference.LF);
 
 		const lastLine = model.getLineCount();
-		const lastLineMaxColumn = model.getLineMaxColumn(lastLine);
-		let posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, lastLineMaxColumn))!;
-		if (trimLongText && model.getValueLengthInRange(posttextRange, EndOfLinePreference.LF) > LIMIT_CHARS) {
-			const posttextEnd = model.modifyPosition(posttextRange.getStartPosition(), LIMIT_CHARS);
-			posttextRange = Range.fromPositions(posttextRange.getStartPosition(), posttextEnd);
+		let posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, model.getLineMaxColumn(lastLine)))!;
+		if (trimLongText && model.getValueLengthInRange(posttextRange, EndOfLinePreference.LF) > limitCharacters) {
+			posttextRange = Range.fromPositions(posttextRange.getStartPosition(), model.modifyPosition(posttextRange.getStartPosition(), limitCharacters));
 		}
 		const posttext = model.getValueInRange(posttextRange, EndOfLinePreference.LF);
 
-
 		let text: string;
 		if (selectionStartPage === selectionEndPage || selectionStartPage + 1 === selectionEndPage) {
-			// take full selection
 			text = model.getValueInRange(selection, EndOfLinePreference.LF);
 		} else {
-			const selectionRange1 = selectionStartPageRange.intersectRanges(selection)!;
-			const selectionRange2 = selectionEndPageRange.intersectRanges(selection)!;
-			text = (
-				model.getValueInRange(selectionRange1, EndOfLinePreference.LF)
+			text = model.getValueInRange(selectionStartPageRange.intersectRanges(selection)!, EndOfLinePreference.LF)
 				+ String.fromCharCode(8230)
-				+ model.getValueInRange(selectionRange2, EndOfLinePreference.LF)
-			);
+				+ model.getValueInRange(selectionEndPageRange.intersectRanges(selection)!, EndOfLinePreference.LF);
 		}
-		if (trimLongText && text.length > 2 * LIMIT_CHARS) {
-			text = text.substring(0, LIMIT_CHARS) + String.fromCharCode(8230) + text.substring(text.length - LIMIT_CHARS, text.length);
+		if (trimLongText && text.length > 2 * limitCharacters) {
+			text = text.substring(0, limitCharacters) + String.fromCharCode(8230) + text.substring(text.length - limitCharacters);
 		}
 
-		let selectionStart: number;
-		let selectionEnd: number;
-		if (selection.getDirection() === SelectionDirection.LTR) {
-			selectionStart = pretext.length;
-			selectionEnd = pretext.length + text.length;
-		} else {
-			selectionEnd = pretext.length;
-			selectionStart = pretext.length + text.length;
-		}
+		const leftToRight = selection.getDirection() === SelectionDirection.LTR;
 		return {
 			value: pretext + text + posttext,
-			selection: selection,
-			selectionStart,
-			selectionEnd,
+			selection,
+			selectionStart: leftToRight ? pretext.length : pretext.length + text.length,
+			selectionEnd: leftToRight ? pretext.length + text.length : pretext.length,
 			startPositionWithinEditor: pretextRange.getStartPosition(),
 			newlineCountBeforeSelection: pretextRange.endLineNumber - pretextRange.startLineNumber,
 		};
@@ -114,36 +149,17 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 }
 
 export function ariaLabelForScreenReaderContent(options: IComputedEditorOptions, keybindingService: IKeybindingService) {
-	const accessibilitySupport = options.get(EditorOption.accessibilitySupport);
-	if (accessibilitySupport === AccessibilitySupport.Disabled) {
-
-		const toggleKeybindingLabel = keybindingService.lookupKeybinding('editor.action.toggleScreenReaderAccessibilityMode')?.getAriaLabel();
-		const runCommandKeybindingLabel = keybindingService.lookupKeybinding('workbench.action.showCommands')?.getAriaLabel();
-		const keybindingEditorKeybindingLabel = keybindingService.lookupKeybinding('workbench.action.openGlobalKeybindings')?.getAriaLabel();
-		const editorNotAccessibleMessage = nls.localize('accessibilityModeOff', "The editor is not accessible at this time.");
-		if (toggleKeybindingLabel) {
-			return nls.localize('accessibilityOffAriaLabel', "{0} To enable screen reader optimized mode, use {1}", editorNotAccessibleMessage, toggleKeybindingLabel);
-		} else if (runCommandKeybindingLabel) {
-			return nls.localize('accessibilityOffAriaLabelNoKb', "{0} To enable screen reader optimized mode, open the quick pick with {1} and run the command Toggle Screen Reader Accessibility Mode, which is currently not triggerable via keyboard.", editorNotAccessibleMessage, runCommandKeybindingLabel);
-		} else if (keybindingEditorKeybindingLabel) {
-			return nls.localize('accessibilityOffAriaLabelNoKbs', "{0} Please assign a keybinding for the command Toggle Screen Reader Accessibility Mode by accessing the keybindings editor with {1} and run it.", editorNotAccessibleMessage, keybindingEditorKeybindingLabel);
-		} else {
-			// SOS
-			return editorNotAccessibleMessage;
-		}
+	if (options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Disabled) {
+		const hasToggleKeybinding = keybindingService.lookupKeybinding('editor.action.toggleScreenReaderAccessibilityMode') !== undefined;
+		return nls.localize('editor', 'accessibilityModeOff', hasToggleKeybinding
+			? 'The editor is not accessible at this time. Use the configured accessibility-mode shortcut to enable it.'
+			: 'The editor is not accessible at this time. Enable screen reader optimized mode from the command menu.');
 	}
 	return options.get(EditorOption.ariaLabel);
 }
 
 export function newlinecount(text: string): number {
 	let result = 0;
-	let startIndex = -1;
-	do {
-		startIndex = text.indexOf('\n', startIndex + 1);
-		if (startIndex === -1) {
-			break;
-		}
-		result++;
-	} while (true);
+	for (const character of text) if (character === '\n') result += 1;
 	return result;
 }

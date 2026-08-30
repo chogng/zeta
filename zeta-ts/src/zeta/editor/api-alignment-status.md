@@ -84,9 +84,9 @@
 | `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 本地 scheduler 实现改为 `EditorSelectionsOverlay` |
 | `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 本地 scheduler 实现改为 `EditorViewCursor` |
 | `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 本地 scheduler 实现改为 `EditorViewCursors` |
-| `browser/viewParts/viewLines/viewLine.ts` | `ViewLine` | 本地 scheduler 实现改为 `EditorViewLine` |
-| `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 本地 scheduler 实现改为 `EditorViewLineOptions` |
-| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 本地 scheduler 实现改为 `EditorViewLines` |
+| `browser/viewParts/viewLines/viewLine.ts` | `ViewLine` | 本地 scheduler 实现改为 `ViewLine` |
+| `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 本地 scheduler 实现改为 `ViewLineOptions` |
+| `browser/viewParts/viewLines/viewLines.ts` | `ViewLines` | 本地 scheduler 实现改为 `ViewLines` |
 | `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 本地 scheduler 实现改为 `EditorViewZones` |
 | `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 本地 scheduler 实现改为 `EditorWhitespaceOverlay` |
 | `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 本地多 context contribution owner 改为 `WidgetContributionCollection` |

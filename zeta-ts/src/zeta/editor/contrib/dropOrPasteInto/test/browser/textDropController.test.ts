@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
+import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
-import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
@@ -71,7 +70,7 @@ test("Plain-text drops insert at the viewport hit target", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("ab\ncd");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((1) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });
@@ -87,7 +86,7 @@ test("Plain-text drops insert at the viewport hit target", () => {
 	viewport.element.dispatchEvent(drop);
 	assert.equal(drop.defaultPrevented, true);
 	assert.equal(model.getText(), "abX\nY\ncd");
-	assert.deepEqual(selections.selections, SelectionSet.single(Selection.fromPositions(new Position((1) + 1, (1) + 1))));
+	assert.deepEqual(selections.selections, [Selection.fromPositions(new Position((1) + 1, (1) + 1))]);
 	dom.window.close();
 });
 
@@ -95,7 +94,7 @@ test("Non-text drops remain available to their host", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("alpha");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
@@ -118,7 +117,7 @@ test("Read-only editors leave text drops available to their host", () => {
 	using model = new TextModel("alpha");
 	using selections = new CursorsController(
 		model,
-		SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))),
+		[Selection.fromPositions(new Position((0) + 1, (0) + 1))],
 		{ readOnly: true },
 	);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
@@ -142,7 +141,7 @@ test("Rich HTML drops reduce to inert text when plain text is unavailable", () =
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("ab");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 20);
 	viewport.layout({ width: 120, height: 20 });
@@ -163,7 +162,7 @@ test("One user-provided text file drop inserts at the hit target after decoding"
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("ab\ncd");
-	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
+	using selections = new CursorsController(model, [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.element.getBoundingClientRect = () => rectangle(120, 40);
 	viewport.layout({ width: 120, height: 40 });

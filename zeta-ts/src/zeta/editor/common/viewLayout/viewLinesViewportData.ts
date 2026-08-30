@@ -7,6 +7,44 @@ import { Range } from '../core/range.js';
 import { Selection } from '../core/selection.js';
 import { IPartialViewLinesViewportData, IViewModel, IViewWhitespaceViewportData, ViewLineRenderingData } from '../viewModel.js';
 import { ViewModelDecoration } from '../viewModel/viewModelDecoration.js';
+import { type EditorLineRange } from '../viewModel/editorViewportContracts.js';
+
+export interface EditorViewportDataOptions {
+	readonly modelVersion: number;
+	readonly lineHeight: number;
+	readonly visibleLines: EditorLineRange;
+	readonly renderLines: EditorLineRange;
+	readonly renderTop: number;
+	readonly relativeVerticalOffset?: readonly number[];
+}
+
+/** Immutable render snapshot for the visible and overscan line windows. */
+export class EditorViewportData {
+	readonly startLineIndex: number;
+	readonly endLineIndexExclusive: number;
+	readonly relativeVerticalOffset: readonly number[];
+
+	constructor(readonly options: EditorViewportDataOptions) {
+		if (!Number.isSafeInteger(options.modelVersion) || options.modelVersion < 0) throw new RangeError('Viewport model version is invalid');
+		if (!Number.isFinite(options.lineHeight) || options.lineHeight <= 0) throw new RangeError('Viewport line height is invalid');
+		this.startLineIndex = options.renderLines.startLineIndex;
+		this.endLineIndexExclusive = options.renderLines.endLineIndexExclusive;
+		const count = this.endLineIndexExclusive - this.startLineIndex;
+		this.relativeVerticalOffset = options.relativeVerticalOffset ?? Array.from({ length: count }, (_, index) => options.renderTop + index * options.lineHeight);
+		if (this.relativeVerticalOffset.length !== count) throw new RangeError('Viewport offsets do not cover the render window');
+	}
+
+	get modelVersion(): number { return this.options.modelVersion; }
+	get lineHeight(): number { return this.options.lineHeight; }
+	get visibleLines(): EditorLineRange { return this.options.visibleLines; }
+	get renderLines(): EditorLineRange { return this.options.renderLines; }
+	get renderTop(): number { return this.options.renderTop; }
+
+	getLineTop(lineIndex: number): number {
+		if (lineIndex < this.startLineIndex || lineIndex >= this.endLineIndexExclusive) throw new RangeError('Line is outside the render window');
+		return this.relativeVerticalOffset[lineIndex - this.startLineIndex]!;
+	}
+}
 
 /**
  * Contains all data needed to render at a specific viewport.

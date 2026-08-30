@@ -1,225 +1,73 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
+import { type TextModel } from "../../../common/model/textModel.js";
 
-import { CancellationToken } from '../../../../base/common/cancellation.js';
-import { ITextModel } from '../../../common/model.js';
-import { computeIndentLevel } from '../../../common/model/utils.js';
-import { FoldingMarkers } from '../../../common/languages/languageConfiguration.js';
-import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
-import { FoldingRegions, MAX_LINE_NUMBER } from './foldingRanges.js';
-import { FoldingLimitReporter, RangeProvider } from './folding.js';
-
-const MAX_FOLDING_REGIONS_FOR_INDENT_DEFAULT = 5000;
-
-const ID_INDENT_PROVIDER = 'indent';
-
-export class IndentRangeProvider implements RangeProvider {
-	readonly id = ID_INDENT_PROVIDER;
-
-	constructor(
-		private readonly editorModel: ITextModel,
-		private readonly languageConfigurationService: ILanguageConfigurationService,
-		private readonly foldingRangesLimit: FoldingLimitReporter
-	) { }
-
-	dispose() { }
-
-	compute(cancelationToken: CancellationToken,): Promise<FoldingRegions> {
-		const foldingRules = this.languageConfigurationService.getLanguageConfiguration(this.editorModel.getLanguageId()).foldingRules;
-		const offSide = foldingRules && !!foldingRules.offSide;
-		const markers = foldingRules && foldingRules.markers;
-		return Promise.resolve(computeRanges(this.editorModel, offSide, markers, this.foldingRangesLimit));
-	}
+export interface EditorIndentFoldingOptions {
+	readonly tabSize?: number;
 }
 
-// public only for testing
-export class RangesCollector {
-	private readonly _startIndexes: number[];
-	private readonly _endIndexes: number[];
-	private readonly _indentOccurrences: number[];
-	private _length: number;
-	private readonly _foldingRangesLimit: FoldingLimitReporter;
-
-	constructor(foldingRangesLimit: FoldingLimitReporter) {
-		this._startIndexes = [];
-		this._endIndexes = [];
-		this._indentOccurrences = [];
-		this._length = 0;
-		this._foldingRangesLimit = foldingRangesLimit;
-	}
-
-	public insertFirst(startLineNumber: number, endLineNumber: number, indent: number) {
-		if (startLineNumber > MAX_LINE_NUMBER || endLineNumber > MAX_LINE_NUMBER) {
-			return;
+/** Computes provider-owned fold ranges from decreasing leading indentation. */
+export function computeEditorIndentFoldingRanges(model: TextModel, options: EditorIndentFoldingOptions = {}): readonly EditorFoldingRange[] {
+	const tabSize = readTabSize(options.tabSize);
+	const stack: IndentLine[] = [];
+	const ranges: EditorFoldingRange[] = [];
+	let previous: IndentLine | undefined;
+	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
+		const text = model.getLineContent((lineIndex) + 1);
+		if (isBlank(text)) continue;
+		const indentation = leadingIndentation(text, tabSize);
+		while (true) {
+			const previousTop = stack.at(-1);
+			if (!previousTop || previousTop.indentation < indentation) break;
+			const previous = stack.pop()!;
+			appendRange(ranges, previous.lineIndex, lineIndex - 1);
 		}
-		const index = this._length;
-		this._startIndexes[index] = startLineNumber;
-		this._endIndexes[index] = endLineNumber;
-		this._length++;
-		if (indent < 1000) {
-			this._indentOccurrences[indent] = (this._indentOccurrences[indent] || 0) + 1;
-		}
+		if (previous && indentation > previous.indentation) stack.push(previous);
+		previous = { lineIndex, indentation };
 	}
-
-	public toIndentRanges(model: ITextModel) {
-		const limit = this._foldingRangesLimit.limit;
-		if (this._length <= limit) {
-			this._foldingRangesLimit.update(this._length, false);
-
-			// reverse and create arrays of the exact length
-			const startIndexes = new Uint32Array(this._length);
-			const endIndexes = new Uint32Array(this._length);
-			for (let i = this._length - 1, k = 0; i >= 0; i--, k++) {
-				startIndexes[k] = this._startIndexes[i];
-				endIndexes[k] = this._endIndexes[i];
-			}
-			return new FoldingRegions(startIndexes, endIndexes);
-		} else {
-			this._foldingRangesLimit.update(this._length, limit);
-
-			let entries = 0;
-			let maxIndent = this._indentOccurrences.length;
-			for (let i = 0; i < this._indentOccurrences.length; i++) {
-				const n = this._indentOccurrences[i];
-				if (n) {
-					if (n + entries > limit) {
-						maxIndent = i;
-						break;
-					}
-					entries += n;
-				}
-			}
-			const tabSize = model.getOptions().tabSize;
-			// reverse and create arrays of the exact length
-			const startIndexes = new Uint32Array(limit);
-			const endIndexes = new Uint32Array(limit);
-			for (let i = this._length - 1, k = 0; i >= 0; i--) {
-				const startIndex = this._startIndexes[i];
-				const lineContent = model.getLineContent(startIndex);
-				const indent = computeIndentLevel(lineContent, tabSize);
-				if (indent < maxIndent || (indent === maxIndent && entries++ < limit)) {
-					startIndexes[k] = startIndex;
-					endIndexes[k] = this._endIndexes[i];
-					k++;
-				}
-			}
-			return new FoldingRegions(startIndexes, endIndexes);
-		}
-
+	while (stack.length > 0) {
+		const previous = stack.pop()!;
+		appendRange(ranges, previous.lineIndex, model.lineCount - 1);
 	}
+	return Object.freeze(ranges);
 }
 
-
-interface PreviousRegion {
-	indent: number; // indent or -2 if a marker
-	endAbove: number; // end line number for the region above
-	line: number; // start line of the region. Only used for marker regions.
+interface IndentLine {
+	readonly lineIndex: number;
+	readonly indentation: number;
 }
 
-const foldingRangesLimitDefault: FoldingLimitReporter = {
-	limit: MAX_FOLDING_REGIONS_FOR_INDENT_DEFAULT,
-	update: () => { }
-};
+function appendRange(ranges: EditorFoldingRange[], startLineIndex: number, endLineIndex: number): void {
+	if (endLineIndex <= startLineIndex) return;
+	ranges.push(Object.freeze({
+		startLineIndex,
+		endLineIndex,
+		collapsed: false,
+		source: EditorFoldingRangeSource.Provider,
+	}));
+}
 
-export function computeRanges(model: ITextModel, offSide: boolean, markers?: FoldingMarkers, foldingRangesLimit: FoldingLimitReporter = foldingRangesLimitDefault): FoldingRegions {
-	const tabSize = model.getOptions().tabSize;
-	const result = new RangesCollector(foldingRangesLimit);
+function isBlank(text: string): boolean {
+	return /^[\t ]*$/u.test(text);
+}
 
-	let pattern: RegExp | undefined = undefined;
-	let startPattern: RegExp | undefined = undefined;
-	let endPattern: RegExp | undefined = undefined;
-	if (markers) {
-		if (markers.start.flags === markers.end.flags) {
-			pattern = new RegExp(`(${markers.start.source})|(?:${markers.end.source})`, markers.start.flags);
+function leadingIndentation(text: string, tabSize: number): number {
+	let indentation = 0;
+	for (const character of text) {
+		if (character === " ") {
+			indentation += 1;
+		} else if (character === "\t") {
+			indentation += tabSize - indentation % tabSize;
 		} else {
-			startPattern = markers.start;
-			endPattern = markers.end;
+			break;
 		}
 	}
+	return indentation;
+}
 
-	const previousRegions: PreviousRegion[] = [];
-	const line = model.getLineCount() + 1;
-	previousRegions.push({ indent: -1, endAbove: line, line }); // sentinel, to make sure there's at least one entry
-
-	for (let line = model.getLineCount(); line > 0; line--) {
-		const lineContent = model.getLineContent(line);
-		const indent = computeIndentLevel(lineContent, tabSize);
-		let previous = previousRegions[previousRegions.length - 1];
-		if (indent === -1) {
-			if (offSide) {
-				// for offSide languages, empty lines are associated to the previous block
-				// note: the next block is already written to the results, so this only
-				// impacts the end position of the block before
-				previous.endAbove = line;
-			}
-			continue; // only whitespace
-		}
-		let isStartMatch = false;
-		let isEndMatch = false;
-		let m;
-		if (pattern) {
-			pattern.lastIndex = 0;
-			if ((m = pattern.exec(lineContent))) {
-				isStartMatch = !!m[1];
-				isEndMatch = !isStartMatch;
-			}
-		} else {
-			if (startPattern) {
-				startPattern.lastIndex = 0;
-				isStartMatch = startPattern.test(lineContent);
-			}
-			if (!isStartMatch && endPattern) {
-				endPattern.lastIndex = 0;
-				isEndMatch = endPattern.test(lineContent);
-			}
-		}
-		if (isStartMatch || isEndMatch) {
-			// folding pattern match
-			if (isStartMatch) { // start pattern match
-				// discard all regions until the folding pattern
-				let i = previousRegions.length - 1;
-				while (i > 0 && previousRegions[i].indent !== -2) {
-					i--;
-				}
-				if (i > 0) {
-					previousRegions.length = i + 1;
-					previous = previousRegions[i];
-
-					// new folding range from pattern, includes the end line
-					result.insertFirst(line, previous.line, indent);
-					previous.line = line;
-					previous.indent = indent;
-					previous.endAbove = line;
-					continue;
-				} else {
-					// no end marker found, treat line as a regular line
-				}
-			} else { // end pattern match
-				previousRegions.push({ indent: -2, endAbove: line, line });
-				continue;
-			}
-		}
-		if (previous.indent > indent) {
-			// discard all regions with larger indent
-			do {
-				previousRegions.pop();
-				previous = previousRegions[previousRegions.length - 1];
-			} while (previous.indent > indent);
-
-			// new folding range
-			const endLineNumber = previous.endAbove - 1;
-			if (endLineNumber - line >= 1) { // needs at east size 1
-				result.insertFirst(line, endLineNumber, indent);
-			}
-		}
-		if (previous.indent === indent) {
-			previous.endAbove = line;
-		} else { // previous.indent < indent
-			// new region with a bigger indent
-			previousRegions.push({ indent, endAbove: line, line });
-		}
+function readTabSize(value: number | undefined): number {
+	const tabSize = value ?? 4;
+	if (!Number.isSafeInteger(tabSize) || tabSize < 1 || tabSize > 64) {
+		throw new RangeError("Indent folding tab size must be an integer from 1 through 64");
 	}
-	return result.toIndentRanges(model);
+	return tabSize;
 }

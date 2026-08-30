@@ -1,8 +1,3 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
 export const enum LinePartMetadata {
 	IS_WHITESPACE = 1,
 	PSEUDO_BEFORE = 2,
@@ -16,21 +11,18 @@ export const enum LinePartMetadata {
 export class LinePart {
 	_linePartBrand: void = undefined;
 
-	constructor(
-		/**
-		 * last char index of this token (not inclusive).
-		 */
+	public constructor(
 		public readonly endIndex: number,
 		public readonly type: string,
 		public readonly metadata: number,
-		public readonly containsRTL: boolean
+		public readonly containsRTL: boolean,
 	) { }
 
 	public isWhitespace(): boolean {
-		return (this.metadata & LinePartMetadata.IS_WHITESPACE_MASK ? true : false);
+		return (this.metadata & LinePartMetadata.IS_WHITESPACE_MASK) !== 0;
 	}
 
 	public isPseudoAfter(): boolean {
-		return (this.metadata & LinePartMetadata.PSEUDO_AFTER_MASK ? true : false);
+		return (this.metadata & LinePartMetadata.PSEUDO_AFTER_MASK) !== 0;
 	}
 }

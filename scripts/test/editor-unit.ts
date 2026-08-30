@@ -5,6 +5,8 @@ const desktopDirectory = resolve(import.meta.dirname, '../../zeta-ts');
 const result = spawnSync(process.execPath, [
 	'--import',
 	'../scripts/test/ignore-css-imports.ts',
+	'--import',
+	'../scripts/test/editor-test-environment.ts',
 	'--test',
 	'--test-concurrency=1',
 	...process.argv.slice(2),

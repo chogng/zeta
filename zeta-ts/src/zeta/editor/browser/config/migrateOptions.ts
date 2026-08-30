@@ -1,9 +1,4 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
-
-import { IEditorOptions } from '../../common/config/editorOptions.js';
+import { type IEditorOptions } from '../../common/config/editorOptions.js';
 
 export interface ISettingsReader {
 	(key: string): unknown;
@@ -14,26 +9,22 @@ export interface ISettingsWriter {
 }
 
 export class EditorSettingMigration {
-
 	public static items: EditorSettingMigration[] = [];
 
 	constructor(
 		public readonly key: string,
-		public readonly migrate: (value: unknown, read: ISettingsReader, write: ISettingsWriter) => void
+		public readonly migrate: (value: unknown, read: ISettingsReader, write: ISettingsWriter) => void,
 	) { }
 
 	apply(options: unknown): void {
 		const value = EditorSettingMigration._read(options, this.key);
 		const read = (key: string) => EditorSettingMigration._read(options, key);
-		const write = (key: string, value: unknown) => EditorSettingMigration._write(options, key, value);
+		const write = (key: string, nextValue: unknown) => EditorSettingMigration._write(options, key, nextValue);
 		this.migrate(value, read, write);
 	}
 
 	private static _read(source: unknown, key: string): unknown {
-		if (typeof source === 'undefined' || source === null) {
-			return undefined;
-		}
-
+		if (source === undefined || source === null) return undefined;
 		const firstDotIndex = key.indexOf('.');
 		if (firstDotIndex >= 0) {
 			const firstSegment = key.substring(0, firstDotIndex);
@@ -46,8 +37,9 @@ export class EditorSettingMigration {
 		const firstDotIndex = key.indexOf('.');
 		if (firstDotIndex >= 0) {
 			const firstSegment = key.substring(0, firstDotIndex);
-			(target as Record<string, unknown>)[firstSegment] = (target as Record<string, unknown>)[firstSegment] || {};
-			this._write((target as Record<string, unknown>)[firstSegment], key.substring(firstDotIndex + 1), value);
+			const record = target as Record<string, unknown>;
+			record[firstSegment] = record[firstSegment] || {};
+			this._write(record[firstSegment], key.substring(firstDotIndex + 1), value);
 			return;
 		}
 		(target as Record<string, unknown>)[key] = value;
@@ -59,21 +51,17 @@ function registerEditorSettingMigration(key: string, migrate: (value: unknown, r
 }
 
 function registerSimpleEditorSettingMigration(key: string, values: [unknown, unknown][]): void {
-	registerEditorSettingMigration(key, (value, read, write) => {
-		if (typeof value !== 'undefined') {
-			for (const [oldValue, newValue] of values) {
-				if (value === oldValue) {
-					write(key, newValue);
-					return;
-				}
+	registerEditorSettingMigration(key, (value, _read, write) => {
+		if (value === undefined) return;
+		for (const [oldValue, newValue] of values) {
+			if (value === oldValue) {
+				write(key, newValue);
+				return;
 			}
 		}
 	});
 }
 
-/**
- * Compatibility with old options
- */
 export function migrateOptions(options: IEditorOptions): void {
 	EditorSettingMigration.items.forEach(migration => migration.apply(options));
 }
@@ -97,36 +85,31 @@ registerSimpleEditorSettingMigration('defaultColorDecorators', [[true, 'auto'], 
 registerSimpleEditorSettingMigration('minimap.autohide', [[true, 'mouseover'], [false, 'none']]);
 
 registerEditorSettingMigration('autoClosingBrackets', (value, read, write) => {
-	if (value === false) {
-		write('autoClosingBrackets', 'never');
-		if (typeof read('autoClosingQuotes') === 'undefined') {
-			write('autoClosingQuotes', 'never');
-		}
-		if (typeof read('autoSurround') === 'undefined') {
-			write('autoSurround', 'never');
-		}
-	}
+	if (value !== false) return;
+	write('autoClosingBrackets', 'never');
+	if (read('autoClosingQuotes') === undefined) write('autoClosingQuotes', 'never');
+	if (read('autoSurround') === undefined) write('autoSurround', 'never');
+});
+
+registerEditorSettingMigration('quickSuggestions', (value, _read, write) => {
+	if (typeof value !== 'boolean') return;
+	const nextValue = value ? 'on' : 'off';
+	write('quickSuggestions', { comments: nextValue, strings: nextValue, other: nextValue });
 });
 
 registerEditorSettingMigration('renderIndentGuides', (value, read, write) => {
-	if (typeof value !== 'undefined') {
-		write('renderIndentGuides', undefined);
-		if (typeof read('guides.indentation') === 'undefined') {
-			write('guides.indentation', !!value);
-		}
-	}
+	if (value === undefined) return;
+	write('renderIndentGuides', undefined);
+	if (read('guides.indentation') === undefined) write('guides.indentation', Boolean(value));
 });
 
 registerEditorSettingMigration('highlightActiveIndentGuide', (value, read, write) => {
-	if (typeof value !== 'undefined') {
-		write('highlightActiveIndentGuide', undefined);
-		if (typeof read('guides.highlightActiveIndentation') === 'undefined') {
-			write('guides.highlightActiveIndentation', !!value);
-		}
-	}
+	if (value === undefined) return;
+	write('highlightActiveIndentGuide', undefined);
+	if (read('guides.highlightActiveIndentation') === undefined) write('guides.highlightActiveIndentation', Boolean(value));
 });
 
-const suggestFilteredTypesMapping: Record<string, string> = {
+const filteredSuggestionSettings: Readonly<Record<string, string>> = Object.freeze({
 	method: 'showMethods',
 	function: 'showFunctions',
 	constructor: 'showConstructors',
@@ -153,108 +136,52 @@ const suggestFilteredTypesMapping: Record<string, string> = {
 	folder: 'showFolders',
 	typeParameter: 'showTypeParameters',
 	snippet: 'showSnippets',
-};
+});
 
 registerEditorSettingMigration('suggest.filteredTypes', (value, read, write) => {
-	if (value && typeof value === 'object') {
-		for (const entry of Object.entries(suggestFilteredTypesMapping)) {
-			const v = (value as Record<string, unknown>)[entry[0]];
-			if (v === false) {
-				if (typeof read(`suggest.${entry[1]}`) === 'undefined') {
-					write(`suggest.${entry[1]}`, false);
-				}
-			}
-		}
-		write('suggest.filteredTypes', undefined);
-	}
-});
-
-registerEditorSettingMigration('quickSuggestions', (input, read, write) => {
-	if (typeof input === 'boolean') {
-		const value = input ? 'on' : 'off';
-		const newValue = { comments: value, strings: value, other: value };
-		write('quickSuggestions', newValue);
-	}
-});
-
-// Sticky Scroll
-
-registerEditorSettingMigration('experimental.stickyScroll.enabled', (value, read, write) => {
-	if (typeof value === 'boolean') {
-		write('experimental.stickyScroll.enabled', undefined);
-		if (typeof read('stickyScroll.enabled') === 'undefined') {
-			write('stickyScroll.enabled', value);
+	if (typeof value !== 'object' || value === null) return;
+	for (const [kind, setting] of Object.entries(filteredSuggestionSettings)) {
+		if ((value as Record<string, unknown>)[kind] === false && read(`suggest.${setting}`) === undefined) {
+			write(`suggest.${setting}`, false);
 		}
 	}
+	write('suggest.filteredTypes', undefined);
 });
 
-registerEditorSettingMigration('experimental.stickyScroll.maxLineCount', (value, read, write) => {
-	if (typeof value === 'number') {
-		write('experimental.stickyScroll.maxLineCount', undefined);
-		if (typeof read('stickyScroll.maxLineCount') === 'undefined') {
-			write('stickyScroll.maxLineCount', value);
-		}
-	}
+function moveLegacySetting(key: string, target: string, accepts: (value: unknown) => boolean): void {
+	registerEditorSettingMigration(key, (value, read, write) => {
+		if (!accepts(value)) return;
+		write(key, undefined);
+		if (read(target) === undefined) write(target, value);
+	});
+}
+
+moveLegacySetting('experimental.stickyScroll.enabled', 'stickyScroll.enabled', value => typeof value === 'boolean');
+moveLegacySetting('experimental.stickyScroll.maxLineCount', 'stickyScroll.maxLineCount', value => typeof value === 'number');
+moveLegacySetting('editor.experimentalEditContextEnabled', 'editor.editContext', value => typeof value === 'boolean');
+moveLegacySetting('codeActionWidget.includeNearbyQuickfixes', 'codeActionWidget.includeNearbyQuickFixes', value => typeof value === 'boolean');
+
+registerEditorSettingMigration('codeActionsOnSave', (value, _read, write) => {
+	if (typeof value !== 'object' || value === null) return;
+	let changed = false;
+	const actions = Object.fromEntries(Object.entries(value).map(([kind, mode]) => {
+		if (typeof mode !== 'boolean') return [kind, mode];
+		changed = true;
+		return [kind, mode ? 'explicit' : 'never'];
+	}));
+	if (changed) write('codeActionsOnSave', actions);
 });
 
-// Edit Context
-
-registerEditorSettingMigration('editor.experimentalEditContextEnabled', (value, read, write) => {
-	if (typeof value === 'boolean') {
-		write('editor.experimentalEditContextEnabled', undefined);
-		if (typeof read('editor.editContext') === 'undefined') {
-			write('editor.editContext', value);
-		}
-	}
+registerEditorSettingMigration('lightbulb.enabled', (value, _read, write) => {
+	if (typeof value === 'boolean') write('lightbulb.enabled', value ? undefined : 'off');
 });
 
-// Code Actions on Save
-registerEditorSettingMigration('codeActionsOnSave', (value, read, write) => {
-	if (value && typeof value === 'object') {
-		let toBeModified = false;
-		const newValue: Record<string, unknown> = {};
-		for (const entry of Object.entries(value)) {
-			if (typeof entry[1] === 'boolean') {
-				toBeModified = true;
-				newValue[entry[0]] = entry[1] ? 'explicit' : 'never';
-			} else {
-				newValue[entry[0]] = entry[1];
-			}
-		}
-		if (toBeModified) {
-			write(`codeActionsOnSave`, newValue);
-		}
-	}
+registerEditorSettingMigration('inlineSuggest.edits.codeShifting', (value, _read, write) => {
+	if (typeof value !== 'boolean') return;
+	write('inlineSuggest.edits.codeShifting', undefined);
+	write('inlineSuggest.edits.allowCodeShifting', value ? 'always' : 'never');
 });
 
-// Migrate Quick Fix Settings
-registerEditorSettingMigration('codeActionWidget.includeNearbyQuickfixes', (value, read, write) => {
-	if (typeof value === 'boolean') {
-		write('codeActionWidget.includeNearbyQuickfixes', undefined);
-		if (typeof read('codeActionWidget.includeNearbyQuickFixes') === 'undefined') {
-			write('codeActionWidget.includeNearbyQuickFixes', value);
-		}
-	}
-});
-
-// Migrate the lightbulb settings
-registerEditorSettingMigration('lightbulb.enabled', (value, read, write) => {
-	if (typeof value === 'boolean') {
-		write('lightbulb.enabled', value ? undefined : 'off');
-	}
-});
-
-// NES Code Shifting
-registerEditorSettingMigration('inlineSuggest.edits.codeShifting', (value, read, write) => {
-	if (typeof value === 'boolean') {
-		write('inlineSuggest.edits.codeShifting', undefined);
-		write('inlineSuggest.edits.allowCodeShifting', value ? 'always' : 'never');
-	}
-});
-
-// Migrate Hover
-registerEditorSettingMigration('hover.enabled', (value, read, write) => {
-	if (typeof value === 'boolean') {
-		write('hover.enabled', value ? 'on' : 'off');
-	}
+registerEditorSettingMigration('hover.enabled', (value, _read, write) => {
+	if (typeof value === 'boolean') write('hover.enabled', value ? 'on' : 'off');
 });

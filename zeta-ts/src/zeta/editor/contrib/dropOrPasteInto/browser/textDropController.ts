@@ -6,7 +6,6 @@ import { type View } from '../../../browser/view.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TypeOperations } from '../../../common/cursor/cursorTypeOperations.js';
 import { Selection } from '../../../common/core/selection.js';
-import { SelectionSet } from '../../../common/cursor/selectionSet.js';
 import { type Position } from '../../../common/core/position.js';
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from './textFileTransfer.js';
 
@@ -45,8 +44,8 @@ export class TextDropController extends Disposable {
 		}
 		stopEvent(event);
 		this.viewport.element.focus({ preventScroll: true });
-		this.selections.execute(TypeOperations.paste(this.viewport.textModel, SelectionSet.single(Selection.fromPositions(target.position)), text));
-		this.viewport.revealPosition(this.selections.selections.primary.getPosition());
+		this.selections.execute(TypeOperations.paste(this.viewport.textModel, [Selection.fromPositions(target.position)], text));
+		this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
 	}
 
 	private dropTextFile(event: DragEvent, position: Position): void {
@@ -59,8 +58,8 @@ export class TextDropController extends Disposable {
 		this.viewport.element.focus({ preventScroll: true });
 		void file.text().then(text => {
 			if (this.isDisposed || request !== this.asynchronousDropRequest || text.length > TEXT_FILE_TRANSFER_MAX_BYTES || model.version !== expectedVersion) return;
-			this.selections.execute(TypeOperations.paste(model, SelectionSet.single(Selection.fromPositions(position)), text));
-			this.viewport.revealPosition(this.selections.selections.primary.getPosition());
+			this.selections.execute(TypeOperations.paste(model, [Selection.fromPositions(position)], text));
+			this.viewport.revealPosition(this.selections.selections[0]!.getPosition());
 		}).catch(() => {
 			// The supplied file could not be decoded as text.
 		});

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SelectionDirection, Selection } from "../../common/core/selection.js";
-import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 
@@ -47,31 +46,38 @@ test("Selection preserves anchor direction and ordered range", () => {
 	});
 });
 
-test("SelectionSet owns immutable multi-cursor order and primary", () => {
+test("Selection arrays keep the primary cursor first", () => {
 	const first = Selection.fromPositions(new Position((0) + 1, (1) + 1));
 	const second = Selection.fromPositions(new Position((2) + 1, (3) + 1));
 	const selections = [first, second];
-	const set = SelectionSet.withPrimary(selections, 1);
+	const set = primaryFirst(selections, 1);
 	selections.reverse();
 
 	assert.deepEqual({
 		frozen: Object.isFrozen(set),
-		selectionsFrozen: Object.isFrozen(set.selections),
-		selections: set.selections,
-		primary: set.primary,
+		selectionsFrozen: Object.isFrozen(set),
+		selections: set,
+		primary: set[0]!,
 	}, {
 		frozen: true,
 		selectionsFrozen: true,
-		selections: [first, second],
+		selections: [second, first],
 		primary: second,
 	});
-	assert.equal(SelectionSet.single(first).primary, first);
+	assert.equal([first][0]!, first);
 	assert.throws(
-		() => SelectionSet.withPrimary([], 0),
+		() => primaryFirst([], 0),
 		/must not be empty/,
 	);
 	assert.throws(
-		() => SelectionSet.withPrimary([first], 1),
+		() => primaryFirst([first], 1),
 		/primaryIndex/,
 	);
 });
+
+function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {
+	if (items.length === 0) throw new RangeError('Selections must not be empty');
+	if (!Number.isSafeInteger(primaryIndex) || primaryIndex < 0 || primaryIndex >= items.length) throw new RangeError('primaryIndex must identify a selection');
+	if (primaryIndex === 0) return Object.freeze([...items]);
+	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
+}

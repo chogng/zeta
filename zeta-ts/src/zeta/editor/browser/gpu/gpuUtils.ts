@@ -1,9 +1,8 @@
-import { fontVariantForCanvas } from '../config/fontMeasurements.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../viewParts/viewLines/viewLine.js';
 import { type IStyledTextureAtlasPageGlyph } from './atlas/atlas.js';
-import { createStringContentSegmenter } from './stringContentSegmenter.js';
-import { type GpuRenderFrame, type GpuRenderStrategyInput } from './gpuFrameStrategy.js';
-import { type StyledGlyphRasterizer } from './raster/styledGlyphRasterizer.js';
+import { segmentContent } from './contentSegmenter.js';
+import { type GpuFrame, type GpuRenderInput } from './gpu.js';
+import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
 import { type IStyledGlyphStyle } from './raster/raster.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { containsRTL, isBasicASCII } from '../../../base/common/strings.js';
@@ -36,7 +35,7 @@ export function observeDevicePixelDimensions(element: HTMLElement, ownerWindow: 
 	return toDisposable(() => observer.disconnect());
 }
 
-export function createGpuRenderFrame(glyphRasterizer: StyledGlyphRasterizer, input: GpuRenderStrategyInput, lineIndexes: Iterable<number>): GpuRenderFrame {
+export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: GpuRenderInput, lineIndexes: Iterable<number>): GpuFrame {
 		const vertices: number[] = [];
 		const gpuLineIndexes = new Set<number>();
 		const baseStyle = readBaseStyle(input.rootStyle);
@@ -51,7 +50,7 @@ export function createGpuRenderFrame(glyphRasterizer: StyledGlyphRasterizer, inp
 			const lineStart = (input.textLeft + (visualLine.wrappedTextIndentWidth ?? 0)) * glyphRasterizer.devicePixelRatio;
 			let deviceX = lineStart;
 			const lineTop = (input.paddingTop + visualLineIndex * input.layout.lineHeight) * glyphRasterizer.devicePixelRatio;
-			const segments = createStringContentSegmenter(text, { isBasicASCII: isBasicASCII(text), useMonospaceOptimizations: false });
+			const segments = segmentContent(text, isBasicASCII(text), false);
 			for (let index = 0; index < text.length; index += 1) {
 				const segment = segments.getSegmentData(index);
 				if (!segment) continue;
@@ -74,7 +73,7 @@ export function createGpuRenderFrame(glyphRasterizer: StyledGlyphRasterizer, inp
 		return Object.freeze({ vertices: new Float32Array(vertices), gpuLineIndexes });
 	}
 
-function canRenderLine(input: GpuRenderStrategyInput, text: string, tokens: readonly ResolvedSemanticToken[]): boolean {
+function canRenderLine(input: GpuRenderInput, text: string, tokens: readonly ResolvedSemanticToken[]): boolean {
 		if (input.fontLigatures || input.textDirection === 'rtl' || text.length > 2_000 || containsRTL(text)) return false;
 		for (const token of tokens) {
 			if (token.modifiers?.includes(SemanticTokenModifier.Static) || token.modifiers?.includes(SemanticTokenModifier.Deprecated)) return false;
@@ -89,7 +88,7 @@ function readBaseStyle(style: CSSStyleDeclaration): IStyledGlyphStyle {
 		fontFamily: style.fontFamily,
 		fontSize: positiveNumber(Number.parseFloat(style.fontSize), 14),
 		fontStyle: style.fontStyle || 'normal',
-		fontVariant: fontVariantForCanvas(style),
+		fontVariant: style.fontVariantCaps || 'normal',
 		fontWeight: style.fontWeight || '400',
 		letterSpacing: style.letterSpacing === 'normal' ? 0 : Number.parseFloat(style.letterSpacing) || 0,
 	});

@@ -12,24 +12,49 @@ import { IEditorContribution, IDiffEditorContribution } from '../common/editorCo
 import { ITextModel } from '../common/model.js';
 import { IModelService } from '../common/services/model.js';
 import { ITextModelService } from '../common/services/resolverService.js';
-import { MenuId, MenuRegistry, Action2 } from '../../platform/actions/common/actions.js';
+import { MenuId, MenusRegistry, Action2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandMetadata } from '../../platform/commands/common/commands.js';
 import { ContextKeyExpr, IContextKeyService, ContextKeyExpression } from '../../platform/contextkey/common/contextkey.js';
-import { ServicesAccessor as InstantiationServicesAccessor, BrandedService, IInstantiationService, IConstructorSignature } from '../../platform/instantiation/common/instantiation.js';
-import { IKeybindings, KeybindingsRegistry, KeybindingWeight } from '../../platform/keybinding/common/keybindingsRegistry.js';
+import { ServicesAccessor as InstantiationServicesAccessor, IInstantiationService, type ServiceConstructionDescriptor } from '../../platform/instantiation/common/instantiation.js';
+import { KeybindingsRegistry, KeybindingWeight } from '../../platform/keybinding/common/keybindingsRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
-import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { assertType } from '../../base/common/types.js';
 import { ThemeIcon } from '../../base/common/themables.js';
-import { IDisposable } from '../../base/common/lifecycle.js';
+import { IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { KeyMod, KeyCode } from '../../base/common/keyCodes.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { getActiveElement } from '../../base/browser/dom.js';
 import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
+import { type Event } from '../../base/common/event.js';
+import { type TextModel } from '../common/model/textModel.js';
+import { type DocumentTextStyleAttributes } from '../common/model/documentSchema.js';
+import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
+import { type ILanguageFeaturesService } from '../common/services/languageFeatures.js';
+import { type IResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokens.js';
+import { type DocumentCollaborationInvite, type DocumentCollaborationMember, type DocumentCollaborationRoomRole } from '../common/services/documentCollaborationService.js';
+import { type ICodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
+import { type EditorView } from './editorView.js';
+import { type View } from './view.js';
+import { type DecorationSource } from './viewParts/decorations/decorations.js';
+import { type EditorLineVisibilitySource } from '../common/viewModel/viewModelLines.js';
+import { type LanguageLexicalContextSource } from '../common/languages/languageLexicalContext.js';
+import { type BracketColorizationSource, type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
+import { type IVersionedEditorWorkerClient } from './services/editorWorkerService.js';
+import { type CursorsController } from '../common/cursor/cursor.js';
 
 export type ServicesAccessor = InstantiationServicesAccessor;
-export type EditorContributionCtor = IConstructorSignature<IEditorContribution, [ICodeEditor]>;
-export type DiffEditorContributionCtor = IConstructorSignature<IDiffEditorContribution, [IDiffEditor]>;
+export type EditorContributionCtor = new (editor: ICodeEditor, ...services: any[]) => IEditorContribution;
+export type DiffEditorContributionCtor = new (editor: IDiffEditor, ...services: any[]) => IDiffEditorContribution;
+
+type EditorService = object;
+
+interface IKeybindings {
+	readonly primary?: number;
+	readonly secondary?: readonly number[];
+	readonly win?: { readonly primary: number; readonly secondary?: readonly number[] };
+	readonly linux?: { readonly primary: number; readonly secondary?: readonly number[] };
+	readonly mac?: { readonly primary: number; readonly secondary?: readonly number[] };
+}
 
 export const enum EditorContributionInstantiation {
 	/**
@@ -138,27 +163,21 @@ export abstract class Command {
 					}
 				}
 
-				const desc = {
-					id: this.id,
-					weight: kbOpts.weight,
-					args: kbOpts.args,
-					when: kbWhen,
-					primary: kbOpts.primary,
-					secondary: kbOpts.secondary,
-					win: kbOpts.win,
-					linux: kbOpts.linux,
-					mac: kbOpts.mac,
-				};
-
-				KeybindingsRegistry.registerKeybindingRule(desc);
+				for (const keybinding of [kbOpts.primary, ...(kbOpts.secondary ?? [])]) {
+					if (keybinding !== undefined) {
+						KeybindingsRegistry.registerKeybindingRule({
+							command: this.id,
+							keybinding,
+							when: kbWhen ?? undefined,
+							args: kbOpts.args === undefined ? undefined : [kbOpts.args],
+							priority: kbOpts.weight,
+						});
+					}
+				}
 			}
 		}
 
-		CommandsRegistry.registerCommand({
-			id: this.id,
-			handler: (accessor, args) => this.runCommand(accessor, args),
-			metadata: this.metadata
-		});
+		CommandsRegistry.register(this.id, (accessor, args) => this.runCommand(accessor, args));
 
 		if (this.canTriggerInlineEdits) {
 			TriggerInlineEditCommandsRegistry.registerCommand(this.id);
@@ -166,7 +185,7 @@ export abstract class Command {
 	}
 
 	private _registerMenuItem(item: ICommandMenuOptions): void {
-		MenuRegistry.appendMenuItem(item.menuId, {
+		MenusRegistry.appendMenuItem(item.menuId, {
 			group: item.group,
 			command: {
 				id: this.id,
@@ -210,16 +229,14 @@ export class MultiCommand extends Command {
 	public addImplementation(priority: number, name: string, implementation: CommandImplementation, when?: ContextKeyExpression): IDisposable {
 		this._implementations.push({ priority, name, implementation, when });
 		this._implementations.sort((a, b) => b.priority - a.priority);
-		return {
-			dispose: () => {
+		return toDisposable(() => {
 				for (let i = 0; i < this._implementations.length; i++) {
 					if (this._implementations[i].implementation === implementation) {
 						this._implementations.splice(i, 1);
 						return;
 					}
 				}
-			}
-		};
+		});
 	}
 
 	public runCommand(accessor: ServicesAccessor, args: unknown): void | Promise<void> {
@@ -367,7 +384,7 @@ export abstract class EditorAction extends EditorCommand {
 
 		function withDefaults(item: Partial<ICommandMenuOptions>): ICommandMenuOptions {
 			if (!item.menuId) {
-				item.menuId = MenuId.EditorContext;
+				item.menuId = MenuId.for('EditorContext');
 			}
 			if (!item.title) {
 				item.title = typeof opts.label === 'string' ? opts.label : opts.label.value;
@@ -405,18 +422,8 @@ export abstract class EditorAction extends EditorCommand {
 		return this.run(accessor, editor, args || {});
 	}
 
-	protected reportTelemetry(accessor: ServicesAccessor, editor: ICodeEditor) {
-		type EditorActionInvokedClassification = {
-			owner: 'alexdima';
-			comment: 'An editor action has been invoked.';
-			name: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'The label of the action that was invoked.' };
-			id: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'The identifier of the action that was invoked.' };
-		};
-		type EditorActionInvokedEvent = {
-			name: string;
-			id: string;
-		};
-		accessor.get(ITelemetryService).publicLog2<EditorActionInvokedEvent, EditorActionInvokedClassification>('editorActionInvoked', { name: this.label, id: this.id });
+	protected reportTelemetry(_accessor: ServicesAccessor, _editor: ICodeEditor): void {
+		// Telemetry is a Workbench concern; editor actions only expose their stable identity.
 	}
 
 	public abstract run(accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void>;
@@ -434,16 +441,14 @@ export class MultiEditorAction extends EditorAction {
 	public addImplementation(priority: number, implementation: EditorActionImplementation): IDisposable {
 		this._implementations.push([priority, implementation]);
 		this._implementations.sort((a, b) => b[0] - a[0]);
-		return {
-			dispose: () => {
+		return toDisposable(() => {
 				for (let i = 0; i < this._implementations.length; i++) {
 					if (this._implementations[i][1] === implementation) {
 						this._implementations.splice(i, 1);
 						return;
 					}
 				}
-			}
-		};
+		});
 	}
 
 	public run(accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void> {
@@ -480,7 +485,7 @@ export abstract class EditorAction2 extends Action2 {
 			const logService = editorAccessor.get(ILogService);
 			const enabled = kbService.contextMatchesRules(this.desc.precondition ?? undefined);
 			if (!enabled) {
-				logService.debug(`[EditorAction2] NOT running command because its precondition is FALSE`, this.desc.id, this.desc.precondition?.serialize());
+				logService.debug(`[EditorAction2] command precondition is false`, this.desc.id);
 				return;
 			}
 			return this.runEditorCommand(editorAccessor, editor, ...args);
@@ -492,16 +497,155 @@ export abstract class EditorAction2 extends Action2 {
 
 //#endregion
 
+export interface EditorCommandEvent {
+	readonly commandId: string;
+}
+
+export interface EditorCommandMetadata {
+	readonly id: string;
+	readonly canTriggerInlineEdits?: boolean;
+}
+
+export type EditorCommandExecutor = <T>(commandId: string, operation: () => T) => T;
+
+/** Internal typed slot shared by independently installed editor features. */
+export interface EditorCapability<T> {
+	readonly id: string;
+	readonly _value?: T;
+}
+
+interface SharedTextContext {
+	readonly kind: 'text';
+	readonly options: ICodeEditorWidgetOptions;
+	readonly model: TextModel;
+	readonly editorWorker: IVersionedEditorWorkerClient;
+	readonly languageId: string;
+	readonly languageFeaturesService: ILanguageFeaturesService;
+	readonly configurations: ILanguageConfigurationService;
+	readonly onLanguageError: (error: unknown) => void;
+	readonly getCapability: <T>(capability: EditorCapability<T>) => T;
+	readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
+	readonly register: <T extends IDisposable>(value: T) => T;
+}
+
+export interface TextEditorContributionConfigurationContext extends SharedTextContext {
+	readonly viewModel: CursorsController;
+	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;
+	readonly provideCapability: <T>(capability: EditorCapability<T>, value: T) => void;
+	readonly addDecorationSource: (source: DecorationSource) => void;
+	readonly setLineProjection: (value: { readonly visibilitySource: EditorLineVisibilitySource }) => void;
+	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
+	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
+	readonly setLanguageLexicalContext: (source: LanguageLexicalContextSource) => void;
+}
+
+export interface TextEditorContributionContext extends SharedTextContext {
+	readonly view: EditorView;
+	readonly viewport: View;
+	readonly viewModel: CursorsController;
+	readonly onDidExecuteCommand: Event<EditorCommandEvent>;
+	readonly executeCommand: EditorCommandExecutor;
+	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
+}
+
+export interface DocumentFormattingState {
+	readonly context: 'none' | 'text' | 'code';
+	readonly readOnly: boolean;
+	readonly bold: boolean;
+	readonly italic: boolean;
+	readonly fontFamily: 'sans' | 'serif' | 'monospace' | undefined;
+	readonly fontSize: number | undefined;
+	readonly checkedDocumentActionIds: ReadonlySet<string>;
+}
+
+export interface DocumentFormattingContribution extends IDisposable {
+	readonly element: HTMLElement;
+	setState(state: DocumentFormattingState): void;
+}
+
+export interface DocumentCollaborationStartResult {
+	readonly roomId: string;
+	readonly principalId: string | undefined;
+	readonly canManageMembers: boolean;
+}
+
+export interface DocumentCollaborationContribution extends IDisposable {
+	readonly element: HTMLElement;
+	setState(state: 'unavailable' | 'inactive' | 'connecting' | 'connected' | 'resyncRequired' | 'error', options?: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean }): void;
+}
+
+export interface DocumentEditorContributionContext {
+	readonly kind: 'document';
+	readonly container: HTMLElement;
+	readonly documentActions: readonly { readonly id: string; readonly label: string }[];
+	readonly onToggleMark: (markType: 'strong' | 'em') => void;
+	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
+	readonly onClearTextStyle: () => void;
+	readonly onRunDocumentAction: (actionId: string) => void;
+	readonly onStartCollaboration: (roomId: string | undefined) => Promise<DocumentCollaborationStartResult>;
+	readonly onStopCollaboration: () => void;
+	readonly onInviteCollaborator: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
+	readonly onListCollaborators: () => Promise<readonly DocumentCollaborationMember[]>;
+	readonly onRotateCollaboratorAccessToken: (principalId: string) => Promise<DocumentCollaborationInvite>;
+	readonly onRevokeCollaborator: (principalId: string) => Promise<void>;
+	readonly setFormattingContribution: (contribution: DocumentFormattingContribution) => void;
+	readonly setCollaborationContribution: (contribution: DocumentCollaborationContribution) => void;
+}
+
+export type EditorContributionContext = TextEditorContributionContext | DocumentEditorContributionContext;
+
+export interface TextEditorRuntimeContribution extends IDisposable {}
+
+export interface TextEditorRuntimeContributionRegistration {
+	readonly descriptor: ServiceConstructionDescriptor<TextEditorRuntimeContribution>;
+	readonly instantiation: EditorContributionInstantiation;
+}
+
+export interface TextEditorCapabilityContribution {
+	readonly id: string;
+	readonly commands?: readonly EditorCommandMetadata[];
+	configure?(context: TextEditorContributionConfigurationContext): void;
+	install?(context: EditorContributionContext): void;
+	readonly runtime?: TextEditorRuntimeContributionRegistration;
+}
+
+const capabilityContributions: TextEditorCapabilityContribution[] = [];
+const capabilityContributionIds = new Set<string>();
+
+export function registerTextEditorCapabilityContribution(contribution: TextEditorCapabilityContribution): void {
+	const valid = contribution?.id?.trim() && (contribution.configure || contribution.install || contribution.runtime);
+	if (!valid) {
+		throw new TypeError('Editor contribution is invalid');
+	}
+	if (capabilityContributionIds.has(contribution.id)) {
+		throw new Error(`Duplicate editor contribution '${contribution.id}'`);
+	}
+	for (const command of contribution.commands ?? []) {
+		if (!command.id.trim()) {
+			throw new TypeError('Editor command ID is required');
+		}
+		if (command.canTriggerInlineEdits) {
+			TriggerInlineEditCommandsRegistry.registerCommand(command.id);
+		}
+	}
+	capabilityContributionIds.add(contribution.id);
+	capabilityContributions.push(Object.freeze(contribution));
+}
+
+export function getTextEditorCapabilityContributions(): readonly TextEditorCapabilityContribution[] {
+	return capabilityContributions;
+}
+
 // --- Registration of commands and actions
 
 
 export function registerModelAndPositionCommand(id: string, handler: (accessor: ServicesAccessor, model: ITextModel, position: Position, ...args: unknown[]) => unknown) {
-	CommandsRegistry.registerCommand(id, function (accessor, ...args) {
+	CommandsRegistry.register(id, function (accessor, ...args) {
 
 		const instaService = accessor.get(IInstantiationService);
 
 		const [resource, position] = args;
-		assertType(URI.isUri(resource));
+		assertType(resource instanceof URI);
 		assertType(Position.isIPosition(position));
 
 		const model = accessor.get(IModelService).getModel(resource);
@@ -549,7 +693,7 @@ export function registerInstantiatedEditorAction(editorAction: EditorAction): vo
  * Registers an editor contribution. Editor contributions have a lifecycle which is bound
  * to a specific code editor instance.
  */
-export function registerEditorContribution<Services extends BrandedService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void {
+export function registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void {
 	EditorContributionRegistry.INSTANCE.registerEditorContribution(id, ctor, instantiation);
 }
 
@@ -557,7 +701,7 @@ export function registerEditorContribution<Services extends BrandedService[]>(id
  * Registers a diff editor contribution. Diff editor contributions have a lifecycle which
  * is bound to a specific diff editor instance.
  */
-export function registerDiffEditorContribution<Services extends BrandedService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution }): void {
+export function registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution }): void {
 	EditorContributionRegistry.INSTANCE.registerDiffEditorContribution(id, ctor);
 }
 
@@ -601,7 +745,7 @@ class EditorContributionRegistry {
 	constructor() {
 	}
 
-	public registerEditorContribution<Services extends BrandedService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void {
+	public registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void {
 		this.editorContributions.push({ id, ctor: ctor as EditorContributionCtor, instantiation });
 	}
 
@@ -609,7 +753,7 @@ class EditorContributionRegistry {
 		return this.editorContributions.slice(0);
 	}
 
-	public registerDiffEditorContribution<Services extends BrandedService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution }): void {
+	public registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution }): void {
 		this.diffEditorContributions.push({ id, ctor: ctor as DiffEditorContributionCtor });
 	}
 
@@ -661,7 +805,7 @@ export const UndoCommand = registerCommand(new MultiCommand({
 		title: nls.localize('undo', "Undo"),
 		order: 1
 	}, {
-		menuId: MenuId.SimpleEditorContext,
+			menuId: MenuId.for('SimpleEditorContext'),
 		group: '1_do',
 		title: nls.localize('undo', "Undo"),
 		order: 1
@@ -690,7 +834,7 @@ export const RedoCommand = registerCommand(new MultiCommand({
 		title: nls.localize('redo', "Redo"),
 		order: 1
 	}, {
-		menuId: MenuId.SimpleEditorContext,
+			menuId: MenuId.for('SimpleEditorContext'),
 		group: '1_do',
 		title: nls.localize('redo', "Redo"),
 		order: 2
@@ -718,7 +862,7 @@ export const SelectAllCommand = registerCommand(new MultiCommand({
 		title: nls.localize('selectAll', "Select All"),
 		order: 1
 	}, {
-		menuId: MenuId.SimpleEditorContext,
+			menuId: MenuId.for('SimpleEditorContext'),
 		group: '9_select',
 		title: nls.localize('selectAll', "Select All"),
 		order: 1

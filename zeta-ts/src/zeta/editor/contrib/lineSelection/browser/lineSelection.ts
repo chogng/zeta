@@ -1,5 +1,4 @@
 import { Selection } from "../../../common/core/selection.js";
-import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
@@ -10,8 +9,8 @@ import { type TextModel } from "../../../common/model/textModel.js";
  * Every result is forward from the first selected line's start. A complete
  * non-final line ends at the next line's start so it includes its line break.
  */
-export function expandLineSelections(model: TextModel, selections: SelectionSet): SelectionSet {
-	const expanded = selections.selections.map(selection => {
+export function expandLineSelections(model: TextModel, selections: readonly Selection[]): readonly Selection[] {
+	const expanded = selections.map(selection => {
 		const start = new Position(selection.startLineNumber, 1);
 		const selectedEndLineNumber = selection.endLineNumber;
 		const end = selectedEndLineNumber === model.lineCount
@@ -19,5 +18,5 @@ export function expandLineSelections(model: TextModel, selections: SelectionSet)
 			: new Position(selectedEndLineNumber + 1, 1);
 		return Selection.fromPositions(start, end);
 	});
-	return SelectionSet.withPrimary(expanded, selections.primaryIndex);
+	return Object.freeze(expanded);
 }

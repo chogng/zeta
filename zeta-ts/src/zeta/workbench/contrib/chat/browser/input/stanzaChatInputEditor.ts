@@ -8,10 +8,9 @@ import { CursorsController } from "../../../../../editor/common/cursor/cursor.js
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/languageCompletionSessionController.js";
-import { EditorSuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
+import { SuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
 import "../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
 import { Selection } from "../../../../../editor/common/core/selection.js";
-import { SelectionSet } from "../../../../../editor/common/cursor/selectionSet.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
@@ -28,7 +27,7 @@ const CHAT_INPUT_MAX_HEIGHT = 320;
 export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
 	private readonly model = this._register(new TextModel());
-	private readonly selections = this._register(new CursorsController(this.model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1)))));
+	private readonly selections: CursorsController;
 	private readonly editor: CodeEditorWidget;
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
@@ -43,26 +42,25 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.className = "zeta-chat-input-editor";
 		this.element.style.height = `${this.height}px`;
 		options.container.append(this.element);
+		this.editor = this._register(new CodeEditorWidget({
+			container: this.element,
+			model: this.model,
+			input: { resource: this.model.uri },
+			languageId: CHAT_INPUT_LANGUAGE_ID,
+			lineHeight: CHAT_INPUT_LINE_HEIGHT,
+			ariaLabel: options.ariaLabel,
+			placeholder: options.placeholder,
+			presentation: "embedded",
+			padding: CHAT_INPUT_EDITOR_PADDING,
+			lineWrapping: EditorLineWrapping.On,
+		}));
+		this.selections = this.editor.selections;
 		const providers = this._register(new LanguageCompletionProviderRegistry());
 		this._register(providers.register(createStanzaChatCommandCompletionProvider(options.slashCommands)));
 		this._register(providers.register(createStanzaChatSkillCompletionProvider(options.skills)));
 		const completions = this._register(new LanguageCompletionService(this.model, providers));
 		const completionSession = this._register(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
-		this.editor = this._register(new CodeEditorWidget({
-			container: this.element,
-			model: this.model,
-			lineHeight: CHAT_INPUT_LINE_HEIGHT,
-			ariaLabel: options.ariaLabel,
-			placeholder: options.placeholder,
-			selectionController: this.selections,
-			viewport: {
-				presentation: "embedded",
-				focusOutlineOwner: "host",
-				padding: CHAT_INPUT_EDITOR_PADDING,
-				lineWrapping: EditorLineWrapping.On,
-			},
-		}));
-		this._register(new EditorSuggestController(
+		this._register(new SuggestController(
 			this.editor.view,
 			this.selections,
 			completions,
@@ -95,7 +93,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		const range = Range.fromPositions(new Position((0) + 1, (0) + 1), this.model.positionAt(this.model.length));
 		this.model.applyEdits([{ range, text: value }]);
 		const end = this.model.positionAt(this.model.length);
-		this.selections.setSelections(SelectionSet.single(Selection.fromPositions(end)));
+		this.selections.setSelections([Selection.fromPositions(end)]);
 	}
 
 	focus(): void {

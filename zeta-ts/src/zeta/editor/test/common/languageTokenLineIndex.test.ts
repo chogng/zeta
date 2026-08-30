@@ -156,7 +156,7 @@ test("Token line index validates queries and owns neither store nor model", () =
 	const index = new LanguageTokenLineIndex(store);
 
 	assert.throws(() => index.getLineTokens(-1), /non-negative safe integer/);
-	assert.throws(() => index.getLineTokens(1), /lineIndex/);
+	assert.throws(() => index.getLineTokens(1), /lineNumber/);
 	index.dispose();
 	assert.throws(() => index.lines, /already disposed/);
 

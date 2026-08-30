@@ -1,210 +1,120 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
- *  Licensed under the MIT License. See License.txt in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
+import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
+import { assertLanguageId } from "../../../common/languages/languageId.js";
+import { createLanguageLexicalLineScanner } from "../../../common/languages/languageLexicalConfiguration.js";
+import { type LanguageLexicalState } from "../../../common/languages/languageLexicalLineScanner.js";
+import { type TextModel } from "../../../common/model/textModel.js";
 
-import { CancellationToken } from '../../../../base/common/cancellation.js';
-import { onUnexpectedExternalError } from '../../../../base/common/errors.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { ITextModel } from '../../../common/model.js';
-import { FoldingContext, FoldingRange, FoldingRangeProvider } from '../../../common/languages.js';
-import { FoldingLimitReporter, RangeProvider } from './folding.js';
-import { FoldingRegions, MAX_LINE_NUMBER } from './foldingRanges.js';
-
-export interface IFoldingRangeData extends FoldingRange {
-	rank: number;
+interface OpenBracketFold {
+	readonly startLineIndex: number;
+	readonly matchingToken: string;
 }
 
-const foldingContext: FoldingContext = {
-};
-
-const ID_SYNTAX_PROVIDER = 'syntax';
-
-export class SyntaxRangeProvider implements RangeProvider {
-
-	readonly id = ID_SYNTAX_PROVIDER;
-
-	readonly disposables: DisposableStore;
-
-	constructor(
-		private readonly editorModel: ITextModel,
-		private readonly providers: FoldingRangeProvider[],
-		readonly handleFoldingRangesChange: () => void,
-		private readonly foldingRangesLimit: FoldingLimitReporter,
-		private readonly fallbackRangeProvider: RangeProvider | undefined // used when all providers return null
-	) {
-		this.disposables = new DisposableStore();
-		if (fallbackRangeProvider) {
-			this.disposables.add(fallbackRangeProvider);
-		}
-
-		for (const provider of providers) {
-			if (typeof provider.onDidChange === 'function') {
-				this.disposables.add(provider.onDidChange(handleFoldingRangesChange));
-			}
-		}
-	}
-
-	compute(cancellationToken: CancellationToken): Promise<FoldingRegions | null> {
-		return collectSyntaxRanges(this.providers, this.editorModel, cancellationToken).then(ranges => {
-			if (this.editorModel.isDisposed()) {
-				return null;
-			}
-			if (ranges) {
-				const res = sanitizeRanges(ranges, this.foldingRangesLimit);
-				return res;
-			}
-			return this.fallbackRangeProvider?.compute(cancellationToken) ?? null;
-		});
-	}
-
-	dispose() {
-		this.disposables.dispose();
-	}
+interface OpenMarkerFold {
+	readonly startLineIndex: number;
 }
 
-function collectSyntaxRanges(providers: FoldingRangeProvider[], model: ITextModel, cancellationToken: CancellationToken): Promise<IFoldingRangeData[] | null> {
-	let rangeData: IFoldingRangeData[] | null = null;
-	const promises = providers.map((provider, i) => {
-		return Promise.resolve(provider.provideFoldingRanges(model, foldingContext, cancellationToken)).then(ranges => {
-			if (cancellationToken.isCancellationRequested) {
-				return;
-			}
-			if (Array.isArray(ranges)) {
-				if (!Array.isArray(rangeData)) {
-					rangeData = [];
-				}
-				const nLines = model.getLineCount();
-				for (const r of ranges) {
-					if (r.start > 0 && r.end > r.start && r.end <= nLines) {
-						rangeData.push({ start: r.start, end: r.end, rank: i, kind: r.kind });
-					}
-				}
-			}
-		}, onUnexpectedExternalError);
-	});
-	return Promise.all(promises).then(_ => {
-		return rangeData;
-	});
-}
-
-class RangesCollector {
-	private readonly _startIndexes: number[];
-	private readonly _endIndexes: number[];
-	private readonly _nestingLevels: number[];
-	private readonly _nestingLevelCounts: number[];
-	private readonly _types: Array<string | undefined>;
-	private _length: number;
-	private readonly _foldingRangesLimit: FoldingLimitReporter;
-
-	constructor(foldingRangesLimit: FoldingLimitReporter) {
-		this._startIndexes = [];
-		this._endIndexes = [];
-		this._nestingLevels = [];
-		this._nestingLevelCounts = [];
-		this._types = [];
-		this._length = 0;
-		this._foldingRangesLimit = foldingRangesLimit;
+/**
+ * Computes synchronous structural fold ranges from Stanza's configured lexical scanner.
+ *
+ * Brace, bracket, multi-line block-comment, and configured named region markers
+ * participate. Parentheses are intentionally excluded: multi-line argument lists
+ * remain editor text rather than becoming accidental fold headers. Callers may merge
+ * these provider-owned ranges with indentation folds without exposing scanner state to
+ * browser code.
+ */
+export function computeEditorLanguageFoldingRanges(model: TextModel, languageId: string, configurations: ILanguageConfigurationService): readonly EditorFoldingRange[] {
+	assertLanguageId(languageId);
+	if (!configurations || typeof configurations.getLanguageConfiguration !== "function") {
+		throw new TypeError("Language folding requires language configurations");
 	}
-
-	public add(startLineNumber: number, endLineNumber: number, type: string | undefined, nestingLevel: number) {
-		if (startLineNumber > MAX_LINE_NUMBER || endLineNumber > MAX_LINE_NUMBER) {
-			return;
+	const configuration = configurations.getLanguageConfiguration(languageId);
+	const scanner = createLanguageLexicalLineScanner(languageId, configuration);
+	const bracketStack: OpenBracketFold[] = [];
+	const blockCommentStarts: number[] = [];
+	const markerStarts: OpenMarkerFold[] = [];
+	const ranges: EditorFoldingRange[] = [];
+	let state: LanguageLexicalState = "normal";
+	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
+		const line = model.getLineContent((lineIndex) + 1);
+		const result = scanner.scan(line, state);
+		state = result.outputState;
+		if (matchesMarker(configuration.foldingRules.markers?.end, line)) {
+			const start = markerStarts.pop();
+			if (start) appendRange(ranges, start.startLineIndex, lineIndex);
+		} else if (matchesMarker(configuration.foldingRules.markers?.start, line)) {
+			markerStarts.push(Object.freeze({ startLineIndex: lineIndex }));
 		}
-		const index = this._length;
-		this._startIndexes[index] = startLineNumber;
-		this._endIndexes[index] = endLineNumber;
-		this._nestingLevels[index] = nestingLevel;
-		this._types[index] = type;
-		this._length++;
-		if (nestingLevel < 30) {
-			this._nestingLevelCounts[nestingLevel] = (this._nestingLevelCounts[nestingLevel] || 0) + 1;
-		}
-	}
-
-	public toIndentRanges() {
-		const limit = this._foldingRangesLimit.limit;
-		if (this._length <= limit) {
-			this._foldingRangesLimit.update(this._length, false);
-
-			const startIndexes = new Uint32Array(this._length);
-			const endIndexes = new Uint32Array(this._length);
-			for (let i = 0; i < this._length; i++) {
-				startIndexes[i] = this._startIndexes[i];
-				endIndexes[i] = this._endIndexes[i];
-			}
-			return new FoldingRegions(startIndexes, endIndexes, this._types);
-		} else {
-			this._foldingRangesLimit.update(this._length, limit);
-
-			let entries = 0;
-			let maxLevel = this._nestingLevelCounts.length;
-			for (let i = 0; i < this._nestingLevelCounts.length; i++) {
-				const n = this._nestingLevelCounts[i];
-				if (n) {
-					if (n + entries > limit) {
-						maxLevel = i;
-						break;
-					}
-					entries += n;
-				}
-			}
-
-			const startIndexes = new Uint32Array(limit);
-			const endIndexes = new Uint32Array(limit);
-			const types: Array<string | undefined> = [];
-			for (let i = 0, k = 0; i < this._length; i++) {
-				const level = this._nestingLevels[i];
-				if (level < maxLevel || (level === maxLevel && entries++ < limit)) {
-					startIndexes[k] = this._startIndexes[i];
-					endIndexes[k] = this._endIndexes[i];
-					types[k] = this._types[i];
-					k++;
-				}
-			}
-			return new FoldingRegions(startIndexes, endIndexes, types);
-		}
-
-	}
-
-}
-
-export function sanitizeRanges(rangeData: IFoldingRangeData[], foldingRangesLimit: FoldingLimitReporter): FoldingRegions {
-	const sorted = rangeData.sort((d1, d2) => {
-		let diff = d1.start - d2.start;
-		if (diff === 0) {
-			diff = d1.rank - d2.rank;
-		}
-		return diff;
-	});
-	const collector = new RangesCollector(foldingRangesLimit);
-
-	let top: IFoldingRangeData | undefined = undefined;
-	const previous: IFoldingRangeData[] = [];
-	for (const entry of sorted) {
-		if (!top) {
-			top = entry;
-			collector.add(entry.start, entry.end, entry.kind && entry.kind.value, previous.length);
-		} else {
-			if (entry.start > top.start) {
-				if (entry.end <= top.end) {
-					previous.push(top);
-					top = entry;
-					collector.add(entry.start, entry.end, entry.kind && entry.kind.value, previous.length);
+		for (const event of result.events) {
+			if (event.kind === "multiline") {
+				if (event.lexicalKind !== "blockComment") continue;
+				if (event.action === "open") {
+					blockCommentStarts.push(lineIndex);
 				} else {
-					if (entry.start > top.end) {
-						do {
-							top = previous.pop();
-						} while (top && entry.start > top.end);
-						if (top) {
-							previous.push(top);
-						}
-						top = entry;
-					}
-					collector.add(entry.start, entry.end, entry.kind && entry.kind.value, previous.length);
+					const startLineIndex = blockCommentStarts.pop();
+					if (startLineIndex !== undefined) appendRange(ranges, startLineIndex, lineIndex);
 				}
+				continue;
 			}
+			if (event.kind !== "bracket") continue;
+			if (event.action === "open" && isFoldOpeningToken(event.token)) {
+				bracketStack.push(Object.freeze({ startLineIndex: lineIndex, matchingToken: event.matchingToken }));
+				continue;
+			}
+			if (event.action !== "close") continue;
+			const opener = bracketStack.at(-1);
+			if (!opener || opener.matchingToken !== event.token) continue;
+			bracketStack.pop();
+			appendRange(ranges, opener.startLineIndex, lineIndex);
 		}
 	}
-	return collector.toIndentRanges();
+	return Object.freeze(normalizeFoldingRanges(ranges));
+}
+
+function matchesMarker(pattern: RegExp | undefined, line: string): boolean {
+	if (!pattern) return false;
+	// Configuration patterns are frozen at registration time. Recreate a
+	// stateless matcher so global/sticky contributions cannot mutate `lastIndex`.
+	return new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, "")).test(line);
+}
+
+/** Merges independently-derived provider ranges while retaining only nested or disjoint spans. */
+export function mergeEditorFoldingRanges(...sources: readonly (readonly EditorFoldingRange[])[]): readonly EditorFoldingRange[] {
+	if (sources.some(source => !Array.isArray(source))) throw new TypeError("Folding range sources must be arrays");
+	const ranges = sources.flat().map(range => Object.freeze({
+		startLineIndex: range.startLineIndex,
+		endLineIndex: range.endLineIndex,
+		collapsed: false,
+		source: EditorFoldingRangeSource.Provider,
+	}));
+	return Object.freeze(normalizeFoldingRanges(ranges));
+}
+
+function isFoldOpeningToken(token: string): boolean {
+	return token === "{" || token === "[";
+}
+
+function appendRange(ranges: EditorFoldingRange[], startLineIndex: number, endLineIndex: number): void {
+	if (endLineIndex <= startLineIndex) return;
+	ranges.push(Object.freeze({ startLineIndex, endLineIndex, collapsed: false, source: EditorFoldingRangeSource.Provider }));
+}
+
+function normalizeFoldingRanges(ranges: readonly EditorFoldingRange[]): readonly EditorFoldingRange[] {
+	const ordered = [...ranges]
+		.filter(range => Number.isSafeInteger(range.startLineIndex) && Number.isSafeInteger(range.endLineIndex) && range.startLineIndex >= 0 && range.endLineIndex > range.startLineIndex)
+		.sort((left, right) => left.startLineIndex - right.startLineIndex || right.endLineIndex - left.endLineIndex);
+	const result: EditorFoldingRange[] = [];
+	const active: EditorFoldingRange[] = [];
+	for (const range of ordered) {
+		while (active.length > 0 && active.at(-1)!.endLineIndex < range.startLineIndex) active.pop();
+		const enclosing = active.at(-1);
+		if (enclosing && range.startLineIndex === enclosing.startLineIndex) continue;
+		if (enclosing && range.endLineIndex > enclosing.endLineIndex) continue;
+		const previous = result.at(-1);
+		if (previous && previous.startLineIndex === range.startLineIndex && previous.endLineIndex === range.endLineIndex) continue;
+		const normalized = Object.freeze({ ...range, collapsed: false, source: EditorFoldingRangeSource.Provider });
+		result.push(normalized);
+		active.push(normalized);
+	}
+	return result;
 }
