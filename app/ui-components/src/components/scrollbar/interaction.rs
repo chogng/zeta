@@ -1,4 +1,5 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use zui::ui::AnimationEasing;
 use zui::ui::ScalarAnimation;
@@ -15,7 +16,7 @@ pub enum ScrollbarPointerPresence {
     Over,
 }
 
-/// Interaction state used by [`super::ScrollbarStyle`] to select semantic colors.
+/// Interaction state used by scrollbar styles to select semantic colors.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum ScrollbarState {
     #[default]
@@ -24,7 +25,7 @@ pub enum ScrollbarState {
     Active,
 }
 
-/// Current visual state supplied to a [`super::ScrollView`].
+/// Current visual state supplied to one scrollbar.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollbarPresentation {
     state: ScrollbarState,

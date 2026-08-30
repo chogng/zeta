@@ -9,7 +9,7 @@
 > [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键设置组合由
 > [`zeta-settings`](../settings/README.md) 管，工作界面的组合键提示由 [`zeta-workbench`](../workbench/README.md) 管。
 
-`zeta-ui-components` 基于 `zui` 提供 Button、Switch、Checkbox、ActionBar、ContextMenu、Dropdown、Picker、TabList、Keycap、Sash、Resizable、HorizontalScrollbar、VerticalScrollbar、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
+`zeta-ui-components` 基于 `zui` 提供 Button、Switch、Checkbox、ActionBar、Menu、ContextMenu、Dropdown、Picker、TabList、Keycap、Sash、Resizable、HorizontalScrollbar、VerticalScrollbar、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
 ## 1. 边界与依赖方向
@@ -36,7 +36,8 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui-components::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用写时复制的平衡分块树，单项更新、按偏移定位和区间 splice 不重建无关分支，并支持稀疏展示覆盖和 item-relative scroll anchor；identity、selection、键盘语义与产品数据归 host |
 | 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui-components::TreeView` | ✅；普通文件树复用固定高度 ListView，展开式编辑器可接入保留的可变高度布局；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
 | 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui-components::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
-| 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
+| 菜单外壳、纵向菜单项、选择、命中、键盘导航和无障碍结构 | `zeta-ui-components::Menu` | ✅；产品 identity 由 host 提供，打开状态、关闭与 command 归 host |
+| 锚定菜单的 viewport 翻转、约束与浮层组合 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/Menu，不重复菜单内容和交互结构 |
 | 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui-components::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
 | 带搜索框的锚定候选列表、滚动、选择展示与 accessibility | `zeta-ui-components::Picker` | ✅；调用界面保留打开状态、查询、过滤、输入路由和选择结果执行 |
 | Icon+text label 的内部布局 | `zeta-ui-components::IconLabel` | ✅ |
@@ -106,8 +107,9 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::list_view::ListItemLayout` | public | 为一个 projected index 暴露 translated item bounds；不携带产品 identity 或内容 |
 | `components::tree_view::{TreeView, TreeViewStyle}` | public | 在 host-flattened visible node sequence 上组合 ListView；`new` 保留固定高度快速路径，`from_layout` 接收可变高度保留布局；拥有 depth indentation、disclosure/content geometry 与虚拟化 |
 | `components::tree_view::{TreeItem, TreeItemExpansion, TreeItemLayout}` | public | 分别表达可见节点的 depth/Leaf/Collapsed/Expanded 结构状态，以及同源 row/disclosure/content bounds |
-| `components::context_menu::{ContextMenu, ContextMenuItem}` | public | 组合 ContextView 与纵向 ActionBar，绘制带柔和 BoxShadow 的无边框 menu surface，公开同源 item bounds/hit-test，并允许 host 在保留的 header row 中绘制搜索等产品内容 |
-| `components::context_menu::{ContextMenuSelection, ContextMenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style、可选 header height 和锚点 placement，padding 固定为 2px、radius 固定为 4px |
+| `components::menu::{Menu, MenuItem, MenuIds}` | public | 绘制带柔和 BoxShadow 的无边框菜单外壳，以 host 提供的稳定 identity 建立菜单与菜单项的同一交互/无障碍树，并公开同源 item bounds/hit-test |
+| `components::menu::{MenuSelection, MenuStyle}` | public | 默认选择首个 enabled item；定义 surface color、item size/style 和可选 header height，padding 固定为 2px、radius 固定为 4px |
+| `components::context_menu::{ContextMenu, ContextMenuStyle}` | public | 组合 ContextView 与 Menu，只定义锚点 placement、viewport 翻转/约束和浮层合成，并把菜单几何与 header 组合入口原样公开给 host |
 | `components::dropdown::{Dropdown, DropdownItem}` | public | 组合锚定浮层与纵向 label item；可滚动模式只为 visible/overscan range 构建 ActionBar，同时以 O(1) 固定高度几何公开全部 item/interactive bounds，供 host 保留键盘与 accessibility identity |
 | `components::dropdown::{DropdownSelection, DropdownStyle}` | public | 默认选择首个 enabled item，并定义 borderless surface、item size/style、可选 header height、圆角和锚点 placement |
 | `components::dropdown::DropdownScrollConfiguration` | public | 让 host 以 retained `ScrollState`、最大可见项数与 `ScrollViewStyle` 为 Dropdown 的 item region 启用独立滚动；header 保持固定 |
@@ -150,8 +152,10 @@ host
           ├─ ContextView → anchored layout → overlay layer
           │   ├─ floating shell rect
           │   └─ caller content inside content-bounds clip
-          ├─ ContextMenu → ContextView + shadow/menu surface + vertical ActionBar
-          │   └─ soft BoxShadow + 2px padding + 4px radius + selected MenuItem presentation
+          ├─ Menu → shadow/menu surface + vertical ActionBar + interaction regions
+          │   └─ MenuIds/MenuItem → Menu/MenuItem accessibility + vertical navigation
+          ├─ ContextMenu → ContextView + Menu
+          │   └─ anchored placement + viewport constraint + overlay composition
           ├─ Dropdown → ContextView + ListView projected range + vertical ActionBar
           │   └─ visible/overscan selected item → Button selection presentation
           ├─ Picker → Dropdown + SearchBox + host-owned item identities
@@ -256,26 +260,11 @@ Terminal 从底部计数和输出增长锚定不属于通用 `ScrollState`；Nat
 `TabList` 不持有 tab identity、activation、focus、accessibility、关闭动作或对应 tabpanel。
 Session navigation 和后续 Editor tabs 可以复用同一 surface/排列 primitive，但各自保留内容
 布局与 active panel 生命周期。
-`ContextView::new` 接收同一 logical coordinate space 中的 viewport、anchor 和期望 content
-size。它先把 padding 加入外壳尺寸，再按 `ContextViewPlacement` 尝试首选侧和对齐；
-首选位置不适合时先翻转，仍无法完整放入时贴紧 inset viewport 并约束外壳和内容尺寸。
-`ContextView::draw` 把外壳与调用方 closure 发出的任意 primitive 放入同一个新浮层；该层不继承
-host component 的 clip，因此可以越过锚点所在控件的边界，调用方内容再单独裁剪到
-`content_bounds`。Host 必须使用同一 `ContextViewLayout`
-注册命中区域，并自行管理 open/close、outside click、Escape、focus restoration 和 anchored
-content 的领域交互；这些 retained lifecycle 不进入 scene component。当前
-`ContextViewStyle` 不暴露 border：浮层天然无边框；若某个具体浮层需要描边，应由其内容组件
-拥有并绘制，不能改变 ContextView 的定位几何。`ContextMenu` 在 ContextView 上建立通用菜单
-基座：`PaintRect::with_shadow` 让 renderer 在本体前生成扩展 shadow quad，fragment shader
-根据圆角矩形 signed distance 近似 Gaussian coverage，以 surface 边缘作为 50% coverage
-中点；ContextMenu 再组合低透明度的 ambient shadow 与向下偏移的 key shadow，避免单层黑色
-光晕。内部无边框 menu surface 固定使用 2px padding 与 4px radius，再由纵向 ActionBar
-排列 label item。Host 通过
-`ContextMenuSelection::Item` 投影唯一选中项，并使用 ContextMenu 返回的同源 bounds 注册交互。
-`ContextMenuStyle::with_header_height` 只保留 product-owned header geometry；
-`ContextMenu::paint_with_header` 保证 header 与菜单项绘制在同一 overlay。搜索状态、输入语义、
-过滤和焦点仍由 host 保存，ContextMenu 不依赖 `TextInput` 或业务数据。Native 的分支菜单通过
-这条 header contract 组合产品搜索。
+`ContextView::new` 接收同一逻辑坐标空间中的 viewport、anchor 和期望 content size。它先把 padding 加入外壳尺寸，再按 `ContextViewPlacement` 尝试首选侧和对齐；首选位置不适合时先翻转，仍无法完整放入时贴紧 inset viewport 并约束外壳和内容尺寸。`ContextView::draw` 把外壳与调用方 closure 发出的任意 primitive 放入同一个新浮层；该层不继承 host component 的 clip，因此可以越过锚点所在控件的边界，调用方内容再单独裁剪到 `content_bounds`。Host 必须使用同一 `ContextViewLayout` 注册命中区域，并自行管理 open/close、outside click、Escape、focus restoration 和锚定内容的领域交互；这些 retained lifecycle 不进入 scene component。当前 `ContextViewStyle` 不暴露 border：浮层天然无边框；若某个具体浮层需要描边，应由其内容组件拥有并绘制，不能改变 ContextView 的定位几何。
+
+`Menu` 拥有无边框菜单外壳、低透明度 ambient shadow、向下偏移的 key shadow、2px padding、4px radius、纵向 `ActionBar`、选择展示和 item bounds/hit-test。`MenuIds` 与 `MenuItem` 接收 host 提供的稳定 identity，`Menu::compose` 用同一几何建立 `Menu`/`MenuItem` 无障碍节点、激活动作和纵向导航；host 只保留打开状态、关闭、焦点恢复与命令执行。`MenuStyle::with_header_height` 保留调用界面拥有的 header geometry，`Menu::{paint_with_header,draw_components_with_header}` 保证 header 与菜单项处于同一组件树。
+
+`ContextMenu` 使用 `ContextView` 定位一个完整 `Menu`，只增加锚定、viewport 翻转/约束和浮层层级。标签菜单与 SCM 工具栏菜单直接提供 `MenuIds`/`MenuItem`，不再分别创建菜单项交互节点；标签菜单的重命名输入仍通过 header 入口组合，状态和输入语义保留在 Workbench。
 `Dropdown` 是另一层 ContextView 组合：它使用无外层 padding 的浮层外壳，
 用垂直 ActionBar 排列 label item，并默认选择第一个 enabled item。Host 可以用
 `DropdownSelection::Item` 投影 hover/focus/pressed 对应的唯一选择，用 Dropdown 返回的同源
@@ -304,7 +293,7 @@ ScrollState 的 axis clamp、绝对 offset、首尾和
 ensure-visible transition，水平/垂直 Scrollbar 的独立类型、比例 thumb geometry、track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ScrollView 的内容坐标、裁剪和 visibility policy，ListView 的固定/可变高度 visible/overscan range、平衡分块高度索引、O(log n) 单项更新、O(log n + k) 区间 splice、稀疏高度覆盖、scroll anchor、gap/padding、translated bounds、hit-test、ensure-visible 与 visible/overscan-only paint，TreeView 的固定/可变 item、depth/disclosure geometry、命中与 visible/overscan-only paint，
 ContextView 的纵/横锚定、
 翻转、对齐、viewport 约束、外壳/内容裁剪，Dropdown 的默认/显式选择、无外层 inset 与命中，
-ContextMenu 的柔和阴影、2px padding、4px radius、默认/显式选择与命中，ActionBar 排列与命中、
+Menu 的柔和阴影、2px padding、4px radius、默认/显式选择、命中、纵向导航与无障碍父子关系，ContextMenu 的锚定浮层组合，ActionBar 排列与命中、
 TabList 横纵排列与
 surface 状态、按钮、图标标签和输入框的状态/样式/布局。GPU conversion、shader、atlas 与 input
 validation 测试属于具体 backend crate。
@@ -332,8 +321,7 @@ validation 测试属于具体 backend crate。
   但尚无 roving focus、keyboard navigation、overflow 或 custom representation；
 - `Dropdown` 当前只支持单列 label item、固定 item size、单项 selection 与非虚拟化滚动；icon、
   separator、submenu、typeahead、打开/关闭与 accessibility scope 尚无；
-- `BoxShadow` 当前支持单个 rounded-rect shadow 的 color、offset 与 blur radius；尚无 spread、
-  inset 或多重 shadow。ContextMenu 也暂不内建 icon、separator、submenu、typeahead 或超高菜单滚动；
+- `BoxShadow` 当前支持单个圆角矩形阴影的 color、offset、blur radius 与 spread；尚无 inset 或多重 shadow。`Menu` 暂不内建 icon、separator、submenu、typeahead 或超高菜单滚动；
 - `TabList` 当前只拥有固定 item size、gap 和 Tab surface paint；custom content、动态宽度、
   overflow、close action、identity、interaction 与 tabpanel 均由 composed control/host 拥有；
 - `NavBar` 当前尚未作为独立 component 存在；在出现稳定的横向 Titlebar TabList 消费者后，才评估是否把方向、slot 和 overflow/scroll geometry 收敛为 `zeta-ui-components` presentation contract；

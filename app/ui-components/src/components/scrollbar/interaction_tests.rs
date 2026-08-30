@@ -1,6 +1,10 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use super::{ScrollbarController, ScrollbarPointerPresence, ScrollbarPresentation, ScrollbarState};
+use super::ScrollbarController;
+use super::ScrollbarPointerPresence;
+use super::ScrollbarPresentation;
+use super::ScrollbarState;
 
 const HOLD: Duration = Duration::from_millis(100);
 const FADE_IN: Duration = Duration::from_millis(20);

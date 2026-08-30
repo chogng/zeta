@@ -1,9 +1,9 @@
 use super::Switch;
 use super::SwitchColors;
 use super::SwitchSelection;
-use super::SwitchState;
 use super::SwitchStateColors;
 use super::SwitchStyle;
+use super::ToggleState;
 use crate::Border;
 use crate::Color;
 use crate::CornerRadii;
@@ -56,7 +56,7 @@ fn switch_centers_track_and_positions_thumb_for_off_and_on() {
     let off = Switch::new(
         Rect::from_xywh(10.0, 10.0, 80.0, 40.0),
         SwitchSelection::Off,
-        SwitchState::Resting,
+        ToggleState::Resting,
         test_style(),
     );
     assert_eq!(off.track_bounds(), Rect::from_xywh(30.0, 20.0, 40.0, 20.0));
@@ -65,7 +65,7 @@ fn switch_centers_track_and_positions_thumb_for_off_and_on() {
     let on = Switch::new(
         off.bounds(),
         SwitchSelection::On,
-        SwitchState::Resting,
+        ToggleState::Resting,
         test_style(),
     );
     assert_eq!(on.thumb_bounds(), Rect::from_xywh(53.0, 23.0, 14.0, 14.0));
@@ -76,7 +76,7 @@ fn switch_paints_position_and_interaction_state_colors() {
     let switch = Switch::new(
         Rect::from_xywh(0.0, 0.0, 80.0, 40.0),
         SwitchSelection::On,
-        SwitchState::Pressed,
+        ToggleState::Pressed,
         test_style(),
     );
     let mut scene = UiScene::new(Color::TRANSPARENT);
@@ -95,7 +95,7 @@ fn disabled_switch_uses_disabled_colors_without_changing_geometry() {
     let switch = Switch::new(
         Rect::from_xywh(0.0, 0.0, 80.0, 40.0),
         SwitchSelection::Off,
-        SwitchState::Disabled,
+        ToggleState::Disabled,
         test_style(),
     );
     let mut scene = UiScene::new(Color::TRANSPARENT);
@@ -113,7 +113,7 @@ fn switch_clamps_visual_geometry_to_small_host_bounds() {
     let switch = Switch::new(
         Rect::from_xywh(10.0, 20.0, 12.0, 8.0),
         SwitchSelection::On,
-        SwitchState::Resting,
+        ToggleState::Resting,
         test_style(),
     );
 
@@ -129,7 +129,7 @@ fn switch_projects_animation_progress_into_thumb_geometry() {
     let switch = Switch::new(
         Rect::from_xywh(10.0, 10.0, 80.0, 40.0),
         SwitchSelection::On,
-        SwitchState::Resting,
+        ToggleState::Resting,
         test_style(),
     )
     .with_progress(0.5);

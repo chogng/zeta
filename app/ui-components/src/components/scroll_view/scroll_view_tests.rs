@@ -1,9 +1,10 @@
 use super::{
     ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollView,
-    ScrollViewStyle, ScrollbarPart, ScrollbarPresentation, ScrollbarState, ScrollbarStyle,
-    ScrollbarVisibility,
+    ScrollViewStyle, ScrollbarPresentation, ScrollbarStyle, ScrollbarVisibility,
 };
-use crate::{Color, Component, Point, Rect, Size, UiScene};
+use crate::{
+    Color, Component, Point, Rect, ScrollbarAxis, ScrollbarPart, ScrollbarState, Size, UiScene,
+};
 
 fn style() -> ScrollViewStyle {
     ScrollViewStyle::new(ScrollbarStyle::new(
@@ -113,6 +114,26 @@ fn automatic_vertical_scrollbar_uses_proportional_clamped_thumb_geometry() {
         Rect::from_xywh(90.0, 74.0, 8.0, 24.0)
     );
     assert!(view.horizontal_scrollbar().is_none());
+}
+
+#[test]
+fn both_axis_view_composes_independent_horizontal_and_vertical_scrollbars() {
+    let view = ScrollView::new(
+        Rect::from_xywh(10.0, 20.0, 100.0, 80.0),
+        Size::new(300.0, 240.0),
+        ScrollState::default(),
+        ScrollAxis::Both,
+        style(),
+    );
+
+    assert_eq!(
+        view.horizontal_scrollbar().unwrap().layout().axis(),
+        ScrollbarAxis::Horizontal
+    );
+    assert_eq!(
+        view.vertical_scrollbar().unwrap().layout().axis(),
+        ScrollbarAxis::Vertical
+    );
 }
 
 #[test]

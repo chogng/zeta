@@ -1,3 +1,5 @@
+use super::ToggleState;
+use super::centered_bounds;
 use crate::Border;
 use crate::Color;
 use crate::Component;
@@ -8,17 +10,6 @@ use crate::PaintRect;
 use crate::Rect;
 use crate::Size;
 use crate::UiScene;
-/// Visual interaction state projected onto one [`Switch`] by its host.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum SwitchState {
-    #[default]
-    Resting,
-    Hovered,
-    Focused,
-    Pressed,
-    Disabled,
-}
-
 /// On/off presentation projected onto one [`Switch`] by its host.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum SwitchSelection {
@@ -98,13 +89,13 @@ impl SwitchStateColors {
         self
     }
 
-    const fn for_state(self, state: SwitchState) -> SwitchColors {
+    const fn for_state(self, state: ToggleState) -> SwitchColors {
         match state {
-            SwitchState::Resting => self.resting,
-            SwitchState::Hovered => self.hovered,
-            SwitchState::Focused => self.focused,
-            SwitchState::Pressed => self.pressed,
-            SwitchState::Disabled => self.disabled,
+            ToggleState::Resting => self.resting,
+            ToggleState::Hovered => self.hovered,
+            ToggleState::Focused => self.focused,
+            ToggleState::Pressed => self.pressed,
+            ToggleState::Disabled => self.disabled,
         }
     }
 }
@@ -173,7 +164,7 @@ impl SwitchStyle {
         self
     }
 
-    const fn colors_for(self, selection: SwitchSelection, state: SwitchState) -> SwitchColors {
+    const fn colors_for(self, selection: SwitchSelection, state: ToggleState) -> SwitchColors {
         match selection {
             SwitchSelection::Off => self.off.for_state(state),
             SwitchSelection::On => self.on.for_state(state),
@@ -190,7 +181,7 @@ impl SwitchStyle {
 pub struct Switch {
     bounds: Rect,
     selection: SwitchSelection,
-    state: SwitchState,
+    state: ToggleState,
     style: SwitchStyle,
     thumb_progress: f32,
 }
@@ -199,7 +190,7 @@ impl Switch {
     pub const fn new(
         bounds: Rect,
         selection: SwitchSelection,
-        state: SwitchState,
+        state: ToggleState,
         style: SwitchStyle,
     ) -> Self {
         Self {
@@ -219,7 +210,7 @@ impl Switch {
         self.selection
     }
 
-    pub const fn state(self) -> SwitchState {
+    pub const fn state(self) -> ToggleState {
         self.state
     }
 
@@ -279,19 +270,6 @@ impl Component for Switch {
                 .with_corner_radii(self.style.thumb_corner_radii),
         );
     }
-}
-
-fn centered_bounds(bounds: Rect, size: Size) -> Rect {
-    let bounds_width = bounds.size.width.max(0.0);
-    let bounds_height = bounds.size.height.max(0.0);
-    let width = size.width.max(0.0).min(bounds_width);
-    let height = size.height.max(0.0).min(bounds_height);
-    Rect::from_xywh(
-        bounds.origin.x + (bounds_width - width) * 0.5,
-        bounds.origin.y + (bounds_height - height) * 0.5,
-        width,
-        height,
-    )
 }
 
 #[cfg(test)]

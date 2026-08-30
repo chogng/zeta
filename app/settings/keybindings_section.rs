@@ -130,7 +130,7 @@ impl<'a> KeybindingsSection<'a> {
 
     fn scrollbar(&self, list: &ListView) -> Option<KeybindingsScrollbar> {
         let view = list.scroll_view();
-        let layout = view.vertical_scrollbar()?;
+        let layout = view.vertical_scrollbar()?.layout();
         let maximum = view.metrics().maximum_offset().y;
         let offset = view.viewport().visible_content_bounds().origin.y;
         let percentage = if maximum > 0.0 {
