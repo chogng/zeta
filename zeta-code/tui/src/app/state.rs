@@ -52,6 +52,7 @@ use crate::features::queue::QueueView;
 use crate::features::rewind::RewindPaneSpec;
 use crate::features::rewind::RewindSelectionAction;
 use crate::features::sessions::RootTarget;
+use crate::features::sessions::SessionManagerPointerTarget;
 use crate::features::sessions::SessionManagerView;
 use crate::features::sessions::SessionPaneSpec;
 use crate::features::sessions::SessionSelectionAction;
@@ -1201,6 +1202,39 @@ impl App {
 
     pub(crate) fn session_manager_hint(&self) -> &'static str {
         self.sessions.manager().selection_hint()
+    }
+
+    pub(crate) fn select_session_manager_pointer_target(
+        &mut self,
+        target: SessionManagerPointerTarget,
+    ) {
+        self.sessions.manager_mut().select_pointer_target(target);
+    }
+
+    pub(crate) fn activate_session_manager_pointer_target(
+        &mut self,
+        target: SessionManagerPointerTarget,
+    ) {
+        let catalog = self.sessions.catalog().to_vec();
+        self.sessions.manager_mut().select_pointer_target(target);
+        if let Some(preview) = self.sessions.manager_mut().toggle_or_preview(&catalog) {
+            self.quick_view = Some(QuickViewState::new(preview));
+        }
+    }
+
+    pub(crate) fn scroll_session_manager(&mut self, up: bool) -> bool {
+        if !matches!(self.sessions.root(), Some(RootTarget::Manager)) {
+            return false;
+        }
+        let catalog = self.sessions.catalog().to_vec();
+        let manager = self.sessions.manager_mut();
+        manager.focus();
+        if up {
+            manager.select_previous(&catalog);
+        } else {
+            manager.select_next(&catalog);
+        }
+        true
     }
 
     pub(crate) fn root_navigation_hint(&self) -> Option<&'static str> {

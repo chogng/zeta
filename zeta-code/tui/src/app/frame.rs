@@ -150,6 +150,7 @@ pub(crate) enum InputPointerTarget {
     Composer(ChatComposerPointerTarget),
     Approval(usize),
     Query(usize),
+    SessionManager(crate::features::sessions::SessionManagerPointerTarget),
     TranscriptToggle(String),
     TranscriptDetails(String),
 }
@@ -161,7 +162,17 @@ pub(crate) fn input_pointer_target_at(
     row: u16,
 ) -> Option<InputPointerTarget> {
     let areas = layout(app, terminal_area);
-    if app.session_manager_view().is_none() {
+    if let Some(manager) = app.session_manager_view() {
+        let manager_areas = super::screen_layout::manager_areas(
+            areas.session.transcript,
+            welcome::desired_height(areas.session.transcript.width),
+        );
+        if let Some(target) =
+            sessions::pointer_target_at(manager_areas.sessions, manager, column, row)
+        {
+            return Some(InputPointerTarget::SessionManager(target));
+        }
+    } else {
         let messages = app.transcript_views();
         if let Some(target) = chat_history::pointer_target_at(
             areas.session.transcript,

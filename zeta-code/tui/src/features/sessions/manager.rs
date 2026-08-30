@@ -5,6 +5,7 @@ use crate::components::detail_list::DetailListRow;
 use crate::components::pane::PaneSpec;
 use crate::render::RenderContext;
 use ratatui::Frame;
+use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
@@ -24,7 +25,6 @@ use zeta_protocol::SessionId;
 use zeta_protocol::SessionManagerActivity;
 use zeta_protocol::SessionManagerStatus;
 use zeta_protocol::SessionStatus;
-use zeta_utils_elapsed::format_compact_duration;
 
 const ANIMATION_INTERVAL: Duration = Duration::from_millis(80);
 const WORKING_FRAMES: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -97,6 +97,11 @@ impl SessionManagerState {
             Some(ManagerSelection::Session(session_id)) => Some(session_id),
             Some(ManagerSelection::Group(_)) | None => None,
         }
+    }
+
+    pub(crate) fn select_pointer_target(&mut self, target: SessionManagerPointerTarget) {
+        self.selected = Some(target.0);
+        self.focus();
     }
 
     pub(crate) fn toggle_or_preview(
@@ -196,7 +201,6 @@ impl SessionManagerState {
         SessionManagerView {
             sessions,
             selected: self.selected.as_ref(),
-            focused: self.focused,
             pinned: &self.pinned,
             collapsed: &self.collapsed,
             animation_frame: self.animation_frame,
@@ -271,11 +275,34 @@ fn thread_status_label(status: zeta_protocol::ThreadStatus) -> &'static str {
 pub(crate) struct SessionManagerView<'a> {
     sessions: &'a [Session],
     selected: Option<&'a ManagerSelection>,
-    focused: bool,
     pinned: &'a BTreeSet<SessionId>,
     collapsed: &'a BTreeSet<SessionGroup>,
     animation_frame: usize,
     now_unix_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SessionManagerPointerTarget(ManagerSelection);
+
+pub(crate) fn pointer_target_at(
+    area: Rect,
+    view: SessionManagerView<'_>,
+    column: u16,
+    row: u16,
+) -> Option<SessionManagerPointerTarget> {
+    if !area.contains(Position::new(column, row)) {
+        return None;
+    }
+    let rows = manager_rows(view.sessions, view.pinned, view.collapsed);
+    let selected_row = rows.iter().position(|candidate| {
+        view.selected
+            .is_some_and(|selected| candidate.selection() == *selected)
+    });
+    let viewport = manager_viewport(rows.len(), selected_row, usize::from(area.height));
+    let line = usize::from(row.saturating_sub(area.y));
+    let top_notice = usize::from(viewport.start > 0);
+    let index = viewport.start.saturating_add(line.checked_sub(top_notice)?);
+    (index < viewport.end).then(|| SessionManagerPointerTarget(rows[index].selection()))
 }
 
 pub(crate) fn draw_manager(
@@ -318,13 +345,11 @@ pub(crate) fn draw_manager(
                     count,
                     view.collapsed.contains(&group),
                     view.selected == Some(&ManagerSelection::Group(group)),
-                    view.focused,
                     usize::from(area.width),
                 ),
                 ManagerRow::Session(session) => session_line(
                     session,
                     view.selected == Some(&ManagerSelection::Session(session.session_id.clone())),
-                    view.focused,
                     view.animation_frame,
                     view.now_unix_ms,
                     usize::from(area.width),
@@ -494,7 +519,6 @@ fn manager_rows<'a>(
 fn session_line<'a>(
     session: &'a Session,
     selected: bool,
-    focused: bool,
     animation_frame: usize,
     now_unix_ms: u64,
     width: usize,
@@ -511,7 +535,7 @@ fn session_line<'a>(
     let (name_width, middle_gap, middle_width) = column_widths(body_width, !middle.is_empty());
     let name = pad_to_width(&truncate_to_width(&session.title, name_width), name_width);
     let middle = pad_to_width(&truncate_to_width(middle, middle_width), middle_width);
-    let row_style = if selected && focused {
+    let row_style = if selected {
         selected_style()
     } else {
         Style::default().fg(Color::Gray)
@@ -535,12 +559,11 @@ fn group_line(
     count: usize,
     collapsed: bool,
     selected: bool,
-    focused: bool,
     width: usize,
 ) -> Line<'static> {
     let arrow = if collapsed { '▸' } else { '▾' };
     let text = format!("{arrow} {} ({count})", group.label());
-    let style = if selected && focused {
+    let style = if selected {
         selected_style().add_modifier(Modifier::BOLD)
     } else {
         Style::default()
@@ -586,15 +609,32 @@ fn activity_text(session: &Session) -> &str {
 
 fn elapsed_label(session: &Session, now_unix_ms: u64) -> String {
     if session.manager.status_changed_at_unix_ms == 0 {
-        return "—".into();
+        return String::new();
     }
-    let elapsed = format_compact_duration(Duration::from_millis(
+    let elapsed = whole_hour_label(Duration::from_millis(
         now_unix_ms.saturating_sub(session.manager.status_changed_at_unix_ms),
     ));
+    if elapsed.is_empty() {
+        return elapsed;
+    }
     if session.manager.status == SessionManagerStatus::Completed {
         format!("{elapsed} ago")
     } else {
         elapsed
+    }
+}
+
+fn whole_hour_label(duration: Duration) -> String {
+    let hours = duration.as_secs() / 3_600;
+    if hours == 0 {
+        return String::new();
+    }
+    let days = hours / 24;
+    let remaining_hours = hours % 24;
+    match (days, remaining_hours) {
+        (0, hours) => format!("{hours}h"),
+        (days, 0) => format!("{days}d"),
+        (days, hours) => format!("{days}d {hours:02}h"),
     }
 }
 

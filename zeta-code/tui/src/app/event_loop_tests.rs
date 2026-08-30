@@ -14,8 +14,15 @@ use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
 use crate::components::suggest::SuggestView;
 use crate::mouse::MouseMode;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 use ratatui::layout::Rect;
 use std::collections::VecDeque;
+use zeta_protocol::Session;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionManagerInfo;
+use zeta_protocol::SessionStatus;
 
 #[test]
 fn request_actions_wait_for_the_active_request_without_losing_order() {
@@ -134,4 +141,40 @@ fn pointer_click_switches_a_selection_tab() {
 
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
     assert_eq!(app.list_selection().unwrap().active_tab().label(), "Second");
+}
+
+#[test]
+fn pointer_hover_selects_a_manager_row_and_click_opens_its_preview() {
+    let mut app = App::new();
+    app.update(AppEvent::SessionCatalogReceived(vec![Session {
+        session_id: SessionId::new("pointer-session").unwrap(),
+        title: "Pointer session".into(),
+        status: SessionStatus::Active,
+        manager: SessionManagerInfo::default(),
+        threads: Vec::new(),
+    }]));
+    app.insert_text("/sessions");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let area = Rect::new(0, 0, 80, 24);
+    let mut session_cell = None;
+    'cells: for row in area.y..area.bottom() {
+        for column in area.x..area.right() {
+            if matches!(
+                frame::input_pointer_target_at(&app, area, column, row),
+                Some(InputPointerTarget::SessionManager(_))
+            ) {
+                select_hovered_popup_item(&mut app, area, column, row);
+                if app.session_manager_hint().contains("space to preview") {
+                    session_cell = Some((column, row));
+                    break 'cells;
+                }
+            }
+        }
+    }
+    let (column, row) = session_cell.expect("the Session row should be interactive");
+
+    assert!(app.session_manager_focused());
+    assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
+    assert_eq!(app.quick_view().unwrap().title(), "Session preview");
+    assert!(app.session_manager_view().is_some());
 }

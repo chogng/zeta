@@ -81,11 +81,11 @@ fn row_starts_with_status_icon_and_keeps_name_activity_and_time_columns() {
             text: "Running targeted tests".into(),
         }),
     );
-    let text = line_text(&session_line(&session, false, false, 0, 72_000, 72));
+    let text = line_text(&session_line(&session, false, 0, 7_210_000, 72));
 
     assert!(text.starts_with("  ⠋ working"));
     assert!(text.contains("Running targeted tests"));
-    assert!(text.ends_with("1m 02s"));
+    assert!(text.ends_with("2h"));
     assert_eq!(text.width(), 72);
 }
 
@@ -94,8 +94,9 @@ fn completed_time_is_relative_but_working_time_is_runtime() {
     let completed = session("done", SessionManagerStatus::Completed, None);
     let working = session("work", SessionManagerStatus::Working, None);
 
-    assert_eq!(elapsed_label(&completed, 72_000), "1m 02s ago");
-    assert_eq!(elapsed_label(&working, 72_000), "1m 02s");
+    assert_eq!(elapsed_label(&completed, 1_810_000), "");
+    assert_eq!(elapsed_label(&working, 10_750_000), "2h");
+    assert_eq!(elapsed_label(&completed, 259_210_000), "3d ago");
 }
 
 #[test]
@@ -126,6 +127,20 @@ fn viewport_reserves_rows_for_both_overflow_notices() {
         manager_viewport(20, Some(10), 5),
         ManagerViewport { start: 8, end: 11 }
     );
+}
+
+#[test]
+fn pointer_targets_visible_rows_and_focuses_the_hovered_session() {
+    let sessions = vec![session("idle", SessionManagerStatus::Idle, None)];
+    let mut state = SessionManagerState::default();
+    state.reconcile(&sessions);
+    let target = pointer_target_at(Rect::new(0, 0, 32, 5), state.view(&sessions), 2, 1)
+        .expect("the first session row is interactive");
+
+    state.select_pointer_target(target);
+
+    assert!(state.focused());
+    assert_eq!(state.selected_session().unwrap().as_str(), "idle");
 }
 
 #[test]
@@ -196,7 +211,6 @@ fn rendering_shows_group_count_overflow_and_high_contrast_selection() {
         .collect::<Vec<_>>();
     let mut state = SessionManagerState::default();
     state.reconcile(&sessions);
-    state.focus();
     let backend = TestBackend::new(32, 5);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal

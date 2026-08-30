@@ -333,6 +333,15 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         select_hovered_popup_item(&mut app, terminal_area, mouse.column, mouse.row);
                         None
                     }
+                    Event::Mouse(mouse)
+                        if matches!(
+                            mouse.kind,
+                            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                        ) =>
+                    {
+                        app.scroll_session_manager(mouse.kind == MouseEventKind::ScrollUp);
+                        None
+                    }
                     Event::Paste(text) => {
                         app.handle_paste(text);
                         None
@@ -1212,6 +1221,10 @@ fn activate_pointer_item(
         InputPointerTarget::Approval(index) | InputPointerTarget::Query(index) => {
             app.activate_thread_request_choice(index)
         }
+        InputPointerTarget::SessionManager(target) => {
+            app.activate_session_manager_pointer_target(target);
+            None
+        }
         InputPointerTarget::TranscriptToggle(entry_id) => {
             app.toggle_transcript_cell(&entry_id);
             None
@@ -1255,6 +1268,9 @@ fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column:
         }
         Some(InputPointerTarget::Approval(index) | InputPointerTarget::Query(index)) => {
             app.select_thread_request_choice(index);
+        }
+        Some(InputPointerTarget::SessionManager(target)) => {
+            app.select_session_manager_pointer_target(target);
         }
         Some(
             InputPointerTarget::TranscriptToggle(_) | InputPointerTarget::TranscriptDetails(_),
