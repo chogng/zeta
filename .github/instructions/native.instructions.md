@@ -18,3 +18,7 @@ Route new capability to its long-term owner:
 Changes in `zeta-rs/native` are limited to compatibility needed to remove or migrate old implementation, thin mapping from platform/product state into canonical lower APIs, and minimal wiring required to keep the existing host running. An exception must name the long-term owner, migration endpoint, and deletion condition.
 
 When modifying existing native files, prefer migrating, deleting, deprecating, or narrowing responsibility. Historical split scene/interaction hosting is debt, not a foundation for new helpers or public abstractions.
+
+## Learnings
+
+* 测试界面前先确认实现技术栈：Web 和 Electron 界面使用 Playwright；`app` 中基于 ZUI/WGPU 的窗口没有 DOM/CDP 接口，不要声称可用 Playwright 连接。此类界面的结构、层级和几何优先通过 `InspectionFrame` 断言，运行产品只用于补充交互验证，不以截图作为调试依据。
