@@ -1,8 +1,8 @@
 import type { PieceNode } from "./pieceTreeBase.js";
 
 export const enum NodeColor {
-	Black,
-	Red,
+	Black = 0,
+	Red = 1,
 }
 
 /** Returns the first node in document order. */

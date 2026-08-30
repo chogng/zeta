@@ -3,7 +3,8 @@ import test from "node:test";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
+import { type TrackedRange } from "../../common/model/trackedRange.js";
+import { TrackedRangeStickiness } from '../../common/model.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -18,19 +19,19 @@ test("TrackedRange applies explicit insertion-edge stickiness", () => {
 	using model = new TextModel("abcd");
 	using both = model.trackRange(
 		range(1, 3),
-		TrackedRangeStickiness.GrowsAtBothEdges,
+		TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
 	);
 	using start = model.trackRange(
 		range(1, 3),
-		TrackedRangeStickiness.GrowsOnlyAtStart,
+		TrackedRangeStickiness.GrowsOnlyWhenTypingBefore,
 	);
 	using end = model.trackRange(
 		range(1, 3),
-		TrackedRangeStickiness.GrowsOnlyAtEnd,
+		TrackedRangeStickiness.GrowsOnlyWhenTypingAfter,
 	);
 	using neither = model.trackRange(
 		range(1, 3),
-		TrackedRangeStickiness.NeverGrowsAtEdges,
+		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	);
 
 	model.applyEdits([
@@ -56,7 +57,12 @@ test("TrackedRange applies explicit insertion-edge stickiness", () => {
 test("Collapsed tracked ranges stay ordered at inserted text", () => {
 	using model = new TextModel("abc");
 	const tracked = new Map<TrackedRangeStickiness, TrackedRange>();
-	for (const stickiness of Object.values(TrackedRangeStickiness)) {
+	for (const stickiness of [
+		TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		TrackedRangeStickiness.GrowsOnlyWhenTypingBefore,
+		TrackedRangeStickiness.GrowsOnlyWhenTypingAfter,
+	]) {
 		tracked.set(
 			stickiness,
 			model.trackRange(range(1, 1), stickiness),
@@ -76,19 +82,19 @@ test("Collapsed tracked ranges stay ordered at inserted text", () => {
 			]),
 		),
 		{
-			[TrackedRangeStickiness.GrowsAtBothEdges]: {
+			[TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges]: {
 				range: range(1, 2),
 				text: "X",
 			},
-			[TrackedRangeStickiness.GrowsOnlyAtStart]: {
+			[TrackedRangeStickiness.GrowsOnlyWhenTypingBefore]: {
 				range: range(1, 1),
 				text: "",
 			},
-			[TrackedRangeStickiness.GrowsOnlyAtEnd]: {
+			[TrackedRangeStickiness.GrowsOnlyWhenTypingAfter]: {
 				range: range(2, 2),
 				text: "",
 			},
-			[TrackedRangeStickiness.NeverGrowsAtEdges]: {
+			[TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges]: {
 				range: range(2, 2),
 				text: "",
 			},
@@ -104,19 +110,19 @@ test("TrackedRange resolves replacement containment deterministically", () => {
 	using model = new TextModel("abcdef");
 	using both = model.trackRange(
 		range(2, 4),
-		TrackedRangeStickiness.GrowsAtBothEdges,
+		TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
 	);
 	using start = model.trackRange(
 		range(2, 4),
-		TrackedRangeStickiness.GrowsOnlyAtStart,
+		TrackedRangeStickiness.GrowsOnlyWhenTypingBefore,
 	);
 	using end = model.trackRange(
 		range(2, 4),
-		TrackedRangeStickiness.GrowsOnlyAtEnd,
+		TrackedRangeStickiness.GrowsOnlyWhenTypingAfter,
 	);
 	using neither = model.trackRange(
 		range(2, 4),
-		TrackedRangeStickiness.NeverGrowsAtEdges,
+		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	);
 
 	model.applyEdits([{ range: range(1, 5), text: "Z" }]);
@@ -140,7 +146,7 @@ test("TrackedRange updates before events and follows undo and redo", () => {
 	using model = new TextModel("abcdef");
 	using tracked = model.trackRange(
 		range(2, 4),
-		TrackedRangeStickiness.NeverGrowsAtEdges,
+		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	);
 	const observedText: string[] = [];
 	using listener = model.onDidChange(() => {
@@ -159,14 +165,14 @@ test("TrackedRange validates model positions and disposal", () => {
 	assert.throws(
 		() => model.trackRange(
 			Range.fromPositions(position(1, 0)),
-			TrackedRangeStickiness.NeverGrowsAtEdges,
+			TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		),
 		/lineIndex/,
 	);
 
 	const explicitlyDisposed = model.trackRange(
 		range(0, 1),
-		TrackedRangeStickiness.NeverGrowsAtEdges,
+		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	);
 	explicitlyDisposed.dispose();
 	assert.throws(
@@ -176,7 +182,7 @@ test("TrackedRange validates model positions and disposal", () => {
 
 	const modelOwned = model.trackRange(
 		range(1, 2),
-		TrackedRangeStickiness.NeverGrowsAtEdges,
+		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	);
 	model.dispose();
 	assert.throws(() => modelOwned.range, /already disposed/);
@@ -187,7 +193,7 @@ test("TrackedRange rejects unknown stickiness", () => {
 	assert.throws(
 		() => model.trackRange(
 			range(0, 1),
-			"invalid" as TrackedRangeStickiness,
+			"invalid" as unknown as TrackedRangeStickiness,
 		),
 		/Unknown tracked range stickiness/,
 	);

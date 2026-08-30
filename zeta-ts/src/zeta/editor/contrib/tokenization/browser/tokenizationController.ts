@@ -1,10 +1,10 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { type TokenizationTextModelPart } from "../common/tokenizationTextModelPart.js";
+import { type LanguageTokenLineIndexPart } from "../common/languageTokenLineIndexPart.js";
 
 /** Exposes tokenization readiness to the browser view without owning token production. */
 export class TokenizationController extends Disposable {
-	constructor(private readonly viewport: EditorViewport, private readonly tokenization: TokenizationTextModelPart) {
+	constructor(private readonly viewport: EditorViewport, private readonly tokenization: LanguageTokenLineIndexPart) {
 		super();
 		if (viewport.textModel !== tokenization.textModel) throw new TypeError("Stanza tokenization dependencies must share a text model");
 		this._register(tokenization.onDidChange(() => this.update()));

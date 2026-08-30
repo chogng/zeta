@@ -1,7 +1,8 @@
 import "../../../workbench/contrib/chat/browser/media/chat.css";
 import "./sessionsChatView.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
-import type { IDimension, IRectangle } from "../../../base/browser/geometry.js";
+import type { IDimension } from "../../../base/browser/dom.js";
+import type { IPositionedRectangle } from "../../../base/browser/geometry.js";
 import { Direction, Grid, Sizing, type IView } from "../../../base/browser/ui/grid/grid.js";
 import { Disposable, setDisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
@@ -162,7 +163,7 @@ class SessionsChatEmptyView implements IView {
 		this.update("ready", undefined);
 	}
 
-	layout(_bounds: IRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void {}
 
 	update(state: ISessionsManagementService["state"], error: string | undefined): void {
 		if (state === "loading") {
@@ -242,7 +243,7 @@ class SessionsChatGridEntry extends Disposable implements IView {
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
-	layout(_bounds: IRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void {}
 
 	update(selection: SessionsViewSelection, active: boolean): void {
 		this.selection = selection;

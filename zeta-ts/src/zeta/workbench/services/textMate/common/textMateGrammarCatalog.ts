@@ -1,4 +1,4 @@
-import { raceCancellation } from "../../../../base/common/cancellation.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId } from "../../../../editor/common/languages/languageId.js";
@@ -156,7 +156,7 @@ export async function materializeTextMateGrammarCatalog(snapshot: TextMateGramma
 			content,
 		};
 	}));
-	const grammars = await raceCancellation(loading, signal, "TextMate grammar materialization was cancelled");
+	const grammars = await raceCancellationError(loading, signal, "TextMate grammar materialization was cancelled");
 	return normalizeTextMateGrammarCatalog({ revision, grammars });
 }
 

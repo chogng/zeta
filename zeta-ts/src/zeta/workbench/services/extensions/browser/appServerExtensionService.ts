@@ -2,12 +2,12 @@ import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
-import type { LanguageConfigurationContributionInput, LanguageConfigurationRegistration } from "../../../../editor/common/languages/languageConfiguration.js";
+import type { LanguageConfigurationContributionInput, LanguageConfigurationRegistration } from "../../../../editor/common/languages/ownedLanguageConfigurationContributions.js";
 import { parseLanguageConfiguration } from "./languageConfigurationParser.js";
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/languages/languageRegistry.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { ILanguageService } from '../../../../editor/common/services/languageService.js';
-import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
+import type { IZetaLanguageService } from '../../../../editor/common/languages/language.js';
+import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
@@ -31,8 +31,8 @@ export interface AppServerExtensionServiceOptions {
 	readonly api: IExtensionApi;
 	readonly eventApi?: IServerEventApi;
 	readonly textMateService: ITextMateService;
-	readonly languageService?: ILanguageService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageService?: IZetaLanguageService;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 

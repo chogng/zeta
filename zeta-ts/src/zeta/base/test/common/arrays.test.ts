@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { arraysEqual, commonPrefixLength, commonSuffixLength, isNonEmptyArray } from '../../common/arrays.js';
+import { arraysEqual, commonArraySuffixLength, commonPrefixLength, isNonEmptyArray } from '../../common/arrays.js';
 
 test('arraysEqual compares complete sequences', () => {
 	assert.equal(arraysEqual([1, 2], [1, 2]), true);
@@ -18,9 +18,9 @@ test('commonPrefixLength returns the shared leading run', () => {
 });
 
 test('commonSuffixLength excludes an already matched prefix', () => {
-	assert.equal(commonSuffixLength(['a', 'x', 'c'], ['a', 'y', 'c'], 1), 1);
-	assert.equal(commonSuffixLength(['a'], ['a'], 1), 0);
-	assert.throws(() => commonSuffixLength(['a'], ['a'], 2), RangeError);
+	assert.equal(commonArraySuffixLength(['a', 'x', 'c'], ['a', 'y', 'c'], 1), 1);
+	assert.equal(commonArraySuffixLength(['a'], ['a'], 1), 0);
+	assert.throws(() => commonArraySuffixLength(['a'], ['a'], 2), RangeError);
 });
 
 test('isNonEmptyArray rejects nullish and empty sequences', () => {

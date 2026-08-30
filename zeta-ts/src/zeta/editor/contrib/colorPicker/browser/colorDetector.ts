@@ -3,9 +3,10 @@ import { MutableDisposable, Disposable, type IDisposable } from '../../../../bas
 import { type Position } from '../../../common/core/position.js';
 import { type TextDecorationId, TextDecorationCollection, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
+
 import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
-import { ColorService, type ColorData, type DefaultColorDecoratorsEnablement } from '../common/color.js';
+import { ColorService, type ColorData, type DefaultColorDecoratorsEnablement } from '../common/languageColors.js';
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 export interface ColorDetectorOptions {
 	readonly enabled: boolean;
@@ -77,7 +78,7 @@ export class ColorDetector extends Disposable {
 			this.detectedCount = colors.length;
 			this.decorations.replaceAll(colors.slice(0, this.options.limit).map(data => ({
 				range: data.information.range,
-				stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 				metadata: data,
 			})));
 		}, error => {

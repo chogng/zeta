@@ -1,4 +1,3 @@
-import { CharCode } from "../../../../base/common/charCode.js";
 import { LineRange } from "../ranges/lineRange.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
 import { Position } from "../position.js";
@@ -15,7 +14,10 @@ import { Range } from "../range.js";
 export class TextLength {
 	static readonly zero = new TextLength(0, 0);
 
-	static lengthDiffNonNegative(start: TextLength, end: TextLength): TextLength { return end.isLessThan(start) ? TextLength.zero : TextLength.betweenLengths(start, end); }
+	static lengthDiffNonNegative(start: TextLength, end: TextLength): TextLength {
+		if (end.isLessThan(start)) return TextLength.zero;
+		return start.lineCount === end.lineCount ? new TextLength(0, end.columnCount - start.columnCount) : new TextLength(end.lineCount - start.lineCount, end.columnCount);
+	}
 
 	static betweenPositions(start: Position, end: Position): TextLength {
 		if (end.isBefore(start)) throw new RangeError("TextLength end must not precede its start");
@@ -24,14 +26,13 @@ export class TextLength {
 			: new TextLength(end.lineNumber - start.lineNumber, end.column - 1);
 	}
 
-	static ofPosition(position: Position): TextLength { return new TextLength(position.lineNumber - 1, position.column - 1); }
-	static fromPosition(position: Position): TextLength { return TextLength.ofPosition(position); }
-	static ofRange(range: Range): TextLength { return TextLength.betweenPositions(range.getStartPosition(), range.getEndPosition()); }
+	static fromPosition(position: Position): TextLength { return new TextLength(position.lineNumber - 1, position.column - 1); }
+	static ofRange(range: Range) { return TextLength.betweenPositions(range.getStartPosition(), range.getEndPosition()); }
 	static ofText(text: string): TextLength {
 		let lineCount = 0;
 		let columnCount = 0;
-		for (let index = 0; index < text.length; index += 1) {
-			if (text.charCodeAt(index) === CharCode.LineFeed) {
+		for (const character of text) {
+			if (character === '\n') {
 				lineCount += 1;
 				columnCount = 0;
 			} else {
@@ -41,16 +42,9 @@ export class TextLength {
 		return new TextLength(lineCount, columnCount);
 	}
 
-	static ofOffsetRange(text: string, range: OffsetRange): TextLength { return TextLength.ofText(range.substring(text)); }
-	static ofSubstr(text: string, range: OffsetRange): TextLength { return TextLength.ofOffsetRange(text, range); }
-	static sum<T>(values: readonly T[], getLength: (value: T) => TextLength): TextLength {
+	static ofSubstr(text: string, range: OffsetRange): TextLength { return TextLength.ofText(range.substring(text)); }
+	static sum<T>(values: readonly T[], getLength: (f: T) => TextLength): TextLength {
 		return values.reduce((length, value) => length.add(getLength(value)), TextLength.zero);
-	}
-
-	private static betweenLengths(start: TextLength, end: TextLength): TextLength {
-		return start.lineCount === end.lineCount
-			? new TextLength(0, end.columnCount - start.columnCount)
-			: new TextLength(end.lineCount - start.lineCount, end.columnCount);
 	}
 
 	constructor(readonly lineCount: number, readonly columnCount: number) {
@@ -59,7 +53,7 @@ export class TextLength {
 		}
 	}
 
-	isZero(): boolean { return this.lineCount === 0 && this.columnCount === 0; }
+	isZero() { return this.lineCount === 0 && this.columnCount === 0; }
 	isLessThan(other: TextLength): boolean { return this.compare(other) < 0; }
 	isGreaterThan(other: TextLength): boolean { return this.compare(other) > 0; }
 	isGreaterThanOrEqualTo(other: TextLength): boolean { return this.compare(other) >= 0; }
@@ -82,5 +76,5 @@ export class TextLength {
 	createRange(start: Position): Range { return Range.fromPositions(start, this.addToPosition(start)); }
 	toRange(): Range { return this.createRange(new Position(1, 1)); }
 	toLineRange(): LineRange { return LineRange.ofLength(1, this.lineCount + 1); }
-	toString(): string { return `${this.lineCount},${this.columnCount}`; }
+	toString() { return `${this.lineCount},${this.columnCount}`; }
 }

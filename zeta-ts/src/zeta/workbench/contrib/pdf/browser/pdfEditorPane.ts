@@ -1,5 +1,5 @@
 import { addDisposableListener, h, svg as createSvgElement } from "../../../../base/browser/dom.js";
-import type { IDimension } from "../../../../base/browser/geometry.js";
+import type { IDimension } from "../../../../base/browser/dom.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Separator } from "../../../../base/common/actions.js";

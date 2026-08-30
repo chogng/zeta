@@ -1,16 +1,17 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "./editorEditCommand.js";
 import type { SelectionSet } from "../cursor/selectionSet.js";
-import { type Range } from "../core/range.js";
+import { Range } from "../core/range.js";
 import { normalizeTextLineEndings } from "../core/textChange.js";
 
 
-import { type TextEdit } from "../core/editOperation.js";
+
 import { type TextModel } from "../model/textModel.js";
+import { type TextEdit } from '../languages.js';
 
 /** Converts current-version text edits and selections into one editor command. */
 export function createEditorEditCommand(model: TextModel, selections: SelectionSet, edits: readonly TextEdit[], historyMode = EditorCommandHistoryMode.Isolated): EditorEditCommand | undefined {
 	if (edits.length === 0) return undefined;
-	const normalized = edits.map(edit => Object.freeze({ range: edit.range, text: normalizeTextLineEndings(edit.text) }));
+	const normalized = edits.map(edit => Object.freeze({ range: Range.lift(edit.range), text: normalizeTextLineEndings(edit.text) }));
 	const offsets = normalized.map(edit => ({ start: model.offsetAt(edit.range.getStartPosition()), end: model.offsetAt(edit.range.getEndPosition()), length: edit.text.length }));
 	for (let index = 1; index < offsets.length; index += 1) {
 		if (offsets[index - 1]!.end > offsets[index]!.start) throw new RangeError("Editor edits must be ordered and non-overlapping");
@@ -63,7 +64,8 @@ interface OffsetEditorEdit {
 }
 
 function offsetEdit(model: TextModel, edit: TextEdit): OffsetEditorEdit {
-	return { range: edit.range, start: model.offsetAt(edit.range.getStartPosition()), end: model.offsetAt(edit.range.getEndPosition()), text: normalizeTextLineEndings(edit.text) };
+	const range = Range.lift(edit.range);
+	return { range, start: model.offsetAt(range.getStartPosition()), end: model.offsetAt(range.getEndPosition()), text: normalizeTextLineEndings(edit.text) };
 }
 
 function compareOffsetEdits(left: { readonly start: number; readonly end: number }, right: { readonly start: number; readonly end: number }): number {

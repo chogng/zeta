@@ -30,7 +30,7 @@ test('common editor options normalize shared editor settings', () => {
 	assert.equal(EditorOptions.wordWrap.validate('on'), EditorLineWrapping.On);
 	assert.equal(EditorOptions.wordWrap.validate('bounded'), 'bounded');
 	assert.ok(Object.isFrozen(EditorOptions.minimap.validate({ enabled: false })));
-	assert.equal(editorOptionsRegistry.length, EditorOption.insertFinalNewLine + 1);
+	assert.equal(editorOptionsRegistry.length, EditorOption.doubleClickSelectsBlock + 1);
 });
 
 test('common editor options preserve VS Code internal enum and nested option contracts', () => {

@@ -14,7 +14,7 @@ import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import { ConsoleLogSink } from "../../platform/log/common/consoleLogSink.js";
-import { ILogService } from "../../platform/log/common/logService.js";
+import { ILogService } from "../../platform/log/common/log.js";
 import { LogService } from "../../platform/log/common/logServiceImpl.js";
 import { BrowserLifecycleService } from "../../platform/lifecycle/browser/browserLifecycleService.js";
 import { ILifecycleService, type ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
@@ -121,7 +121,7 @@ import {
 } from "../services/configuration/browser/configurationService.js";
 import {
 	DialogService,
-} from "../services/dialogs/common/dialogService.js";
+} from "../services/dialogs/common/dialog.js";
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeController } from "./theme.js";
 import { IResourceLabelService, ResourceLabelService } from "./labels.js";
@@ -159,8 +159,9 @@ import { AppServerRemoteAgentService } from "../services/remote/browser/appServe
 import { IRemoteAgentService } from "../services/remote/common/remoteAgentService.js";
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
-import { ILanguageService, LanguageService } from '../../editor/common/services/languageService.js';
-import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/services/languageConfigurationService.js';
+import { ILanguageService } from '../../editor/common/languages/language.js';
+import { LanguageService } from '../../editor/common/services/languageService.js';
+import { IComposableLanguageConfigurationService, ComposableLanguageConfigurationService } from '../../editor/common/languages/ownedLanguageConfigurationContributions.js';
 import { WorkbenchLanguageFeatures } from '../services/language/browser/workbenchLanguageFeatures.js';
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
@@ -201,7 +202,7 @@ import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/w
 import { projectExtensionTokenTheme } from "../services/textMate/common/textMateThemeProjection.js";
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
-import { ITextModelService } from "../../editor/common/services/resolverService.js";
+import { ITextModelResourceService } from "../../editor/common/services/textModelResourceService.js";
 import { registerTreeViewsDnDService } from '../../editor/common/services/treeViewsDndService.js';
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../contrib/bulkEdit/common/bulkEdit.js";
@@ -389,7 +390,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
 		const textModelService = this._register(getBrowserTextModelService(textResourceStore));
-		services.registerInstance(ITextModelService, textModelService);
+		services.registerInstance(ITextModelResourceService, textModelService);
 		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
 		services.registerInstance(IWorkspaceEditService, workspaceEditService);
 		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));
@@ -398,8 +399,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITextMateService, textMateService);
 		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
-		const languageConfigurationService = this._register(new LanguageConfigurationService());
-		services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
+		const languageConfigurationService = this._register(new ComposableLanguageConfigurationService());
+		services.registerInstance(IComposableLanguageConfigurationService, languageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		this._register(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));

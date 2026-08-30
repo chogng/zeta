@@ -1,18 +1,20 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { URI } from "../../../base/common/uri.js";
 import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
+import { TextEdit } from '../core/edits/textEdit.js';
 import { countEOL } from "../core/misc/eolCounter.js";
 import { OffsetRange } from "../core/ranges/offsetRange.js";
-import { Position } from "../core/position.js";
-import { Range } from "../core/range.js";
+import { type IPosition, Position } from "../core/position.js";
+import { type IRange, Range } from "../core/range.js";
 import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/textChange.js";
-import { TextEditHistoryGroup, TextEditHistoryMergeMode, type ISingleEditOperation, type TextEdit } from "../core/editOperation.js";
+import { TextEditHistoryGroup, TextEditHistoryMergeMode, type ISingleEditOperation } from "../core/editOperation.js";
 import { TextLength } from "../core/text/textLength.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
 import type { TextBuffer } from "./textBuffer.js";
-import { createTextBuffer } from "./textBufferFactory.js";
+import { createPieceTreeTextBuffer } from "./textBufferFactory.js";
 import { TextModelHistory, type TextModelHistoryEntry, type TextModelHistorySnapshot } from "./editStack.js";
-import { TrackedRangeCollection, type TrackedRange, type TrackedRangeStickiness } from "./trackedRange.js";
+import { TrackedRangeCollection, type TrackedRange } from "./trackedRange.js";
 import { classifyTextModelSize, type TextModelLargeFilePolicy } from "./textModelLargeFile.js";
 import type { DocumentSelection } from "../core/documentSelection.js";
 import type { DocumentMark, DocumentNode } from "./document.js";
@@ -23,6 +25,10 @@ import type { DocumentTransaction } from "./documentTransaction.js";
 import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
+import { EndOfLinePreference, TrackedRangeStickiness, type ITextModel } from '../model.js';
+import * as languages from '../languages.js';
+import type { IModelLanguageChangedEvent } from '../textModelEvents.js';
+import type { ILanguageSelection } from '../languages/language.js';
 
 interface OffsetEdit extends OffsetTextEdit {}
 
@@ -51,6 +57,9 @@ export interface TextModelMaintenanceOptions {
 }
 
 export interface TextModelOptions {
+	readonly resource?: URI;
+	readonly languageId?: string;
+	readonly isForSimpleWidget?: boolean;
 	readonly historyLimit?: TextModelHistoryLimit;
 	/** Product-owned scheduling for non-semantic piece-tree maintenance. */
 	readonly maintenance?: TextModelMaintenanceOptions;
@@ -82,6 +91,7 @@ export interface TextModelUndoRedoSnapshot {
 
 const DEFAULT_HISTORY_TRANSACTIONS = 1_000;
 const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
+let MODEL_ID = 0;
 
 /**
  * Zeta's canonical mutable text document.
@@ -89,11 +99,14 @@ const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
  * The model owns normalized LF text, versioning, atomic non-overlapping edit
  * transactions, transaction-level undo/redo, and generic tracked ranges.
  * Logical line identity and rich semantic stores remain part of this same model and version.
- * The model has no DOM, URI, persistence, language, or presentation dependency.
+ * URI and language are part of the model identity. Persistence and presentation
+ * remain outside the model.
  */
-export class TextModel extends Disposable {
+export class TextModel extends Disposable implements ITextModel {
 	private readonly willDisposeEmitter = this._register(new Emitter<void>());
 	private readonly changeEmitter = this._register(new Emitter<TextModelChange>());
+	private readonly languageEmitter = this._register(new Emitter<IModelLanguageChangedEvent>());
+	private readonly languageSelection = this._register(new MutableDisposable<IDisposable>());
 	private readonly trackedRanges = this._register(new TrackedRangeCollection(
 		offset => this.positionAt(offset),
 	));
@@ -111,13 +124,24 @@ export class TextModel extends Disposable {
 	readonly largeFile: TextModelLargeFilePolicy;
 	private nextTransactionId = 1;
 	private _version = 1;
+	private languageId: string;
+
+	readonly id: string;
+	readonly uri: URI;
+	readonly isForSimpleWidget: boolean;
 
 	readonly onDidChange: Event<TextModelChange> = this.changeEmitter.event;
+	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent> = this.languageEmitter.event;
 	/** Fires once so registries can release model identity before teardown completes. */
 	readonly onWillDispose: Event<void> = this.willDisposeEmitter.event;
 
 	constructor(initialText = "", options: TextModelOptions = {}) {
 		super();
+		MODEL_ID += 1;
+		this.id = `$model${MODEL_ID}`;
+		this.uri = options.resource ?? URI.parse(`inmemory://model/${MODEL_ID}`);
+		this.languageId = requireLanguageId(options.languageId ?? 'plaintext');
+		this.isForSimpleWidget = options.isForSimpleWidget ?? false;
 		const historyTransactionLimit = readHistoryLimit(
 			options.historyLimit?.transactions,
 			DEFAULT_HISTORY_TRANSACTIONS,
@@ -141,7 +165,7 @@ export class TextModel extends Disposable {
 		const blockDocument = options.blocks?.document ?? options.blocks?.schema.createDocument();
 		const blockSnapshot = blockDocument && options.blocks ? projectDocumentToLines(options.blocks.schema, blockDocument) : undefined;
 		const normalizedInitialText = blockSnapshot?.getText() ?? normalizeTextLineEndings(initialText);
-		this.buffer = createTextBuffer(normalizedInitialText);
+		this.buffer = createPieceTreeTextBuffer(normalizedInitialText);
 		if (!options.blocks) {
 			this.plainLineIds = this.initializeLineIds(options.lineIds);
 			this.plainLineSnapshot = this.createPlainLineSnapshot(options.metadata);
@@ -162,7 +186,7 @@ export class TextModel extends Disposable {
 		)) : undefined;
 		this._register(toDisposable(() => {
 			this.history.dispose();
-			this.buffer = createTextBuffer("");
+			this.buffer = createPieceTreeTextBuffer("");
 		}));
 	}
 
@@ -287,6 +311,33 @@ export class TextModel extends Disposable {
 		return this._version;
 	}
 
+	getLanguageId(): string {
+		this.assertNotDisposed();
+		return this.languageId;
+	}
+
+	setLanguage(languageId: string, source?: string): void;
+	setLanguage(languageSelection: ILanguageSelection, source?: string): void;
+	setLanguage(languageIdOrSelection: string | ILanguageSelection, source = 'api'): void {
+		this.assertNotDisposed();
+		if (typeof languageIdOrSelection !== 'string') {
+			const selection = languageIdOrSelection;
+			this.languageSelection.value = selection.onDidChange(() => this.setLanguageValue(selection.languageId, source));
+			this.setLanguageValue(selection.languageId, source);
+			return;
+		}
+		this.languageSelection.clear();
+		this.setLanguageValue(languageIdOrSelection, source);
+	}
+
+	private setLanguageValue(languageId: string, source: string): void {
+		const nextLanguage = requireLanguageId(languageId);
+		const oldLanguage = this.languageId;
+		if (oldLanguage === nextLanguage) return;
+		this.languageId = nextLanguage;
+		this.languageEmitter.fire(Object.freeze({ oldLanguage, newLanguage: nextLanguage, source }));
+	}
+
 	get lineCount(): number {
 		this.assertNotDisposed();
 		return this.buffer.lineCount;
@@ -337,6 +388,14 @@ export class TextModel extends Disposable {
 		return this.buffer.getText();
 	}
 
+	getVersionId(): number {
+		return this.version;
+	}
+
+	getValue(): string {
+		return this.getText();
+	}
+
 	createSnapshot(): TextSnapshot {
 		this.assertNotDisposed();
 		const version = this._version;
@@ -361,6 +420,25 @@ export class TextModel extends Disposable {
 		);
 	}
 
+	getValueInRange(range: IRange, eol = EndOfLinePreference.TextDefined): string {
+		const value = this.getTextInRange(Range.lift(range));
+		if (eol === EndOfLinePreference.TextDefined) return value;
+		const lineFeedValue = value.replace(/\r\n|\r/g, '\n');
+		return eol === EndOfLinePreference.CRLF ? lineFeedValue.replace(/\n/g, '\r\n') : lineFeedValue;
+	}
+
+	getValueLengthInRange(range: Range, eol: EndOfLinePreference): number {
+		return this.getValueInRange(range, eol).length;
+	}
+
+	modifyPosition(position: Position, offset: number): Position {
+		return this.positionAt(Math.min(this.length, Math.max(0, this.offsetAt(position) + offset)));
+	}
+
+	getLineCount(): number {
+		return this.lineCount;
+	}
+
 	getLineContent(lineNumber: number): string {
 		this.assertNotDisposed();
 		return this.buffer.getLineContent(lineNumber - 1);
@@ -371,6 +449,14 @@ export class TextModel extends Disposable {
 		return this.buffer.getLineLength(lineNumber - 1);
 	}
 
+	getLineMaxColumn(lineNumber: number): number {
+		return this.getLineLength(lineNumber) + 1;
+	}
+
+	getFullModelRange(): Range {
+		return new Range(1, 1, this.lineCount, this.getLineMaxColumn(this.lineCount));
+	}
+
 	offsetAt(position: Position): number {
 		this.assertNotDisposed();
 		return this.buffer.offsetAt(
@@ -379,10 +465,30 @@ export class TextModel extends Disposable {
 		);
 	}
 
+	getOffsetAt(position: IPosition): number {
+		return this.offsetAt(Position.lift(position));
+	}
+
 	positionAt(offset: number): Position {
 		this.assertNotDisposed();
 		const position = this.buffer.positionAt(offset);
 		return new Position((position.lineIndex) + 1, (position.columnIndex) + 1);
+	}
+
+	getPositionAt(offset: number): Position {
+		return this.positionAt(offset);
+	}
+
+	validatePosition(position: IPosition): Position {
+		const lifted = Position.lift(position);
+		if (lifted.lineNumber < 1) return new Position(1, 1);
+		if (lifted.lineNumber > this.lineCount) return new Position(this.lineCount, this.getLineMaxColumn(this.lineCount));
+		return new Position(lifted.lineNumber, Math.min(Math.max(lifted.column, 1), this.getLineMaxColumn(lifted.lineNumber)));
+	}
+
+	validateRange(range: IRange): Range {
+		const lifted = Range.lift(range);
+		return Range.fromPositions(this.validatePosition(lifted.getStartPosition()), this.validatePosition(lifted.getEndPosition()));
 	}
 
 	trackRange(
@@ -445,8 +551,12 @@ export class TextModel extends Disposable {
 		return this.applyEdits(operations.map(operation => ({ range: operation.range, text: operation.text ?? "" })), options);
 	}
 
+	edit(edit: TextEdit, options: TextEditOptions = {}): void {
+		this.applyEdits(edit.replacements, options);
+	}
+
 	applyEdits(
-		edits: readonly TextEdit[],
+		edits: readonly languages.TextEdit[],
 		options: TextEditOptions = {},
 	): TextModelChange | undefined {
 		this.assertNotDisposed();
@@ -473,9 +583,10 @@ export class TextModel extends Disposable {
 			if (typeof edit.text !== "string") {
 				throw new TypeError("TextEdit.text must be a string");
 			}
+			const range = Range.lift(edit.range);
 			return {
-				startOffset: this.offsetAt(edit.range.getStartPosition()),
-				endOffset: this.offsetAt(edit.range.getEndPosition()),
+				startOffset: this.offsetAt(range.getStartPosition()),
+				endOffset: this.offsetAt(range.getEndPosition()),
 				text: normalizeTextLineEndings(edit.text),
 			};
 		});
@@ -911,4 +1022,11 @@ function readMaintenanceOptions(value: TextModelMaintenanceOptions | undefined):
 		throw new TypeError("TextModel maintenance requires a scheduler");
 	}
 	return Object.freeze({ schedule: value.schedule });
+}
+
+function requireLanguageId(languageId: string): string {
+	if (typeof languageId !== 'string' || languageId.trim().length === 0) {
+		throw new TypeError('TextModel language id must be a non-empty string');
+	}
+	return languageId;
 }

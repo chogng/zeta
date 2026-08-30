@@ -6,7 +6,7 @@ import {
 } from "../../../../../platform/dialogs/common/dialogs.js";
 import {
 	DialogService,
-} from "../../../../../workbench/services/dialogs/common/dialogService.js";
+} from "../../../../../workbench/services/dialogs/common/dialog.js";
 
 test("dialog service publishes requests through its owned model", async () => {
 	using service = new DialogService();

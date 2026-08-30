@@ -3,14 +3,14 @@ import test from "node:test";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../../../common/languages/languageRequestCoordinator.js";
-import { LanguageFeatureProviderRegistry } from "../../../../common/languageFeatureRegistry.js";
+import { OwnedLanguageFeatureProviderRegistry } from "../../../../common/ownedLanguageFeatureProviderRegistry.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type LanguageTokenResult } from "../../../../common/tokens/languageTokens.js";
 import { SemanticTokensService, type LanguageSemanticTokensProvider } from "../../common/semanticTokens.js";
 
 test("semantic-token service publishes only current model results", async () => {
 	using model = new TextModel("value");
-	using providers = new LanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>();
 	let resolveResult: ((value: LanguageTokenResult | undefined) => void) | undefined;
 	using registration = providers.register({
 		languageIds: ["typescript"],
@@ -28,7 +28,7 @@ test("semantic-token service publishes only current model results", async () => 
 
 test("semantic-token service applies the first matching provider", async () => {
 	using model = new TextModel("value");
-	using providers = new LanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>();
 	using registration = providers.register({
 		languageIds: ["typescript"],
 		provideSemanticTokens: request => ({ tokens: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (request.snapshot.getText().length) + 1)), tokenType: "variable", modifiers: ["readonly"] }] }),

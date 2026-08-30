@@ -4,14 +4,14 @@ import { type URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../../platform/files/common/files.js";
 import { normalizeTextLineEndings } from "../../../../../editor/common/core/textChange.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { type ITextModelService } from "../../../../../editor/common/services/resolverService.js";
+import { type ITextModelResourceService } from "../../../../../editor/common/services/textModelResourceService.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
 import { type BulkEditPreviewEntry, type BulkEditPreviewModel } from "../../common/bulkEdit.js";
 
 export interface BulkEditPreviewDependencies {
 	readonly files: IFileService;
-	readonly models: ITextModelService;
+	readonly models: ITextModelResourceService;
 	readonly workingCopies: IWorkingCopyService;
 }
 
@@ -53,7 +53,7 @@ async function previewEntry(entry: LanguageWorkspaceEditEntry, index: number, de
 	}
 }
 
-async function previewTextDocument(entry: Extract<LanguageWorkspaceEditEntry, { kind: "textDocument" }>, index: number, models: ITextModelService, files: IFileService, states: Map<string, FileState>, signal: AbortSignal): Promise<BulkEditPreviewEntry> {
+async function previewTextDocument(entry: Extract<LanguageWorkspaceEditEntry, { kind: "textDocument" }>, index: number, models: ITextModelResourceService, files: IFileService, states: Map<string, FileState>, signal: AbortSignal): Promise<BulkEditPreviewEntry> {
 	const state = await getFileState(entry.resource, files, states);
 	if (!state.exists || state.text === undefined) return { index, kind: entry.kind, resource: entry.resource, detail: `${entry.edits.length} text edits`, error: "The edit target does not exist or is not a UTF-8 file." };
 	using reference = await models.acquire({ resource: entry.resource, ...(state.synthetic ? { initialText: state.text } : {}) }, signal);

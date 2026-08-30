@@ -1,6 +1,6 @@
 import './overlayWidgets.css';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { getDomNodePagePosition, type IRectangle } from '../../../../base/browser/geometry.js';
+import { getDomNodePagePosition, type IDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IOverlayWidget, type IOverlayWidgetPosition, type IOverlayWidgetPositionCoordinates, OverlayWidgetPositionPreference } from '../../editorBrowser.js';
 import { PartFingerprint, PartFingerprints, type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
@@ -21,7 +21,7 @@ export class ViewOverlayWidgets extends EditorViewPart {
 	public readonly domNode: FastDomNode<HTMLDivElement>;
 	public readonly overflowingOverlayWidgetsDomNode: FastDomNode<HTMLDivElement>;
 	private readonly widgets = this._register(new DisposableMap<string, OverlayWidget>());
-	private viewDomNodePagePosition: IRectangle | null = null;
+	private viewDomNodePagePosition: IDomNodePagePosition | null = null;
 
 	constructor(private readonly options: ViewOverlayWidgetsOptions) {
 		super();
@@ -125,7 +125,7 @@ class OverlayWidget extends Disposable {
 		this.position = position;
 	}
 
-	public render(context: EditorRenderingContext, viewPagePosition: IRectangle | null, stackOffset: number): void {
+	public render(context: EditorRenderingContext, viewPagePosition: IDomNodePagePosition | null, stackOffset: number): void {
 		const preference = this.position?.preference;
 		this.domNode.setDisplay(preference === null || preference === undefined ? 'none' : 'block');
 		if (preference === null || preference === undefined) return;
@@ -139,7 +139,7 @@ class OverlayWidget extends Disposable {
 		this.domNode.setTop(coordinates.top);
 	}
 
-	private coordinatePosition(position: IOverlayWidgetPositionCoordinates, context: EditorRenderingContext, viewPagePosition: IRectangle | null): IOverlayWidgetPositionCoordinates {
+	private coordinatePosition(position: IOverlayWidgetPositionCoordinates, context: EditorRenderingContext, viewPagePosition: IDomNodePagePosition | null): IOverlayWidgetPositionCoordinates {
 		if (!this.allowEditorOverflow || !viewPagePosition) return position;
 		const targetWindow = this.options.viewDomNode.ownerDocument.defaultView;
 		const fixed = this.options.fixedOverflowWidgets;
@@ -149,7 +149,7 @@ class OverlayWidget extends Disposable {
 		};
 	}
 
-	private preferredPosition(preference: OverlayWidgetPositionPreference, context: EditorRenderingContext, width: number, height: number, stackOffset: number, viewPagePosition: IRectangle | null): IOverlayWidgetPositionCoordinates {
+	private preferredPosition(preference: OverlayWidgetPositionPreference, context: EditorRenderingContext, width: number, height: number, stackOffset: number, viewPagePosition: IDomNodePagePosition | null): IOverlayWidgetPositionCoordinates {
 		const viewportWidth = context.layout.viewportSize.width;
 		const viewportHeight = context.layout.viewportSize.height;
 		const minimapWidth = this.options.readMinimapWidth();

@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { Color } from "../../common/color.js";
+import { Color } from "../../common/languageColors.js";
 
 test("Color parses, normalizes, and composes immutable RGBA values", () => {
 	assert.equal(Color.fromHex("#fff").toString(), "#ffffff");

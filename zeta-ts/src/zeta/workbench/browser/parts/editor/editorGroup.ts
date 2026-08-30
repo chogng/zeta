@@ -1,7 +1,7 @@
 import { DragAndDropObserver } from "../../../../base/browser/dnd.js";
 import { DndCssClasses } from "../../../../base/browser/ui/dnd/dnd.js";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
+import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, setDisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -12,7 +12,7 @@ import { TextFileBinaryError, type ITextFileService } from "../../../services/te
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
+import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -92,7 +92,7 @@ export interface EditorGroupOptions {
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;
@@ -143,7 +143,7 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly textFileService: ITextFileService | undefined;
 	private readonly textMateService: ITextMateService | undefined;
 	private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
-	private readonly languageConfigurationService: ILanguageConfigurationService | undefined;
+	private readonly languageConfigurationService: IComposableLanguageConfigurationService | undefined;
 	private readonly languageResolver: TextResourceLanguageResolver | undefined;
 	private readonly diffService: IDiffService | undefined;
 	private readonly instantiationService: IInstantiationService | undefined;

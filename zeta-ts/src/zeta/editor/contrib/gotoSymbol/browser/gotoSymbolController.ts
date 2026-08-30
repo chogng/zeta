@@ -4,7 +4,7 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/gotoSymbol.js";
+import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/languageDocumentSymbolSearch.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns editor-local document-symbol quick navigation (Ctrl/Cmd+Shift+O). */

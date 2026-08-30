@@ -43,7 +43,7 @@ const { IConfigurationService: ConfigurationServiceId } = await import('../../..
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
-const { ServiceContainer, SyncDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { ServiceContainer, ServiceConstructionDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
@@ -295,7 +295,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		id: SettingsEditorPaneId,
 		title: 'Settings',
 		order: 1,
-		ctorDescriptor: new SyncDescriptor(SettingsEditorPane, {
+		ctorDescriptor: new ServiceConstructionDescriptor(SettingsEditorPane, {
 			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId],
 		}),
 	}));

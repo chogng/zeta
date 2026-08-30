@@ -1,9 +1,10 @@
 import * as dom from '../../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { getClientArea, getDomNodePagePosition, type IDimension } from '../../../../base/browser/geometry.js';
+import { getClientArea, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidgetPosition, type IContentWidgetRenderedCoordinate } from '../../editorBrowser.js';
 import { type IPosition, Position } from '../../../common/core/position.js';
+import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { PositionAffinity } from '../../../common/model.js';
 import { PartFingerprint, PartFingerprints, type EditorRenderingContext, EditorViewPart } from '../../view/viewPart.js';
 

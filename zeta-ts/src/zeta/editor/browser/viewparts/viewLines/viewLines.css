@@ -15,7 +15,7 @@
 	cursor: copy;
 }
 
-.stanza-editor-line {
+.view-line {
   position: absolute;
   box-sizing: border-box;
   min-width: 100%;
@@ -139,8 +139,8 @@
   display: none;
 }
 
-.stanza-editor-line.gpu-rendered .stanza-editor-line-text,
-.stanza-editor-line.gpu-rendered .stanza-editor-line-text * {
+.view-line.gpu-rendered .stanza-editor-line-text,
+.view-line.gpu-rendered .stanza-editor-line-text * {
   color: transparent !important;
   text-decoration-color: transparent !important;
   text-shadow: none !important;
@@ -151,8 +151,8 @@
     display: none;
   }
 
-  .stanza-editor-line.gpu-rendered .stanza-editor-line-text,
-  .stanza-editor-line.gpu-rendered .stanza-editor-line-text * {
+  .view-line.gpu-rendered .stanza-editor-line-text,
+  .view-line.gpu-rendered .stanza-editor-line-text * {
     color: CanvasText !important;
   }
 }

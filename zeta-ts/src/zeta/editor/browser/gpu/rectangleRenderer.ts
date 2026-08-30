@@ -4,15 +4,15 @@ import { quadVertices } from './gpuUtils.js';
 import { createObjectCollectionBuffer, type IObjectCollectionBuffer, type IObjectCollectionBufferEntry } from './objectCollectionBuffer.js';
 import { RectangleRendererBindingId, rectangleRendererWgsl } from './rectangleRenderer.wgsl.js';
 
-export type RectangleRendererEntrySpec = readonly [
-	{ readonly name: 'x' },
-	{ readonly name: 'y' },
-	{ readonly name: 'width' },
-	{ readonly name: 'height' },
-	{ readonly name: 'red' },
-	{ readonly name: 'green' },
-	{ readonly name: 'blue' },
-	{ readonly name: 'alpha' },
+export type RectangleRendererEntrySpec = [
+	{ name: 'x' },
+	{ name: 'y' },
+	{ name: 'width' },
+	{ name: 'height' },
+	{ name: 'red' },
+	{ name: 'green' },
+	{ name: 'blue' },
+	{ name: 'alpha' },
 ];
 
 const rectangleProperties: RectangleRendererEntrySpec = [

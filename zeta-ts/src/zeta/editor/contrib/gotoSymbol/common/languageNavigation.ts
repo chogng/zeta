@@ -3,7 +3,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
+import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 /** One source or target position returned by a cross-resource language feature. */
@@ -44,11 +44,11 @@ export interface LanguageReferenceProvider extends LanguageFeatureProviderMetada
 }
 
 export interface LanguageNavigationProviderRegistries {
-	readonly definitions: LanguageFeatureProviderRegistry<LanguageDefinitionProvider>;
-	readonly declarations: LanguageFeatureProviderRegistry<LanguageDeclarationProvider>;
-	readonly implementations: LanguageFeatureProviderRegistry<LanguageImplementationProvider>;
-	readonly typeDefinitions: LanguageFeatureProviderRegistry<LanguageTypeDefinitionProvider>;
-	readonly references: LanguageFeatureProviderRegistry<LanguageReferenceProvider>;
+	readonly definitions: OwnedLanguageFeatureProviderRegistry<LanguageDefinitionProvider>;
+	readonly declarations: OwnedLanguageFeatureProviderRegistry<LanguageDeclarationProvider>;
+	readonly implementations: OwnedLanguageFeatureProviderRegistry<LanguageImplementationProvider>;
+	readonly typeDefinitions: OwnedLanguageFeatureProviderRegistry<LanguageTypeDefinitionProvider>;
+	readonly references: OwnedLanguageFeatureProviderRegistry<LanguageReferenceProvider>;
 }
 
 /** Coordinates cancellable cross-resource language requests for one source model. */
@@ -78,12 +78,12 @@ export class LanguageNavigationService extends Disposable {
 		return this.collectRequest(languageId, request, this.providers.references, (provider) => provider.provideReferences(request, signal));
 	}
 
-	private async collect<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, position: Position, signal: AbortSignal, registry: LanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider, request: LanguageLocationRequest) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
+	private async collect<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, position: Position, signal: AbortSignal, registry: OwnedLanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider, request: LanguageLocationRequest) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };
 		return this.collectRequest(languageId, request, registry, provider => provide(provider, request));
 	}
 
-	private async collectRequest<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, request: LanguageLocationRequest, registry: LanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
+	private async collectRequest<TProvider extends LanguageFeatureProviderMetadata>(languageId: string, request: LanguageLocationRequest, registry: OwnedLanguageFeatureProviderRegistry<TProvider>, provide: (provider: TProvider) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
 		const locations: LanguageLocation[] = [];
 		for (const provider of registry.getProviders(languageId)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);

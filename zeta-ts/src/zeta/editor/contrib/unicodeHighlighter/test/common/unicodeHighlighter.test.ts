@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findUnicodeHighlights } from "../../common/unicodeHighlighter.js";
+import { findUnicodeHighlights } from "../../common/unicodeHighlights.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Unicode highlighter finds invisible, bidi, and mixed-script confusable characters", () => {

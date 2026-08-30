@@ -5,23 +5,24 @@ import { createEditorBrowserServices } from '../../browser/services/contribution
 import { type ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
-import { type EditorWorkerFactory } from "../../common/services/editorWorker.js";
+import { type VersionedEditorWorkerFactory } from "../../browser/services/versionedEditorWorkerClient.js";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { registerBuiltinLanguageDescriptions } from "../../common/languages/languageBuiltinDescriptions.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
-import { ILanguageService, LanguageService } from '../../common/services/languageService.js';
-import { ILanguageConfigurationService, LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { ILanguageService, type IZetaLanguageService } from '../../common/languages/language.js';
+import { LanguageService } from '../../common/services/languageService.js';
+import { IComposableLanguageConfigurationService, ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { IModelService } from '../../common/services/model.js';
 import { ModelService } from '../../common/services/modelService.js';
-import { type IStandaloneThemeService } from "../common/standaloneTheme.js";
-import { StandaloneThemeService } from "./standaloneThemeService.js";
+import { type INamedEditorThemeService } from "../common/namedEditorTheme.js";
+import { NamedEditorThemeService } from "./namedEditorThemeService.js";
 
 export interface StandaloneServiceOverrides {
-	readonly languageService?: ILanguageService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageService?: IZetaLanguageService;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly editorWorkerFactory?: EditorWorkerFactory;
+	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
 	/** Explicit Worker authority that replaces the local completion provider registry. */
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
@@ -30,12 +31,12 @@ export interface StandaloneServiceOverrides {
 export class StandaloneServiceCollection extends Disposable {
 	readonly instantiationService: ServiceContainer;
 	readonly modelService: IModelService;
-	readonly languageService: ILanguageService;
-	readonly languageConfigurationService: ILanguageConfigurationService;
+	readonly languageService: IZetaLanguageService;
+	readonly languageConfigurationService: IComposableLanguageConfigurationService;
 	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly themeService: IStandaloneThemeService;
+	readonly themeService: INamedEditorThemeService;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
-	readonly editorWorkerFactory: EditorWorkerFactory;
+	readonly editorWorkerFactory: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory: LanguageCompletionWorkerFactory | undefined;
 	readonly codeEditorService: ICodeEditorService;
 
@@ -45,16 +46,16 @@ export class StandaloneServiceCollection extends Disposable {
 		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError("Standalone language feature overrides require a language configuration service");
 		if (overrides.languageService) instantiationService.registerInstance(ILanguageService, overrides.languageService);
 		else instantiationService.registerSingleton(ILanguageService, () => new LanguageService());
-		if (overrides.languageConfigurationService) instantiationService.registerInstance(ILanguageConfigurationService, overrides.languageConfigurationService);
-		else instantiationService.registerSingleton(ILanguageConfigurationService, () => new LanguageConfigurationService());
+		if (overrides.languageConfigurationService) instantiationService.registerInstance(IComposableLanguageConfigurationService, overrides.languageConfigurationService);
+		else instantiationService.registerSingleton(IComposableLanguageConfigurationService, () => new ComposableLanguageConfigurationService());
 		if (overrides.languageFeaturesService) instantiationService.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
-		else instantiationService.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(ILanguageConfigurationService)));
-		instantiationService.registerSingleton(IThemeService, () => new StandaloneThemeService(window));
-		this.themeService = instantiationService.get(IThemeService) as IStandaloneThemeService;
+		else instantiationService.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(IComposableLanguageConfigurationService)));
+		instantiationService.registerSingleton(IThemeService, () => new NamedEditorThemeService(window));
+		this.themeService = instantiationService.get(IThemeService) as INamedEditorThemeService;
 		instantiationService.registerSingleton(IModelService, () => new ModelService());
 		this.modelService = instantiationService.get(IModelService);
 		this.languageService = instantiationService.get(ILanguageService);
-		this.languageConfigurationService = instantiationService.get(ILanguageConfigurationService);
+		this.languageConfigurationService = instantiationService.get(IComposableLanguageConfigurationService);
 		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService.configurations));

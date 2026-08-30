@@ -1,4 +1,5 @@
-import { raceCancellation, throwIfCancelled } from "../../../../base/common/cancellation.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
+import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { type Event } from "../../../../base/common/event.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { FileRevisionConflictError, type IFileChangeEvent, type IFileService } from "../../../../platform/files/common/files.js";
@@ -88,9 +89,9 @@ export class TextFileService implements ITextFileService {
 				encoding: "utf8",
 			});
 		}
-		const stat = await raceCancellation(this.files.stat(request.resource), signal, "Text file resolution was cancelled");
+		const stat = await raceCancellationError(this.files.stat(request.resource), signal, "Text file resolution was cancelled");
 		if (stat.sizeBytes > MAX_SAFE_TEXT_FILE_BYTES) throw new TextFileTooLargeError(request.resource, stat.sizeBytes);
-		const content = await raceCancellation(this.files.readFileBytes(request.resource), signal, "Text file resolution was cancelled");
+		const content = await raceCancellationError(this.files.readFileBytes(request.resource), signal, "Text file resolution was cancelled");
 		if (!(content.bytes instanceof Uint8Array) || typeof content.revision !== "string") throw new TypeError("File service returned invalid text content");
 		return Object.freeze({
 			resource: request.resource,
@@ -105,7 +106,7 @@ export class TextFileService implements ITextFileService {
 		validateSaveRequest(request);
 		throwIfCancelled(signal, "Text file save was cancelled");
 		try {
-			const saved = await raceCancellation(this.files.writeFile({
+			const saved = await raceCancellationError(this.files.writeFile({
 				resource: request.resource,
 				content: request.text,
 				...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }),

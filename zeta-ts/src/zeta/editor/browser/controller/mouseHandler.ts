@@ -6,14 +6,15 @@ import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
+import { type TrackedRange } from "../../common/model/trackedRange.js";
 import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
 import { type EditorViewport } from "../view.js";
 import { DragScrolling } from "./dragScrolling.js";
-import { PointerHandler } from "./pointerHandler.js";
-import { MouseTargetFactory, MouseTargetKind } from "./mouseTarget.js";
+import { PointerEventRouter } from "./pointerEventRouter.js";
+import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from "./semanticMouseTarget.js";
 import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
 import { CursorMoveCommands, PointerMultiCursorModifier, type PointerModifierState } from "../../common/cursor/cursorMoveCommands.js";
+import { TrackedRangeStickiness } from '../../common/model.js';
 
 enum MouseSelectionKind {
 	Character = "character",
@@ -53,14 +54,14 @@ export interface MouseHandlerOptions {
 /**
  * Browser mouse and pointer policy for one Stanza viewport and selection controller.
  *
- * PointerHandler owns browser dispatch/capture. This controller owns gesture
+ * PointerEventRouter owns browser dispatch/capture. This controller owns gesture
  * policy and maps semantic hit targets to common selection state.
  */
 export class MouseHandler extends Disposable {
 	private readonly dragListeners =
 		this._register(new DisposableStore());
-	private readonly pointerHandler: PointerHandler;
-	private readonly mouseTargetFactory: MouseTargetFactory;
+	private readonly pointerHandler: PointerEventRouter;
+	private readonly mouseTargetFactory: SemanticMouseTargetFactory;
 	private readonly multiCursorModifier: PointerMultiCursorModifier;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private activeSelection: ActiveMouseSelection | undefined;
@@ -90,8 +91,8 @@ export class MouseHandler extends Disposable {
 				"Stanza pointer and selection controllers must share one text model",
 			);
 		}
-		this.pointerHandler = this._register(new PointerHandler(viewport.element));
-		this.mouseTargetFactory = new MouseTargetFactory(viewport);
+		this.pointerHandler = this._register(new PointerEventRouter(viewport.element));
+		this.mouseTargetFactory = new SemanticMouseTargetFactory(viewport);
 		this._register(this.pointerHandler.onDidPointerDown(event => this.beginPointerSelection(event)));
 		this._register(this.pointerHandler.onDidContextMenu(event => this.handleContextMenu(event)));
 		this._register(toDisposable(() => this.stopPointerSelection()));
@@ -100,7 +101,7 @@ export class MouseHandler extends Disposable {
 	private beginPointerSelection(event: PointerEvent): void {
 		if (event.defaultPrevented || event.button !== 0) return;
 		const target = this.mouseTargetFactory.create(event);
-		if (!target || target.kind === MouseTargetKind.Scrollbar || target.kind === MouseTargetKind.Widget || target.kind === MouseTargetKind.ViewZone) return;
+		if (!target || target.kind === SemanticMouseTargetKind.Scrollbar || target.kind === SemanticMouseTargetKind.Widget || target.kind === SemanticMouseTargetKind.ViewZone) return;
 		const hitTarget = target.editorTarget;
 		if (!hitTarget) return;
 		event.preventDefault();
@@ -147,7 +148,7 @@ export class MouseHandler extends Disposable {
 
 	private handleContextMenu(event: MouseEvent): void {
 		const target = this.mouseTargetFactory.create(event, true);
-		if (!target || target.kind === MouseTargetKind.Scrollbar || target.kind === MouseTargetKind.Widget || target.kind === MouseTargetKind.ViewZone) return;
+		if (!target || target.kind === SemanticMouseTargetKind.Scrollbar || target.kind === SemanticMouseTargetKind.Widget || target.kind === SemanticMouseTargetKind.ViewZone) return;
 		const hitTarget = target?.editorTarget;
 		if (!hitTarget) return;
 		this.viewport.element.focus({ preventScroll: true });
@@ -210,7 +211,7 @@ export class MouseHandler extends Disposable {
 		}
 		const anchor = this.dragListeners.add(this.viewport.textModel.trackRange(
 			anchorRange,
-			TrackedRangeStickiness.NeverGrowsAtEdges,
+			TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		));
 		const initialSelection = selectionForTarget(
 			kind,
@@ -226,7 +227,7 @@ export class MouseHandler extends Disposable {
 			columnFallbackAnchor: kind === MouseSelectionKind.Column
 				? this.dragListeners.add(this.viewport.textModel.trackRange(
 					Range.fromPositions(this.selectionController.selections.primary.getSelectionStart()),
-					TrackedRangeStickiness.NeverGrowsAtEdges,
+					TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 				))
 				: undefined,
 			additionalSelections: addSelection
@@ -242,7 +243,7 @@ export class MouseHandler extends Disposable {
 			selections: base.selections.map(selection => ({
 				range: this.dragListeners.add(this.viewport.textModel.trackRange(
 					selection,
-					TrackedRangeStickiness.NeverGrowsAtEdges,
+					TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 				)),
 				direction: selection.getDirection(),
 			})),

@@ -141,7 +141,7 @@ Browser controller 的职责是把一个 DOM event 解析成一个 editor intent
 - `AbstractEditContext`：browser input contract；`NativeEditContext` 使用浏览器原生 EditContext，`TextAreaEditContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`EditorView` 只选择并暴露这份契约，`ViewController` 执行 common command，`SuggestController` 通过 `EditorView.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
-- `PointerHandler`：pointer dispatch、drag session 和 native capture 的 browser adapter。
+- `PointerEventRouter`：pointer dispatch、drag session 和浏览器 capture 的 browser adapter。
 - `MouseHandler`：把 mouse/pointer hit target 转换为 selection intent；`DragScrolling` 保持拖选期间的边缘滚动，多光标移动命令位于 `common/cursor/cursorMoveCommands.ts`。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 

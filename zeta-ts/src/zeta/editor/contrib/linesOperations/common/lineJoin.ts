@@ -2,8 +2,9 @@ import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOff
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { type TextEdit } from "../../../common/core/editOperation.js";
+
 import { type TextModel } from "../../../common/model/textModel.js";
+import { type TextEdit } from '../../../common/languages.js';
 
 interface JoinSelection {
 	readonly start: Position;

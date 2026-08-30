@@ -7,10 +7,11 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { LineDiffKind, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { TextDecorationCollection } from '../../../../editor/common/model/decorationCollection.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
-import { TrackedRangeStickiness } from '../../../../editor/common/model/trackedRange.js';
+
 import { type IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import { type IQuickDiffModelService, type QuickDiffComparison } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
+import { TrackedRangeStickiness } from '../../../../editor/common/model.js';
 
 interface QuickDiffDecorationMetadata {
 	readonly presentation: DecorationPresentation.DiffAdded | DecorationPresentation.DiffModified | DecorationPresentation.DiffDeleted;
@@ -84,7 +85,7 @@ export class QuickDiffDecorator extends Disposable implements OwnedDecorationSou
 		}
 		this.collection.replaceAll(Object.freeze([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => Object.freeze({
 			range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata,
 		}))));
 	}

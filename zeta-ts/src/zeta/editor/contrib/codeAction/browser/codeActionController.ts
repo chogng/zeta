@@ -8,7 +8,7 @@ import { Range } from "../../../common/core/range.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { type CodeActionService, type LanguageCodeAction } from "../common/codeAction.js";
+import { type CodeActionService, type LanguageCodeAction } from "../common/languageCodeActions.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */

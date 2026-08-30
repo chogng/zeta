@@ -1,4 +1,4 @@
-import { ILogService } from "../../../../platform/log/common/logService.js";
+import { ILogService } from "../../../../platform/log/common/log.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";
 import { ITaskService } from "../../tasks/common/taskService.js";
 import { ITestingService } from "../common/testingService.js";

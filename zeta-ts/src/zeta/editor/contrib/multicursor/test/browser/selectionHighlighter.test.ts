@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -25,13 +26,12 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorView, EditorViewport } = await import('../../../../browser/view.js');
-const { getSelectionHighlightDecorationOptions } = await import('../../../wordHighlighter/browser/highlightDecorations.js');
+const { resolveSelectionHighlightPresentation } = await import('../../../wordHighlighter/browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
-const { SelectionHighlighter } = await import('../../browser/selectionHighlighter.js');
+const { SelectionHighlighter } = await import('../../browser/multicursor.js');
 
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
 	using languages = new LanguageFeaturesService();
-	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
@@ -44,7 +44,6 @@ test('Selection highlighter owns non-empty textual matches and excludes active s
 
 test('Selection highlighter applies whole-word, whitespace, multiline, and maximum-length policy', () => {
 	using languages = new LanguageFeaturesService();
-	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	using harness = createHarness('item itemized item\nitem', languages, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)));
 
 	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.range), [
@@ -62,6 +61,7 @@ function createHarness(text: string, languages: LanguageFeaturesService, initial
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
 	const selections = new CursorsController(model, SelectionSet.single(initialSelection));
+	const textualProvider = new TextualMultiDocumentHighlightFeature(languages, { resource: URI.parse('file:///selection.ts'), model, wordPattern: () => undefined });
 	const decorations = new TextDecorationCollection<boolean>(model);
 	const viewport = new EditorViewport({
 		container,
@@ -69,7 +69,7 @@ function createHarness(text: string, languages: LanguageFeaturesService, initial
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createStanzaDecorationSource(decorations, decoration => getSelectionHighlightDecorationOptions(decoration.metadata))],
+		decorationSources: [createStanzaDecorationSource(decorations, decoration => resolveSelectionHighlightPresentation(decoration.metadata))],
 	});
 	const view = new EditorView(viewport, selections);
 	const controller = new SelectionHighlighter(view, selections, decorations, {
@@ -77,7 +77,7 @@ function createHarness(text: string, languages: LanguageFeaturesService, initial
 		languageFeaturesService: languages,
 	});
 	view.layout({ width: 240, height: 60 });
-	return new SelectionHarness(dom, model, selections, decorations, viewport, view, controller);
+	return new SelectionHarness(dom, model, selections, decorations, viewport, view, controller, textualProvider);
 }
 
 class SelectionHarness implements Disposable {
@@ -89,9 +89,11 @@ class SelectionHarness implements Disposable {
 		readonly viewport: InstanceType<typeof EditorViewport>,
 		readonly view: InstanceType<typeof EditorView>,
 		readonly controller: InstanceType<typeof SelectionHighlighter>,
+		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,
 	) {}
 
 	dispose(): void {
+		this.textualProvider.dispose();
 		this.controller.dispose();
 		this.view.dispose();
 		this.viewport.dispose();

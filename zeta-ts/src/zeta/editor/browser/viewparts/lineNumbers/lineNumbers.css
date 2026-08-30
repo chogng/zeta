@@ -10,7 +10,7 @@
   background: var(--zeta-editor-background);
 }
 
-.stanza-editor-line-number {
+.line-numbers {
   position: absolute;
   left: var(--stanza-editor-line-numbers-left);
   display: block;
@@ -23,7 +23,7 @@
   text-align: right;
 }
 
-.stanza-editor-line-number.active {
+.line-numbers.active {
   color: var(--zeta-editor-foreground);
 }
 
@@ -32,7 +32,7 @@
     background: Canvas;
   }
 
-  .stanza-editor-line-number {
+  .line-numbers {
     color: CanvasText;
   }
 }

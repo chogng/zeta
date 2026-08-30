@@ -1,7 +1,7 @@
 import './media/modalEditorPart.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { focusFirst, restoreFocus, trapTabFocus } from '../../../../base/browser/focus.js';
-import { Dimension, type IDimension } from '../../../../base/browser/geometry.js';
+import { Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';

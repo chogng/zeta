@@ -5,11 +5,11 @@ import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
-import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageNavigationService } from '../../contrib/gotoSymbol/common/languageNavigation.js';
 
 test("language navigation collects provider results with source resource identity and removes duplicates", async () => {
-	using configurations = new LanguageConfigurationService();
+	using configurations = new ComposableLanguageConfigurationService();
 	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("const answer = value;");
 	const source = URI.file("C:\\project\\main.ts");
@@ -39,7 +39,7 @@ test("language navigation collects provider results with source resource identit
 });
 
 test("language navigation exposes declaration, implementation, type definition, and references independently", async () => {
-	using configurations = new LanguageConfigurationService();
+	using configurations = new ComposableLanguageConfigurationService();
 	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("value");
 	const source = URI.file("C:\\project\\main.ts");
@@ -63,7 +63,7 @@ test("language navigation exposes declaration, implementation, type definition, 
 });
 
 test("language navigation discards results after the source model changes", async () => {
-	using configurations = new LanguageConfigurationService();
+	using configurations = new ComposableLanguageConfigurationService();
 	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("value");
 	const source = URI.file("C:\\project\\main.ts");

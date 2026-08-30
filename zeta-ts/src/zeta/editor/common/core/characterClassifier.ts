@@ -1,46 +1,50 @@
-import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
+import { toUint8 } from '../../../base/common/uint.js';
 
-/** A compact character classifier with a fast ASCII path and sparse Unicode map. */
+/** A fast character classifier with a compact ASCII path and sparse Unicode map. */
 export class CharacterClassifier<T extends number> {
-	private readonly asciiMap: Uint8Array;
-	private readonly map = new Map<number, number>();
-	private readonly defaultValue: number;
+	protected readonly _asciiMap: Uint8Array;
+	protected readonly _map: Map<number, number>;
+	protected readonly _defaultValue: number;
 
-	constructor(defaultValue: T) {
-		this.defaultValue = toUint8(defaultValue);
-		this.asciiMap = new Uint8Array(256);
-		this.asciiMap.fill(this.defaultValue);
+	constructor(_defaultValue: T) {
+		const defaultValue = toUint8(_defaultValue);
+		this._defaultValue = defaultValue;
+		this._asciiMap = CharacterClassifier._createAsciiMap(defaultValue);
+		this._map = new Map<number, number>();
 	}
 
-	set(charCode: number, value: T): void {
-		if (!isNonNegativeSafeInteger(charCode)) throw new RangeError("Character code must be a non-negative safe integer");
-		const normalizedValue = toUint8(value);
-		if (charCode < 256) this.asciiMap[charCode] = normalizedValue;
-		else this.map.set(charCode, normalizedValue);
+	private static _createAsciiMap(defaultValue: number): Uint8Array {
+		const asciiMap = new Uint8Array(256);
+		asciiMap.fill(defaultValue);
+		return asciiMap;
+	}
+
+	set(charCode: number, _value: T): void {
+		const value = toUint8(_value);
+		if (charCode >= 0 && charCode < 256) this._asciiMap[charCode] = value;
+		else this._map.set(charCode, value);
 	}
 
 	get(charCode: number): T {
-		const value = charCode >= 0 && charCode < 256 ? this.asciiMap[charCode] : this.map.get(charCode) ?? this.defaultValue;
-		return value as T;
+		return (charCode >= 0 && charCode < 256 ? this._asciiMap[charCode] : this._map.get(charCode) || this._defaultValue) as T;
 	}
 
-	clear(): void {
-		this.asciiMap.fill(this.defaultValue);
-		this.map.clear();
+	clear() {
+		this._asciiMap.fill(this._defaultValue);
+		this._map.clear();
 	}
 }
+
+const enum Boolean { False = 0, True = 1 }
 
 export class CharacterSet {
-	private readonly actual = new CharacterClassifier<CharacterSetValue>(CharacterSetValue.False);
+	private readonly _actual: CharacterClassifier<Boolean>;
 
-	add(charCode: number): void { this.actual.set(charCode, CharacterSetValue.True); }
-	has(charCode: number): boolean { return this.actual.get(charCode) === CharacterSetValue.True; }
-	clear(): void { this.actual.clear(); }
-}
+	constructor() {
+		this._actual = new CharacterClassifier<Boolean>(Boolean.False);
+	}
 
-enum CharacterSetValue { False = 0, True = 1 }
-
-function toUint8(value: number): number {
-	if (!isNonNegativeSafeInteger(value) || value > 255) throw new RangeError("Character classifier values must fit in one byte");
-	return value;
+	add(charCode: number): void { this._actual.set(charCode, Boolean.True); }
+	has(charCode: number): boolean { return this._actual.get(charCode) === Boolean.True; }
+	clear(): void { return this._actual.clear(); }
 }

@@ -1,53 +1,68 @@
-import { GraphemeIterator } from '../../../base/common/strings.js';
+import { safeIntl } from '../../../base/common/date.js';
+import type { GraphemeIterator } from '../../../base/common/strings.js';
+import type { ViewLineRenderingData } from '../../common/viewModel.js';
+import type { ViewLineOptions } from '../viewparts/viewLines/viewLineOptions.js';
 
 export interface IContentSegmenter {
 	getSegmentAtIndex(index: number): string | undefined;
 	getSegmentData(index: number): Intl.SegmentData | undefined;
 }
 
-interface ContentSegmenterOptions {
-	readonly isBasicASCII: boolean;
-	readonly useMonospaceOptimizations: boolean;
-}
-
-export function createContentSegmenter(content: string, options: ContentSegmenterOptions): IContentSegmenter {
-	return options.isBasicASCII && options.useMonospaceOptimizations
-		? new AsciiContentSegmenter(content)
-		: new GraphemeContentSegmenter(content);
+export function createContentSegmenter(lineData: ViewLineRenderingData, options: ViewLineOptions): IContentSegmenter {
+	if (lineData.isBasicASCII && options.useMonospaceOptimizations) {
+		return new AsciiContentSegmenter(lineData);
+	}
+	return new GraphemeContentSegmenter(lineData);
 }
 
 class AsciiContentSegmenter implements IContentSegmenter {
-	constructor(private readonly content: string) {}
+	private readonly _content: string;
 
-	public getSegmentAtIndex(index: number): string | undefined {
-		return this.content[index];
+	constructor(lineData: ViewLineRenderingData) {
+		this._content = lineData.content;
 	}
 
-	public getSegmentData(_index: number): Intl.SegmentData | undefined {
+	getSegmentAtIndex(index: number): string {
+		return this._content[index];
+	}
+
+	getSegmentData(index: number): Intl.SegmentData | undefined {
 		return undefined;
 	}
 }
 
+/**
+ * This is a more modern version of {@link GraphemeIterator}, relying on browser APIs instead of a
+ * manual table approach.
+ */
 class GraphemeContentSegmenter implements IContentSegmenter {
-	private readonly segments: (Intl.SegmentData | undefined)[] = [];
+	private readonly _segments: (Intl.SegmentData | undefined)[] = [];
 
-	constructor(content: string) {
-		const iterator = new GraphemeIterator(content);
-		while (!iterator.eol()) {
-			const index = iterator.offset;
-			const segment = content.slice(index, index + iterator.nextGraphemeLength());
-			while (this.segments.length < index) {
-				this.segments.push(undefined);
+	constructor(lineData: ViewLineRenderingData) {
+		const content = lineData.content;
+		const segmenter = safeIntl.Segmenter(undefined, { granularity: 'grapheme' }).value;
+		const segmentedContent = Array.from(segmenter.segment(content));
+		let segmenterIndex = 0;
+
+		for (let x = 0; x < content.length; x++) {
+			const segment = segmentedContent[segmenterIndex];
+			if (!segment) {
+				break;
 			}
-			this.segments.push({ segment, index, input: content });
+			if (segment.index !== x) {
+				this._segments.push(undefined);
+				continue;
+			}
+			segmenterIndex++;
+			this._segments.push(segment);
 		}
 	}
 
-	public getSegmentAtIndex(index: number): string | undefined {
-		return this.segments[index]?.segment;
+	getSegmentAtIndex(index: number): string | undefined {
+		return this._segments[index]?.segment;
 	}
 
-	public getSegmentData(index: number): Intl.SegmentData | undefined {
-		return this.segments[index];
+	getSegmentData(index: number): Intl.SegmentData | undefined {
+		return this._segments[index];
 	}
 }

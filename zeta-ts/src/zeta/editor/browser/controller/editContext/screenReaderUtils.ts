@@ -1,238 +1,92 @@
-import { SelectionDirection, Selection } from '../../../common/core/selection.js';
+import { AccessibilitySupport } from '../../../../platform/accessibility/common/accessibility.js';
+import { type IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import * as nls from '../../../../nls.js';
+import { type IComputedEditorOptions, EditorOption } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
-import { type TextModel } from '../../../common/model/textModel.js';
-
-const SCREEN_READER_PAGE_SEPARATOR = String.fromCharCode(8230);
-const SCREEN_READER_TRIM_LENGTH = 500;
-
-/** A model range and its corresponding UTF-16 range in the projected value. */
-export interface SimpleScreenReaderContentSegment {
-	readonly modelStartOffset: number;
-	readonly modelEndOffset: number;
-	readonly contentStartOffset: number;
-	readonly contentEndOffset: number;
-}
-
-/** The common screen-reader projection contract used by textarea input. */
-export interface ISimpleScreenReaderContentState {
-	readonly value: string;
-	/** The direction-aware selection offsets used by TextAreaState. */
-	readonly selectionStart: number;
-	readonly selectionEnd: number;
-	readonly selection: Selection;
-	readonly startPositionWithinEditor: Position;
-	readonly newlineCountBeforeSelection: number;
-	readonly startOffset: number;
-	readonly endOffset: number;
-	readonly segments: readonly SimpleScreenReaderContentSegment[];
-}
+import { Range } from '../../../common/core/range.js';
+import { Selection, SelectionDirection } from '../../../common/core/selection.js';
+import { EndOfLinePreference } from '../../../common/model.js';
+import { type ISimpleModel } from '../../../common/viewModel/screenReaderSimpleModel.js';
 
 export interface IPagedScreenReaderStrategy<T> {
-	fromEditorSelection(model: TextModel, selection: Selection, linesPerPage: number, trimLongText: boolean): T;
+	fromEditorSelection(model: ISimpleModel, selection: Selection, linesPerPage: number, trimLongText: boolean): T;
 }
 
-/**
- * Creates the line-oriented projection used by the textarea accessibility
- * path. The selection's surrounding page remains readable while very large
- * ranges are bounded to keep browser text controls responsive.
- */
+export interface ISimpleScreenReaderContentState {
+	value: string;
+	selectionStart: number;
+	selectionEnd: number;
+	selection: Selection;
+	startPositionWithinEditor: Position;
+	newlineCountBeforeSelection: number;
+}
+
 export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrategy<ISimpleScreenReaderContentState> {
-	fromEditorSelection(model: TextModel, selection: Selection, linesPerPage: number, trimLongText: boolean): ISimpleScreenReaderContentState {
-		const pageSize = normalizePageSize(linesPerPage);
-		const snapshot = model.createSnapshot();
-		const selectionStart = model.offsetAt(selection.getStartPosition());
-		const selectionEnd = model.offsetAt(selection.getEndPosition());
-		const startPage = Math.floor((selection.startLineNumber - 1) / pageSize);
-		const endPage = Math.floor((selection.endLineNumber - 1) / pageSize);
-		const startPageRange = pageRange(model, startPage, pageSize);
-		const endPageRange = pageRange(model, endPage, pageSize);
-		const selectionRanges = startPage === endPage || startPage + 1 === endPage
-			? [{ startOffset: selectionStart, endOffset: selectionEnd }]
-			: [
-				{ startOffset: selectionStart, endOffset: startPageRange.endOffset },
-				{ startOffset: endPageRange.startOffset, endOffset: selectionEnd },
-			];
+	private _getPageOfLine(lineNumber: number, linesPerPage: number): number {
+		return Math.floor((lineNumber - 1) / linesPerPage);
+	}
 
-		let value = '';
-		const segments: SimpleScreenReaderContentSegment[] = [];
-		const appendRange = (startOffset: number, endOffset: number): void => {
-			const safeStartOffset = Math.min(startOffset, endOffset);
-			const safeEndOffset = Math.max(startOffset, endOffset);
-			const contentStartOffset = value.length;
-			value += snapshot.getTextBetweenOffsets(safeStartOffset, safeEndOffset);
-			segments.push(Object.freeze({
-				modelStartOffset: safeStartOffset,
-				modelEndOffset: safeEndOffset,
-				contentStartOffset,
-				contentEndOffset: value.length,
-			}));
-		};
-		const appendSeparator = (): void => {
-			value += SCREEN_READER_PAGE_SEPARATOR;
-		};
+	private _getRangeForPage(page: number, linesPerPage: number): Range {
+		const offset = page * linesPerPage;
+		return new Range(offset + 1, 1, offset + linesPerPage + 1, 1);
+	}
 
-		appendBoundedRange(
-			startPageRange.startOffset,
-			selectionStart,
-			trimLongText,
-			'last',
-			appendRange,
-		);
-		appendSelectionRanges(selectionRanges, trimLongText, appendRange, appendSeparator);
-		appendBoundedRange(
-			selectionEnd,
-			endPageRange.endOffset,
-			trimLongText,
-			'first',
-			appendRange,
-		);
+	public fromEditorSelection(model: ISimpleModel, selection: Selection, linesPerPage: number, trimLongText: boolean): ISimpleScreenReaderContentState {
+		const limitCharacters = 500;
+		const selectionStartPage = this._getPageOfLine(selection.startLineNumber, linesPerPage);
+		const selectionStartPageRange = this._getRangeForPage(selectionStartPage, linesPerPage);
+		const selectionEndPage = this._getPageOfLine(selection.endLineNumber, linesPerPage);
+		const selectionEndPageRange = this._getRangeForPage(selectionEndPage, linesPerPage);
 
-		const firstSegment = segments[0] ?? Object.freeze({
-			modelStartOffset: selectionStart,
-			modelEndOffset: selectionEnd,
-			contentStartOffset: 0,
-			contentEndOffset: 0,
-		});
-		const lastSegment = segments.at(-1) ?? firstSegment;
-		const mappingState: Pick<ISimpleScreenReaderContentState, 'value' | 'segments' | 'startOffset' | 'endOffset'> = {
-			value,
-			segments,
-			startOffset: firstSegment.modelStartOffset,
-			endOffset: lastSegment.modelEndOffset,
-		};
-		const orderedSelectionStart = contentOffsetAtModelOffset(mappingState, selectionStart, 'start');
-		const orderedSelectionEnd = contentOffsetAtModelOffset(mappingState, selectionEnd, 'end');
-		const directionAwareSelectionStart = selection.getDirection() === SelectionDirection.RTL
-			? orderedSelectionEnd
-			: orderedSelectionStart;
-		const directionAwareSelectionEnd = selection.getDirection() === SelectionDirection.RTL
-			? orderedSelectionStart
-			: orderedSelectionEnd;
-		const startPosition = model.positionAt(firstSegment.modelStartOffset);
-		return Object.freeze({
-			value,
-			selectionStart: directionAwareSelectionStart,
-			selectionEnd: directionAwareSelectionEnd,
+		let pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn))!;
+		if (trimLongText && model.getValueLengthInRange(pretextRange, EndOfLinePreference.LF) > limitCharacters) {
+			pretextRange = Range.fromPositions(model.modifyPosition(pretextRange.getEndPosition(), -limitCharacters), pretextRange.getEndPosition());
+		}
+		const pretext = model.getValueInRange(pretextRange, EndOfLinePreference.LF);
+
+		const lastLine = model.getLineCount();
+		let posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, model.getLineMaxColumn(lastLine)))!;
+		if (trimLongText && model.getValueLengthInRange(posttextRange, EndOfLinePreference.LF) > limitCharacters) {
+			posttextRange = Range.fromPositions(posttextRange.getStartPosition(), model.modifyPosition(posttextRange.getStartPosition(), limitCharacters));
+		}
+		const posttext = model.getValueInRange(posttextRange, EndOfLinePreference.LF);
+
+		let text: string;
+		if (selectionStartPage === selectionEndPage || selectionStartPage + 1 === selectionEndPage) {
+			text = model.getValueInRange(selection, EndOfLinePreference.LF);
+		} else {
+			text = model.getValueInRange(selectionStartPageRange.intersectRanges(selection)!, EndOfLinePreference.LF)
+				+ String.fromCharCode(8230)
+				+ model.getValueInRange(selectionEndPageRange.intersectRanges(selection)!, EndOfLinePreference.LF);
+		}
+		if (trimLongText && text.length > 2 * limitCharacters) {
+			text = text.substring(0, limitCharacters) + String.fromCharCode(8230) + text.substring(text.length - limitCharacters);
+		}
+
+		const leftToRight = selection.getDirection() === SelectionDirection.LTR;
+		return {
+			value: pretext + text + posttext,
 			selection,
-			startPositionWithinEditor: startPosition,
-			newlineCountBeforeSelection: newlineCount(value.slice(0, orderedSelectionStart)),
-			startOffset: firstSegment.modelStartOffset,
-			endOffset: lastSegment.modelEndOffset,
-			segments: Object.freeze(segments),
-		});
+			selectionStart: leftToRight ? pretext.length : pretext.length + text.length,
+			selectionEnd: leftToRight ? pretext.length + text.length : pretext.length,
+			startPositionWithinEditor: pretextRange.getStartPosition(),
+			newlineCountBeforeSelection: pretextRange.endLineNumber - pretextRange.startLineNumber,
+		};
 	}
 }
 
-/** Maps a model offset to a projected UTF-16 offset, including omitted pages. */
-export function contentOffsetAtModelOffset(
-	state: Pick<ISimpleScreenReaderContentState, 'segments' | 'startOffset' | 'endOffset'>,
-	modelOffset: number,
-	affinity: 'start' | 'end' = 'start',
-): number {
-	if (state.segments.length === 0) return 0;
-	const offset = clampModelOffset(modelOffset, state.startOffset, state.endOffset);
-	let previous: SimpleScreenReaderContentSegment | undefined;
-	for (const segment of state.segments) {
-		if (offset < segment.modelStartOffset) {
-			return affinity === 'end'
-				? segment.contentStartOffset
-				: previous?.contentEndOffset ?? segment.contentStartOffset;
-		}
-		if (offset <= segment.modelEndOffset) {
-			return segment.contentStartOffset + offset - segment.modelStartOffset;
-		}
-		previous = segment;
+export function ariaLabelForScreenReaderContent(options: IComputedEditorOptions, keybindingService: IKeybindingService) {
+	if (options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Disabled) {
+		const hasToggleKeybinding = keybindingService.lookupKeybinding('editor.action.toggleScreenReaderAccessibilityMode') !== undefined;
+		return nls.localize('editor', 'accessibilityModeOff', hasToggleKeybinding
+			? 'The editor is not accessible at this time. Use the configured accessibility-mode shortcut to enable it.'
+			: 'The editor is not accessible at this time. Enable screen reader optimized mode from the command menu.');
 	}
-	return state.segments.at(-1)!.contentEndOffset;
+	return options.get(EditorOption.ariaLabel);
 }
 
-/** Maps a projected UTF-16 offset back to the nearest model offset. */
-export function modelOffsetAtContentOffset(
-	state: Pick<ISimpleScreenReaderContentState, 'value' | 'segments'>,
-	contentOffset: number,
-	affinity: 'start' | 'end' = 'start',
-): number {
-	if (state.segments.length === 0) return 0;
-	const offset = clampContentOffset(contentOffset, state.value.length);
-	let previous: SimpleScreenReaderContentSegment | undefined;
-	for (const segment of state.segments) {
-		if (previous && offset >= previous.contentEndOffset && offset <= segment.contentStartOffset) {
-			return affinity === 'end' ? segment.modelStartOffset : previous.modelEndOffset;
-		}
-		if (offset >= segment.contentStartOffset && offset <= segment.contentEndOffset) {
-			return segment.modelStartOffset + offset - segment.contentStartOffset;
-		}
-		previous = segment;
-	}
-	return state.segments.at(-1)!.modelEndOffset;
-}
-
-export function newlineCount(value: string): number {
+export function newlinecount(text: string): number {
 	let result = 0;
-	for (const character of value) {
-		if (character === '\n') result += 1;
-	}
+	for (const character of text) if (character === '\n') result += 1;
 	return result;
-}
-
-function pageRange(model: TextModel, page: number, linesPerPage: number): { readonly startOffset: number; readonly endOffset: number } {
-	const startLineIndex = page * linesPerPage;
-	const endLineIndex = Math.min(model.lineCount, startLineIndex + linesPerPage);
-	const startOffset = model.offsetAt(new Position((startLineIndex) + 1, (0) + 1));
-	const endOffset = endLineIndex === model.lineCount
-		? model.length
-		: model.offsetAt(new Position((endLineIndex) + 1, (0) + 1));
-	return { startOffset, endOffset };
-}
-
-function appendBoundedRange(
-	startOffset: number,
-	endOffset: number,
-	trimLongText: boolean,
-	direction: 'first' | 'last',
-	appendRange: (startOffset: number, endOffset: number) => void,
-): void {
-	if (!trimLongText || endOffset - startOffset <= SCREEN_READER_TRIM_LENGTH) {
-		appendRange(startOffset, endOffset);
-		return;
-	}
-	if (direction === 'first') {
-		appendRange(startOffset, startOffset + SCREEN_READER_TRIM_LENGTH);
-		return;
-	}
-	appendRange(endOffset - SCREEN_READER_TRIM_LENGTH, endOffset);
-}
-
-function appendSelectionRanges(
-	ranges: readonly { readonly startOffset: number; readonly endOffset: number }[],
-	trimLongText: boolean,
-	appendRange: (startOffset: number, endOffset: number) => void,
-	appendSeparator: () => void,
-): void {
-	const totalLength = ranges.reduce((total, range) => total + range.endOffset - range.startOffset, 0);
-	if (!trimLongText || totalLength <= SCREEN_READER_TRIM_LENGTH * 2) {
-		for (const [index, range] of ranges.entries()) {
-			if (index > 0) appendSeparator();
-			appendRange(range.startOffset, range.endOffset);
-		}
-		return;
-	}
-	const first = ranges[0]!;
-	const last = ranges.at(-1)!;
-	appendRange(first.startOffset, Math.min(first.endOffset, first.startOffset + SCREEN_READER_TRIM_LENGTH));
-	appendSeparator();
-	appendRange(Math.max(last.startOffset, last.endOffset - SCREEN_READER_TRIM_LENGTH), last.endOffset);
-}
-
-function normalizePageSize(value: number): number {
-	if (!Number.isSafeInteger(value) || value < 1) throw new RangeError('Screen-reader page size must be a positive safe integer');
-	return value;
-}
-
-function clampModelOffset(offset: number, startOffset: number, endOffset: number): number {
-	return Math.min(Math.max(Number.isSafeInteger(offset) ? offset : startOffset, startOffset), endOffset);
-}
-
-function clampContentOffset(offset: number, length: number): number {
-	return Math.min(Math.max(Number.isSafeInteger(offset) ? offset : 0, 0), length);
 }

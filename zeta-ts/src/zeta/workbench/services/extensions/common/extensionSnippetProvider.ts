@@ -1,4 +1,4 @@
-import { parseLanguageCompletionSnippet } from "../../../../editor/contrib/snippet/common/snippetParser.js";
+import { parseLanguageCompletionSnippet } from "../../../../editor/contrib/snippet/common/languageCompletionSnippetParser.js";
 import { LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { Position } from "../../../../editor/common/core/position.js";

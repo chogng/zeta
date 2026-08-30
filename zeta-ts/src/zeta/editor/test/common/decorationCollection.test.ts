@@ -4,7 +4,8 @@ import { TextDecorationChangeReason, TextDecorationCollection } from "../../comm
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
+import { TrackedRangeStickiness } from '../../common/model.js';
+
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (
@@ -27,12 +28,12 @@ test("TextDecorationCollection owns stable IDs and opaque metadata", () => {
 
 	const id = decorations.add({
 		range: range(1, 3),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: { kind: "search" },
 	});
 	decorations.update(id, {
 		range: range(2, 5),
-		stickiness: TrackedRangeStickiness.GrowsAtBothEdges,
+		stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
 		metadata: { kind: "diagnostic" },
 	});
 	const updated = decorations.get(id);
@@ -77,7 +78,7 @@ test("TextDecorationCollection reports tracked range movement", () => {
 	using decorations = new TextDecorationCollection<string>(model);
 	const id = decorations.add({
 		range: range(1, 2),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "match",
 	});
 	const events: unknown[] = [];
@@ -119,7 +120,7 @@ test("TextDecorationCollection exposes tracked ranges before change listeners fi
 	using ownedDecorations = decorations;
 	decorations.add({
 		range: range(1, 2),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "match",
 	});
 
@@ -133,7 +134,7 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 	using decorations = new TextDecorationCollection<string>(model);
 	const originalId = decorations.add({
 		range: range(0, 1),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "original",
 	});
 	let eventCount = 0;
@@ -142,12 +143,12 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 	assert.throws(() => decorations.replaceAll([
 		{
 			range: range(1, 2),
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: "valid",
 		},
 		{
 			range: Range.fromPositions(position(2, 0)),
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: "invalid",
 		},
 	]), /lineIndex/);
@@ -161,12 +162,12 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 	const ids = decorations.replaceAll([
 		{
 			range: range(0, 1),
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: "first",
 		},
 		{
 			range: range(2, 3),
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: "second",
 		},
 	]);
@@ -188,14 +189,14 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 test("TextDecorationCollection applies a delta in one event and retains reusable IDs", () => {
 	using model = new TextModel("abc");
 	using decorations = new TextDecorationCollection<string>(model);
-	const first = decorations.add({ range: range(0, 1), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: "first" });
-	const second = decorations.add({ range: range(1, 2), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: "second" });
+	const first = decorations.add({ range: range(0, 1), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: "first" });
+	const second = decorations.add({ range: range(1, 2), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: "second" });
 	let eventCount = 0;
 	using listener = decorations.onDidChange(() => eventCount += 1);
 
 	const ids = decorations.deltaDecorations([first, second], [{
 		range: range(2, 3),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "updated",
 	}]);
 
@@ -211,12 +212,12 @@ test("Decoration owners remain independent over a shared model", () => {
 	using search = new TextDecorationCollection<string>(model);
 	const diagnosticId = diagnostics.add({
 		range: range(0, 1),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: { severity: 2 },
 	});
 	const searchId = search.add({
 		range: range(2, 3),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "result",
 	});
 
@@ -240,7 +241,7 @@ test("TextDecorationCollection disposal does not own the model", () => {
 	const decorations = new TextDecorationCollection<string>(model);
 	decorations.add({
 		range: range(0, 1),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "owned",
 	});
 	decorations.dispose();

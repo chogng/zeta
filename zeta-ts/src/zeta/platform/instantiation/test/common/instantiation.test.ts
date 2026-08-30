@@ -2,21 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	createServiceIdentifier,
-	InstantiationType,
-	getSingletonServiceDescriptors,
-	registerSingleton,
 	ServiceCollection,
 	ServiceContainer,
-	SyncDescriptor,
+	ServiceConstructionDescriptor,
 	type ServicesAccessor,
 } from "../../../../platform/instantiation/common/instantiation.js";
+import { getSingletonServiceDescriptors, InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
 
 test("instantiation resolves descriptor arguments in contract order", () => {
 	const serviceId = createServiceIdentifier<string>("test.message");
 	const container = new ServiceContainer();
 	container.registerInstance(serviceId, "service");
-	const descriptor = new SyncDescriptor(TestContribution, {
+	const descriptor = new ServiceConstructionDescriptor(TestContribution, {
 		staticArguments: ["static"],
 		serviceDependencies: [serviceId],
 	});
@@ -147,11 +145,12 @@ test("ServiceCollection transfers explicit instances into a container", () => {
 test("global singleton descriptors remain explicit until a container adopts them", () => {
 	const serviceId = createServiceIdentifier<{ readonly created: number }>("test.global-singleton");
 	let created = 0;
-	const descriptor = registerSingleton(serviceId, () => ({ created: ++created }), InstantiationType.Delayed);
-	assert.equal(getSingletonServiceDescriptors().includes(descriptor), true);
+	class RegisteredService { readonly created = ++created; }
+	registerSingleton(serviceId, RegisteredService, InstantiationType.Delayed);
+	assert.equal(getSingletonServiceDescriptors().some(([id]) => id === serviceId), true);
 	using container = new ServiceContainer();
 	assert.equal(container.getOptional(serviceId), undefined);
-	container.registerSingletonDescriptor(descriptor);
+	container.registerSingleton(serviceId, () => new RegisteredService());
 	assert.equal(created, 0);
 	assert.equal(container.get(serviceId).created, 1);
 	assert.equal(container.get(serviceId).created, 1);

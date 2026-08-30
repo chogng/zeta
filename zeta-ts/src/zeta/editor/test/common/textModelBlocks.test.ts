@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../base/common/uri.js";
 import { createDefaultDocumentSchema, DocumentSchema } from "../../common/model/documentSchema.js";
-import { createInsertCitationCommand, createInsertReferenceCommand } from "../../contrib/citation/common/commands.js";
+import { createInsertCitationCommand, createInsertReferenceCommand } from "../../contrib/citation/common/citationCommands.js";
 import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../contrib/citation/common/references.js";
 import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../contrib/academic/common/schema.js";
 import { TextModel } from "../../common/model/textModel.js";

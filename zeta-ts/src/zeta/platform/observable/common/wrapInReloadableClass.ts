@@ -2,7 +2,7 @@ import { isHotReloadEnabled } from '../../../base/common/hotReload.js';
 import { readHotReloadableExport } from '../../../base/common/hotReloadHelpers.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { autorunWithStore } from '../../../base/common/observable.js';
-import { IInstantiationService, type ServiceIdentifier, SyncDescriptor } from '../../instantiation/common/instantiation.js';
+import { IInstantiationService, type ServiceIdentifier, ServiceConstructionDescriptor } from '../../instantiation/common/instantiation.js';
 
 type DisposableConstructor1<TArgument, TServices extends unknown[], TResult extends IDisposable> = new (
 	argument: TArgument,
@@ -21,10 +21,10 @@ type ServiceDependencies<TServices extends unknown[]> = {
 export function wrapInReloadableClass1<TArgument, TServices extends unknown[], TResult extends IDisposable>(
 	getClass: () => DisposableConstructor1<TArgument, TServices, TResult>,
 	...serviceDependenciesArgument: TServices extends [] ? [] : [serviceDependencies: ServiceDependencies<TServices>]
-): SyncDescriptor<IDisposable> {
+): ServiceConstructionDescriptor<IDisposable> {
 	const serviceDependencies = serviceDependenciesArgument[0] ?? [];
 	if (!isHotReloadEnabled()) {
-		return new SyncDescriptor(getClass(), { serviceDependencies });
+		return new ServiceConstructionDescriptor(getClass(), { serviceDependencies });
 	}
 
 	class ReloadableWrapper extends Disposable {
@@ -33,14 +33,14 @@ export function wrapInReloadableClass1<TArgument, TServices extends unknown[], T
 			this._register(autorunWithStore((reader, store) => {
 				const Constructor = readHotReloadableExport(getClass(), reader);
 				store.add(instantiationService.createInstance(
-					new SyncDescriptor(Constructor, { serviceDependencies }),
+					new ServiceConstructionDescriptor(Constructor, { serviceDependencies }),
 					argument,
 				));
 			}));
 		}
 	}
 
-	return new SyncDescriptor(ReloadableWrapper, {
+	return new ServiceConstructionDescriptor(ReloadableWrapper, {
 		serviceDependencies: [IInstantiationService],
 	});
 }

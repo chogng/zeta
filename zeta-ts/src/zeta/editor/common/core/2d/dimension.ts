@@ -1,4 +1,4 @@
 export interface IDimension {
-	readonly width: number;
-	readonly height: number;
+	width: number;
+	height: number;
 }

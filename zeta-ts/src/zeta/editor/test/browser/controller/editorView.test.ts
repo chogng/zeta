@@ -6,7 +6,8 @@ import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { EditorIndentationKind } from "../../../common/core/misc/indentation.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../../common/languages/languageConfiguration.js";
+import { LanguageIndentAction } from "../../../common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
@@ -404,10 +405,10 @@ test("Textarea rejects cross-model wiring without owning either model", () => {
 		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "*", { getLanguageConfiguration: () => { throw new Error("unreachable"); } }),
 	}), /Language ID/);
 	assert.throws(() => new EditorView(viewport, compatibleSelections, {
-		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "typescript", {} as LanguageConfigurationRegistry),
+		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "typescript", {} as OwnedLanguageConfigurationContributions),
 	}), /configuration source/);
 	using lexicalModel = new TextModel("");
-	using lexicalConfigurations = new LanguageConfigurationRegistry();
+	using lexicalConfigurations = new OwnedLanguageConfigurationContributions();
 	using lexicalContext = new LanguageLexicalContextIndex(lexicalModel, "typescript", lexicalConfigurations);
 	assert.throws(() => new EditorView(viewport, compatibleSelections, {
 		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "typescript", { getLanguageConfiguration: () => { throw new Error("unreachable"); } }, lexicalContext),
@@ -428,7 +429,7 @@ test("Textarea applies current language pair configuration through editor comman
 	assert.ok(container);
 	using model = new TextModel("item");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 4)));
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
 		container,
@@ -498,7 +499,7 @@ test("Textarea does not trust matching pairs that it did not auto-close", () => 
 	assert.ok(container);
 	using model = new TextModel("()");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 1)));
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
 		container,
@@ -530,7 +531,7 @@ test("Textarea applies current on-enter rules with editor-owned indentation", ()
 	assert.ok(container);
 	using model = new TextModel("{}");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 1)));
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
 		container,
@@ -578,7 +579,7 @@ test("Textarea Enter ignores structural brackets inside lexical string tokens", 
 	assert.ok(container);
 	using model = new TextModel("const value = \"{\"");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, model.getText().length)));
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
 		container,
@@ -608,7 +609,7 @@ test("Textarea respects auto-closing notIn inside lexical string tokens", () => 
 	assert.ok(container);
 	using model = new TextModel("\"value \"");
 	using selections = new CursorsController(model, SelectionSet.single(caret(0, 7)));
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
 		container,

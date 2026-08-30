@@ -4,9 +4,9 @@ import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
+import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { ColorService, type LanguageColorProvider } from '../../common/color.js';
+import { ColorService, type LanguageColorProvider } from '../../common/languageColors.js';
 import { ColorDetector } from '../../browser/colorDetector.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -69,7 +69,7 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 test('color detector returns the tracked range before its debounced provider refresh', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using model = new TextModel('#f00');
-	using providers = new LanguageFeatureProviderRegistry<LanguageColorProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageColorProvider>();
 	const service = new ColorService(model, providers);
 	using detector = new ColorDetector(model, service, 'css', dom.window as unknown as Window, {
 		enabled: true,

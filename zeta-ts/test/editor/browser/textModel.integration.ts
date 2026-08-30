@@ -2,7 +2,7 @@ import { URI } from "../../../src/zeta/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/zeta/base/common/lifecycle.js";
 import { createBrowserEditorPart } from "../../../src/zeta/workbench/contrib/codeEditor/browser/browserEditorPart.js";
 import { CodeEditorPane } from "../../../src/zeta/workbench/contrib/codeEditor/browser/codeEditorPane.js";
-import { LanguageConfigurationService } from "../../../src/zeta/editor/common/services/languageConfigurationService.js";
+import { LanguageConfigurationService } from "../../../src/zeta/editor/common/languages/languageConfigurationRegistry.js";
 import { LanguageFeaturesService } from "../../../src/zeta/editor/common/services/languageFeaturesService.js";
 import { LanguageService } from "../../../src/zeta/editor/common/services/languageService.js";
 import { Position } from "../../../src/zeta/editor/common/core/position.js";

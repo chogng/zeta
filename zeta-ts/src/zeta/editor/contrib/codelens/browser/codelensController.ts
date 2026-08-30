@@ -1,13 +1,13 @@
-import { registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
 import { StableEditorScrollState } from '../../../browser/stableEditorScroll.js';
 import { TimeoutTimer } from '../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { type LanguageFeatureProviderRegistry } from '../../../common/languageFeatureRegistry.js';
-import { type LanguageCodeLensCommand, type LanguageCodeLensProvider } from '../common/codelens.js';
+import { type OwnedLanguageFeatureProviderRegistry } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
+import { type LanguageCodeLensCommand, type LanguageCodeLensProvider } from '../common/languageCodeLenses.js';
 import { codeLensCache } from './codeLensCache.js';
-import { CodeLensModel, getCodeLensModel, resolveCodeLensItem, type CodeLensItem } from './codelens.js';
+import { LanguageCodeLensModel, getLanguageCodeLensModel, resolveLanguageCodeLensItem, type LanguageCodeLensItem } from './codelens.js';
 import { CodeLensWidget } from './codelensWidget.js';
 
 export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
@@ -21,8 +21,8 @@ export class CodeLensContribution extends Disposable {
 	private readonly cacheExpiry = this._register(new TimeoutTimer());
 	private readonly resolvingWidgets = new Map<CodeLensWidget, AbortController>();
 	private request: AbortController | undefined;
-	private currentModel = CodeLensModel.Empty;
-	private cachedModel: CodeLensModel | undefined;
+	private currentModel = LanguageCodeLensModel.Empty;
+	private cachedModel: LanguageCodeLensModel | undefined;
 	private refreshPromise: Promise<void> | undefined;
 	private resolvePromise: Promise<void> | undefined;
 	private refreshScheduled = false;
@@ -30,7 +30,7 @@ export class CodeLensContribution extends Disposable {
 
 	public constructor(
 		private readonly viewport: EditorViewport,
-		private readonly providers: LanguageFeatureProviderRegistry<LanguageCodeLensProvider>,
+		private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>,
 		private readonly languageId: string,
 		private readonly resource: URI | undefined,
 		private readonly onExecuteCommand: ExecuteCodeLensCommand | undefined,
@@ -46,7 +46,7 @@ export class CodeLensContribution extends Disposable {
 		this._register(viewport.onDidChangeLayout(change => {
 			if (change.layout.modelVersion !== this.modelVersion) {
 				this.modelVersion = change.layout.modelVersion;
-				this.currentModel = CodeLensModel.Empty;
+				this.currentModel = LanguageCodeLensModel.Empty;
 				this.clearWidgets();
 				this.scheduleRefresh();
 				return;
@@ -63,7 +63,7 @@ export class CodeLensContribution extends Disposable {
 		this.refreshPromise = this.refresh();
 	}
 
-	public async getModel(): Promise<CodeLensModel> {
+	public async getModel(): Promise<LanguageCodeLensModel> {
 		await this.refreshPromise;
 		while (this.resolvePromise) await this.resolvePromise;
 		return this.currentModel;
@@ -95,7 +95,7 @@ export class CodeLensContribution extends Disposable {
 			return;
 		}
 		const request = this.request = new AbortController();
-		const model = await getCodeLensModel({
+		const model = await getLanguageCodeLensModel({
 			model: this.viewport.textModel,
 			providers: this.providers,
 			languageId: this.languageId,
@@ -115,7 +115,7 @@ export class CodeLensContribution extends Disposable {
 		const cachedModel = this.resource ? codeLensCache.get(this.resource, this.viewport.textModel.lineCount) : undefined;
 		if (!cachedModel) {
 			this.cachedModel = undefined;
-			this.currentModel = CodeLensModel.Empty;
+			this.currentModel = LanguageCodeLensModel.Empty;
 			this.clearWidgets();
 			return;
 		}
@@ -126,12 +126,12 @@ export class CodeLensContribution extends Disposable {
 			if (this.cachedModel !== cachedModel || this.isDisposed) return;
 			if (this.resource) codeLensCache.delete(this.resource);
 			this.cachedModel = undefined;
-			this.currentModel = CodeLensModel.Empty;
+			this.currentModel = LanguageCodeLensModel.Empty;
 			this.clearWidgets();
 		}, 30_000);
 	}
 
-	private reconcileWidgets(items: readonly CodeLensItem[]): void {
+	private reconcileWidgets(items: readonly LanguageCodeLensItem[]): void {
 		const scrollState = StableEditorScrollState.capture(this.viewport);
 		const groups = groupCodeLensItems(items);
 		const currentWidgets = new Map(this.widgets);
@@ -185,7 +185,7 @@ export class CodeLensContribution extends Disposable {
 		this.resolvingWidgets.set(widget, request);
 		const items = widget.codeLensItems;
 		try {
-			const symbols = await Promise.all(items.map(item => resolveCodeLensItem({
+			const symbols = await Promise.all(items.map(item => resolveLanguageCodeLensItem({
 				model: this.viewport.textModel,
 				languageId: this.languageId,
 				resource: this.resource,
@@ -202,9 +202,9 @@ export class CodeLensContribution extends Disposable {
 		}
 	}
 
-	private replaceResolvedItems(previousItems: readonly CodeLensItem[], resolvedItems: readonly CodeLensItem[]): void {
+	private replaceResolvedItems(previousItems: readonly LanguageCodeLensItem[], resolvedItems: readonly LanguageCodeLensItem[]): void {
 		const replacements = new Map(previousItems.map((item, index) => [item, resolvedItems[index]!] as const));
-		this.currentModel = new CodeLensModel(this.currentModel.lenses.map(item => replacements.get(item) ?? item));
+		this.currentModel = new LanguageCodeLensModel(this.currentModel.lenses.map(item => replacements.get(item) ?? item));
 	}
 
 	private updateCache(): void {
@@ -223,8 +223,8 @@ export class CodeLensContribution extends Disposable {
 	}
 }
 
-function groupCodeLensItems(items: readonly CodeLensItem[]): ReadonlyMap<number, readonly CodeLensItem[]> {
-	const groups = new Map<number, CodeLensItem[]>();
+function groupCodeLensItems(items: readonly LanguageCodeLensItem[]): ReadonlyMap<number, readonly LanguageCodeLensItem[]> {
+	const groups = new Map<number, LanguageCodeLensItem[]>();
 	for (const item of items) {
 		const lineNumber = item.symbol.range.getStartPosition().lineNumber;
 		const group = groups.get(lineNumber);
@@ -234,7 +234,7 @@ function groupCodeLensItems(items: readonly CodeLensItem[]): ReadonlyMap<number,
 	return groups;
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: CodeLensContribution.ID,
 	install: context => {
 		if (context.kind !== 'text' || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;

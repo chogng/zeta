@@ -1,9 +1,10 @@
 import "./media/unusualLineTerminators.css";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
+
 import { type TextModel } from "../../../common/model/textModel.js";
-import { findUnusualLineTerminators } from "../common/unusualLineTerminators.js";
+import { findUnusualLineTerminators } from "../common/unusualLineTerminatorRanges.js";
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 /** Highlights unusual Unicode line separators without changing the canonical LF model. */
 export class UnusualLineTerminatorsController extends Disposable {
@@ -19,6 +20,6 @@ export class UnusualLineTerminatorsController extends Disposable {
 	private update(): void {
 		if (this.lastVersion === this.model.version) return;
 		this.lastVersion = this.model.version;
-		this.decorations.replaceAll(findUnusualLineTerminators(this.model).map(range => ({ range, stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: undefined })));
+		this.decorations.replaceAll(findUnusualLineTerminators(this.model).map(range => ({ range, stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: undefined })));
 	}
 }

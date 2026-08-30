@@ -6,10 +6,11 @@ import { localize } from '../../../../nls.js';
 import { createEditorEditCommand } from '../../../common/commands/editorCommand.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { type EditorViewport } from '../../../browser/view.js';
-import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
-import { ColorService, type ColorData } from '../common/color.js';
+import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { ColorService, type ColorData } from '../common/languageColors.js';
 import { ColorDetector } from './colorDetector.js';
 import { ColorPickerModel } from './colorPickerModel.js';
 import { ColorPickerWidget } from './colorPickerWidget.js';
@@ -180,7 +181,7 @@ export class ColorPickerController extends Disposable {
 		const edits = [
 			presentation.textEdit ?? { range: data.information.range, text: presentation.label },
 			...(presentation.additionalTextEdits ?? []),
-		].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()) || Position.compare(left.range.getEndPosition(), right.range.getEndPosition()));
+		].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()) || Position.compare(Range.lift(left.range).getEndPosition(), Range.lift(right.range).getEndPosition()));
 		try {
 			const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, edits);
 			if (command) this.selections.execute(command);
@@ -225,7 +226,7 @@ function colorSwatch(target: EventTarget | null): HTMLElement | undefined {
 		: undefined;
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.colorPicker',
 	configure: context => {
 		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource, context.onLanguageError);

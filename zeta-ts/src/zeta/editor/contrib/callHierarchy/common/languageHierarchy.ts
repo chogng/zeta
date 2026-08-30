@@ -3,7 +3,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
+import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface LanguageHierarchyItem {
@@ -58,7 +58,7 @@ export interface PreparedTypeHierarchy {
 
 /** Coordinates prepare/follow-up hierarchy requests while preserving provider identity and revision freshness. */
 export class LanguageHierarchyService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly callProviders: LanguageFeatureProviderRegistry<LanguageCallHierarchyProvider>, private readonly typeProviders: LanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>) { super(); }
+	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly callProviders: OwnedLanguageFeatureProviderRegistry<LanguageCallHierarchyProvider>, private readonly typeProviders: OwnedLanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>) { super(); }
 
 	async prepareCallHierarchy(languageId: string, position: Position, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedCallHierarchy[]> {
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, position };

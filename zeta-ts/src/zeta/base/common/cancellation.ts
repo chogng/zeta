@@ -165,15 +165,6 @@ export function throwIfCancelled(cancellation: AbortSignal | CancellationToken, 
 	if (isCancellationRequested(cancellation)) throw new CancellationError(message, cancellationReason(cancellation));
 }
 
-export function raceCancellation<T>(promise: PromiseLike<T>, cancellation: AbortSignal | CancellationToken, message = 'Operation cancelled'): Promise<T> {
-	if (isCancellationRequested(cancellation)) return Promise.reject(new CancellationError(message, cancellationReason(cancellation)));
-	return new Promise<T>((resolve, reject) => {
-		const cancel = (): void => reject(new CancellationError(message, cancellationReason(cancellation)));
-		const disposable = subscribeCancellation(cancellation, cancel);
-		Promise.resolve(promise).then(resolve, reject).finally(() => disposable.dispose());
-	});
-}
-
 function isCancellationRequested(cancellation: AbortSignal | CancellationToken): boolean {
 	return isAbortSignal(cancellation) ? cancellation.aborted : cancellation.isCancellationRequested;
 }

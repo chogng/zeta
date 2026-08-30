@@ -242,7 +242,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/viewLines/domReadingContext.ts",
 		"browser/viewparts/viewLines/rangeUtil.ts",
 		"browser/viewparts/viewLines/viewLineOptions.ts",
-		"contrib/tokenization/common/tokenizationTextModelPart.ts",
+		"contrib/tokenization/common/languageTokenLineIndexPart.ts",
 		"contrib/semanticTokens/common/semanticTokens.ts",
 		"common/model/textBuffer.ts",
 		"common/model/textBufferFactory.ts",

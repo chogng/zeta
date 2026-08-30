@@ -2,7 +2,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type Range } from '../../../common/core/range.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from '../../../common/languageFeatureRegistry.js';
+import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
 export interface LanguageSelectionRangeRequest extends LanguageFeatureRequest {
@@ -16,7 +16,7 @@ export interface LanguageSelectionRangeProvider extends LanguageFeatureProviderM
 
 /** Collects versioned structural selection candidates from registered language providers. */
 export class SelectionRangeService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageSelectionRangeProvider>, private readonly resource?: URI) {
+	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageSelectionRangeProvider>, private readonly resource?: URI) {
 		super();
 	}
 

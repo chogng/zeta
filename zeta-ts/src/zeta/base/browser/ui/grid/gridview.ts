@@ -1,4 +1,4 @@
-import { type IDimension } from "../../geometry.js";
+import { type IDimension } from "../../dom.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { type Sash, type SashPresentation } from "../sash/sash.js";

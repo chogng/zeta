@@ -1,6 +1,6 @@
 import "./media/editorPane.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { type IDimension } from "../../../../base/browser/geometry.js";
+import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -8,7 +8,7 @@ import { assertDefined } from "../../../../base/common/types.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
+import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
 import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
@@ -16,7 +16,7 @@ import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.j
 import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { EditorBrowser, isEditorTextViewState, type EditorBrowserOptions, type EditorTextViewState } from "../../../../editor/browser/editorBrowser.js";
-import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/resolverService.js";
+import { type ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -46,7 +46,7 @@ export interface EditorPanePart extends IDisposable {
 export interface EditorPanePartOptions extends EditorBrowserOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
@@ -54,12 +54,12 @@ export interface EditorPanePartOptions extends EditorBrowserOptions {
 }
 
 export interface EditorPaneOptions {
-	readonly modelService: ITextModelService;
+	readonly modelService: ITextModelResourceService;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly createPart?: (options: EditorPanePartOptions) => EditorPanePart;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
@@ -120,7 +120,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly statusChangeEmitter = this._register(new Emitter<void>());
-	private readonly modelService: ITextModelService;
+	private readonly modelService: ITextModelResourceService;
 	private readonly createPart: (options: EditorPanePartOptions) => EditorPanePart;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };

@@ -2,9 +2,10 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
 import { type LanguageDiagnostic, type LanguageDiagnosticResult } from "../../../common/languages/languageResults.js";
-import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
+
 import { type URI } from "../../../../base/common/uri.js";
 import { type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource } from "../../../common/services/languageDiagnosticsService.js";
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 /**
  * Projects current-version diagnostics into generic text decorations.
@@ -38,7 +39,7 @@ export class LanguageDiagnosticDecorationBridge extends Disposable {
 		const diagnostics = deduplicateDiagnostics([...localDiagnostics, ...externalDiagnostics]);
 		this.decorations.replaceAll(diagnostics.map(diagnostic => ({
 			range: diagnostic.range,
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: diagnostic,
 		})));
 	}

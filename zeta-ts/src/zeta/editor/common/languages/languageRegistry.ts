@@ -4,6 +4,8 @@ import { Disposable, toDisposable, type IDisposable } from "../../../base/common
 import { escapeRegExpCharacters } from "../../../base/common/strings.js";
 import { assertLanguageId } from "./languageId.js";
 import type { TextResourceLanguageInput } from "../../../platform/language/common/textResourceLanguage.js";
+import { type URI } from '../../../base/common/uri.js';
+import { type ILanguageIcon, type ILanguageNameIdPair } from './language.js';
 
 /** Declarative identity and file-association metadata for one editor language. */
 export interface LanguageDescription {
@@ -14,6 +16,8 @@ export interface LanguageDescription {
 	readonly filenamePatterns?: readonly string[];
 	readonly mimetypes?: readonly string[];
 	readonly firstLine?: string;
+	readonly configuration?: URI;
+	readonly icon?: ILanguageIcon;
 }
 
 export interface LanguageRegistrationOptions {
@@ -83,6 +87,34 @@ export class LanguageRegistry extends Disposable {
 		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		return selectDescription(this.descriptions.get(languageId))?.description;
+	}
+
+	getRegisteredLanguageIds(): string[] {
+		this.assertNotDisposed();
+		return [...this.descriptions.keys()];
+	}
+
+	getSortedRegisteredLanguageNames(): ILanguageNameIdPair[] {
+		return this.getRegisteredLanguageIds().flatMap(languageId => {
+			const name = this.getLanguageName(languageId);
+			return name === null ? [] : [{ languageId, languageName: name }];
+		}).sort((left, right) => left.languageName.localeCompare(right.languageName, undefined, { sensitivity: 'base' }));
+	}
+
+	getLanguageName(languageId: string): string | null {
+		const description = this.get(languageId);
+		return description?.aliases?.[0] ?? description?.id ?? null;
+	}
+
+	getLanguageIdByLanguageName(languageName: string): string | null {
+		const normalized = languageName.toLocaleLowerCase();
+		return this.getRegisteredLanguageIds().find(languageId => this.get(languageId)?.aliases?.some(alias => alias.toLocaleLowerCase() === normalized)) ?? null;
+	}
+
+	getLanguageIdByMimeType(mimeType: string | null | undefined): string | null {
+		if (!mimeType) return null;
+		const normalized = mimeType.toLocaleLowerCase();
+		return this.getRegisteredLanguageIds().find(languageId => this.get(languageId)?.mimetypes?.includes(normalized)) ?? null;
 	}
 
 	resolveLanguageId(input: TextResourceLanguageInput): string | undefined {
@@ -161,6 +193,8 @@ function normalizeDescription(description: LanguageDescription): LanguageDescrip
 		filenamePatterns: normalizeTextList(description.filenamePatterns, "language filename patterns", true),
 		mimetypes: normalizeTextList(description.mimetypes, "language MIME types", true),
 		...(description.firstLine === undefined ? {} : { firstLine: normalizeFirstLinePattern(description.firstLine) }),
+		...(description.configuration === undefined ? {} : { configuration: description.configuration }),
+		...(description.icon === undefined ? {} : { icon: Object.freeze({ light: description.icon.light, dark: description.icon.dark }) }),
 	});
 }
 

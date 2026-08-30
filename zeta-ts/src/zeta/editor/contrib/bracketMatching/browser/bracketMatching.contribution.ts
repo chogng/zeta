@@ -1,4 +1,4 @@
-import { registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
@@ -8,7 +8,7 @@ import { BracketEditingController, RemoveBracketsCommandId } from './bracketEdit
 import { BracketMatchController } from './bracketMatchController.js';
 import { BracketNavigationController } from './bracketNavigationController.js';
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.bracketMatching',
 	commands: [{ id: RemoveBracketsCommandId, canTriggerInlineEdits: true }],
 	configure: context => {

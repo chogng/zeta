@@ -1,61 +1,76 @@
-import { h } from '../../../../base/browser/dom.js';
+import { $, getActiveDocument, getActiveWindow } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import './media/decorationCssRuleExtractor.css';
 
 export class DecorationCssRuleExtractor extends Disposable {
-	private readonly container: HTMLDivElement;
-	private readonly dummyElement: HTMLSpanElement;
-	private readonly ruleCache = new Map<string, CSSStyleRule[]>();
-	private readonly cssVariableCache = new Map<string, string>();
-	private readonly ownerDocument: Document;
+	private _container: HTMLElement;
+	private _dummyElement: HTMLSpanElement;
+	private _ruleCache: Map</* className */string, CSSStyleRule[]> = new Map();
+	private _cssVariableCache: Map</* variableName */string, /* value */string> = new Map();
 
-	constructor(host: HTMLElement) {
+	constructor() {
 		super();
-		this.ownerDocument = host.ownerDocument;
-		this.container = h(this.ownerDocument, 'div');
-		this.container.className = 'stanza-decoration-css-rule-extractor';
-		this.dummyElement = h(this.ownerDocument, 'span');
-		this.container.append(this.dummyElement);
-		this._register(toDisposable(() => this.container.remove()));
+		this._container = $('div.monaco-decoration-css-rule-extractor');
+		this._dummyElement = $('span');
+		this._container.appendChild(this._dummyElement);
+		this._register(toDisposable(() => this._container.remove()));
 	}
 
-	public getStyleRules(host: HTMLElement, decorationClassName: string): readonly CSSStyleRule[] {
-		const existing = this.ruleCache.get(decorationClassName);
+	getStyleRules(canvas: HTMLElement, decorationClassName: string): CSSStyleRule[] {
+		const existing = this._ruleCache.get(decorationClassName);
 		if (existing) return existing;
-		this.dummyElement.className = decorationClassName;
-		host.append(this.container);
-		const classNames = decorationClassName.split(' ').filter(Boolean);
-		const rules: CSSStyleRule[] = [];
-		for (const stylesheet of this.ownerDocument.styleSheets) this.collectMatchingRules(stylesheet.cssRules, classNames, rules);
-		this.container.remove();
-		this.ruleCache.set(decorationClassName, rules);
+		this._dummyElement.className = decorationClassName;
+		canvas.appendChild(this._container);
+		const rules = this._getStyleRules(decorationClassName);
+		this._ruleCache.set(decorationClassName, rules);
+		canvas.removeChild(this._container);
 		return rules;
 	}
 
-	public resolveCssVariable(canvas: HTMLCanvasElement, variableName: string): string {
-		const existing = this.cssVariableCache.get(variableName);
-		if (existing !== undefined) return existing;
-		canvas.parentElement?.append(this.container);
-		const value = this.ownerDocument.defaultView?.getComputedStyle(this.container).getPropertyValue(variableName).trim() ?? '';
-		this.container.remove();
-		this.cssVariableCache.set(variableName, value);
-		return value;
-	}
-
-	public clear(): void {
-		this.ruleCache.clear();
-		this.cssVariableCache.clear();
-	}
-
-	private collectMatchingRules(ruleList: CSSRuleList, classNames: readonly string[], result: CSSStyleRule[]): void {
-		for (const rule of ruleList) {
-			if (rule instanceof this.ownerDocument.defaultView!.CSSImportRule && rule.styleSheet) {
-				this.collectMatchingRules(rule.styleSheet.cssRules, classNames, result);
-				continue;
-			}
-			if (!(rule instanceof this.ownerDocument.defaultView!.CSSStyleRule)) continue;
-			if (classNames.some(className => rule.selectorText.includes(`.${className}`))) result.push(rule);
-			if (rule.cssRules?.length) this.collectMatchingRules(rule.cssRules, classNames, result);
+	private _getStyleRules(className: string) {
+		const rules: CSSStyleRule[] = [];
+		const stylesheets = [...getActiveDocument().styleSheets];
+		const classNames = className.split(' ').filter(c => c.length > 0);
+		for (const stylesheet of stylesheets) {
+			this._collectMatchingRules(stylesheet.cssRules, classNames, rules);
 		}
+		return rules;
+	}
+
+	private _collectMatchingRules(cssRules: CSSRuleList, classNames: string[], result: CSSStyleRule[]): void {
+		for (const rule of cssRules) {
+			if (rule instanceof CSSImportRule) {
+				if (rule.styleSheet) this._collectMatchingRules(rule.styleSheet.cssRules, classNames, result);
+			} else if (rule instanceof CSSStyleRule) {
+				for (const className of classNames) {
+					const searchTerm = `.${className}`;
+					const index = rule.selectorText.indexOf(searchTerm);
+					if (index !== -1) {
+						const endOfResult = index + searchTerm.length;
+						if (rule.selectorText.length === endOfResult || rule.selectorText.substring(endOfResult, endOfResult + 1).match(/[ :.]/)) {
+							result.push(rule);
+							break;
+						}
+					}
+				}
+				if (rule.cssRules?.length) this._collectMatchingRules(rule.cssRules, classNames, result);
+			}
+		}
+	}
+
+	resolveCssVariable(canvas: HTMLCanvasElement, variableName: string): string {
+		let result = this._cssVariableCache.get(variableName);
+		if (result === undefined) {
+			canvas.appendChild(this._container);
+			result = getActiveWindow().getComputedStyle(this._container).getPropertyValue(variableName).trim();
+			canvas.removeChild(this._container);
+			this._cssVariableCache.set(variableName, result);
+		}
+		return result;
+	}
+
+	clear(): void {
+		this._ruleCache.clear();
+		this._cssVariableCache.clear();
 	}
 }

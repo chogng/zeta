@@ -1,4 +1,4 @@
-.stanza-editor-margin {
+.glyph-margin {
   position: absolute;
   top: 0;
   left: 0;
@@ -10,7 +10,7 @@
 }
 
 @media (forced-colors: active) {
-  .stanza-editor-margin {
+  .glyph-margin {
     background: Canvas;
   }
 }

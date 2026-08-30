@@ -1,9 +1,31 @@
-import type { JsonSchema } from '../../../base/common/jsonSchema.js';
 import type { IMarkdownString } from '../../../base/common/htmlContent.js';
+import { ScrollbarVisibility } from '../../../base/common/scrollable.js';
 import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
+import type { IConfigurationPropertySchema } from '../../../platform/configuration/common/configurationRegistry.js';
 import { isMacintosh } from '../../../base/common/platform.js';
-import { createDefaultFontInfo, EDITOR_FONT_DEFAULTS, FONT_VARIATION_OFF, FONT_VARIATION_TRANSLATE, type FontInfo } from './fontInfo.js';
+import { EDITOR_FONT_DEFAULTS, FONT_VARIATION_OFF, FONT_VARIATION_TRANSLATE, FontInfo, GOLDEN_LINE_HEIGHT_RATIO, MINIMUM_LINE_HEIGHT } from './fontInfo.js';
+
+function createDefaultFontInfo(): FontInfo {
+	return new FontInfo({
+		pixelRatio: 1,
+		fontFamily: EDITOR_FONT_DEFAULTS.fontFamily,
+		fontWeight: EDITOR_FONT_DEFAULTS.fontWeight,
+		fontSize: EDITOR_FONT_DEFAULTS.fontSize,
+		fontFeatureSettings: 'normal',
+		fontVariationSettings: FONT_VARIATION_OFF,
+		lineHeight: Math.max(MINIMUM_LINE_HEIGHT, Math.round(GOLDEN_LINE_HEIGHT_RATIO * EDITOR_FONT_DEFAULTS.fontSize)),
+		letterSpacing: EDITOR_FONT_DEFAULTS.letterSpacing,
+		isMonospace: true,
+		typicalHalfwidthCharacterWidth: 0,
+		typicalFullwidthCharacterWidth: 0,
+		canUseHalfwidthRightwardsArrow: false,
+		spaceWidth: 0,
+		middotWidth: 0,
+		wsmiddotWidth: 0,
+		maxDigitWidth: 0,
+	}, false);
+}
 
 /** The editor's supported automatic-closing strategies. */
 export type EditorAutoClosingStrategy = 'always' | 'languageDefined' | 'beforeWhitespace' | 'never';
@@ -21,7 +43,7 @@ export enum EditorLineWrapping {
 }
 
 /** Word-wrap values exposed by the VS Code editor option contract. */
-export type EditorWordWrap = 'off' | 'on' | 'wordWrapColumn' | 'bounded';
+type EditorWordWrap = 'off' | 'on' | 'wordWrapColumn' | 'bounded';
 
 /** The levels supported by the editor's automatic indentation controller. */
 export enum EditorAutoIndentStrategy {
@@ -33,7 +55,7 @@ export enum EditorAutoIndentStrategy {
 }
 
 /** User-facing accessibility policy before it is resolved by a host service. */
-export type EditorAccessibilitySupport = 'auto' | 'off' | 'on';
+type EditorAccessibilitySupport = 'auto' | 'off' | 'on';
 
 /** Line-number presentation accepted by the common editor configuration. */
 export type LineNumbersType = 'on' | 'off' | 'relative' | 'interval' | ((lineNumber: number) => string);
@@ -192,12 +214,12 @@ export interface IEditorLayoutComputerInput {
 	readonly glyphMargin: boolean;
 	readonly lineDecorationsWidth: string | number;
 	readonly folding: boolean;
-	readonly minimap: EditorMinimapOptions;
-	readonly scrollbar: EditorScrollbarOptions;
+	readonly minimap: Readonly<Required<IEditorMinimapOptions>>;
+	readonly scrollbar: InternalEditorScrollbarOptions;
 	readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	readonly lineNumbersMinChars: number;
 	readonly scrollBeyondLastLine: boolean;
-	readonly wordWrap: EditorWordWrap;
+	readonly wordWrap: 'wordWrapColumn' | 'on' | 'off' | 'bounded';
 	readonly wordWrapColumn: number;
 	readonly wordWrapMinified: boolean;
 	readonly accessibilitySupport: AccessibilitySupport;
@@ -212,7 +234,7 @@ export interface IMinimapLayoutInput {
 	readonly scrollBeyondLastLine: boolean;
 	readonly paddingTop: number;
 	readonly paddingBottom: number;
-	readonly minimap: EditorMinimapOptions;
+	readonly minimap: Readonly<Required<IEditorMinimapOptions>>;
 	readonly verticalScrollbarWidth: number;
 	readonly viewLineCount: number;
 	readonly remainingWidth: number;
@@ -317,13 +339,13 @@ export interface IEditorScrollbarOptions {
 }
 
 /** Normalized scrollbar options. */
-export type EditorScrollbarOptions = Readonly<Required<IEditorScrollbarOptions>>;
+type EditorScrollbarOptions = InternalEditorScrollbarOptions;
 
 /** Resolved scrollbar options used by layout calculations. */
 export interface InternalEditorScrollbarOptions {
 	readonly arrowSize: number;
-	readonly vertical: 'auto' | 'visible' | 'hidden';
-	readonly horizontal: 'auto' | 'visible' | 'hidden';
+	readonly vertical: ScrollbarVisibility;
+	readonly horizontal: ScrollbarVisibility;
 	readonly useShadows: boolean;
 	readonly verticalHasArrows: boolean;
 	readonly horizontalHasArrows: boolean;
@@ -355,18 +377,15 @@ export interface IBracketPairColorizationOptions {
 }
 
 /** Normalized bracket-pair colorization options. */
-export type BracketPairColorizationOptions = Readonly<Required<IBracketPairColorizationOptions>>;
+type BracketPairColorizationOptions = Readonly<Required<IBracketPairColorizationOptions>>;
 
-export type InternalBracketPairColorizationOptions = BracketPairColorizationOptions;
+export type InternalBracketPairColorizationOptions = Readonly<Required<IBracketPairColorizationOptions>>;
 
 /** A vertical ruler declaration. */
-export interface EditorRulerOption {
+export interface IRulerOption {
 	readonly column: number;
 	readonly color: string | null;
 }
-
-/** VS Code's public name for a ruler entry. */
-export type IRulerOption = EditorRulerOption;
 
 /** Configuration options for editor comments. */
 export interface IEditorCommentsOptions {
@@ -476,7 +495,7 @@ export interface IUnicodeHighlightOptions {
 	readonly allowedLocales?: Record<string | '_os' | '_vscode', true>;
 }
 
-export type InternalUnicodeHighlightOptions = Readonly<Required<IUnicodeHighlightOptions>>;
+export type InternalUnicodeHighlightOptions = Required<Readonly<IUnicodeHighlightOptions>>;
 
 export type InUntrustedWorkspace = 'inUntrustedWorkspace';
 export const inUntrustedWorkspace: InUntrustedWorkspace = 'inUntrustedWorkspace';
@@ -504,18 +523,31 @@ export interface IInlineSuggestOptions {
 	readonly suppressInSnippetMode?: boolean;
 	readonly fontFamily?: string | 'default';
 	readonly edits?: {
-		readonly allowCodeShifting?: 'always' | 'horizontal' | 'never';
-		readonly renderSideBySide?: 'never' | 'auto';
-		readonly showCollapsed?: boolean;
-		readonly showLongDistanceHint?: boolean;
-		readonly longDistanceHintContextLineCount?: number;
-		readonly enabled?: boolean;
+		allowCodeShifting?: 'always' | 'horizontal' | 'never';
+		renderSideBySide?: 'never' | 'auto';
+		showCollapsed?: boolean;
+		showLongDistanceHint?: boolean;
+		/**
+		 * Controls how many lines of surrounding context are shown above and below the target line
+		 * in the long distance inline suggestion hint preview. `0` shows only the target line.
+		 */
+		longDistanceHintContextLineCount?: number;
+		/**
+		* @internal
+		*/
+		enabled?: boolean;
 	};
 	readonly triggerCommandOnProviderChange?: boolean;
 	readonly experimental?: {
-		readonly suppressInlineSuggestions?: string;
-		readonly emptyResponseInformation?: boolean;
-		readonly showOnSuggestConflict?: 'always' | 'never' | 'whenSuggestListIsIncomplete';
+		/**
+		* @internal
+		*/
+		suppressInlineSuggestions?: string;
+		/**
+		* @internal
+		*/
+		emptyResponseInformation?: boolean;
+		showOnSuggestConflict?: 'always' | 'never' | 'whenSuggestListIsIncomplete';
 	};
 }
 
@@ -596,9 +628,6 @@ export interface IPasteAsOptions {
 
 export type EditorPasteAsOptions = Readonly<Required<IPasteAsOptions>>;
 
-/** Minimal markdown payload used by the read-only message option. */
-export type IEditorMarkdownString = IMarkdownString;
-
 /** Raw editor options shared by browser and non-browser consumers. */
 export interface IEditorOptions {
 	readonly inDiffEditor?: boolean;
@@ -609,8 +638,8 @@ export interface IEditorOptions {
 	readonly ariaRequired?: boolean;
 	readonly screenReaderAnnounceInlineSuggestion?: boolean;
 	readonly tabIndex?: number;
-	readonly rulers?: readonly (number | IRulerOption)[];
-	readonly wordSegmenterLocales?: string | readonly string[];
+	readonly rulers?: (number | IRulerOption)[];
+	readonly wordSegmenterLocales?: string | string[];
 	readonly wordSeparators?: string;
 	readonly selectionClipboard?: boolean;
 	readonly cursorSurroundingLines?: number;
@@ -623,7 +652,7 @@ export interface IEditorOptions {
 	readonly revealHorizontalRightPadding?: number;
 	readonly roundedSelection?: boolean;
 	readonly readOnly?: boolean;
-	readonly readOnlyMessage?: IEditorMarkdownString;
+	readonly readOnlyMessage?: IMarkdownString;
 	readonly domReadOnly?: boolean;
 	readonly linkedEditing?: boolean;
 	readonly renameOnType?: boolean;
@@ -652,7 +681,7 @@ export interface IEditorOptions {
 	readonly scrollBeyondLastColumn?: number;
 	readonly smoothScrolling?: boolean;
 	readonly automaticLayout?: boolean;
-	readonly wordWrap?: EditorWordWrap;
+	readonly wordWrap?: 'off' | 'on' | 'wordWrapColumn' | 'bounded';
 	readonly wordWrapOverride1?: 'off' | 'on' | 'inherit';
 	readonly wordWrapOverride2?: 'off' | 'on' | 'inherit';
 	readonly wordWrapColumn?: number;
@@ -680,9 +709,6 @@ export interface IEditorOptions {
 	readonly multiCursorPaste?: 'spread' | 'full';
 	readonly multiCursorLimit?: number;
 	readonly mouseMiddleClickAction?: MouseMiddleClickAction;
-	readonly tabSize?: number;
-	readonly insertSpaces?: boolean;
-	readonly detectIndentation?: boolean;
 	readonly lineNumbers?: LineNumbersType;
 	readonly glyphMargin?: boolean;
 	readonly minimap?: IEditorMinimapOptions;
@@ -690,7 +716,7 @@ export interface IEditorOptions {
 	readonly stickyScroll?: IEditorStickyScrollOptions;
 	readonly find?: IEditorFindOptions;
 	readonly bracketPairColorization?: IBracketPairColorizationOptions;
-	readonly accessibilitySupport?: EditorAccessibilitySupport;
+	readonly accessibilitySupport?: 'auto' | 'off' | 'on';
 	readonly accessibilityPageSize?: number;
 	readonly suggest?: ISuggestOptions;
 	readonly smartSelect?: ISmartSelectOptions;
@@ -749,7 +775,7 @@ export interface IEditorOptions {
 	readonly trimWhitespaceOnDelete?: boolean;
 	readonly showUnused?: boolean;
 	readonly peekWidgetDefaultFocus?: 'tree' | 'editor';
-	readonly placeholder?: string;
+	readonly placeholder?: string | undefined;
 	readonly definitionLinkOpensInPeek?: boolean;
 	readonly showDeprecated?: boolean;
 	readonly matchOnWordStartOnly?: boolean;
@@ -772,13 +798,6 @@ export interface IEditorOptions {
 	readonly codeLens?: boolean;
 	readonly folding?: boolean;
 	readonly inlineSuggest?: IInlineSuggestOptions;
-	/** Legacy Zeta alias retained while callers migrate to `suggest`. */
-	readonly suggestions?: boolean;
-	/** Legacy Workbench settings kept for source compatibility. */
-	readonly formatOnSave?: boolean;
-	readonly insertFinalNewLine?: boolean;
-	/** Legacy boolean switch retained for older Zeta integrations. */
-	readonly unicodeHighlighting?: boolean;
 }
 
 /** Diff-specific options shared by the diff editor and its host. */
@@ -786,7 +805,7 @@ export interface IDiffEditorBaseOptions {
 	readonly enableSplitViewResizing?: boolean;
 	readonly splitViewDefaultRatio?: number;
 	readonly renderSideBySide?: boolean;
-	readonly renderSideBySideInlineBreakpoint?: number;
+	readonly renderSideBySideInlineBreakpoint?: number | undefined;
 	readonly useInlineViewWhenSpaceIsLimited?: boolean;
 	readonly compactMode?: boolean;
 	readonly hideOriginalLineNumbers?: boolean;
@@ -803,17 +822,23 @@ export interface IDiffEditorBaseOptions {
 	readonly diffAlgorithm?: 'legacy' | 'advanced' | 'advanced-external' | 'advanced-wasm';
 	readonly accessibilityVerbose?: boolean;
 	readonly experimental?: {
-		readonly showMoves?: boolean;
-		readonly showEmptyDecorations?: boolean;
-		readonly useTrueInlineView?: boolean;
+		/**
+		 * Defaults to false.
+		 */
+		showMoves?: boolean;
+		showEmptyDecorations?: boolean;
+		/**
+		 * Only applies when `renderSideBySide` is set to false.
+		*/
+		useTrueInlineView?: boolean;
 	};
 	readonly isInEmbeddedEditor?: boolean;
 	readonly onlyShowAccessibleDiffViewer?: boolean;
 	readonly hideUnchangedRegions?: {
-		readonly enabled?: boolean;
-		readonly revealLineCount?: number;
-		readonly minimumLineCount?: number;
-		readonly contextLineCount?: number;
+		enabled?: boolean;
+		revealLineCount?: number;
+		minimumLineCount?: number;
+		contextLineCount?: number;
 	};
 }
 
@@ -1005,20 +1030,15 @@ export enum EditorOption {
 	scrollOnMiddleClick,
 	effectiveAllowVariableFonts,
 	doubleClickSelectsBlock,
-	// Zeta compatibility options (Workbench settings, not upstream EditorOption IDs).
-	tabSize,
-	insertSpaces,
-	detectIndentation,
-	suggestions,
-	formatOnSave,
-	insertFinalNewLine,
 }
 
 /** Stable memory used by computed layout options between recomputations. */
 export class ComputeOptionsMemory {
 	public stableMinimapLayoutInput: IMinimapLayoutInput | null = null;
-	public stableFitMaxMinimapScale = 0;
-	public stableFitRemainingWidth = 0;
+	public stableFitMaxMinimapScale: number = 0;
+	public stableFitRemainingWidth: number = 0;
+
+	constructor() { }
 }
 
 /** Inputs that can affect option computation without importing browser APIs. */
@@ -1059,14 +1079,14 @@ export function filterFontDecorations(options: IComputedEditorOptions): boolean 
 
 /** Describes which option IDs changed during one configuration update. */
 export class ConfigurationChangedEvent {
-	private readonly values: readonly boolean[];
+	private readonly _values: boolean[];
 
-	public constructor(values: readonly boolean[]) {
-		this.values = Object.freeze([...values]);
+	public constructor(values: boolean[]) {
+		this._values = values;
 	}
 
 	public hasChanged(id: EditorOption): boolean {
-		return this.values[id] ?? false;
+		return this._values[id] ?? false;
 	}
 }
 
@@ -1079,20 +1099,20 @@ export class ApplyUpdateResult<T> {
 }
 
 /** An option descriptor kept in the common registry. */
-export type EditorOptionSchema = JsonSchema | Readonly<Record<string, JsonSchema>>;
+type EditorOptionSchema = IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema };
 
 export interface IEditorOption<K extends EditorOption, V> {
 	readonly id: K;
 	readonly name: string;
 	readonly defaultValue: V;
-	readonly schema: EditorOptionSchema | undefined;
+	readonly schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema } | undefined;
 	validate(input: unknown): V;
 	compute(environment: IEnvironmentalOptions, options: IComputedEditorOptions, value: V): V;
 	applyUpdate(value: V | undefined, update: V): ApplyUpdateResult<V>;
 }
 
 /** Maps option IDs to their normalized values. */
-export interface EditorOptionValueMap {
+interface EditorOptionValueMap {
 	/** Unsupported computed options remain type-safe at the boundary as unknown. */
 	[id: number]: unknown;
 	[EditorOption.acceptSuggestionOnCommitCharacter]: boolean;
@@ -1163,13 +1183,10 @@ export interface EditorOptionValueMap {
 	[EditorOption.letterSpacing]: number;
 	[EditorOption.lineDecorationsWidth]: number;
 	[EditorOption.wordWrap]: EditorWordWrap;
-	[EditorOption.tabSize]: number;
-	[EditorOption.insertSpaces]: boolean;
-	[EditorOption.detectIndentation]: boolean;
 	[EditorOption.lineNumbers]: InternalEditorRenderLineNumbersOptions;
 	[EditorOption.lineNumbersMinChars]: number;
 	[EditorOption.glyphMargin]: boolean;
-	[EditorOption.rulers]: readonly EditorRulerOption[];
+	[EditorOption.rulers]: readonly IRulerOption[];
 	[EditorOption.minimap]: EditorMinimapOptions;
 	[EditorOption.scrollbar]: InternalEditorScrollbarOptions;
 	[EditorOption.stickyScroll]: EditorStickyScrollOptions;
@@ -1203,7 +1220,7 @@ export interface EditorOptionValueMap {
 	[EditorOption.placeholder]: string | undefined;
 	[EditorOption.quickSuggestionsDelay]: number;
 	[EditorOption.quickSuggestions]: InternalQuickSuggestionsOptions;
-	[EditorOption.readOnlyMessage]: IEditorMarkdownString | undefined;
+	[EditorOption.readOnlyMessage]: IMarkdownString | undefined;
 	[EditorOption.renameOnType]: boolean;
 	[EditorOption.renderControlCharacters]: boolean;
 	[EditorOption.renderFinalNewline]: 'off' | 'on' | 'dimmed';
@@ -1232,12 +1249,9 @@ export interface EditorOptionValueMap {
 	[EditorOption.smartSelect]: SmartSelectOptions;
 	[EditorOption.unicodeHighlighting]: InternalUnicodeHighlightOptions;
 	[EditorOption.links]: boolean;
-	[EditorOption.suggestions]: boolean;
 	[EditorOption.inlineSuggest]: InternalInlineSuggestOptions;
 	[EditorOption.parameterHints]: InternalParameterHintOptions;
 	[EditorOption.inlayHints]: EditorInlayHintsOptions;
-	[EditorOption.formatOnSave]: boolean;
-	[EditorOption.insertFinalNewLine]: boolean;
 	[EditorOption.useShadowDOM]: boolean;
 	[EditorOption.useTabStops]: boolean;
 	[EditorOption.wordBreak]: 'normal' | 'keepAll';
@@ -1262,11 +1276,10 @@ export interface EditorOptionValueMap {
 	[EditorOption.defaultColorDecorators]: 'auto' | 'always' | 'never';
 }
 
-/** Finds the normalized value type associated with an option ID. */
-export type FindComputedEditorOptionValueById<T extends EditorOption> = EditorOptionValueMap[T];
-
-/** A validated option lookup used by font construction helpers. */
-export interface IValidatedEditorOptions extends IComputedEditorOptions {}
+type EditorOptionsType = { [K in EditorOption]: IEditorOption<K, EditorOptionValueMap[K]> };
+type FindEditorOptionsKeyById<T extends EditorOption> = T;
+type ComputedEditorOptionValue<T extends IEditorOption<any, any>> = T extends IEditorOption<any, infer R> ? R : never;
+export type FindComputedEditorOptionValueById<T extends EditorOption> = NonNullable<ComputedEditorOptionValue<EditorOptionsType[FindEditorOptionsKeyById<T>]>>;
 
 /** Registry containing the descriptors in numeric option-ID order. */
 export const editorOptionsRegistry: IEditorOption<EditorOption, unknown>[] = [];
@@ -1327,13 +1340,13 @@ export class EditorLayoutInfoComputer extends EditorOptionDefinition<EditorOptio
 	}
 
 	public static computeContainedMinimapLineCount(input: {
-		readonly viewLineCount: number;
-		readonly scrollBeyondLastLine: boolean;
-		readonly paddingTop: number;
-		readonly paddingBottom: number;
-		readonly height: number;
-		readonly lineHeight: number;
-		readonly pixelRatio: number;
+		viewLineCount: number;
+		scrollBeyondLastLine: boolean;
+		paddingTop: number;
+		paddingBottom: number;
+		height: number;
+		lineHeight: number;
+		pixelRatio: number;
 	}): { typicalViewportLineCount: number; extraLinesBeforeFirstLine: number; extraLinesBeyondLastLine: number; desiredRatio: number; minimapLineCount: number } {
 		const height = Math.max(1, input.height);
 		const lineHeight = Math.max(1, input.lineHeight);
@@ -1347,7 +1360,7 @@ export class EditorLayoutInfoComputer extends EditorOptionDefinition<EditorOptio
 		return { typicalViewportLineCount, extraLinesBeforeFirstLine, extraLinesBeyondLastLine, desiredRatio, minimapLineCount };
 	}
 
-	public static computeMinimapLayout(input: IMinimapLayoutInput, memory: ComputeOptionsMemory): EditorMinimapLayoutInfo {
+	public static _computeMinimapLayout(input: IMinimapLayoutInput, memory: ComputeOptionsMemory): EditorMinimapLayoutInfo {
 		const outerWidth = Math.max(0, input.outerWidth);
 		const outerHeight = Math.max(0, input.outerHeight);
 		const pixelRatio = Math.max(1, input.pixelRatio);
@@ -1523,7 +1536,7 @@ export class EditorLayoutInfoComputer extends EditorOptionDefinition<EditorOptio
 			wrappingColumn = wordWrapColumn;
 		}
 
-		const minimapLayout = EditorLayoutInfoComputer.computeMinimapLayout({
+		const minimapLayout = EditorLayoutInfoComputer._computeMinimapLayout({
 			outerWidth,
 			outerHeight,
 			lineHeight,
@@ -1632,6 +1645,10 @@ export class EditorFontLigatures extends EditorOptionDefinition<EditorOption.fon
 	public constructor() {
 		super(EditorOption.fontLigatures, 'fontLigatures', EditorFontLigatures.OFF, validateFontLigatures);
 	}
+
+	public override validate(input: unknown): string {
+		return validateFontLigatures(input);
+	}
 }
 
 export class EditorFontVariations extends EditorOptionDefinition<EditorOption.fontVariations, string> {
@@ -1640,6 +1657,14 @@ export class EditorFontVariations extends EditorOptionDefinition<EditorOption.fo
 
 	public constructor() {
 		super(EditorOption.fontVariations, 'fontVariations', EditorFontVariations.OFF, validateFontVariations);
+	}
+
+	public override validate(input: unknown): string {
+		return validateFontVariations(input);
+	}
+
+	public override compute(environment: IEnvironmentalOptions, options: IComputedEditorOptions, value: string): string {
+		return super.compute(environment, options, value);
 	}
 }
 
@@ -1673,13 +1698,10 @@ const editorOptions = {
 	lineHeight: register(new EditorOptionDefinition(EditorOption.lineHeight, 'lineHeight', EDITOR_FONT_DEFAULTS.lineHeight, input => boundedNumber(input, EDITOR_FONT_DEFAULTS.lineHeight, 0, 150), undefined, (environment, _options, _value) => environment.fontInfo.lineHeight)),
 	letterSpacing: register(new EditorOptionDefinition(EditorOption.letterSpacing, 'letterSpacing', EDITOR_FONT_DEFAULTS.letterSpacing, input => boundedNumber(input, EDITOR_FONT_DEFAULTS.letterSpacing, -5, 20))),
 	wordWrap: register(new EditorOptionDefinition(EditorOption.wordWrap, 'wordWrap', 'off' as EditorWordWrap, input => enumValue(input, 'off' as EditorWordWrap, ['off', 'on', 'wordWrapColumn', 'bounded'] as const))),
-	tabSize: register(new EditorOptionDefinition(EditorOption.tabSize, 'tabSize', EDITOR_MODEL_DEFAULTS.tabSize, input => boundedInteger(input, EDITOR_MODEL_DEFAULTS.tabSize, 1, 32))),
-	insertSpaces: register(new EditorOptionDefinition(EditorOption.insertSpaces, 'insertSpaces', EDITOR_MODEL_DEFAULTS.insertSpaces, input => booleanValue(input, EDITOR_MODEL_DEFAULTS.insertSpaces))),
-	detectIndentation: register(new EditorOptionDefinition(EditorOption.detectIndentation, 'detectIndentation', EDITOR_MODEL_DEFAULTS.detectIndentation, input => booleanValue(input, EDITOR_MODEL_DEFAULTS.detectIndentation))),
 	lineNumbers: register(new EditorOptionDefinition(EditorOption.lineNumbers, 'lineNumbers', defaultLineNumbers(), validateLineNumbers)),
 	glyphMargin: register(new EditorOptionDefinition(EditorOption.glyphMargin, 'glyphMargin', true, input => booleanValue(input, true))),
 	lineDecorationsWidth: register(new EditorOptionDefinition(EditorOption.lineDecorationsWidth, 'lineDecorationsWidth', 10, validateLineDecorationsWidth, undefined, (environment, _options, value) => value < 0 ? boundedInteger(-value * environment.fontInfo.typicalHalfwidthCharacterWidth, 10, 0, 1000) : value)),
-	rulers: register(new EditorOptionDefinition(EditorOption.rulers, 'rulers', Object.freeze([]) as readonly EditorRulerOption[], validateRulers)),
+	rulers: register(new EditorOptionDefinition(EditorOption.rulers, 'rulers', Object.freeze([]) as readonly IRulerOption[], validateRulers)),
 	minimap: register(new EditorOptionDefinition(EditorOption.minimap, 'minimap', defaultMinimapOptions(), validateMinimapOptions)),
 	scrollbar: register(new EditorOptionDefinition(EditorOption.scrollbar, 'scrollbar', defaultScrollbarOptions(), validateScrollbarOptions)),
 	stickyScroll: register(new EditorOptionDefinition(EditorOption.stickyScroll, 'stickyScroll', defaultStickyScrollOptions(), validateStickyScrollOptions)),
@@ -1727,15 +1749,12 @@ const editorOptions = {
 	codeLens: register(new EditorOptionDefinition(EditorOption.codeLens, 'codeLens', true, input => booleanValue(input, true))),
 	folding: register(new EditorOptionDefinition(EditorOption.folding, 'folding', true, input => booleanValue(input, true))),
 	links: register(new EditorOptionDefinition(EditorOption.links, 'links', true, input => booleanValue(input, true))),
-	suggestions: register(new EditorOptionDefinition(EditorOption.suggestions, 'suggestions', true, input => booleanValue(input, true))),
 	inlineSuggest: register(new EditorOptionDefinition(EditorOption.inlineSuggest, 'inlineSuggest', defaultInlineSuggestOptions(), validateInlineSuggestOptions)),
 	parameterHints: register(new EditorOptionDefinition(EditorOption.parameterHints, 'parameterHints', defaultParameterHintOptions(), validateParameterHintOptions)),
 	inlayHints: register(new EditorOptionDefinition(EditorOption.inlayHints, 'inlayHints', defaultInlayHintsOptions(), validateInlayHintsOptions)),
 	unicodeHighlighting: register(new EditorOptionDefinition(EditorOption.unicodeHighlighting, 'unicodeHighlight', defaultUnicodeHighlightOptions(), validateUnicodeHighlightOptions)),
 	effectiveEditContext: register(new EditorOptionDefinition(EditorOption.effectiveEditContext, 'effectiveEditContext', false, input => booleanValue(input, false), undefined, (environment, options) => environment.editContextSupported && options.get(EditorOption.editContext))),
 	effectiveAllowVariableFonts: register(new EditorOptionDefinition(EditorOption.effectiveAllowVariableFonts, 'effectiveAllowVariableFonts', false, input => booleanValue(input, false), undefined, (environment, options) => environment.accessibilitySupport === AccessibilitySupport.Enabled ? options.get(EditorOption.allowVariableFontsInAccessibilityMode) : options.get(EditorOption.allowVariableFonts))),
-	formatOnSave: register(new EditorOptionDefinition(EditorOption.formatOnSave, 'formatOnSave', false, input => booleanValue(input, false))),
-	insertFinalNewLine: register(new EditorOptionDefinition(EditorOption.insertFinalNewLine, 'insertFinalNewLine', false, input => booleanValue(input, false))),
 };
 
 type EditorOptionsCollection = Record<string, IEditorOption<EditorOption, unknown>> & {
@@ -1918,7 +1937,7 @@ const objectCompatibilityDefaults: Readonly<Record<string, unknown>> = {
 	inlayHints: Object.freeze({ enabled: 'on', fontSize: 0, fontFamily: '', padding: false, maximumLength: 43 }),
 	parameterHints: Object.freeze({ enabled: true, cycle: true }),
 	minimap: Object.freeze({ enabled: true, autohide: 'none', side: 'right', size: 'proportional', renderCharacters: true, showSlider: 'mouseover', maxColumn: 120, scale: 1, showRegionSectionHeaders: true, showMarkSectionHeaders: true, markSectionHeaderRegex: '', sectionHeaderFontSize: 9, sectionHeaderLetterSpacing: 1 }),
-	scrollbar: Object.freeze({ arrowSize: 11, vertical: 'auto', horizontal: 'auto', useShadows: true, verticalHasArrows: false, horizontalHasArrows: false, handleMouseWheel: true, alwaysConsumeMouseWheel: true, horizontalScrollbarSize: 12, horizontalSliderSize: 12, verticalScrollbarSize: 14, verticalSliderSize: 14, scrollByPage: false, ignoreHorizontalScrollbarInContentHeight: false }),
+	scrollbar: Object.freeze({ arrowSize: 11, vertical: ScrollbarVisibility.Auto, horizontal: ScrollbarVisibility.Auto, useShadows: true, verticalHasArrows: false, horizontalHasArrows: false, handleMouseWheel: true, alwaysConsumeMouseWheel: true, horizontalScrollbarSize: 12, horizontalSliderSize: 12, verticalScrollbarSize: 14, verticalSliderSize: 14, scrollByPage: false, ignoreHorizontalScrollbarInContentHeight: false }),
 	stickyScroll: Object.freeze({ enabled: true, maxLineCount: 5, defaultModel: 'outlineModel', scrollWithEditor: true }),
 	dropIntoEditor: Object.freeze({ enabled: true, showDropSelector: 'afterDrop' }),
 };
@@ -1979,7 +1998,7 @@ function computeEditorClassName(environment: IEnvironmentalOptions, options: ICo
 function addCompatibilityOption(
 	name: string,
 	defaultValue: unknown,
-	schema?: JsonSchema,
+	schema?: IConfigurationPropertySchema,
 	validator: ((input: unknown) => unknown) | undefined = undefined,
 ): void {
 	const id = optionId(name);
@@ -2058,7 +2077,7 @@ function enumValue<T extends string>(input: unknown, defaultValue: T, values: re
 }
 
 /** Returns an allowed string value, optionally translating renamed values. */
-export function stringSet<T extends string>(value: unknown, defaultValue: T, allowedValues: readonly T[], renamedValues?: Readonly<Record<string, T>>): T {
+export function stringSet<T extends string>(value: unknown, defaultValue: T, allowedValues: ReadonlyArray<T>, renamedValues?: Record<string, T>): T {
 	if (typeof value !== 'string') return defaultValue;
 	const renamed = renamedValues?.[value];
 	if (renamed !== undefined) return renamed;
@@ -2206,8 +2225,8 @@ function validateScrollbarOptions(input: unknown): EditorScrollbarOptions {
 	const options = isRecord(input) ? input : {};
 	return Object.freeze({
 		arrowSize: boundedInteger(options.arrowSize, 11, 0, 1000),
-		vertical: enumValue(options.vertical, 'auto' as const, ['auto', 'visible', 'hidden'] as const),
-		horizontal: enumValue(options.horizontal, 'auto' as const, ['auto', 'visible', 'hidden'] as const),
+		vertical: scrollbarVisibility(options.vertical),
+		horizontal: scrollbarVisibility(options.horizontal),
 		useShadows: boolean(options.useShadows, true),
 		verticalHasArrows: boolean(options.verticalHasArrows, false),
 		horizontalHasArrows: boolean(options.horizontalHasArrows, false),
@@ -2220,6 +2239,14 @@ function validateScrollbarOptions(input: unknown): EditorScrollbarOptions {
 		ignoreHorizontalScrollbarInContentHeight: boolean(options.ignoreHorizontalScrollbarInContentHeight, false),
 		alwaysConsumeMouseWheel: boolean(options.alwaysConsumeMouseWheel, true),
 	});
+}
+
+function scrollbarVisibility(value: unknown): ScrollbarVisibility {
+	switch (value) {
+		case 'hidden': return ScrollbarVisibility.Hidden;
+		case 'visible': return ScrollbarVisibility.Visible;
+		default: return ScrollbarVisibility.Auto;
+	}
 }
 
 function validateStickyScrollOptions(input: unknown): EditorStickyScrollOptions {
@@ -2240,9 +2267,9 @@ function validateBracketPairColorizationOptions(input: unknown): BracketPairColo
 	});
 }
 
-function validateRulers(input: unknown): readonly EditorRulerOption[] {
+function validateRulers(input: unknown): readonly IRulerOption[] {
 	if (!Array.isArray(input)) return Object.freeze([]);
-	const rulers: EditorRulerOption[] = [];
+	const rulers: IRulerOption[] = [];
 	for (const value of input) {
 		if (typeof value === 'number') {
 			rulers.push(Object.freeze({ column: clampedInt(value, 0, 0, 10_000) as number, color: null }));

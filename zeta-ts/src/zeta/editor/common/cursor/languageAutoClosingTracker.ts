@@ -5,7 +5,8 @@ import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from ".
 import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../model/trackedRange.js";
+import { type TrackedRange } from "../model/trackedRange.js";
+import { TrackedRangeStickiness } from '../model.js';
 
 interface AutoClosingEntry {
 	readonly open: string;
@@ -83,12 +84,12 @@ export class LanguageAutoClosingTracker extends Disposable implements LanguageAu
 	private createEntry(action: LanguageAutoClosingAction): AutoClosingEntry {
 		const enclosingRange = this.model.trackRange(
 			Range.fromPositions(this.model.positionAt(action.enclosingStartOffset), this.model.positionAt(action.closeEndOffset)),
-			TrackedRangeStickiness.NeverGrowsAtEdges,
+			TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		);
 		try {
 			const closeRange = this.model.trackRange(
 				Range.fromPositions(this.model.positionAt(action.closeStartOffset), this.model.positionAt(action.closeEndOffset)),
-				TrackedRangeStickiness.NeverGrowsAtEdges,
+				TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			);
 			return { open: action.open, close: action.close, enclosingRange, closeRange };
 		} catch (error) {

@@ -7,6 +7,7 @@ test('ViewLineOptions snapshots the configuration shared by line renderers', () 
 		textDirection: ViewLineTextDirection.RightToLeft,
 		fontLigatures: true,
 		useGpu: true,
+		useMonospaceOptimizations: false,
 		lineHeight: 22,
 		tabSize: 4,
 	});
@@ -31,13 +32,14 @@ test('ViewLineOptions rejects invalid renderer configuration', () => {
 		textDirection: 'diagonal' as ViewLineTextDirection,
 		fontLigatures: false,
 		useGpu: false,
+		useMonospaceOptimizations: false,
 		lineHeight: 20,
 		tabSize: 4,
 	}), /text direction/);
 });
 
 test('ViewLineOptions compares every renderer-owned field', () => {
-	const options = new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, lineHeight: 20, tabSize: 4 });
-	assert.equal(options.equals(new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, lineHeight: 20, tabSize: 4 })), true);
-	assert.equal(options.equals(new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, lineHeight: 20, tabSize: 2 })), false);
+	const options = new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 4 });
+	assert.equal(options.equals(new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 4 })), true);
+	assert.equal(options.equals(new ViewLineOptions({ textDirection: ViewLineTextDirection.Auto, fontLigatures: false, useGpu: false, useMonospaceOptimizations: false, lineHeight: 20, tabSize: 2 })), false);
 });

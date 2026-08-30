@@ -1,46 +1,99 @@
-import { type Range } from '../../core/range.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
 
-export interface InplaceReplaceResult {
-	readonly range: Range;
-	readonly value: string;
-}
+import { IRange } from '../../core/range.js';
+import { IInplaceReplaceSupportResult } from '../../languages.js';
 
-/** Cycles numeric and well-known textual values at one selection or word range. */
 export class BasicInplaceReplace {
-	public static readonly instance = new BasicInplaceReplace();
 
-	public navigateValueSet(selectionRange: Range, selectionText: string, wordRange: Range | undefined, word: string | undefined, up: boolean): InplaceReplaceResult | undefined {
-		const selectionValue = this.navigateValue(selectionText, up);
-		if (selectionValue !== undefined) return Object.freeze({ range: selectionRange, value: selectionValue });
-		if (!wordRange || word === undefined) return undefined;
-		const wordValue = this.navigateValue(word, up);
-		return wordValue === undefined ? undefined : Object.freeze({ range: wordRange, value: wordValue });
-	}
+	public static readonly INSTANCE = new BasicInplaceReplace();
 
-	private navigateValue(value: string, up: boolean): string | undefined {
-		const numeric = this.navigateNumber(value, up);
-		if (numeric !== undefined) return numeric;
-		for (const values of VALUE_SETS) {
-			const index = values.indexOf(value);
-			if (index < 0) continue;
-			return values[(index + (up ? 1 : -1) + values.length) % values.length];
+	public navigateValueSet(range1: IRange, text1: string, range2: IRange, text2: string | null, up: boolean): IInplaceReplaceSupportResult | null {
+
+		if (range1 && text1) {
+			const result = this.doNavigateValueSet(text1, up);
+			if (result) {
+				return {
+					range: range1,
+					value: result
+				};
+			}
 		}
-		return undefined;
+
+		if (range2 && text2) {
+			const result = this.doNavigateValueSet(text2, up);
+			if (result) {
+				return {
+					range: range2,
+					value: result
+				};
+			}
+		}
+
+		return null;
 	}
 
-	private navigateNumber(value: string, up: boolean): string | undefined {
-		const number = Number(value);
-		if (!Number.isFinite(number) || number !== Number.parseFloat(value)) return undefined;
-		if (number === 0 && !up) return undefined;
-		const decimalIndex = value.lastIndexOf('.');
-		const precision = 10 ** (decimalIndex < 0 ? 0 : value.length - decimalIndex - 1);
-		return String((Math.floor(number * precision) + (up ? precision : -precision)) / precision);
+	private doNavigateValueSet(text: string, up: boolean): string | null {
+		const numberResult = this.numberReplace(text, up);
+		if (numberResult !== null) {
+			return numberResult;
+		}
+		return this.textReplace(text, up);
+	}
+
+	private numberReplace(value: string, up: boolean): string | null {
+		const precision = Math.pow(10, value.length - (value.lastIndexOf('.') + 1));
+		let n1 = Number(value);
+		const n2 = parseFloat(value);
+
+		if (!isNaN(n1) && !isNaN(n2) && n1 === n2) {
+
+			if (n1 === 0 && !up) {
+				return null; // don't do negative
+				//			} else if(n1 === 9 && up) {
+				//				return null; // don't insert 10 into a number
+			} else {
+				n1 = Math.floor(n1 * precision);
+				n1 += up ? precision : -precision;
+				return String(n1 / precision);
+			}
+		}
+
+		return null;
+	}
+
+	private readonly _defaultValueSet: string[][] = [
+		['true', 'false'],
+		['True', 'False'],
+		['Private', 'Public', 'Friend', 'ReadOnly', 'Partial', 'Protected', 'WriteOnly'],
+		['public', 'protected', 'private'],
+	];
+
+	private textReplace(value: string, up: boolean): string | null {
+		return this.valueSetsReplace(this._defaultValueSet, value, up);
+	}
+
+	private valueSetsReplace(valueSets: string[][], value: string, up: boolean): string | null {
+		let result: string | null = null;
+		for (let i = 0, len = valueSets.length; result === null && i < len; i++) {
+			result = this.valueSetReplace(valueSets[i], value, up);
+		}
+		return result;
+	}
+
+	private valueSetReplace(valueSet: string[], value: string, up: boolean): string | null {
+		let idx = valueSet.indexOf(value);
+		if (idx >= 0) {
+			idx += up ? +1 : -1;
+			if (idx < 0) {
+				idx = valueSet.length - 1;
+			} else {
+				idx %= valueSet.length;
+			}
+			return valueSet[idx];
+		}
+		return null;
 	}
 }
-
-const VALUE_SETS: readonly (readonly string[])[] = Object.freeze([
-	Object.freeze(['true', 'false']),
-	Object.freeze(['True', 'False']),
-	Object.freeze(['Private', 'Public', 'Friend', 'ReadOnly', 'Partial', 'Protected', 'WriteOnly']),
-	Object.freeze(['public', 'protected', 'private']),
-]);

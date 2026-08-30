@@ -1,5 +1,5 @@
 import { getWindow } from "../../../base/browser/dom.js";
-import { Dimension, getClientArea, type IDimension } from "../../../base/browser/geometry.js";
+import { Dimension, getClientArea, type IDimension } from "../../../base/browser/dom.js";
 import { observeElementSize } from "../../../base/browser/observer.js";
 import type { BrowserWindow } from "../../../base/browser/window.js";
 import { type Event, Emitter } from "../../../base/common/event.js";

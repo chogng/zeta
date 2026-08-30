@@ -7,8 +7,8 @@ import type { AppServerConnectionState } from "../../../../../platform/app-serve
 import type { ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, ExtensionHostOutputEvent, ExtensionHostReconcileMode, IExtensionHostApi, JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { Position } from "../../../../../editor/common/core/position.js";
-import { HoverService } from "../../../../../editor/contrib/hover/common/hover.js";
-import { ParameterHintsService } from "../../../../../editor/contrib/parameterHints/common/parameterHints.js";
+import { LanguageHoverService } from "../../../../../editor/contrib/hover/common/hover.js";
+import { ParameterHintsService } from "../../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import type { ITaskService, TaskProvider, TaskProviderRegistration } from "../../../tasks/common/taskService.js";
 import type { ITestingService, TestProfileProvider, TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
@@ -81,7 +81,7 @@ test("projects supported language operations while diagnosing unsupported operat
 	await service.start();
 
 	using model = new TextModel("answer");
-	using hover = new HoverService(model, languages.hoverProvider);
+	using hover = new LanguageHoverService(model, languages.hoverProvider);
 	using parameterHints = new ParameterHintsService(model, languages.parameterHintsProvider);
 	assert.deepEqual(await hover.provideHover("typescript", new Position((0) + 1, (1) + 1)), { contents: ["Host hover"] });
 	assert.deepEqual(await parameterHints.provideParameterHints("typescript", new Position((0) + 1, (1) + 1)), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });

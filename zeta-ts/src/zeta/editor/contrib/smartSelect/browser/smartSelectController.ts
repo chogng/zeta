@@ -1,14 +1,15 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
+import { CursorChangeReason } from "../../../common/cursorEvents.js";
 import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type Range } from "../../../common/core/range.js";
 import { type TextSnapshot } from "../../../common/core/textChange.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
-import { expandSmartSelection } from "../common/smartSelect.js";
+import { expandSmartSelection } from "../common/smartSelectionExpansion.js";
 import { SelectionRangeService } from "../common/selectionRanges.js";
 
 /** Routes the editor smart-select shortcut into the DOM-free range expansion policy. */
@@ -21,7 +22,7 @@ export class SmartSelectController extends Disposable {
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
 		this._register(selections.onDidChange(change => {
-			if (change.reason !== "explicit" && change.reason !== "cursorOperation") this.history.length = 0;
+			if (change.reason !== CursorChangeReason.Explicit) this.history.length = 0;
 		}));
 		this._register(toDisposable(() => this.request?.abort()));
 	}
@@ -73,7 +74,7 @@ export class SmartSelectController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.smartSelect",
 	install: context => {
 		if (context.kind !== "text") return;

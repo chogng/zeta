@@ -4,8 +4,8 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
-import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
-import { HoverService } from '../../contrib/hover/common/hover.js';
+import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
+import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -47,7 +47,7 @@ const stanza = await import("../../editor.main.js");
 test.after(() => browserEnvironment.window.close());
 
 test("standalone service collection honors explicit first-scope overrides", () => {
-	const languageConfigurations = new LanguageConfigurationService();
+	const languageConfigurations = new ComposableLanguageConfigurationService();
 	const languages = new LanguageFeaturesService(languageConfigurations);
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
@@ -61,7 +61,7 @@ test("standalone service collection honors explicit first-scope overrides", () =
 test("standalone theme APIs register, select, and project a named theme", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	stanza.editor.defineTheme("standalone-test", {
+	stanza.editor.defineNamedTheme("standalone-test", {
 		label: "Standalone Test",
 		colorScheme: stanza.ColorScheme.Dark,
 		colors: { "editor.background": "#101010" },
@@ -132,9 +132,9 @@ test('standalone languages API replaces provider batches atomically', () => {
 });
 
 test("standalone languages API feeds the shared editor registries", async () => {
-	using language = stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
-	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
-	using provider = stanza.languages.registerHoverProvider({
+	stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
+	using configuration = stanza.languages.registerLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
+	using provider = stanza.languages.registerLanguageHoverProvider({
 		languageIds: ['stanza-public-test'],
 		provideHover: () => ({ contents: ['Public hover'] }),
 	});
@@ -142,7 +142,7 @@ test("standalone languages API feeds the shared editor registries", async () => 
 	assert.equal(services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }), 'stanza-public-test');
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments.lineComment, '//');
 	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));
-	using hover = new HoverService(model, services.languageFeaturesService.hoverProvider);
+	using hover = new LanguageHoverService(model, services.languageFeaturesService.hoverProvider);
 	assert.deepEqual(await hover.provideHover('stanza-public-test', new stanza.Position(1, 2)), { contents: ['Public hover'] });
 });
 
@@ -150,7 +150,7 @@ test("standalone completion providers execute in a live editor", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let requests = 0;
-	using language = stanza.languages.register({ id: "stanza-completion-test" });
+	stanza.languages.register({ id: "stanza-completion-test" });
 	using provider = stanza.languages.registerCompletionProvider({
 		id: "standalone.test",
 		languageIds: ["stanza-completion-test"],
@@ -193,13 +193,13 @@ test("standalone API registers URI and language identity with model lifecycle ev
 	const created: string[] = [];
 	const disposed: string[] = [];
 	const languages: string[] = [];
-	using createListener = stanza.editor.onDidCreateModel(model => created.push(stanza.editor.getModelResource(model).toString()));
-	using disposeListener = stanza.editor.onWillDisposeModel(model => disposed.push(stanza.editor.getModelResource(model).toString()));
-	using languageListener = stanza.editor.onDidChangeModelLanguage(event => languages.push(`${event.oldLanguageId}->${event.newLanguageId}`));
+	using createListener = stanza.editor.onDidCreateModel(model => created.push(model.uri.toString()));
+	using disposeListener = stanza.editor.onWillDisposeModel(model => disposed.push(model.uri.toString()));
+	using languageListener = stanza.editor.onDidChangeModelLanguage(event => languages.push(`${event.oldLanguage}->${event.model.getLanguageId()}`));
 
 	const model = stanza.editor.createModel("const value = 1;", "typescript", resource);
 	assert.equal(stanza.editor.getModel(resource), model);
-	assert.equal(stanza.editor.getModelLanguage(model), "typescript");
+	assert.equal(model.getLanguageId(), "typescript");
 	assert.deepEqual(created, [resource.toString()]);
 	assert.throws(() => stanza.editor.createModel("duplicate", "typescript", resource), /already exists/);
 
@@ -257,7 +257,7 @@ test("standalone editor rejects unregistered models and conflicting model option
 	const registered = stanza.editor.createModel("registered", "plaintext", URI.parse("inmemory://stanza/conflict.txt"));
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
 	registered.dispose();
-	const lateConfigurations = new LanguageConfigurationService();
+	const lateConfigurations = new ComposableLanguageConfigurationService();
 	const lateOverride = new LanguageFeaturesService(lateConfigurations);
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();

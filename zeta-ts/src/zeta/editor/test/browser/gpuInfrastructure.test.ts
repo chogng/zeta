@@ -3,7 +3,7 @@ import test from 'node:test';
 import { TextModel } from '../../common/model/textModel.js';
 import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { BufferDirtyTracker } from '../../browser/gpu/bufferDirtyTracker.js';
-import { createContentSegmenter } from '../../browser/gpu/contentSegmenter.js';
+import { createStringContentSegmenter } from '../../browser/gpu/stringContentSegmenter.js';
 import { createObjectCollectionBuffer } from '../../browser/gpu/objectCollectionBuffer.js';
 import { type TextureAtlas } from '../../browser/gpu/atlas/textureAtlas.js';
 import { FullFileRenderStrategy } from '../../browser/gpu/renderStrategy/fullFileRenderStrategy.js';
@@ -40,7 +40,7 @@ test('ObjectCollectionBuffer grows and compacts managed entries', () => {
 
 test('ContentSegmenter returns one entry for a complete grapheme', () => {
 	const text = 'A👩‍💻B';
-	const segmenter = createContentSegmenter(text, { isBasicASCII: false, useMonospaceOptimizations: false });
+	const segmenter = createStringContentSegmenter(text, { isBasicASCII: false, useMonospaceOptimizations: false });
 
 	assert.equal(segmenter.getSegmentAtIndex(0), 'A');
 	assert.equal(segmenter.getSegmentAtIndex(1), '👩‍💻');

@@ -2,26 +2,16 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { CursorCollection } from './cursorCollection.js';
-import { CursorContext } from './cursorContext.js';
+import { CursorControllerContext } from './cursorControllerContext.js';
 import { SelectionSet } from './selectionSet.js';
 import { Range } from '../core/range.js';
 import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange } from '../core/textChange.js';
 import { TextEditHistoryGroup, TextEditHistoryMergeMode } from '../core/editOperation.js';
 import { TextModel } from "../model/textModel.js";
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../commands/editorEditCommand.js";
+import { CursorChangeReason } from '../cursorEvents.js';
 
-export enum CursorChangeReason {
-	Explicit = "explicit",
-	Command = "command",
-	Undo = "undo",
-	Redo = "redo",
-	ModelChange = "modelChange",
-	HistoryCancellation = "historyCancellation",
-	CursorOperation = "cursorOperation",
-	CursorUndo = "cursorUndo",
-}
-
-export interface CursorStateChangedEvent {
+export interface CursorSelectionSetChange {
 	readonly selections: SelectionSet;
 	readonly reason: CursorChangeReason;
 	readonly modelVersion: number;
@@ -64,9 +54,9 @@ interface ActiveComposition {
  * tracked selections and command-level selection history.
  */
 export class CursorsController extends Disposable {
-	private readonly context: CursorContext;
+	private readonly context: CursorControllerContext;
 	private readonly changeEmitter =
-		this._register(new Emitter<CursorStateChangedEvent>());
+		this._register(new Emitter<CursorSelectionSetChange>());
 	private readonly cursors: CursorCollection;
 	private readonly selectionHistory =
 		new Map<number, SelectionHistoryEntry>();
@@ -78,7 +68,7 @@ export class CursorsController extends Disposable {
 	private activeComposition: ActiveComposition | undefined;
 	private executingCommand = false;
 
-	readonly onDidChange: Event<CursorStateChangedEvent> =
+	readonly onDidChange: Event<CursorSelectionSetChange> =
 		this.changeEmitter.event;
 
 	constructor(
@@ -87,7 +77,7 @@ export class CursorsController extends Disposable {
 		options: CursorsControllerOptions = {},
 	) {
 		super();
-		this.context = new CursorContext(model, options);
+		this.context = new CursorControllerContext(model, options);
 		this.currentSelections = initialSelections;
 		this.cursors = this._register(new CursorCollection(model, initialSelections));
 		try {
@@ -131,7 +121,7 @@ export class CursorsController extends Disposable {
 		this.cursorHistory.length = 0;
 		this.installSelections(
 			selections,
-			CursorChangeReason.Explicit,
+			CursorChangeReason.NotSet,
 		);
 	}
 
@@ -142,7 +132,7 @@ export class CursorsController extends Disposable {
 		this.breakHistoryGroup();
 		if (CursorCollection.selectionsEqual(this.currentSelections, selections)) return;
 		this.rememberCursorSelections(this.currentSelections);
-		this.installSelections(selections, CursorChangeReason.CursorOperation);
+		this.installSelections(selections, CursorChangeReason.Explicit);
 	}
 
 	/** Restores the preceding cursor-only selection state without changing document undo history. */
@@ -152,7 +142,7 @@ export class CursorsController extends Disposable {
 		this.breakHistoryGroup();
 		const previous = this.cursorHistory.pop();
 		if (!previous) return false;
-		this.installSelections(previous, CursorChangeReason.CursorUndo);
+		this.installSelections(previous, CursorChangeReason.Explicit);
 		return true;
 	}
 
@@ -241,7 +231,7 @@ export class CursorsController extends Disposable {
 						}
 						this.installSelections(
 							initialSelections,
-							CursorChangeReason.HistoryCancellation,
+							CursorChangeReason.Undo,
 						);
 					}
 					return change;
@@ -283,7 +273,7 @@ export class CursorsController extends Disposable {
 			this.breakHistoryGroup();
 			this.invalidateActiveComposition();
 			this.refreshTrackedSelections(
-				CursorChangeReason.ModelChange,
+				CursorChangeReason.RecoverFromMarkers,
 				true,
 				true,
 			);
@@ -293,7 +283,7 @@ export class CursorsController extends Disposable {
 			this.breakHistoryGroup();
 			this.invalidateActiveComposition();
 			this.refreshTrackedSelections(
-				CursorChangeReason.ModelChange,
+				CursorChangeReason.RecoverFromMarkers,
 			);
 			return undefined;
 		}
@@ -311,7 +301,7 @@ export class CursorsController extends Disposable {
 		);
 		this.installSelections(
 			after,
-			CursorChangeReason.Command,
+			CursorChangeReason.NotSet,
 		);
 		if (change) {
 			this.rememberSelectionHistory(
@@ -343,7 +333,7 @@ export class CursorsController extends Disposable {
 	private acceptModelChange(change: TextModelChange): void {
 		if (this.executingCommand) {
 			this.refreshTrackedSelections(
-				CursorChangeReason.ModelChange,
+				CursorChangeReason.RecoverFromMarkers,
 				false,
 			);
 			return;
@@ -376,13 +366,15 @@ export class CursorsController extends Disposable {
 		) {
 			this.installSelections(
 				history.before,
-				CursorChangeReason.HistoryCancellation,
+				CursorChangeReason.Undo,
 			);
 			this.forgetSelectionHistory(change.transactionId);
 			return;
 		}
 		this.refreshTrackedSelections(
-			CursorChangeReason.ModelChange,
+			change.reason === TextModelChangeReason.Reset
+				? CursorChangeReason.ContentFlush
+				: CursorChangeReason.RecoverFromMarkers,
 		);
 	}
 
@@ -394,7 +386,7 @@ export class CursorsController extends Disposable {
 		const previous = this.currentSelections;
 		this.cursors.setSelections(selections);
 		this.currentSelections = selections;
-		if (reason && !CursorCollection.selectionsEqual(previous, selections)) {
+		if (reason !== undefined && !CursorCollection.selectionsEqual(previous, selections)) {
 			this.changeEmitter.fire(Object.freeze({
 				selections,
 				reason,

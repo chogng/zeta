@@ -3,8 +3,8 @@ import { h, reset, fragment as createFragment } from '../../../base/browser/dom.
 import { FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange } from '../../common/viewModel.js';
-import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
+import { type EditorLineRange } from '../../common/viewModel/editorViewportContracts.js';
+import { type EditorViewportData } from '../../common/viewLayout/editorViewportData.js';
 import { type EditorRenderingContext } from './renderingContext.js';
 
 export interface ViewLayerLineRenderer<TLine> {
@@ -60,7 +60,7 @@ export class ViewLayer<TLine> extends Disposable {
 		return this.renderedRange;
 	}
 
-	render(viewportData: ViewportData): void {
+	render(viewportData: EditorViewportData): void {
 		this.root.setTop(viewportData.renderTop);
 		const visualProjection = this.readVisualProjection();
 		const projectionRevision = this.readProjectionRevision();

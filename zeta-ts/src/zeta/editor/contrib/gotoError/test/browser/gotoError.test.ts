@@ -10,8 +10,9 @@ import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { TrackedRangeStickiness } from "../../../../common/model/trackedRange.js";
+
 import { h } from "../../../../../base/browser/dom.js";
+import { TrackedRangeStickiness } from '../../../../common/model.js';
 
 const environment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, Event: environment.window.Event, KeyboardEvent: environment.window.KeyboardEvent })) Object.defineProperty(globalThis, name, { configurable: true, value });
@@ -24,8 +25,8 @@ test("F8 navigates current diagnostics in both directions", () => {
 	using model = new TextModel("one\ntwo\nthree");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
-	diagnostics.add({ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("first") });
-	diagnostics.add({ range: Range.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("last") });
+	diagnostics.add({ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (2) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("first") });
+	diagnostics.add({ range: Range.fromPositions(new Position((2) + 1, (1) + 1), new Position((2) + 1, (3) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: diagnostic("last") });
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

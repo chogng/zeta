@@ -3,7 +3,7 @@ import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { type EditorViewportLineSource } from "../../common/viewModel.js";
+import { type EditorViewportLineSource } from "../../common/viewModel/editorViewportContracts.js";
 import { EditorViewportChangeReason, ViewLayout } from "../../common/viewLayout/viewLayout.js";
 
 test("ViewLayout calculates visible and overscan line ranges", () => {

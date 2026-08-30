@@ -1,4 +1,4 @@
-import { EditorContributionInstantiation, registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { EditorContributionInstantiation, registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { FoldingController } from "./folding.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
@@ -7,10 +7,10 @@ import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
 import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
 import { FoldingDecorationProvider } from "./foldingDecorations.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
-import { FoldingRangeService } from '../common/folding.js';
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { FoldingRangeService } from '../common/languageFoldingRanges.js';
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.folding",
 	configure: context => {
 		const folding = context.register(new EditorFoldingModel(context.model));
@@ -56,7 +56,7 @@ registerEditorContribution({
 		}
 	},
 	runtime: {
-		descriptor: new SyncDescriptor(FoldingController),
+		descriptor: new ServiceConstructionDescriptor(FoldingController),
 		instantiation: EditorContributionInstantiation.Eager,
 	},
 });

@@ -5,7 +5,7 @@ import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/d
 import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorExtensions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
-import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekViewWidget.js';
+import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
 import { type IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import { type IQuickDiffEditorController, type IQuickDiffEditorControllerService, type IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';

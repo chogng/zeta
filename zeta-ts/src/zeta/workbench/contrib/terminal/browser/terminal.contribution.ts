@@ -1,7 +1,7 @@
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
@@ -28,7 +28,7 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
 		localizationKey: { bundle: "zeta.views", key: "terminal" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(TerminalViewPane, {
+		ctorDescriptor: new ServiceConstructionDescriptor(TerminalViewPane, {
 			serviceDependencies: [ITerminalService, IThemeService, IMenuService, IContextMenuService, IContextKeyService, IWorkbenchLayoutService, IWorkspaceContextService],
 		}),
 	}]);

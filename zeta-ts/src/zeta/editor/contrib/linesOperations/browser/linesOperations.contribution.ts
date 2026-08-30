@@ -1,8 +1,8 @@
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { JoinLinesCommandId, LineJoinController } from "./lineJoinController.js";
 import { EditorLineOperationCommandId, LineOperationsController } from "./lineOperationsController.js";
 
-registerEditorContribution({ id: "editor.contrib.linesOperations", commands: [
+registerTextEditorCapabilityContribution({ id: "editor.contrib.linesOperations", commands: [
 	...Object.values(EditorLineOperationCommandId).map(id => ({ id, canTriggerInlineEdits: true })),
 	{ id: JoinLinesCommandId, canTriggerInlineEdits: true },
 ], install: context => {

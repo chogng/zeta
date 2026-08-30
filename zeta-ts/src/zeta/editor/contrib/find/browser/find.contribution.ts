@@ -1,10 +1,10 @@
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { FindController } from "./findController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.find",
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));

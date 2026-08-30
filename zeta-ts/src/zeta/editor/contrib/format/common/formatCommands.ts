@@ -1,14 +1,15 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
-import { type TextEdit } from "../../../common/core/editOperation.js";
+
 import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
+import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
+import { type TextEdit } from '../../../common/languages.js';
 
 export interface LanguageFormattingOptions {
 	readonly tabSize: number;
@@ -32,7 +33,7 @@ export interface LanguageFormattingProvider extends LanguageFeatureProviderMetad
 
 /** Owns formatting provider dispatch; edit validation/application stays in TextModel and cursor. */
 export class FormatService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageFormattingProvider>, private readonly resource?: URI) {
+	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageFormattingProvider>, private readonly resource?: URI) {
 		super();
 	}
 

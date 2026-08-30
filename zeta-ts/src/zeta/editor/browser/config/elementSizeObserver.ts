@@ -1,55 +1,91 @@
-import { getClientArea, type IDimension, Dimension } from '../../../base/browser/geometry.js';
-import { observeElementSize } from '../../../base/browser/observer.js';
+import { getWindow, scheduleAtNextAnimationFrame } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { isFiniteNumber } from '../../../base/common/numbers.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { type IDimension } from '../../common/core/2d/dimension.js';
 
-/**
- * Caches one editor host size and publishes only actual size changes.
- *
- * The browser observer is an implementation detail. Consumers receive the
- * same dimension shape for ResizeObserver and explicit initial observation,
- * which keeps layout ownership in the viewport rather than in the DOM API.
- */
 export class ElementSizeObserver extends Disposable {
-	private readonly changeEmitter = this._register(new Emitter<IDimension>());
-	private readonly observation = this._register(new MutableDisposable<IDisposable>());
-	private currentSize: Dimension | undefined;
+	private _onDidChange = this._register(new Emitter<void>());
+	public readonly onDidChange: Event<void> = this._onDidChange.event;
+	private readonly _referenceDomElement: HTMLElement | null;
+	private _width: number;
+	private _height: number;
+	private _resizeObserver: ResizeObserver | null;
 
-	readonly onDidChange: Event<IDimension> = this.changeEmitter.event;
-
-	constructor(private readonly element: HTMLElement) {
+	constructor(referenceDomElement: HTMLElement | null, dimension: IDimension | undefined) {
 		super();
+		this._referenceDomElement = referenceDomElement;
+		this._width = -1;
+		this._height = -1;
+		this._resizeObserver = null;
+		this.measureReferenceDomElement(false, dimension);
 	}
 
-	get size(): IDimension | undefined {
-		return this.currentSize;
+	public override dispose(): void {
+		this.stopObserving();
+		super.dispose();
 	}
 
-	startObserving(): void {
-		this.observation.value = observeElementSize(
-			this.element,
-			size => this.observe(size),
-			{ box: 'content-box' },
-		);
-	}
+	public getWidth(): number { return this._width; }
+	public getHeight(): number { return this._height; }
 
-	stopObserving(): void {
-		this.observation.clear();
-	}
-
-	/** Publishes a caller-supplied size, normally for the initial layout. */
-	observe(size: IDimension): void {
-		if (!isFiniteNumber(size.width) || size.width < 0 || !isFiniteNumber(size.height) || size.height < 0) {
-			throw new RangeError('Editor element size must be finite and non-negative');
+	public startObserving(): void {
+		if (!this._resizeObserver && this._referenceDomElement) {
+			let observedDimension: IDimension | null = null;
+			const observeNow = () => {
+				if (observedDimension) this.observe({ width: observedDimension.width, height: observedDimension.height });
+				else this.observe();
+			};
+			let shouldObserve = false;
+			let alreadyObservedThisAnimationFrame = false;
+			const update = () => {
+				if (shouldObserve && !alreadyObservedThisAnimationFrame) {
+					try {
+						shouldObserve = false;
+						alreadyObservedThisAnimationFrame = true;
+						observeNow();
+					} finally {
+						scheduleAtNextAnimationFrame(getWindow(this._referenceDomElement), () => {
+							alreadyObservedThisAnimationFrame = false;
+							update();
+						});
+					}
+				}
+			};
+			this._resizeObserver = new ResizeObserver(entries => {
+				if (entries?.[0]?.contentRect) observedDimension = { width: entries[0].contentRect.width, height: entries[0].contentRect.height };
+				else observedDimension = null;
+				shouldObserve = true;
+				update();
+			});
+			this._resizeObserver.observe(this._referenceDomElement);
 		}
-		if (this.currentSize?.width === size.width && this.currentSize.height === size.height) return;
-		this.currentSize = new Dimension(size.width, size.height);
-		this.changeEmitter.fire(this.currentSize);
 	}
 
-	/** Reads the current client area when no ResizeObserver event has arrived. */
-	observeNow(): void {
-		this.observe(getClientArea(this.element));
+	public stopObserving(): void {
+		if (this._resizeObserver) {
+			this._resizeObserver.disconnect();
+			this._resizeObserver = null;
+		}
+	}
+
+	public observe(dimension?: IDimension): void { this.measureReferenceDomElement(true, dimension); }
+
+	private measureReferenceDomElement(emitEvent: boolean, dimension?: IDimension): void {
+		let observedWidth = 0;
+		let observedHeight = 0;
+		if (dimension) {
+			observedWidth = dimension.width;
+			observedHeight = dimension.height;
+		} else if (this._referenceDomElement) {
+			observedWidth = this._referenceDomElement.clientWidth;
+			observedHeight = this._referenceDomElement.clientHeight;
+		}
+		observedWidth = Math.max(5, observedWidth);
+		observedHeight = Math.max(5, observedHeight);
+		if (this._width !== observedWidth || this._height !== observedHeight) {
+			this._width = observedWidth;
+			this._height = observedHeight;
+			if (emitEvent) this._onDidChange.fire();
+		}
 	}
 }

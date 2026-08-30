@@ -1,6 +1,6 @@
 import { isPositiveSafeInteger } from "../../../../base/common/numbers.js";
 import { VersionedLanguageResultStore } from "../languageResultStore.js";
-import { parseLanguageCompletionSnippet } from "../../../contrib/snippet/common/snippetParser.js";
+import { parseLanguageCompletionSnippet } from "../../../contrib/snippet/common/languageCompletionSnippetParser.js";
 import { Position } from "../../core/position.js";
 import { Range } from "../../core/range.js";
 import { normalizeTextLineEndings, type TextSnapshot } from "../../core/textChange.js";

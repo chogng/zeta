@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type IDimension } from "../../../../../base/browser/geometry.js";
+import { type IDimension } from "../../../../../base/browser/dom.js";
 import { URI } from "../../../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";

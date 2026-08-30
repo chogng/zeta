@@ -1,6 +1,6 @@
 import './media/keyboardShortcutsEditor.css';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
-import type { IDimension } from '../../../../base/browser/geometry.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
 import { isModifierKey, StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';

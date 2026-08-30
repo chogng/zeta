@@ -5,7 +5,7 @@ import { IMenuService } from "../../../../platform/actions/common/menuService.js
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { IChatService } from "../../../services/chat/common/chatService.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
@@ -40,7 +40,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		localizationKey: { bundle: "zeta.views", key: "chat" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(ChatViewPane, {
+		ctorDescriptor: new ServiceConstructionDescriptor(ChatViewPane, {
 			serviceDependencies: [
 				IChatService,
 				ISessionsManagementService,

@@ -1,4 +1,5 @@
-import { type LanguageCharacterPair, type ResolvedLanguageCommentConfiguration } from "./languageConfiguration.js";
+import { type LanguageCharacterPair } from "./languageConfiguration.js";
+import { type ResolvedLanguageCommentConfiguration } from "./ownedLanguageConfigurationContributions.js";
 import { LanguageDiagnosticSeverity } from "./languageResults.js";
 
 export type LanguageLexicalState = "normal" | "blockComment" | "multilineString" | `rawString:${number}`;

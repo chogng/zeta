@@ -5,7 +5,8 @@ import type { URI } from "../../../../base/common/uri.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { CancellationError } from "../../../../base/common/errors.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { Dimension, type IDimension, type IRectangle } from "../../../../base/browser/geometry.js";
+import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
+import { type IPositionedRectangle } from "../../../../base/browser/geometry.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from "../../../../base/browser/ui/grid/grid.js";
 import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -22,7 +23,7 @@ import { type ITextFileService } from "../../../services/textfile/common/textFil
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
+import type { IComposableLanguageConfigurationService } from '../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
@@ -110,7 +111,7 @@ export interface IEditorPartOptions {
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;
@@ -883,7 +884,7 @@ class EditorGroupGridView implements ISerializableGridView {
 		return this.group.domNode;
 	}
 
-	layout(bounds: IRectangle): void {
+	layout(bounds: IPositionedRectangle): void {
 		this.group.layout(bounds);
 	}
 

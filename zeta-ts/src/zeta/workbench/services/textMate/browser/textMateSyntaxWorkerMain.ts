@@ -5,7 +5,7 @@ import { SyntaxProviderRegistry } from "../../../../editor/common/languages/synt
 import { SyntaxProviderWorker } from "../../../../editor/common/languages/syntax/syntaxService.js";
 import { syntaxWireCodec } from "../../../../editor/common/languages/syntax/syntaxWire.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../editor/common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../../../editor/common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../../../editor/common/languages/ownedLanguageConfigurationContributions.js";
 import { createLanguageLexicalSyntaxProvider } from "../../../../editor/common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageWorkerWireServer } from "../../../../editor/common/languages/languageWorkerWire.js";
 import { createTextMateSyntaxModule } from "../common/textMateSyntaxModule.js";
@@ -18,7 +18,7 @@ import { createBrowserTextMateTokenizationService } from "./browserTextMateToken
 start(({ port, resources }) => {
 	const registry = resources.add(new SyntaxProviderRegistry());
 	const modules = resources.add(new SyntaxProviderModuleRegistry());
-	const languageConfigurations = resources.add(new LanguageConfigurationRegistry());
+	const languageConfigurations = resources.add(new OwnedLanguageConfigurationContributions());
 	resources.add(registerBuiltinLanguageConfigurations(languageConfigurations));
 	resources.add(modules.register({
 		id: "language.lexical",

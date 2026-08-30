@@ -1,5 +1,6 @@
 import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
-import { DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE, LanguageConfigurationRegistry, LanguageIndentAction, type LanguageAutoClosingPair, type LanguageAutoClosingTokenContext, type LanguageCharacterPair, type LanguageConfiguration, type LanguageConfigurationSource, type LanguageFoldingMarkers, type LanguageIndentationRules, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
+import { DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE, LanguageIndentAction, type LanguageAutoClosingPair, type LanguageAutoClosingTokenContext, type LanguageCharacterPair, type LanguageConfigurationInput, type LanguageFoldingMarkers, type LanguageIndentationRules, type LanguageOnEnterRule } from "./languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions, type LanguageConfigurationSource, type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
 import { assertLanguageId } from "./languageId.js";
 
 export const BUILTIN_LANGUAGE_IDS = Object.freeze([
@@ -80,7 +81,7 @@ interface BuiltinOnEnterOptions {
 	readonly removeText?: number;
 }
 
-const ECMASCRIPT_CONFIGURATION: LanguageConfiguration = Object.freeze({
+const ECMASCRIPT_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
 	comments: Object.freeze({
 		lineComment: "//",
 		blockComment: pair("/*", "*/"),
@@ -93,14 +94,14 @@ const ECMASCRIPT_CONFIGURATION: LanguageConfiguration = Object.freeze({
 	onEnterRules: ECMASCRIPT_ON_ENTER_RULES,
 	wordPattern: PROGRAMMING_WORD_PATTERN,
 });
-const JSON_CONFIGURATION: LanguageConfiguration = Object.freeze({
+const JSON_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
 	brackets: JSON_BRACKETS,
 	autoClosingPairs: JSON_PAIRS,
 	surroundingPairs: JSON_SURROUNDING_PAIRS,
 	indentationRules: JSON_INDENTATION_RULES,
 	wordPattern: PROGRAMMING_WORD_PATTERN,
 });
-const JSONC_CONFIGURATION: LanguageConfiguration = Object.freeze({
+const JSONC_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
 	comments: Object.freeze({
 		lineComment: "//",
 		blockComment: pair("/*", "*/"),
@@ -113,7 +114,7 @@ const JSONC_CONFIGURATION: LanguageConfiguration = Object.freeze({
 	onEnterRules: JSONC_ON_ENTER_RULES,
 	wordPattern: PROGRAMMING_WORD_PATTERN,
 });
-const RUST_CONFIGURATION: LanguageConfiguration = Object.freeze({
+const RUST_CONFIGURATION: LanguageConfigurationInput = Object.freeze({
 	comments: Object.freeze({
 		lineComment: "//",
 		blockComment: pair("/*", "*/"),
@@ -128,8 +129,8 @@ const RUST_CONFIGURATION: LanguageConfiguration = Object.freeze({
 });
 
 /** Registers built-in editing rules into one caller-owned realm. */
-export function registerBuiltinLanguageConfigurations(registry: LanguageConfigurationRegistry): IDisposable {
-	if (!(registry instanceof LanguageConfigurationRegistry)) {
+export function registerBuiltinLanguageConfigurations(registry: OwnedLanguageConfigurationContributions): IDisposable {
+	if (!(registry instanceof OwnedLanguageConfigurationContributions)) {
 		throw new TypeError("Built-in language configurations require a language configuration registry");
 	}
 	const registrations = new DisposableStore();
@@ -142,13 +143,13 @@ export function registerBuiltinLanguageConfigurations(registry: LanguageConfigur
 
 /** Resolves built-in rules for isolated providers that receive no registry. */
 export function createBuiltinLanguageConfigurationSource(): LanguageConfigurationSource {
-	const configurations = new Map<string, ResolvedLanguageConfiguration>();
+	const configurations = new Map<string, MergedLanguageConfiguration>();
 	for (const languageId of ECMASCRIPT_LANGUAGE_IDS) configurations.set(languageId, resolved(languageId, ECMASCRIPT_CONFIGURATION));
 	configurations.set("json", resolved("json", JSON_CONFIGURATION));
 	configurations.set("jsonc", resolved("jsonc", JSONC_CONFIGURATION));
 	configurations.set("rust", resolved("rust", RUST_CONFIGURATION));
 	return Object.freeze({
-		getLanguageConfiguration(languageId: string): ResolvedLanguageConfiguration {
+		getLanguageConfiguration(languageId: string): MergedLanguageConfiguration {
 			assertLanguageId(languageId);
 			return configurations.get(languageId) ?? resolved(languageId, {});
 		},
@@ -163,7 +164,7 @@ function autoPair(open: string, close: string, notIn: readonly LanguageAutoClosi
 	return Object.freeze({ open, close, notIn: Object.freeze([...notIn]) });
 }
 
-function resolved(languageId: string, configuration: LanguageConfiguration): ResolvedLanguageConfiguration {
+function resolved(languageId: string, configuration: LanguageConfigurationInput): MergedLanguageConfiguration {
 	const comments = configuration.comments && {
 		...(configuration.comments.lineComment ? { lineComment: configuration.comments.lineComment } : {}),
 		...(configuration.comments.blockComment ? { blockComment: configuration.comments.blockComment } : {}),

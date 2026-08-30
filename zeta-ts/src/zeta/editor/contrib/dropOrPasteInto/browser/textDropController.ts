@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createReadableClipboardData, readEditorClipboardText } from '../../../browser/controller/editContext/clipboardUtils.js';
-import { registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TypeOperations } from '../../../common/cursor/cursorTypeOperations.js';
@@ -67,7 +67,7 @@ export class TextDropController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.dropOrPasteInto',
 	install: context => {
 		if (context.kind !== 'text') return;

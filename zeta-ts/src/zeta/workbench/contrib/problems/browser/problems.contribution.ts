@@ -1,4 +1,4 @@
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
@@ -26,7 +26,7 @@ export function registerProblemsView(registry: WorkbenchViewRegistry = ViewsRegi
 		localizationKey: { bundle: "zeta.views", key: "problems" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(ProblemsViewPane, {
+		ctorDescriptor: new ServiceConstructionDescriptor(ProblemsViewPane, {
 			serviceDependencies: [IMarkerService, IEditorService],
 		}),
 	}]);

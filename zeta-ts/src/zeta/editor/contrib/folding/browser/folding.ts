@@ -9,7 +9,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type TextEditorContributionContext } from "../../../browser/editorExtensions.js";
-import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
+import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from "../../../browser/controller/semanticMouseTarget.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 export enum FoldingCommand {
@@ -34,7 +34,7 @@ export class FoldingController extends Disposable {
 	private readonly viewport: EditorViewport;
 	private readonly selections: CursorsController;
 	private readonly folding: EditorFoldingModel;
-	private readonly mouseTargets: MouseTargetFactory;
+	private readonly mouseTargets: SemanticMouseTargetFactory;
 	private awaitingChord = false;
 
 	constructor(
@@ -45,7 +45,7 @@ export class FoldingController extends Disposable {
 		this.viewport = context.viewport;
 		this.selections = context.selections;
 		this.folding = context.getCapability(TextEditorCapability.folding);
-		this.mouseTargets = new MouseTargetFactory(this.viewport);
+		this.mouseTargets = new SemanticMouseTargetFactory(this.viewport);
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
 			if (this.viewport.textModel !== this.selections.textModel || this.viewport.textModel !== this.folding.model) {
@@ -92,7 +92,7 @@ export class FoldingController extends Disposable {
 
 	private handleGutterPointerDown(event: PointerEvent): void {
 		const target = this.mouseTargets.create(event);
-		if (target?.kind !== MouseTargetKind.GutterDecoration || target.decorationOwner !== "folding") return;
+		if (target?.kind !== SemanticMouseTargetKind.GutterDecoration || target.decorationOwner !== "folding") return;
 		const lineIndex = target.editorTarget?.position.lineNumber === undefined ? undefined : target.editorTarget.position.lineNumber - 1;
 		if (lineIndex === undefined) return;
 		event.preventDefault();

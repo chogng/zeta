@@ -7,7 +7,7 @@ import { type Position } from "../../../common/core/position.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
-import { PeekViewWidget } from "../../peekView/browser/peekViewWidget.js";
+import { PeekViewWidget } from "../../peekView/browser/peekView.js";
 import { type LanguageHierarchyItem, type LanguageHierarchyService, type PreparedCallHierarchy, type PreparedTypeHierarchy } from "../common/languageHierarchy.js";
 
 type HierarchyKind = "call" | "type";

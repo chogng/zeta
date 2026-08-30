@@ -1,7 +1,7 @@
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import "./paneCompositePart.css";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import type { IDimension } from "../../../base/browser/geometry.js";
+import type { IDimension } from "../../../base/browser/dom.js";
 import { type Event } from "../../../base/common/event.js";
 import { localize, type ILocalizationService, type LocalizationKey } from "../../services/localization/common/localizationService.js";
 import { MenuWorkbenchToolBar } from "../../../platform/actions/browser/toolbar.js";

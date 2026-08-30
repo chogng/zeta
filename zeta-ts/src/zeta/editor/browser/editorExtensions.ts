@@ -1,12 +1,12 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
 import { type Event } from '../../base/common/event.js';
-import { type SyncDescriptor } from "../../platform/instantiation/common/instantiation.js";
+import { type ServiceConstructionDescriptor } from "../../platform/instantiation/common/instantiation.js";
 import { type CursorsController } from "../common/cursor/cursor.js";
-import { type LanguageConfigurationSource } from "../common/languages/languageConfiguration.js";
+import { type LanguageConfigurationSource } from "../common/languages/ownedLanguageConfigurationContributions.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
 import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
-import type { ISemanticTokensStylingService } from '../common/services/semanticTokensStyling.js';
+import type { IResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokens.js';
 import { type DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
@@ -18,7 +18,7 @@ import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLi
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/viewLine.js";
 import { type TabFocus } from "./config/tabFocus.js";
-import { type IEditorWorkerClient } from "../common/services/editorWorker.js";
+import { type IVersionedEditorWorkerClient } from "./services/versionedEditorWorkerClient.js";
 import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
 
 export interface EditorCommandEvent {
@@ -43,10 +43,10 @@ export interface TextEditorContributionConfigurationContext {
 	readonly kind: "text";
 	readonly options: EditorBrowserOptions;
 	readonly model: TextModel;
-	readonly editorWorker: IEditorWorkerClient;
+	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly semanticTokensStylingService: ISemanticTokensStylingService;
+	readonly semanticTokensStylingService: IResolvedSemanticTokensService;
 	readonly configurations: LanguageConfigurationSource;
 	readonly selections: CursorsController;
 	readonly tabFocus: TabFocus;
@@ -66,7 +66,7 @@ export interface TextEditorContributionContext {
 	readonly kind: "text";
 	readonly options: EditorBrowserOptions;
 	readonly model: TextModel;
-	readonly editorWorker: IEditorWorkerClient;
+	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: LanguageConfigurationSource;
@@ -134,21 +134,21 @@ export type EditorContributionContext = TextEditorContributionContext | Document
 export interface TextEditorRuntimeContribution extends IDisposable {}
 
 /** Controls when a constructor-backed extension joins one text editor's lifetime. */
-export enum EditorContributionInstantiation {
-	Eager = "eager",
-	AfterFirstRender = "afterFirstRender",
-	BeforeFirstInteraction = "beforeFirstInteraction",
-	Eventually = "eventually",
-	Lazy = "lazy",
+export const enum EditorContributionInstantiation {
+	Eager,
+	AfterFirstRender,
+	BeforeFirstInteraction,
+	Eventually,
+	Lazy,
 }
 
 export interface TextEditorRuntimeContributionRegistration {
-	readonly descriptor: SyncDescriptor<TextEditorRuntimeContribution>;
+	readonly descriptor: ServiceConstructionDescriptor<TextEditorRuntimeContribution>;
 	readonly instantiation: EditorContributionInstantiation;
 }
 
 /** Installs one statically selected capability at its supported editor mount point. */
-export interface EditorContribution {
+export interface TextEditorCapabilityContribution {
 	readonly id: string;
 	readonly commands?: readonly EditorCommandMetadata[];
 	configure?(context: TextEditorContributionConfigurationContext): void;
@@ -157,11 +157,11 @@ export interface EditorContribution {
 	readonly runtime?: TextEditorRuntimeContributionRegistration;
 }
 
-const contributions: EditorContribution[] = [];
+const contributions: TextEditorCapabilityContribution[] = [];
 const contributionIds = new Set<string>();
 
 /** Registers one flat editor extension through a Workbench mode bundle side effect. */
-export function registerEditorContribution(contribution: EditorContribution): void {
+export function registerTextEditorCapabilityContribution(contribution: TextEditorCapabilityContribution): void {
 	if (!contribution || !contribution.id?.trim() || (typeof contribution.configure !== "function" && typeof contribution.install !== "function" && !contribution.runtime)) throw new TypeError("Editor contribution is invalid");
 	if (contribution.runtime && (!contribution.runtime.descriptor?.ctor || !isInstantiation(contribution.runtime.instantiation))) {
 		throw new TypeError("Editor runtime contribution is invalid");
@@ -175,7 +175,7 @@ export function registerEditorContribution(contribution: EditorContribution): vo
 	contributions.push(contribution);
 }
 
-export function getEditorContributions(): readonly EditorContribution[] {
+export function getTextEditorCapabilityContributions(): readonly TextEditorCapabilityContribution[] {
 	return contributions;
 }
 

@@ -3,11 +3,11 @@ import { CharCode } from '../../../../base/common/charCode.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange } from '../../../common/viewModel.js';
+import { type EditorLineRange } from '../../../common/viewModel/editorViewportContracts.js';
 import { type Position } from '../../../common/core/position.js';
 import { type Range } from '../../../common/core/range.js';
 import { type TextModelChange } from '../../../common/core/textChange.js';
-import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
+import { type EditorViewportData } from '../../../common/viewLayout/editorViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { ViewLine, type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
@@ -68,7 +68,7 @@ export class ViewLines extends Disposable {
 		return this.layer.renderedLines;
 	}
 
-	public render(viewportData: ViewportData): void {
+	public render(viewportData: EditorViewportData): void {
 		this.layer.render(viewportData);
 	}
 

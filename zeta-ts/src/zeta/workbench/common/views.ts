@@ -7,7 +7,7 @@ import type {
 	ContextKeyExpression,
 } from "../../platform/contextkey/common/contextkey.js";
 import type {
-	SyncDescriptor,
+	ServiceConstructionDescriptor,
 } from "../../platform/instantiation/common/instantiation.js";
 import type { Icon } from "../../base/common/icon.js";
 import type { LocalizationKey } from "../../nls.js";
@@ -42,7 +42,7 @@ export interface IViewDescriptor {
 	 * Browser hosts append their runtime pane options after descriptor static
 	 * arguments. The instantiation service appends declared services last.
 	 */
-	readonly ctorDescriptor: SyncDescriptor<IView>;
+	readonly ctorDescriptor: ServiceConstructionDescriptor<IView>;
 	readonly when?: ContextKeyExpression;
 	readonly order?: number;
 	readonly collapsed?: boolean;

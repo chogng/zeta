@@ -1,13 +1,13 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { EditorStateModel } from "../common/editorState.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { EditorInteractionStateStore } from "../common/editorInteractionState.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Binds browser focus, selection, and scroll events into the common editor-state model. */
 export class EditorStateController extends Disposable {
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly state: EditorStateModel) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly state: EditorInteractionStateStore) {
 		super();
 		this._register(addDisposableListener(input, "focus", () => state.setFocused(true)));
 		this._register(addDisposableListener(input, "blur", () => state.setFocused(false)));
@@ -16,8 +16,8 @@ export class EditorStateController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.editorState", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.editorState", install: context => {
 	if (context.kind !== "text") return;
-	const state = context.register(new EditorStateModel(context.model, context.selections.selections));
+	const state = context.register(new EditorInteractionStateStore(context.model, context.selections.selections));
 	context.register(new EditorStateController(context.view.element, context.viewport, context.selections, state));
 } });

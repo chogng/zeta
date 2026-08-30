@@ -1,41 +1,61 @@
-import { type Event } from '../../base/common/event.js';
-import { type TextModelChange } from './core/textChange.js';
+import * as strings from '../../base/common/strings.js';
+import { type TextDirection } from './model.js';
+import { type IViewLineTokens } from './tokens/lineTokens.js';
+import { type InlineDecoration } from './viewModel/inlineDecorations.js';
 
-/** A half-open range of visual-line indexes shared by layout and view-model code. */
-export interface EditorLineRange {
-	readonly startLineIndex: number;
-	readonly endLineIndexExclusive: number;
-}
+export class ViewLineRenderingData {
+	public readonly minColumn: number;
+	public readonly maxColumn: number;
+	public readonly content: string;
+	public readonly continuesWithWrappedLine: boolean;
+	public readonly containsRTL: boolean;
+	public readonly isBasicASCII: boolean;
+	public readonly tokens: IViewLineTokens;
+	public readonly inlineDecorations: InlineDecoration[];
+	public readonly tabSize: number;
+	public readonly startVisibleColumn: number;
+	public readonly textDirection: TextDirection;
+	public readonly hasVariableFonts: boolean;
 
-/** Supplies the current visual-line collection to the common layout. */
-export interface EditorViewportLineSource {
-	readonly lineCount: number;
-	readonly onDidChange: Event<void>;
-}
+	constructor(
+		minColumn: number,
+		maxColumn: number,
+		content: string,
+		continuesWithWrappedLine: boolean,
+		mightContainRTL: boolean,
+		mightContainNonBasicASCII: boolean,
+		tokens: IViewLineTokens,
+		inlineDecorations: InlineDecoration[],
+		tabSize: number,
+		startVisibleColumn: number,
+		textDirection: TextDirection,
+		hasVariableFonts: boolean
+	) {
+		this.minColumn = minColumn;
+		this.maxColumn = maxColumn;
+		this.content = content;
+		this.continuesWithWrappedLine = continuesWithWrappedLine;
+		this.isBasicASCII = ViewLineRenderingData.isBasicASCII(content, mightContainNonBasicASCII);
+		this.containsRTL = ViewLineRenderingData.containsRTL(content, this.isBasicASCII, mightContainRTL);
+		this.tokens = tokens;
+		this.inlineDecorations = inlineDecorations;
+		this.tabSize = tabSize;
+		this.startVisibleColumn = startVisibleColumn;
+		this.textDirection = textDirection;
+		this.hasVariableFonts = hasVariableFonts;
+	}
 
-/** Minimal model contract consumed by the DOM-free viewport layout. */
-export interface EditorViewportModelSource {
-	readonly lineCount: number;
-	readonly version: number;
-	readonly onDidChange: Event<TextModelChange>;
-}
+	public static isBasicASCII(lineContent: string, mightContainNonBasicASCII: boolean): boolean {
+		if (mightContainNonBasicASCII) {
+			return strings.isBasicASCII(lineContent);
+		}
+		return true;
+	}
 
-/** Batch mutation boundary used by view-layout custom line-height owners. */
-export interface EditorLineHeightChangeAccessor {
-	insertOrChangeCustomLineHeight(decorationId: string, startLineNumber: number, endLineNumber: number, lineHeight: number): void;
-	removeCustomLineHeight(decorationId: string): void;
-}
-
-/** Immutable geometry for one block of vertical space between visual lines. */
-export interface EditorViewZoneLayout {
-	readonly id: string;
-	readonly afterLineIndex: number;
-	readonly top: number;
-	readonly heightInPixels: number;
-}
-
-/** The scroll coordinates exchanged between the view-model and the browser view. */
-export interface EditorScrollPosition {
-	readonly left: number;
-	readonly top: number;
+	public static containsRTL(lineContent: string, isBasicASCII: boolean, mightContainRTL: boolean): boolean {
+		if (!isBasicASCII && mightContainRTL) {
+			return strings.containsRTL(lineContent);
+		}
+		return false;
+	}
 }

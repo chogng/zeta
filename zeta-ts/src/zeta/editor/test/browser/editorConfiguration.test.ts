@@ -3,23 +3,22 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../base/browser/dom.js';
 import { applyEditorFontInfo } from '../../browser/config/domFontInfo.js';
-import { resolveEditorConfiguration } from '../../browser/config/editorConfiguration.js';
+import { resolveEditorGeometryConfiguration } from '../../browser/config/resolvedEditorGeometryConfiguration.js';
 import { migrateOptions } from '../../browser/config/migrateOptions.js';
-import { EditorLineWrapping } from '../../common/config/editorOptions.js';
 import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
 
 test('browser editor configuration resolves geometry defaults at the composition boundary', () => {
-	assert.deepEqual(resolveEditorConfiguration({}), {
+	assert.deepEqual(resolveEditorGeometryConfiguration({}), {
 		fontFamily: undefined,
 		fontSize: EDITOR_FONT_DEFAULTS.fontSize,
 		lineHeight: 20,
 		fontLigatures: false,
 	});
-	assert.equal(resolveEditorConfiguration({ fontSize: 12 }).lineHeight, 20);
-	assert.equal(resolveEditorConfiguration({ fontSize: 20 }).lineHeight, 30);
-	assert.throws(() => resolveEditorConfiguration({ fontSize: 7 }), RangeError);
-	assert.throws(() => resolveEditorConfiguration({ lineHeight: 81 }), RangeError);
-	assert.throws(() => resolveEditorConfiguration({ fontLigatures: 'on' as never }), TypeError);
+	assert.equal(resolveEditorGeometryConfiguration({ fontSize: 12 }).lineHeight, 20);
+	assert.equal(resolveEditorGeometryConfiguration({ fontSize: 20 }).lineHeight, 30);
+	assert.throws(() => resolveEditorGeometryConfiguration({ fontSize: 7 }), RangeError);
+	assert.throws(() => resolveEditorGeometryConfiguration({ lineHeight: 81 }), RangeError);
+	assert.throws(() => resolveEditorGeometryConfiguration({ fontLigatures: 'on' as never }), TypeError);
 });
 
 test('DOM font info applies the shared editor font vocabulary', () => {
@@ -37,11 +36,11 @@ test('DOM font info applies the shared editor font vocabulary', () => {
 	dom.window.close();
 });
 
-test('browser editor option migration converts only supported legacy shapes without mutating the caller', () => {
+test('browser editor option migration updates supported legacy shapes in place', () => {
 	const legacy = {
 		wordWrap: true,
-		showLineNumbers: false,
-		activeLineHighlight: 'on',
+		lineNumbers: false,
+		renderLineHighlight: true,
 		renderIndentGuides: false,
 		renderWhitespace: true,
 		matchBrackets: false,
@@ -49,24 +48,22 @@ test('browser editor option migration converts only supported legacy shapes with
 		defaultColorDecorators: false,
 	};
 
-	assert.deepEqual(migrateOptions(legacy), {
-		lineWrapping: EditorLineWrapping.On,
+	migrateOptions(legacy);
+	assert.deepEqual(legacy, {
+		wordWrap: 'on',
 		lineNumbers: 'off',
 		renderLineHighlight: 'line',
+		renderIndentGuides: undefined,
 		guides: { indentation: false },
 		renderWhitespace: 'boundary',
 		matchBrackets: 'never',
 		occurrencesHighlight: 'singleFile',
 		defaultColorDecorators: 'never',
 	});
-	assert.equal(legacy.wordWrap, true);
 });
 
-test('browser editor option migration preserves current values and rejects invalid legacy values', () => {
-	assert.deepEqual(migrateOptions({ wordWrap: false, lineWrapping: EditorLineWrapping.On }), {
-		lineWrapping: EditorLineWrapping.On,
-	});
-	assert.deepEqual(migrateOptions({ lineNumbers: 'relative' }), { lineNumbers: 'relative' });
-	assert.deepEqual(migrateOptions({ renderLineHighlight: 'gutter' }), { renderLineHighlight: 'gutter' });
-	assert.throws(() => migrateOptions({ activeLineHighlight: 'blink' }), /highlight option is invalid/);
+test('browser editor option migration preserves current values', () => {
+	const options = { lineNumbers: 'relative', renderLineHighlight: 'gutter' };
+	migrateOptions(options);
+	assert.deepEqual(options, { lineNumbers: 'relative', renderLineHighlight: 'gutter' });
 });

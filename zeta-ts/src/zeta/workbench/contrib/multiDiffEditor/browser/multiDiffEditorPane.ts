@@ -1,14 +1,14 @@
 import './media/multiDiffEditorPane.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
-import { type IDimension } from '../../../../base/browser/geometry.js';
+import { type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { MultiDiffEditorWidget, type MultiDiffEditorItem, type MultiDiffEditorLocation } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type IDiffComputationService } from '../../../../editor/common/diff/diffComputationService.js';
-import { type ITextModelService, type TextModelReference } from '../../../../editor/common/services/resolverService.js';
+import { type ITextModelResourceService, type TextModelReference } from '../../../../editor/common/services/textModelResourceService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { IMenuService } from '../../../../platform/actions/common/menuService.js';
@@ -19,7 +19,7 @@ import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.j
 import { isMultiDiffEditorInput, MULTI_DIFF_EDITOR_ID, multiDiffEditorItemKey, type MultiDiffEditorInputItem } from './multiDiffEditorInput.js';
 
 export interface MultiDiffEditorPaneOptions {
-	readonly modelService: ITextModelService;
+	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDiffComputationService;
 	readonly lineHeight?: number;
 	readonly fontFamily?: string;

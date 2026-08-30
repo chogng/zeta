@@ -1,5 +1,5 @@
 import { IExtensionHostApi } from "../../../../platform/extensionHost/common/extensionHostApi.js";
-import { ILogService } from "../../../../platform/log/common/logService.js";
+import { ILogService } from "../../../../platform/log/common/log.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { IOutputService } from "../../output/common/outputService.js";

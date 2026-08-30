@@ -8,7 +8,8 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource, type ViewLine } from '../viewLines/viewLine.js';
 import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
 import { type ViewLines } from '../viewLines/viewLines.js';
-import { BindingId, type GpuRenderFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
+import { BindingId } from '../../gpu/gpu.js';
+import { type GpuRenderFrame, type IGpuFrameRenderStrategy } from '../../gpu/gpuFrameStrategy.js';
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
 import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
 import { type EditorRenderingContext } from '../../view/renderingContext.js';
@@ -37,7 +38,7 @@ export class ViewLinesGpu extends Disposable {
 	private readonly vertexBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly uniformBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly atlasTexture = this._register(new MutableDisposable<IReference<GPUTexture>>());
-	private readonly renderStrategy = this._register(new MutableDisposable<IGpuRenderStrategy>());
+	private readonly renderStrategy = this._register(new MutableDisposable<IGpuFrameRenderStrategy>());
 	private pipeline: GPURenderPipeline | undefined;
 	private sampler: GPUSampler | undefined;
 	private bindGroup: GPUBindGroup | undefined;
@@ -286,7 +287,7 @@ export class ViewLinesGpu extends Disposable {
 		this.renderStrategy.value = this.createRenderStrategy(this.rasterizer!, visualLines);
 	}
 
-	private createRenderStrategy(rasterizer: GlyphRasterizer, visualLines: EditorVisualLineProjection): IGpuRenderStrategy {
+	private createRenderStrategy(rasterizer: GlyphRasterizer, visualLines: EditorVisualLineProjection): IGpuFrameRenderStrategy {
 		return this.canUseFullFileStrategy(visualLines)
 			? new FullFileRenderStrategy(rasterizer)
 			: new ViewportRenderStrategy(rasterizer);

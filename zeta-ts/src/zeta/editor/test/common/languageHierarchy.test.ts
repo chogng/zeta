@@ -5,11 +5,11 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
-import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageHierarchyService } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 
 test("language hierarchy keeps prepare and follow-up requests on the same provider", async () => {
-	using configurations = new LanguageConfigurationService();
+	using configurations = new ComposableLanguageConfigurationService();
 	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("function root() {}\n");
 	const source = URI.file("C:\\project\\main.ts");
@@ -39,7 +39,7 @@ test("language hierarchy keeps prepare and follow-up requests on the same provid
 });
 
 test("language hierarchy discards follow-up results when the source revision changes", async () => {
-	using configurations = new LanguageConfigurationService();
+	using configurations = new ComposableLanguageConfigurationService();
 	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("class Root {}\n");
 	const source = URI.file("C:\\project\\main.ts");

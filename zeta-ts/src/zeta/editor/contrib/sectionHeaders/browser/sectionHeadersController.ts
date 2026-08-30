@@ -1,9 +1,10 @@
 import "./media/sectionHeaders.css";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
+import { type LanguageConfigurationSource } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 import { findSectionHeaders, type FindSectionHeaderOptions } from "../../../common/services/findSectionHeaders.js";
 import { type TextModel } from "../../../common/model/textModel.js";
+import { Position } from '../../../common/core/position.js';
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Marks named source sections for browser presentation and accessibility. */
@@ -14,7 +15,7 @@ export class SectionHeadersController extends Disposable {
 		private readonly languageId: string,
 		private readonly configurations: LanguageConfigurationSource,
 		private readonly lexicalContext: LanguageLexicalContextSource,
-		private readonly options: Omit<FindSectionHeaderOptions, "foldingMarkers">,
+		private readonly options: Omit<FindSectionHeaderOptions, "foldingRules">,
 	) {
 		super();
 		if (model !== viewport.textModel || lexicalContext.textModel !== model) throw new TypeError("Stanza section header dependencies must share a text model");
@@ -27,10 +28,10 @@ export class SectionHeadersController extends Disposable {
 		const configuration = this.configurations.getLanguageConfiguration(this.languageId);
 		const headers = new Map(findSectionHeaders(this.model, {
 			...this.options,
-			foldingMarkers: configuration.foldingMarkers,
-		}).filter(header => !header.shouldBeInComments || this.lexicalContext.getTokenTypeAt(header.range.getStartPosition()) === "comment")
+			foldingRules: configuration.foldingMarkers ? { markers: configuration.foldingMarkers } : undefined,
+		}).filter(header => !header.shouldBeInComments || this.lexicalContext.getTokenTypeAt(new Position(header.range.startLineNumber, header.range.startColumn)) === "comment")
 			.map(header => [header.range.startLineNumber - 1, header]));
-		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-line")]) {
+		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".view-line")]) {
 			const logicalLineIndex = Number(line.dataset.logicalLineIndex);
 			const header = headers.get(logicalLineIndex);
 			line.classList.toggle("section-header", Boolean(header));

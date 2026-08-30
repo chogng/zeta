@@ -12,7 +12,7 @@ export class ArrayEdit<T> extends BaseEdit<ArrayReplacement<T>, ArrayEdit<T>> {
 	static insert<T>(offset: number, value: readonly T[]): ArrayEdit<T> { return ArrayEdit.replace(OffsetRange.emptyAt(offset), value); }
 	static delete<T>(range: OffsetRange): ArrayEdit<T> { return ArrayEdit.replace(range, []); }
 
-	protected createNew(replacements: readonly ArrayReplacement<T>[]): ArrayEdit<T> { return new ArrayEdit(replacements); }
+	protected _createNew(replacements: readonly ArrayReplacement<T>[]): ArrayEdit<T> { return new ArrayEdit(replacements); }
 
 	apply(data: readonly T[]): readonly T[] {
 		const result: T[] = [];
@@ -41,6 +41,6 @@ export class ArrayReplacement<T> extends BaseReplacement<ArrayReplacement<T>> {
 	constructor(range: OffsetRange, readonly newValue: readonly T[]) { super(range); }
 	getNewLength(): number { return this.newValue.length; }
 	equals(other: ArrayReplacement<T>): boolean { return this.replaceRange.equals(other.replaceRange) && this.newValue.length === other.newValue.length && this.newValue.every((value, index) => value === other.newValue[index]); }
-	tryJoinTouching(other: ArrayReplacement<T>): ArrayReplacement<T> { return new ArrayReplacement(this.replaceRange.joinRightTouching(other.replaceRange), [...this.newValue, ...other.newValue]); }
-	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): ArrayReplacement<T> { return new ArrayReplacement(range, rangeInReplacement?.slice(this.newValue) ?? this.newValue); }
+	tryJoinTouching(other: ArrayReplacement<T>): ArrayReplacement<T> | undefined { return new ArrayReplacement(this.replaceRange.joinRightTouching(other.replaceRange), [...this.newValue, ...other.newValue]); }
+	slice(range: OffsetRange, rangeInReplacement: OffsetRange): ArrayReplacement<T> { return new ArrayReplacement(range, rangeInReplacement.slice(this.newValue)); }
 }

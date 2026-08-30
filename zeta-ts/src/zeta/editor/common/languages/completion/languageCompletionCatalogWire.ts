@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DeferredPromise } from "../../../../base/common/async.js";
-import { raceCancellation } from "../../../../base/common/cancellation.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LanguageCompletionProviderRegistry, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionRequest } from "./languageCompletionProviders.js";
 import { LanguageCompletionProviderModuleState, type LanguageCompletionProviderModuleCatalog, type LanguageCompletionProviderModuleController, type LanguageCompletionProviderModuleStateChange } from "./languageCompletionProviderModules.js";
@@ -81,7 +81,7 @@ export class LanguageCompletionCatalogWorkerClient extends Disposable implements
 
 	async run(request: LanguageWorkerRequest<LanguageCompletionLane, LanguageCompletionRequest>, signal: AbortSignal): Promise<LanguageCompletionResult> {
 		this.ensureAlive();
-		await raceCancellation(this.moduleReadiness, signal, "Language completion provider module wait was cancelled");
+		await raceCancellationError(this.moduleReadiness, signal, "Language completion provider module wait was cancelled");
 		this.ensureAlive();
 		return this.worker.run(request, signal);
 	}
@@ -109,7 +109,7 @@ export class LanguageCompletionCatalogWorkerClient extends Disposable implements
 
 	async resolveCompletionItem(request: LanguageCompletionResolveRequest, signal: AbortSignal): Promise<LanguageCompletionItemDetails> {
 		this.ensureAlive();
-		await raceCancellation(this.moduleReadiness, signal, "Language completion provider module wait was cancelled");
+		await raceCancellationError(this.moduleReadiness, signal, "Language completion provider module wait was cancelled");
 		this.ensureAlive();
 		return this.resolver.resolveCompletionItem(request, signal);
 	}

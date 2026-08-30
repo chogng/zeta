@@ -3,7 +3,7 @@ import { CharCode } from '../../../../base/common/charCode.js';
 import { isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../../base/common/numbers.js';
 import { normalizeTextLineEndings, type TextSnapshot } from '../../core/textChange.js';
 import type { TextBuffer } from '../../model/textBuffer.js';
-import { createTextBuffer } from '../../model/textBufferFactory.js';
+import { createPieceTreeTextBuffer } from '../../model/textBufferFactory.js';
 import type { LanguageWorkerDocumentChange } from './textModelSync.protocol.js';
 
 /** Single-document Piece Tree mirror owned by one language-worker server. */
@@ -18,7 +18,7 @@ export class LanguageWorkerDocumentMirror {
 			throw new Error('Language worker mirror snapshot metadata is inconsistent');
 		}
 		this.versionValue = snapshot.version;
-		this.buffer = createTextBuffer(text);
+		this.buffer = createPieceTreeTextBuffer(text);
 	}
 
 	public get version(): number {

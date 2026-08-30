@@ -206,7 +206,7 @@ test("Folding controller collapses macOS prefix levels without hiding shallower 
 });
 
 function renderedLogicalLines(root: ParentNode): readonly string[] {
-	return [...root.querySelectorAll<HTMLElement>(".stanza-editor-line")].map(line => line.dataset.logicalLineIndex!);
+	return [...root.querySelectorAll<HTMLElement>(".view-line")].map(line => line.dataset.logicalLineIndex!);
 }
 
 function foldingControllerContext(

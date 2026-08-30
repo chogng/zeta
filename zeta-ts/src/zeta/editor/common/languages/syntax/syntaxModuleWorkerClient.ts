@@ -1,4 +1,4 @@
-import { raceCancellation } from "../../../../base/common/cancellation.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
 import { type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { SyntaxProviderModuleState, type SyntaxProviderModuleCatalog, type SyntaxProviderModuleController, type SyntaxProviderModuleStateChange } from "./syntaxProviderModules.js";
@@ -51,7 +51,7 @@ export class SyntaxModuleWorkerClient extends Disposable implements SyntaxWorker
 	}
 
 	async run(request: LanguageWorkerRequest<SyntaxLane, SyntaxRequest>, signal: AbortSignal): Promise<SyntaxResult> {
-		await raceCancellation(this.moduleReadiness, signal, "Syntax provider module wait was cancelled");
+		await raceCancellationError(this.moduleReadiness, signal, "Syntax provider module wait was cancelled");
 		return this.worker.run(request, signal);
 	}
 

@@ -36,13 +36,18 @@ export const enum PartFingerprint {
 	None,
 	ContentWidgets,
 	OverflowingContentWidgets,
+	OverflowGuard,
 	OverlayWidgets,
 	OverflowingOverlayWidgets,
-	ViewZones,
+	ScrollableElement,
+	TextArea,
+	ViewLines,
+	Minimap,
+	ViewLinesGpu,
 }
 
 export class PartFingerprints {
-	public static write(target: Element | FastDomNode<HTMLElement>, fingerprint: PartFingerprint): void {
+	public static write(target: Element | FastDomNode<HTMLElement>, fingerprint: PartFingerprint) {
 		target.setAttribute('data-mprt', String(fingerprint));
 	}
 

@@ -1,5 +1,5 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { ITestingService } from "../../../services/testing/common/testingService.js";
 import { ITerminalService } from "../../../services/terminal/common/terminal.js";
@@ -17,7 +17,7 @@ export function registerTestingView(registry: WorkbenchViewRegistry = ViewsRegis
 		localizationKey: { bundle: "zeta.views", key: "testing" },
 		order: 1,
 		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(TestingViewPane, { serviceDependencies: [ITestingService, ITerminalService, IViewsService] }),
+		ctorDescriptor: new ServiceConstructionDescriptor(TestingViewPane, { serviceDependencies: [ITestingService, ITerminalService, IViewsService] }),
 	}]);
 }
 

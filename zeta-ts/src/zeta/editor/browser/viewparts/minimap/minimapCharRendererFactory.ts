@@ -1,4 +1,8 @@
-import { h } from '../../../../base/browser/dom.js';
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 import { MinimapCharRenderer } from './minimapCharRenderer.js';
 import { allCharCodes, Constants } from './minimapCharSheet.js';
 import { prebakedMiniMaps } from './minimapPreBaked.js';
@@ -18,7 +22,7 @@ export class MinimapCharRendererFactory {
 	/**
 	 * Creates a new character renderer factory with the given scale.
 	 */
-	public static create(scale: number, fontFamily: string, host: HTMLElement): MinimapCharRenderer {
+	public static create(scale: number, fontFamily: string) {
 		// renderers are immutable. By default we'll 'create' a new minimap
 		// character renderer whenever we switch editors, no need to do extra work.
 		if (this.lastCreated && scale === this.lastCreated.scale && fontFamily === this.lastFontFamily) {
@@ -30,8 +34,8 @@ export class MinimapCharRendererFactory {
 			factory = new MinimapCharRenderer(prebakedMiniMaps[scale](), scale);
 		} else {
 			factory = MinimapCharRendererFactory.createFromSampleData(
-				MinimapCharRendererFactory.createSampleData(fontFamily, host).data,
-				scale,
+				MinimapCharRendererFactory.createSampleData(fontFamily).data,
+				scale
 			);
 		}
 
@@ -43,10 +47,9 @@ export class MinimapCharRendererFactory {
 	/**
 	 * Creates the font sample data, writing to a canvas.
 	 */
-	public static createSampleData(fontFamily: string, host: HTMLElement): ImageData {
-		const canvas = h(host.ownerDocument, 'canvas');
-		const ctx = canvas.getContext('2d');
-		if (!ctx) throw new Error('Minimap character sampling requires a 2D canvas context');
+	public static createSampleData(fontFamily: string): ImageData {
+		const canvas = document.createElement('canvas');
+		const ctx = canvas.getContext('2d')!;
 
 		canvas.style.height = `${Constants.SAMPLED_CHAR_HEIGHT}px`;
 		canvas.height = Constants.SAMPLED_CHAR_HEIGHT;
@@ -85,7 +88,7 @@ export class MinimapCharRendererFactory {
 		sourceOffset: number,
 		dest: Uint8ClampedArray,
 		destOffset: number,
-		scale: number,
+		scale: number
 	): number {
 		const width = Constants.BASE_CHAR_WIDTH * scale;
 		const height = Constants.BASE_CHAR_HEIGHT * scale;

@@ -1,4 +1,4 @@
-import { Dimension, type IDimension } from "../../../base/browser/geometry.js";
+import { Dimension, type IDimension } from "../../../base/browser/dom.js";
 import type { SerializedGridDescriptor } from "../../../base/browser/ui/grid/grid.js";
 import type { WorkbenchPartView } from "../../../workbench/browser/workbenchPartView.js";
 import type { SessionsPartId } from "../../services/layout/common/sessionsLayoutService.js";

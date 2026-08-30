@@ -5,11 +5,12 @@ import { type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type Range } from '../../../common/core/range.js';
 import { type TextDecorationCollection, type TextDecorationId, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from "../../../common/model/textModel.js";
+import { GlyphMarginLane } from '../../../common/model.js';
 import { EmptyRangeRendering, createStanzaRangeRectangles } from '../../../common/viewModel/rangeGeometry.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
-import { type EditorLineRange } from '../../../common/viewModel.js';
+import { type EditorLineRange } from '../../../common/viewModel/editorViewportContracts.js';
 import { type DiagnosticOverviewMarker, type DiffOverviewMarker } from "../overviewRuler/overviewRuler.js";
 import { type EditorOverlayContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
@@ -40,12 +41,6 @@ export enum DecorationPresentation {
 	ColorSwatch = "color-swatch",
 	GlyphMargin = "glyph-margin",
 	LineDecoration = "line-decoration",
-}
-
-export enum GlyphMarginLane {
-	Left = "left",
-	Center = "center",
-	Right = "right",
 }
 
 export interface DecorationGlyphMarginPresentation {

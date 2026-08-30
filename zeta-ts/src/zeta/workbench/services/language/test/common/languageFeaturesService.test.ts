@@ -6,15 +6,15 @@ import { LanguageCompletionService } from '../../../../../editor/common/language
 import { LanguageRequestStatus } from '../../../../../editor/common/languages/languageRequestCoordinator.js';
 import { SyntaxService } from '../../../../../editor/common/languages/syntax/syntaxService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
-import { LanguageConfigurationService } from '../../../../../editor/common/services/languageConfigurationService.js';
+import { ComposableLanguageConfigurationService } from '../../../../../editor/common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { HoverService } from '../../../../../editor/contrib/hover/common/hover.js';
+import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatures.js';
 
 test('Workbench installs product languages while Editor owns provider registries', async () => {
 	using languageService = new LanguageService();
-	using languageConfigurations = new LanguageConfigurationService();
+	using languageConfigurations = new ComposableLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
 	using workbenchLanguages = new WorkbenchLanguageFeatures(languageService, languageConfigurations, languageFeatures);
 	using model = new TextModel('const answer = 42;');
@@ -28,10 +28,10 @@ test('Workbench installs product languages while Editor owns provider registries
 });
 
 test('Language features service atomically owns a replaceable cross-kind provider batch', async () => {
-	using languageConfigurations = new LanguageConfigurationService();
+	using languageConfigurations = new ComposableLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
 	using model = new TextModel('answer');
-	using hover = new HoverService(model, languageFeatures.hoverProvider);
+	using hover = new LanguageHoverService(model, languageFeatures.hoverProvider);
 	const registration = languageFeatures.registerProviderBatch({ hovers: [{ providerId: 'host.first', languageIds: ['typescript'], provideHover: () => ({ contents: ['first'] }) }] });
 
 	assert.deepEqual(await hover.provideHover('typescript', new Position((0) + 1, (1) + 1)), { contents: ['first'] });

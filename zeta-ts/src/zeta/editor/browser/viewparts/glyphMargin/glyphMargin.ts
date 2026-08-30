@@ -6,7 +6,8 @@ import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
-import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration, GlyphMarginLane } from '../decorations/decorations.js';
+import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration } from '../decorations/decorations.js';
+import { GlyphMarginLane } from '../../../common/model.js';
 import { type DecorationsOverlay } from '../decorations/decorations.js';
 
 export interface GlyphMarginWidgetsOptions {
@@ -42,7 +43,7 @@ export class GlyphMarginWidgets extends EditorViewPart {
 		this.laneDomNodes = new Map(options.lanes.map(lane => {
 			const domNode = h(this.domNode.ownerDocument, 'span');
 			domNode.className = 'stanza-editor-glyph-margin-lane';
-			domNode.dataset.glyphMarginLane = lane;
+			domNode.dataset.glyphMarginLane = String(lane);
 			this.domNode.append(domNode);
 			return [lane, domNode] as const;
 		}));

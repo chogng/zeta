@@ -1,14 +1,14 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
-import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/resolverService.js";
+import type { ITextModelResourceService, TextModelBlockInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/textModelResourceService.js";
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { DocumentWorkingCopy } from "./documentWorkingCopy.js";
 import { parseDocument } from "./documentWorkingCopy.js";
 
 /** Workbench persistence adapter for a TextModel opened by the document editor. */
-export class DocumentEditorTextModelService extends Disposable implements ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference> {
+export class DocumentEditorTextModelService extends Disposable implements ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference> {
 	constructor(private readonly textFiles: ITextFileService, private readonly workingCopyService?: IWorkingCopyService) {
 		super();
 		if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function") {

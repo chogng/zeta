@@ -3,25 +3,14 @@ import { Disposable, MutableDisposable, type IDisposable } from '../../../base/c
 import { isFiniteNumber, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../config/editorOptions.js';
 import { type TextModel } from '../model/textModel.js';
-import { type EditorViewportLineSource } from '../viewModel.js';
+import { type EditorViewportLineSource } from './editorViewportContracts.js';
 import { EditorVisualLineProjection, type EditorVisualLine } from './modelLineProjection.js';
+import { type ZetaLineBreaksComputer, type ZetaLineBreaksResult } from './zetaLineBreaksComputer.js';
 
 /** Supplies logical-line visibility without importing a browser feature. */
 export interface EditorLineVisibilitySource {
 	readonly onDidChange: Event<void>;
 	isLineVisible(lineIndex: number): boolean;
-}
-
-/** Browser or worker implementation that turns one logical line into visual rows. */
-export interface ILineBreaksComputer {
-	computeLineBreaks(text: string, wrapWidth: number, wrappingIndent?: WrappingIndent): readonly number[];
-	/** Optional extended result used to lay out wrapped continuation rows. */
-	computeLineBreaksWithIndent?(text: string, wrapWidth: number, wrappingIndent: WrappingIndent): LineBreaksResult;
-}
-
-export interface LineBreaksResult {
-	readonly breakColumns: readonly number[];
-	readonly wrappedTextIndentWidth: number;
 }
 
 export interface ViewModelLinesOptions {
@@ -72,7 +61,7 @@ export class ViewModelLines extends Disposable {
 	private wrappingProjection: EditorVisualLineProjection;
 	private currentProjection: EditorVisualLineProjection;
 	private projectionRevision = 0;
-	private pendingBreaks: LineBreaksResult[] | undefined;
+	private pendingBreaks: ZetaLineBreaksResult[] | undefined;
 	private nextLineIndex = 0;
 	private scanVersion = -1;
 
@@ -82,7 +71,7 @@ export class ViewModelLines extends Disposable {
 
 	constructor(
 		private readonly model: TextModel,
-		private readonly lineBreaksComputer: ILineBreaksComputer,
+		private readonly lineBreaksComputer: ZetaLineBreaksComputer,
 		options: ViewModelLinesOptions = {},
 	) {
 		super();
@@ -328,7 +317,7 @@ function readWrappingIndent(value: WrappingIndent | undefined): WrappingIndent {
 	return wrappingIndent;
 }
 
-function computeLineBreaksForLine(computer: ILineBreaksComputer, text: string, wrapWidth: number, wrappingIndent: WrappingIndent): LineBreaksResult {
+function computeLineBreaksForLine(computer: ZetaLineBreaksComputer, text: string, wrapWidth: number, wrappingIndent: WrappingIndent): ZetaLineBreaksResult {
 	const extended = computer.computeLineBreaksWithIndent;
 	if (extended) {
 		const result = extended.call(computer, text, wrapWidth, wrappingIndent);

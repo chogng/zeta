@@ -4,7 +4,7 @@ import { Disposable, type IDisposable, toDisposable } from "../../../../base/com
 import { URI } from "../../../../base/common/uri.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
-import type { ILogService } from "../../../../platform/log/common/logService.js";
+import type { ILogService } from "../../../../platform/log/common/log.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { Memento } from "../../../common/memento.js";

@@ -1,29 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationPresentation, GlyphMarginLane, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorations.js";
+import { DecorationPresentation, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorations.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
+import { TrackedRangeStickiness, GlyphMarginLane } from '../../common/model.js';
+
 
 test("Decoration source resolves opaque metadata without owning the collection", () => {
 	using model = new TextModel("abcd\nefgh\nij");
 	using collection = new TextDecorationCollection<DecorationMetadata>(model);
 	const matchId = collection.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: { presentation: DecorationPresentation.SearchMatch },
 	});
 	collection.add({
 		range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (1) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: {},
 	});
 	const errorId = collection.add({
 		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: { presentation: DecorationPresentation.ErrorUnderline },
 	});
 	const source = createStanzaDecorationSource(
@@ -81,7 +82,7 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
 	using collection = new TextDecorationCollection<string>(model);
 	const id = collection.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "match",
 	});
 	const source = createStanzaDecorationSource(
@@ -115,7 +116,7 @@ test("Decoration geometry presents an empty diagnostic at its text position", ()
 	using collection = new TextDecorationCollection<DecorationPresentation>(model);
 	const id = collection.add({
 		range: Range.fromPositions(new Position((1) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: DecorationPresentation.HintUnderline,
 	});
 	const source = createStanzaDecorationSource(collection, decoration => decoration.metadata);
@@ -140,7 +141,7 @@ test("Decoration sources declare and validate glyph-margin ownership", () => {
 	using collection = new TextDecorationCollection<string>(model);
 	const id = collection.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "folding",
 	});
 	const source = createStanzaDecorationSource(collection, () => ({
@@ -170,7 +171,7 @@ test("Decoration sources declare and validate line-decoration ownership", () => 
 	using collection = new TextDecorationCollection<string>(model);
 	const id = collection.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "folding",
 	});
 	const source = createStanzaDecorationSource(collection, () => ({

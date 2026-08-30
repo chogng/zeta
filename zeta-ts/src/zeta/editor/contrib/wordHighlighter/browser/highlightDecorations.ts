@@ -1,5 +1,5 @@
 import './highlightDecorations.css';
-import { DocumentHighlightKind } from '../../../common/languages/documentHighlights.js';
+import { DocumentHighlightKind } from '../../../common/languages.js';
 import { DecorationPresentation, type DecorationPresentationResolution } from '../../../browser/viewparts/decorations/decorations.js';
 
 const wordHighlight = Object.freeze({
@@ -27,12 +27,12 @@ const selectionHighlightWithoutOverview = Object.freeze({
 	minimap: true,
 });
 
-export function getHighlightDecorationOptions(kind: DocumentHighlightKind | undefined): DecorationPresentationResolution {
+export function resolveDocumentHighlightPresentation(kind: DocumentHighlightKind | undefined): DecorationPresentationResolution {
 	if (kind === DocumentHighlightKind.Write) return wordHighlightStrong;
 	if (kind === DocumentHighlightKind.Text) return wordHighlightText;
 	return wordHighlight;
 }
 
-export function getSelectionHighlightDecorationOptions(hasSemanticHighlights: boolean): DecorationPresentationResolution {
+export function resolveSelectionHighlightPresentation(hasSemanticHighlights: boolean): DecorationPresentationResolution {
 	return hasSemanticHighlights ? selectionHighlightWithoutOverview : selectionHighlight;
 }

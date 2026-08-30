@@ -1,57 +1,13 @@
-export interface IDimension {
-	readonly width: number;
-	readonly height: number;
-}
-
-export class Dimension implements IDimension {
-	static readonly Zero = new Dimension(0, 0);
-	static readonly None = Dimension.Zero;
-
-	constructor(
-		readonly width: number,
-		readonly height: number,
-	) {}
-
-	with(
-		width = this.width,
-		height = this.height,
-	): Dimension {
-		return width === this.width && height === this.height
-			? this
-			: new Dimension(width, height);
-	}
-
-	static equals(
-		left: IDimension | undefined,
-		right: IDimension | undefined,
-	): boolean {
-		return left === right ||
-			Boolean(left && right &&
-				left.width === right.width &&
-				left.height === right.height);
-	}
-}
+import { Dimension, getWindow, type IDimension } from "./dom.js";
 
 export interface IPosition {
 	readonly left: number;
 	readonly top: number;
 }
 
-export interface IRectangle extends IPosition, IDimension {}
+export interface IPositionedRectangle extends IPosition, IDimension {}
 
-export function getClientArea(element: HTMLElement): Dimension {
-	const targetWindow = getOwnerWindow(element);
-	if (element === targetWindow.document.body) {
-		const viewport = targetWindow.visualViewport;
-		return new Dimension(
-			viewport?.width ?? targetWindow.innerWidth,
-			viewport?.height ?? targetWindow.innerHeight,
-		);
-	}
-	return new Dimension(element.clientWidth, element.clientHeight);
-}
-
-export function getViewport(targetWindow: Window): IRectangle {
+export function getViewport(targetWindow: Window): IPositionedRectangle {
 	const viewport = targetWindow.visualViewport;
 	return {
 		left: viewport?.offsetLeft ?? 0,
@@ -61,21 +17,8 @@ export function getViewport(targetWindow: Window): IRectangle {
 	};
 }
 
-export function getDomNodePagePosition(
-	element: HTMLElement,
-): IRectangle {
-	const bounds = element.getBoundingClientRect();
-	const targetWindow = getOwnerWindow(element);
-	return {
-		left: bounds.left + targetWindow.scrollX,
-		top: bounds.top + targetWindow.scrollY,
-		width: bounds.width,
-		height: bounds.height,
-	};
-}
-
 export function getContentSize(element: HTMLElement): Dimension {
-	const style = getOwnerWindow(element).getComputedStyle(element);
+	const style = getWindow(element).getComputedStyle(element);
 	return new Dimension(
 		element.offsetWidth -
 			pixels(style.borderLeftWidth) -
@@ -91,7 +34,7 @@ export function getContentSize(element: HTMLElement): Dimension {
 }
 
 export function getTotalSize(element: HTMLElement): Dimension {
-	const style = getOwnerWindow(element).getComputedStyle(element);
+	const style = getWindow(element).getComputedStyle(element);
 	return new Dimension(
 		element.offsetWidth +
 			pixels(style.marginLeft) +
@@ -104,10 +47,4 @@ export function getTotalSize(element: HTMLElement): Dimension {
 
 function pixels(value: string): number {
 	return Number.parseFloat(value) || 0;
-}
-
-function getOwnerWindow(element: HTMLElement): Window {
-	const targetWindow = element.ownerDocument.defaultView;
-	if (!targetWindow) throw new Error("DOM geometry requires an element with an owning window");
-	return targetWindow;
 }

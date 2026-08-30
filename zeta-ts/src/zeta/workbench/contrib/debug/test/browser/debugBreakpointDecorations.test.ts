@@ -3,10 +3,11 @@ import test from 'node:test';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { GlyphMarginLane } from '../../../../../editor/browser/viewparts/decorations/decorations.js';
+
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { type IDebugBreakpoint, type IDebugService } from '../../../../services/debug/common/debugService.js';
 import { DebugBreakpointDecorationProvider } from '../../browser/debugBreakpointDecorations.js';
+import { GlyphMarginLane } from '../../../../../editor/common/model.js';
 
 test('Debug breakpoints project semantic glyph-margin decorations', () => {
 	const resource = URI.file('C:\\project\\main.ts');

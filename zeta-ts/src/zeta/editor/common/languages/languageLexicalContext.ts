@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type LanguageConfigurationChangeEvent, type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
+import { type MergedLanguageConfigurationChangeEvent, type LanguageConfigurationSource, type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
 import { assertLanguageId } from "./languageId.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { type LanguageLexicalBracketEvent, type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
@@ -39,7 +39,7 @@ export interface LanguageStructuralBracketSource extends LanguageLexicalContextS
  */
 export class LanguageLexicalContextIndex extends Disposable implements LanguageStructuralBracketSource {
 	private readonly changeEmitter = this._register(new Emitter<void>());
-	private configuration: ResolvedLanguageConfiguration | undefined;
+	private configuration: MergedLanguageConfiguration | undefined;
 	private scanner: LanguageLexicalLineScanner | undefined;
 	private bracketTokens: readonly string[] = Object.freeze([]);
 	private lineResults: LanguageLexicalLineResult[] = [];
@@ -53,8 +53,8 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 			throw new TypeError("Language lexical context requires a configuration source");
 		}
 		this._register(textModel.onDidChange(change => this.acceptModelChange(change)));
-		if (configurations.onDidChangeConfiguration) {
-			this._register(configurations.onDidChangeConfiguration(event => this.acceptConfigurationChange(event)));
+		if (configurations.onDidChange) {
+			this._register(configurations.onDidChange(event => this.acceptConfigurationChange(event)));
 		}
 		this._register(toDisposable(() => {
 			this.configuration = undefined;
@@ -151,7 +151,7 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 		this.changeEmitter.fire();
 	}
 
-	private acceptConfigurationChange(event: LanguageConfigurationChangeEvent): void {
+	private acceptConfigurationChange(event: MergedLanguageConfigurationChangeEvent): void {
 		if (event.languageId !== this.languageId) return;
 		this.configuration = undefined;
 		this.scanner = undefined;
@@ -251,7 +251,7 @@ function contains(token: LanguageToken, startColumn: number, endColumn: number):
 	return token.range.startColumn - 1 <= startColumn && token.range.endColumn - 1 >= endColumn;
 }
 
-function structuralBracketTokens(configuration: ResolvedLanguageConfiguration): readonly string[] {
+function structuralBracketTokens(configuration: MergedLanguageConfiguration): readonly string[] {
 	return Object.freeze([...new Set(configuration.brackets.flatMap(pair => [pair.open, pair.close]))].sort((left, right) => right.length - left.length));
 }
 

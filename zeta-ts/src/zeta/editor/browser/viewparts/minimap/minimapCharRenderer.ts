@@ -8,6 +8,7 @@ import { Constants, getCharIndex } from './minimapCharSheet.js';
 import { toUint8 } from '../../../../base/common/uint.js';
 
 export class MinimapCharRenderer {
+	_minimapCharRendererBrand: void = undefined;
 	private readonly charDataNormal: Uint8ClampedArray;
 	private readonly charDataLight: Uint8ClampedArray;
 

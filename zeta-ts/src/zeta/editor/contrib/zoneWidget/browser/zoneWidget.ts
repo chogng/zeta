@@ -6,7 +6,8 @@ import { type CodeEditorWidget } from '../../../browser/widget/codeEditor/codeEd
 import { type EditorViewZone, type EditorViewZoneHandle } from '../../../browser/view.js';
 import { type Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
-import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';
+import { type TrackedRange } from '../../../common/model/trackedRange.js';
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 export type ZoneWidgetEditor = Pick<CodeEditorWidget, 'viewport' | 'revealRange'>;
 
@@ -123,10 +124,10 @@ export abstract class ZoneWidget extends Disposable {
 		this.editor.viewport.textModel.offsetAt(range.getEndPosition());
 		this.hide();
 		this.heightInLines = this.limitHeightInLines(heightInLines);
-		this.anchor.value = this.editor.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
+		this.anchor.value = this.editor.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		const viewZone: EditorViewZone = {
-			afterLineIndex: this.anchorVisualLineIndex,
-			heightInPixels: this.heightInPixels,
+			afterLineNumber: this.anchorVisualLineIndex + 1,
+			heightInPx: this.heightInPixels,
 			ordinal: this.options.ordinal,
 			domNode: this.domNode,
 		};
@@ -152,7 +153,7 @@ export abstract class ZoneWidget extends Disposable {
 		validateHeightInLines(heightInLines);
 		this.editor.viewport.textModel.offsetAt(range.getStartPosition());
 		this.editor.viewport.textModel.offsetAt(range.getEndPosition());
-		this.anchor.value = this.editor.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
+		this.anchor.value = this.editor.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		this.heightInLines = this.limitHeightInLines(heightInLines);
 		this.layoutZone();
 	}
@@ -221,11 +222,11 @@ export abstract class ZoneWidget extends Disposable {
 		if (!this.viewZone || this.layingOut) return;
 		this.layingOut = true;
 		try {
-			const nextAfterLineIndex = this.anchorVisualLineIndex;
+			const nextAfterLineNumber = this.anchorVisualLineIndex + 1;
 			const nextHeightInPixels = this.heightInPixels;
-			const needsZoneLayout = this.viewZone.afterLineIndex !== nextAfterLineIndex || this.viewZone.heightInPixels !== nextHeightInPixels;
-			this.viewZone.afterLineIndex = nextAfterLineIndex;
-			this.viewZone.heightInPixels = nextHeightInPixels;
+			const needsZoneLayout = this.viewZone.afterLineNumber !== nextAfterLineNumber || this.viewZone.heightInPx !== nextHeightInPixels;
+			this.viewZone.afterLineNumber = nextAfterLineNumber;
+			this.viewZone.heightInPx = nextHeightInPixels;
 			if (needsZoneLayout) this.viewZoneHandle.value?.layout();
 			this.layoutDom(nextHeightInPixels);
 			this.updateSashState();

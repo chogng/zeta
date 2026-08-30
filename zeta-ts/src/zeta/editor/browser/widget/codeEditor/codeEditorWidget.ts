@@ -1,13 +1,14 @@
 import { isHTMLElement } from "../../../../base/browser/dom.js";
-import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
+import { getClientArea } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
+import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type EditorScrollPosition } from "../../../common/viewModel.js";
+import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
 import type { IContentWidget, IOverlayWidget, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
 import { type EditorViewport } from "../../view.js";

@@ -1,7 +1,8 @@
 import "./media/binaryEditorPane.css";
 import { h } from "../../../../base/browser/dom.js";
-import type { IDimension } from "../../../../base/browser/geometry.js";
-import { raceCancellation, throwIfCancelled } from "../../../../base/common/cancellation.js";
+import type { IDimension } from "../../../../base/browser/dom.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
+import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
@@ -46,11 +47,11 @@ export class BinaryEditorPane extends Disposable implements IEditorPane {
 		const summary = this.requireSummary();
 		const content = this.requireContent();
 		throwIfCancelled(signal, "Binary editor loading was cancelled");
-		const stat = await raceCancellation(this.files.stat(input.resource), signal, "Binary editor loading was cancelled");
+		const stat = await raceCancellationError(this.files.stat(input.resource), signal, "Binary editor loading was cancelled");
 		if (stat.sizeBytes > MAX_BINARY_EDITOR_BYTES) {
 			throw new Error(`Binary file is too large to preview (${formatByteCount(stat.sizeBytes)})`);
 		}
-		const resolved = await raceCancellation(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
+		const resolved = await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
 		throwIfCancelled(signal, "Binary editor loading was cancelled");
 		const visible = resolved.bytes.subarray(0, MAX_RENDERED_BYTES);
 		summary.textContent = `${formatByteCount(resolved.bytes.length)} · read-only hexadecimal preview${resolved.bytes.length > visible.length ? ` · first ${formatByteCount(visible.length)}` : ""}`;

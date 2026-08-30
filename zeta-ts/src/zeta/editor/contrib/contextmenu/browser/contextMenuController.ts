@@ -1,5 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
 import { type EditorHitTarget } from "../../../common/viewModel/pointerHitTest.js";
@@ -25,7 +25,7 @@ export class ContextMenuController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.contextMenu",
 	install: context => {
 		if (context.kind !== "text" || !context.options.onShowContextMenu) return;

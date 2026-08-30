@@ -77,7 +77,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(main, /export \* from "\.\/editor\.api\.js"/u);
 	assert.match(worker, /StanzaWorkerPort/u);
 	assert.match(worker, /export function start/u);
-	assert.match(editorWorkerService, /class EditorWorkerService/u);
+	assert.match(editorWorkerService, /class VersionedEditorWorkerClient/u);
 	assert.match(analysisWorker, /editor\.worker\.start/u);
 	assert.match(completionWorker, /editor\.worker\.start/u);
 	const retiredBrowserLanguageDirectory = join(editorRoot, "browser/language");

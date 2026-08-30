@@ -8,14 +8,14 @@ import { createLanguageCompletionInvokeContext } from "../../../../../editor/com
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
 import { WorkspaceSymbolService } from '../../../../../editor/common/languages/workspaceSymbols.js';
-import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/codeAction.js';
+import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/languageCodeActions.js';
 import { FormatService } from '../../../../../editor/contrib/format/common/formatCommands.js';
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
-import { HoverService } from '../../../../../editor/contrib/hover/common/hover.js';
-import { InlayHintsService } from '../../../../../editor/contrib/inlayHints/common/inlayHints.js';
-import { LinkedEditingService } from '../../../../../editor/contrib/linkedEditing/common/linkedEditing.js';
-import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/parameterHints.js';
-import { RenameService } from '../../../../../editor/contrib/rename/common/rename.js';
+import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
+import { InlayHintsService } from '../../../../../editor/contrib/inlayHints/common/languageInlayHints.js';
+import { LinkedEditingService } from '../../../../../editor/contrib/linkedEditing/common/languageLinkedEditing.js';
+import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/languageParameterHints.js';
+import { RenameService } from '../../../../../editor/contrib/rename/common/languageRename.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -97,7 +97,7 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("pri");
 	const resource = URI.file("C:\\project\\main.rs");
-	using hover = new HoverService(model, languages.hoverProvider, resource);
+	using hover = new LanguageHoverService(model, languages.hoverProvider, resource);
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
 	using parameterHints = new ParameterHintsService(model, languages.parameterHintsProvider, resource);
 	using inlayHints = new InlayHintsService(model, languages.inlayHintsProvider, resource);
@@ -165,7 +165,7 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	assert.deepEqual(api.documentFormattingRequests[0]!.options, { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null });
 	assert.deepEqual(api.rangeFormattingRequests[0]!.range, DTO_RANGE);
 	assert.equal(documentEdits[0]!.text, "formatted");
-	assert.equal(rangeEdits[0]!.range.getEndPosition().column, 6);
+	assert.equal(Range.lift(rangeEdits[0]!.range).getEndPosition().column, 6);
 });
 
 test("App Server language providers do not send documents above their transport limit", async () => {

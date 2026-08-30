@@ -1,14 +1,15 @@
 import { SelectionDirection, Selection } from '../core/selection.js';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { type TextModel } from '../model/textModel.js';
-import { TrackedRangeStickiness, type TrackedRange } from '../model/trackedRange.js';
+import { type TrackedRange } from '../model/trackedRange.js';
+import { TrackedRangeStickiness } from '../model.js';
 
 export class Cursor extends AbstractDisposable {
 	private readonly trackedRange: TrackedRange;
 
 	constructor(model: TextModel, selection: Selection) {
 		super();
-		this.trackedRange = model.trackRange(selection, TrackedRangeStickiness.NeverGrowsAtEdges);
+		this.trackedRange = model.trackRange(selection, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		this.direction = selection.getDirection();
 	}
 

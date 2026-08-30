@@ -1,9 +1,9 @@
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { BlockCommentController, ToggleBlockCommentCommandId } from "./blockCommentController.js";
 import { LineCommentController, ToggleLineCommentCommandId } from "./lineCommentController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
-registerEditorContribution({ id: "editor.contrib.comment", commands: [
+registerTextEditorCapabilityContribution({ id: "editor.contrib.comment", commands: [
 	{ id: ToggleLineCommentCommandId, canTriggerInlineEdits: true },
 	{ id: ToggleBlockCommentCommandId, canTriggerInlineEdits: true },
 ], install: context => {

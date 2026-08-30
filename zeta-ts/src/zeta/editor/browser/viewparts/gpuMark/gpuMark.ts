@@ -6,12 +6,13 @@ import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Shows which visible rows were emitted by the GPU text strategy. */
 export class GpuMarkOverlay extends DynamicViewOverlay {
+	public static readonly CLASS_NAME = 'gpu-mark';
 	public readonly domNode: HTMLElement;
 	private readonly rows: ViewPartRows;
 
 	constructor(context: EditorViewContext, host: HTMLElement, private readonly readGpuLineIndexes: () => ReadonlySet<number>) {
 		super(context);
-		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-gpu-mark-layer', 'stanza-editor-gpu-mark'));
+		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-gpu-mark-layer', GpuMarkOverlay.CLASS_NAME));
 		this.domNode = this.rows.domNode;
 	}
 

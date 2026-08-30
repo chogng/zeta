@@ -12,7 +12,7 @@ export class LengthEdit extends BaseEdit<LengthReplacement, LengthEdit> {
 	static delete(range: OffsetRange): LengthEdit { return LengthEdit.replace(range, 0); }
 	static compose(edits: readonly LengthEdit[]): LengthEdit { return edits.reduce((result, edit) => result.compose(edit), LengthEdit.empty); }
 
-	protected createNew(replacements: readonly LengthReplacement[]): LengthEdit { return new LengthEdit(replacements); }
+	protected _createNew(replacements: readonly LengthReplacement[]): LengthEdit { return new LengthEdit(replacements); }
 
 	inverse(): LengthEdit {
 		const inverse: LengthReplacement[] = [];
@@ -48,7 +48,7 @@ export class LengthReplacement extends BaseReplacement<LengthReplacement> {
 
 	getNewLength(): number { return this.newLength; }
 	equals(other: LengthReplacement): boolean { return this.replaceRange.equals(other.replaceRange) && this.newLength === other.newLength; }
-	tryJoinTouching(other: LengthReplacement): LengthReplacement { return new LengthReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newLength + other.newLength); }
-	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): LengthReplacement { return new LengthReplacement(range, rangeInReplacement?.length ?? this.newLength); }
-	toString(): string { return `[${this.replaceRange.start}, +${this.replaceRange.length}) -> +${this.newLength}`; }
+	tryJoinTouching(other: LengthReplacement): LengthReplacement | undefined { return new LengthReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newLength + other.newLength); }
+	slice(range: OffsetRange, rangeInReplacement: OffsetRange): LengthReplacement { return new LengthReplacement(range, rangeInReplacement.length); }
+	toString() { return `[${this.replaceRange.start}, +${this.replaceRange.length}) -> +${this.newLength}}`; }
 }

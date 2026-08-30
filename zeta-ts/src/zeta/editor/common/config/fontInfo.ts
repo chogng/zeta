@@ -62,6 +62,12 @@ export class BareFontInfo {
 		});
 	}
 
+	private static _wrapInQuotes(fontFamily: string): string {
+		if (/[,"']/.test(fontFamily)) return fontFamily;
+		if (/[+ ]/.test(fontFamily)) return `"${fontFamily}"`;
+		return fontFamily;
+	}
+
 	public readonly pixelRatio: number;
 	public readonly fontFamily: string;
 	public readonly fontWeight: string;
@@ -72,14 +78,14 @@ export class BareFontInfo {
 	public readonly letterSpacing: number;
 
 	protected constructor(options: {
-		readonly pixelRatio: number;
-		readonly fontFamily: string;
-		readonly fontWeight: string;
-		readonly fontSize: number;
-		readonly fontFeatureSettings: string;
-		readonly fontVariationSettings: string;
-		readonly lineHeight: number;
-		readonly letterSpacing: number;
+		pixelRatio: number;
+		fontFamily: string;
+		fontWeight: string;
+		fontSize: number;
+		fontFeatureSettings: string;
+		fontVariationSettings: string;
+		lineHeight: number;
+		letterSpacing: number;
 	}) {
 		this.pixelRatio = finiteOr(options.pixelRatio, 1);
 		this.fontFamily = String(options.fontFamily);
@@ -107,7 +113,7 @@ export class BareFontInfo {
 
 	/** Adds the platform fallback and quotes family names where CSS requires it. */
 	public getMassagedFontFamily(): string {
-		const fontFamily = wrapFontFamily(this.fontFamily);
+		const fontFamily = BareFontInfo._wrapInQuotes(this.fontFamily);
 		if (EDITOR_FONT_DEFAULTS.fontFamily && this.fontFamily !== EDITOR_FONT_DEFAULTS.fontFamily) {
 			return `${fontFamily}, ${EDITOR_FONT_DEFAULTS.fontFamily}`;
 		}
@@ -122,7 +128,7 @@ export const SERIALIZED_FONT_INFO_VERSION = 2;
 export class FontInfo extends BareFontInfo {
 	readonly _editorStylingBrand: void = undefined;
 
-	public readonly version = SERIALIZED_FONT_INFO_VERSION;
+	public readonly version: number = SERIALIZED_FONT_INFO_VERSION;
 	public readonly isTrusted: boolean;
 	public readonly isMonospace: boolean;
 	public readonly typicalHalfwidthCharacterWidth: number;
@@ -134,22 +140,22 @@ export class FontInfo extends BareFontInfo {
 	public readonly maxDigitWidth: number;
 
 	public constructor(options: {
-		readonly pixelRatio: number;
-		readonly fontFamily: string;
-		readonly fontWeight: string;
-		readonly fontSize: number;
-		readonly fontFeatureSettings: string;
-		readonly fontVariationSettings: string;
-		readonly lineHeight: number;
-		readonly letterSpacing: number;
-		readonly isMonospace: boolean;
-		readonly typicalHalfwidthCharacterWidth: number;
-		readonly typicalFullwidthCharacterWidth: number;
-		readonly canUseHalfwidthRightwardsArrow: boolean;
-		readonly spaceWidth: number;
-		readonly middotWidth: number;
-		readonly wsmiddotWidth: number;
-		readonly maxDigitWidth: number;
+		pixelRatio: number;
+		fontFamily: string;
+		fontWeight: string;
+		fontSize: number;
+		fontFeatureSettings: string;
+		fontVariationSettings: string;
+		lineHeight: number;
+		letterSpacing: number;
+		isMonospace: boolean;
+		typicalHalfwidthCharacterWidth: number;
+		typicalFullwidthCharacterWidth: number;
+		canUseHalfwidthRightwardsArrow: boolean;
+		spaceWidth: number;
+		middotWidth: number;
+		wsmiddotWidth: number;
+		maxDigitWidth: number;
 	},
 		isTrusted: boolean,
 	) {
@@ -207,34 +213,6 @@ export const EDITOR_FONT_DEFAULTS = Object.freeze({
 	lineHeight: 0,
 	letterSpacing: 0,
 });
-
-/** Creates a zero-metric FontInfo for computed-option defaults. */
-export function createDefaultFontInfo(): FontInfo {
-	return new FontInfo({
-		pixelRatio: 1,
-		fontFamily: EDITOR_FONT_DEFAULTS.fontFamily,
-		fontWeight: EDITOR_FONT_DEFAULTS.fontWeight,
-		fontSize: EDITOR_FONT_DEFAULTS.fontSize,
-		fontFeatureSettings: 'normal',
-		fontVariationSettings: FONT_VARIATION_OFF,
-		lineHeight: Math.max(MINIMUM_LINE_HEIGHT, Math.round(GOLDEN_LINE_HEIGHT_RATIO * EDITOR_FONT_DEFAULTS.fontSize)),
-		letterSpacing: EDITOR_FONT_DEFAULTS.letterSpacing,
-		isMonospace: true,
-		typicalHalfwidthCharacterWidth: 0,
-		typicalFullwidthCharacterWidth: 0,
-		canUseHalfwidthRightwardsArrow: false,
-		spaceWidth: 0,
-		middotWidth: 0,
-		wsmiddotWidth: 0,
-		maxDigitWidth: 0,
-	}, false);
-}
-
-function wrapFontFamily(fontFamily: string): string {
-	if (/[,"']/.test(fontFamily)) return fontFamily;
-	if (/[+ ]/.test(fontFamily)) return `"${fontFamily}"`;
-	return fontFamily;
-}
 
 function finiteOr(value: number, fallback: number): number {
 	return Number.isFinite(value) ? value : fallback;

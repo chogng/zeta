@@ -1,5 +1,5 @@
 import "./media/diffEditorPane.css";
-import { type IDimension } from "../../../../base/browser/geometry.js";
+import { type IDimension } from "../../../../base/browser/dom.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../../base/common/types.js";
@@ -11,12 +11,12 @@ import { type ITextResourceStore } from "../../../../editor/common/services/text
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
 import { type IDiffComputationService } from "../../../../editor/common/diff/diffComputationService.js";
 import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
-import { type TextModelReference, type ITextModelService } from "../../../../editor/common/services/resolverService.js";
+import { type TextModelReference, type ITextModelResourceService } from "../../../../editor/common/services/textModelResourceService.js";
 import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
 import { h } from "../../../../base/browser/dom.js";
 
 export interface DiffEditorPaneOptions {
-	readonly modelService: ITextModelService;
+	readonly modelService: ITextModelResourceService;
 	readonly createComputationService: () => IDiffComputationService;
 	readonly lineHeight?: number;
 	readonly fontFamily?: string;
@@ -32,7 +32,7 @@ export interface DiffEditorPaneOptions {
 export class DiffEditorPane extends Disposable implements IEditorPane {
 	readonly id = DIFF_EDITOR_ID;
 	private readonly session = this._register(new MutableDisposable<DiffEditorPaneSession>());
-	private readonly modelService: ITextModelService;
+	private readonly modelService: ITextModelResourceService;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 

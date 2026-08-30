@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorLineWrapping } from "../../common/config/editorOptions.js";
 import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
-import { DOMLineBreaksComputer } from "../../browser/view/domLineBreaksComputer.js";
+import { ZetaDOMLineBreaksComputer } from "../../browser/view/zetaDomLineBreaksComputer.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -14,7 +14,7 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
 	using model = new TextModel("header\ninside\nend\nlast");
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		visibilitySource: hiddenRanges,
@@ -44,7 +44,7 @@ test("Visible visual-line projection refreshes the source before collapsed range
 	using model = new TextModel("header\ninside\nend");
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		visibilitySource: hiddenRanges,
 	});
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
@@ -60,7 +60,7 @@ test("Visible visual-line projection refreshes the source before collapsed range
 
 test("View-model lines keep the wrapping projection path when no visibility filter is installed", () => {
 	using model = new TextModel("first\nsecond");
-	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()));
+	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()));
 
 	const initialProjection = projection.projection;
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (0) + 1)), text: "x" }]);

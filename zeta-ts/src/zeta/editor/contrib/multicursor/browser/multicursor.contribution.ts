@@ -1,17 +1,17 @@
-import { type EditorCapability, registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { type EditorCapability, registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { MultiCursorController } from "./multiCursorController.js";
 import { OccurrenceSelectionController } from "./occurrenceSelectionController.js";
-import { SelectionHighlighter } from "./selectionHighlighter.js";
+import { SelectionHighlighter } from "./multicursor.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
-import { getSelectionHighlightDecorationOptions } from "../../wordHighlighter/browser/highlightDecorations.js";
+import { resolveSelectionHighlightPresentation } from "../../wordHighlighter/browser/highlightDecorations.js";
 
 const selectionHighlightDecorations: EditorCapability<TextDecorationCollection<boolean>> = Object.freeze({ id: "editor.capability.selectionHighlightDecorations" });
 
-registerEditorContribution({ id: "editor.contrib.multicursor", configure: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.multicursor", configure: context => {
 	const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
 	context.provideCapability(selectionHighlightDecorations, decorations);
-	context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => getSelectionHighlightDecorationOptions(decoration.metadata)));
+	context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => resolveSelectionHighlightPresentation(decoration.metadata)));
 }, install: context => {
 	if (context.kind !== "text") return;
 	context.register(new MultiCursorController(context.view.element, context.viewport, context.selections));

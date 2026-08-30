@@ -1,6 +1,6 @@
 import { IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
-import { ILogService } from "../../../../platform/log/common/logService.js";
+import { ILogService } from "../../../../platform/log/common/log.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";

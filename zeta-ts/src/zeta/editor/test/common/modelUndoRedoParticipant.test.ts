@@ -4,10 +4,10 @@ import { URI } from "../../../base/common/uri.js";
 import { Range } from "../../common/core/range.js";
 import { TextEditHistoryGroup } from "../../common/core/editOperation.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { ModelUndoRedoParticipant } from "../../common/services/modelUndoRedoParticipant.js";
+import { RetainedModelUndoRedoHistory } from "../../common/services/retainedModelUndoRedoHistory.js";
 
-test("ModelUndoRedoParticipant retains only the configured number of model histories", () => {
-	using participant = new ModelUndoRedoParticipant({ maxEntries: 1 });
+test("RetainedModelUndoRedoHistory retains only the configured number of model histories", () => {
+	using participant = new RetainedModelUndoRedoHistory({ maxEntries: 1 });
 	const firstResource = URI.file("C:\\project\\first.ts");
 	const secondResource = URI.file("C:\\project\\second.ts");
 	using first = editedModel("first");
@@ -22,8 +22,8 @@ test("ModelUndoRedoParticipant retains only the configured number of model histo
 	assert.equal(reopenedSecond.canUndo, true);
 });
 
-test("ModelUndoRedoParticipant does not capture an unfinished history revision", () => {
-	using participant = new ModelUndoRedoParticipant();
+test("RetainedModelUndoRedoHistory does not capture an unfinished history revision", () => {
+	using participant = new RetainedModelUndoRedoHistory();
 	const resource = URI.file("C:\\project\\revision.ts");
 	using model = new TextModel("revision");
 	const group = TextEditHistoryGroup.create();

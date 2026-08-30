@@ -1,6 +1,7 @@
 import { commonPrefixLength, commonSuffixLength } from '../../../../../base/common/strings.js';
 import { type Position } from '../../../../common/core/position.js';
 import { type Range } from '../../../../common/core/range.js';
+import { SelectionDirection } from '../../../../common/core/selection.js';
 import { type ISimpleScreenReaderContentState } from '../screenReaderUtils.js';
 
 export const _debugComposition = false;
@@ -77,19 +78,19 @@ export class TextAreaState {
 
 	deduceEditorPosition(offset: number): [Position | null, number, number] {
 		if (offset <= this.selectionStart) {
-			return this.finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, this.value.substring(offset, this.selectionStart), -1);
+			return this._finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, this.value.substring(offset, this.selectionStart), -1);
 		}
 		if (offset >= this.selectionEnd) {
-			return this.finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(this.selectionEnd, offset), 1);
+			return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(this.selectionEnd, offset), 1);
 		}
 		const textBeforeOffset = this.value.substring(this.selectionStart, offset);
 		if (!textBeforeOffset.includes(String.fromCharCode(8230))) {
-			return this.finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, textBeforeOffset, 1);
+			return this._finishDeduceEditorPosition(this.selection?.getStartPosition() ?? null, textBeforeOffset, 1);
 		}
-		return this.finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(offset, this.selectionEnd), -1);
+		return this._finishDeduceEditorPosition(this.selection?.getEndPosition() ?? null, this.value.substring(offset, this.selectionEnd), -1);
 	}
 
-	private finishDeduceEditorPosition(anchor: Position | null, deltaText: string, signum: number): [Position | null, number, number] {
+	private _finishDeduceEditorPosition(anchor: Position | null, deltaText: string, signum: number): [Position | null, number, number] {
 		let lineFeedCount = 0;
 		for (const character of deltaText) {
 			if (character === '\n') lineFeedCount += 1;
@@ -97,7 +98,7 @@ export class TextAreaState {
 		return [anchor, signum * deltaText.length, lineFeedCount];
 	}
 
-	static deduceInput(previousState: TextAreaState | null, currentState: TextAreaState, _couldBeEmojiInput: boolean): ITypeData {
+	static deduceInput(previousState: TextAreaState, currentState: TextAreaState, _couldBeEmojiInput: boolean): ITypeData {
 		if (!previousState) {
 			return { text: '', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 };
 		}
@@ -140,7 +141,7 @@ export class TextAreaState {
 		};
 	}
 
-	static deduceAndroidCompositionInput(previousState: TextAreaState | null, currentState: TextAreaState): ITypeData {
+	static deduceAndroidCompositionInput(previousState: TextAreaState, currentState: TextAreaState): ITypeData {
 		if (!previousState) {
 			return { text: '', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 };
 		}
@@ -165,11 +166,23 @@ export class TextAreaState {
 		};
 	}
 
-	static fromScreenReaderContentState(state: ISimpleScreenReaderContentState): TextAreaState {
+	static fromScreenReaderContentState(state: ISimpleScreenReaderContentState) {
+		let selectionStart: number;
+		let selectionEnd: number;
+		switch (state.selection.getDirection()) {
+			case SelectionDirection.LTR:
+				selectionStart = state.selectionStart;
+				selectionEnd = state.selectionEnd;
+				break;
+			case SelectionDirection.RTL:
+				selectionStart = state.selectionEnd;
+				selectionEnd = state.selectionStart;
+				break;
+		}
 		return new TextAreaState(
 			state.value,
-			state.selectionStart,
-			state.selectionEnd,
+			selectionStart,
+			selectionEnd,
 			state.selection,
 			state.newlineCountBeforeSelection,
 		);

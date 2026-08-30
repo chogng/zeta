@@ -1,17 +1,11 @@
 import { Position } from "./position.js";
-import { Range } from "./range.js";
+import { type IRange, Range } from "./range.js";
 
 /** A single pre-transaction replacement consumed by the text model. */
 export interface ISingleEditOperation {
-	readonly range: Range;
+	readonly range: IRange;
 	readonly text: string | null;
 	readonly forceMoveMarkers?: boolean;
-}
-
-/** One replacement in the pre-transaction document. */
-export interface TextEdit {
-	readonly range: Range;
-	readonly text: string;
 }
 
 /** Factory helpers for the editor's canonical single-edit operation shape. */

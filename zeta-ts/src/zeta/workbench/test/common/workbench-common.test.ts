@@ -13,7 +13,7 @@ import {
 import {
 	createServiceIdentifier,
 	ServiceContainer,
-	SyncDescriptor,
+	ServiceConstructionDescriptor,
 } from "../../../platform/instantiation/common/instantiation.js";
 import {
 	darkColorTheme,
@@ -252,7 +252,7 @@ test("view registrations are ordered and disposed atomically", () => {
 			id: "zeta.search",
 			title: "Search",
 			order: 20,
-			ctorDescriptor: new SyncDescriptor(TestView, {
+			ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
 				staticArguments: ["zeta.search"],
 			}),
 		},
@@ -260,7 +260,7 @@ test("view registrations are ordered and disposed atomically", () => {
 			id: "zeta.explorer",
 			title: "Explorer",
 			order: 10,
-			ctorDescriptor: new SyncDescriptor(TestView, {
+			ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
 				staticArguments: ["zeta.explorer"],
 			}),
 		},
@@ -279,7 +279,7 @@ test("view registrations are ordered and disposed atomically", () => {
 			{
 				id: "zeta.explorer",
 				title: "Duplicate",
-				ctorDescriptor: new SyncDescriptor(TestView, {
+				ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
 					staticArguments: ["zeta.explorer"],
 				}),
 			},

@@ -3,7 +3,7 @@ import test from "node:test";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOptions.js";
 import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
-import { DOMLineBreaksComputer } from "../../browser/view/domLineBreaksComputer.js";
+import { ZetaDOMLineBreaksComputer } from "../../browser/view/zetaDomLineBreaksComputer.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
@@ -11,7 +11,7 @@ import { Range } from "../../common/core/range.js";
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
 	using model = new TextModel("ab😀cd\nxyz");
-	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 	});
@@ -43,7 +43,7 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
 
 test("browser visual-line projection applies wrapping indent modes to continuation rows", () => {
 	using model = new TextModel("  abcdefghijkl");
-	const computer = new DOMLineBreaksComputer(new FixedTextMeasurer(), 4);
+	const computer = new ZetaDOMLineBreaksComputer(new FixedTextMeasurer(), 4);
 	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.None).wrappedTextIndentWidth, 0);
 	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.Same).wrappedTextIndentWidth, 20);
 	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent((0) + 1), 110, WrappingIndent.Indent).wrappedTextIndentWidth, 40);
@@ -71,19 +71,19 @@ test("browser visual-line projection applies wrapping indent modes to continuati
 
 test("browser visual-line projection validates its public wrapping inputs", () => {
 	using model = new TextModel("text");
-	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapping: "invalid" as EditorLineWrapping,
 	}), /wrapping mode/);
-	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapWidth: -1,
 	}), /wrap width/);
-	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrappingIndent: "Same" as unknown as WrappingIndent,
 	}), /wrapping indent mode/);
-	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		initialWrappingMeasurement: { schedule: undefined as never },
 	}), /requires a scheduler/);
-	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	assert.throws(() => new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		initialWrappingMeasurement: { initialLineCount: 0, schedule: () => toDisposable(() => {}) },
 	}), /measurement count/);
 });
@@ -92,7 +92,7 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 	using model = new TextModel("abc\ndefg\nhij");
 	const scheduled: (() => void)[] = [];
 	const measurer = new CountingTextMeasurer();
-	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(measurer), {
+	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(measurer), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		initialWrappingMeasurement: {
@@ -128,7 +128,7 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 test("browser visual-line projection restarts an incomplete wrapped scan after an edit", () => {
 	using model = new TextModel("abc\ndef");
 	const scheduled: (() => void)[] = [];
-	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+	using projection = new ViewModelLines(model, new ZetaDOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		initialWrappingMeasurement: {

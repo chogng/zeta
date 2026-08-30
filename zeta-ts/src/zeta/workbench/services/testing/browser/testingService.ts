@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import type { ILogService } from "../../../../platform/log/common/logService.js";
+import type { ILogService } from "../../../../platform/log/common/log.js";
 import { type ITaskRun, type ITaskService } from "../../tasks/common/taskService.js";
 import { type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
 

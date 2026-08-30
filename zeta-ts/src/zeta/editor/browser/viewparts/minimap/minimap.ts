@@ -7,8 +7,8 @@ import { clamp } from '../../../../base/common/numbers.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { RenderMinimap, type EditorMinimapLayoutInfo, type EditorMinimapOptions } from '../../../common/config/editorOptions.js';
 import type { TextModel } from '../../../common/model/textModel.js';
-import type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
-import type { EditorScrollPosition } from '../../../common/viewModel.js';
+import type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
+import type { EditorScrollPosition } from '../../../common/viewModel/editorViewportContracts.js';
 import type { EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import type { EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
@@ -128,7 +128,7 @@ export class Minimap extends EditorViewPart {
 		const foreground = parseCssColor(style.color, new RGBA8(128, 128, 128, 255));
 		const background = parseCssColor(style.backgroundColor, new RGBA8(0, 0, 0, 0));
 		const fontFamily = style.fontFamily || 'monospace';
-		const charRenderer = MinimapCharRendererFactory.create(layout.minimapScale, fontFamily, this.canvas);
+		const charRenderer = MinimapCharRendererFactory.create(layout.minimapScale, fontFamily);
 		const projection = this.options.readVisualProjection();
 		const visualLineCount = projection.visualLineCount;
 		const rowCount = layout.minimapIsSampling

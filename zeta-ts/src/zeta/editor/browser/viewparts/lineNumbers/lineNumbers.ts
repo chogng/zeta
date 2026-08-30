@@ -15,7 +15,7 @@ interface LineNumbersOverlayOptions {
 
 /** Projects line numbers into virtual rows. */
 export class LineNumbersOverlay extends EditorViewPart {
-	public static readonly CLASS_NAME = 'stanza-editor-line-number';
+	public static readonly CLASS_NAME = 'line-numbers';
 	public readonly domNode: HTMLElement;
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	private readonly selectionController: CursorsController | undefined;

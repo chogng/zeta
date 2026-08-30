@@ -1,4 +1,4 @@
-import { commonPrefixLength, commonSuffixLength } from "../../../base/common/arrays.js";
+import { commonArraySuffixLength, commonPrefixLength } from "../../../base/common/arrays.js";
 import { type LanguageWorkerDocumentSynchronization } from '../services/textModelSync/textModelSync.protocol.js';
 import { createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
@@ -126,7 +126,7 @@ function scanAllLines(scanner: LanguageLexicalLineScanner, lines: readonly strin
 
 function updateLines(scanner: LanguageLexicalLineScanner, previousLines: readonly string[], previousResults: readonly LanguageLexicalLineResult[], lines: readonly string[], signal?: AbortSignal): { readonly lineResults: readonly LanguageLexicalLineResult[]; readonly scannedLineCount: number } {
 	const prefixLength = commonPrefixLength(previousLines, lines);
-	const suffixLength = commonSuffixLength(previousLines, lines, prefixLength);
+	const suffixLength = commonArraySuffixLength(previousLines, lines, prefixLength);
 	const lineResults = previousResults.slice(0, prefixLength);
 	const newSuffixStart = lines.length - suffixLength;
 	const oldSuffixStart = previousLines.length - suffixLength;

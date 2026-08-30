@@ -6,7 +6,7 @@ export enum PieceBuffer {
 	Add,
 }
 
-export interface Piece {
+export interface BufferPiece {
 	readonly buffer: PieceBuffer;
 	readonly startOffset: number;
 	readonly length: number;
@@ -22,7 +22,7 @@ export class PieceNode {
 	totalLineFeeds: number;
 	totalPieces: number;
 
-	constructor(public piece: Piece) {
+	constructor(public piece: BufferPiece) {
 		this.totalLength = piece.length;
 		this.totalLineFeeds = piece.lineFeedOffsets.length;
 		this.totalPieces = 1;
@@ -35,7 +35,7 @@ export class PieceNode {
 	}
 }
 
-export function createPiece(buffer: PieceBuffer, startOffset: number, text: string): Piece {
+export function createPiece(buffer: PieceBuffer, startOffset: number, text: string): BufferPiece {
 	const lineFeedOffsets: number[] = [];
 	for (let index = 0; index < text.length; index += 1) {
 		if (text.charCodeAt(index) === CharCode.LineFeed) lineFeedOffsets.push(index);
@@ -43,7 +43,7 @@ export function createPiece(buffer: PieceBuffer, startOffset: number, text: stri
 	return { buffer, startOffset, length: text.length, lineFeedOffsets };
 }
 
-export function slicePiece(piece: Piece, startOffset: number, endOffset: number): Piece {
+export function slicePiece(piece: BufferPiece, startOffset: number, endOffset: number): BufferPiece {
 	const firstLineFeed = lowerBound(piece.lineFeedOffsets, startOffset);
 	const lastLineFeed = lowerBound(piece.lineFeedOffsets, endOffset);
 	return {
@@ -54,11 +54,11 @@ export function slicePiece(piece: Piece, startOffset: number, endOffset: number)
 	};
 }
 
-export function canCoalesce(left: Piece, right: Piece): boolean {
+export function canCoalesce(left: BufferPiece, right: BufferPiece): boolean {
 	return left.buffer === right.buffer && left.startOffset + left.length === right.startOffset;
 }
 
-export function coalescePieces(left: Piece, right: Piece): Piece {
+export function coalescePieces(left: BufferPiece, right: BufferPiece): BufferPiece {
 	return {
 		buffer: left.buffer,
 		startOffset: left.startOffset,

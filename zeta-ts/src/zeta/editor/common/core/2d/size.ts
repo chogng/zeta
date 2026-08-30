@@ -20,5 +20,5 @@ export class Size2D {
 	isZero(): boolean { return this.width === 0 && this.height === 0; }
 	transpose(): Size2D { return new Size2D(this.height, this.width); }
 	toDimension(): IDimension { return { width: this.width, height: this.height }; }
-	toString(): string { return `(${this.width},${this.height})`; }
+	toString() { return `(${this.width},${this.height})`; }
 }

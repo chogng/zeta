@@ -8,11 +8,12 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type TextSearchMatch, type TextSearchQuery } from "../../../common/model/textModelSearch.js";
+import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type TextSearchMatch, type TextModelSearchQuery } from "../../../common/model/textModelSearch.js";
 import { createReplaceAllTextMatchesCommand, createReplaceTextMatchCommand, resolveTextSearchReplacement } from "../common/textSearchCommands.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
+import { type TrackedRange } from "../../../common/model/trackedRange.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { EditorOptions } from '../../../common/config/editorOptions.js';
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;
@@ -270,7 +271,7 @@ export class FindController extends Disposable {
 		this.matches = Object.freeze(found.slice(0, DISPLAY_RESULT_LIMIT));
 		this.decorations.replaceAll(this.matches.map(match => ({
 			range: match.range,
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: undefined,
 		})));
 		this.currentMatchIndex = this.findCurrentMatchIndex();
@@ -365,7 +366,7 @@ export class FindController extends Disposable {
 
 	private captureSelectionScope(): void {
 		const range = this.selections.selections.primary;
-		this.selectionScope.value = range.isEmpty() ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
+		this.selectionScope.value = range.isEmpty() ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		this.projectFindInSelectionAvailability();
 	}
 
@@ -408,7 +409,7 @@ export class FindController extends Disposable {
 		return text.length <= 4_096 && !text.includes("\n") ? text : undefined;
 	}
 
-	private get query(): TextSearchQuery {
+	private get query(): TextModelSearchQuery {
 		return {
 			pattern: this.searchInput.value,
 			patternKind: this.regularExpression ? TextSearchPatternKind.RegularExpression : TextSearchPatternKind.Literal,

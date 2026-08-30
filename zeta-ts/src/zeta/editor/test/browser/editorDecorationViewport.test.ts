@@ -11,7 +11,8 @@ import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore } from "../..
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
+import { TrackedRangeStickiness } from '../../common/model.js';
+
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -43,12 +44,12 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	using diagnostics = new TextDecorationCollection<"error" | "warning">(model);
 	const matchId = matches.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "match",
 	});
 	const diagnosticId = diagnostics.add({
 		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "error",
 	});
 	let matchResolutionCount = 0;
@@ -116,7 +117,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 
 	diagnostics.update(diagnosticId, {
 		range: Range.fromPositions(new Position((1) + 1, (1) + 1), new Position((1) + 1, (3) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "warning",
 	});
 	const warning = requiredElement<HTMLElement>(
@@ -172,12 +173,12 @@ test("Line and block decoration parts project source presentation details", () =
 	using decorations = new TextDecorationCollection<"lines" | "block">(model);
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "lines",
 	});
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "block",
 	});
 	const source = createStanzaDecorationSource(
@@ -242,9 +243,9 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 	using model = new TextModel("same\nadded\nmodified\nafter delete");
 	using decorations = new TextDecorationCollection<DecorationPresentation>(model);
 	decorations.replaceAll([
-		{ range: Range.fromPositions(new Position((1) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffAdded },
-		{ range: Range.fromPositions(new Position((2) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffModified },
-		{ range: Range.fromPositions(new Position((3) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffDeleted },
+		{ range: Range.fromPositions(new Position((1) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffAdded },
+		{ range: Range.fromPositions(new Position((2) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffModified },
+		{ range: Range.fromPositions(new Position((3) + 1, (0) + 1)), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: DecorationPresentation.DiffDeleted },
 	]);
 	using viewport = new EditorViewport({
 		container,
@@ -289,7 +290,7 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 	using decorations = new TextDecorationCollection<void>(model);
 	const id = decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: undefined,
 	});
 	const viewport = new EditorViewport({
@@ -301,14 +302,14 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 		decorationSources: [createStanzaDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
 	});
 	viewport.layout({ width: 200, height: 40 });
-	const line = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-line");
+	const line = requiredElement<HTMLElement>(viewport.element, ".view-line");
 	Object.defineProperty(line, "getBoundingClientRect", {
 		configurable: true,
 		value: () => testRectangle(100, 0, 200),
 	});
 	decorations.update(id, {
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: undefined,
 	});
 
@@ -326,7 +327,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 	using decorations = new TextDecorationCollection<void>(model);
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (5) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: undefined,
 	});
 	using viewport = new EditorViewport({

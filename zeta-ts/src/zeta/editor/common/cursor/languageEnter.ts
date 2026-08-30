@@ -1,7 +1,8 @@
 import { getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../core/misc/indentation.js";
 import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
-import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";
+import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule } from "../languages/languageConfiguration.js";
+import { type MergedLanguageConfiguration } from "../languages/ownedLanguageConfigurationContributions.js";
 import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
 import { type Selection } from "../core/selection.js";
 import type { SelectionSet } from "./selectionSet.js";
@@ -13,7 +14,7 @@ export interface LanguageEnterCommandOptions {
 }
 
 /** Creates one language-aware Enter transaction for every current selection. */
-export function createLanguageEnterCommand(model: TextModel, selections: SelectionSet, configuration: ResolvedLanguageConfiguration, options: LanguageEnterCommandOptions = {}): EditorEditCommand {
+export function createLanguageEnterCommand(model: TextModel, selections: SelectionSet, configuration: MergedLanguageConfiguration, options: LanguageEnterCommandOptions = {}): EditorEditCommand {
 	assertConfiguration(configuration);
 	assertOptions(model, configuration, options);
 	const resolvedIndentation = resolveEditorIndentationOptions(options.indentation);
@@ -21,7 +22,7 @@ export function createLanguageEnterCommand(model: TextModel, selections: Selecti
 	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.BeginCoalescedTyping);
 }
 
-function createEnterEdit(model: TextModel, selection: Selection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): SelectionEdit {
+function createEnterEdit(model: TextModel, selection: Selection, configuration: MergedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): SelectionEdit {
 	const startLine = model.getLineContent(selection.getStartPosition().lineNumber);
 	const endLine = model.getLineContent(selection.getEndPosition().lineNumber);
 	const originalBeforeText = startLine.slice(0, selection.startColumn - 1);
@@ -40,7 +41,7 @@ function createEnterEdit(model: TextModel, selection: Selection, configuration: 
 	};
 }
 
-function resolveEnterAction(configuration: ResolvedLanguageConfiguration, previousLineText: string, beforeText: string, afterText: string): LanguageEnterAction {
+function resolveEnterAction(configuration: MergedLanguageConfiguration, previousLineText: string, beforeText: string, afterText: string): LanguageEnterAction {
 	const explicit = configuration.onEnterRules.find(rule => matchesOnEnterRule(rule, previousLineText, beforeText, afterText));
 	if (explicit) return explicit.action;
 	const bracketPairs = [...configuration.brackets].sort((left, right) => right.open.length - left.open.length);
@@ -105,13 +106,13 @@ function startsWithToken(text: string, token: string): boolean {
 	return text.trimStart().startsWith(token);
 }
 
-function assertConfiguration(configuration: ResolvedLanguageConfiguration): void {
+function assertConfiguration(configuration: MergedLanguageConfiguration): void {
 	if (typeof configuration !== "object" || configuration === null || !Array.isArray(configuration.brackets) || !Array.isArray(configuration.onEnterRules)) {
 		throw new TypeError("Language Enter requires a resolved language configuration");
 	}
 }
 
-function assertOptions(model: TextModel, configuration: ResolvedLanguageConfiguration, options: LanguageEnterCommandOptions): void {
+function assertOptions(model: TextModel, configuration: MergedLanguageConfiguration, options: LanguageEnterCommandOptions): void {
 	if (typeof options !== "object" || options === null) throw new TypeError("Language Enter options must be an object");
 	const lexicalContext = options.lexicalContext;
 	if (!lexicalContext) return;

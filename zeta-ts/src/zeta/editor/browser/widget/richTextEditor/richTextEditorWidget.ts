@@ -6,8 +6,8 @@ import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import type { IDimension } from '../../../../base/browser/geometry.js';
 import type { EditorResourceInput } from '../../editorBrowser.js';
+import type { IDimension } from '../../../common/core/2d/dimension.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import type { DocumentPlugin } from '../../../common/model/documentPlugin.js';
 import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from '../../../common/model/document.js';
@@ -19,14 +19,14 @@ import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionComma
 import { extractDocumentFragment } from '../../../common/model/documentFragment.js';
 import { createDefaultDocumentSchema, type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from '../../../common/model/documentSchema.js';
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
-import { allSelection, nodeSelection, textSelection, type DocumentSelection, type TextSelection } from '../../../common/core/documentSelection.js';
+import { allSelection, nodeSelection, textSelection, type DocumentSelection, type DocumentTextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { EditorDom } from '../../editorDom.js';
-import { getEditorContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorExtensions.js';
+import { getTextEditorCapabilityContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorExtensions.js';
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../contrib/collaboration/common/controller.js';
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
-import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/resolverService.js';
+import type { ITextModelResourceService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/textModelResourceService.js';
 import type { IDocumentCollaborationService } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationInvite } from '../../../common/services/documentCollaborationService.js';
@@ -83,7 +83,7 @@ export type InlineNodeViewFactory = (context: InlineNodeViewContext) => HTMLElem
 export interface EditorToolbarActionContext {
 	readonly model: TextModel;
 	readonly blockId: DocumentNodeId;
-	readonly selection: TextSelection | undefined;
+	readonly selection: DocumentTextSelection | undefined;
 	readonly ownerDocument: Document;
 }
 
@@ -143,7 +143,7 @@ export class RichTextEditorWidget extends Disposable {
 		return this.modelReferenceSlot.value;
 	}
 
-	constructor(private readonly modelService: ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference>, private readonly options: RichTextEditorOptions = {}) {
+	constructor(private readonly modelService: ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference>, private readonly options: RichTextEditorOptions = {}) {
 		super();
 		if (!modelService || typeof modelService.acquire !== "function") {
 			this.dispose();
@@ -158,7 +158,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (this.container) throw new ReferenceError("Document editor has already been created");
 		let formattingContribution: DocumentFormattingContribution | undefined;
 		let collaborationContribution: DocumentCollaborationContribution | undefined;
-		for (const contribution of getEditorContributions()) {
+		for (const contribution of getTextEditorCapabilityContributions()) {
 			contribution.install?.({
 				kind: "document",
 				container: parent,
@@ -468,7 +468,7 @@ export class RichTextEditorWidget extends Disposable {
 			const start = textarea.selectionStart ?? 0;
 			const end = textarea.selectionEnd ?? start;
 			if (model.selection?.kind === "all" && start === 0 && end === textarea.value.length) return;
-			const selection = createTextareaTextSelection(model.document, node.id, textarea);
+			const selection = createTextareaDocumentTextSelection(model.document, node.id, textarea);
 			if (selection) model.setSelection(selection);
 		};
 		textarea.addEventListener("select", syncTextareaSelection);
@@ -477,7 +477,7 @@ export class RichTextEditorWidget extends Disposable {
 		textarea.addEventListener("paste", event => this.handleTextPaste(event, model, node.id, textarea));
 		textarea.addEventListener("copy", event => this.handleTextClipboard(event, model, node.id, textarea, false));
 		textarea.addEventListener("cut", event => this.handleTextClipboard(event, model, node.id, textarea, true));
-		textarea.addEventListener("compositionstart", () => this.beginComposition(model, node.id, textarea, createTextareaTextSelection(model.document, node.id, textarea)));
+		textarea.addEventListener("compositionstart", () => this.beginComposition(model, node.id, textarea, createTextareaDocumentTextSelection(model.document, node.id, textarea)));
 		textarea.addEventListener("compositionend", event => this.endComposition(event, textarea));
 		textarea.addEventListener("compositioncancel", () => this.cancelComposition(textarea));
 		textarea.addEventListener("input", () => {
@@ -534,9 +534,9 @@ export class RichTextEditorWidget extends Disposable {
 			createdEditor.addEventListener("cut", event => this.handleRichTextClipboard(event, model, true));
 			createdEditor.addEventListener("keydown", event => this.handleRichTextKeydown(event, node, model, createdEditor));
 			createdEditor.addEventListener("input", () => this.handleRichEditContext(createdEditor, model));
-			createdEditor.addEventListener("focus", () => this.syncRichTextSelection(createdEditor, model));
-			createdEditor.addEventListener("keyup", () => this.syncRichTextSelection(createdEditor, model));
-			createdEditor.addEventListener("mouseup", () => this.syncRichTextSelection(createdEditor, model, true));
+			createdEditor.addEventListener("focus", () => this.syncRichDocumentTextSelection(createdEditor, model));
+			createdEditor.addEventListener("keyup", () => this.syncRichDocumentTextSelection(createdEditor, model));
+			createdEditor.addEventListener("mouseup", () => this.syncRichDocumentTextSelection(createdEditor, model, true));
 			createdEditor.addEventListener("compositionstart", () => this.beginComposition(model, node.id, createdEditor, readDocumentTextSelection(this.requireContainer(), true)?.selection ?? (model.selection?.kind === "text" ? model.selection : undefined)));
 			createdEditor.addEventListener("compositionend", event => this.endComposition(event, createdEditor));
 			createdEditor.addEventListener("compositioncancel", () => this.cancelComposition(createdEditor));
@@ -649,7 +649,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing"));
 	}
 
-	private beginComposition(model: TextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: TextSelection | undefined): void {
+	private beginComposition(model: TextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: DocumentTextSelection | undefined): void {
 		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model || !selection || selection.kind !== "text") return;
 		if (findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
 		this.composition = { model, blockId, element, selection, baseText: readCompositionText(element), version: model.version };
@@ -701,10 +701,10 @@ export class RichTextEditorWidget extends Disposable {
 		const image = findImageClipboardFile(event.clipboardData);
 		if (image) {
 			event.preventDefault();
-			void this.insertPastedImage(model, blockId, image, createTextareaTextSelection(model.document, blockId, textarea));
+			void this.insertPastedImage(model, blockId, image, createTextareaDocumentTextSelection(model.document, blockId, textarea));
 			return;
 		}
-		const selection = model.selection?.kind === "all" ? model.selection : createTextareaTextSelection(model.document, blockId, textarea);
+		const selection = model.selection?.kind === "all" ? model.selection : createTextareaDocumentTextSelection(model.document, blockId, textarea);
 		const encodedFragment = event.clipboardData?.getData(DOCUMENT_FRAGMENT_CLIPBOARD_MIME);
 		if (encodedFragment && selection) {
 			let fragment;
@@ -790,7 +790,7 @@ export class RichTextEditorWidget extends Disposable {
 			if (domSelection) model.setSelection(domSelection.selection);
 		}
 		const selection = model.selection;
-		if (!selection || (selection.kind === "text" && isCollapsedTextSelection(selection)) || selection.kind === "node") return;
+		if (!selection || (selection.kind === "text" && isCollapsedDocumentTextSelection(selection)) || selection.kind === "node") return;
 		const text = documentSelectionToText(model.document, selection);
 		if (text === undefined) return;
 		const fragment = extractDocumentFragment(model.schema, model.document, selection);
@@ -815,11 +815,11 @@ export class RichTextEditorWidget extends Disposable {
 			return;
 		}
 		if (model.selection?.kind !== "all") {
-			const selection = createTextareaTextSelection(model.document, blockId, textarea);
+			const selection = createTextareaDocumentTextSelection(model.document, blockId, textarea);
 			if (selection) model.setSelection(selection);
 		}
 		const selection = model.selection;
-		if (!selection || (selection.kind === "text" && isCollapsedTextSelection(selection)) || selection.kind === "node") return;
+		if (!selection || (selection.kind === "text" && isCollapsedDocumentTextSelection(selection)) || selection.kind === "node") return;
 		const text = documentSelectionToText(model.document, selection);
 		if (text === undefined) return;
 		const fragment = extractDocumentFragment(model.schema, model.document, selection);
@@ -835,7 +835,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (command) this.dispatchCommand(model, command);
 	}
 
-	private async insertPastedImage(model: TextModel, blockId: string, image: File, selection?: TextSelection): Promise<void> {
+	private async insertPastedImage(model: TextModel, blockId: string, image: File, selection?: DocumentTextSelection): Promise<void> {
 		if (this.isReadOnly()) return;
 		const ownerDocument = this.container?.ownerDocument;
 		if (!ownerDocument) return;
@@ -904,7 +904,7 @@ export class RichTextEditorWidget extends Disposable {
 			command = createDeleteBoundaryCommand(model, blockId, selection, "forward");
 		} else if (event.inputType === "insertLineBreak") {
 			command = createInsertHardBreakCommand(model.schema, model.document, blockId, selection);
-		} else if (event.inputType === "insertParagraph" && isCollapsedTextSelection(selection)) {
+		} else if (event.inputType === "insertParagraph" && isCollapsedDocumentTextSelection(selection)) {
 			command = createParagraphSplitCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection.anchor.offset);
 		}
 		if (!command) return;
@@ -913,12 +913,12 @@ export class RichTextEditorWidget extends Disposable {
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
-	private syncRichTextSelection(editor: HTMLDivElement, model: TextModel, force = false): void {
+	private syncRichDocumentTextSelection(editor: HTMLDivElement, model: TextModel, force = false): void {
 		if (this.modelReferenceSlot.value?.model !== model) return;
 		const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
-		if (inlineSelection && !isTextSelectionInDocument(model.document, inlineSelection.selection)) return;
+		if (inlineSelection && !isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) return;
 		this.activeBlockId = inlineSelection?.blockId ?? editor.dataset.blockId;
-		if (inlineSelection && !(model.selection?.kind === "all" && isCollapsedTextSelection(inlineSelection.selection) && !force)) model.setSelection(inlineSelection.selection);
+		if (inlineSelection && !(model.selection?.kind === "all" && isCollapsedDocumentTextSelection(inlineSelection.selection) && !force)) model.setSelection(inlineSelection.selection);
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
 	}
@@ -929,9 +929,9 @@ export class RichTextEditorWidget extends Disposable {
 		if (!model || !container) return;
 		const inlineSelection = readDocumentTextSelection(container, true);
 		if (!inlineSelection) return;
-		if (!isTextSelectionInDocument(model.document, inlineSelection.selection)) return;
+		if (!isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) return;
 		this.activeBlockId = inlineSelection.blockId;
-		if (!(model.selection?.kind === "all" && isCollapsedTextSelection(inlineSelection.selection))) model.setSelection(inlineSelection.selection);
+		if (!(model.selection?.kind === "all" && isCollapsedDocumentTextSelection(inlineSelection.selection))) model.setSelection(inlineSelection.selection);
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
 	}
@@ -971,7 +971,7 @@ export class RichTextEditorWidget extends Disposable {
 		const selection = inlineSelection.selection;
 		const textNode = findNode(model.document, inlineSelection.nodeId);
 		if (!textNode || textNode.text === undefined) return;
-		const collapsed = isCollapsedTextSelection(selection);
+		const collapsed = isCollapsedDocumentTextSelection(selection);
 		let command: DocumentCommand | undefined;
 		if (event.key === "Tab" && !event.metaKey && !event.ctrlKey && !event.altKey && collapsed) {
 			if (this.handleTableCellTab(event, model, node.id)) return;
@@ -1036,7 +1036,7 @@ export class RichTextEditorWidget extends Disposable {
 		} else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === "ArrowDown") {
 			command = createMoveBlockCommand(model.document, node.id, "down");
 		} else if (event.key === "Enter" && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
-			command = createInsertHardBreakCommand(model.schema, model.document, node.id, createTextareaTextSelection(model.document, node.id, textarea));
+			command = createInsertHardBreakCommand(model.schema, model.document, node.id, createTextareaDocumentTextSelection(model.document, node.id, textarea));
 		} else if (event.key === "Enter" && !event.shiftKey && start === end) {
 			command = textNode
 				? createParagraphSplitCommand(model.schema, model.document, node.id, textNode.id, start)
@@ -1089,7 +1089,7 @@ export class RichTextEditorWidget extends Disposable {
 				textarea.setSelectionRange(Math.min(anchor, head), Math.max(anchor, head), anchor <= head ? "forward" : "backward");
 			}
 		} else if (selection?.kind === "text" && editor.classList.contains("stanza-document-rich-text-input")) {
-			setInlineTextSelection(this.requireContainer(), selection);
+			setInlineDocumentTextSelection(this.requireContainer(), selection);
 		}
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
@@ -1150,7 +1150,7 @@ export class RichTextEditorWidget extends Disposable {
 			const offset = direction === "backward" ? textNode.text!.length : 0;
 			const selection = textSelection({ nodeId: textNode.id, offset });
 			model.setSelection(selection);
-			setInlineTextSelection(editor as HTMLDivElement, selection);
+			setInlineDocumentTextSelection(editor as HTMLDivElement, selection);
 		}
 		this.updateToolbar();
 	}
@@ -1172,7 +1172,7 @@ export class RichTextEditorWidget extends Disposable {
 			const offset = command.focus.point?.offset ?? 0;
 			textarea.setSelectionRange(Math.min(offset, textarea.value.length), Math.min(offset, textarea.value.length));
 		} else if (editor.classList.contains("stanza-document-rich-text-input") && model.selection?.kind === "text") {
-			setInlineTextSelection(this.requireContainer(), model.selection);
+			setInlineDocumentTextSelection(this.requireContainer(), model.selection);
 		}
 		this.updateToolbar();
 	}
@@ -1183,7 +1183,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (!model) return;
 		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (!blockId) return;
-		const selection = this.readActiveTextSelection(model, blockId);
+		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		const selectionBlockId = selection ? findTextBearingBlockId(model.document, selection.anchor.nodeId) : undefined;
 		let command: DocumentCommand | undefined;
 		switch (action) {
@@ -1250,7 +1250,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
-		const selection = this.readActiveTextSelection(model, blockId);
+		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
 		const command = createToggleMarkCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, markType, {}, model.storedMarks);
 		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
@@ -1264,7 +1264,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
-		const selection = this.readActiveTextSelection(model, blockId);
+		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
 		const command = createSetTextStyleCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, attrs, model.storedMarks);
 		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
@@ -1278,25 +1278,25 @@ export class RichTextEditorWidget extends Disposable {
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
-		const selection = this.readActiveTextSelection(model, blockId);
+		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
 		const command = createRemoveMarkCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, "textStyle", model.storedMarks);
 		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
 	}
 
-	private readActiveTextSelection(model: TextModel, blockId: string): TextSelection | undefined {
+	private readActiveDocumentTextSelection(model: TextModel, blockId: string): DocumentTextSelection | undefined {
 		const modelSelection = model.selection;
-		if (modelSelection?.kind === "text" && findTextBearingBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isTextSelectionInDocument(model.document, modelSelection)) {
+		if (modelSelection?.kind === "text" && findTextBearingBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isDocumentTextSelectionInDocument(model.document, modelSelection)) {
 			return modelSelection;
 		}
 		const editor = findBlockEditor(this.requireContainer(), blockId);
 		if (editor?.tagName === "TEXTAREA") {
-			const selection = createTextareaTextSelection(model.document, blockId, editor as HTMLTextAreaElement);
+			const selection = createTextareaDocumentTextSelection(model.document, blockId, editor as HTMLTextAreaElement);
 			return selection;
 		}
 		if (editor?.classList.contains("stanza-document-rich-text-input")) {
 			const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
-			if (inlineSelection?.blockId === blockId && isTextSelectionInDocument(model.document, inlineSelection.selection)) {
+			if (inlineSelection?.blockId === blockId && isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) {
 				return inlineSelection.selection;
 			}
 		}
@@ -1319,17 +1319,17 @@ export class RichTextEditorWidget extends Disposable {
 			let checked = false;
 			if (type === "paragraph" || type === "heading") checked = block?.type === type;
 			else if (type === "blockquote") checked = block !== undefined && findBlockquoteForBlock(model.document, block.id) !== undefined;
-			else if (type === "link") checked = selection !== undefined && (selectionBlock?.type === "paragraph" || selectionBlock?.type === "heading") && isTextSelectionMarked(selectionBlock, selection, "link", model.storedMarks);
+			else if (type === "link") checked = selection !== undefined && (selectionBlock?.type === "paragraph" || selectionBlock?.type === "heading") && isDocumentTextSelectionMarked(selectionBlock, selection, "link", model.storedMarks);
 			else checked = list?.type === type;
 			if (checked) checkedDocumentActionIds.add(type);
 		}
 		const textContext = isTypographyBlock(block);
-		const activeSelection = textContext ? this.readActiveTextSelection(model, block!.id) ?? selection : undefined;
+		const activeSelection = textContext ? this.readActiveDocumentTextSelection(model, block!.id) ?? selection : undefined;
 		toolbar.setState({
 			context: block?.type === "codeBlock" ? "code" : textContext ? "text" : "none",
 			readOnly,
-			bold: textContext && activeSelection ? isTextSelectionMarked(block!, activeSelection, "strong", model.storedMarks) : false,
-			italic: textContext && activeSelection ? isTextSelectionMarked(block!, activeSelection, "em", model.storedMarks) : false,
+			bold: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, "strong", model.storedMarks) : false,
+			italic: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, "em", model.storedMarks) : false,
 			fontFamily: textContext && activeSelection ? selectedTextStyleFontFamily(block!, activeSelection, model.storedMarks) : undefined,
 			fontSize: textContext && activeSelection ? selectedTextStyleFontSize(block!, activeSelection, model.storedMarks) : undefined,
 			checkedDocumentActionIds,
@@ -1498,7 +1498,7 @@ function isTypographyBlock(node: DocumentNode | undefined): node is DocumentNode
 	return node?.type === "paragraph" || node?.type === "heading";
 }
 
-function isTextSelectionInDocument(document: DocumentNode, selection: TextSelection): boolean {
+function isDocumentTextSelectionInDocument(document: DocumentNode, selection: DocumentTextSelection): boolean {
 	const anchor = findNode(document, selection.anchor.nodeId);
 	const head = findNode(document, selection.head.nodeId);
 	return anchor?.text !== undefined
@@ -1549,7 +1549,7 @@ function findTextArea(container: HTMLDivElement, blockId: string): HTMLTextAreaE
 	return undefined;
 }
 
-function createTextareaTextSelection(document: DocumentNode, blockId: string, textarea: HTMLTextAreaElement): TextSelection | undefined {
+function createTextareaDocumentTextSelection(document: DocumentNode, blockId: string, textarea: HTMLTextAreaElement): DocumentTextSelection | undefined {
 	const block = findNode(document, blockId);
 	const textNode = block?.content.length === 1 && block.content[0]?.text !== undefined ? block.content[0] : undefined;
 	if (!textNode) return undefined;
@@ -1632,7 +1632,7 @@ interface DocumentComposition {
 	readonly model: TextModel;
 	readonly blockId: string;
 	readonly element: HTMLTextAreaElement | HTMLDivElement;
-	readonly selection: TextSelection;
+	readonly selection: DocumentTextSelection;
 	readonly baseText: string;
 	readonly version: number;
 }
@@ -1787,7 +1787,7 @@ function findBlockquoteForBlock(root: DocumentNode, blockId: string): DocumentNo
 	return undefined;
 }
 
-function isTextSelectionMarked(block: DocumentNode, selection: TextSelection, markType: string, storedMarks?: readonly DocumentMark[]): boolean {
+function isDocumentTextSelectionMarked(block: DocumentNode, selection: DocumentTextSelection, markType: string, storedMarks?: readonly DocumentMark[]): boolean {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return false;
@@ -1815,15 +1815,15 @@ function isTextSelectionMarked(block: DocumentNode, selection: TextSelection, ma
 	return selectedText;
 }
 
-function selectedTextStyleFontFamily(block: DocumentNode, selection: TextSelection, storedMarks?: readonly DocumentMark[]): "sans" | "serif" | "monospace" | undefined {
+function selectedTextStyleFontFamily(block: DocumentNode, selection: DocumentTextSelection, storedMarks?: readonly DocumentMark[]): "sans" | "serif" | "monospace" | undefined {
 	return selectedTextStyleAttribute(block, selection, "fontFamily", isTextStyleFontFamily, storedMarks);
 }
 
-function selectedTextStyleFontSize(block: DocumentNode, selection: TextSelection, storedMarks?: readonly DocumentMark[]): number | undefined {
+function selectedTextStyleFontSize(block: DocumentNode, selection: DocumentTextSelection, storedMarks?: readonly DocumentMark[]): number | undefined {
 	return selectedTextStyleAttribute(block, selection, "fontSize", isTextStyleFontSize, storedMarks);
 }
 
-function selectedTextStyleAttribute<T extends string | number>(block: DocumentNode, selection: TextSelection, attribute: "fontFamily" | "fontSize", isValid: (value: unknown) => value is T, storedMarks?: readonly DocumentMark[]): T | undefined {
+function selectedTextStyleAttribute<T extends string | number>(block: DocumentNode, selection: DocumentTextSelection, attribute: "fontFamily" | "fontSize", isValid: (value: unknown) => value is T, storedMarks?: readonly DocumentMark[]): T | undefined {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
@@ -1859,13 +1859,13 @@ function readTextStyleAttribute<T extends string | number>(marks: readonly Docum
 	return isValid(value) ? value : undefined;
 }
 
-interface DomTextSelection {
+interface DomDocumentTextSelection {
 	readonly blockId: string;
 	readonly nodeId: string;
-	readonly selection: TextSelection;
+	readonly selection: DocumentTextSelection;
 }
 
-function readDocumentTextSelection(container: HTMLDivElement, includeCollapsed = false): DomTextSelection | undefined {
+function readDocumentTextSelection(container: HTMLDivElement, includeCollapsed = false): DomDocumentTextSelection | undefined {
 	const selection = container.ownerDocument.getSelection();
 	if (!selection || selection.rangeCount === 0 || (!includeCollapsed && selection.isCollapsed)) return undefined;
 	const anchorRun = findInlineRun(container, selection.anchorNode);
@@ -1882,7 +1882,7 @@ function readDocumentTextSelection(container: HTMLDivElement, includeCollapsed =
 	};
 }
 
-function readInlineTextSelection(editor: HTMLDivElement, includeCollapsed = false): { nodeId: string; selection: TextSelection } | undefined {
+function readInlineDocumentTextSelection(editor: HTMLDivElement, includeCollapsed = false): { nodeId: string; selection: DocumentTextSelection } | undefined {
 	const selection = readDocumentTextSelection(editor, includeCollapsed);
 	if (!selection || selection.blockId !== editor.dataset.blockId) return undefined;
 	return { nodeId: selection.nodeId, selection: selection.selection };
@@ -1930,7 +1930,7 @@ function offsetWithinInlineRun(editor: HTMLDivElement, run: HTMLElement, node: N
 	return offsetBefore + range.toString().length;
 }
 
-function setInlineTextSelection(editor: HTMLDivElement, selection: TextSelection): void {
+function setInlineDocumentTextSelection(editor: HTMLDivElement, selection: DocumentTextSelection): void {
 	const anchorPosition = findInlineRunAtOffset(editor, selection.anchor.nodeId, selection.anchor.offset);
 	const headPosition = findInlineRunAtOffset(editor, selection.head.nodeId, selection.head.offset);
 	if (!anchorPosition || !headPosition) return;
@@ -2009,8 +2009,8 @@ function createListItemIndentationForBlock(schema: DocumentSchema, document: Doc
 	return createListItemIndentationCommand(schema, document, location.parent.id, paragraphId, direction);
 }
 
-function createDeleteBoundaryCommand(model: TextModel, blockId: string, selection: TextSelection, direction: "backward" | "forward"): DocumentCommand | undefined {
-	if (!isCollapsedTextSelection(selection)) return createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, "");
+function createDeleteBoundaryCommand(model: TextModel, blockId: string, selection: DocumentTextSelection, direction: "backward" | "forward"): DocumentCommand | undefined {
+	if (!isCollapsedDocumentTextSelection(selection)) return createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, "");
 	const point = selection.anchor;
 	const textNode = findNode(model.document, point.nodeId);
 	if (!textNode || textNode.text === undefined) return undefined;
@@ -2023,13 +2023,13 @@ function createDeleteBoundaryCommand(model: TextModel, blockId: string, selectio
 	return createInlineBoundaryCommand(model.document, blockId, point.nodeId, direction);
 }
 
-function isCollapsedTextSelection(selection: TextSelection): boolean {
+function isCollapsedDocumentTextSelection(selection: DocumentTextSelection): boolean {
 	return selection.anchor.nodeId === selection.head.nodeId && selection.anchor.offset === selection.head.offset;
 }
 
 function documentInsertionMarks(model: TextModel, selection: DocumentSelection | undefined): readonly DocumentMark[] | undefined {
 	if (model.storedMarks !== undefined) return model.storedMarks;
-	if (!selection || selection.kind !== "text" || !isCollapsedTextSelection(selection)) return undefined;
+	if (!selection || selection.kind !== "text" || !isCollapsedDocumentTextSelection(selection)) return undefined;
 	const node = findNode(model.document, selection.anchor.nodeId);
 	return node?.text === undefined ? undefined : node.marks;
 }

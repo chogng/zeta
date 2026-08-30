@@ -1,5 +1,5 @@
-import type { ILogSink, LogEntry } from "./logService.js";
-import { LogLevel } from "./logService.js";
+import type { ILogSink, LogEntry } from "./log.js";
+import { LogLevel } from "./log.js";
 
 /** Development and host-console projection of structured log entries. */
 export class ConsoleLogSink implements ILogSink {

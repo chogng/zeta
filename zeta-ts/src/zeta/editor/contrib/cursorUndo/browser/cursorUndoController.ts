@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
@@ -34,7 +34,7 @@ export class CursorUndoController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.cursorUndo", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.cursorUndo", install: context => {
 	if (context.kind !== "text") return;
 	context.register(new CursorUndoController(context.view.element, context.viewport, context.selections));
 } });

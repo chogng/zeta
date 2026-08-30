@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { IRectangle } from "../../browser/geometry.js";
+import type { IPositionedRectangle } from "../../browser/geometry.js";
 import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -38,7 +38,7 @@ class TestView {
 		this.element = h(ownerDocument, "div");
 	}
 
-	layout(_bounds: IRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void {}
 }
 
 class SerializableTestView extends TestView {

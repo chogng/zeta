@@ -4,7 +4,7 @@ import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { expandSmartSelection } from "../../common/smartSelect.js";
+import { expandSmartSelection } from "../../common/smartSelectionExpansion.js";
 
 test("Smart select expands a caret through word, pair, line, and document scopes", () => {
 	using model = new TextModel("const value = (one + two);\nnext");

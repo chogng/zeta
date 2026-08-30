@@ -2,12 +2,13 @@ import { LineRange } from "../ranges/lineRange.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
 import { Position } from "../position.js";
 import { Range } from "../range.js";
-import { normalizeTextLineEndings } from "../textChange.js";
+import { splitLines } from '../../../../base/common/strings.js';
 import { PositionOffsetTransformer } from "./positionToOffsetImpl.js";
 import { TextLength } from "./textLength.js";
 
 /** A DOM-free text value that can expose slices in editor coordinates. */
 export abstract class AbstractText {
+	private _transformer: PositionOffsetTransformer | undefined;
 	abstract readonly length: TextLength;
 	abstract getValueOfRange(range: Range): string;
 
@@ -17,9 +18,9 @@ export abstract class AbstractText {
 	getValueOfOffsetRange(range: OffsetRange): string { return this.getValueOfRange(this.getTransformer().getRange(range)); }
 	getLineLength(lineNumber: number): number { return this.getTransformer().getLineLength(lineNumber); }
 	getLineAt(lineNumber: number): string { return this.getValueOfRange(new Range(lineNumber, 1, lineNumber, Number.MAX_SAFE_INTEGER)); }
-	getLines(): string[] { return this.getValue().split("\n"); }
+	getLines(): string[] { return splitLines(this.getValue()); }
 	getLinesOfRange(range: LineRange): string[] { return range.mapToLineArray(lineNumber => this.getLineAt(lineNumber)); }
-	getTransformer(): PositionOffsetTransformer { return new PositionOffsetTransformer(this.getValue()); }
+	getTransformer(): PositionOffsetTransformer { return this._transformer ??= new PositionOffsetTransformer(this.getValue()); }
 	equals(other: AbstractText): boolean { return this === other || this.getValue() === other.getValue(); }
 }
 
@@ -46,25 +47,23 @@ export class LineBasedText extends AbstractText {
 }
 
 export class ArrayText extends LineBasedText {
-	constructor(lines: readonly string[]) {
+	constructor(lines: string[]) {
 		super(lineNumber => lines[lineNumber - 1], lines.length);
 	}
 }
 
 /** A text view backed by one normalized JavaScript string. */
 export class StringText extends AbstractText {
-	readonly value: string;
-	private readonly transformer: PositionOffsetTransformer;
+	private readonly _t;
 
-	constructor(value: string) {
+	constructor(readonly value: string) {
 		super();
-		this.value = normalizeTextLineEndings(value);
-		this.transformer = new PositionOffsetTransformer(this.value);
+		this._t = new PositionOffsetTransformer(this.value);
 	}
 
-	get length(): TextLength { return this.transformer.textLength; }
-	getValueOfRange(range: Range): string { return this.transformer.getOffsetRange(range).substring(this.value); }
-	override getTransformer(): PositionOffsetTransformer { return this.transformer; }
+	get length(): TextLength { return this._t.textLength; }
+	getValueOfRange(range: Range): string { return this._t.getOffsetRange(range).substring(this.value); }
+	override getTransformer() { return this._t; }
 }
 
 function validateLineRange(range: Range, lineCount: number): void {

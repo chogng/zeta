@@ -1,5 +1,5 @@
-import { CancellationTokenSource, raceCancellation as raceCancellationCore, type CancellationToken } from './cancellation.js';
-import { canceled, isCancellationError } from './errors.js';
+import { CancellationTokenSource, type CancellationToken } from './cancellation.js';
+import { canceled, CancellationError, isCancellationError } from './errors.js';
 import { AbstractDisposable, DisposableStore, toDisposable, type IDisposable } from './lifecycle.js';
 
 export interface CancelablePromise<T> extends Promise<T> {
@@ -38,12 +38,42 @@ export function createCancelablePromise<T>(callback: (token: CancellationToken) 
 	return promise;
 }
 
-export function raceCancellation<T>(promise: PromiseLike<T>, cancellation: AbortSignal | CancellationToken, message?: string): Promise<T> {
-	return raceCancellationCore(promise, cancellation, message);
+export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken): Promise<T | undefined>;
+export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken, defaultValue: T): Promise<T>;
+export function raceCancellation<T>(promise: Promise<T>, token: CancellationToken, defaultValue?: T): Promise<T | undefined> {
+	if (token.isCancellationRequested) return Promise.resolve(defaultValue);
+	return new Promise<T | undefined>((resolve, reject) => {
+		const cancellation = token.onCancellationRequested(() => resolve(defaultValue));
+		promise.then(resolve, reject).finally(() => cancellation.dispose());
+	});
 }
 
-export function raceCancellationError<T>(promise: PromiseLike<T>, cancellation: AbortSignal | CancellationToken): Promise<T> {
-	return raceCancellationCore(promise, cancellation);
+export function raceCancellationError<T>(promise: PromiseLike<T>, cancellation: AbortSignal | CancellationToken, message = 'Operation cancelled'): Promise<T> {
+	if (isCancellationRequested(cancellation)) return Promise.reject(new CancellationError(message, cancellationReason(cancellation)));
+	return new Promise<T>((resolve, reject) => {
+		const cancel = (): void => reject(new CancellationError(message, cancellationReason(cancellation)));
+		const disposable = subscribeCancellation(cancellation, cancel);
+		Promise.resolve(promise).then(resolve, reject).finally(() => disposable.dispose());
+	});
+}
+
+function isCancellationRequested(cancellation: AbortSignal | CancellationToken): boolean {
+	return isAbortSignal(cancellation) ? cancellation.aborted : cancellation.isCancellationRequested;
+}
+
+function cancellationReason(cancellation: AbortSignal | CancellationToken): unknown {
+	return isAbortSignal(cancellation) ? cancellation.reason : undefined;
+}
+
+function subscribeCancellation(cancellation: AbortSignal | CancellationToken, listener: () => void): IDisposable {
+	if (!isAbortSignal(cancellation)) return cancellation.onCancellationRequested(listener);
+	cancellation.addEventListener('abort', listener, { once: true });
+	return toDisposable(() => cancellation.removeEventListener('abort', listener));
+}
+
+function isAbortSignal(cancellation: AbortSignal | CancellationToken): cancellation is AbortSignal {
+	const candidate = cancellation as AbortSignal;
+	return typeof candidate.aborted === 'boolean' && typeof candidate.addEventListener === 'function' && typeof candidate.removeEventListener === 'function';
 }
 
 export function rejectIfNotCanceled(error: unknown): undefined {

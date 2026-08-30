@@ -38,11 +38,11 @@
   font-family: inherit;
 }
 
-.stanza-editor-embedded .stanza-editor-line-number {
+.stanza-editor-embedded .line-numbers {
   display: none;
 }
 
-.stanza-editor.hide-line-numbers .stanza-editor-line-number {
+.stanza-editor.hide-line-numbers .line-numbers {
   display: none;
 }
 

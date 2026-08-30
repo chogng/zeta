@@ -1,6 +1,6 @@
 import { Position } from "../../../common/core/position.js";
 import "./media/linkedEditing.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { type EditorView } from "../../../browser/view.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
@@ -9,9 +9,10 @@ import { extendEditorEditCommand } from "../../../common/commands/editorCommand.
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { Range } from "../../../common/core/range.js";
-import { type TextEdit } from "../../../common/core/editOperation.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
-import { LinkedEditingService } from "../common/linkedEditing.js";
+
+import { type TrackedRange } from "../../../common/model/trackedRange.js";
+import { LinkedEditingService } from "../common/languageLinkedEditing.js";
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 /** Synchronizes provider-declared linked ranges through one atomic native-input transaction. */
 export class LinkedEditingController extends Disposable {
@@ -46,7 +47,7 @@ export class LinkedEditingController extends Disposable {
 			if (result.ranges.some(range => this.viewport.textModel.getTextInRange(range) !== expectedText)) { this.clear(); return; }
 			this.ranges.clear();
 			this.trackedRanges = result.ranges.map(range => {
-				const trackedRange = this.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
+				const trackedRange = this.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 				this.ranges.add(toDisposable(() => trackedRange.dispose()));
 				return trackedRange;
 			});
@@ -60,12 +61,13 @@ export class LinkedEditingController extends Disposable {
 	private extendCommand(command: EditorEditCommand): EditorEditCommand {
 		if (!this.active || command.edits.length !== 1) return command;
 		const sourceEdit = command.edits[0]!;
-		const source = this.trackedRanges.find(candidate => containsRange(candidate.range, sourceEdit.range));
+		const sourceEditRange = Range.lift(sourceEdit.range);
+		const source = this.trackedRanges.find(candidate => containsRange(candidate.range, sourceEditRange));
 		if (!source) return command;
 		const model = this.viewport.textModel;
 		const sourceStartOffset = model.offsetAt(source.range.getStartPosition());
-		const relativeStartOffset = model.offsetAt(sourceEdit.range.getStartPosition()) - sourceStartOffset;
-		const relativeEndOffset = model.offsetAt(sourceEdit.range.getEndPosition()) - sourceStartOffset;
+		const relativeStartOffset = model.offsetAt(sourceEditRange.getStartPosition()) - sourceStartOffset;
+		const relativeEndOffset = model.offsetAt(sourceEditRange.getEndPosition()) - sourceStartOffset;
 		const currentValue = model.getTextInRange(source.range);
 		const nextValue = currentValue.slice(0, relativeStartOffset) + sourceEdit.text + currentValue.slice(relativeEndOffset);
 		if (this.wordPattern && !matchesEntirePattern(this.wordPattern, nextValue)) {
@@ -82,7 +84,7 @@ export class LinkedEditingController extends Disposable {
 				if (startOffset < targetStartOffset || endOffset > targetEndOffset) return undefined;
 				return { range: Range.fromPositions(model.positionAt(startOffset), model.positionAt(endOffset)), text: sourceEdit.text };
 			})
-			.filter((edit): edit is TextEdit => edit !== undefined)
+			.filter((edit): edit is { readonly range: Range; readonly text: string } => edit !== undefined)
 			.sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()));
 		return extendEditorEditCommand(model, command, edits);
 	}
@@ -119,7 +121,7 @@ function matchesEntirePattern(pattern: RegExp, value: string): boolean {
 	return match?.index === 0 && match[0].length === value.length;
 }
 
-registerEditorContribution({ id: "editor.contrib.linkedEditing", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.linkedEditing", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new LinkedEditingService(context.model, context.languageFeaturesService.linkedEditingProvider, context.options.input.resource));
 	context.register(new LinkedEditingController(context.view, context.view.element, context.viewport, context.selections, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));

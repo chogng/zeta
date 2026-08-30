@@ -1,12 +1,12 @@
 import "./media/rename.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { RenameService } from "../common/rename.js";
+import { RenameService } from "../common/languageRename.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 
@@ -119,7 +119,7 @@ export class RenameController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
 	context.register(new RenameController(context.view.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError, context.executeCommand));

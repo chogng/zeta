@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -20,7 +20,7 @@ export class LineSelectionController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.lineSelection",
 	install: context => {
 		if (context.kind !== "text") return;

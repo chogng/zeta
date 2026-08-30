@@ -7,7 +7,7 @@ import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEdito
 import { CursorsController } from "../../../../../editor/common/cursor/cursor.js";
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
-import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/suggestModel.js";
+import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/languageCompletionSessionController.js";
 import { SuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
 import "../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
 import { Selection } from "../../../../../editor/common/core/selection.js";

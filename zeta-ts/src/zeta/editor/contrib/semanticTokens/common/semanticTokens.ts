@@ -1,11 +1,11 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
+import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../../../common/languages/languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../../../common/languages/languageResultStore.js";
 import { createLanguageTokenStore, type LanguageTokenResult } from "../../../common/tokens/languageTokens.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import type { SemanticTokenModelSource } from '../../../common/services/semanticTokensStyling.js';
+import type { SemanticTokenModelSource } from '../../../common/services/resolvedSemanticTokens.js';
 
 export const SEMANTIC_TOKENS_LANE = "semanticTokens";
 export type SemanticTokensLane = typeof SEMANTIC_TOKENS_LANE;
@@ -32,7 +32,7 @@ export class SemanticTokensService extends Disposable {
 	readonly tokens: ReturnType<typeof createLanguageTokenStore>;
 	private readonly coordinator: LanguageRequestCoordinator<SemanticTokensLane, SemanticTokensPayload, LanguageTokenResult>;
 
-	constructor(model: TextModel, providers: LanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>, private readonly resource?: URI) {
+	constructor(model: TextModel, providers: OwnedLanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>, private readonly resource?: URI) {
 		super();
 		this.tokens = this._register(createLanguageTokenStore(model));
 		this.coordinator = this._register(new LanguageRequestCoordinator(model, () => new SemanticTokensProviderWorker(model, providers)));
@@ -48,7 +48,7 @@ export class SemanticTokensService extends Disposable {
 }
 
 class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane, SemanticTokensPayload, LanguageTokenResult> {
-	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>) {}
+	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>) {}
 
 	async run(request: LanguageWorkerRequest<SemanticTokensLane, SemanticTokensPayload>, signal: AbortSignal): Promise<LanguageTokenResult> {
 		const providerRequest = Object.freeze({ requestId: request.requestId, model: this.model, snapshot: request.snapshot, languageId: request.payload.languageId, ...(request.payload.resource ? { resource: request.payload.resource } : {}) });

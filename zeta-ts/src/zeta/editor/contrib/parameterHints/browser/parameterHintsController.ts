@@ -1,8 +1,8 @@
 import "./media/parameterHints.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
+import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/languageParameterHints.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
@@ -98,7 +98,7 @@ export class ParameterHintsController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.parameterHints", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.parameterHints", install: context => {
 	if (context.kind !== "text" || context.options.parameterHints === false) return;
 	const service = context.register(new ParameterHintsService(context.model, context.languageFeaturesService.parameterHintsProvider, context.options.input.resource));
 	context.register(new ParameterHintsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));

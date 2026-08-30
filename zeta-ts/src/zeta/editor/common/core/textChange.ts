@@ -3,6 +3,12 @@ import { decodeUTF16LE } from "./stringBuilder.js";
 
 /** A compact offset change used by incremental buffers and worker protocols. */
 export class TextChange {
+	private static _writeStringSize(text: string): number { return encodedStringSize(text); }
+	private static _writeString(buffer: Uint8Array, text: string, offset: number): number { return writeString(buffer, text, offset); }
+	private static _readString(buffer: Uint8Array, offset: number): string {
+		const length = readUInt32BE(buffer, offset);
+		return decodeUTF16LE(buffer, offset + 4, length);
+	}
 	get oldLength(): number { return this.oldText.length; }
 	get oldEnd(): number { return this.oldPosition + this.oldText.length; }
 	get newLength(): number { return this.newText.length; }
@@ -20,28 +26,26 @@ export class TextChange {
 		return `(replace@${this.oldPosition} \"${oldText}\" with \"${newText}\")`;
 	}
 
-	writeSize(): number { return 8 + encodedStringSize(this.oldText) + encodedStringSize(this.newText); }
+	writeSize(): number { return 8 + TextChange._writeStringSize(this.oldText) + TextChange._writeStringSize(this.newText); }
 	write(buffer: Uint8Array, offset: number): number {
 		writeUInt32BE(buffer, this.oldPosition, offset); offset += 4;
 		writeUInt32BE(buffer, this.newPosition, offset); offset += 4;
-		offset = writeString(buffer, this.oldText, offset);
-		return writeString(buffer, this.newText, offset);
+		offset = TextChange._writeString(buffer, this.oldText, offset);
+		return TextChange._writeString(buffer, this.newText, offset);
 	}
 
 	static read(buffer: Uint8Array, offset: number, destination: TextChange[]): number {
 		const oldPosition = readUInt32BE(buffer, offset); offset += 4;
 		const newPosition = readUInt32BE(buffer, offset); offset += 4;
-		const oldTextLength = readUInt32BE(buffer, offset); offset += 4;
-		const oldText = decodeUTF16LE(buffer, offset, oldTextLength); offset += oldTextLength * 2;
-		const newTextLength = readUInt32BE(buffer, offset); offset += 4;
-		const newText = decodeUTF16LE(buffer, offset, newTextLength); offset += newTextLength * 2;
+		const oldText = TextChange._readString(buffer, offset); offset += TextChange._writeStringSize(oldText);
+		const newText = TextChange._readString(buffer, offset); offset += TextChange._writeStringSize(newText);
 		destination.push(new TextChange(oldPosition, oldText, newPosition, newText));
 		return offset;
 	}
 }
 
 /** Compresses two consecutive change lists into one old-document change list. */
-export function compressConsecutiveTextChanges(previous: readonly TextChange[] | null, current: readonly TextChange[]): TextChange[] {
+export function compressConsecutiveTextChanges(previous: TextChange[] | null, current: TextChange[]): TextChange[] {
 	if (!previous || previous.length === 0) return [...current];
 	const compressor = new TextChangeCompressor([...previous], [...current]);
 	return compressor.compress();

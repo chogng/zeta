@@ -8,7 +8,7 @@ import { findSectionHeaders } from "../../../common/services/findSectionHeaders.
 test("section headers include named regions but not ordinary foldable lines", () => {
 	using model = new TextModel("// #region -- Runtime --\nfunction run() {\n}\n// #endregion");
 	const headers = findSectionHeaders(model, {
-		foldingMarkers: { start: /^\s*\/\/\s*#?region\b/iu, end: /^\s*\/\/\s*#?endregion\b/iu },
+		foldingRules: { markers: { start: /^\s*\/\/\s*#?region\b/iu, end: /^\s*\/\/\s*#?endregion\b/iu } },
 		findRegionSectionHeaders: true,
 		findMarkSectionHeaders: false,
 		markSectionHeaderRegex: "",

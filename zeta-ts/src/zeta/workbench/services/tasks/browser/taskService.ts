@@ -3,7 +3,7 @@ import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
-import type { ILogService } from "../../../../platform/log/common/logService.js";
+import type { ILogService } from "../../../../platform/log/common/log.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalService } from "../../terminal/common/terminal.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskProviderTask, type TaskRunStatus } from "../common/taskService.js";

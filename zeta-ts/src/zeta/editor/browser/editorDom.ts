@@ -1,7 +1,7 @@
 import { h, isHTMLElement } from '../../base/browser/dom.js';
-import { type IDimension } from '../../base/browser/geometry.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
+import { type IDimension } from '../common/core/2d/dimension.js';
 
 export interface EditorDomOptions {
 	readonly rootClassName: string;

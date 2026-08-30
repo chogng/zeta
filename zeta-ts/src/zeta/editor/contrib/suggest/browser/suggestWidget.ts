@@ -2,7 +2,7 @@ import "./media/completionWidget.css";
 import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
+import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
 import { type EditorView, type EditorViewport } from "../../../browser/view.js";
 

@@ -1,5 +1,5 @@
 import "./media/readOnlyMessage.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -95,7 +95,7 @@ function isMutationInput(event: InputEvent): boolean {
 	return event.inputType.startsWith("insert") || event.inputType.startsWith("delete") || event.inputType === "historyUndo" || event.inputType === "historyRedo";
 }
 
-registerEditorContribution({ id: "editor.contrib.readOnlyMessage", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.readOnlyMessage", install: context => {
 	if (context.kind !== "text" || !context.options.input.readOnly) return;
 	context.register(new ReadOnlyMessageController(context.view.element, context.viewport));
 } });

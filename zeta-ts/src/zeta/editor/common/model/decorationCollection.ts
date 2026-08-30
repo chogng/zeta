@@ -3,7 +3,8 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { Range } from "../core/range.js";
 import { TextModel } from "./textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "./trackedRange.js";
+import { type TrackedRange } from "./trackedRange.js";
+import { TrackedRangeStickiness } from '../model.js';
 
 declare const textDecorationIdBrand: unique symbol;
 

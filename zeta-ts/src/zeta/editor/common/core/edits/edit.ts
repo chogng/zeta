@@ -1,24 +1,24 @@
 import { OffsetRange } from "../ranges/offsetRange.js";
 
 /** Common contract for a replacement whose input and output have measurable length. */
-export abstract class BaseReplacement<Self extends BaseReplacement<Self>> {
+export abstract class BaseReplacement<TSelf extends BaseReplacement<TSelf>> {
 	constructor(readonly replaceRange: OffsetRange) {}
 
 	abstract getNewLength(): number;
-	abstract tryJoinTouching(other: Self): Self | undefined;
-	abstract slice(newReplaceRange: OffsetRange, rangeInReplacement?: OffsetRange): Self;
-	abstract equals(other: Self): boolean;
+	abstract tryJoinTouching(other: TSelf): TSelf | undefined;
+	abstract slice(newReplaceRange: OffsetRange, rangeInReplacement?: OffsetRange): TSelf;
+	abstract equals(other: TSelf): boolean;
 
-	delta(offset: number): Self { return this.slice(this.replaceRange.delta(offset), new OffsetRange(0, this.getNewLength())); }
+	delta(offset: number): TSelf { return this.slice(this.replaceRange.delta(offset), new OffsetRange(0, this.getNewLength())); }
 	getLengthDelta(): number { return this.getNewLength() - this.replaceRange.length; }
-	get isEmpty(): boolean { return this.replaceRange.isEmpty && this.getNewLength() === 0; }
+	get isEmpty() { return this.replaceRange.isEmpty && this.getNewLength() === 0; }
 	getRangeAfterReplace(): OffsetRange { return new OffsetRange(this.replaceRange.start, this.replaceRange.start + this.getNewLength()); }
 	toString(): string { return `{ ${this.replaceRange.toString()} -> ${this.getNewLength()} }`; }
 }
 
 /** A sorted, disjoint set of replacements applied simultaneously. */
-export abstract class BaseEdit<Replacement extends BaseReplacement<Replacement>, Self extends BaseEdit<Replacement, Self>> {
-	constructor(readonly replacements: readonly Replacement[]) {
+export abstract class BaseEdit<T extends BaseReplacement<T>, TEdit extends BaseEdit<T, TEdit>> {
+	constructor(readonly replacements: readonly T[]) {
 		let previousEnd = -1;
 		for (const replacement of replacements) {
 			if (replacement.replaceRange.start < previousEnd) throw new RangeError("Edits must be sorted and disjoint");
@@ -26,20 +26,20 @@ export abstract class BaseEdit<Replacement extends BaseReplacement<Replacement>,
 		}
 	}
 
-	protected abstract createNew(replacements: readonly Replacement[]): Self;
+	protected abstract _createNew(replacements: readonly T[]): TEdit;
 
-	equals(other: Self): boolean {
+	equals(other: TEdit): boolean {
 		return this.replacements.length === other.replacements.length && this.replacements.every((replacement, index) => replacement.equals(other.replacements[index]!));
 	}
 
 	isEmpty(): boolean { return this.replacements.length === 0; }
 	getLengthDelta(): number { return this.replacements.reduce((sum, replacement) => sum + replacement.getLengthDelta(), 0); }
 	getNewDataLength(dataLength: number): number { return dataLength + this.getLengthDelta(); }
-	toString(): string { return `[${this.replacements.map(replacement => replacement.toString()).join(", ")}]`; }
+	toString() { return `[${this.replacements.map(replacement => replacement.toString()).join(", ")}]`; }
 
-	normalize(): Self {
-		const normalized: Replacement[] = [];
-		let previous: Replacement | undefined;
+	normalize(): TEdit {
+		const normalized: T[] = [];
+		let previous: T | undefined;
 		for (const replacement of this.replacements) {
 			if (replacement.isEmpty) continue;
 			if (previous && previous.replaceRange.endExclusive === replacement.replaceRange.start) {
@@ -53,18 +53,18 @@ export abstract class BaseEdit<Replacement extends BaseReplacement<Replacement>,
 			previous = replacement;
 		}
 		if (previous) normalized.push(previous);
-		return this.createNew(normalized);
+		return this._createNew(normalized);
 	}
 
 	/** Composes this edit with an edit expressed in the result coordinate space. */
-	compose(other: Self): Self {
+	compose(other: TEdit): TEdit {
 		const first = this.normalize();
 		const second = other.normalize();
 		if (first.isEmpty()) return second;
 		if (second.isEmpty()) return first;
 
 		const pending = [...first.replacements];
-		const result: Replacement[] = [];
+		const result: T[] = [];
 		let delta = 0;
 
 		for (const secondReplacement of second.replacements) {
@@ -77,8 +77,8 @@ export abstract class BaseEdit<Replacement extends BaseReplacement<Replacement>,
 			}
 
 			const deltaBeforeIntersecting = delta;
-			let firstIntersecting: Replacement | undefined;
-			let lastIntersecting: Replacement | undefined;
+			let firstIntersecting: T | undefined;
+			let lastIntersecting: T | undefined;
 			while (true) {
 				const firstReplacement = pending[0];
 				if (!firstReplacement || firstReplacement.replaceRange.start + delta > secondReplacement.replaceRange.endExclusive) break;
@@ -110,22 +110,22 @@ export abstract class BaseEdit<Replacement extends BaseReplacement<Replacement>,
 		}
 
 		result.push(...pending);
-		return this.createNew(result).normalize();
+		return this._createNew(result).normalize();
 	}
 
-	decomposeSplit(shouldBeInFirst: (replacement: Replacement) => boolean): { first: Self; second: Self } {
-		const first: Replacement[] = [];
-		const second: Replacement[] = [];
+	decomposeSplit(shouldBeInE1: (repl: T) => boolean): { e1: TEdit; e2: TEdit } {
+		const e1: T[] = [];
+		const e2: T[] = [];
 		let secondDelta = 0;
 		for (const replacement of this.replacements) {
-			if (shouldBeInFirst(replacement)) {
-				first.push(replacement);
+			if (shouldBeInE1(replacement)) {
+				e1.push(replacement);
 				secondDelta += replacement.getLengthDelta();
 			} else {
-				second.push(replacement.slice(replacement.replaceRange.delta(secondDelta), new OffsetRange(0, replacement.getNewLength())));
+				e2.push(replacement.slice(replacement.replaceRange.delta(secondDelta), new OffsetRange(0, replacement.getNewLength())));
 			}
 		}
-		return { first: this.createNew(first), second: this.createNew(second) };
+		return { e1: this._createNew(e1), e2: this._createNew(e2) };
 	}
 
 	getNewRanges(): OffsetRange[] {
@@ -184,27 +184,27 @@ export abstract class BaseEdit<Replacement extends BaseReplacement<Replacement>,
 	}
 }
 
-export type AnyReplacement = BaseReplacement<any>;
-export type AnyEdit = BaseEdit<any, any>;
+export type AnyReplacement = BaseReplacement<AnyReplacement>;
+export type AnyEdit = BaseEdit<AnyReplacement, AnyEdit>;
 
-export class Edit<Replacement extends BaseReplacement<Replacement>> extends BaseEdit<Replacement, Edit<Replacement>> {
+export class Edit<T extends BaseReplacement<T>> extends BaseEdit<T, Edit<T>> {
 	static readonly empty = new Edit<never>([]);
-	static create<Replacement extends BaseReplacement<Replacement>>(replacements: readonly Replacement[]): Edit<Replacement> { return new Edit(replacements); }
-	static single<Replacement extends BaseReplacement<Replacement>>(replacement: Replacement): Edit<Replacement> { return new Edit([replacement]); }
-	protected createNew(replacements: readonly Replacement[]): Edit<Replacement> { return new Edit(replacements); }
+	static create<T extends BaseReplacement<T>>(replacements: readonly T[]): Edit<T> { return new Edit(replacements); }
+	static single<T extends BaseReplacement<T>>(replacement: T): Edit<T> { return new Edit([replacement]); }
+	protected _createNew(replacements: readonly T[]): Edit<T> { return new Edit(replacements); }
 }
 
 /** A length-only replacement carrying an annotation through edit algebra. */
-export class AnnotationReplacement<Annotation> extends BaseReplacement<AnnotationReplacement<Annotation>> {
-	constructor(range: OffsetRange, readonly newLength: number, readonly annotation: Annotation) {
+export class AnnotationReplacement<TAnnotation> extends BaseReplacement<AnnotationReplacement<TAnnotation>> {
+	constructor(range: OffsetRange, readonly newLength: number, readonly annotation: TAnnotation) {
 		super(range);
 		if (!Number.isSafeInteger(newLength) || newLength < 0) throw new RangeError("Replacement length must be non-negative");
 	}
 
 	getNewLength(): number { return this.newLength; }
-	equals(other: AnnotationReplacement<Annotation>): boolean { return this.replaceRange.equals(other.replaceRange) && this.newLength === other.newLength && this.annotation === other.annotation; }
-	tryJoinTouching(other: AnnotationReplacement<Annotation>): AnnotationReplacement<Annotation> | undefined {
+	equals(other: AnnotationReplacement<TAnnotation>): boolean { return this.replaceRange.equals(other.replaceRange) && this.newLength === other.newLength && this.annotation === other.annotation; }
+	tryJoinTouching(other: AnnotationReplacement<TAnnotation>): AnnotationReplacement<TAnnotation> | undefined {
 		return this.annotation === other.annotation ? new AnnotationReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newLength + other.newLength, this.annotation) : undefined;
 	}
-	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): AnnotationReplacement<Annotation> { return new AnnotationReplacement(range, rangeInReplacement?.length ?? this.newLength, this.annotation); }
+	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): AnnotationReplacement<TAnnotation> { return new AnnotationReplacement(range, rangeInReplacement?.length ?? this.newLength, this.annotation); }
 }

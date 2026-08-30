@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { projectStanzaSemanticTokenLine } from "../../browser/viewparts/viewLines/viewLine.js";
-import { SemanticTokensProviderStyling, resolveSemanticTokenModifiers, resolveSemanticTokenPresentation } from '../../common/services/semanticTokensProviderStyling.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../common/services/semanticTokensStyling.js';
-import { SemanticTokensStylingService } from '../../common/services/semanticTokensStylingService.js';
+import { LanguageTokenStylingResolver, resolveSemanticTokenModifiers, resolveSemanticTokenPresentation } from '../../common/services/languageTokenStylingResolver.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../common/services/resolvedSemanticTokens.js';
+import { ResolvedSemanticTokensService } from '../../common/services/resolvedSemanticTokensService.js';
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
@@ -54,7 +54,7 @@ test("syntax token presentation applies exact theme styling without a semantic c
 test("Semantic token source resolves immutable named lines without owning common state", () => {
 	using model = new TextModel("const value");
 	using store = createLanguageTokenStore(model);
-	using styling = new SemanticTokensStylingService();
+	using styling = new ResolvedSemanticTokensService();
 	assert.equal(store.accept({
 		requestId: 1,
 		textModel: model,
@@ -67,7 +67,7 @@ test("Semantic token source resolves immutable named lines without owning common
 		},
 	}), LanguageResultAcceptance.Applied);
 	using index = new LanguageTokenLineIndex(store);
-	const source = styling.createSource(index, new SemanticTokensProviderStyling(entry => (
+	const source = styling.createSource(index, new LanguageTokenStylingResolver(entry => (
 		entry.tokenType === "plugin-variable"
 			? SemanticTokenPresentation.Variable
 			: resolveSemanticTokenPresentation(entry)
@@ -98,7 +98,7 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 	using model = new TextModel("const value");
 	using lexicalStore = createLanguageTokenStore(model);
 	using semanticStore = createLanguageTokenStore(model);
-	using styling = new SemanticTokensStylingService();
+	using styling = new ResolvedSemanticTokensService();
 	lexicalStore.accept({
 		requestId: 1,
 		textModel: model,

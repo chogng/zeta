@@ -1,5 +1,5 @@
 import "./media/gotoLineWidget.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
@@ -7,7 +7,7 @@ import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../common
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
-import { type EditorScrollPosition } from "../../../common/viewModel.js";
+import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 export interface GotoLineControllerOptions {
@@ -135,7 +135,7 @@ export class GotoLineController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.quickAccess",
 	install: context => {
 		if (context.kind !== "text") return;

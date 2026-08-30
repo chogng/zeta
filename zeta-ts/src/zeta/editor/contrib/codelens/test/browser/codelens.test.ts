@@ -5,14 +5,14 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { MouseTargetFactory, MouseTargetKind } from '../../../../browser/controller/mouseTarget.js';
+import { SemanticMouseTargetFactory, SemanticMouseTargetKind } from '../../../../browser/controller/semanticMouseTarget.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
+import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type LanguageCodeLensProvider } from '../../common/codelens.js';
+import { type LanguageCodeLensProvider } from '../../common/languageCodeLenses.js';
 import { bindCodeLensCacheStorage, codeLensCache } from '../../browser/codeLensCache.js';
-import { CodeLensModel, getCodeLensModel, resolveCodeLensItem } from '../../browser/codelens.js';
+import { LanguageCodeLensModel, getLanguageCodeLensModel, resolveLanguageCodeLensItem } from '../../browser/codelens.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -32,7 +32,7 @@ const { CodeLensContribution } = await import('../../browser/codelensController.
 
 test('CodeLens model preserves provider ownership, provider rank, and independent failures', async () => {
 	using model = new TextModel('first\nsecond');
-	using providers = new LanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
 	let primaryResolveCount = 0;
 	let secondaryResolveCount = 0;
 	const primary: LanguageCodeLensProvider = {
@@ -64,7 +64,7 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 	const errors: unknown[] = [];
 	const signal = new AbortController().signal;
 
-	const result = await getCodeLensModel({ model, providers, languageId: 'typescript', signal, onError: error => errors.push(error) });
+	const result = await getLanguageCodeLensModel({ model, providers, languageId: 'typescript', signal, onError: error => errors.push(error) });
 
 	assert.deepEqual(result.lenses.map(item => item.symbol.command?.id ?? item.symbol.data), [
 		'primary.immediate',
@@ -73,7 +73,7 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 	]);
 	assert.equal(result.lenses[1]!.provider, primary);
 	assert.equal(errors.length, 1);
-	const resolved = await resolveCodeLensItem({ model, languageId: 'typescript', signal, onError: error => errors.push(error) }, result.lenses[1]!);
+	const resolved = await resolveLanguageCodeLensItem({ model, languageId: 'typescript', signal, onError: error => errors.push(error) }, result.lenses[1]!);
 	assert.equal(resolved?.command?.id, 'primary.resolved');
 	assert.equal(primaryResolveCount, 1);
 	assert.equal(secondaryResolveCount, 0);
@@ -82,7 +82,7 @@ test('CodeLens model preserves provider ownership, provider rank, and independen
 test('CodeLens contribution groups one stable widget per line and refreshes provider changes', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('first\nsecond');
-	using providers = new LanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
 	using changeEmitter = new Emitter<void>();
 	let title = 'Deferred';
 	let resolveCount = 0;
@@ -120,12 +120,12 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 	assert.equal(viewport.getPositionContentCoordinates(new Position((1) + 1, (0) + 1)).top, 34);
 	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Immediate', 'Deferred']);
 	assert.equal(resolveCount, 1);
-	const pointerTarget = new MouseTargetFactory(viewport).create({
+	const pointerTarget = new SemanticMouseTargetFactory(viewport).create({
 		clientX: 0,
 		clientY: 0,
 		target: widget.querySelector('button'),
 	});
-	assert.equal(pointerTarget?.kind, MouseTargetKind.Widget);
+	assert.equal(pointerTarget?.kind, SemanticMouseTargetKind.Widget);
 	viewport.layout({ width: 320, height: 60 });
 	await Promise.resolve();
 	assert.equal(resolveCount, 1);
@@ -150,7 +150,7 @@ test('CodeLens contribution groups one stable widget per line and refreshes prov
 test('CodeLens model waits for every visible resolve batch in the current request', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel(Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n'));
-	using providers = new LanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
 	const requests: Array<{ readonly value: ReturnType<typeof lens>; readonly resolve: (value: ReturnType<typeof lens>) => void }> = [];
 	using registration = providers.register({
 		languageIds: ['typescript'],
@@ -188,7 +188,7 @@ test('CodeLens cache retains labels without executable commands and rejects a di
 		languageIds: ['typescript'],
 		provideCodeLenses: () => [],
 	};
-	const codeLensModel = new CodeLensModel([Object.freeze({ symbol: lens(1, 0, command('source.run', 'Run')), provider })]);
+	const codeLensModel = new LanguageCodeLensModel([Object.freeze({ symbol: lens(1, 0, command('source.run', 'Run')), provider })]);
 	try {
 		codeLensCache.put(resource, 2, codeLensModel);
 
@@ -204,7 +204,7 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 	try {
 		const firstDom = new JSDOM('<!doctype html><body><main></main></body>');
 		using firstModel = new TextModel('first\nsecond');
-		using firstProviders = new LanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
+		using firstProviders = new OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
 		using firstRegistration = firstProviders.register({
 			languageIds: ['typescript'],
 			provideCodeLenses: () => [lens(1, 0, command('old.run', 'Cached'))],
@@ -216,7 +216,7 @@ test('CodeLens contribution shows cached labels as text until fresh commands arr
 
 		const secondDom = new JSDOM('<!doctype html><body><main></main></body>');
 		using secondModel = new TextModel('first\nsecond');
-		using secondProviders = new LanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
+		using secondProviders = new OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
 		let provideFreshLenses: ((value: readonly ReturnType<typeof lens>[]) => void) | undefined;
 		const freshLenses = new Promise<readonly ReturnType<typeof lens>[]>(resolve => { provideFreshLenses = resolve; });
 		using secondRegistration = secondProviders.register({
@@ -262,7 +262,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		]);
 		const restoredDom = new JSDOM('<!doctype html><body><main></main></body>');
 		using restoredModel = new TextModel('first\nsecond\nthird');
-		using restoredProviders = new LanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
+		using restoredProviders = new OwnedLanguageFeatureProviderRegistry<LanguageCodeLensProvider>();
 		using restoredViewport = new EditorViewport({
 			container: requiredElement<HTMLElement>(restoredDom.window.document, 'main'),
 			model: restoredModel,
@@ -286,7 +286,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		restoredDom.window.close();
 
 		const provider: LanguageCodeLensProvider = { languageIds: ['typescript'], provideCodeLenses: () => [] };
-		codeLensCache.put(storedResource, 2, new CodeLensModel([
+		codeLensCache.put(storedResource, 2, new LanguageCodeLensModel([
 			Object.freeze({ symbol: lens(1, 0, command('source.run', 'Run')), provider }),
 		]));
 		storage.fireWillSave(WillSaveStateReason.PERIODIC);
@@ -303,7 +303,7 @@ test('CodeLens cache persists workspace line positions without command data', ()
 		assert.equal(codeLensCache.get(storedResource, 2), undefined);
 		assert.deepEqual(codeLensCache.get(switchedResource, 1)?.lenses.map(item => item.symbol.range.getStartPosition().lineNumber), [1]);
 
-		codeLensCache.put(closingResource, 1, new CodeLensModel([
+		codeLensCache.put(closingResource, 1, new LanguageCodeLensModel([
 			Object.freeze({ symbol: lens(0, 0, command('closing.run', 'Closing')), provider }),
 		]));
 		binding.dispose();

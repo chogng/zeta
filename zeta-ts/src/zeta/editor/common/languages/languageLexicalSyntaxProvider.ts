@@ -1,7 +1,7 @@
 import { LanguageLexicalSyntaxCache, type LanguageLexicalCacheUpdateObserver } from "./languageLexicalSyntaxCache.js";
 import { type SyntaxProvider, type SyntaxProviderRequest } from "./syntax/syntaxProviders.js";
 import { BUILTIN_LANGUAGE_IDS, createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
-import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
+import { type LanguageConfigurationSource, type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { type LanguageWorkerDocumentSynchronization } from '../services/textModelSync/textModelSync.protocol.js';
 
@@ -11,7 +11,7 @@ export interface LanguageLexicalSyntaxProviderOptions {
 }
 
 interface LanguageCacheEntry {
-	readonly configuration: ResolvedLanguageConfiguration;
+	readonly configuration: MergedLanguageConfiguration;
 	readonly cache: LanguageLexicalSyntaxCache;
 }
 

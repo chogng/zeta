@@ -1,4 +1,3 @@
-import { type IDimension } from "../../base/browser/geometry.js";
 import { isNonEmptyArray } from "../../base/common/arrays.js";
 import { Emitter, type Event } from "../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
@@ -10,10 +9,11 @@ import { SelectionSet } from "../common/cursor/selectionSet.js";
 import type { IPosition } from '../common/core/position.js';
 import { Position } from "../common/core/position.js";
 import { type Range } from "../common/core/range.js";
+import { type IDimension } from '../common/core/2d/dimension.js';
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
 import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
-import { LanguageConfigurationService, type ILanguageConfigurationService } from '../common/services/languageConfigurationService.js';
+import { ComposableLanguageConfigurationService, type IComposableLanguageConfigurationService } from '../common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type PositionAffinity } from '../common/model.js';
@@ -25,18 +25,18 @@ import { EditorOptions, type EditorLineWrapping, type IEditorMinimapOptions, typ
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
-import { isCompletionsEnablement, type CompletionsEnablement } from "../common/services/completionsEnablement.js";
-import { EditorWorkerClient, type EditorWorkerFactory } from "../common/services/editorWorker.js";
-import { EditorWorker } from "../common/services/editorWebWorker.js";
+import { isCompletionsEnablement, type CompletionsEnablement } from "../common/services/ownedCompletionsEnablement.js";
+import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "./services/versionedEditorWorkerClient.js";
+import { EditorWorkerRequestExecutor } from "../common/services/editorWorkerRequestExecutor.js";
 import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorations.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { type IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import { TabFocus } from "./config/tabFocus.js";
-import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
+import { resolveEditorGeometryConfiguration } from "./config/resolvedEditorGeometryConfiguration.js";
 import { migrateOptions } from "./config/migrateOptions.js";
-import { getEditorContributions, type EditorCapability, type EditorCommandEvent, type TextEditorContributionContext } from "./editorExtensions.js";
+import { getTextEditorCapabilityContributions, type EditorCapability, type EditorCommandEvent, type TextEditorContributionContext } from "./editorExtensions.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/viewLine.js";
-import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
+import { ResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokensService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { LanguageEditingAdapter } from "./view/viewController.js";
@@ -58,7 +58,7 @@ export enum ContentWidgetPositionPreference {
 export interface IContentWidgetPosition {
 	readonly position: IPosition | null;
 	readonly secondaryPosition?: IPosition | null;
-	readonly preference: readonly ContentWidgetPositionPreference[];
+	readonly preference: ContentWidgetPositionPreference[];
 	readonly positionAffinity?: PositionAffinity;
 }
 
@@ -104,13 +104,14 @@ export interface IOverlayWidget {
 }
 
 export interface IViewZone {
-	afterLineIndex: number;
-	/** Preferred fixed height. Takes precedence over heightInLines. */
-	heightInPixels?: number;
-	/** Height in current editor lines. Defaults to one line when neither height is set. */
+	afterLineNumber: number;
+	afterColumn?: number;
+	afterColumnAffinity?: PositionAffinity;
+	showInHiddenAreas?: boolean;
 	heightInLines?: number;
+	heightInPx?: number;
 	ordinal?: number;
-	minWidthInPixels?: number;
+	minWidthInPx?: number;
 	suppressMouseDown?: boolean;
 	readonly domNode: HTMLElement;
 	readonly marginDomNode?: HTMLElement | null;
@@ -182,7 +183,7 @@ export interface EditorBrowserOptions {
 	/** Optional shared language registrations and providers for this editor host. */
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	/** Optional shared language editing configuration for this editor host. */
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageConfigurationService?: IComposableLanguageConfigurationService;
 	/** Window-scoped constructor service for runtime editor contributions. */
 	readonly instantiationService?: IInstantiationService;
 	/** Host-scoped registry for live code editors and resource open handlers. */
@@ -198,7 +199,7 @@ export interface EditorBrowserOptions {
 	/** Caller-owned text model rendered by this editor. */
 	readonly model: TextModel;
 	/** Host-selected execution boundary for model-versioned editor computations. */
-	readonly editorWorkerFactory?: EditorWorkerFactory;
+	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly languageSupport?: IDisposable;
@@ -224,7 +225,7 @@ export interface EditorBrowserOptions {
 	readonly selectionHighlightMaxLength?: number;
 	readonly glyphMargin?: boolean;
 	readonly showSymbolIcons?: boolean;
-	readonly rulers?: readonly EditorRuler[];
+	readonly rulers?: EditorRuler[];
 	readonly guides?: IEditorOptions['guides'];
 	readonly bracketPairColorization?: boolean;
 	readonly matchBrackets?: "never" | "near" | "always";
@@ -312,9 +313,9 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 	constructor(options: EditorBrowserOptions) {
 		super();
 		try {
-			options = migrateOptions(options);
+			migrateOptions(options as IEditorOptions);
 			validateOptions(options);
-			const configuration = resolveEditorConfiguration(options);
+			const configuration = resolveEditorGeometryConfiguration(options);
 			const tabFocus = options.tabFocus ?? this._register(new TabFocus());
 			const languageId = options.languageId;
 			const onLanguageError = options.onLanguageError ?? reportLanguageError;
@@ -322,14 +323,14 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			const model = options.model;
 			const editorWorker = this._register(options.editorWorkerFactory
 				? options.editorWorkerFactory(model)
-				: new EditorWorkerClient(model, () => new EditorWorker()));
+				: new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor()));
 			this.onDidChange = listener => model.onDidChange(() => listener());
 			if (options.languageFeaturesService && !options.languageConfigurationService) {
 				throw new TypeError('Editor language features require their language configuration service');
 			}
-			const languageConfigurationService = options.languageConfigurationService ?? this._register(new LanguageConfigurationService());
+			const languageConfigurationService = options.languageConfigurationService ?? this._register(new ComposableLanguageConfigurationService());
 			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(languageConfigurationService));
-			const semanticTokensStylingService = this._register(new SemanticTokensStylingService());
+			const semanticTokensStylingService = this._register(new ResolvedSemanticTokensService());
 			const configurations = languageConfigurationService;
 			this.selections = this._register(new CursorsController(
 				model,
@@ -354,7 +355,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
-			const selectedContributions = getEditorContributions();
+			const selectedContributions = getTextEditorCapabilityContributions();
 			for (const contribution of selectedContributions) {
 				contribution.configure?.({
 					kind: "text",

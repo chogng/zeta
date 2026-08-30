@@ -1,8 +1,8 @@
 import { BrowserClipboardService } from '../../../../platform/clipboard/browser/browserClipboardService.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { IInstantiationService, SyncDescriptor, type IInstantiationService as InstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { EditorContributionInstantiation, registerEditorContribution, type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
+import { IInstantiationService, ServiceConstructionDescriptor, type IInstantiationService as InstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { EditorContributionInstantiation, registerTextEditorCapabilityContribution, type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
 import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import { ClipboardController } from './clipboardController.js';
 
@@ -19,10 +19,10 @@ class ClipboardContribution extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.clipboard',
 	runtime: {
-		descriptor: new SyncDescriptor(ClipboardContribution, { serviceDependencies: [IInstantiationService] }),
+		descriptor: new ServiceConstructionDescriptor(ClipboardContribution, { serviceDependencies: [IInstantiationService] }),
 		instantiation: EditorContributionInstantiation.Eager,
 	},
 });

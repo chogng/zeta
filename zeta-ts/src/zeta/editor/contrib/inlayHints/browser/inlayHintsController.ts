@@ -1,9 +1,9 @@
 import "./media/inlayHints.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";
+import { InlayHintsService, type LanguageInlayHint } from "../common/languageInlayHints.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
@@ -55,7 +55,7 @@ export class InlayHintsController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.inlayHints", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.inlayHints", install: context => {
 	if (context.kind !== "text" || context.options.inlayHints === false || context.model.largeFile.tooLargeForTokenization) return;
 	const service = context.register(new InlayHintsService(context.model, context.languageFeaturesService.inlayHintsProvider, context.options.input.resource));
 	context.register(new InlayHintsController(context.viewport, service, context.languageId, context.onLanguageError));

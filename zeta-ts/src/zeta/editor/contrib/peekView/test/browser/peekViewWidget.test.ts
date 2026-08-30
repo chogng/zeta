@@ -21,7 +21,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import('../../../../browser/view.js');
-const { PeekViewWidget } = await import('../../browser/peekViewWidget.js');
+const { PeekViewWidget } = await import('../../browser/peekView.js');
 
 test('PeekViewWidget renders inside reserved editor space', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

@@ -1,5 +1,5 @@
 import { DisposableStore, type IDisposable, toDisposable } from "../common/lifecycle.js";
-import { Dimension } from "./geometry.js";
+import { Dimension } from "./dom.js";
 
 type ObserverWindow = Window & typeof globalThis;
 

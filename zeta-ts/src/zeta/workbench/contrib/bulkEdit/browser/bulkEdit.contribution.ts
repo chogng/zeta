@@ -1,9 +1,9 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
-import { ITextModelService } from "../../../../editor/common/services/resolverService.js";
+import { ITextModelResourceService } from "../../../../editor/common/services/textModelResourceService.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
@@ -24,7 +24,7 @@ export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegi
 		order: 1,
 		hideByDefault: true,
 		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(BulkEditPreviewPane),
+		ctorDescriptor: new ServiceConstructionDescriptor(BulkEditPreviewPane),
 	}]);
 }
 
@@ -32,7 +32,7 @@ export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegi
 export class BulkEditPreviewContribution extends Disposable {
 	private activeSession: PreviewSession | undefined;
 
-	constructor(private readonly bulkEdits: IBulkEditService, private readonly views: IViewsService, private readonly files: IFileService, private readonly models: ITextModelService, private readonly workingCopies: IWorkingCopyService, private readonly dialogs: IDialogService) {
+	constructor(private readonly bulkEdits: IBulkEditService, private readonly views: IViewsService, private readonly files: IFileService, private readonly models: ITextModelResourceService, private readonly workingCopies: IWorkingCopyService, private readonly dialogs: IDialogService) {
 		super();
 		this._register(bulkEdits.setPreviewHandler((edit, signal) => this.preview(edit, signal)));
 		this._register(toDisposable(() => this.activeSession?.controller.abort()));
@@ -77,4 +77,4 @@ interface PreviewSession {
 	readonly controller: AbortController;
 }
 
-registerWorkbenchContribution("workbench.contrib.bulkEditPreview", WorkbenchPhase.BlockRestore, accessor => new BulkEditPreviewContribution(accessor.get(IBulkEditService), accessor.get(IViewsService), accessor.get(IFileService), accessor.get(ITextModelService), accessor.get(IWorkingCopyService), accessor.get(IDialogService)));
+registerWorkbenchContribution("workbench.contrib.bulkEditPreview", WorkbenchPhase.BlockRestore, accessor => new BulkEditPreviewContribution(accessor.get(IBulkEditService), accessor.get(IViewsService), accessor.get(IFileService), accessor.get(ITextModelResourceService), accessor.get(IWorkingCopyService), accessor.get(IDialogService)));

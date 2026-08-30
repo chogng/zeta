@@ -1,4 +1,5 @@
-import { isPositiveSafeInteger } from "../../../base/common/numbers.js";
+import { CharCode } from "../../../base/common/charCode.js";
+import * as strings from "../../../base/common/strings.js";
 
 /**
  * Converts UTF-16 columns to the editor's approximate visible columns.
@@ -8,45 +9,54 @@ import { isPositiveSafeInteger } from "../../../base/common/numbers.js";
  * navigation, indentation, and status-bar semantics.
  */
 export class CursorColumns {
-	static visibleColumnFromColumn(lineContent: string, columnIndex: number, tabSize: number): number {
-		validateTabSize(tabSize);
-		const end = Math.min(Math.max(0, columnIndex), lineContent.length);
+	private static _nextVisibleColumn(codePoint: number, visibleColumn: number, tabSize: number): number {
+		if (codePoint === CharCode.Tab) return CursorColumns.nextRenderTabStop(visibleColumn, tabSize);
+		return visibleColumn + (strings.isFullWidthCharacter(codePoint) || strings.isEmojiImprecise(codePoint) ? 2 : 1);
+	}
+
+	static visibleColumnFromColumn(lineContent: string, column: number, tabSize: number): number {
+		const textLength = Math.min(column - 1, lineContent.length);
+		const text = lineContent.substring(0, textLength);
+		const iterator = new strings.GraphemeIterator(text);
 		let visibleColumn = 0;
-		for (let index = 0; index < end;) {
-			const codePoint = lineContent.codePointAt(index)!;
-			const width = codePoint > 0xffff ? 2 : 1;
-			visibleColumn = nextVisibleColumn(codePoint, visibleColumn, tabSize);
-			index += width;
+		while (!iterator.eol()) {
+			const codePoint = strings.getNextCodePoint(text, textLength, iterator.offset);
+			iterator.nextGraphemeLength();
+			visibleColumn = this._nextVisibleColumn(codePoint, visibleColumn, tabSize);
 		}
 		return visibleColumn;
 	}
 
 	static columnFromVisibleColumn(lineContent: string, visibleColumn: number, tabSize: number): number {
-		validateTabSize(tabSize);
-		if (visibleColumn <= 0) return 0;
-		let currentColumn = 0;
-		let currentVisibleColumn = 0;
-		while (currentColumn < lineContent.length) {
-			const codePoint = lineContent.codePointAt(currentColumn)!;
-			const width = codePoint > 0xffff ? 2 : 1;
-			const next = nextVisibleColumn(codePoint, currentVisibleColumn, tabSize);
-			if (next >= visibleColumn) {
-				return next - visibleColumn < visibleColumn - currentVisibleColumn
-					? currentColumn + width
-					: currentColumn;
+		if (visibleColumn <= 0) return 1;
+		const iterator = new strings.GraphemeIterator(lineContent);
+		let beforeVisibleColumn = 0;
+		let beforeColumn = 1;
+		while (!iterator.eol()) {
+			const codePoint = strings.getNextCodePoint(lineContent, lineContent.length, iterator.offset);
+			iterator.nextGraphemeLength();
+			const afterVisibleColumn = this._nextVisibleColumn(codePoint, beforeVisibleColumn, tabSize);
+			const afterColumn = iterator.offset + 1;
+			if (afterVisibleColumn >= visibleColumn) {
+				return afterVisibleColumn - visibleColumn < visibleColumn - beforeVisibleColumn ? afterColumn : beforeColumn;
 			}
-			currentColumn += width;
-			currentVisibleColumn = next;
+			beforeVisibleColumn = afterVisibleColumn;
+			beforeColumn = afterColumn;
 		}
-		return lineContent.length;
+		return lineContent.length + 1;
 	}
 
 	static toStatusbarColumn(lineContent: string, columnIndex: number, tabSize: number): number {
-		return this.visibleColumnFromColumn(lineContent, columnIndex, tabSize) + 1;
+		const text = lineContent.substring(0, Math.min(columnIndex - 1, lineContent.length));
+		const iterator = new strings.CodePointIterator(text);
+		let result = 0;
+		while (!iterator.eol()) {
+			result = iterator.nextCodePoint() === CharCode.Tab ? CursorColumns.nextRenderTabStop(result, tabSize) : result + 1;
+		}
+		return result + 1;
 	}
 
 	static nextRenderTabStop(visibleColumn: number, tabSize: number): number {
-		validateTabSize(tabSize);
 		return visibleColumn + tabSize - visibleColumn % tabSize;
 	}
 
@@ -55,35 +65,10 @@ export class CursorColumns {
 	}
 
 	static prevRenderTabStop(visibleColumn: number, tabSize: number): number {
-		validateTabSize(tabSize);
 		return Math.max(0, visibleColumn - 1 - (visibleColumn - 1) % tabSize);
 	}
 
 	static prevIndentTabStop(visibleColumn: number, indentSize: number): number {
 		return this.prevRenderTabStop(visibleColumn, indentSize);
 	}
-}
-
-function nextVisibleColumn(codePoint: number, visibleColumn: number, tabSize: number): number {
-	if (codePoint === 9) return CursorColumns.nextRenderTabStop(visibleColumn, tabSize);
-	return visibleColumn + (isWideCodePoint(codePoint) ? 2 : 1);
-}
-
-function isWideCodePoint(codePoint: number): boolean {
-	return codePoint >= 0x1100 && (
-		codePoint <= 0x115f ||
-		codePoint === 0x2329 ||
-		codePoint === 0x232a ||
-		(codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
-		(codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-		(codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-		(codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-		(codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-		(codePoint >= 0xff00 && codePoint <= 0xff60) ||
-		(codePoint >= 0xffe0 && codePoint <= 0xffe6)
-	);
-}
-
-function validateTabSize(value: number): void {
-	if (!isPositiveSafeInteger(value)) throw new RangeError("Tab size must be a positive safe integer");
 }

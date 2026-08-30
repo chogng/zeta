@@ -1,4 +1,4 @@
-import { Dimension, type IDimension } from "../../geometry.js";
+import { Dimension, type IDimension } from "../../dom.js";
 import { observeElementSize } from "../../observer.js";
 import { type Event, Emitter } from "../../../common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";

@@ -2,13 +2,7 @@ import { AbstractDisposable, DisposableMap, Disposable, type IDisposable } from 
 import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
 import { type TextModelContentChange } from "../core/textChange.js";
-
-export enum TrackedRangeStickiness {
-	GrowsAtBothEdges = "growsAtBothEdges",
-	GrowsOnlyAtStart = "growsOnlyAtStart",
-	GrowsOnlyAtEnd = "growsOnlyAtEnd",
-	NeverGrowsAtEdges = "neverGrowsAtEdges",
-}
+import { TrackedRangeStickiness } from '../model.js';
 
 export interface TrackedRange extends IDisposable {
 	readonly range: Range;
@@ -123,11 +117,11 @@ function mapTrackedRange(
 		changes,
 	);
 	const growsAtStart =
-		stickiness === TrackedRangeStickiness.GrowsAtBothEdges ||
-		stickiness === TrackedRangeStickiness.GrowsOnlyAtStart;
+		stickiness === TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges ||
+		stickiness === TrackedRangeStickiness.GrowsOnlyWhenTypingBefore;
 	const growsAtEnd =
-		stickiness === TrackedRangeStickiness.GrowsAtBothEdges ||
-		stickiness === TrackedRangeStickiness.GrowsOnlyAtEnd;
+		stickiness === TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges ||
+		stickiness === TrackedRangeStickiness.GrowsOnlyWhenTypingAfter;
 
 	if (startOffset === endOffset) {
 		const before = mapOffset(
@@ -180,7 +174,10 @@ function mapTrackedRange(
 function isTrackedRangeStickiness(
 	value: TrackedRangeStickiness,
 ): boolean {
-	return Object.values(TrackedRangeStickiness).includes(value);
+	return value === TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges ||
+		value === TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges ||
+		value === TrackedRangeStickiness.GrowsOnlyWhenTypingBefore ||
+		value === TrackedRangeStickiness.GrowsOnlyWhenTypingAfter;
 }
 
 function mapOffset(

@@ -1,8 +1,8 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
-import { createTransposeCharactersCommand } from "../common/transpose.js";
+import { createTransposeCharactersCommand } from "../common/transposeCharactersCommand.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
@@ -48,7 +48,7 @@ export class TransposeController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.transpose',
 	commands: [{ id: TransposeCommandId, canTriggerInlineEdits: true }],
 	install: context => {

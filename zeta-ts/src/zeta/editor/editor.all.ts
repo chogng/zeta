@@ -25,7 +25,7 @@ import "./contrib/hover/browser/hover.contribution.js";
 import "./contrib/inPlaceReplace/browser/inPlaceReplaceController.js";
 import "./contrib/inlayHints/browser/inlayHintsController.js";
 import "./contrib/insertFinalNewLine/browser/insertFinalNewLine.contribution.js";
-import "./contrib/inlineCompletions/browser/inlineCompletionsController.js";
+import "./contrib/inlineCompletions/browser/controller/inlineCompletionsController.js";
 import "./contrib/inlineProgress/browser/inlineProgressController.js";
 import "./contrib/linesOperations/browser/linesOperations.contribution.js";
 import "./contrib/lineSelection/browser/lineSelectionController.js";

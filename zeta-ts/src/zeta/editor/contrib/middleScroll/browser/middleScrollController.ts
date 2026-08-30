@@ -1,5 +1,5 @@
 import "./media/middleScroll.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -30,7 +30,7 @@ export class MiddleScrollController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.middleScroll",
 	install: context => {
 		if (context.kind !== "text") return;

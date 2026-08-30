@@ -5,7 +5,7 @@ import { RangeUtil } from './rangeUtil.js';
 import { ViewLineTextDirection, type ViewLineOptions } from './viewLineOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type Range } from '../../../common/core/range.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
 import { type FloatHorizontalRange } from '../../view/renderingContext.js';
@@ -27,6 +27,7 @@ interface BrowserCaretDocument {
 
 /** Owns one reusable virtual-line DOM subtree rendered by ViewLines. */
 export class ViewLine {
+	public static readonly CLASS_NAME = 'view-line';
 	public readonly domNode: FastDomNode<HTMLDivElement>;
 	public readonly textElement: HTMLSpanElement;
 	private characterMapping: CharacterMapping;
@@ -35,7 +36,7 @@ export class ViewLine {
 	constructor(host: HTMLElement, lineIndex: number, private readonly options: ViewLineOptions) {
 		const domNode = new FastDomNode(h(host.ownerDocument, "div"));
 		const textElement = h(host.ownerDocument, "span");
-		domNode.setClassName("stanza-editor-line");
+		domNode.setClassName(ViewLine.CLASS_NAME);
 		domNode.domNode.dataset.lineIndex = String(lineIndex);
 		textElement.className = "stanza-editor-line-text";
 		textElement.dir = options.textDirection;
@@ -110,8 +111,8 @@ export class ViewLine {
 	}
 }
 
-export { SemanticTokenModifier, SemanticTokenPresentation } from '../../../common/services/semanticTokensStyling.js';
-export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
+export { SemanticTokenModifier, SemanticTokenPresentation } from '../../../common/services/resolvedSemanticTokens.js';
+export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 
 export interface BracketColorizationSpan {
 	readonly startColumn: number;
@@ -145,8 +146,8 @@ export function projectStanzaSemanticTokenLine(
 	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
 	const ownerDocument = element.ownerDocument;
 	const fragment = createFragment(ownerDocument);
-	const characterMapping = new CharacterMapping(lineText.length + 1);
 	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn])])].sort((left, right) => left - right);
+	const characterMapping = new CharacterMapping(lineText.length + 1, Math.max(1, boundaries.length - 1));
 	let visibleColumn = 0;
 	if (lineText.length === 0) {
 		fragment.append(h(ownerDocument, 'span'));

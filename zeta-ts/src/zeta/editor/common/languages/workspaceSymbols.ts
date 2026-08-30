@@ -1,7 +1,7 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { type URI } from "../../../base/common/uri.js";
 import { type Range } from "../core/range.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../languageFeatureRegistry.js";
+import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../ownedLanguageFeatureProviderRegistry.js";
 
 export type LanguageWorkspaceSymbolKind = string | number;
 
@@ -21,7 +21,7 @@ export interface LanguageWorkspaceSymbolProvider extends LanguageFeatureProvider
 
 /** Aggregates workspace symbol providers independently from one editor model. */
 export class WorkspaceSymbolService extends Disposable {
-	constructor(private readonly providers: LanguageFeatureProviderRegistry<LanguageWorkspaceSymbolProvider>) {
+	constructor(private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageWorkspaceSymbolProvider>) {
 		super();
 	}
 

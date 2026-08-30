@@ -3,11 +3,11 @@ import { type ISize } from '../../../base/common/layout.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { type TextModelChange } from '../core/textChange.js';
-import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewZoneLayout, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel.js';
+import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewZoneLayout, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
 import { LinesLayout, type EditorViewportVerticalPadding } from './linesLayout.js';
 import { type CustomLineHeightData } from './lineHeights.js';
 
-export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition, EditorViewportLineSource, EditorViewportModelSource } from '../viewModel.js';
+export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition, EditorViewportLineSource, EditorViewportModelSource } from '../viewModel/editorViewportContracts.js';
 export type { EditorViewportVerticalPadding } from './linesLayout.js';
 
 export interface EditorViewportLayout {

@@ -6,12 +6,12 @@ import { Size2D } from "./size.js";
 export class Rect {
 	static fromPoint(point: Point): Rect { return new Rect(point.x, point.y, point.x, point.y); }
 	static fromPoints(topLeft: Point, bottomRight: Point): Rect { return new Rect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y); }
-	static fromPointSize(point: Point, size: Size2D): Rect { return new Rect(point.x, point.y, point.x + size.width, point.y + size.height); }
+	static fromPointSize(point: Point, size: Point): Rect { return new Rect(point.x, point.y, point.x + size.x, point.y + size.y); }
 	static fromLeftTopRightBottom(left: number, top: number, right: number, bottom: number): Rect { return new Rect(left, top, right, bottom); }
 	static fromLeftTopWidthHeight(left: number, top: number, width: number, height: number): Rect { return new Rect(left, top, left + width, top + height); }
 	static fromRanges(horizontal: OffsetRange, vertical: OffsetRange): Rect { return new Rect(horizontal.start, vertical.start, horizontal.endExclusive, vertical.endExclusive); }
 
-	static hull(rects: readonly Rect[]): Rect {
+	static hull(rects: Rect[]): Rect {
 		if (rects.length === 0) return new Rect(0, 0, 0, 0);
 		return rects.slice(1).reduce((hull, rect) => hull.union(rect), rects[0]);
 	}
@@ -26,8 +26,8 @@ export class Rect {
 		if (top > bottom) throw new BugIndicatingError("Invalid arguments: Vertically offset by " + (top - bottom));
 	}
 
-	get width(): number { return this.right - this.left; }
-	get height(): number { return this.bottom - this.top; }
+	get width() { return this.right - this.left; }
+	get height() { return this.bottom - this.top; }
 
 	withMargin(margin: number): Rect;
 	withMargin(vertical: number, horizontal: number): Rect;
@@ -94,7 +94,7 @@ export class Rect {
 	withHorizontalRange(range: OffsetRange): Rect { return new Rect(range.start, this.top, range.endExclusive, this.bottom); }
 	withVerticalRange(range: OffsetRange): Rect { return new Rect(this.left, range.start, this.right, range.endExclusive); }
 	getSize(): Size2D { return new Size2D(this.width, this.height); }
-	toStyles(): { readonly position: "absolute"; readonly left: string; readonly top: string; readonly width: string; readonly height: string } {
+	toStyles() {
 		return { position: "absolute", left: `${this.left}px`, top: `${this.top}px`, width: `${this.width}px`, height: `${this.height}px` };
 	}
 	toString(): string { return `Rect{(${this.left},${this.top}), (${this.right},${this.bottom})}`; }

@@ -5,7 +5,7 @@ import { BareFontInfo, type IValidatedEditorOptions } from './fontInfo.js';
 export function createBareFontInfoFromValidatedSettings(
 	options: IValidatedEditorOptions,
 	pixelRatio: number,
-	ignoreEditorZoom = false,
+	ignoreEditorZoom: boolean,
 ): BareFontInfo {
 	const fontFamily = options.get(EditorOption.fontFamily);
 	const fontWeight = options.get(EditorOption.fontWeight);
@@ -20,16 +20,16 @@ export function createBareFontInfoFromValidatedSettings(
 /** Builds a bare font descriptor from raw settings at a trust boundary. */
 export function createBareFontInfoFromRawSettings(
 	options: {
-		readonly fontFamily?: unknown;
-		readonly fontWeight?: unknown;
-		readonly fontSize?: unknown;
-		readonly fontLigatures?: unknown;
-		readonly fontVariations?: unknown;
-		readonly lineHeight?: unknown;
-		readonly letterSpacing?: unknown;
+		fontFamily?: unknown;
+		fontWeight?: unknown;
+		fontSize?: unknown;
+		fontLigatures?: unknown;
+		fontVariations?: unknown;
+		lineHeight?: unknown;
+		letterSpacing?: unknown;
 	},
 	pixelRatio: number,
-	ignoreEditorZoom = false,
+	ignoreEditorZoom: boolean = false,
 ): BareFontInfo {
 	if (!options || typeof options !== 'object') throw new TypeError('Raw editor font settings must be an object');
 	const fontFamily = EditorOptions.fontFamily.validate(options.fontFamily);

@@ -5,14 +5,14 @@ import { h } from '../../../../../base/browser/dom.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type EditorCommandExecutor } from '../../../../browser/editorExtensions.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
+import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type LanguageRenameProvider, RenameService } from '../../common/rename.js';
+import { type LanguageRenameProvider, RenameService } from '../../common/languageRename.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -42,7 +42,7 @@ test('Rename reports its command after applying the provider edit', async () => 
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, 'textarea');
 	container.append(editorInput);
-	using providers = new LanguageFeatureProviderRegistry<LanguageRenameProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageRenameProvider>();
 	providers.register({
 		languageIds: ['typescript'],
 		prepareRename: () => ({ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)), placeholder: 'abc' }),

@@ -1,11 +1,12 @@
 import { Position } from '../core/position.js';
-import { Range } from '../core/range.js';
-import { type TextEdit } from '../core/editOperation.js';
+import { type IRange, Range } from '../core/range.js';
+
 import { type TextSnapshot } from '../core/textChange.js';
-import { type InplaceReplaceResult } from '../languages/supports/inplaceReplaceSupport.js';
+import { type IInplaceReplaceSupportResult } from '../languages.js';
 import { type LanguageWorkerWireCodec } from '../languages/languageWorkerWire.js';
-import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorker.js';
+import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorkerProtocol.js';
 import { type UnicodeHighlight, type UnicodeHighlightKind } from './unicodeTextModelHighlighter.js';
+import { type TextEdit } from '../languages.js';
 
 export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, EditorWorkerRequest, EditorWorkerResult> = Object.freeze({
 	lanes: Object.freeze([
@@ -58,7 +59,7 @@ export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, Ed
 			case EDITOR_WORKER_MINIMAL_EDITS_LANE:
 				return Object.freeze((result as readonly TextEdit[]).map(encodeEdit));
 			case EDITOR_WORKER_NAVIGATE_VALUE_LANE: {
-				const navigation = result as InplaceReplaceResult | undefined;
+				const navigation = result as IInplaceReplaceSupportResult | undefined;
 				return navigation ? Object.freeze({ range: encodeRange(navigation.range), value: navigation.value }) : null;
 			}
 		}
@@ -88,7 +89,7 @@ function decodeEdit(value: unknown, snapshot: TextSnapshot): TextEdit {
 	return Object.freeze({ range: decodeRange(value.range, snapshot), text: decodeString(value.text, 'Editor worker edit text') });
 }
 
-function encodeRange(range: Range): unknown {
+function encodeRange(range: IRange): unknown {
 	return Object.freeze({
 		start: Object.freeze({ lineIndex: range.startLineNumber - 1, columnIndex: range.startColumn - 1 }),
 		end: Object.freeze({ lineIndex: range.endLineNumber - 1, columnIndex: range.endColumn - 1 }),

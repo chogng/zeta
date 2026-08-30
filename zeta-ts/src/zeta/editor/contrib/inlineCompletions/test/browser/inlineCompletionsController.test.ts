@@ -5,7 +5,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
-import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
+import { OwnedLanguageFeatureProviderRegistry } from '../../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { SelectionSet } from '../../../../common/cursor/selectionSet.js';
@@ -27,8 +27,8 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import('../../../../browser/view.js');
-const { InlineCompletionsService } = await import('../../../../browser/services/inlineCompletionsService.js');
-const { InlineCompletionsController } = await import('../../browser/inlineCompletionsController.js');
+const { InlineCompletionProviderService } = await import('../../../../browser/services/inlineCompletionProviderService.js');
+const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -41,7 +41,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	viewport.layout({ width: 200, height: 40 });
 	const input = h(dom.window.document, 'textarea');
 	container.append(input);
-	using providers = new LanguageFeatureProviderRegistry<LanguageInlineCompletionsProvider>();
+	using providers = new OwnedLanguageFeatureProviderRegistry<LanguageInlineCompletionsProvider>();
 	const requests: string[] = [];
 	providers.register({
 		languageIds: ['plaintext'],
@@ -50,7 +50,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 			return [{ insertText: ' completion' }];
 		},
 	});
-	using service = new InlineCompletionsService(model, providers);
+	using service = new InlineCompletionProviderService(model, providers);
 	using commands = new Emitter<{ readonly commandId: string }>();
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);

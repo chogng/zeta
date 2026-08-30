@@ -1,7 +1,8 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
-import { type TextEdit } from "../../../common/core/editOperation.js";
+import { type TextEdit } from '../../../common/languages.js';
+
 
 interface BracketDeletion {
 	readonly startOffset: number;

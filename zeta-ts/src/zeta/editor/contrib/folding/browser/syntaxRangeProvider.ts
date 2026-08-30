@@ -1,5 +1,5 @@
 import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
-import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
+import { type LanguageConfigurationSource } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { assertLanguageId } from "../../../common/languages/languageId.js";
 import { createLanguageLexicalLineScanner } from "../../../common/languages/languageLexicalConfiguration.js";
 import { type LanguageLexicalState } from "../../../common/languages/languageLexicalLineScanner.js";

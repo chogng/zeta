@@ -5,7 +5,7 @@ import { Selection } from "../../common/core/selection.js";
 import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { createTransposeCharactersCommand } from "../../contrib/transpose/common/transpose.js";
+import { createTransposeCharactersCommand } from "../../contrib/transpose/common/transposeCharactersCommand.js";
 
 test("Transpose swaps complete graphemes for multiple carets and undoes atomically", () => {
 	using model = new TextModel("a😊b\néx");

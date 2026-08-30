@@ -5,7 +5,7 @@ import { h } from "../../../base/browser/dom.js";
 import { Emitter } from '../../../base/common/event.js';
 import { ContentWidgetPositionPreference, type IContentWidgetPosition, OverlayWidgetPositionPreference } from '../../browser/editorBrowser.js';
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
-import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorations.js";
+import { createStanzaDecorationSource, DecorationPresentation } from "../../browser/viewparts/decorations/decorations.js";
 import { type BracketColorizationSource } from '../../browser/viewparts/viewLines/viewLine.js';
 import { CursorsController } from "../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
@@ -17,10 +17,10 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { WrappingIndent } from "../../common/config/editorOptions.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { PositionAffinity } from '../../common/model.js';
+import { PositionAffinity, TrackedRangeStickiness, GlyphMarginLane } from '../../common/model.js';
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../common/services/semanticTokensStyling.js';
+
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../common/services/resolvedSemanticTokens.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -406,7 +406,7 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 	embeddedViewport.layout({ width: 300, height: 40 });
 	assert.equal(embeddedViewport.element.classList.contains("stanza-editor-focus-owner-host"), true);
 	assert.equal(embeddedViewport.element.classList.contains("stanza-editor-focus-owner-editor"), false);
-	assert.equal(embeddedViewport.element.querySelector(".stanza-editor-line.active"), null);
+	assert.equal(embeddedViewport.element.querySelector(".view-line.active"), null);
 	assert.ok(embeddedViewport.element.querySelector(".stanza-editor-caret"));
 	assert.throws(() => new EditorViewport({
 		container,
@@ -722,7 +722,7 @@ test("Editor gutter orders generic glyphs, line numbers, folding controls, then 
 	using glyphs = new TextDecorationCollection<string>(model);
 	glyphs.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "generic",
 	});
 	const glyphSource = createStanzaDecorationSource(glyphs, () => ({
@@ -1570,9 +1570,9 @@ test('EditorViewport changes public view zones with content and margin ownership
 	viewport.changeViewZones(accessor => {
 		retainedAccessor = accessor;
 		id = accessor.addZone({
-			afterLineIndex: 0,
-			heightInPixels: 24,
-			minWidthInPixels: 450,
+			afterLineNumber: 1,
+			heightInPx: 24,
+			minWidthInPx: 450,
 			suppressMouseDown: true,
 			domNode,
 			marginDomNode,
@@ -1607,9 +1607,9 @@ test('EditorViewport resolves line-based and default view-zone heights after lin
 	const defaultHeightNode = h(dom.window.document, 'div');
 	const fixedHeightNode = h(dom.window.document, 'div');
 	viewport.changeViewZones(accessor => {
-		accessor.addZone({ afterLineIndex: 0, heightInLines: 1.5, domNode: lineHeightNode });
-		accessor.addZone({ afterLineIndex: 0, domNode: defaultHeightNode });
-		accessor.addZone({ afterLineIndex: 0, heightInPixels: 18, heightInLines: 2, domNode: fixedHeightNode });
+		accessor.addZone({ afterLineNumber: 1, heightInLines: 1.5, domNode: lineHeightNode });
+		accessor.addZone({ afterLineNumber: 1, domNode: defaultHeightNode });
+		accessor.addZone({ afterLineNumber: 1, heightInPx: 18, heightInLines: 2, domNode: fixedHeightNode });
 	});
 	const before = { lineHeight: lineHeightNode.style.height, defaultHeight: defaultHeightNode.style.height, fixedHeight: fixedHeightNode.style.height };
 
@@ -1754,7 +1754,7 @@ function requiredElement<T extends Element = HTMLElement>(
 
 function lineElements(container: ParentNode): HTMLDivElement[] {
 	return [...container.querySelectorAll<HTMLDivElement>(
-		".stanza-editor-line",
+		".view-line",
 	)];
 }
 
@@ -1779,7 +1779,7 @@ function lineNumber(line: Element | undefined): HTMLSpanElement {
 	assert.ok(editor);
 	return requiredElement<HTMLSpanElement>(
 		editor,
-		`.stanza-editor-line-margin[data-line-index="${line.getAttribute("data-line-index")}"] .stanza-editor-line-number`,
+		`.stanza-editor-line-margin[data-line-index="${line.getAttribute("data-line-index")}"] .line-numbers`,
 	);
 }
 

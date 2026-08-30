@@ -2,7 +2,7 @@
 let platformTextDecoder: TextDecoder | undefined;
 
 export function getPlatformTextDecoder(): TextDecoder {
-	return platformTextDecoder ??= new TextDecoder();
+	return platformTextDecoder ??= new TextDecoder('UTF-16LE');
 }
 
 export function decodeUTF16LE(source: Uint8Array, offset: number, length: number): string {
@@ -20,51 +20,61 @@ export function decodeUTF16LE(source: Uint8Array, offset: number, length: number
 
 /** A reusable UTF-16 chunk builder for tokenization and piece-tree assembly. */
 export class StringBuilder {
-	private readonly buffer: Uint16Array;
-	private readonly completedStrings: string[] = [];
-	private bufferLength = 0;
+	private readonly _capacity: number;
+	private readonly _buffer: Uint16Array;
+	private _completedStrings: string[] | null = null;
+	private _bufferLength: number = 0;
 
 	constructor(capacity: number) {
 		if (!Number.isSafeInteger(capacity) || capacity < 1) throw new RangeError("StringBuilder capacity must be positive");
-		this.buffer = new Uint16Array(capacity);
+		this._capacity = capacity | 0;
+		this._buffer = new Uint16Array(this._capacity);
 	}
 
 	reset(): void {
-		this.completedStrings.length = 0;
-		this.bufferLength = 0;
+		this._completedStrings = null;
+		this._bufferLength = 0;
 	}
 
 	build(): string {
-		this.flushBuffer();
-		return this.completedStrings.join("");
+		if (this._completedStrings !== null) {
+			this._flushBuffer();
+			return this._completedStrings.join('');
+		}
+		return this._buildBuffer();
+	}
+
+	private _buildBuffer(): string {
+		if (this._bufferLength === 0) return '';
+		return getPlatformTextDecoder().decode(new Uint16Array(this._buffer.buffer, 0, this._bufferLength));
 	}
 
 	appendCharCode(charCode: number): void {
 		if (!Number.isSafeInteger(charCode) || charCode < 0 || charCode > 0xffff) throw new RangeError("Character code must be a UTF-16 code unit");
-		if (this.bufferLength === this.buffer.length) this.flushBuffer();
-		this.buffer[this.bufferLength] = charCode;
-		this.bufferLength += 1;
+		const remainingSpace = this._capacity - this._bufferLength;
+		if (remainingSpace <= 1 && (remainingSpace === 0 || charCode >= 0xD800 && charCode <= 0xDBFF)) this._flushBuffer();
+		this._buffer[this._bufferLength++] = charCode;
 	}
 
 	appendASCIICharCode(charCode: number): void {
 		if (!Number.isSafeInteger(charCode) || charCode < 0 || charCode > 0x7f) throw new RangeError("Character code must be ASCII");
-		this.appendCharCode(charCode);
+		if (this._bufferLength === this._capacity) this._flushBuffer();
+		this._buffer[this._bufferLength++] = charCode;
 	}
 
 	appendString(value: string): void {
-		if (value.length >= this.buffer.length) {
-			this.flushBuffer();
-			this.completedStrings.push(value);
+		if (this._bufferLength + value.length >= this._capacity) {
+			this._flushBuffer();
+			this._completedStrings!.push(value);
 			return;
 		}
-		if (this.bufferLength + value.length > this.buffer.length) this.flushBuffer();
-		for (let index = 0; index < value.length; index += 1) this.buffer[this.bufferLength + index] = value.charCodeAt(index);
-		this.bufferLength += value.length;
+		for (let index = 0; index < value.length; index += 1) this._buffer[this._bufferLength++] = value.charCodeAt(index);
 	}
 
-	private flushBuffer(): void {
-		if (this.bufferLength === 0) return;
-		this.completedStrings.push(String.fromCharCode(...this.buffer.subarray(0, this.bufferLength)));
-		this.bufferLength = 0;
+	private _flushBuffer(): void {
+		const value = this._buildBuffer();
+		this._bufferLength = 0;
+		if (this._completedStrings === null) this._completedStrings = [value];
+		else this._completedStrings.push(value);
 	}
 }

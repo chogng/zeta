@@ -1,7 +1,7 @@
-import type { IDimension } from '../../../../base/browser/geometry.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import type { ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** One Preferences surface hosted by the shared Preferences editor shell. */
 export interface IPreferencesEditorPane extends IDisposable {
@@ -15,7 +15,7 @@ export interface IPreferencesEditorPaneDescriptor {
 	readonly id: string;
 	readonly title: string;
 	readonly order: number;
-	readonly ctorDescriptor: SyncDescriptor<IPreferencesEditorPane>;
+	readonly ctorDescriptor: ServiceConstructionDescriptor<IPreferencesEditorPane>;
 }
 
 /** Owns the Preferences panes contributed within one module realm. */

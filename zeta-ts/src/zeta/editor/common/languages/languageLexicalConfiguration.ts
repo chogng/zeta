@@ -1,4 +1,4 @@
-import { type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
+import { type MergedLanguageConfiguration } from "./ownedLanguageConfigurationContributions.js";
 import { assertLanguageId } from "./languageId.js";
 import { LanguageLexicalLineScanner } from "./languageLexicalLineScanner.js";
 
@@ -24,7 +24,7 @@ const RUST_KEYWORDS = Object.freeze([
 	"unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ]);
 
-export function createLanguageLexicalLineScanner(languageId: string, configuration: ResolvedLanguageConfiguration): LanguageLexicalLineScanner {
+export function createLanguageLexicalLineScanner(languageId: string, configuration: MergedLanguageConfiguration): LanguageLexicalLineScanner {
 	assertLanguageId(languageId);
 	if (configuration.languageId !== languageId) {
 		throw new Error("Language lexical configuration identity does not match its language");

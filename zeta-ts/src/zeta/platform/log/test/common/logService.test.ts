@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canLog, ConsoleLogger, LogLevel, NullLoggerService, type LogEntry } from "../../common/logService.js";
+import { canLog, ConsoleLogger, LogLevel, NullLoggerService, type LogEntry } from "../../common/log.js";
 import { LogService } from "../../common/logServiceImpl.js";
 
 test("LogService publishes structured entries and releases dynamic sinks", () => {

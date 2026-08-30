@@ -1,39 +1,52 @@
-import { NKeyMap, type NKey } from '../../../../base/common/map.js';
+import { NKeyMap } from '../../../../base/common/map.js';
 
 export interface IDecorationStyleSet {
-	readonly color: number | undefined;
-	readonly bold: boolean | undefined;
-	readonly opacity: number | undefined;
-	readonly strikethrough: boolean | undefined;
-	readonly strikethroughThickness: number | undefined;
-	readonly strikethroughColor: number | undefined;
+	color: number | undefined;
+	bold: boolean | undefined;
+	opacity: number | undefined;
+	strikethrough: boolean | undefined;
+	strikethroughThickness: number | undefined;
+	strikethroughColor: number | undefined;
 }
 
 export interface IDecorationStyleCacheEntry extends IDecorationStyleSet {
-	readonly id: number;
+	id: number;
 }
 
 export class DecorationStyleCache {
-	private nextId = 1;
-	private readonly cacheById = new Map<number, IDecorationStyleCacheEntry>();
-	private readonly cacheByStyle = new NKeyMap<IDecorationStyleCacheEntry, [NKey, NKey, NKey, NKey, NKey, NKey]>();
+	private _nextId = 1;
+	private readonly _cacheById = new Map<number, IDecorationStyleCacheEntry>();
+	private readonly _cacheByStyle = new NKeyMap<IDecorationStyleCacheEntry, [number, number, string, number, string, number]>();
 
-	public getOrCreateEntry(color: number | undefined, bold: boolean | undefined, opacity: number | undefined, strikethrough: boolean | undefined, strikethroughThickness: number | undefined, strikethroughColor: number | undefined): number {
-		if (color === undefined && bold === undefined && opacity === undefined && strikethrough === undefined && strikethroughThickness === undefined && strikethroughColor === undefined) return 0;
-		const keys = styleKeys(color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor);
-		const existing = this.cacheByStyle.get(...keys);
-		if (existing) return existing.id;
-		const entry = Object.freeze({ id: this.nextId++, color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor });
-		this.cacheById.set(entry.id, entry);
-		this.cacheByStyle.set(entry, ...keys);
-		return entry.id;
+	getOrCreateEntry(color: number | undefined, bold: boolean | undefined, opacity: number | undefined, strikethrough: boolean | undefined, strikethroughThickness: number | undefined, strikethroughColor: number | undefined): number {
+		if (color === undefined && bold === undefined && opacity === undefined && strikethrough === undefined && strikethroughThickness === undefined && strikethroughColor === undefined) {
+			return 0;
+		}
+		const result = this._cacheByStyle.get(
+			color ?? 0,
+			bold ? 1 : 0,
+			opacity === undefined ? '' : opacity.toFixed(2),
+			strikethrough ? 1 : 0,
+			strikethroughThickness === undefined ? '' : strikethroughThickness.toFixed(2),
+			strikethroughColor ?? 0
+		);
+		if (result) return result.id;
+		const id = this._nextId++;
+		const entry: IDecorationStyleCacheEntry = { id, color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor };
+		this._cacheById.set(id, entry);
+		this._cacheByStyle.set(entry,
+			color ?? 0,
+			bold ? 1 : 0,
+			opacity === undefined ? '' : opacity.toFixed(2),
+			strikethrough ? 1 : 0,
+			strikethroughThickness === undefined ? '' : strikethroughThickness.toFixed(2),
+			strikethroughColor ?? 0
+		);
+		return id;
 	}
 
-	public getStyleSet(id: number): IDecorationStyleSet | undefined {
-		return id === 0 ? undefined : this.cacheById.get(id);
+	getStyleSet(id: number): IDecorationStyleSet | undefined {
+		if (id === 0) return undefined;
+		return this._cacheById.get(id);
 	}
-}
-
-function styleKeys(color: number | undefined, bold: boolean | undefined, opacity: number | undefined, strikethrough: boolean | undefined, strikethroughThickness: number | undefined, strikethroughColor: number | undefined): [NKey, NKey, NKey, NKey, NKey, NKey] {
-	return [color ?? 'undefined', bold ?? 'undefined', opacity ?? 'undefined', strikethrough ?? 'undefined', strikethroughThickness ?? 'undefined', strikethroughColor ?? 'undefined'];
 }

@@ -2,30 +2,24 @@ import { Lazy } from "../../../base/common/lazy.js";
 import { LRUCache } from "../../../base/common/map.js";
 import { CharacterClassifier } from "./characterClassifier.js";
 
-export enum WordCharacterClass {
+export const enum WordCharacterClass {
 	Regular = 0,
 	Whitespace = 1,
 	WordSeparator = 2,
 }
 
-export interface IntlWordSegmentData {
-	readonly index: number;
-	readonly segment: string;
-	readonly isWordLike: true;
-}
-
 /** Character classes and optional locale-aware word segmentation for cursor commands. */
 export class WordCharacterClassifier extends CharacterClassifier<WordCharacterClass> {
-	readonly intlSegmenterLocales: readonly string[];
-	private readonly segmenter: Lazy<Intl.Segmenter> | undefined;
-	private cachedLine: string | undefined;
-	private cachedSegments: readonly IntlWordSegmentData[] = [];
+	readonly intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[];
+	private readonly _segmenter: Lazy<Intl.Segmenter> | null;
+	private _cachedLine: string | null = null;
+	private _cachedSegments: IntlWordSegmentData[] = [];
 
-	constructor(wordSeparators: string, intlSegmenterLocales: readonly string[] = []) {
+	constructor(wordSeparators: string, intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[]) {
 		super(WordCharacterClass.Regular);
-		this.intlSegmenterLocales = Object.freeze([...intlSegmenterLocales]);
-		this.segmenter = this.intlSegmenterLocales.length === 0
-			? undefined
+		this.intlSegmenterLocales = intlSegmenterLocales;
+		this._segmenter = this.intlSegmenterLocales.length === 0
+			? null
 			: new Lazy(() => new Intl.Segmenter(this.intlSegmenterLocales, { granularity: "word" }));
 		for (let index = 0; index < wordSeparators.length; index += 1) this.set(wordSeparators.charCodeAt(index), WordCharacterClass.WordSeparator);
 		this.set(32, WordCharacterClass.Whitespace);
@@ -34,7 +28,7 @@ export class WordCharacterClassifier extends CharacterClassifier<WordCharacterCl
 
 	findPrevIntlWordBeforeOrAtOffset(line: string, offset: number): IntlWordSegmentData | null {
 		let candidate: IntlWordSegmentData | null = null;
-		for (const segment of this.getIntlWords(line)) {
+		for (const segment of this._getIntlSegmenterWordsOnLine(line)) {
 			if (segment.index > offset) break;
 			candidate = segment;
 		}
@@ -42,26 +36,34 @@ export class WordCharacterClassifier extends CharacterClassifier<WordCharacterCl
 	}
 
 	findNextIntlWordAtOrAfterOffset(line: string, offset: number): IntlWordSegmentData | null {
-		return this.getIntlWords(line).find(segment => segment.index >= offset) ?? null;
+		return this._getIntlSegmenterWordsOnLine(line).find(segment => segment.index >= offset) ?? null;
 	}
 
-	private getIntlWords(line: string): readonly IntlWordSegmentData[] {
-		if (!this.segmenter) return [];
-		if (this.cachedLine === line) return this.cachedSegments;
-		this.cachedLine = line;
-		this.cachedSegments = Object.freeze([...this.segmenter.value.segment(line)].filter(segment => segment.isWordLike).map(segment => Object.freeze({
-			index: segment.index,
-			segment: segment.segment,
-			isWordLike: true as const,
-		})));
-		return this.cachedSegments;
+	private _getIntlSegmenterWordsOnLine(line: string): IntlWordSegmentData[] {
+		if (!this._segmenter) return [];
+		if (this._cachedLine === line) return this._cachedSegments;
+		this._cachedLine = line;
+		this._cachedSegments = this._filterWordSegments(this._segmenter.value.segment(line));
+		return this._cachedSegments;
 	}
+
+	private _filterWordSegments(segments: Intl.Segments): IntlWordSegmentData[] {
+		return [...segments].filter((segment): segment is IntlWordSegmentData => this._isWordLike(segment));
+	}
+
+	private _isWordLike(segment: Intl.SegmentData): segment is IntlWordSegmentData {
+		return segment.isWordLike === true;
+	}
+}
+
+export interface IntlWordSegmentData extends Intl.SegmentData {
+	isWordLike: true;
 }
 
 const classifierCache = new LRUCache<string, WordCharacterClassifier>(10);
 
-export function getMapForWordSeparators(wordSeparators: string, intlSegmenterLocales: readonly string[] = []): WordCharacterClassifier {
-	const key = `${wordSeparators}\u0000${intlSegmenterLocales.join(",")}`;
+export function getMapForWordSeparators(wordSeparators: string, intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[]): WordCharacterClassifier {
+	const key = `${wordSeparators}/${intlSegmenterLocales.join(",")}`;
 	const cached = classifierCache.get(key);
 	if (cached) return cached;
 	const classifier = new WordCharacterClassifier(wordSeparators, intlSegmenterLocales);

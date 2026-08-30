@@ -6,7 +6,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { type Position } from "../../../common/core/position.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { PeekViewWidget } from "../../peekView/browser/peekViewWidget.js";
+import { PeekViewWidget } from "../../peekView/browser/peekView.js";
 import { type LanguageLocation, type LanguageNavigationService } from "../common/languageNavigation.js";
 
 export type LanguageNavigationKind = "definition" | "declaration" | "implementation" | "typeDefinition" | "references";

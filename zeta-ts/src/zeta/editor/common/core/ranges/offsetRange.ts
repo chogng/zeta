@@ -47,29 +47,28 @@ export class OffsetRange implements IOffsetRange {
 	forEach(callback: (offset: number) => void): void { for (let offset = this.start; offset < this.endExclusive; offset += 1) callback(offset); }
 	withMargin(margin: number): OffsetRange;
 	withMargin(startMargin: number, endMargin: number): OffsetRange;
-	withMargin(startMargin: number, endMargin = startMargin): OffsetRange { return new OffsetRange(this.start - startMargin, this.endExclusive + endMargin); }
+	withMargin(startMargin: number, endMargin: number = startMargin): OffsetRange { return new OffsetRange(this.start - startMargin, this.endExclusive + endMargin); }
 	joinRightTouching(other: OffsetRange): OffsetRange { if (this.endExclusive !== other.start) throw new RangeError("Offset ranges are not touching"); return new OffsetRange(this.start, other.endExclusive); }
-	toString(): string { return `[${this.start}, ${this.endExclusive})`; }
+	toString() { return `[${this.start}, ${this.endExclusive})`; }
 }
 
 export class OffsetRangeSet {
-	private readonly sortedRanges: OffsetRange[] = [];
+	private readonly _sortedRanges: OffsetRange[] = [];
 
-	get ranges(): readonly OffsetRange[] { return [...this.sortedRanges]; }
-	get length(): number { return this.sortedRanges.reduce((total, range) => total + range.length, 0); }
+	get ranges(): OffsetRange[] { return this._sortedRanges; }
+	get length(): number { return this._sortedRanges.reduce((total, range) => total + range.length, 0); }
 
 	addRange(range: OffsetRange): void {
 		let start = 0;
-		while (start < this.sortedRanges.length && this.sortedRanges[start].endExclusive < range.start) start += 1;
+		while (start < this._sortedRanges.length && this._sortedRanges[start].endExclusive < range.start) start += 1;
 		let end = start;
-		while (end < this.sortedRanges.length && this.sortedRanges[end].start <= range.endExclusive) end += 1;
-		if (start === end) this.sortedRanges.splice(start, 0, range);
-		else this.sortedRanges.splice(start, end - start, new OffsetRange(Math.min(range.start, this.sortedRanges[start].start), Math.max(range.endExclusive, this.sortedRanges[end - 1].endExclusive)));
+		while (end < this._sortedRanges.length && this._sortedRanges[end].start <= range.endExclusive) end += 1;
+		if (start === end) this._sortedRanges.splice(start, 0, range);
+		else this._sortedRanges.splice(start, end - start, new OffsetRange(Math.min(range.start, this._sortedRanges[start].start), Math.max(range.endExclusive, this._sortedRanges[end - 1].endExclusive)));
 	}
 
-	contains(offset: number): boolean { return this.sortedRanges.some(range => range.contains(offset)); }
-	intersectsStrict(other: OffsetRange): boolean { return this.sortedRanges.some(range => range.intersects(other)); }
-	intersectWithRange(other: OffsetRange): OffsetRangeSet { const result = new OffsetRangeSet(); for (const range of this.sortedRanges) { const intersection = range.intersect(other); if (intersection) result.addRange(intersection); } return result; }
+	intersectsStrict(other: OffsetRange): boolean { return this._sortedRanges.some(range => range.intersects(other)); }
+	intersectWithRange(other: OffsetRange): OffsetRangeSet { const result = new OffsetRangeSet(); for (const range of this._sortedRanges) { const intersection = range.intersect(other); if (intersection) result.addRange(intersection); } return result; }
 	intersectWithRangeLength(other: OffsetRange): number { return this.intersectWithRange(other).length; }
-	toString(): string { return this.sortedRanges.map(range => range.toString()).join(", "); }
+	toString(): string { return this._sortedRanges.map(range => range.toString()).join(", "); }
 }

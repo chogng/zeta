@@ -3,7 +3,8 @@ import { TextDecorationCollection } from "../../../common/model/decorationCollec
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type Range } from "../../../common/core/range.js";
-import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
+import { TrackedRangeStickiness } from '../../../common/model.js';
+
 
 /** Projects current collapsed-cursor bracket matches into caller-owned decorations. */
 export class BracketMatchController extends Disposable {
@@ -43,7 +44,7 @@ export class BracketMatchController extends Disposable {
 		}
 		this.decorations.replaceAll([...ranges.values()].map(range => ({
 			range,
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: undefined,
 		})));
 	}

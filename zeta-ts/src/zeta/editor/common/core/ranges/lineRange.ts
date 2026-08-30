@@ -1,18 +1,21 @@
-import { Range } from '../range.js';
+import type { Comparator } from '../../../../base/common/arrays.js';
+import { type IRange, Range } from '../range.js';
 import { OffsetRange } from './offsetRange.js';
 
 /** A one-based half-open range of line numbers. */
 export class LineRange {
-	static readonly compareByStart = (left: LineRange, right: LineRange): number => left.startLineNumber - right.startLineNumber;
+	public readonly startLineNumber: number;
+	public readonly endLineNumberExclusive: number;
+	static readonly compareByStart: Comparator<LineRange> = (left, right) => left.startLineNumber - right.startLineNumber;
 	static ofLength(startLineNumber: number, length: number): LineRange { return new LineRange(startLineNumber, startLineNumber + length); }
-	static fromRange(range: Range): LineRange { return new LineRange(range.startLineNumber, range.endLineNumber); }
-	static fromRangeInclusive(range: Range): LineRange { return new LineRange(range.startLineNumber, range.endLineNumber + 1); }
-	static joinMany(lineRanges: readonly (readonly LineRange[])[]): readonly LineRange[] { return lineRanges.reduce<LineRangeSet>((set, ranges) => set.getUnion(new LineRangeSet(ranges)), new LineRangeSet()).ranges; }
-	static join(ranges: readonly LineRange[]): LineRange {
+	static fromRange(range: IRange): LineRange { return new LineRange(range.startLineNumber, range.endLineNumber); }
+	static fromRangeInclusive(range: IRange): LineRange { return new LineRange(range.startLineNumber, range.endLineNumber + 1); }
+	static joinMany(lineRanges: readonly (readonly LineRange[])[]): readonly LineRange[] { return lineRanges.reduce<LineRangeSet>((set, ranges) => set.getUnion(new LineRangeSet([...ranges])), new LineRangeSet()).ranges; }
+	static join(ranges: LineRange[]): LineRange {
 		if (ranges.length === 0) throw new RangeError('Cannot join an empty line range list');
 		return new LineRange(Math.min(...ranges.map(range => range.startLineNumber)), Math.max(...ranges.map(range => range.endLineNumberExclusive)));
 	}
-	static deserialize(value: readonly [number, number]): LineRange { return new LineRange(value[0], value[1]); }
+	static deserialize(value: ISerializedLineRange): LineRange { return new LineRange(value[0], value[1]); }
 	static subtract(left: LineRange, right: LineRange | undefined): LineRange[] {
 		if (!right) return [left];
 		if (right.endLineNumberExclusive <= left.startLineNumber || left.endLineNumberExclusive <= right.startLineNumber) return [left];
@@ -22,8 +25,10 @@ export class LineRange {
 		return result;
 	}
 
-	constructor(readonly startLineNumber: number, readonly endLineNumberExclusive: number) {
+	constructor(startLineNumber: number, endLineNumberExclusive: number) {
 		if (!Number.isSafeInteger(startLineNumber) || !Number.isSafeInteger(endLineNumberExclusive) || startLineNumber > endLineNumberExclusive) throw new RangeError('Invalid line range');
+		this.startLineNumber = startLineNumber;
+		this.endLineNumberExclusive = endLineNumberExclusive;
 	}
 
 	get length(): number { return this.endLineNumberExclusive - this.startLineNumber; }
@@ -40,7 +45,7 @@ export class LineRange {
 	toOffsetRange(): OffsetRange { return new OffsetRange(this.startLineNumber - 1, this.endLineNumberExclusive - 1); }
 	toInclusiveRange(): Range | null { return this.isEmpty ? null : new Range(this.startLineNumber, 1, this.endLineNumberExclusive - 1, Number.MAX_SAFE_INTEGER); }
 	toExclusiveRange(): Range { return new Range(this.startLineNumber, 1, this.endLineNumberExclusive, 1); }
-	serialize(): readonly [number, number] { return [this.startLineNumber, this.endLineNumberExclusive]; }
+	serialize(): ISerializedLineRange { return [this.startLineNumber, this.endLineNumberExclusive]; }
 	mapToLineArray<T>(map: (lineNumber: number) => T): T[] { const result: T[] = []; this.forEach(lineNumber => result.push(map(lineNumber))); return result; }
 	forEach(callback: (lineNumber: number) => void): void { for (let lineNumber = this.startLineNumber; lineNumber < this.endLineNumberExclusive; lineNumber += 1) callback(lineNumber); }
 	distanceToRange(other: LineRange): number { if (this.endLineNumberExclusive <= other.startLineNumber) return other.startLineNumber - this.endLineNumberExclusive; if (other.endLineNumberExclusive <= this.startLineNumber) return this.startLineNumber - other.endLineNumberExclusive; return 0; }
@@ -50,24 +55,25 @@ export class LineRange {
 }
 
 export class LineRangeSet {
-	private readonly normalizedRanges: LineRange[];
-	constructor(normalizedRanges: readonly LineRange[] = []) { this.normalizedRanges = [...normalizedRanges].sort((left, right) => left.startLineNumber - right.startLineNumber); }
-	get ranges(): readonly LineRange[] { return [...this.normalizedRanges]; }
+	constructor(private readonly _normalizedRanges: LineRange[] = []) { this._normalizedRanges.sort((left, right) => left.startLineNumber - right.startLineNumber); }
+	get ranges(): readonly LineRange[] { return this._normalizedRanges; }
 	addRange(range: LineRange): void {
 		if (range.isEmpty) return;
-		const ranges = [...this.normalizedRanges, range].sort((left, right) => left.startLineNumber - right.startLineNumber);
-		this.normalizedRanges.length = 0;
+		const ranges = [...this._normalizedRanges, range].sort((left, right) => left.startLineNumber - right.startLineNumber);
+		this._normalizedRanges.length = 0;
 		for (const candidate of ranges) {
-			const previous = this.normalizedRanges.at(-1);
-			if (previous && previous.endLineNumberExclusive >= candidate.startLineNumber) this.normalizedRanges[this.normalizedRanges.length - 1] = previous.join(candidate);
-			else this.normalizedRanges.push(candidate);
+			const previous = this._normalizedRanges.at(-1);
+			if (previous && previous.endLineNumberExclusive >= candidate.startLineNumber) this._normalizedRanges[this._normalizedRanges.length - 1] = previous.join(candidate);
+			else this._normalizedRanges.push(candidate);
 		}
 	}
-	contains(lineNumber: number): boolean { return this.normalizedRanges.some(range => range.contains(lineNumber)); }
-	intersects(range: LineRange): boolean { return this.normalizedRanges.some(candidate => candidate.intersectsStrict(range)); }
-	getUnion(other: LineRangeSet): LineRangeSet { const result = new LineRangeSet(this.ranges); for (const range of other.ranges) result.addRange(range); return result; }
-	subtractFrom(range: LineRange): LineRangeSet { let result = [range]; for (const candidate of this.normalizedRanges) result = result.flatMap(current => LineRange.subtract(current, candidate)); return new LineRangeSet(result); }
-	getIntersection(other: LineRangeSet): LineRangeSet { const result = new LineRangeSet(); for (const left of this.normalizedRanges) for (const right of other.normalizedRanges) { const intersection = left.intersect(right); if (intersection && !intersection.isEmpty) result.addRange(intersection); } return result; }
-	getWithDelta(delta: number): LineRangeSet { return new LineRangeSet(this.normalizedRanges.map(range => range.delta(delta))); }
-	toString(): string { return this.normalizedRanges.map(range => range.toString()).join(', '); }
+	contains(lineNumber: number): boolean { return this._normalizedRanges.some(range => range.contains(lineNumber)); }
+	intersects(range: LineRange): boolean { return this._normalizedRanges.some(candidate => candidate.intersectsStrict(range)); }
+	getUnion(other: LineRangeSet): LineRangeSet { const result = new LineRangeSet([...this.ranges]); for (const range of other.ranges) result.addRange(range); return result; }
+	subtractFrom(range: LineRange): LineRangeSet { let result = [range]; for (const candidate of this._normalizedRanges) result = result.flatMap(current => LineRange.subtract(current, candidate)); return new LineRangeSet(result); }
+	getIntersection(other: LineRangeSet): LineRangeSet { const result = new LineRangeSet(); for (const left of this._normalizedRanges) for (const right of other._normalizedRanges) { const intersection = left.intersect(right); if (intersection && !intersection.isEmpty) result.addRange(intersection); } return result; }
+	getWithDelta(delta: number): LineRangeSet { return new LineRangeSet(this._normalizedRanges.map(range => range.delta(delta))); }
+	toString() { return this._normalizedRanges.map(range => range.toString()).join(', '); }
 }
+
+export type ISerializedLineRange = [startLineNumber: number, endLineNumberExclusive: number];

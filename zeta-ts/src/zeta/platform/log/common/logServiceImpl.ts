@@ -1,5 +1,5 @@
 import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
-import { LogLevel, type ILogServiceHost, type ILogSink, type LogEntry, type LogEntryLevel } from "./logService.js";
+import { LogLevel, type ILogServiceHost, type ILogSink, type LogEntry, type LogEntryLevel } from "./log.js";
 
 export interface LogServiceOptions {
 	readonly sinks?: readonly ILogSink[];

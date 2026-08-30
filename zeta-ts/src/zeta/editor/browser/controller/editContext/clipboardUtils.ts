@@ -4,7 +4,7 @@ import { Mimes } from '../../../../base/common/mime.js';
 
 /** Clipboard data readable by an editor input adapter. */
 export interface IReadableClipboardData {
-	readonly types: readonly string[];
+	types: string[];
 	readonly files: readonly File[];
 	getData(type: string): string;
 }
@@ -71,25 +71,17 @@ export function createClipboardPasteEvent(browserEvent: ClipboardEvent): IClipbo
 	};
 }
 
-export function createReadableClipboardData(dataTransfer: DataTransfer | null | undefined): IReadableClipboardData {
+export function createReadableClipboardData(dataTransfer: DataTransfer | undefined | null): IReadableClipboardData {
 	return {
-		types: Object.freeze(Array.from(dataTransfer?.types ?? [])),
-		files: Object.freeze(Array.from(dataTransfer?.files ?? [])),
-		getData: (type: string): string => {
-			try {
-				return dataTransfer?.getData(type) ?? '';
-			} catch {
-				return '';
-			}
-		},
+		types: Array.from(dataTransfer?.types ?? []),
+		files: Array.prototype.slice.call(dataTransfer?.files ?? [], 0),
+		getData: (type: string) => dataTransfer?.getData(type) ?? '',
 	};
 }
 
-export function createWritableClipboardData(dataTransfer: DataTransfer | null | undefined): IWritableClipboardData {
+export function createWritableClipboardData(dataTransfer: DataTransfer | undefined | null): IWritableClipboardData {
 	return {
-		setData: (type: string, value: string): void => {
-			dataTransfer?.setData(type, value);
-		},
+		setData: (type: string, value: string) => dataTransfer?.setData(type, value),
 	};
 }
 

@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { URI } from '../../../base/common/uri.js';
-import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { LanguageService } from '../../common/services/languageService.js';
 
 test('language identity, configuration, and feature providers have separate owners', () => {
 	using languageService = new LanguageService();
-	using languageConfigurationService = new LanguageConfigurationService();
+	using languageConfigurationService = new ComposableLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), undefined);
@@ -24,7 +24,7 @@ test('language identity, configuration, and feature providers have separate owne
 });
 
 test('language feature registries report effective provider changes', () => {
-	using languageConfigurationService = new LanguageConfigurationService();
+	using languageConfigurationService = new ComposableLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
 	let changes = 0;
 	using listener = languageFeaturesService.colorProvider.onDidChange(() => changes += 1);

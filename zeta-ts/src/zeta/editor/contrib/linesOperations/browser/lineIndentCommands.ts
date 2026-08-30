@@ -3,8 +3,9 @@ import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../commo
 import type { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { type TextEdit } from "../../../common/core/editOperation.js";
+
 import { type TextModel } from "../../../common/model/textModel.js";
+import { type TextEdit } from '../../../common/languages.js';
 
 export enum EditorLineIndentDirection {
 	Indent = "indent",

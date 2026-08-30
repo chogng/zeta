@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { Selection } from "../../../../common/core/selection.js";
@@ -39,8 +39,8 @@ test("Remove matching brackets leaves non-bracket or range selections alone", ()
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, range), undefined);
 });
 
-function configurationsForBrackets(): LanguageConfigurationRegistry {
-	const configurations = new LanguageConfigurationRegistry();
+function configurationsForBrackets(): OwnedLanguageConfigurationContributions {
+	const configurations = new OwnedLanguageConfigurationContributions();
 	configurations.register("typescript", {
 		comments: { lineComment: "//", blockComment: { open: "/*", close: "*/" } },
 		brackets: [{ open: "(", close: ")" }, { open: "{", close: "}" }],

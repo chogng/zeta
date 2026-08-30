@@ -1,4 +1,4 @@
-import { arraysEqual, commonPrefixLength, commonSuffixLength } from "../../../../base/common/arrays.js";
+import { arraysEqual, commonArraySuffixLength, commonPrefixLength } from "../../../../base/common/arrays.js";
 import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { type LanguageWorkerDocumentSynchronization } from '../../../../editor/common/services/textModelSync/textModelSync.protocol.js';
 import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
@@ -407,7 +407,7 @@ function scanAllLines(grammar: IGrammar, lines: readonly string[], timeLimit: nu
 
 function updateLines(grammar: IGrammar, previousLines: readonly string[], previousResults: readonly TextMateLineResult[], lines: readonly string[], timeLimit: number, resolver: TextMateScopeResolver, metadataResolver: TextMateScopeMetadataResolver, signal?: AbortSignal): { readonly lineResults: readonly TextMateLineResult[]; readonly scannedLineCount: number } {
 	const prefixLength = commonPrefixLength(previousLines, lines);
-	const suffixLength = commonSuffixLength(previousLines, lines, prefixLength);
+	const suffixLength = commonArraySuffixLength(previousLines, lines, prefixLength);
 	const lineResults = previousResults.slice(0, prefixLength);
 	const newSuffixStart = lines.length - suffixLength;
 	const oldSuffixStart = previousLines.length - suffixLength;

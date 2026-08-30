@@ -134,7 +134,7 @@ export function commonPrefixLength<T>(
 }
 
 /** Returns the number of equal trailing items without overlapping an already matched prefix. */
-export function commonSuffixLength<T>(
+export function commonArraySuffixLength<T>(
 	left: readonly T[],
 	right: readonly T[],
 	prefixLength = 0,

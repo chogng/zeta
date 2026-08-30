@@ -1,8 +1,9 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
-import { type TextEdit } from "../../../common/core/editOperation.js";
+
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TextSearchMatch } from "../../../common/model/textModelSearch.js";
+import { type TextEdit } from '../../../common/languages.js';
 
 /** Expands JavaScript-style regular-expression replacement tokens against one search match. */
 export function resolveTextSearchReplacement(match: TextSearchMatch, replacement: string): string {

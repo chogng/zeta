@@ -1,4 +1,4 @@
-import { raceCancellation } from "../../../../base/common/cancellation.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
@@ -473,5 +473,5 @@ function isCompletionItemResolver(value: LanguageCompletionWorker): value is Lan
 
 function waitForCatalog(source: LanguageCompletionProviderCatalogSource, signal: AbortSignal | undefined): Promise<LanguageCompletionProviderCatalog> {
 	if (!signal) return source.waitForProviderCatalog();
-	return raceCancellation(source.waitForProviderCatalog(), signal, "Completion provider catalog wait was cancelled");
+	return raceCancellationError(source.waitForProviderCatalog(), signal, "Completion provider catalog wait was cancelled");
 }

@@ -272,38 +272,39 @@ export class NativeEditContext extends AbstractEditContext {
 			"paste",
 			event => this.fireWillPaste(event),
 		));
-		this._register(editContextAddDisposableListener<NativeTextUpdateEvent>(
+		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"textupdate",
-			event => this.handleTextUpdate(event),
+			event => this.handleTextUpdate(event as NativeTextUpdateEvent),
 		));
-		this._register(editContextAddDisposableListener<NativeTextFormatUpdateEvent>(
+		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"textformatupdate",
-			event => this.handleTextFormatUpdate(event),
+			event => this.handleTextFormatUpdate(event as NativeTextFormatUpdateEvent),
 		));
-		this._register(editContextAddDisposableListener<NativeCharacterBoundsUpdateEvent>(
+		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"characterboundsupdate",
-			event => this.handleCharacterBoundsUpdate(event),
+			event => this.handleCharacterBoundsUpdate(event as NativeCharacterBoundsUpdateEvent),
 		));
-		this._register(editContextAddDisposableListener<CompositionEvent>(
+		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"compositionstart",
-			event => this.handleCompositionStart(event),
+			event => this.handleCompositionStart(event as CompositionEvent),
 		));
-		this._register(editContextAddDisposableListener<CompositionEvent>(
+		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"compositionend",
-			event => this.handleCompositionEnd(event),
+			event => this.handleCompositionEnd(event as CompositionEvent),
 		));
 		this._register(editContextAddDisposableListener(this.nativeContext, "selectionchange", () => this.selectEmitter.fire(undefined)));
-		this._register(editContextAddDisposableListener<CompositionEvent>(
+		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"compositionupdate",
 			event => {
 				if (!this.composing) return;
-				this.compositionUpdateEmitter.fire(this.createCompositionEvent(event, event.data ?? ""));
+				const compositionEvent = event as CompositionEvent;
+				this.compositionUpdateEmitter.fire(this.createCompositionEvent(compositionEvent, compositionEvent.data ?? ""));
 			},
 		));
 	}

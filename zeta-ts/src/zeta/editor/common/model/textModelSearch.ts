@@ -4,6 +4,19 @@ import { Range } from "../core/range.js";
 import { getMapForWordSeparators, WordCharacterClass, type WordCharacterClassifier } from '../core/wordCharacterClassifier.js';
 import type { TextModel } from "./textModel.js";
 
+export function isMultilineRegexSource(searchString: string): boolean {
+	if (!searchString) return false;
+	for (let index = 0; index < searchString.length; index += 1) {
+		const character = searchString[index];
+		if (character === '\n') return true;
+		if (character === '\\') {
+			const escaped = searchString[++index];
+			if (escaped === 'n' || escaped === 'r' || escaped === 'W') return true;
+		}
+	}
+	return false;
+}
+
 const DEFAULT_RESULT_LIMIT = 999;
 const MAX_RESULT_LIMIT = 100_000;
 const MAX_PATTERN_LENGTH = 4_096;
@@ -15,7 +28,7 @@ export enum TextSearchPatternKind {
 }
 
 /** One caller-readable document search request. */
-export interface TextSearchQuery {
+export interface TextModelSearchQuery {
 	readonly pattern: string;
 	readonly patternKind?: TextSearchPatternKind;
 	readonly matchCase?: boolean;
@@ -53,7 +66,7 @@ export class TextSearchQueryError extends Error {
  * Offsets and ranges use UTF-16 code units. Empty regular-expression matches are supported and
  * always advance by one Unicode code point so a global search cannot loop forever.
  */
-export function findTextMatches(model: TextModel, query: TextSearchQuery, options: TextSearchOptions = {}): readonly TextSearchMatch[] {
+export function findTextMatches(model: TextModel, query: TextModelSearchQuery, options: TextSearchOptions = {}): readonly TextSearchMatch[] {
 	validateQuery(query);
 	const resultLimit = readResultLimit(options.resultLimit);
 	if (query.pattern.length === 0 || resultLimit === 0) return Object.freeze([]);
@@ -91,7 +104,7 @@ export function findTextMatches(model: TextModel, query: TextSearchQuery, option
 }
 
 /** Finds the first match at or after `from`, optionally wrapping once at the document end. */
-export function findNextTextMatch(model: TextModel, query: TextSearchQuery, from: Position, wrap = true): TextSearchMatch | undefined {
+export function findNextTextMatch(model: TextModel, query: TextModelSearchQuery, from: Position, wrap = true): TextSearchMatch | undefined {
 	const documentEnd = model.positionAt(model.createSnapshot().length);
 	const following = findTextMatches(model, query, {
 		range: Range.fromPositions(from, documentEnd),
@@ -104,7 +117,7 @@ export function findNextTextMatch(model: TextModel, query: TextSearchQuery, from
 	})[0];
 }
 
-function validateQuery(query: TextSearchQuery): void {
+function validateQuery(query: TextModelSearchQuery): void {
 	if (!query || typeof query !== "object") throw new TypeError("Text search requires a query");
 	if (typeof query.pattern !== "string") throw new TypeError("Text search pattern must be a string");
 	if (query.wordSeparators !== undefined && typeof query.wordSeparators !== 'string') throw new TypeError('Text search word separators must be a string');
@@ -124,7 +137,7 @@ function readResultLimit(value: number | undefined): number {
 	return limit;
 }
 
-function compileQuery(query: TextSearchQuery): RegExp {
+function compileQuery(query: TextModelSearchQuery): RegExp {
 	const source = query.patternKind === TextSearchPatternKind.RegularExpression
 		? query.pattern
 		: escapeRegExpCharacters(query.pattern);
@@ -140,7 +153,7 @@ function isWholeWordMatch(text: string, start: number, end: number, wordSeparato
 	const last = codePointBefore(text, end);
 	const before = codePointBefore(text, start);
 	const after = codePointAt(text, end);
-	const classifier = wordSeparators === undefined ? undefined : getMapForWordSeparators(wordSeparators);
+	const classifier = wordSeparators === undefined ? undefined : getMapForWordSeparators(wordSeparators, []);
 	return !(isWordCharacter(first, classifier) && isWordCharacter(before, classifier)) &&
 		!(isWordCharacter(last, classifier) && isWordCharacter(after, classifier));
 }

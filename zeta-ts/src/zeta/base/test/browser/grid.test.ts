@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { IRectangle } from "../../browser/geometry.js";
+import type { IPositionedRectangle } from "../../browser/geometry.js";
 import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -44,7 +44,7 @@ class TestGridView {
 		this.element = h(ownerDocument, "div");
 	}
 
-	layout(bounds: IRectangle): void {
+	layout(bounds: IPositionedRectangle): void {
 		this.layouts.push(bounds);
 	}
 

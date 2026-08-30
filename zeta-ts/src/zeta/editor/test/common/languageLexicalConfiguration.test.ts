@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../common/languages/ownedLanguageConfigurationContributions.js";
 import { type SyntaxProviderRequest } from "../../common/languages/syntax/syntaxProviders.js";
 import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Lexical caches remain isolated by language identity at one model version", async () => {
 	using model = new TextModel("// comment\n`value`");
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
 	const snapshot = model.createSnapshot();
@@ -21,7 +21,7 @@ test("Lexical caches remain isolated by language identity at one model version",
 
 test("A language configuration revision replaces same-version lexical state", async () => {
 	using model = new TextModel("# comment\n<% value");
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const provider = createLanguageLexicalSyntaxProvider({ languageConfigurations: configurations });
 	const snapshot = model.createSnapshot();
@@ -38,7 +38,7 @@ test("A language configuration revision replaces same-version lexical state", as
 });
 
 test("Built-in lexical configuration registrations release without owning the registry", () => {
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	const registrations = registerBuiltinLanguageConfigurations(configurations);
 
 	assert.equal(configurations.getLanguageConfiguration("typescript").comments.lineComment, "//");

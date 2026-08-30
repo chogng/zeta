@@ -1,4 +1,4 @@
-import { Dimension, getClientArea, type IDimension } from "../../../base/browser/geometry.js";
+import { Dimension, getClientArea, type IDimension } from "../../../base/browser/dom.js";
 import { SerializableGrid } from "../../../base/browser/ui/grid/grid.js";
 import type { IResizable } from "../../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../../base/common/event.js";

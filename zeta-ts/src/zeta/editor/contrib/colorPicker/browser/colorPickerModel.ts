@@ -1,7 +1,7 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
-import { type LanguageColorPresentation } from '../common/color.js';
+import { type LanguageColorPresentation } from '../common/languageColors.js';
 
 /** Owns the editable color and the provider-backed text representation selected for insertion. */
 export class ColorPickerModel extends Disposable {

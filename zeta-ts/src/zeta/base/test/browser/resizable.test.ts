@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { Dimension } = await import("../../browser/geometry.js");
+const { Dimension } = await import("../../browser/dom.js");
 const { Emitter } = await import("../../common/event.js");
 const { bindResizableLayout, ResizableHTMLElement } = await import(
 	"../../browser/ui/resizable/resizable.js",

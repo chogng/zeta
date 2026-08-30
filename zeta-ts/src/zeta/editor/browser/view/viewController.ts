@@ -18,7 +18,7 @@ import { type Position } from '../../common/core/position.js';
 import { SelectionSet } from '../../common/cursor/selectionSet.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
-import { type LanguageConfigurationSource } from '../../common/languages/languageConfiguration.js';
+import { type LanguageConfigurationSource } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '../../common/languages/languageLexicalContext.js';
 import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';

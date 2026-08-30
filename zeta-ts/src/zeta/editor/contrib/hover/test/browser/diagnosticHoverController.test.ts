@@ -8,7 +8,8 @@ import { TextDecorationCollection } from "../../../../common/model/decorationCol
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { TrackedRangeStickiness } from "../../../../common/model/trackedRange.js";
+import { TrackedRangeStickiness } from '../../../../common/model.js';
+
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
@@ -44,7 +45,7 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 	using decorations = new TextDecorationCollection<string>(model);
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
-		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		metadata: "Use let instead",
 	});
 	using viewport = new EditorViewport({

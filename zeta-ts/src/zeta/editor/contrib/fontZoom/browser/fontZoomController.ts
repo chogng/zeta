@@ -1,5 +1,5 @@
 import "./media/fontZoom.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -48,7 +48,7 @@ function readScale(value: number): number { if (!Number.isFinite(value) || value
 function readPositive(value: number, name: string): number { if (!Number.isFinite(value) || value <= 0) throw new RangeError(`Stanza ${name} must be positive`); return value; }
 function readFontSize(element: HTMLElement): number { return Number.parseFloat(element.ownerDocument.defaultView?.getComputedStyle(element).fontSize ?? ""); }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.fontZoom",
 	install: context => {
 		if (context.kind !== "text") return;

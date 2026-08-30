@@ -5,7 +5,7 @@ import { IContextMenuService } from "../../../../platform/contextview/browser/co
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
 import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IGitService } from "../../../services/git/common/gitService.js";
@@ -50,7 +50,7 @@ export function registerGitViews(
 			localizationKey: { bundle: "zeta.views", key: "changes" },
 			order: 1,
 			canToggleVisibility: false,
-			ctorDescriptor: new SyncDescriptor(ScmViewPane, {
+			ctorDescriptor: new ServiceConstructionDescriptor(ScmViewPane, {
 				serviceDependencies: [IGitService, IFileIconThemeService, IEditorService, ICommandService, IContextMenuService],
 			}),
 		},
@@ -61,7 +61,7 @@ export function registerGitViews(
 			order: 2,
 			collapsed: true,
 			canToggleVisibility: false,
-			ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
+			ctorDescriptor: new ServiceConstructionDescriptor(ScmAgentReviewViewPane),
 		},
 		{
 			id: GIT_GRAPH_VIEW_ID,
@@ -70,7 +70,7 @@ export function registerGitViews(
 			order: 3,
 			collapsed: true,
 			canToggleVisibility: false,
-			ctorDescriptor: new SyncDescriptor(ScmGraphViewPane, {
+			ctorDescriptor: new ServiceConstructionDescriptor(ScmGraphViewPane, {
 				serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IFileIconThemeService],
 			}),
 		},

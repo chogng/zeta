@@ -1,6 +1,6 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { cloneDocumentStyles } from "../../../../base/browser/domStylesheets.js";
-import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
+import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import { getWindowId, registerWindow } from "../../../../base/browser/window.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableMap, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";

@@ -1,8 +1,8 @@
 import { isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
-import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorViewZoneLayout, type EditorViewportLineSource } from '../viewModel.js';
+import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorViewZoneLayout, type EditorViewportLineSource } from '../viewModel/editorViewportContracts.js';
 import { CustomLineHeightData, LineHeightsManager } from './lineHeights.js';
 
-export type { EditorLineRange, EditorViewportLineSource } from '../viewModel.js';
+export type { EditorLineRange, EditorViewportLineSource } from '../viewModel/editorViewportContracts.js';
 
 /** Vertical space reserved around the projected line collection. */
 export interface EditorViewportVerticalPadding {

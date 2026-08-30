@@ -1,6 +1,6 @@
 import { assertDefined } from "../../../../base/common/types.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IDimension } from "../../../../base/browser/geometry.js";
+import type { IDimension } from "../../../../base/browser/dom.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { RichTextEditorWidget, type RichTextEditorOptions } from "../../../../editor/browser/widget/richTextEditor/richTextEditorWidget.js";
 import type { DocumentSelection } from "../../../../editor/common/core/documentSelection.js";

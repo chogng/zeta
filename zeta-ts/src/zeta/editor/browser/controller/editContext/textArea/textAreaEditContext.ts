@@ -12,7 +12,7 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { type EditorViewport } from '../../../view.js';
-import { modelOffsetAtContentOffset, SimplePagedScreenReaderStrategy, type ISimpleScreenReaderContentState } from '../screenReaderUtils.js';
+import { MappedScreenReaderStrategy, modelOffsetAtContentOffset, type MappedScreenReaderContentState } from '../mappedScreenReaderUtils.js';
 import { TextAreaInput } from "./textAreaEditContextInput.js";
 import { TextAreaEditContextRegistry } from "./textAreaEditContextRegistry.js";
 import { TextAreaState, type ITextAreaWrapper } from "./textAreaEditContextState.js";
@@ -190,9 +190,9 @@ const MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS = 32 * 1_024;
 class TextAreaAccessibilityController extends Disposable {
 	private accessibleInputSyncScheduled = false;
 	private accessibleInputState = TextAreaState.EMPTY;
-	private accessibleScreenReaderContentState: ISimpleScreenReaderContentState | undefined;
+	private accessibleScreenReaderContentState: MappedScreenReaderContentState | undefined;
 	private accessibleInputStartOffset = 0;
-	private readonly screenReaderStrategy = new SimplePagedScreenReaderStrategy();
+	private readonly screenReaderStrategy = new MappedScreenReaderStrategy();
 
 	constructor(
 		private readonly input: TextAreaEditContext,

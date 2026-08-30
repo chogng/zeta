@@ -4,8 +4,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
-import { type LanguageCodeLensProvider } from '../common/codelens.js';
-import { CodeLensModel, type CodeLensItem } from './codelens.js';
+import { type LanguageCodeLensProvider } from '../common/languageCodeLenses.js';
+import { LanguageCodeLensModel, type LanguageCodeLensItem } from './codelens.js';
 
 const StorageKey = 'codelens/cache2';
 
@@ -16,7 +16,7 @@ interface SerializedCacheEntry {
 
 interface CacheEntry {
 	readonly lineCount: number;
-	readonly model: CodeLensModel;
+	readonly model: LanguageCodeLensModel;
 }
 
 const cachedCodeLensProvider: LanguageCodeLensProvider = {
@@ -29,13 +29,13 @@ class CodeLensCache {
 	private readonly entries = new LRUCache<string, CacheEntry>(20, 0.75);
 	private storageBinding: IDisposable | undefined;
 
-	public put(resource: URI, lineCount: number, model: CodeLensModel): void {
+	public put(resource: URI, lineCount: number, model: LanguageCodeLensModel): void {
 		const key = resource.toString();
 		const lenses = model.lenses.map(item => createCachedItem(item.symbol.range, item.symbol.command?.title));
-		this.entries.set(key, { lineCount, model: new CodeLensModel(lenses) });
+		this.entries.set(key, { lineCount, model: new LanguageCodeLensModel(lenses) });
 	}
 
-	public get(resource: URI, lineCount: number): CodeLensModel | undefined {
+	public get(resource: URI, lineCount: number): LanguageCodeLensModel | undefined {
 		const key = resource.toString();
 		const entry = this.entries.get(key);
 		if (!entry || entry.lineCount !== lineCount) return undefined;
@@ -86,7 +86,7 @@ export function bindCodeLensCacheStorage(storageService: IStorageService): IDisp
 	return codeLensCache.bindStorage(storageService);
 }
 
-function createCachedItem(range: Range, title: string | undefined): CodeLensItem {
+function createCachedItem(range: Range, title: string | undefined): LanguageCodeLensItem {
 	return Object.freeze({
 		symbol: Object.freeze({
 			range,
@@ -114,7 +114,7 @@ function deserialize(raw: string): ReadonlyMap<string, CacheEntry> {
 		}
 		const lines = [...new Set(candidate.lines)].filter(line => line <= candidate.lineCount).sort((left, right) => left - right);
 		const lenses = lines.map(line => createCachedItem(Range.fromPositions(new Position(line, 1)), undefined));
-		result.set(key, { lineCount: candidate.lineCount, model: new CodeLensModel(lenses) });
+		result.set(key, { lineCount: candidate.lineCount, model: new LanguageCodeLensModel(lenses) });
 	}
 	return result;
 }

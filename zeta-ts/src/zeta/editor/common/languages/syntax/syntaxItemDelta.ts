@@ -1,4 +1,4 @@
-import { arraysEqual, commonPrefixLength, commonSuffixLength } from "../../../../base/common/arrays.js";
+import { arraysEqual, commonArraySuffixLength, commonPrefixLength } from "../../../../base/common/arrays.js";
 import { SYNTAX_TOKEN_LANE, type SyntaxLane } from "./syntaxService.js";
 import { type LanguageDiagnostic, type LanguageToken } from "../languageResults.js";
 import { type Range } from "../../core/range.js";
@@ -85,7 +85,7 @@ function createStableLineRuns(lane: SyntaxLane, previousItems: readonly SyntaxIt
 
 function createStableLinePairs(previous: readonly string[], current: readonly string[]): readonly LinePair[] {
 	const prefixLength = commonPrefixLength(previous, current);
-	const suffixLength = commonSuffixLength(previous, current, prefixLength);
+	const suffixLength = commonArraySuffixLength(previous, current, prefixLength);
 	const pairs = new Map<string, LinePair>();
 	for (let index = 0; index < prefixLength; index += 1) addPair(pairs, index, index);
 	const previousInteriorEnd = previous.length - suffixLength;

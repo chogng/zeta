@@ -4,8 +4,8 @@ import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
-import { LanguageCompletionSessionController } from "../../common/suggestModel.js";
+import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
+import { LanguageCompletionSessionController } from "../../common/languageCompletionSessionController.js";
 import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionItemKind } from "../../../../common/languages/completion/languageCompletions.js";
@@ -198,7 +198,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	const service = new LanguageCompletionService(model, registry);
 	const selections = controllerAt(model, new Position((0) + 1, (text.length) + 1));
 	const session = new LanguageCompletionSessionController(service.results, selections);
-	const configurations = new LanguageConfigurationRegistry();
+	const configurations = new OwnedLanguageConfigurationContributions();
 	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
 	const viewport = new EditorViewport({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),

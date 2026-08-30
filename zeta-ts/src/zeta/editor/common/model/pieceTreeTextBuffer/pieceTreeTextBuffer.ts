@@ -1,4 +1,4 @@
-import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, slicePiece, updateNodeAndAncestors, type Piece } from "./pieceTreeBase.js";
+import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, slicePiece, updateNodeAndAncestors, type BufferPiece } from "./pieceTreeBase.js";
 import { NodeColor, deleteNode, insertAfter, insertBefore, nextNode, previousNode, rightmost } from "./rbTreeBase.js";
 import type { TextBuffer } from "../textBuffer.js";
 import { createTextBufferSnapshot, type TextBufferSnapshot, type TextBufferSnapshotSegment } from "../textBufferSnapshot.js";
@@ -363,13 +363,13 @@ export class PieceTreeTextBuffer implements TextBuffer {
 		}
 	}
 
-	private createRootNode(piece: Piece): PieceNode {
+	private createRootNode(piece: BufferPiece): PieceNode {
 		const node = new PieceNode(piece);
 		node.color = NodeColor.Black;
 		return node;
 	}
 
-	private pieceText(piece: Piece): string {
+	private pieceText(piece: BufferPiece): string {
 		const buffer = piece.buffer === PieceBuffer.Original
 			? this.originalBuffer
 			: this.addBuffer;

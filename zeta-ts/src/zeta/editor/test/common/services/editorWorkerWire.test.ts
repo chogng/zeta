@@ -6,15 +6,15 @@ import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorker
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
-import { EditorWorkerClient } from '../../../common/services/editorWorker.js';
-import { EditorWorker } from '../../../common/services/editorWebWorker.js';
+import { VersionedEditorWorkerClient } from '../../../browser/services/versionedEditorWorkerClient.js';
+import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { editorWorkerWireCodec } from '../../../common/services/editorWorkerWire.js';
 
 test('Editor worker client synchronizes model versions across the structured-clone boundary', async () => {
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorker());
+	using server = new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorkerRequestExecutor());
 	using model = new TextModel('const value = true;');
-	using client = new EditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
+	using client = new VersionedEditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
 
 	const first = await client.navigateValueSet(Range.fromPositions(new Position((0) + 1, (14) + 1)), true, /[A-Za-z]+/g);
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (18) + 1)), text: 'false' }]);

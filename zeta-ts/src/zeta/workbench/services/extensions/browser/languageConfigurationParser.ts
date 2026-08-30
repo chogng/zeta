@@ -1,7 +1,7 @@
-import { LanguageIndentAction, type LanguageAutoClosingPair, type LanguageCharacterPair, type LanguageConfiguration, type LanguageCommentConfiguration, type LanguageEnterAction, type LanguageFoldingMarkers, type LanguageIndentationRules, type LanguageOnEnterRule } from "../../../../editor/common/languages/languageConfiguration.js";
+import { LanguageIndentAction, type LanguageAutoClosingPair, type LanguageCharacterPair, type LanguageConfigurationInput, type LanguageCommentConfiguration, type LanguageEnterAction, type LanguageFoldingMarkers, type LanguageIndentationRules, type LanguageOnEnterRule } from "../../../../editor/common/languages/languageConfiguration.js";
 
 /** Converts a VS Code-compatible JSON language configuration into editor rules. */
-export function parseLanguageConfiguration(value: unknown, owner: string): LanguageConfiguration {
+export function parseLanguageConfiguration(value: unknown, owner: string): LanguageConfigurationInput {
 	const document = record(value, owner);
 	return Object.freeze({
 		...(document.comments === undefined ? {} : { comments: parseComments(document.comments, `${owner}.comments`) }),

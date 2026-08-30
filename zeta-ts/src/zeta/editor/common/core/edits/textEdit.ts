@@ -3,18 +3,34 @@ import { Position } from "../position.js";
 import { Range } from "../range.js";
 import { TextLength } from "../text/textLength.js";
 import { AbstractText, StringText } from "../text/abstractText.js";
-import { StringEdit, StringReplacement } from "./stringEdit.js";
+import type { ISingleEditOperation } from "../editOperation.js";
+import { BaseStringEdit, StringEdit, StringReplacement } from "./stringEdit.js";
 
 /** A text-coordinate replacement using one-based editor positions. */
 export class TextReplacement {
 	static delete(range: Range): TextReplacement { return new TextReplacement(range, ""); }
-	static insert(position: Position, text: string): TextReplacement { return new TextReplacement(Range.fromPositions(position), text); }
+	static joinReplacements(replacements: TextReplacement[], initialValue: AbstractText): TextReplacement {
+		if (replacements.length === 0) throw new RangeError('Cannot join an empty replacement list');
+		if (replacements.length === 1) return replacements[0]!;
+		const start = replacements[0]!.range.getStartPosition();
+		const end = replacements.at(-1)!.range.getEndPosition();
+		let text = '';
+		for (let index = 0; index < replacements.length; index += 1) {
+			const replacement = replacements[index]!;
+			text += replacement.text;
+			const next = replacements[index + 1];
+			if (next) text += initialValue.getValueOfRange(Range.fromPositions(replacement.range.getEndPosition(), next.range.getStartPosition()));
+		}
+		return new TextReplacement(Range.fromPositions(start, end), text);
+	}
 	static fromStringReplacement(replacement: StringReplacement, initialState: AbstractText): TextReplacement { return new TextReplacement(initialState.getTransformer().getRange(replacement.replaceRange), replacement.newText); }
+	static equals(first: TextReplacement, second: TextReplacement) { return first.range.equalsRange(second.range) && first.text === second.text; }
 
 	constructor(readonly range: Range, readonly text: string) {}
 
 	get isEmpty(): boolean { return this.range.isEmpty() && this.text.length === 0; }
-	equals(other: TextReplacement): boolean { return this.range.equalsRange(other.range) && this.text === other.text; }
+	equals(other: TextReplacement): boolean { return TextReplacement.equals(this, other); }
+	toSingleEditOperation(): ISingleEditOperation { return { range: this.range, text: this.text }; }
 	toEdit(): TextEdit { return new TextEdit([this]); }
 
 	extendToCoverRange(range: Range, initialValue: AbstractText): TextReplacement {
@@ -59,7 +75,7 @@ export class TextEdit {
 	static replace(range: Range, text: string): TextEdit { return new TextEdit([new TextReplacement(range, text)]); }
 	static delete(range: Range): TextEdit { return TextEdit.replace(range, ""); }
 	static insert(position: Position, text: string): TextEdit { return TextEdit.replace(Range.fromPositions(position), text); }
-	static fromStringEdit(edit: StringEdit, initialState: AbstractText): TextEdit { return new TextEdit(edit.replacements.map(replacement => TextReplacement.fromStringReplacement(replacement, initialState))); }
+	static fromStringEdit(edit: BaseStringEdit, initialState: AbstractText): TextEdit { return new TextEdit(edit.replacements.map(replacement => TextReplacement.fromStringReplacement(replacement, initialState))); }
 	static fromParallelReplacementsUnsorted(replacements: readonly TextReplacement[]): TextEdit { return new TextEdit([...replacements].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()))); }
 
 	constructor(readonly replacements: readonly TextReplacement[]) {
@@ -85,8 +101,9 @@ export class TextEdit {
 	}
 
 	applyToString(value: string): string { return this.apply(new StringText(value)); }
-	toStringEdit(initialState: AbstractText): StringEdit { const transformer = initialState.getTransformer(); return new StringEdit(this.replacements.map(replacement => new StringReplacement(transformer.getOffsetRange(replacement.range), replacement.text))); }
 	inverse(document: AbstractText): TextEdit { const newRanges = this.getNewRanges(); return new TextEdit(this.replacements.map((replacement, index) => new TextReplacement(newRanges[index]!, document.getValueOfRange(replacement.range)))); }
+	inverseMapPosition(positionAfterEdit: Position, document: AbstractText): Position | Range { return this.inverse(document).mapPosition(positionAfterEdit); }
+	inverseMapRange(range: Range, document: AbstractText): Range { return this.inverse(document).mapRange(range); }
 
 	mapPosition(position: Position): Position | Range {
 		let lineDelta = 0;
@@ -142,13 +159,26 @@ export class TextEdit {
 	/** Composes edits through a synthetic source whose line geometry covers both operands. */
 	compose(other: TextEdit): TextEdit {
 		const source = new StringText(createSyntheticSource(this, other));
-		const first = this.toStringEdit(source);
+		const first = toStringEdit(this, source);
 		const afterFirst = new StringText(first.apply(source.value));
-		const second = other.toStringEdit(afterFirst);
+		const second = toStringEdit(other, afterFirst);
 		return TextEdit.fromStringEdit(first.compose(second), source);
 	}
 
 	equals(other: TextEdit): boolean { return this.replacements.length === other.replacements.length && this.replacements.every((replacement, index) => replacement.equals(other.replacements[index]!)); }
+	toString(initialValue: AbstractText | string | undefined): string {
+		if (initialValue === undefined) return this.replacements.map(replacement => replacement.toString()).join('\n');
+		const text = typeof initialValue === 'string' ? new StringText(initialValue) : initialValue;
+		return this.replacements.map(replacement => {
+			const oldText = text.getValueOfRange(replacement.range);
+			return `${replacement.range.toString()} ${JSON.stringify(oldText)} -> ${JSON.stringify(replacement.text)}`;
+		}).join('\n');
+	}
+}
+
+function toStringEdit(edit: TextEdit, initialState: AbstractText): StringEdit {
+	const transformer = initialState.getTransformer();
+	return new StringEdit(edit.replacements.map(replacement => new StringReplacement(transformer.getOffsetRange(replacement.range), replacement.text)));
 }
 
 function createSyntheticSource(first: TextEdit, second: TextEdit): string {

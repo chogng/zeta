@@ -3,8 +3,9 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
+import { type TrackedRange } from "../../../common/model/trackedRange.js";
 import { EditorFoldingRangeSource, editorFoldingRangeKey, normalizeEditorFoldingRanges, validateEditorFoldingLineIndex, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 interface EditorFoldingRegionRecord {
 	readonly range: TrackedRange;
@@ -50,7 +51,7 @@ export class EditorFoldingModel extends Disposable {
 					new Position((range.startLineIndex) + 1, (0) + 1),
 					new Position((range.endLineIndex) + 1, (this.textModel.getLineContent((range.endLineIndex) + 1).length) + 1),
 				),
-				TrackedRangeStickiness.NeverGrowsAtEdges,
+				TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			),
 			collapsed: range.collapsed,
 			source: range.source,

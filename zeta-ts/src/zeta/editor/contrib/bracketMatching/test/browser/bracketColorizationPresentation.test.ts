@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { BracketColorizationSource } from "../../browser/bracketColorizationPresentation.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
-import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Bracket colorization follows lexical nesting and excludes brackets in strings", () => {
 	using model = new TextModel("{\n  (\"}\")\n}");
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using registration = configurations.register("typescript", {
 		brackets: [{ open: "{", close: "}" }, { open: "(", close: ")" }],
 	});
@@ -27,7 +27,7 @@ test("Bracket colorization follows lexical nesting and excludes brackets in stri
 
 test("Bracket colorization invalidates its cached nesting after model edits", () => {
 	using model = new TextModel("{\n}");
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using registration = configurations.register("typescript", { brackets: [{ open: "{", close: "}" }] });
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
@@ -39,7 +39,7 @@ test("Bracket colorization invalidates its cached nesting after model edits", ()
 
 test('Bracket guide projection remains available when bracket colors are disabled', () => {
 	using model = new TextModel('{\n  value\n}');
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using registration = configurations.register('typescript', { brackets: [{ open: '{', close: '}' }] });
 	using lexical = new LanguageLexicalContextIndex(model, 'typescript', configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);

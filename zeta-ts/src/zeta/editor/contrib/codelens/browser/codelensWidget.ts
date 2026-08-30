@@ -3,21 +3,21 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { type EditorViewport, type EditorViewZone, type EditorViewZoneHandle } from '../../../browser/view.js';
-import { type LanguageCodeLens, type LanguageCodeLensCommand } from '../common/codelens.js';
-import { type CodeLensItem } from './codelens.js';
+import { type LanguageCodeLens, type LanguageCodeLensCommand } from '../common/languageCodeLenses.js';
+import { type LanguageCodeLensItem } from './codelens.js';
 
 export type ExecuteCodeLensCommand = (command: LanguageCodeLensCommand) => void;
 
 /** Owns the stable DOM and interactions for one line of code lenses. */
 export class CodeLensWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
-	private items: readonly CodeLensItem[];
+	private items: readonly LanguageCodeLensItem[];
 	private currentCommands: readonly LanguageCodeLensCommand[] = [];
 	private commandsResolved = false;
 	private readonly viewZone: EditorViewZone;
 	private readonly viewZoneHandle: EditorViewZoneHandle;
 
-	public constructor(private readonly viewport: EditorViewport, items: readonly CodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
+	public constructor(private readonly viewport: EditorViewport, items: readonly LanguageCodeLensItem[], private readonly executeCommand?: ExecuteCodeLensCommand) {
 		super();
 		this.items = items;
 		this.domNode = h(viewport.element.ownerDocument, 'div');
@@ -25,8 +25,8 @@ export class CodeLensWidget extends Disposable {
 		this.domNode.setAttribute('role', 'group');
 		this.domNode.setAttribute('aria-label', localize('zeta.editor.codeLens', 'commands', 'CodeLens commands'));
 		this.viewZone = {
-			afterLineIndex: this.afterVisualLineIndex,
-			heightInPixels: this.codeLensHeight,
+			afterLineNumber: this.afterVisualLineIndex + 1,
+			heightInPx: this.codeLensHeight,
 			domNode: this.domNode,
 		};
 		this.viewZoneHandle = this._register(viewport.addViewZone(this.viewZone));
@@ -40,7 +40,7 @@ export class CodeLensWidget extends Disposable {
 		this.layout();
 	}
 
-	public get codeLensItems(): readonly CodeLensItem[] {
+	public get codeLensItems(): readonly LanguageCodeLensItem[] {
 		return this.items;
 	}
 
@@ -48,22 +48,22 @@ export class CodeLensWidget extends Disposable {
 		return !this.commandsResolved && this.items.some(item => !item.symbol.command && item.provider.resolveCodeLens !== undefined);
 	}
 
-	public updateCodeLensItems(items: readonly CodeLensItem[]): void {
+	public updateCodeLensItems(items: readonly LanguageCodeLensItem[]): void {
 		this.items = items;
 		this.commandsResolved = false;
 		this.render(this.initialSymbols);
 		this.layout();
 	}
 
-	public updateResolvedCodeLensItems(items: readonly CodeLensItem[]): void {
+	public updateResolvedCodeLensItems(items: readonly LanguageCodeLensItem[]): void {
 		this.items = items;
 		this.commandsResolved = true;
 		this.render(this.initialSymbols);
 	}
 
 	public layout(): void {
-		this.viewZone.afterLineIndex = this.afterVisualLineIndex;
-		this.viewZone.heightInPixels = this.codeLensHeight;
+		this.viewZone.afterLineNumber = this.afterVisualLineIndex + 1;
+		this.viewZone.heightInPx = this.codeLensHeight;
 		this.viewZoneHandle.layout();
 		const coordinates = this.viewport.getPositionContentCoordinates(this.items[0]!.symbol.range.getStartPosition());
 		this.domNode.style.left = `${Math.max(4, coordinates.left)}px`;

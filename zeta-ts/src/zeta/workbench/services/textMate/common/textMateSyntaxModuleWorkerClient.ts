@@ -1,4 +1,4 @@
-import { raceCancellation } from "../../../../base/common/cancellation.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { SyntaxModuleWorkerClient } from "../../../../editor/common/languages/syntax/syntaxModuleWorkerClient.js";
 import { type SyntaxRequest } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
@@ -74,7 +74,7 @@ export class TextMateSyntaxModuleWorkerClient extends Disposable implements Synt
 		while (true) {
 			const catalogTail = this.catalogTail;
 			const themeTail = this.themeTail;
-			await raceCancellation(Promise.all([catalogTail, themeTail]).then(() => undefined), signal, "TextMate grammar catalog wait was cancelled");
+			await raceCancellationError(Promise.all([catalogTail, themeTail]).then(() => undefined), signal, "TextMate grammar catalog wait was cancelled");
 			if (catalogTail === this.catalogTail && themeTail === this.themeTail) return;
 		}
 	}

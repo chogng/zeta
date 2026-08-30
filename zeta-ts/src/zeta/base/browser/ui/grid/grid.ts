@@ -1,4 +1,4 @@
-import { type IDimension } from "../../geometry.js";
+import { type IDimension } from "../../dom.js";
 import { type Event } from "../../../common/event.js";
 import { Disposable } from "../../../common/lifecycle.js";
 import { GridView, type GridLocation, type GridViewDescriptor, type GridViewOptions, type GridViewSizing, type ISerializableView as ISerializableGridView, type IView as IGridView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridview.js";

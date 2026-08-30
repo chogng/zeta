@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
-import { CursorChangeReason, CursorsController } from "../../common/cursor/cursor.js";
+import { CursorsController } from "../../common/cursor/cursor.js";
+import { CursorChangeReason } from "../../common/cursorEvents.js";
 import { Selection } from "../../common/core/selection.js";
 import { SelectionSet } from "../../common/cursor/selectionSet.js";
 import { Position } from "../../common/core/position.js";
@@ -65,7 +66,7 @@ test("CursorsController restores command selections", () => {
 		afterUndo: single(4, 1),
 		afterRedo: single(2, 2),
 		reasons: [
-			CursorChangeReason.Command,
+			CursorChangeReason.NotSet,
 			CursorChangeReason.Undo,
 			CursorChangeReason.Redo,
 		],
@@ -117,11 +118,11 @@ test("Cursor-only selection history restores multi-cursor operations without cha
 	assert.equal(controller.undoCursorOperation(), false);
 	assert.equal(model.version, 1);
 	assert.deepEqual(reasons, [
-		CursorChangeReason.CursorOperation,
-		CursorChangeReason.CursorOperation,
-		CursorChangeReason.CursorUndo,
-		CursorChangeReason.CursorOperation,
 		CursorChangeReason.Explicit,
+		CursorChangeReason.Explicit,
+		CursorChangeReason.Explicit,
+		CursorChangeReason.Explicit,
+		CursorChangeReason.NotSet,
 	]);
 });
 
@@ -145,7 +146,7 @@ test("CursorsController maps external model edits", () => {
 		selections: single(3, 2),
 		events: [{
 			selections: single(3, 2),
-			reason: CursorChangeReason.ModelChange,
+			reason: CursorChangeReason.RecoverFromMarkers,
 			modelVersion: 2,
 		}],
 	});
@@ -310,6 +311,6 @@ test("CursorsController rejects stale post-command selections", () => {
 		text: "XabcY",
 		version: 3,
 		selections: single(1, 1),
-		reasons: [CursorChangeReason.ModelChange],
+		reasons: [CursorChangeReason.RecoverFromMarkers],
 	});
 });

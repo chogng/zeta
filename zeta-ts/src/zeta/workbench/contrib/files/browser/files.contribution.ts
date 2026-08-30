@@ -1,7 +1,7 @@
 import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
@@ -29,7 +29,7 @@ export function registerFilesViews(
 			order: 1,
 			when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
 			canToggleVisibility: false,
-			ctorDescriptor: new SyncDescriptor(ExplorerViewPane, {
+			ctorDescriptor: new ServiceConstructionDescriptor(ExplorerViewPane, {
 				serviceDependencies: [
 					IFileService,
 					IWorkspaceContextService,
@@ -48,7 +48,7 @@ export function registerFilesViews(
 			order: 2,
 			when: WorkspaceFolderCountContext.isEqualTo(0),
 			canToggleVisibility: false,
-			ctorDescriptor: new SyncDescriptor(EmptyView, {
+			ctorDescriptor: new ServiceConstructionDescriptor(EmptyView, {
 				serviceDependencies: [IWorkspaceOpenService],
 			}),
 		},

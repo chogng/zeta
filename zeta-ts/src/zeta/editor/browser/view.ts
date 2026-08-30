@@ -1,20 +1,21 @@
 import { type Event } from '../../base/common/event.js';
-import { getClientArea, type IDimension } from '../../base/browser/geometry.js';
+import { getClientArea } from '../../base/browser/dom.js';
 import { addDisposableListener, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
 import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
-import { runWhenWindowIdle } from '../../base/browser/scheduler.js';
+import { runWhenWindowIdle } from '../../base/browser/dom.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { type IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { type CursorsController } from '../common/cursor/cursor.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
+import { type IDimension } from '../common/core/2d/dimension.js';
 import { Position } from '../common/core/position.js';
 import { type Range } from '../common/core/range.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
-import { type EditorScrollPosition } from '../common/viewModel.js';
+import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
 import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
@@ -50,7 +51,7 @@ import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './vie
 import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorations.js';
 import { createEditorRenderingContext, createEditorViewportData, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
-import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
+import { ZetaDOMLineBreaksComputer } from './view/zetaDomLineBreaksComputer.js';
 import './widget/codeEditor/editor.css';
 
 const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
@@ -452,7 +453,7 @@ export class View extends Disposable {
 		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
 		this.model = options.model;
 		this.element = h(ownerDocument, "div");
-		this.elementSizeObserver = this._register(new ElementSizeObserver(this.element));
+		this.elementSizeObserver = this._register(new ElementSizeObserver(this.element, undefined));
 		this.contentElement = h(ownerDocument, "div");
 		this.contentNode = new FastDomNode(this.contentElement);
 		this.textMetricsElement = h(ownerDocument, "span");
@@ -489,6 +490,7 @@ export class View extends Disposable {
 				textDirection: options.textDirection ?? EditorTextDirection.Auto,
 				fontLigatures: options.fontLigatures ?? false,
 				useGpu: options.experimentalGpuAcceleration === 'on',
+				useMonospaceOptimizations: false,
 				lineHeight: options.lineHeight,
 				tabSize: this.indentation.tabSize,
 			});
@@ -564,14 +566,14 @@ export class View extends Disposable {
 					schedule: callback => runWhenWindowIdle(
 						ownerWindow,
 						() => callback(),
-						{ timeoutMs: 250 },
+						250,
 					),
 				},
 			},
 		));
 		this.viewModelLines = this._register(new ViewModelLines(
 			this.model,
-			new DOMLineBreaksComputer(this.textMeasurer, this.indentation.tabSize),
+			new ZetaDOMLineBreaksComputer(this.textMeasurer, this.indentation.tabSize),
 			{
 				wrapping: options.lineWrapping,
 				wrappingIndent: options.wrappingIndent,
@@ -579,7 +581,7 @@ export class View extends Disposable {
 					schedule: callback => runWhenWindowIdle(
 						ownerWindow,
 						() => callback(),
-						{ timeoutMs: 250 },
+						250,
 					),
 				},
 				visibilitySource: options.lineVisibilitySource,
@@ -827,7 +829,7 @@ export class View extends Disposable {
 		this.elementSizeObserver.startObserving();
 
 		this.project(viewport.layout);
-		this.elementSizeObserver.observeNow();
+		this.elementSizeObserver.observe();
 	}
 
 	get viewportLayout(): EditorViewportLayout {
@@ -1189,7 +1191,7 @@ export class View extends Disposable {
 	}
 
 	private computeMinimapLayout(viewportWidth: number, viewportHeight: number): EditorMinimapLayoutInfo {
-		return EditorLayoutInfoComputer.computeMinimapLayout({
+		return EditorLayoutInfoComputer._computeMinimapLayout({
 			outerWidth: viewportWidth,
 			outerHeight: viewportHeight,
 			lineHeight: this.viewport.layout.lineHeight,

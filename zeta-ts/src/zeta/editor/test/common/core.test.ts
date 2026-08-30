@@ -12,7 +12,7 @@ import { LineRange } from "../../common/core/ranges/lineRange.js";
 import { OffsetRange } from "../../common/core/ranges/offsetRange.js";
 import { RangeMapping, SingleRangeMapping } from "../../common/core/ranges/rangeMapping.js";
 import { RangeSingleLine } from "../../common/core/ranges/rangeSingleLine.js";
-import { PositionOffsetTransformer } from "../../common/core/text/positionToOffsetImpl.js";
+import { PositionOffsetTransformer } from "../../common/core/text/positionToOffset.js";
 import { TextLength } from "../../common/core/text/textLength.js";
 import { StringText } from "../../common/core/text/abstractText.js";
 import { TextChange } from "../../common/core/textChange.js";

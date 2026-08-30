@@ -2,12 +2,12 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { runWhenWindowIdle } from "../../../../base/browser/scheduler.js";
-import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelService } from "../../../../editor/common/services/resolverService.js";
+import { runWhenWindowIdle } from "../../../../base/browser/dom.js";
+import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelResourceService } from "../../../../editor/common/services/textModelResourceService.js";
 import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/common/model/textModel.js";
-import { ModelUndoRedoParticipant } from '../../../../editor/common/services/modelUndoRedoParticipant.js';
+import { RetainedModelUndoRedoHistory } from '../../../../editor/common/services/retainedModelUndoRedoHistory.js';
 
 interface TextModelEntry {
 	readonly resource: URI;
@@ -37,9 +37,9 @@ export interface BrowserTextModelServiceOptions {
 }
 
 /** Shares text models by exact resource identity while references are open. */
-export class BrowserTextModelService implements ITextModelService {
+export class BrowserTextModelService implements ITextModelResourceService {
 	private readonly entries = new Map<string, TextModelEntry>();
-	private readonly undoRedoParticipant = new ModelUndoRedoParticipant();
+	private readonly undoRedoParticipant = new RetainedModelUndoRedoHistory();
 	private disposed = false;
 
 	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: BrowserTextModelServiceOptions = {}) {
@@ -246,7 +246,7 @@ export function createBrowserTextModelService(resourceStore: ITextResourceStore)
 			schedule: callback => runWhenWindowIdle(
 				window,
 				() => callback(),
-				{ timeoutMs: 250 },
+				250,
 			),
 		},
 	});

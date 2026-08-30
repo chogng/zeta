@@ -1,4 +1,10 @@
 import type { IConfigurationKey } from "./configurationService.js";
+import type { JsonSchema } from '../../../base/common/jsonSchema.js';
+
+export interface IConfigurationPropertySchema extends JsonSchema {
+	readonly scope?: string;
+	readonly included?: boolean;
+}
 
 interface IConfigurationSettingSchemaBase {
 	readonly title: string;

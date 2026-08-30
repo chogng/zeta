@@ -1,12 +1,13 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { createBuiltinLanguageConfigurationSource } from "../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../common/languages/languageConfiguration.js";
+import { LanguageIndentAction } from "../../common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../common/languages/ownedLanguageConfigurationContributions.js";
 
 test("Language configurations compose by field, priority, and registration order", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	const revisions: number[] = [];
-	using listener = registry.onDidChangeConfiguration(event => revisions.push(event.configuration.revision));
+	using listener = registry.onDidChange(event => revisions.push(event.configuration.revision));
 	using base = registry.register("typescript", {
 		comments: {
 			lineComment: "//",
@@ -36,7 +37,7 @@ test("Language configurations compose by field, priority, and registration order
 });
 
 test("Language configuration contributions may explicitly clear inherited fields", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	using base = registry.register("json", {
 		comments: { lineComment: "//" },
 		brackets: [{ open: "{", close: "}" }],
@@ -55,7 +56,7 @@ test("Language configuration contributions may explicitly clear inherited fields
 });
 
 test("Language word patterns compose, clone, and clear with language ownership", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	const source = /[A-Za-z:]+/gi;
 	using base = registry.register("rust", { wordPattern: source });
 	const resolved = registry.getLanguageConfiguration("rust").wordPattern!;
@@ -69,7 +70,7 @@ test("Language word patterns compose, clone, and clear with language ownership",
 });
 
 test("Language configuration validation is atomic and identities stay language-owned", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	const initial = registry.getLanguageConfiguration("plaintext");
 
 	assert.throws(() => registry.register("plaintext", {
@@ -88,7 +89,7 @@ test("Language configuration validation is atomic and identities stay language-o
 });
 
 test("a language configuration group replaces itself after validating the full candidate", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	using group = registry.registerMany([{ languageId: "demo", configuration: { comments: { lineComment: "//" } } }]);
 
 	assert.throws(() => group.replace([{ languageId: "demo", configuration: { comments: { lineComment: "" } } }]), /non-empty/);
@@ -99,7 +100,7 @@ test("a language configuration group replaces itself after validating the full c
 });
 
 test("Language configuration registration and registry lifecycles are independent", () => {
-	const registry = new LanguageConfigurationRegistry();
+	const registry = new OwnedLanguageConfigurationContributions();
 	const registration = registry.register("typescript", {
 		comments: { lineComment: "//" },
 	});
@@ -114,7 +115,7 @@ test("Language configuration registration and registry lifecycles are independen
 });
 
 test("Auto-closing and surrounding pairs fall back canonically and accept quote pairs", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	using brackets = registry.register("demo", {
 		brackets: [{ open: "(", close: ")" }],
 	});
@@ -143,7 +144,7 @@ test("Auto-closing and surrounding pairs fall back canonically and accept quote 
 });
 
 test("Auto-closing token exclusions are immutable and validate their closed vocabulary", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	using pairs = registry.register("demo", {
 		autoClosingPairs: [{
 			open: "\"",
@@ -172,7 +173,7 @@ test("Auto-closing token exclusions are immutable and validate their closed voca
 });
 
 test("Indentation, folding, and on-enter rules compose, clone, clear, and restore atomically", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	const increase = /\{$/g;
 	const regionStart = /^\s*\/\/\s*#region\b/giu;
 	using base = registry.register("demo", {
@@ -219,7 +220,7 @@ test("Indentation, folding, and on-enter rules compose, clone, clear, and restor
 });
 
 test("Indentation, folding, and on-enter configuration rejects invalid values before registration", () => {
-	using registry = new LanguageConfigurationRegistry();
+	using registry = new OwnedLanguageConfigurationContributions();
 	const initial = registry.getLanguageConfiguration("demo");
 
 	assert.throws(() => registry.register("demo", {

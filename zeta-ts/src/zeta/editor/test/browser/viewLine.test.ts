@@ -24,6 +24,7 @@ test('ViewLine owns rendering, character mapping, geometry, and DOM hit conversi
 		textDirection: ViewLineTextDirection.Auto,
 		fontLigatures: false,
 		useGpu: false,
+		useMonospaceOptimizations: false,
 		lineHeight: 20,
 		tabSize: 4,
 	}));

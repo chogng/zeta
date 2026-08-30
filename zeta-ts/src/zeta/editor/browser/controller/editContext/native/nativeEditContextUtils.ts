@@ -1,6 +1,23 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, getShadowRoot } from "../../../../../base/browser/dom.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
+
+interface EditContextEventHandlersEventMap {
+	readonly textupdate: Event;
+	readonly textformatupdate: Event;
+	readonly characterboundsupdate: Event;
+	readonly compositionstart: Event;
+	readonly compositionend: Event;
+	readonly compositionupdate: Event;
+	readonly selectionchange: Event;
+}
+
+export interface ITypeData {
+	text: string;
+	replacePrevCharCnt: number;
+	replaceNextCharCnt: number;
+	positionDelta: number;
+}
 
 /** Maximum native text window used when the complete document is too large. */
 export const NATIVE_TEXT_WINDOW_LENGTH = 32 * 1_024;
@@ -45,10 +62,8 @@ export class FocusTracker extends Disposable {
 	}
 
 	refreshFocusState(): void {
-		const root = this.domNode.getRootNode() as Document | ShadowRoot;
-		const activeElement = "activeElement" in root
-			? root.activeElement
-			: this.domNode.ownerDocument.activeElement;
+		const shadowRoot = getShadowRoot(this.domNode);
+		const activeElement = shadowRoot ? shadowRoot.activeElement : this.domNode.ownerDocument.activeElement;
 		this.setFocused(activeElement === this.domNode);
 	}
 
@@ -60,15 +75,14 @@ export class FocusTracker extends Disposable {
 }
 
 /** Adds a listener to the browser EditContext object and owns its removal. */
-export function editContextAddDisposableListener<TEvent extends Event = Event>(
+export function editContextAddDisposableListener<K extends keyof EditContextEventHandlersEventMap>(
 	target: EventTarget,
-	type: string,
-	listener: (event: TEvent) => void,
+	type: K,
+	listener: (this: GlobalEventHandlers, ev: EditContextEventHandlersEventMap[K]) => void,
 	options?: boolean | AddEventListenerOptions,
 ): IDisposable {
 	target.addEventListener(type, listener as EventListener, options);
-	const capture = typeof options === "boolean" ? options : options?.capture ?? false;
-	return toDisposable(() => target.removeEventListener(type, listener as EventListener, capture));
+	return toDisposable(() => target.removeEventListener(type, listener as EventListener));
 }
 
 export function isFiniteOffset(value: number): boolean {

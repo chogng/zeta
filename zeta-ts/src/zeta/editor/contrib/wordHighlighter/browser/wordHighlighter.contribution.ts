@@ -3,23 +3,25 @@ import { RunOnceScheduler, TimeoutTimer } from '../../../../base/common/async.js
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
-import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type EditorView } from '../../../browser/view.js';
 import { createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { Selection } from '../../../common/core/selection.js';
 import { SelectionSet } from '../../../common/cursor/selectionSet.js';
 import { Position } from '../../../common/core/position.js';
-import { type Range } from '../../../common/core/range.js';
-import { CursorChangeReason, type CursorStateChangedEvent, type CursorsController } from '../../../common/cursor/cursor.js';
+import { Range } from '../../../common/core/range.js';
+import { type CursorSelectionSetChange, type CursorsController } from '../../../common/cursor/cursor.js';
+import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
-import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type DocumentHighlightRequest, type DocumentHighlightTarget, type MultiDocumentHighlightProvider } from '../../../common/languages/documentHighlights.js';
-import { type LanguageFeatureProviderMetadata, type LanguageFeatureProviderRegistry } from '../../../common/languageFeatureRegistry.js';
+import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../../common/languages.js';
+import { type LanguageFeatureProviderMetadata, type OwnedLanguageFeatureProviderRegistry } from '../../../common/ownedLanguageFeatureProviderRegistry.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
+
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { getHighlightDecorationOptions } from './highlightDecorations.js';
+import { resolveDocumentHighlightPresentation } from './highlightDecorations.js';
 import { TextualMultiDocumentHighlightFeature } from './textualHighlightProvider.js';
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 type OccurrencesHighlightMode = 'off' | 'singleFile' | 'multiFile';
 
@@ -33,6 +35,17 @@ interface WordHighlighterOptions {
 	readonly onError?: (error: unknown) => void;
 }
 
+interface DocumentHighlightTarget {
+	readonly resource: URI;
+	readonly model: TextModel;
+	readonly snapshot: ReturnType<TextModel['createSnapshot']>;
+	readonly languageId: string;
+	readonly wordPattern?: RegExp;
+}
+
+type RegisteredDocumentHighlightProvider = DocumentHighlightProvider & LanguageFeatureProviderMetadata;
+type RegisteredMultiDocumentHighlightProvider = MultiDocumentHighlightProvider & LanguageFeatureProviderMetadata;
+
 /** Owns semantic word highlights and their editor-local lifecycle. */
 class WordHighlighter extends Disposable {
 	private readonly resource: URI;
@@ -41,8 +54,8 @@ class WordHighlighter extends Disposable {
 	private readonly delay: number;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private readonly onError: (error: unknown) => void;
-	private readonly providers: LanguageFeatureProviderRegistry<DocumentHighlightProvider>;
-	private readonly multiDocumentProviders: LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider>;
+	private readonly providers: OwnedLanguageFeatureProviderRegistry<RegisteredDocumentHighlightProvider>;
+	private readonly multiDocumentProviders: OwnedLanguageFeatureProviderRegistry<RegisteredMultiDocumentHighlightProvider>;
 	private readonly coordinator: WordHighlightCoordinator;
 	private request: CancellationTokenSource | undefined;
 	private readonly scheduler: RunOnceScheduler;
@@ -104,11 +117,11 @@ class WordHighlighter extends Disposable {
 		return this.wordPattern?.();
 	}
 
-	get documentHighlightProvider(): LanguageFeatureProviderRegistry<DocumentHighlightProvider> {
+	get documentHighlightProvider(): OwnedLanguageFeatureProviderRegistry<RegisteredDocumentHighlightProvider> {
 		return this.providers;
 	}
 
-	get multiDocumentHighlightProvider(): LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider> {
+	get multiDocumentHighlightProvider(): OwnedLanguageFeatureProviderRegistry<RegisteredMultiDocumentHighlightProvider> {
 		return this.multiDocumentProviders;
 	}
 
@@ -149,11 +162,11 @@ class WordHighlighter extends Disposable {
 		return this.decorations.size > 0;
 	}
 
-	private handleSelectionChange(change: CursorStateChangedEvent): void {
+	private handleSelectionChange(change: CursorSelectionSetChange): void {
 		if (this.changingSelection) return;
 		this.cancelRequest();
 		this.coordinator.clear();
-		if (change.reason === CursorChangeReason.Explicit || change.reason === CursorChangeReason.CursorOperation || change.reason === CursorChangeReason.CursorUndo) this.schedule();
+		if (change.reason === CursorChangeReason.Explicit) this.schedule();
 	}
 
 	private handleModelChange(): void {
@@ -215,12 +228,13 @@ class WordHighlighter extends Disposable {
 	}
 
 	private replaceHighlights(highlights: readonly DocumentHighlight[]): void {
-		const key = highlights.map(highlight => `${this.textModel.offsetAt(highlight.range.getStartPosition())}-${this.textModel.offsetAt(highlight.range.getEndPosition())}:${highlight.kind ?? ''}`).join(',');
+		const normalized = highlights.map(highlight => ({ ...highlight, range: Range.lift(highlight.range)! }));
+		const key = normalized.map(highlight => `${this.textModel.offsetAt(highlight.range.getStartPosition())}-${this.textModel.offsetAt(highlight.range.getEndPosition())}:${highlight.kind ?? ''}`).join(',');
 		if (key === this.lastDecorationKey) return;
 		this.lastDecorationKey = key;
-		this.decorations.replaceAll(highlights.map(highlight => ({
+		this.decorations.replaceAll(normalized.map(highlight => ({
 			range: highlight.range,
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: highlight.kind,
 		})));
 	}
@@ -251,12 +265,11 @@ class WordHighlighter extends Disposable {
 	}
 }
 
-export async function getOccurrencesAtPosition(registry: LanguageFeatureProviderRegistry<DocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
-	const request = createDocumentHighlightRequest(model, position);
+export async function getOccurrencesAtPosition(registry: OwnedLanguageFeatureProviderRegistry<RegisteredDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 	for (const provider of orderedProviders(registry, model.languageId)) {
-		if (!isDocumentHighlightRequestCurrent(request, token)) return new ResourceMap();
-		const highlights = await provider.provideDocumentHighlights(request, token);
-		if (!isDocumentHighlightRequestCurrent(request, token)) return new ResourceMap();
+		if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
+		const highlights = await provider.provideDocumentHighlights(model.model, position, token);
+		if (!isDocumentHighlightRequestCurrent(model, token)) return new ResourceMap();
 		if (highlights === undefined || highlights === null) continue;
 		const result = new ResourceMap<readonly DocumentHighlight[]>();
 		result.set(model.resource, normalizeHighlights(model.model, highlights));
@@ -265,27 +278,22 @@ export async function getOccurrencesAtPosition(registry: LanguageFeatureProvider
 	return new ResourceMap();
 }
 
-export async function getOccurrencesAcrossMultipleModels(registry: LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[]): Promise<ResourceMap<readonly DocumentHighlight[]>> {
+export async function getOccurrencesAcrossMultipleModels(registry: OwnedLanguageFeatureProviderRegistry<RegisteredMultiDocumentHighlightProvider>, model: DocumentHighlightTarget, position: Position, token: CancellationToken, otherModels: readonly DocumentHighlightTarget[]): Promise<ResourceMap<readonly DocumentHighlight[]>> {
 	const targets = Object.freeze([model, ...otherModels]);
-	const request = createDocumentHighlightRequest(model, position);
 	for (const provider of orderedProviders(registry, model.languageId)) {
-		if (!isDocumentHighlightRequestCurrent(request, token, targets)) return new ResourceMap();
-		const highlights = await provider.provideMultiDocumentHighlights(request, targets, token);
-		if (!isDocumentHighlightRequestCurrent(request, token, targets)) return new ResourceMap();
+		if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
+		const highlights = await provider.provideMultiDocumentHighlights(model.model, position, otherModels.map(target => target.model), token);
+		if (!isDocumentHighlightRequestCurrent(model, token, targets)) return new ResourceMap();
 		if (highlights !== undefined && highlights !== null) return normalizeHighlightMap(highlights, targets);
 	}
 	return new ResourceMap();
 }
 
-function createDocumentHighlightRequest(model: DocumentHighlightTarget, position: Position): DocumentHighlightRequest {
-	return Object.freeze({ ...model, position });
-}
-
-function orderedProviders<TProvider extends LanguageFeatureProviderMetadata>(registry: LanguageFeatureProviderRegistry<TProvider>, languageId: string): readonly TProvider[] {
+function orderedProviders<TProvider extends LanguageFeatureProviderMetadata>(registry: OwnedLanguageFeatureProviderRegistry<TProvider>, languageId: string): readonly TProvider[] {
 	return Object.freeze([...registry.getProviders(languageId)].sort((left, right) => Number(left.languageIds.includes('*')) - Number(right.languageIds.includes('*'))));
 }
 
-function isDocumentHighlightRequestCurrent(request: DocumentHighlightRequest, token: CancellationToken, targets: readonly DocumentHighlightTarget[] = []): boolean {
+function isDocumentHighlightRequestCurrent(request: DocumentHighlightTarget, token: CancellationToken, targets: readonly DocumentHighlightTarget[] = []): boolean {
 	return !token.isCancellationRequested && !request.model.isDisposed && request.model.version === request.snapshot.version && targets.every(target => !target.model.isDisposed && target.model.version === target.snapshot.version);
 }
 
@@ -306,10 +314,11 @@ function normalizeHighlights(model: TextModel, highlights: readonly DocumentHigh
 	if (!Array.isArray(highlights)) throw new TypeError('Document highlights must be an array');
 	return Object.freeze(highlights.map(highlight => {
 		if (!highlight || typeof highlight !== 'object' || !highlight.range) throw new TypeError('Document highlight must contain a range');
-		model.offsetAt(highlight.range.getStartPosition());
-		model.offsetAt(highlight.range.getEndPosition());
+		const range = new Range(highlight.range.startLineNumber, highlight.range.startColumn, highlight.range.endLineNumber, highlight.range.endColumn);
+		model.offsetAt(range.getStartPosition());
+		model.offsetAt(range.getEndPosition());
 		if (highlight.kind !== undefined && !Object.values(DocumentHighlightKind).includes(highlight.kind)) throw new TypeError('Document highlight kind is invalid');
-		return Object.freeze({ range: highlight.range, ...(highlight.kind ? { kind: highlight.kind } : {}) });
+		return Object.freeze({ range, ...(highlight.kind !== undefined ? { kind: highlight.kind } : {}) });
 	}));
 }
 
@@ -426,13 +435,17 @@ function reportHighlightError(error: unknown): void {
 
 const occurrenceDecorations: EditorCapability<TextDecorationCollection<DocumentHighlightKind | undefined>> = Object.freeze({ id: 'editor.capability.occurrenceDecorations' });
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: WordHighlighterContribution.ID,
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
 		context.provideCapability(occurrenceDecorations, decorations);
-		context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => getHighlightDecorationOptions(decoration.metadata)));
-		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
+		context.addDecorationSource(createStanzaDecorationSource(decorations, decoration => resolveDocumentHighlightPresentation(decoration.metadata)));
+		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService, {
+			resource: context.options.input.resource,
+			model: context.model,
+			wordPattern: () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern,
+		}));
 	},
 	install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;

@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type {
 	IDimension,
-} from "../../../../../../base/browser/geometry.js";
+} from "../../../../../../base/browser/dom.js";
 import { Emitter } from "../../../../../../base/common/event.js";
 import {
 	Keybinding,

@@ -1,4 +1,4 @@
-import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { ITaskService } from "../../../services/tasks/common/taskService.js";
 import { ITerminalService } from "../../../services/terminal/common/terminal.js";
@@ -23,7 +23,7 @@ export function registerTasksView(registry: WorkbenchViewRegistry = ViewsRegistr
 		localizationKey: { bundle: "zeta.views", key: "tasks" },
 		order: 2,
 		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(TasksViewPane, { serviceDependencies: [ITaskService, IViewsService, ITerminalService] }),
+		ctorDescriptor: new ServiceConstructionDescriptor(TasksViewPane, { serviceDependencies: [ITaskService, IViewsService, ITerminalService] }),
 	}]);
 }
 

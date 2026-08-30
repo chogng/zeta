@@ -3,10 +3,11 @@ import type { SelectionSet } from './selectionSet.js';
 import { type Position } from '../core/position.js';
 import { Range } from '../core/range.js';
 import { normalizeTextLineEndings } from '../core/textChange.js';
-import { type TextEdit } from '../core/editOperation.js';
+
 import { type TextModel } from '../model/textModel.js';
 import { getTextGraphemeBoundaries } from '../core/textSegmentation.js';
 import { MoveOperations } from './cursorMoveOperations.js';
+import { type TextEdit } from '../languages.js';
 
 interface SelectionReplacement {
 	readonly selectionIndex: number;

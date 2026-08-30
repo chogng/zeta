@@ -1,42 +1,72 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 export interface IBufferDirtyTrackerReader {
+	/**
+	 * The index of the first dirty index.
+	 */
 	readonly dataOffset: number | undefined;
+	/**
+	 * The index of the last dirty index (inclusive).
+	 */
 	readonly dirtySize: number | undefined;
+	/**
+	 * Whether the buffer is dirty.
+	 */
 	readonly isDirty: boolean;
+	/**
+	 * Clear the dirty state.
+	 */
 	clear(): void;
 }
 
+/**
+ * A simple tracker for dirty regions in a buffer.
+ */
 export class BufferDirtyTracker implements IBufferDirtyTrackerReader {
-	private startIndex: number | undefined;
-	private endIndex: number | undefined;
 
-	public get dataOffset(): number | undefined {
-		return this.startIndex;
+	private _startIndex: number | undefined;
+	private _endIndex: number | undefined;
+
+	get dataOffset(): number | undefined {
+		return this._startIndex;
 	}
 
-	public get dirtySize(): number | undefined {
-		if (this.startIndex === undefined || this.endIndex === undefined) return undefined;
-		return this.endIndex - this.startIndex + 1;
+	get dirtySize(): number | undefined {
+		if (this._startIndex === undefined || this._endIndex === undefined) {
+			return undefined;
+		}
+		return this._endIndex - this._startIndex + 1;
 	}
 
-	public get isDirty(): boolean {
-		return this.startIndex !== undefined;
-	}
+	get isDirty(): boolean { return this._startIndex !== undefined; }
 
-	public flag(index: number, length = 1): number {
-		if (!Number.isSafeInteger(index) || index < 0) throw new RangeError('A dirty buffer index must be a non-negative integer');
-		if (!Number.isSafeInteger(length) || length < 1) throw new RangeError('A dirty buffer length must be a positive integer');
-		this.flagIndex(index);
-		this.flagIndex(index + length - 1);
+	/**
+	 * Flag the index(es) as modified. Returns the index flagged.
+	 * @param index An index to flag.
+	 * @param length An optional length to flag. Defaults to 1.
+	 */
+	flag(index: number, length: number = 1): number {
+		this._flag(index);
+		if (length > 1) {
+			this._flag(index + length - 1);
+		}
 		return index;
 	}
 
-	public clear(): void {
-		this.startIndex = undefined;
-		this.endIndex = undefined;
+	private _flag(index: number) {
+		if (this._startIndex === undefined || index < this._startIndex) {
+			this._startIndex = index;
+		}
+		if (this._endIndex === undefined || index > this._endIndex) {
+			this._endIndex = index;
+		}
 	}
 
-	private flagIndex(index: number): void {
-		if (this.startIndex === undefined || index < this.startIndex) this.startIndex = index;
-		if (this.endIndex === undefined || index > this.endIndex) this.endIndex = index;
+	clear() {
+		this._startIndex = undefined;
+		this._endIndex = undefined;
 	}
 }

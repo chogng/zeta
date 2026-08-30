@@ -4,10 +4,11 @@ import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Range } from '../../../common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
-import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
+
 import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { EditorFoldingRangeSource, type EditorFoldingRegion } from './foldingRanges.js';
 import { type EditorFoldingModel } from './foldingModel.js';
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 export const foldingExpandedIcon = register('folding-expanded', lxiconsLibrary.chevronDown);
 export const foldingCollapsedIcon = register('folding-collapsed', lxiconsLibrary.chevronRight);
@@ -47,7 +48,7 @@ export class FoldingDecorationProvider extends Disposable implements OwnedDecora
 	private updateDecorations(): void {
 		this.decorationIds = this.collection.deltaDecorations(this.decorationIds, this.folding.regions.map(region => ({
 			range: Range.fromPositions({ lineNumber: region.startLineIndex + 1, column: 1 }),
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: region,
 		})));
 	}

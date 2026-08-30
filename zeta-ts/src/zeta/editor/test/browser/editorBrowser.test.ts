@@ -5,7 +5,7 @@ import { DisposableTracker, installDisposableTracker } from "../../../base/commo
 import { URI } from "../../../base/common/uri.js";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
-import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { ComposableLanguageConfigurationService } from '../../common/languages/ownedLanguageConfigurationContributions.js';
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
@@ -35,7 +35,7 @@ test("Stanza editor browser composes native input, local language syntax, and pr
 	const model = new TextModel("{\"name\": \"alpha\"");
 	const resource = URI.file("C:\\project\\settings.json");
 	const errors: unknown[] = [];
-	using languageConfigurationService = new LanguageConfigurationService();
+	using languageConfigurationService = new ComposableLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
 	using languageConfigurations = registerBuiltinLanguageConfigurations(languageConfigurationService.configurations);
 	const editorPart = new EditorBrowser({
@@ -118,7 +118,7 @@ test("Stanza editor browser derives indentation folds and projects their gutter 
 	const foldToggle = container.querySelector<HTMLButtonElement>(".stanza-editor-fold-toggle");
 	assert.ok(foldToggle);
 	foldToggle.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
-	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".stanza-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
+	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".view-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
 
 	editorPart.dispose();
 	model.dispose();
@@ -130,7 +130,7 @@ test("Stanza editor browser marks named regions and comment MARK headers only", 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("// #region Runtime\nconst folded = {\n};\n// #endregion\nconst marker = 1; // MARK: API\nconst fake = 'MARK: not a header';");
-	using languageConfigurationService = new LanguageConfigurationService();
+	using languageConfigurationService = new ComposableLanguageConfigurationService();
 	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
 	using languageConfigurations = registerBuiltinLanguageConfigurations(languageConfigurationService.configurations);
 	const editorPart = new EditorBrowser({
@@ -143,7 +143,7 @@ test("Stanza editor browser marks named regions and comment MARK headers only", 
 	});
 	editorPart.layout({ width: 500, height: 180 });
 
-	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".stanza-editor-line.section-header")].map(line => Number(line.dataset.logicalLineIndex)), [0, 4]);
+	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".view-line.section-header")].map(line => Number(line.dataset.logicalLineIndex)), [0, 4]);
 
 	editorPart.dispose();
 	model.dispose();
@@ -156,7 +156,7 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("root\n  child\nafter");
 	const resource = URI.file("C:\\project\\async-fold.txt");
-	using languageConfigurationService = new LanguageConfigurationService();
+	using languageConfigurationService = new ComposableLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService(languageConfigurationService);
 	let resolveRanges: ((ranges: readonly { readonly startLineIndex: number; readonly endLineIndex: number }[]) => void) | undefined;
 	let providerSignal: AbortSignal | undefined;
@@ -248,7 +248,7 @@ test("Stanza editor browser prepares selected before-save contributions for host
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("alpha");
 	const resource = URI.file("C:\\project\\save.txt");
-	using languageConfigurationService = new LanguageConfigurationService();
+	using languageConfigurationService = new ComposableLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService(languageConfigurationService);
 	using formatting = languageFeatures.formattingProvider.register({
 		languageIds: ["plaintext"],
@@ -332,13 +332,13 @@ test("Code editor keeps large files editable while disabling full-document backg
 });
 
 test('editor command events publish only after asynchronous command work completes', async () => {
-	const { registerEditorContribution } = await import('../../browser/editorExtensions.js');
+	const { registerTextEditorCapabilityContribution } = await import('../../browser/editorExtensions.js');
 	const commandId = 'editor.test.asynchronousCommand';
 	const resource = URI.file('C:\\project\\command.txt');
 	const events: string[] = [];
 	let releaseCommand: (() => void) | undefined;
 	let commandResult: Promise<number> | undefined;
-	registerEditorContribution({
+	registerTextEditorCapabilityContribution({
 		id: 'editor.contrib.asynchronousCommand.test',
 		commands: [{ id: commandId, canTriggerInlineEdits: true }],
 		install: context => {
@@ -373,7 +373,7 @@ test('editor command events publish only after asynchronous command work complet
 });
 
 test("constructor-backed editor contributions receive editor context and window services", async () => {
-const [{ EditorContributionInstantiation, registerEditorContribution }, { createServiceIdentifier, ServiceContainer, SyncDescriptor }] = await Promise.all([
+const [{ EditorContributionInstantiation, registerTextEditorCapabilityContribution }, { createServiceIdentifier, ServiceContainer, ServiceConstructionDescriptor }] = await Promise.all([
 		import("../../browser/editorExtensions.js"),
 		import("../../../platform/instantiation/common/instantiation.js"),
 	]);
@@ -389,10 +389,10 @@ const [{ EditorContributionInstantiation, registerEditorContribution }, { create
 		dispose(): void { disposed = true; }
 		[Symbol.dispose](): void { this.dispose(); }
 	}
-	registerEditorContribution({
+	registerTextEditorCapabilityContribution({
 		id: "editor.contrib.runtimeInjection.test",
 		runtime: {
-			descriptor: new SyncDescriptor(RuntimeContribution, { serviceDependencies: [IService] }),
+			descriptor: new ServiceConstructionDescriptor(RuntimeContribution, { serviceDependencies: [IService] }),
 			instantiation: EditorContributionInstantiation.Eager,
 		},
 	});

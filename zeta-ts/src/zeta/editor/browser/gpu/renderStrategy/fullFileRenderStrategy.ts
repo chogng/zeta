@@ -1,4 +1,4 @@
-import { type GpuRenderFrame, type GpuRenderStrategyInput } from '../gpu.js';
+import { type GpuRenderFrame, type GpuRenderStrategyInput } from '../gpuFrameStrategy.js';
 import { type GlyphRasterizer } from '../raster/glyphRasterizer.js';
 import { createGpuRenderFrame } from '../gpuUtils.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';

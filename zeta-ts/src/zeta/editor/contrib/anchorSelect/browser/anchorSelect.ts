@@ -2,7 +2,7 @@ import './anchorSelect.css';
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
 import { DecorationPresentation, createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
@@ -11,7 +11,8 @@ import { SelectionSet } from '../../../common/cursor/selectionSet.js';
 import { type Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
-import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
+import { TrackedRangeStickiness } from '../../../common/model.js';
+
 
 const selectionAnchorDecorations: EditorCapability<TextDecorationCollection<void>> = Object.freeze({ id: 'editor.capability.selectionAnchorDecorations' });
 
@@ -48,7 +49,7 @@ export class SelectionAnchorController extends Disposable {
 		const position = this.selections.selections.primary.getPosition();
 		const [decorationId] = this.decorations.replaceAll([{
 			range: Range.fromPositions(position),
-			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			metadata: undefined,
 		}]);
 		this.decorationId = decorationId;
@@ -115,7 +116,7 @@ export class SelectionAnchorController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: 'editor.contrib.selectionAnchorController',
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));

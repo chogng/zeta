@@ -2,6 +2,7 @@ import {
 	Disposable,
 	type IDisposable,
 } from "../../../base/common/lifecycle.js";
+import { InstantiationType } from './extensions.js';
 
 /** A typed key for a service available while a command is executing. */
 export type ServiceIdentifier<T> = symbol & {
@@ -16,16 +17,13 @@ export function createServiceIdentifier<T>(id: string): ServiceIdentifier<T> {
 	return Symbol(id) as ServiceIdentifier<T>;
 }
 
+/** VS Code-compatible name for declaring a service identifier. */
+export const createDecorator = createServiceIdentifier;
+
 /** Provides command handlers with the services of the active application. */
 export interface ServicesAccessor {
 	get<T>(id: ServiceIdentifier<T>): T;
 	getOptional<T>(id: ServiceIdentifier<T>): T | undefined;
-}
-
-/** Controls when a registered singleton is constructed. */
-export enum InstantiationType {
-	Eager = "eager",
-	Delayed = "delayed",
 }
 
 /** Options for registering a singleton factory. */
@@ -37,7 +35,7 @@ export interface SingletonRegistrationOptions {
 export type ServiceFactory<T> = (accessor: ServicesAccessor) => T;
 
 /** Options that describe arguments owned by a synchronous contribution. */
-export interface SyncDescriptorOptions {
+export interface ServiceConstructionDescriptorOptions {
 	readonly staticArguments?: readonly unknown[];
 	readonly serviceDependencies?: readonly ServiceIdentifier<unknown>[];
 }
@@ -48,13 +46,13 @@ export interface SyncDescriptorOptions {
  * Static arguments are placed before call-site arguments. Resolved services
  * are appended last, in the declared order.
  */
-export class SyncDescriptor<T> {
+export class ServiceConstructionDescriptor<T> {
 	readonly staticArguments: readonly unknown[];
 	readonly serviceDependencies: readonly ServiceIdentifier<unknown>[];
 
 	constructor(
 		readonly ctor: Constructor<T>,
-		options: SyncDescriptorOptions = {},
+		options: ServiceConstructionDescriptorOptions = {},
 	) {
 		this.staticArguments = Object.freeze([
 			...(options.staticArguments ?? []),
@@ -83,29 +81,10 @@ export class ServiceCollection {
 	entries(): IterableIterator<[ServiceIdentifier<unknown>, unknown]> { return this.entriesById.entries(); }
 }
 
-export interface SingletonServiceDescriptor<T> {
-	readonly id: ServiceIdentifier<T>;
-	readonly factory: ServiceFactory<T>;
-	readonly instantiation: InstantiationType;
-}
-
-const singletonServiceDescriptors = new Map<ServiceIdentifier<unknown>, SingletonServiceDescriptor<unknown>>();
-
-export function registerSingleton<T>(id: ServiceIdentifier<T>, factory: ServiceFactory<T>, instantiation = InstantiationType.Delayed): SingletonServiceDescriptor<T> {
-	if (singletonServiceDescriptors.has(id)) throw new Error(`Singleton service '${serviceName(id)}' is already registered`);
-	const descriptor = Object.freeze({ id, factory, instantiation });
-	singletonServiceDescriptors.set(id, descriptor as SingletonServiceDescriptor<unknown>);
-	return descriptor;
-}
-
-export function getSingletonServiceDescriptors(): readonly SingletonServiceDescriptor<unknown>[] {
-	return Object.freeze([...singletonServiceDescriptors.values()]);
-}
-
 /** The service container used by commands, contributions, and views. */
 export interface IInstantiationService extends ServicesAccessor {
 	createInstance<T>(
-		descriptor: SyncDescriptor<T>,
+		descriptor: ServiceConstructionDescriptor<T>,
 		...dynamicArguments: unknown[]
 	): T;
 
@@ -197,10 +176,6 @@ export class ServiceContainer extends Disposable implements IInstantiationServic
 		for (const [id, value] of collection.entries()) this.registerInstance(id, value);
 	}
 
-	registerSingletonDescriptor<T>(descriptor: SingletonServiceDescriptor<T>): void {
-		this.registerSingleton(descriptor.id, descriptor.factory, { instantiation: descriptor.instantiation });
-	}
-
 	has<T>(id: ServiceIdentifier<T>): boolean {
 		return this.registrations.has(id) || this.parent?.has(id) === true;
 	}
@@ -226,7 +201,7 @@ export class ServiceContainer extends Disposable implements IInstantiationServic
 	}
 
 	createInstance<T>(
-		descriptor: SyncDescriptor<T>,
+		descriptor: ServiceConstructionDescriptor<T>,
 		...dynamicArguments: unknown[]
 	): T {
 		this.assertNotDisposed();

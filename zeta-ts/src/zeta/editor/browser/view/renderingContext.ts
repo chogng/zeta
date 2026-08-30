@@ -4,7 +4,7 @@ import { type TextModel } from '../../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
-import { ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
+import { EditorViewportData } from '../../common/viewLayout/editorViewportData.js';
 
 export interface EditorLineVisibleRange {
 	readonly visualLineIndex: number;
@@ -40,15 +40,23 @@ export interface EditorOverlayContext {
  */
 export interface EditorRenderingContext {
 	readonly layout: EditorViewportLayout;
-	readonly viewportData: ViewportData;
+	readonly viewportData: EditorViewportData;
 	readonly overlay: EditorOverlayContext | undefined;
 }
 
 export class FloatHorizontalRange {
-	constructor(
-		public left: number,
-		public width: number,
-	) {}
+	_floatHorizontalRangeBrand: void = undefined;
+	public left: number;
+	public width: number;
+
+	constructor(left: number, width: number) {
+		this.left = left;
+		this.width = width;
+	}
+
+	public toString(): string {
+		return `[${this.left},${this.width}]`;
+	}
 
 	public static compare(left: FloatHorizontalRange, right: FloatHorizontalRange): number {
 		return left.left - right.left;
@@ -65,8 +73,8 @@ export function createEditorRenderingContext(layout: EditorViewportLayout, overl
 }
 
 /** Adapts the common layout snapshot to the line-rendering viewport contract. */
-export function createEditorViewportData(layout: EditorViewportLayout): ViewportData {
-	return new ViewportData({
+export function createEditorViewportData(layout: EditorViewportLayout): EditorViewportData {
+	return new EditorViewportData({
 		modelVersion: layout.modelVersion,
 		lineHeight: layout.lineHeight,
 		visibleLines: layout.visibleLines,

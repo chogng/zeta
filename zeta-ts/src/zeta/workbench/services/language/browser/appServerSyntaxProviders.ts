@@ -1,9 +1,9 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
-import { raceCancellation } from "../../../../base/common/cancellation.js";
+import { raceCancellationError } from "../../../../base/common/async.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxToken } from "../../../../platform/syntax/common/syntaxApi.js";
-import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/documentSymbols.js";
-import { type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/folding.js";
+import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js";
+import { type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/languageFoldingRanges.js";
 import { type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest } from "../../../../editor/contrib/smartSelect/common/selectionRanges.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
@@ -68,7 +68,7 @@ class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolP
 		if (!language || request.ranges.length === 0) return Object.freeze([]);
 		const text = request.snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return Object.freeze([]);
-		const result = await raceCancellation(this.syntax.selectionRanges({
+		const result = await raceCancellationError(this.syntax.selectionRanges({
 			language,
 			revision: request.snapshot.version,
 			text,
@@ -95,7 +95,7 @@ class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolP
 				if (this.cached === cached) this.cached = undefined;
 			});
 		}
-		const result = await raceCancellation(cached.promise, signal, "App Server syntax request was cancelled");
+		const result = await raceCancellationError(cached.promise, signal, "App Server syntax request was cancelled");
 		if (result.revision !== snapshot.version) {
 			throw new Error("App Server syntax result does not match the requested editor model revision");
 		}

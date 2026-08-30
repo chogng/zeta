@@ -8,7 +8,7 @@ Object.defineProperty(globalThis, "window", { configurable: true, value: browser
 Object.defineProperty(globalThis, "document", { configurable: true, value: browserEnvironment.window.document });
 Object.defineProperty(globalThis, "Node", { configurable: true, value: browserEnvironment.window.Node });
 
-const { Dimension } = await import("../../../../base/browser/geometry.js");
+const { Dimension } = await import("../../../../base/browser/dom.js");
 const { BrowserLayoutService } = await import("../../browser/layoutService.js");
 
 test("BrowserLayoutService publishes root geometry and container offsets", () => {

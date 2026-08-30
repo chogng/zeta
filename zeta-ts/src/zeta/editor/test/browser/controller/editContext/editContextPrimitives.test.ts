@@ -3,7 +3,7 @@ import test from 'node:test';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { contentOffsetAtModelOffset, modelOffsetAtContentOffset, SimplePagedScreenReaderStrategy } from '../../../../browser/controller/editContext/screenReaderUtils.js';
+import { contentOffsetAtModelOffset, MappedScreenReaderStrategy, modelOffsetAtContentOffset } from '../../../../browser/controller/editContext/mappedScreenReaderUtils.js';
 import { TextAreaState, type ITextAreaWrapper } from '../../../../browser/controller/editContext/textArea/textAreaEditContextState.js';
 
 test('screen-reader pages preserve endpoint text and model mappings', () => {
@@ -12,7 +12,7 @@ test('screen-reader pages preserve endpoint text and model mappings', () => {
 		new Position((0) + 1, (2) + 1),
 		new Position((3) + 1, (3) + 1),
 	);
-	const state = new SimplePagedScreenReaderStrategy().fromEditorSelection(model, selection, 1, false);
+	const state = new MappedScreenReaderStrategy().fromEditorSelection(model, selection, 1, false);
 
 	assert.equal(state.value, 'zero\n…three');
 	assert.equal(modelOffsetAtContentOffset(state, state.selectionStart), model.offsetAt(selection.getStartPosition()));

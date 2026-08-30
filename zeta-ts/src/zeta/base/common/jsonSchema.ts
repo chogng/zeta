@@ -63,6 +63,8 @@ export interface JsonSchemaSnippet {
 	readonly bodyText?: string;
 }
 
+export interface IJSONSchemaSnippet extends JsonSchemaSnippet { }
+
 export interface JsonSchemaIssue {
 	readonly message: string;
 	readonly offset: number;

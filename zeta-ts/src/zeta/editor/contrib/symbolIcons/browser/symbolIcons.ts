@@ -3,15 +3,10 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Range } from "../../../common/core/range.js";
 import { TextDecorationCollection, type TextDecorationId } from "../../../common/model/decorationCollection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
-import {
-	createStanzaDecorationSource,
-	DecorationPresentation,
-	type DecorationPresentationResolution,
-	type DecorationSource,
-	type OwnedDecorationSource,
-} from "../../../browser/viewparts/decorations/decorations.js";
-import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/documentSymbols.js";
+
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from "../../../browser/viewparts/decorations/decorations.js";
+import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/languageDocumentSymbols.js";
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 const SYMBOL_ICON_DECORATION_OWNER = "symbol-icons";
 
@@ -75,7 +70,7 @@ export class SymbolIconsController extends Disposable implements OwnedDecoration
 					seenLines.add(lineIndex);
 					return [{
 						range: Range.fromPositions({ lineNumber, column: 1 }),
-						stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+						stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 						metadata: Object.freeze({
 							kind: symbol.kind,
 							name: symbol.name,

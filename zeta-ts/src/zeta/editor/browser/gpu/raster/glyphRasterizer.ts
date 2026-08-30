@@ -1,11 +1,11 @@
 import { h } from '../../../../base/browser/dom.js';
-import { type IGlyphRasterizer, type IGpuGlyphStyle, type IRasterizedGlyph } from './raster.js';
+import { type IGpuGlyphStyle, type IStyledGlyphRasterizer, type IStyledRasterizedGlyph } from './raster.js';
 import { createCanvasFontShorthand } from '../../config/fontMeasurements.js';
 
 let nextId = 0;
 
 /** Rasterizes one grapheme using the browser canvas font stack selected by the editor. */
-export class GlyphRasterizer implements IGlyphRasterizer {
+export class GlyphRasterizer implements IStyledGlyphRasterizer {
 	public readonly id = nextId++;
 	public readonly cacheKey: string;
 	private readonly canvas: HTMLCanvasElement;
@@ -28,7 +28,7 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 		return this.context.measureText(text);
 	}
 
-	public rasterizeGlyph(chars: string, style: IGpuGlyphStyle, subPixelX: number): IRasterizedGlyph {
+	public rasterizeGlyph(chars: string, style: IGpuGlyphStyle, subPixelX: number): IStyledRasterizedGlyph {
 		if (!chars) throw new TypeError('WebGPU glyph text must not be empty');
 		const advance = this.getTextMetrics(chars, style).width + style.letterSpacing * this.devicePixelRatio;
 		this.applyRasterFont(style);

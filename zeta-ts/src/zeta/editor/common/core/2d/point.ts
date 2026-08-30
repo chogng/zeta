@@ -16,5 +16,5 @@ export class Point {
 	mapComponents(map: (value: number) => number): Point { return new Point(map(this.x), map(this.y)); }
 	isZero(): boolean { return this.x === 0 && this.y === 0; }
 	withThreshold(threshold: number): Point { return this.mapComponents(value => Math.abs(value) <= threshold ? 0 : value - Math.sign(value) * threshold); }
-	toString(): string { return `(${this.x},${this.y})`; }
+	toString() { return `(${this.x},${this.y})`; }
 }

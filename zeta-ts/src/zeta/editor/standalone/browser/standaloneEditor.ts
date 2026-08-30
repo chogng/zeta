@@ -4,9 +4,8 @@ import { URI } from "../../../base/common/uri.js";
 import { ContentWidgetPositionPreference, type EditorBrowserOptions, OverlayWidgetPositionPreference } from "../../browser/editorBrowser.js";
 import { PositionAffinity } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { type ModelLanguageChangeEvent } from "../../common/services/model.js";
-import { type IStandaloneThemeData } from "../common/standaloneTheme.js";
-import { StandaloneCodeEditor, type IStandaloneCodeEditor } from "./standaloneCodeEditor.js";
+import { type NamedEditorThemeData } from "../common/namedEditorTheme.js";
+import { StandaloneEditorInstance, type IStandaloneEditorInstance } from "./standaloneEditorInstance.js";
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 
 type StandaloneEditorBrowserOptions = Omit<EditorBrowserOptions,
@@ -33,32 +32,31 @@ export interface IStandaloneEditorApi {
 	readonly createModel: typeof createModel;
 	readonly getModel: typeof getModel;
 	readonly getModels: typeof getModels;
-	readonly getModelResource: typeof getModelResource;
-	readonly getModelLanguage: typeof getModelLanguage;
 	readonly setModelLanguage: typeof setModelLanguage;
 	readonly getEditors: typeof getEditors;
-	readonly onDidCreateEditor: Event<IStandaloneCodeEditor>;
+	readonly onDidCreateEditor: Event<IStandaloneEditorInstance>;
 	readonly onDidCreateModel: Event<TextModel>;
 	readonly onWillDisposeModel: Event<TextModel>;
-	readonly onDidChangeModelLanguage: Event<ModelLanguageChangeEvent>;
-	readonly defineTheme: typeof defineTheme;
+	readonly onDidChangeModelLanguage: Event<{ readonly model: TextModel; readonly oldLanguage: string }>;
+	readonly defineNamedTheme: typeof defineNamedTheme;
 	readonly setTheme: typeof setTheme;
 }
 
-const editors = new Set<IStandaloneCodeEditor>();
-const createEditorEmitter = new Emitter<IStandaloneCodeEditor>();
+const editors = new Set<IStandaloneEditorInstance>();
+const createEditorEmitter = new Emitter<IStandaloneEditorInstance>();
 
-export const onDidCreateEditor: Event<IStandaloneCodeEditor> = createEditorEmitter.event;
-export const onDidCreateModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onDidCreateModel(listener);
-export const onWillDisposeModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onWillDisposeModel(listener);
-export const onDidChangeModelLanguage: Event<ModelLanguageChangeEvent> = listener => StandaloneServices.get().modelService.onDidChangeModelLanguage(listener);
+export const onDidCreateEditor: Event<IStandaloneEditorInstance> = createEditorEmitter.event;
+export const onDidCreateModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onModelAdded(listener);
+export const onWillDisposeModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onModelRemoved(listener);
+export const onDidChangeModelLanguage: Event<{ readonly model: TextModel; readonly oldLanguage: string }> = listener =>
+	StandaloneServices.get().modelService.onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
 
 /** Creates one browser editor. A supplied model must come from createModel(). */
 export function create(
 	domElement: HTMLElement,
 	options: IStandaloneEditorConstructionOptions = {},
 	overrides: StandaloneServiceOverrides = {},
-): IStandaloneCodeEditor {
+): IStandaloneEditorInstance {
 	if (!domElement || domElement.nodeType !== 1 || !domElement.ownerDocument) throw new TypeError("Standalone editor requires an HTML element");
 	const services = StandaloneServices.initialize(overrides);
 	const {
@@ -77,15 +75,15 @@ export function create(
 	}
 	if (theme !== undefined) services.themeService.setTheme(theme);
 	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
-	const model = suppliedModel ?? services.modelService.createModel(value ?? "", languageId, resource);
+	const model = suppliedModel ?? services.modelService.createModel(value ?? "", services.languageService.createById(languageId), resource);
 	const ownsModel = suppliedModel === undefined;
 	try {
-		const modelResource = services.modelService.getModelResource(model);
+		if (services.modelService.getModel(model.uri) !== model) throw new ReferenceError('Standalone editor model is not registered with the model service');
 		const editorOptions: EditorBrowserOptions = {
 			...browserOptions,
 			container: domElement,
-			input: { resource: modelResource, label, readOnly },
-			languageId: services.modelService.getModelLanguage(model),
+			input: { resource: model.uri, label, readOnly },
+			languageId: model.getLanguageId(),
 			model,
 			languageFeaturesService: services.languageFeaturesService,
 			languageConfigurationService: services.languageConfigurationService,
@@ -95,8 +93,8 @@ export function create(
 			codeEditorService: services.codeEditorService,
 		};
 		const editor = services.completionWorkerFactory
-			? new StandaloneCodeEditor({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService)
-			: new StandaloneCodeEditor(editorOptions, model, ownsModel, services.themeService);
+			? new StandaloneEditorInstance({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService)
+			: new StandaloneEditorInstance(editorOptions, model, ownsModel, services.themeService);
 		editors.add(editor);
 		editor.registerEditorLifetime(toDisposable(() => editors.delete(editor)));
 		createEditorEmitter.fire(editor);
@@ -108,35 +106,28 @@ export function create(
 }
 
 export function createModel(value: string, languageId?: string, resource?: URI): TextModel {
-	return StandaloneServices.get().modelService.createModel(value, languageId, resource);
+	const services = StandaloneServices.get();
+	return services.modelService.createModel(value, services.languageService.createById(languageId), resource);
 }
 
-export function getModel(resource: URI): TextModel | undefined {
+export function getModel(resource: URI): TextModel | null {
 	return StandaloneServices.get().modelService.getModel(resource);
 }
 
-export function getModels(): readonly TextModel[] {
+export function getModels(): TextModel[] {
 	return StandaloneServices.get().modelService.getModels();
 }
 
-export function getModelResource(model: TextModel): URI {
-	return StandaloneServices.get().modelService.getModelResource(model);
-}
-
-export function getModelLanguage(model: TextModel): string {
-	return StandaloneServices.get().modelService.getModelLanguage(model);
-}
-
 export function setModelLanguage(model: TextModel, languageId: string): void {
-	StandaloneServices.get().modelService.setModelLanguage(model, languageId);
+	model.setLanguage(languageId);
 }
 
-export function getEditors(): readonly IStandaloneCodeEditor[] {
+export function getEditors(): readonly IStandaloneEditorInstance[] {
 	return Object.freeze([...editors]);
 }
 
-export function defineTheme(themeId: string, themeData: IStandaloneThemeData): void {
-	StandaloneServices.get().themeService.defineTheme(themeId, themeData);
+export function defineNamedTheme(themeId: string, themeData: NamedEditorThemeData): void {
+	StandaloneServices.get().themeService.defineNamedTheme(themeId, themeData);
 }
 
 export function setTheme(themeId: string): void {
@@ -152,17 +143,15 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 		createModel,
 		getModel,
 		getModels,
-		getModelResource,
-		getModelLanguage,
 		setModelLanguage,
 		getEditors,
 		onDidCreateEditor,
 		onDidCreateModel,
 		onWillDisposeModel,
 		onDidChangeModelLanguage,
-		defineTheme,
+		defineNamedTheme,
 		setTheme,
 	});
 }
 
-export type { IStandaloneCodeEditor } from './standaloneCodeEditor.js';
+export type { IStandaloneEditorInstance } from './standaloneEditorInstance.js';

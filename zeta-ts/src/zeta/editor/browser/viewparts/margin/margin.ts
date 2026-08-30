@@ -24,6 +24,7 @@ export interface MarginOptions {
 
 /** Owns editor margin geometry and its background. */
 export class Margin extends EditorViewPart {
+	public static readonly CLASS_NAME = 'glyph-margin';
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly host: HTMLElement;
@@ -51,7 +52,7 @@ export class Margin extends EditorViewPart {
 		this._register(toDisposable(() => domNode.remove()));
 		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName("stanza-editor-margin");
+		this.root.setClassName(Margin.CLASS_NAME);
 		this.domNode.setAttribute("role", "presentation");
 		this.domNode.setAttribute("aria-hidden", "true");
 	}

@@ -1,8 +1,8 @@
 import { fontVariantForCanvas } from '../config/fontMeasurements.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../viewparts/viewLines/viewLine.js';
-import { type ITextureAtlasPageGlyph } from './atlas/atlas.js';
-import { createContentSegmenter } from './contentSegmenter.js';
-import { type GpuRenderFrame, type GpuRenderStrategyInput } from './gpu.js';
+import { type IGpuTextureAtlasPageGlyph } from './atlas/atlas.js';
+import { createStringContentSegmenter } from './stringContentSegmenter.js';
+import { type GpuRenderFrame, type GpuRenderStrategyInput } from './gpuFrameStrategy.js';
 import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
 import { type IGpuGlyphStyle } from './raster/raster.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -23,7 +23,7 @@ export function ensureNonNullable<T>(value: T | null): T {
 }
 
 /** Observes the physical canvas size without rounding through CSS pixels. */
-export function observeDevicePixelDimensions(element: HTMLElement, ownerWindow: Window, callback: (width: number, height: number) => void): IDisposable {
+export function observeDevicePixelDimensions(element: HTMLElement, ownerWindow: Window & typeof globalThis, callback: (deviceWidth: number, deviceHeight: number) => void): IDisposable {
 	const ResizeObserverConstructor = (ownerWindow as Window & { readonly ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
 	if (!ResizeObserverConstructor) throw new Error('WebGPU text rendering requires ResizeObserver');
 	const observer = new ResizeObserverConstructor((entries: ResizeObserverEntry[]) => {
@@ -51,7 +51,7 @@ export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: Gp
 			const lineStart = (input.textLeft + (visualLine.wrappedTextIndentWidth ?? 0)) * glyphRasterizer.devicePixelRatio;
 			let deviceX = lineStart;
 			const lineTop = (input.paddingTop + visualLineIndex * input.layout.lineHeight) * glyphRasterizer.devicePixelRatio;
-			const segments = createContentSegmenter(text, { isBasicASCII: isBasicASCII(text), useMonospaceOptimizations: false });
+			const segments = createStringContentSegmenter(text, { isBasicASCII: isBasicASCII(text), useMonospaceOptimizations: false });
 			for (let index = 0; index < text.length; index += 1) {
 				const segment = segments.getSegmentData(index);
 				if (!segment) continue;
@@ -110,7 +110,7 @@ function resolveGlyphStyle(base: IGpuGlyphStyle, rootStyle: CSSStyleDeclaration,
 	});
 }
 
-function appendGlyphQuad(vertices: number[], glyph: Readonly<ITextureAtlasPageGlyph>, left: number, top: number): void {
+function appendGlyphQuad(vertices: number[], glyph: Readonly<IGpuTextureAtlasPageGlyph>, left: number, top: number): void {
 	const right = left + glyph.w;
 	const bottom = top + glyph.h;
 	const atlasRight = glyph.x + glyph.w;

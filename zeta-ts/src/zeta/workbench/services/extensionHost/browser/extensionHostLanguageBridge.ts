@@ -1,16 +1,16 @@
 import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import { type TextEdit } from "../../../../editor/common/core/editOperation.js";
+import { type TextEdit } from "../../../../editor/common/languages.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import type { LanguageProviderBatch } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from "../../../../editor/contrib/format/common/formatCommands.js";
 import type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
-import type { LanguageInlayHint, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/inlayHints.js";
-import type { LanguageLinkedEditingProvider, LanguageLinkedEditingRanges, LanguageLinkedEditingRequest } from "../../../../editor/contrib/linkedEditing/common/linkedEditing.js";
-import type { LanguageParameterHints, LanguageParameterHintsProvider, LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/parameterHints.js";
+import type { LanguageInlayHint, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/languageInlayHints.js";
+import type { LanguageLinkedEditingProvider, LanguageLinkedEditingRanges, LanguageLinkedEditingRequest } from "../../../../editor/contrib/linkedEditing/common/languageLinkedEditing.js";
+import type { LanguageParameterHints, LanguageParameterHintsProvider, LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import type { ExtensionHostLanguageRegistration, JsonValue } from "../../../../platform/extensionHost/common/extensionHostApi.js";
 
 export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze(["completion", "hover", "formatting", "inlayHints", "linkedEditing", "parameterHints"] as const);
@@ -186,7 +186,7 @@ function normalizeFormattingResult(value: JsonValue, snapshot: TextSnapshot): re
 	return Object.freeze(edits);
 }
 
-function normalizeTextEdit(value: JsonValue, snapshot: TextSnapshot, owner: string): TextEdit {
+function normalizeTextEdit(value: JsonValue, snapshot: TextSnapshot, owner: string) {
 	const edit = exactObject(value, owner, ["range", "text"]);
 	return Object.freeze({ range: normalizeRange(edit.range, snapshot, `${owner} range`), text: boundedString(edit.text, `${owner} text`, 1_048_576, true) });
 }

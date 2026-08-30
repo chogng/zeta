@@ -3,8 +3,9 @@ import { Selection } from "../../../common/core/selection.js";
 import { SelectionSet } from "../../../common/cursor/selectionSet.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { type TextEdit } from "../../../common/core/editOperation.js";
+
 import { type TextModel } from "../../../common/model/textModel.js";
+import { type TextEdit } from '../../../common/languages.js';
 
 export enum EditorLineDuplicateDirection {
 	Up = "up",

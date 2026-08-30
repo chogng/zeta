@@ -4,7 +4,7 @@ import { type CursorsController } from "../common/cursor/cursor.js";
 import { Selection } from "../common/core/selection.js";
 import { SelectionSet } from "../common/cursor/selectionSet.js";
 import { type TextModel } from "../common/model/textModel.js";
-import { registerEditorContribution } from "./editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "./editorExtensions.js";
 import { type EditorViewport } from "./view.js";
 
 export const EditorCoreCommandId = Object.freeze({
@@ -45,7 +45,7 @@ export function installCoreTextEditorCommands(
 	});
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: EditorCoreCommandId.selectAll,
 	install: context => {
 		if (context.kind !== "text") return;

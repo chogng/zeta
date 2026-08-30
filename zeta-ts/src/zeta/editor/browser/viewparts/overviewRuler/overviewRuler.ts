@@ -48,7 +48,7 @@ export class OverviewRuler extends EditorViewPart {
 	constructor(private readonly options: OverviewRulerOptions) {
 		super();
 		if (!Number.isFinite(options.width) || options.width <= 0) throw new RangeError('Overview ruler width must be finite and positive');
-		this.zoneManager = new OverviewZoneManager(options.getVerticalOffsetForLineIndex);
+		this.zoneManager = new OverviewZoneManager(lineNumber => options.getVerticalOffsetForLineIndex(lineNumber - 1));
 		this.domNode = h(options.host.ownerDocument, 'div');
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.root = new FastDomNode(this.domNode);
@@ -74,7 +74,7 @@ export class OverviewRuler extends EditorViewPart {
 		if (revision !== this.renderedRevision) {
 			this.entries = Object.freeze(this.options.readEntries().map(entry => Object.freeze({
 				entry,
-				zone: new OverviewRulerZone(entry.startLineIndex, entry.endLineIndexExclusive, entry.heightInLines ?? 0, entry.className),
+				zone: new OverviewRulerZone(entry.startLineIndex + 1, entry.endLineIndexExclusive, entry.heightInLines ?? 0, entry.className),
 			})));
 			this.zoneManager.setZones(this.entries.map(({ zone }) => zone));
 		}
@@ -82,7 +82,7 @@ export class OverviewRuler extends EditorViewPart {
 		this.zoneManager.resolveColorZones();
 		const fragment = createFragment(this.domNode.ownerDocument);
 		for (const { entry, zone } of this.entries) {
-			const colorZone = zone.getColorZone();
+			const colorZone = zone.getColorZones();
 			if (!colorZone) continue;
 			const element = h(this.domNode.ownerDocument, 'span');
 			element.className = 'stanza-editor-overview-marker';

@@ -3,7 +3,7 @@ import { AbstractDisposable, DisposableMap, toDisposable, type IDisposable } fro
 import { isFiniteNumber } from '../../../../base/common/numbers.js';
 import { type EditorViewportLayout, ViewLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type IViewZone, type IViewZoneChangeAccessor } from '../../editorBrowser.js';
-import { EditorViewPart, PartFingerprint, PartFingerprints, type EditorRenderingContext } from '../../view/viewPart.js';
+import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
 
 export type EditorViewZone = IViewZone;
 
@@ -39,12 +39,10 @@ export class ViewZones extends EditorViewPart {
 		this.readVisualLineCount = options.readVisualLineCount;
 		this.lineHeight = options.viewLayout.layout.lineHeight;
 		this.domNode = h(options.host.ownerDocument, 'div');
-		PartFingerprints.write(this.domNode, PartFingerprint.ViewZones);
 		this.domNode.className = 'stanza-editor-view-zones';
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
 		this.marginDomNode = h(options.host.ownerDocument, 'div');
-		PartFingerprints.write(this.marginDomNode, PartFingerprint.ViewZones);
 		this.marginDomNode.className = 'stanza-editor-margin-view-zones';
 		this.marginDomNode.setAttribute('role', 'presentation');
 		this.marginDomNode.setAttribute('aria-hidden', 'true');
@@ -107,14 +105,14 @@ export class ViewZones extends EditorViewPart {
 		if (lineHeight === this.lineHeight) return;
 		this.lineHeight = lineHeight;
 		for (const [id, zone] of this.zones) {
-			if (zone.heightInPixels !== undefined) continue;
-			this.viewLayout.changeViewZone(id, zone.afterLineIndex, this.zoneHeight(zone), zone.ordinal);
+			if (zone.heightInPx !== undefined) continue;
+			this.viewLayout.changeViewZone(id, zone.afterLineNumber - 1, this.zoneHeight(zone), zone.ordinal);
 		}
 	}
 
 	private addZoneData(zone: EditorViewZone): string {
 		this.validateZone(zone);
-		const id = this.viewLayout.addViewZone(zone.afterLineIndex, this.zoneHeight(zone), zone.ordinal);
+		const id = this.viewLayout.addViewZone(zone.afterLineNumber - 1, this.zoneHeight(zone), zone.ordinal);
 		this.zones.set(id, zone);
 		zone.domNode.classList.add('stanza-editor-view-zone');
 		this.domNode.append(zone.domNode);
@@ -134,7 +132,7 @@ export class ViewZones extends EditorViewPart {
 			return;
 		}
 		this.validateZone(zone);
-		this.layoutZones(this.viewLayout.changeViewZone(id, zone.afterLineIndex, this.zoneHeight(zone), zone.ordinal));
+		this.layoutZones(this.viewLayout.changeViewZone(id, zone.afterLineNumber - 1, this.zoneHeight(zone), zone.ordinal));
 	}
 
 	private removeZone(id: string): void {
@@ -181,7 +179,7 @@ export class ViewZones extends EditorViewPart {
 
 	private updateMinimumContentWidth(): void {
 		let width = 0;
-		for (const zone of this.zones.values()) width = Math.max(width, zone.minWidthInPixels ?? 0);
+		for (const zone of this.zones.values()) width = Math.max(width, zone.minWidthInPx ?? 0);
 		this.options.setMinimumContentWidth(width);
 	}
 
@@ -189,25 +187,25 @@ export class ViewZones extends EditorViewPart {
 		if (!zone || !(zone.domNode instanceof this.domNode.ownerDocument.defaultView!.HTMLElement)) {
 			throw new TypeError('Editor view zone requires a DOM root from the editor document');
 		}
-		if (!Number.isSafeInteger(zone.afterLineIndex) || zone.afterLineIndex < -1 || zone.afterLineIndex >= this.readVisualLineCount()) {
-			throw new RangeError('Editor view zone line index is outside the visual line collection');
+		if (!Number.isSafeInteger(zone.afterLineNumber) || zone.afterLineNumber < 0 || zone.afterLineNumber > this.readVisualLineCount()) {
+			throw new RangeError('Editor view zone line number is outside the visual line collection');
 		}
-		if (zone.heightInPixels !== undefined && (!isFiniteNumber(zone.heightInPixels) || zone.heightInPixels <= 0)) {
+		if (zone.heightInPx !== undefined && (!isFiniteNumber(zone.heightInPx) || zone.heightInPx <= 0)) {
 			throw new RangeError('Editor view zone height must be finite and positive');
 		}
-		if (zone.heightInPixels === undefined && zone.heightInLines !== undefined && (!isFiniteNumber(zone.heightInLines) || zone.heightInLines <= 0)) {
+		if (zone.heightInPx === undefined && zone.heightInLines !== undefined && (!isFiniteNumber(zone.heightInLines) || zone.heightInLines <= 0)) {
 			throw new RangeError('Editor view zone line height must be finite and positive');
 		}
 		if (zone.ordinal !== undefined && !isFiniteNumber(zone.ordinal)) {
 			throw new RangeError('Editor view zone ordinal must be finite');
 		}
-		if (zone.minWidthInPixels !== undefined && (!isFiniteNumber(zone.minWidthInPixels) || zone.minWidthInPixels < 0)) {
+		if (zone.minWidthInPx !== undefined && (!isFiniteNumber(zone.minWidthInPx) || zone.minWidthInPx < 0)) {
 			throw new RangeError('Editor view zone minimum width must be finite and non-negative');
 		}
 	}
 
 	private zoneHeight(zone: EditorViewZone): number {
-		return zone.heightInPixels ?? (zone.heightInLines ?? 1) * this.lineHeight;
+		return zone.heightInPx ?? (zone.heightInLines ?? 1) * this.lineHeight;
 	}
 }
 

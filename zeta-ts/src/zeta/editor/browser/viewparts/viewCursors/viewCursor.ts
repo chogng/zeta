@@ -9,7 +9,7 @@ import { SelectionSet } from '../../../common/cursor/selectionSet.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
+import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext, type EditorRenderingContext, type EditorVisiblePosition } from '../../view/renderingContext.js';
 import { type EditorViewContext } from '../../view/viewPart.js';

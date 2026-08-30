@@ -1,135 +1,247 @@
-const MINIMUM_HEIGHT = 4;
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+const enum Constants {
+	MINIMUM_HEIGHT = 4
+}
 
 export class ColorZone {
-	constructor(
-		public readonly from: number,
-		public readonly to: number,
-		public readonly colorId: number,
-	) {}
+	_colorZoneBrand: void = undefined;
 
-	public static compare(left: ColorZone, right: ColorZone): number {
-		return left.colorId - right.colorId || left.from - right.from || left.to - right.to;
+	public readonly from: number;
+	public readonly to: number;
+	public readonly colorId: number;
+
+	constructor(from: number, to: number, colorId: number) {
+		this.from = from | 0;
+		this.to = to | 0;
+		this.colorId = colorId | 0;
+	}
+
+	public static compare(a: ColorZone, b: ColorZone): number {
+		if (a.colorId === b.colorId) {
+			if (a.from === b.from) {
+				return a.to - b.to;
+			}
+			return a.from - b.from;
+		}
+		return a.colorId - b.colorId;
 	}
 }
 
-/** A model-line interval projected into the overview ruler. */
+/**
+ * A zone in the overview ruler
+ */
 export class OverviewRulerZone {
-	private colorZone: ColorZone | null = null;
+	_overviewRulerZoneBrand: void = undefined;
+
+	public readonly startLineNumber: number;
+	public readonly endLineNumber: number;
+	/**
+	 * If set to 0, the height in lines will be determined based on `endLineNumber`.
+	 */
+	public readonly heightInLines: number;
+	public readonly color: string;
+
+	private _colorZone: ColorZone | null;
 
 	constructor(
-		public readonly startLineIndex: number,
-		public readonly endLineIndexExclusive: number,
-		public readonly heightInLines: number,
-		public readonly color: string,
+		startLineNumber: number,
+		endLineNumber: number,
+		heightInLines: number,
+		color: string
 	) {
-		if (!Number.isSafeInteger(startLineIndex) || startLineIndex < 0) throw new RangeError('Overview ruler start line index must be non-negative');
-		if (!Number.isSafeInteger(endLineIndexExclusive) || endLineIndexExclusive <= startLineIndex) throw new RangeError('Overview ruler end line index must follow its start');
-		if (!Number.isSafeInteger(heightInLines) || heightInLines < 0) throw new RangeError('Overview ruler height must be a non-negative safe integer');
-		if (typeof color !== 'string' || color.length === 0) throw new TypeError('Overview ruler color must be a non-empty string');
+		this.startLineNumber = startLineNumber;
+		this.endLineNumber = endLineNumber;
+		this.heightInLines = heightInLines;
+		this.color = color;
+		this._colorZone = null;
 	}
 
-	public static compare(left: OverviewRulerZone, right: OverviewRulerZone): number {
-		return left.color.localeCompare(right.color)
-			|| left.startLineIndex - right.startLineIndex
-			|| left.heightInLines - right.heightInLines
-			|| left.endLineIndexExclusive - right.endLineIndexExclusive;
+	public static compare(a: OverviewRulerZone, b: OverviewRulerZone): number {
+		if (a.color === b.color) {
+			if (a.startLineNumber === b.startLineNumber) {
+				if (a.heightInLines === b.heightInLines) {
+					return a.endLineNumber - b.endLineNumber;
+				}
+				return a.heightInLines - b.heightInLines;
+			}
+			return a.startLineNumber - b.startLineNumber;
+		}
+		return a.color < b.color ? -1 : 1;
 	}
 
 	public setColorZone(colorZone: ColorZone): void {
-		this.colorZone = colorZone;
+		this._colorZone = colorZone;
 	}
 
-	public getColorZone(): ColorZone | null {
-		return this.colorZone;
+	public getColorZones(): ColorZone | null {
+		return this._colorZone;
 	}
 }
 
-/** Maps model-line zones to stable overview-ruler pixel intervals. */
 export class OverviewZoneManager {
-	private zones: OverviewRulerZone[] = [];
-	private colorZonesInvalid = true;
-	private lineHeight = 0;
-	private domWidth = 0;
-	private domHeight = 0;
-	private outerHeight = 0;
-	private pixelRatio = 1;
-	private lastAssignedId = 0;
-	private readonly colorToId = new Map<string, number>();
-	private readonly idToColor: string[] = [];
 
-	constructor(private readonly getVerticalOffsetForLineIndex: (lineIndex: number) => number) {}
+	private readonly _getVerticalOffsetForLine: (lineNumber: number) => number;
+	private _zones: OverviewRulerZone[];
+	private _colorZonesInvalid: boolean;
+	private _lineHeight: number;
+	private _domWidth: number;
+	private _domHeight: number;
+	private _outerHeight: number;
+	private _pixelRatio: number;
 
-	public getIdToColor(): readonly string[] {
-		return this.idToColor;
+	private _lastAssignedId: number;
+	private readonly _color2Id: { [color: string]: number };
+	private readonly _id2Color: string[];
+
+	constructor(getVerticalOffsetForLine: (lineNumber: number) => number) {
+		this._getVerticalOffsetForLine = getVerticalOffsetForLine;
+		this._zones = [];
+		this._colorZonesInvalid = false;
+		this._lineHeight = 0;
+		this._domWidth = 0;
+		this._domHeight = 0;
+		this._outerHeight = 0;
+		this._pixelRatio = 1;
+
+		this._lastAssignedId = 0;
+		this._color2Id = Object.create(null);
+		this._id2Color = [];
 	}
 
-	public setZones(zones: readonly OverviewRulerZone[]): void {
-		this.zones = [...zones].sort(OverviewRulerZone.compare);
-		this.colorZonesInvalid = true;
+	public getId2Color(): string[] {
+		return this._id2Color;
+	}
+
+	public setZones(newZones: OverviewRulerZone[]): void {
+		this._zones = newZones;
+		this._zones.sort(OverviewRulerZone.compare);
 	}
 
 	public setLineHeight(lineHeight: number): boolean {
-		return this.setDimension('lineHeight', lineHeight);
-	}
-
-	public setPixelRatio(pixelRatio: number): boolean {
-		return this.setDimension('pixelRatio', pixelRatio);
-	}
-
-	public getDOMWidth(): number { return this.domWidth; }
-	public getCanvasWidth(): number { return this.domWidth * this.pixelRatio; }
-	public setDOMWidth(width: number): boolean { return this.setDimension('domWidth', width); }
-	public getDOMHeight(): number { return this.domHeight; }
-	public getCanvasHeight(): number { return this.domHeight * this.pixelRatio; }
-	public setDOMHeight(height: number): boolean { return this.setDimension('domHeight', height); }
-	public getOuterHeight(): number { return this.outerHeight; }
-	public setOuterHeight(height: number): boolean { return this.setDimension('outerHeight', height); }
-
-	public resolveColorZones(): readonly ColorZone[] {
-		if (this.outerHeight <= 0 || this.domHeight <= 0) return [];
-		const totalHeight = Math.floor(this.getCanvasHeight());
-		const heightRatio = totalHeight / this.outerHeight;
-		const halfMinimumHeight = Math.floor(MINIMUM_HEIGHT * this.pixelRatio / 2);
-		const result: ColorZone[] = [];
-		for (const zone of this.zones) {
-			const cached = zone.getColorZone();
-			if (!this.colorZonesInvalid && cached) {
-				result.push(cached);
-				continue;
-			}
-			const offsetStart = this.getVerticalOffsetForLineIndex(zone.startLineIndex);
-			const offsetEnd = zone.heightInLines === 0
-				? this.getVerticalOffsetForLineIndex(zone.endLineIndexExclusive)
-				: offsetStart + zone.heightInLines * Math.floor(this.lineHeight);
-			const first = Math.floor(heightRatio * offsetStart);
-			const last = Math.floor(heightRatio * offsetEnd);
-			let center = Math.floor((first + last) / 2);
-			let halfHeight = Math.min(Math.max(last - center, halfMinimumHeight), Math.floor(totalHeight / 2));
-			if (center - halfHeight < 0) center = halfHeight;
-			if (center + halfHeight > totalHeight) center = totalHeight - halfHeight;
-			const colorId = this.colorId(zone.color);
-			const colorZone = new ColorZone(Math.max(0, center - halfHeight), Math.min(totalHeight, center + halfHeight), colorId);
-			zone.setColorZone(colorZone);
-			result.push(colorZone);
+		if (this._lineHeight === lineHeight) {
+			return false;
 		}
-		this.colorZonesInvalid = false;
-		return result.sort(ColorZone.compare);
-	}
-
-	private colorId(color: string): number {
-		const current = this.colorToId.get(color);
-		if (current !== undefined) return current;
-		const id = ++this.lastAssignedId;
-		this.colorToId.set(color, id);
-		this.idToColor[id] = color;
-		return id;
-	}
-
-	private setDimension(property: 'lineHeight' | 'domWidth' | 'domHeight' | 'outerHeight' | 'pixelRatio', value: number): boolean {
-		if (!Number.isFinite(value) || value < 0 || (property === 'pixelRatio' && value === 0)) throw new RangeError(`Overview ruler ${property} must be finite and non-negative`);
-		if (this[property] === value) return false;
-		this[property] = value;
-		this.colorZonesInvalid = true;
+		this._lineHeight = lineHeight;
+		this._colorZonesInvalid = true;
 		return true;
+	}
+
+	public setPixelRatio(pixelRatio: number): void {
+		this._pixelRatio = pixelRatio;
+		this._colorZonesInvalid = true;
+	}
+
+	public getDOMWidth(): number {
+		return this._domWidth;
+	}
+
+	public getCanvasWidth(): number {
+		return this._domWidth * this._pixelRatio;
+	}
+
+	public setDOMWidth(width: number): boolean {
+		if (this._domWidth === width) {
+			return false;
+		}
+		this._domWidth = width;
+		this._colorZonesInvalid = true;
+		return true;
+	}
+
+	public getDOMHeight(): number {
+		return this._domHeight;
+	}
+
+	public getCanvasHeight(): number {
+		return this._domHeight * this._pixelRatio;
+	}
+
+	public setDOMHeight(height: number): boolean {
+		if (this._domHeight === height) {
+			return false;
+		}
+		this._domHeight = height;
+		this._colorZonesInvalid = true;
+		return true;
+	}
+
+	public getOuterHeight(): number {
+		return this._outerHeight;
+	}
+
+	public setOuterHeight(outerHeight: number): boolean {
+		if (this._outerHeight === outerHeight) {
+			return false;
+		}
+		this._outerHeight = outerHeight;
+		this._colorZonesInvalid = true;
+		return true;
+	}
+
+	public resolveColorZones(): ColorZone[] {
+		const colorZonesInvalid = this._colorZonesInvalid;
+		const lineHeight = Math.floor(this._lineHeight);
+		const totalHeight = Math.floor(this.getCanvasHeight());
+		const outerHeight = Math.floor(this._outerHeight);
+		const heightRatio = totalHeight / outerHeight;
+		const halfMinimumHeight = Math.floor(Constants.MINIMUM_HEIGHT * this._pixelRatio / 2);
+
+		const allColorZones: ColorZone[] = [];
+		for (let i = 0, len = this._zones.length; i < len; i++) {
+			const zone = this._zones[i];
+
+			if (!colorZonesInvalid) {
+				const colorZone = zone.getColorZones();
+				if (colorZone) {
+					allColorZones.push(colorZone);
+					continue;
+				}
+			}
+
+			const offset1 = this._getVerticalOffsetForLine(zone.startLineNumber);
+			const offset2 = (
+				zone.heightInLines === 0
+					? this._getVerticalOffsetForLine(zone.endLineNumber) + lineHeight
+					: offset1 + zone.heightInLines * lineHeight
+			);
+
+			const y1 = Math.floor(heightRatio * offset1);
+			const y2 = Math.floor(heightRatio * offset2);
+
+			let ycenter = Math.floor((y1 + y2) / 2);
+			let halfHeight = (y2 - ycenter);
+
+			if (halfHeight < halfMinimumHeight) {
+				halfHeight = halfMinimumHeight;
+			}
+
+			if (ycenter - halfHeight < 0) {
+				ycenter = halfHeight;
+			}
+			if (ycenter + halfHeight > totalHeight) {
+				ycenter = totalHeight - halfHeight;
+			}
+
+			const color = zone.color;
+			let colorId = this._color2Id[color];
+			if (!colorId) {
+				colorId = (++this._lastAssignedId);
+				this._color2Id[color] = colorId;
+				this._id2Color[colorId] = color;
+			}
+			const colorZone = new ColorZone(ycenter - halfHeight, ycenter + halfHeight, colorId);
+
+			zone.setColorZone(colorZone);
+			allColorZones.push(colorZone);
+		}
+
+		this._colorZonesInvalid = false;
+
+		allColorZones.sort(ColorZone.compare);
+		return allColorZones;
 	}
 }

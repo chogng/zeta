@@ -4,9 +4,13 @@ import { StringText } from "../text/abstractText.js";
 import { BaseEdit, BaseReplacement } from "./edit.js";
 
 /** String-specialized edit operations, including inverse and rebase helpers. */
-export abstract class BaseStringEdit<Replacement extends BaseStringReplacement<Replacement>, Self extends BaseStringEdit<Replacement, Self>> extends BaseEdit<Replacement, Self> {
-	static trySwap(first: BaseStringEdit<any, any>, second: BaseStringEdit<any, any>): { e1: StringEdit; e2: StringEdit } | undefined {
-		const firstInverse = first.inverseOnSlice((start, endExclusive) => " ".repeat(endExclusive - start));
+export abstract class BaseStringEdit<T extends BaseStringReplacement<T> = BaseStringReplacement<any>, TEdit extends BaseStringEdit<T, TEdit> = BaseStringEdit<any, any>> extends BaseEdit<T, TEdit> {
+	get TReplacement(): T {
+		throw new Error('TReplacement is not defined for BaseStringEdit');
+	}
+
+	static trySwap(first: BaseStringEdit, second: BaseStringEdit): { e1: StringEdit; e2: StringEdit } | undefined {
+		const firstInverse = first.inverseOnSlice((start, endEx) => " ".repeat(endEx - start));
 		const rebasedFirst = second.tryRebase(firstInverse);
 		if (!rebasedFirst) return undefined;
 		const rebasedSecond = first.tryRebase(rebasedFirst);
@@ -26,7 +30,7 @@ export abstract class BaseStringEdit<Replacement extends BaseStringReplacement<R
 
 	applyOnText(text: StringText): StringText { return new StringText(this.apply(text.value)); }
 
-	inverseOnSlice(getOriginalSlice: (start: number, endExclusive: number) => string): StringEdit {
+	inverseOnSlice(getOriginalSlice: (start: number, endEx: number) => string): StringEdit {
 		const inverse: StringReplacement[] = [];
 		let delta = 0;
 		for (const replacement of this.replacements) {
@@ -38,10 +42,10 @@ export abstract class BaseStringEdit<Replacement extends BaseStringReplacement<R
 
 	inverse(original: string): StringEdit { return this.inverseOnSlice((start, endExclusive) => original.slice(start, endExclusive)); }
 
-	tryRebase(base: StringEdit): StringEdit | undefined { return this.rebaseInternal(base, true); }
-	rebaseSkipConflicting(base: StringEdit): StringEdit { return this.rebaseInternal(base, false)!; }
+	tryRebase(base: StringEdit): StringEdit | undefined { return this._tryRebase(base, true); }
+	rebaseSkipConflicting(base: StringEdit): StringEdit { return this._tryRebase(base, false)!; }
 
-	private rebaseInternal(base: StringEdit, failOnConflict: boolean): StringEdit | undefined {
+	private _tryRebase(base: StringEdit, failOnConflict: boolean): StringEdit | undefined {
 		const rebased: StringReplacement[] = [];
 		let baseIndex = 0;
 		let ownIndex = 0;
@@ -66,16 +70,18 @@ export abstract class BaseStringEdit<Replacement extends BaseStringReplacement<R
 		return new StringEdit(rebased);
 	}
 
-	removeCommonSuffixAndPrefix(source: string): Self { return this.createNew(this.replacements.map(replacement => replacement.removeCommonSuffixAndPrefix(source))).normalize(); }
-	removeCommonSuffixPrefix(source: string): Self { return this.removeCommonSuffixAndPrefix(source); }
+	removeCommonSuffixAndPrefix(source: string): TEdit { return this._createNew(this.replacements.map(replacement => replacement.removeCommonSuffixAndPrefix(source))).normalize(); }
+	removeCommonSuffixPrefix(source: string): StringEdit {
+		return new StringEdit(this.replacements.map(replacement => replacement.removeCommonSuffixPrefix(source)).filter(replacement => !replacement.isEmpty));
+	}
 	normalizeOnSource(source: string): StringEdit {
 		const normalized = StringReplacement.replace(OffsetRange.ofLength(source.length), this.apply(source)).removeCommonSuffixAndPrefix(source);
 		return normalized.isEmpty ? StringEdit.empty : normalized.toEdit();
 	}
-	normalizeEOL(eol: "\n" | "\r\n"): Self { return this.createNew(this.replacements.map(replacement => replacement.normalizeEOL(eol))); }
+	normalizeEOL(eol: '\r\n' | '\n'): StringEdit { return new StringEdit(this.replacements.map(replacement => replacement.normalizeEOL(eol))); }
 	toJson(): ISerializedStringEdit { return this.replacements.map(replacement => replacement.toJson()); }
 	isNeutralOn(source: string): boolean { return this.replacements.every(replacement => replacement.isNeutralOn(source)); }
-	mapData<Data extends IEditData<Data>>(map: (replacement: Replacement) => Data): AnnotatedStringEdit<Data> {
+	mapData<TData extends IEditData<TData>>(map: (replacement: T) => TData): AnnotatedStringEdit<TData> {
 		return new AnnotatedStringEdit(this.replacements.map(replacement => new AnnotatedStringReplacement(replacement.replaceRange, replacement.newText, map(replacement))));
 	}
 
@@ -87,24 +93,29 @@ export abstract class BaseStringEdit<Replacement extends BaseStringReplacement<R
 	}
 }
 
-export abstract class BaseStringReplacement<Self extends BaseStringReplacement<Self>> extends BaseReplacement<Self> {
+export abstract class BaseStringReplacement<T extends BaseStringReplacement<T> = BaseStringReplacement<any>> extends BaseReplacement<T> {
 	constructor(range: OffsetRange, readonly newText: string) { super(range); }
 	getNewLength(): number { return this.newText.length; }
 	replace(value: string): string { return value.slice(0, this.replaceRange.start) + this.newText + value.slice(this.replaceRange.endExclusive); }
 	isNeutralOn(value: string): boolean { return this.newText === this.replaceRange.substring(value); }
-	removeCommonSuffixAndPrefix(source: string): Self { return this.removeCommonSuffix(source).removeCommonPrefix(source); }
-	removeCommonPrefix(source: string): Self {
+	removeCommonSuffixAndPrefix(source: string): T { return this.removeCommonSuffix(source).removeCommonPrefix(source); }
+	removeCommonPrefix(source: string): T {
 		const oldText = this.replaceRange.substring(source);
 		const prefixLength = commonPrefixLength(oldText, this.newText);
 		return this.slice(this.replaceRange.deltaStart(prefixLength), new OffsetRange(prefixLength, this.newText.length));
 	}
-	removeCommonSuffix(source: string): Self {
+	removeCommonSuffix(source: string): T {
 		const oldText = this.replaceRange.substring(source);
 		const suffixLength = commonSuffixLength(oldText, this.newText);
 		return this.slice(this.replaceRange.deltaEnd(-suffixLength), new OffsetRange(0, this.newText.length - suffixLength));
 	}
-	normalizeEOL(_eol: "\n" | "\r\n" = "\n"): Self { return this as unknown as Self; }
-	removeCommonSuffixPrefix(source: string): Self { return this.removeCommonSuffixAndPrefix(source); }
+	normalizeEOL(eol: '\r\n' | '\n'): StringReplacement { return new StringReplacement(this.replaceRange, this.newText.replace(/\r\n|\n/g, eol)); }
+	removeCommonSuffixPrefix(source: string): StringReplacement {
+		const oldText = this.replaceRange.substring(source);
+		const prefixLength = commonPrefixLength(oldText, this.newText);
+		const suffixLength = Math.min(oldText.length - prefixLength, this.newText.length - prefixLength, commonSuffixLength(oldText, this.newText));
+		return new StringReplacement(new OffsetRange(this.replaceRange.start + prefixLength, this.replaceRange.endExclusive - suffixLength), this.newText.substring(prefixLength, this.newText.length - suffixLength));
+	}
 	toEdit(): StringEdit { return new StringEdit([this as unknown as StringReplacement]); }
 	toJson(): ISerializedStringReplacement { return { txt: this.newText, pos: this.replaceRange.start, len: this.replaceRange.length }; }
 	toString(): string { return `${this.replaceRange.toString()} -> ${JSON.stringify(this.newText)}`; }
@@ -139,9 +150,8 @@ export class StringEdit extends BaseStringEdit<StringReplacement, StringEdit> {
 		return result.compose(new StringEdit(batch.reverse()));
 	}
 
-	protected createNew(replacements: readonly StringReplacement[]): StringEdit { return new StringEdit(replacements); }
-	toJson(): ISerializedStringEdit { return this.replacements.map(replacement => replacement.toJson()); }
-	isNeutralOn(source: string): boolean { return this.replacements.every(replacement => replacement.isNeutralOn(source)); }
+	constructor(replacements: readonly StringReplacement[]) { super(replacements); }
+	protected _createNew(replacements: readonly StringReplacement[]): StringEdit { return new StringEdit(replacements); }
 }
 
 export type ISerializedStringEdit = ISerializedStringReplacement[];
@@ -154,13 +164,11 @@ export class StringReplacement extends BaseStringReplacement<StringReplacement> 
 	static fromJson(value: ISerializedStringReplacement): StringReplacement { return new StringReplacement(OffsetRange.ofStartAndLength(value.pos, value.len), value.txt); }
 
 	equals(other: StringReplacement): boolean { return this.replaceRange.equals(other.replaceRange) && this.newText === other.newText; }
-	tryJoinTouching(other: StringReplacement): StringReplacement { return new StringReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newText + other.newText); }
+	tryJoinTouching(other: StringReplacement): StringReplacement | undefined { return new StringReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newText + other.newText); }
 	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): StringReplacement { return new StringReplacement(range, rangeInReplacement?.substring(this.newText) ?? this.newText); }
-	normalizeEOL(eol: "\n" | "\r\n" = "\n"): StringReplacement { return new StringReplacement(this.replaceRange, this.newText.replace(/\r\n|\n/g, eol)); }
-	toJson(): ISerializedStringReplacement { return { txt: this.newText, pos: this.replaceRange.start, len: this.replaceRange.length }; }
 }
 
-export function applyEditsToRanges(sortedRanges: readonly OffsetRange[], edit: StringEdit): OffsetRange[] {
+export function applyEditsToRanges(sortedRanges: OffsetRange[], edit: StringEdit): OffsetRange[] {
 	const pending = [...sortedRanges];
 	const result: OffsetRange[] = [];
 	let delta = 0;
@@ -185,25 +193,29 @@ export function applyEditsToRanges(sortedRanges: readonly OffsetRange[], edit: S
 }
 
 export interface IEditData<T> { join(other: T): T | undefined; }
-export class VoidEditData implements IEditData<VoidEditData> { join(): VoidEditData { return this; } }
+export class VoidEditData implements IEditData<VoidEditData> { join(_other: VoidEditData): VoidEditData | undefined { return this; } }
 
-export class AnnotatedStringEdit<Data extends IEditData<Data>> extends BaseStringEdit<AnnotatedStringReplacement<Data>, AnnotatedStringEdit<Data>> {
+export class AnnotatedStringEdit<T extends IEditData<T>> extends BaseStringEdit<AnnotatedStringReplacement<T>, AnnotatedStringEdit<T>> {
 	static readonly empty = new AnnotatedStringEdit<never>([]);
-	static create<Data extends IEditData<Data>>(replacements: readonly AnnotatedStringReplacement<Data>[]): AnnotatedStringEdit<Data> { return new AnnotatedStringEdit(replacements); }
-	static single<Data extends IEditData<Data>>(replacement: AnnotatedStringReplacement<Data>): AnnotatedStringEdit<Data> { return new AnnotatedStringEdit([replacement]); }
-	static replace<Data extends IEditData<Data>>(range: OffsetRange, text: string, data: Data): AnnotatedStringEdit<Data> { return new AnnotatedStringEdit([new AnnotatedStringReplacement(range, text, data)]); }
-	static insert<Data extends IEditData<Data>>(offset: number, text: string, data: Data): AnnotatedStringEdit<Data> { return AnnotatedStringEdit.replace(OffsetRange.emptyAt(offset), text, data); }
-	static delete<Data extends IEditData<Data>>(range: OffsetRange, data: Data): AnnotatedStringEdit<Data> { return AnnotatedStringEdit.replace(range, "", data); }
-	protected createNew(replacements: readonly AnnotatedStringReplacement<Data>[]): AnnotatedStringEdit<Data> { return new AnnotatedStringEdit(replacements); }
-	toStringEdit(filter?: (replacement: AnnotatedStringReplacement<Data>) => boolean): StringEdit { return new StringEdit(this.replacements.filter(replacement => !filter || filter(replacement)).map(replacement => new StringReplacement(replacement.replaceRange, replacement.newText))); }
+	static create<T extends IEditData<T>>(replacements: readonly AnnotatedStringReplacement<T>[]): AnnotatedStringEdit<T> { return new AnnotatedStringEdit(replacements); }
+	static single<T extends IEditData<T>>(replacement: AnnotatedStringReplacement<T>): AnnotatedStringEdit<T> { return new AnnotatedStringEdit([replacement]); }
+	static replace<T extends IEditData<T>>(range: OffsetRange, text: string, data: T): AnnotatedStringEdit<T> { return new AnnotatedStringEdit([new AnnotatedStringReplacement(range, text, data)]); }
+	static insert<T extends IEditData<T>>(offset: number, text: string, data: T): AnnotatedStringEdit<T> { return AnnotatedStringEdit.replace(OffsetRange.emptyAt(offset), text, data); }
+	static delete<T extends IEditData<T>>(range: OffsetRange, data: T): AnnotatedStringEdit<T> { return AnnotatedStringEdit.replace(range, "", data); }
+	static compose<T extends IEditData<T>>(edits: readonly AnnotatedStringEdit<T>[]): AnnotatedStringEdit<T> { return edits.reduce((result, edit) => result.compose(edit), AnnotatedStringEdit.empty as AnnotatedStringEdit<T>); }
+	constructor(replacements: readonly AnnotatedStringReplacement<T>[]) { super(replacements); }
+	protected _createNew(replacements: readonly AnnotatedStringReplacement<T>[]): AnnotatedStringEdit<T> { return new AnnotatedStringEdit(replacements); }
+	toStringEdit(filter?: (replacement: AnnotatedStringReplacement<T>) => boolean): StringEdit { return new StringEdit(this.replacements.filter(replacement => !filter || filter(replacement)).map(replacement => new StringReplacement(replacement.replaceRange, replacement.newText))); }
 }
 
-export class AnnotatedStringReplacement<Data extends IEditData<Data>> extends BaseStringReplacement<AnnotatedStringReplacement<Data>> {
-	constructor(range: OffsetRange, newText: string, readonly data: Data) { super(range, newText); }
-	equals(other: AnnotatedStringReplacement<Data>): boolean { return this.replaceRange.equals(other.replaceRange) && this.newText === other.newText && this.data === other.data; }
-	tryJoinTouching(other: AnnotatedStringReplacement<Data>): AnnotatedStringReplacement<Data> | undefined { const data = this.data.join(other.data); return data === undefined ? undefined : new AnnotatedStringReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newText + other.newText, data); }
-	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): AnnotatedStringReplacement<Data> { return new AnnotatedStringReplacement(range, rangeInReplacement?.substring(this.newText) ?? this.newText, this.data); }
-	normalizeEOL(eol: "\n" | "\r\n" = "\n"): AnnotatedStringReplacement<Data> { return new AnnotatedStringReplacement(this.replaceRange, this.newText.replace(/\r\n|\n/g, eol), this.data); }
+export class AnnotatedStringReplacement<T extends IEditData<T>> extends BaseStringReplacement<AnnotatedStringReplacement<T>> {
+	static insert<T extends IEditData<T>>(offset: number, text: string, data: T): AnnotatedStringReplacement<T> { return new AnnotatedStringReplacement(OffsetRange.emptyAt(offset), text, data); }
+	static replace<T extends IEditData<T>>(range: OffsetRange, text: string, data: T): AnnotatedStringReplacement<T> { return new AnnotatedStringReplacement(range, text, data); }
+	static delete<T extends IEditData<T>>(range: OffsetRange, data: T): AnnotatedStringReplacement<T> { return new AnnotatedStringReplacement(range, '', data); }
+	constructor(range: OffsetRange, newText: string, readonly data: T) { super(range, newText); }
+	equals(other: AnnotatedStringReplacement<T>): boolean { return this.replaceRange.equals(other.replaceRange) && this.newText === other.newText && this.data === other.data; }
+	tryJoinTouching(other: AnnotatedStringReplacement<T>): AnnotatedStringReplacement<T> | undefined { const data = this.data.join(other.data); return data === undefined ? undefined : new AnnotatedStringReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newText + other.newText, data); }
+	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): AnnotatedStringReplacement<T> { return new AnnotatedStringReplacement(range, rangeInReplacement?.substring(this.newText) ?? this.newText, this.data); }
 }
 
 function areConcurrentInserts(left: OffsetRange, right: OffsetRange): boolean { return left.isEmpty && right.isEmpty && left.start === right.start; }

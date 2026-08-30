@@ -3,7 +3,7 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
+import { OwnedLanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/ownedLanguageFeatureProviderRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
 
@@ -24,8 +24,8 @@ export interface LanguageHoverProvider extends LanguageFeatureProviderMetadata {
 }
 
 /** Stores hover providers and exposes deterministic first-provider semantics. */
-export class HoverService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageHoverProvider>, private readonly resource?: URI) {
+export class LanguageHoverService extends Disposable {
+	constructor(private readonly model: TextModel, private readonly providers: OwnedLanguageFeatureProviderRegistry<LanguageHoverProvider>, private readonly resource?: URI) {
 		super();
 	}
 

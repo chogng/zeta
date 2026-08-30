@@ -7,7 +7,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
-import { type ITextModelService, type TextModelReference } from "../../../../../editor/common/services/resolverService.js";
+import { type ITextModelResourceService, type TextModelReference } from "../../../../../editor/common/services/textModelResourceService.js";
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../../platform/files/common/files.js";
 import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
@@ -49,7 +49,7 @@ test("bulk edit preview follows ordered create and text operations without mutat
 	}
 });
 
-class PreviewTextModelService implements ITextModelService {
+class PreviewTextModelService implements ITextModelResourceService {
 	readonly references: TextModelReference[] = [];
 	private readonly resources: ReadonlyMap<string, string>;
 	private readonly persistentResources: ReadonlySet<string>;

@@ -1,6 +1,6 @@
 import "./media/auxiliaryEditorPart.css";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
+import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";

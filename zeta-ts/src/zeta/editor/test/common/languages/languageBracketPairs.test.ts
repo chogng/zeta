@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
-import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
@@ -58,7 +58,7 @@ test("Language bracket pairs expose enclosing, next, and invalid bracket structu
 
 test("Language bracket pairs invalidate when the language configuration changes", () => {
 	using model = new TextModel("{}");
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using registration = configurations.registerMany([{
 		languageId: "typescript",
 		configuration: { brackets: [{ open: "{", close: "}" }] },
@@ -71,8 +71,8 @@ test("Language bracket pairs invalidate when the language configuration changes"
 	assert.deepEqual(bracketPairs.getLineBrackets(0), []);
 });
 
-function bracketConfigurations(): LanguageConfigurationRegistry {
-	const configurations = new LanguageConfigurationRegistry();
+function bracketConfigurations(): OwnedLanguageConfigurationContributions {
+	const configurations = new OwnedLanguageConfigurationContributions();
 	configurations.register("typescript", {
 		comments: { lineComment: "//", blockComment: { open: "/*", close: "*/" } },
 		brackets: [

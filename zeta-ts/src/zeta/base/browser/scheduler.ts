@@ -1,9 +1,5 @@
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
 
-export interface WindowIdleOptions {
-	readonly timeoutMs?: number;
-}
-
 interface ScheduledAnimationFrame {
 	readonly callback: () => void;
 	readonly priority: number;
@@ -101,34 +97,6 @@ export function modify(
 	callback: () => void,
 ): IDisposable {
 	return scheduleAtNextAnimationFrame(targetWindow, callback, -10_000);
-}
-
-/** Schedules cancellable work during an idle period with a timer fallback. */
-export function runWhenWindowIdle(
-	targetWindow: Window,
-	callback: (deadline: IdleDeadline) => void,
-	options: WindowIdleOptions = {},
-): IDisposable {
-	const idleWindow = targetWindow as Window & {
-		requestIdleCallback?: (
-			callback: IdleRequestCallback,
-			options?: IdleRequestOptions,
-		) => number;
-		cancelIdleCallback?: (handle: number) => void;
-	};
-	if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
-		const handle = idleWindow.requestIdleCallback(callback, {
-			timeout: options.timeoutMs,
-		});
-		return toDisposable(() => idleWindow.cancelIdleCallback?.(handle));
-	}
-
-	const started = targetWindow.performance.now();
-	const handle = targetWindow.setTimeout(() => callback({
-		didTimeout: options.timeoutMs !== undefined,
-		timeRemaining: () => Math.max(0, 50 - (targetWindow.performance.now() - started)),
-	}), options.timeoutMs ?? 0);
-	return toDisposable(() => targetWindow.clearTimeout(handle));
 }
 
 /** Schedules one cancellable timeout scoped to a particular browser window. */

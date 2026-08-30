@@ -4,7 +4,7 @@ import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horiz
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
 import { EditorOptions } from "../../../common/config/editorOptions.js";
-import { type EditorScrollPosition } from "../../../common/viewModel.js";
+import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 export type EditorScrollbarVisibility = "auto" | "visible" | "hidden";

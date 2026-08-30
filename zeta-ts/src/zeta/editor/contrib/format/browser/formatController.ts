@@ -1,9 +1,9 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { type IEditorWorkerClient } from "../../../common/services/editorWorker.js";
+import { type IVersionedEditorWorkerClient } from "../../../browser/services/versionedEditorWorkerClient.js";
 import { createFormattingCommand, FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
 
 export interface FormatControllerOptions {
@@ -16,7 +16,7 @@ export class FormatController extends Disposable {
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: FormatService, private readonly editorWorker: IEditorWorkerClient, private readonly languageId: string, options: FormatControllerOptions = {}) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: FormatService, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly languageId: string, options: FormatControllerOptions = {}) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
@@ -41,7 +41,7 @@ export class FormatController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.format", install: context => {
+registerTextEditorCapabilityContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new FormatService(context.model, context.languageFeaturesService.formattingProvider, context.options.input.resource));
 	const controller = context.register(new FormatController(context.view.element, context.viewport, context.selections, service, context.editorWorker, context.languageId, {

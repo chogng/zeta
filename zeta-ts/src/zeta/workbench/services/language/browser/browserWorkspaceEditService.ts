@@ -4,7 +4,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageTextDocumentEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
-import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/resolverService.js";
+import { type ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../common/workspaceEditService.js";
@@ -43,7 +43,7 @@ type UndoOperation = () => Promise<void>;
 export class BrowserWorkspaceEditService extends Disposable implements IWorkspaceEditService {
 	private readonly retainedFailedSaves = new Map<string, TextModelReference>();
 
-	constructor(private readonly models: ITextModelService, private readonly workingCopies: IWorkingCopyService, private readonly files: IFileService) {
+	constructor(private readonly models: ITextModelResourceService, private readonly workingCopies: IWorkingCopyService, private readonly files: IFileService) {
 		super();
 		this._register(toDisposable(() => {
 			for (const reference of this.retainedFailedSaves.values()) reference.dispose();

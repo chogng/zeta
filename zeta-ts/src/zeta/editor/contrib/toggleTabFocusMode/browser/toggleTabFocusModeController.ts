@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { type TabFocus } from "../../../browser/config/tabFocus.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
@@ -34,7 +34,7 @@ export class ToggleTabFocusModeController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.toggleTabFocusMode",
 	install: context => {
 		if (context.kind !== "text") return;

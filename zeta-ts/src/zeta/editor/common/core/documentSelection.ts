@@ -6,7 +6,7 @@ export interface DocumentPoint {
 	readonly offset: number;
 }
 
-export interface TextSelection {
+export interface DocumentTextSelection {
 	readonly kind: "text";
 	readonly anchor: DocumentPoint;
 	readonly head: DocumentPoint;
@@ -21,9 +21,9 @@ export interface AllSelection {
 	readonly kind: "all";
 }
 
-export type DocumentSelection = TextSelection | NodeSelection | AllSelection;
+export type DocumentSelection = DocumentTextSelection | NodeSelection | AllSelection;
 
-export function textSelection(anchor: DocumentPoint, head = anchor): TextSelection {
+export function textSelection(anchor: DocumentPoint, head = anchor): DocumentTextSelection {
 	validatePoint(anchor);
 	validatePoint(head);
 	return Object.freeze({ kind: "text", anchor: Object.freeze({ ...anchor }), head: Object.freeze({ ...head }) });

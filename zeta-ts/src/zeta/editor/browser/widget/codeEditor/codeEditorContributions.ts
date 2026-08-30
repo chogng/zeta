@@ -1,9 +1,10 @@
 import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { runWhenWindowIdle, scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
+import { runWhenWindowIdle } from '../../../../base/browser/dom.js';
+import { scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type IInstantiationService, type SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { type IInstantiationService, type ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 import { type EditorView } from '../../view.js';
 import { type EditorViewport } from '../../view.js';
 import { type CodeEditorWidget } from './codeEditorWidget.js';
@@ -26,7 +27,7 @@ export interface CodeEditorContribution extends IDisposable {}
 
 export interface CodeEditorContributionDescription {
 	readonly id: string;
-	readonly descriptor: SyncDescriptor<CodeEditorContribution>;
+	readonly descriptor: ServiceConstructionDescriptor<CodeEditorContribution>;
 	readonly instantiation: CodeEditorContributionInstantiation;
 }
 
@@ -86,7 +87,7 @@ export class CodeEditorContributions extends Disposable {
 
 		const targetWindow = getWindow(context.viewport.element);
 		this._register(scheduleAtNextAnimationFrame(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.AfterFirstRender)));
-		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.Eventually), { timeoutMs: 5_000 }));
+		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.Eventually), 5_000));
 	}
 
 	/** Adds another contribution group that shares this widget's instantiation phases and lifetime. */

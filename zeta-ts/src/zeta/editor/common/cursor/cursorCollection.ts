@@ -1,12 +1,14 @@
 import { Position } from "../core/position.js";
+import { Range } from '../core/range.js';
 import { type TextSelectionOffsets } from '../commands/editorEditCommand.js';
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import { Selection } from '../core/selection.js';
 import { SelectionSet } from './selectionSet.js';
 import { normalizeTextLineEndings } from '../core/textChange.js';
-import { type TextEdit } from '../core/editOperation.js';
+
 import { TextModel } from '../model/textModel.js';
 import { Cursor } from './oneCursor.js';
+import { type TextEdit } from '../languages.js';
 
 export class CursorCollection extends Disposable {
 	private readonly resources = this._register(new DisposableStore());
@@ -36,8 +38,9 @@ export class CursorCollection extends Disposable {
 	public static calculateResultLength(model: TextModel, edits: readonly TextEdit[]): number {
 		let length = model.createSnapshot().length;
 		for (const edit of edits) {
-			const startOffset = model.offsetAt(edit.range.getStartPosition());
-			const endOffset = model.offsetAt(edit.range.getEndPosition());
+			const range = Range.lift(edit.range);
+			const startOffset = model.offsetAt(range.getStartPosition());
+			const endOffset = model.offsetAt(range.getEndPosition());
 			length += normalizeTextLineEndings(edit.text).length - (endOffset - startOffset);
 		}
 		return length;

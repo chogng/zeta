@@ -1,5 +1,5 @@
 import "./media/part.css";
-import { type IDimension } from "../../base/browser/geometry.js";
+import { type IDimension } from "../../base/browser/dom.js";
 import { Emitter, type Event } from "../../base/common/event.js";
 import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { h } from "../../base/browser/dom.js";

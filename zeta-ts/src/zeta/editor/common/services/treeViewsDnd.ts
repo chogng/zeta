@@ -1,33 +1,35 @@
-/** Stores asynchronous tree drag data until one drop target consumes it. */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 export interface ITreeViewsDnDService<T> {
 	readonly _serviceBrand: undefined;
 
-	removeDragOperationTransfer(identifier: string | undefined): Promise<T | undefined> | undefined;
-	addDragOperationTransfer(identifier: string, transferPromise: Promise<T | undefined>): void;
+	removeDragOperationTransfer(uuid: string | undefined): Promise<T | undefined> | undefined;
+	addDragOperationTransfer(uuid: string, transferPromise: Promise<T | undefined>): void;
 }
 
-/**
- * Coordinates one-renderer tree drag operations without exposing their data
- * through the browser drag payload.
- */
 export class TreeViewsDnDService<T> implements ITreeViewsDnDService<T> {
-	readonly _serviceBrand = undefined;
-	private readonly dragOperations = new Map<string, Promise<T | undefined>>();
+	_serviceBrand: undefined;
+	private _dragOperations: Map<string, Promise<T | undefined>> = new Map();
 
-	removeDragOperationTransfer(identifier: string | undefined): Promise<T | undefined> | undefined {
-		if (!identifier) return undefined;
-		const operation = this.dragOperations.get(identifier);
-		if (!operation) return undefined;
-		this.dragOperations.delete(identifier);
-		return operation;
+	removeDragOperationTransfer(uuid: string | undefined): Promise<T | undefined> | undefined {
+		if ((uuid && this._dragOperations.has(uuid))) {
+			const operation = this._dragOperations.get(uuid);
+			this._dragOperations.delete(uuid);
+			return operation;
+		}
+		return undefined;
 	}
 
-	addDragOperationTransfer(identifier: string, transferPromise: Promise<T | undefined>): void {
-		this.dragOperations.set(identifier, transferPromise);
+	addDragOperationTransfer(uuid: string, transferPromise: Promise<T | undefined>): void {
+		this._dragOperations.set(uuid, transferPromise);
 	}
 }
 
-/** Identifies tree data retained outside the browser drag payload. */
+
 export class DraggedTreeItemsIdentifier {
-	constructor(readonly identifier: string) {}
+
+	constructor(readonly identifier: string) { }
 }

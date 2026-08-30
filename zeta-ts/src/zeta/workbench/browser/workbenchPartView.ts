@@ -1,5 +1,6 @@
 import { h } from "../../base/browser/dom.js";
-import { Dimension, type IRectangle } from "../../base/browser/geometry.js";
+import { Dimension } from "../../base/browser/dom.js";
+import { type IPositionedRectangle } from "../../base/browser/geometry.js";
 import type { Event } from "../../base/common/event.js";
 import type { WorkbenchPartId } from "../services/layout/common/workbenchLayoutService.js";
 import type { WorkbenchPart } from "./part.js";
@@ -65,7 +66,7 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 		return this.part.onDidChangeConstraints;
 	}
 
-	layout(bounds: IRectangle): void {
+	layout(bounds: IPositionedRectangle): void {
 		this.part.layout(new Dimension(
 			Math.max(0, bounds.width - this.frameInsets.left - this.frameInsets.right),
 			Math.max(0, bounds.height - this.frameInsets.top - this.frameInsets.bottom),

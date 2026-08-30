@@ -17,7 +17,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { Dimension } = await import("../../../base/browser/geometry.js");
+const { Dimension } = await import("../../../base/browser/dom.js");
 const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const { WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");

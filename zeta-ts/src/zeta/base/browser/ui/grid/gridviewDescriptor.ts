@@ -1,4 +1,4 @@
-import { type IRectangle } from "../../geometry.js";
+import { type IPositionedRectangle } from "../../geometry.js";
 import { type Event } from "../../../common/event.js";
 import { isFiniteNumber } from "../../../common/numbers.js";
 import { type SplitViewLayoutPriority, type SplitViewOrientation, type SplitViewSizing } from "../splitview/splitview.js";
@@ -13,7 +13,7 @@ export interface IView {
 	/** Whether the view can snap closed along its primary Grid axis. */
 	readonly snap?: boolean;
 	readonly onDidChange?: Event<void>;
-	layout(bounds: IRectangle): void;
+	layout(bounds: IPositionedRectangle): void;
 	setVisible?(visible: boolean): void;
 }
 

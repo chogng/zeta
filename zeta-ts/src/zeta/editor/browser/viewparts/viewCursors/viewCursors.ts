@@ -3,17 +3,19 @@ import { h, reset } from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
-import { CursorChangeReason, type CursorsController } from '../../../common/cursor/cursor.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { type Range } from '../../../common/core/range.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';
-import { type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
+import { type TrackedRange } from '../../../common/model/trackedRange.js';
+import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 import { ViewPartRows } from '../../view/viewLayer.js';
 import { CursorPlurality, ViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';
+import { TrackedRangeStickiness } from '../../../common/model.js';
 
 export interface ViewCursorsOptions extends ViewCursorOptions {
 	readonly host: HTMLElement;
@@ -65,7 +67,7 @@ export class ViewCursors extends DynamicViewOverlay {
 	}
 
 	public setCompositionRange(range: Range | undefined): void {
-		const next = range ? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges) : undefined;
+		const next = range ? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges) : undefined;
 		this.compositionRange?.dispose();
 		this.compositionRange = next;
 		this.renderNow(this.context.renderingContext);
@@ -161,7 +163,7 @@ export class ViewCursors extends DynamicViewOverlay {
 	private shouldAnimateMovement(reason: CursorChangeReason, selectionCount: number): boolean {
 		if (this.smoothCaretAnimation === 'off' || selectionCount !== this.previousSelectionCount) return false;
 		if (this.smoothCaretAnimation === 'on') return true;
-		return reason === CursorChangeReason.Explicit || reason === CursorChangeReason.CursorOperation || reason === CursorChangeReason.CursorUndo;
+		return reason === CursorChangeReason.Explicit;
 	}
 }
 

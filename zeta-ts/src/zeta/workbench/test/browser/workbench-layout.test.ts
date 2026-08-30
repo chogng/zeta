@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { Dimension } = await import("../../../base/browser/geometry.js");
+const { Dimension } = await import("../../../base/browser/dom.js");
 const { bindResizableLayout } = await import("../../../base/browser/ui/resizable/resizable.js");
 const { lxiconsLibrary } = await import("../../../base/common/lxiconsLibrary.js");
 const { StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
@@ -84,7 +84,7 @@ const {
 const { CommandService } = await import(
 	"../../../workbench/services/commands/common/commandService.js"
 );
-const { ServiceContainer, SyncDescriptor } = await import(
+const { ServiceContainer, ServiceConstructionDescriptor } = await import(
 	"../../../platform/instantiation/common/instantiation.js"
 );
 type WorkbenchPartId =
@@ -1014,7 +1014,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	disposables.add(registry.registerViews("zeta.panel.terminal", [{
 		id: "zeta.terminal",
 		title: "Terminal",
-		ctorDescriptor: new SyncDescriptor(TestPanelView),
+		ctorDescriptor: new ServiceConstructionDescriptor(TestPanelView),
 	}]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const commands = disposables.add(new CommandService(new ServiceContainer()));
@@ -1329,8 +1329,8 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 		isDefault: true,
 	}));
 	disposables.add(registry.registerViews("zeta.test.projection", [
-		{ id: "zeta.test.content", title: "Content", ctorDescriptor: new SyncDescriptor(ContentProjectionView) },
-		{ id: "zeta.test.actions", title: "Actions", ctorDescriptor: new SyncDescriptor(ActionsProjectionView) },
+		{ id: "zeta.test.content", title: "Content", ctorDescriptor: new ServiceConstructionDescriptor(ContentProjectionView) },
+		{ id: "zeta.test.actions", title: "Actions", ctorDescriptor: new ServiceConstructionDescriptor(ActionsProjectionView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({

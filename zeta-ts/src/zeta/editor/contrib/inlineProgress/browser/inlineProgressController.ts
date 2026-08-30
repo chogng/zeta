@@ -1,5 +1,5 @@
 import "./media/inlineProgress.css";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
 import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { observableValue } from "../../../../base/common/observable.js";
@@ -32,7 +32,7 @@ export class InlineProgressController extends Disposable {
 	}
 }
 
-registerEditorContribution({
+registerTextEditorCapabilityContribution({
 	id: "editor.contrib.inlineProgress",
 	install: context => {
 		if (context.kind !== "text") return;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
+import { OwnedLanguageConfigurationContributions } from "../../../../common/languages/ownedLanguageConfigurationContributions.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { SelectionSet } from "../../../../common/cursor/selectionSet.js";
@@ -33,7 +33,7 @@ test("Line comment shortcut toggles current language comments through one editor
 	using selections = new CursorsController(model, SelectionSet.single(
 		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (4) + 1)),
 	));
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using registration = configurations.register("typescript", {
 		comments: { lineComment: "//" },
 	});
@@ -69,7 +69,7 @@ test("Line comment shortcut ignores unsupported languages and invalid wiring", (
 	using other = new TextModel("beta");
 	using selections = new CursorsController(model, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
 	using otherSelections = new CursorsController(other, SelectionSet.single(Selection.fromPositions(new Position((0) + 1, (0) + 1))));
-	using configurations = new LanguageConfigurationRegistry();
+	using configurations = new OwnedLanguageConfigurationContributions();
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

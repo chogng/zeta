@@ -1,8 +1,9 @@
-import type { JsonSchema, JsonSchemaSnippet } from '../../../base/common/jsonSchema.js';
+import type { IJSONSchemaSnippet, JsonSchema } from '../../../base/common/jsonSchema.js';
 import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { EDITOR_FONT_DEFAULTS } from './fontInfo.js';
 import { diffEditorDefaultOptions } from './diffEditor.js';
-import { editorOptionsRegistry, EditorLineWrapping, type EditorOptionSchema } from './editorOptions.js';
+import { editorOptionsRegistry, EditorLineWrapping } from './editorOptions.js';
+import type { IConfigurationPropertySchema } from '../../../platform/configuration/common/configurationRegistry.js';
 
 /** The common configuration node shape used by VS Code settings tooling. */
 export interface EditorConfigurationNode {
@@ -336,7 +337,7 @@ export function isDiffEditorConfigurationKey(key: string): boolean {
 }
 
 /** Adds host-provided font snippets to the editor font-family setting. */
-export async function registerEditorFontConfigurations(getFontSnippets: () => Promise<readonly JsonSchemaSnippet[]>): Promise<void> {
+export async function registerEditorFontConfigurations(getFontSnippets: () => Promise<IJSONSchemaSnippet[]>) {
 	const snippets = await getFontSnippets();
 	const fontFamilySchema = properties['editor.fontFamily'];
 	if (!fontFamilySchema) return;
@@ -344,7 +345,7 @@ export async function registerEditorFontConfigurations(getFontSnippets: () => Pr
 	cachedEditorConfigurationKeys = undefined;
 }
 
-function isConfigurationPropertySchema(schema: EditorOptionSchema): schema is Exclude<EditorOptionSchema, Readonly<Record<string, JsonSchema>>> {
+function isConfigurationPropertySchema(schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema }): schema is IConfigurationPropertySchema {
 	return typeof schema === 'object' && (
 		schema.type !== undefined ||
 		schema.anyOf !== undefined ||

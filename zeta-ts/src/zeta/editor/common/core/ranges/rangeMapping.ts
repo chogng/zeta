@@ -24,7 +24,7 @@ export class RangeMapping {
 export class SingleRangeMapping {
 	constructor(readonly original: Range, readonly modified: Range) {}
 	reverse(): SingleRangeMapping { return new SingleRangeMapping(this.modified, this.original); }
-	toString(): string { return `${this.original.toString()} -> ${this.modified.toString()}`; }
+	toString() { return `${this.original.toString()} -> ${this.modified.toString()}`; }
 }
 
 export class PositionOrRange {

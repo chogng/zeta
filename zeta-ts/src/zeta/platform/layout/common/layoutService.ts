@@ -1,4 +1,4 @@
-import type { IDimension } from "../../../base/browser/geometry.js";
+import type { IDimension } from "../../../base/browser/dom.js";
 import type { Event } from "../../../base/common/event.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 

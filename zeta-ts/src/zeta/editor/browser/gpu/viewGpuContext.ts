@@ -43,7 +43,7 @@ export class ViewGpuContext extends Disposable {
 		if (!ownerWindow) throw new ReferenceError('WebGPU editor rendering requires a browser window');
 		this.ownerWindow = ownerWindow;
 		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
-		this.decorationCssRuleExtractor = this._register(new DecorationCssRuleExtractor(options.host));
+		this.decorationCssRuleExtractor = this._register(new DecorationCssRuleExtractor());
 		this.currentDevicePixelRatio = this.pixelRatio.value;
 		this.canvas = h(options.host.ownerDocument, 'canvas');
 		this.canvas.className = 'stanza-editor-gpu-canvas';

@@ -1,7 +1,6 @@
 import { IntervalTimer, type IntervalTimerContext } from "../common/async.js";
 import { Emitter, type Event as BaseEvent } from "../common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
-import { runWhenWindowIdle } from "./scheduler.js";
 import { type BrowserWindow, getWindows, isWindow, mainWindow } from "./window.js";
 
 type DomListenerOptions = boolean | AddEventListenerOptions;
@@ -19,9 +18,86 @@ const DOCUMENT_NODE_TYPE = 9;
 const ELEMENT_NODE_TYPE = 1;
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
-export { runAtThisOrScheduleAtNextAnimationFrame, runWhenWindowIdle, scheduleAtNextAnimationFrame } from "./scheduler.js";
-export { Dimension, getDomNodePagePosition } from './geometry.js';
+export { runAtThisOrScheduleAtNextAnimationFrame, scheduleAtNextAnimationFrame } from "./scheduler.js";
 export { getWindowById, getWindowId } from './window.js';
+
+export interface IDimension {
+	readonly width: number;
+	readonly height: number;
+}
+
+export class Dimension implements IDimension {
+	static readonly Zero = new Dimension(0, 0);
+	static readonly None = Dimension.Zero;
+
+	constructor(readonly width: number, readonly height: number) {}
+
+	with(width = this.width, height = this.height): Dimension {
+		return width === this.width && height === this.height ? this : new Dimension(width, height);
+	}
+
+	static is(value: unknown): value is IDimension {
+		return typeof value === "object" && value !== null && typeof (value as IDimension).width === "number" && typeof (value as IDimension).height === "number";
+	}
+
+	static lift(value: IDimension): Dimension {
+		return value instanceof Dimension ? value : new Dimension(value.width, value.height);
+	}
+
+	static equals(left: IDimension | undefined, right: IDimension | undefined): boolean {
+		return left === right || Boolean(left && right && left.width === right.width && left.height === right.height);
+	}
+}
+
+export interface IDomNodePagePosition extends IDimension {
+	readonly left: number;
+	readonly top: number;
+}
+
+export function getClientArea(element: HTMLElement, defaultValue?: Dimension, fallbackElement?: HTMLElement): Dimension {
+	const targetWindow = getWindow(element);
+	if (element !== targetWindow.document.body) return new Dimension(element.clientWidth, element.clientHeight);
+	const viewport = targetWindow.visualViewport;
+	if (viewport) return new Dimension(viewport.width, viewport.height);
+	if (targetWindow.innerWidth && targetWindow.innerHeight) return new Dimension(targetWindow.innerWidth, targetWindow.innerHeight);
+	const body = targetWindow.document.body;
+	if (body.clientWidth && body.clientHeight) return new Dimension(body.clientWidth, body.clientHeight);
+	const documentElement = targetWindow.document.documentElement;
+	if (documentElement.clientWidth && documentElement.clientHeight) return new Dimension(documentElement.clientWidth, documentElement.clientHeight);
+	if (fallbackElement) return getClientArea(fallbackElement, defaultValue);
+	if (defaultValue) return defaultValue;
+	throw new Error("Unable to determine browser client area");
+}
+
+export function getDomNodePagePosition(element: HTMLElement): IDomNodePagePosition {
+	const bounds = element.getBoundingClientRect();
+	const targetWindow = getWindow(element);
+	return {
+		left: bounds.left + targetWindow.scrollX,
+		top: bounds.top + targetWindow.scrollY,
+		width: bounds.width,
+		height: bounds.height,
+	};
+}
+
+/** Schedules cancellable work during an idle period with a timer fallback. */
+export function runWhenWindowIdle(targetWindow: Window | typeof globalThis, callback: (idle: IdleDeadline) => void, timeout?: number): IDisposable {
+	const idleWindow = targetWindow as typeof globalThis & {
+		requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+		cancelIdleCallback?: (handle: number) => void;
+	};
+	if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+		const handle = idleWindow.requestIdleCallback(callback, { timeout });
+		return toDisposable(() => idleWindow.cancelIdleCallback?.(handle));
+	}
+
+	const started = targetWindow.performance.now();
+	const handle = targetWindow.setTimeout(() => callback({
+		didTimeout: timeout !== undefined,
+		timeRemaining: () => Math.max(0, 50 - (targetWindow.performance.now() - started)),
+	}), timeout ?? 0);
+	return toDisposable(() => (targetWindow.clearTimeout as (value: typeof handle) => void)(handle));
+}
 
 /** Computes a value during window idle time, or synchronously when first requested. */
 export class WindowIdleValue<T> implements IDisposable {
@@ -141,6 +217,24 @@ export function getWindow(source?: Node | Document | UIEvent | Window | null): B
 
 export function getDocument(source?: Node | Document | UIEvent | Window | null): Document {
 	return getWindow(source).document;
+}
+
+export function $<T extends HTMLElement>(description: string, attrs?: { [key: string]: any }, ...children: Array<Node | string>): T {
+	const match = /^([a-zA-Z][\w-]*)?(?:#([\w-]+))?((?:\.[\w-]+)*)$/.exec(description);
+	if (!match) throw new Error(`Invalid DOM description '${description}'`);
+	const result = getActiveDocument().createElement(match[1] || 'div') as T;
+	if (match[2]) result.id = match[2];
+	if (match[3]) result.className = match[3].slice(1).replace(/\./g, ' ');
+	for (const [name, value] of Object.entries(attrs ?? {})) {
+		if (value === undefined) continue;
+		if (/^on\w+$/.test(name)) {
+			(result as unknown as Record<string, unknown>)[name] = value;
+		} else if (name !== 'selected' || value) {
+			result.setAttribute(name, String(value));
+		}
+	}
+	result.append(...children);
+	return result;
 }
 
 /** Keeps a CSS size on a stable whole-screen-pixel boundary. */

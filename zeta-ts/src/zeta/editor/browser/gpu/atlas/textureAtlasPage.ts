@@ -1,23 +1,25 @@
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { NKeyMap } from '../../../../base/common/map.js';
-import { type IGlyphRasterizer, type IRasterizedGlyph } from '../raster/raster.js';
-import { type IReadableTextureAtlasPage, type ITextureAtlasAllocator, type ITextureAtlasPageGlyph } from './atlas.js';
+import { type IStyledGlyphRasterizer, type IStyledRasterizedGlyph } from '../raster/raster.js';
+import { type IGpuReadableTextureAtlasPage, type IGpuTextureAtlasAllocator, type IGpuTextureAtlasPageGlyph, type ITextureAtlasAllocator } from './atlas.js';
 import { TextureAtlasShelfAllocator } from './textureAtlasShelfAllocator.js';
 import { TextureAtlasSlabAllocator } from './textureAtlasSlabAllocator.js';
 
-export type AllocatorType = 'shelf' | 'slab' | ((canvas: HTMLCanvasElement, textureIndex: number) => ITextureAtlasAllocator);
+export type AllocatorType = 'shelf' | 'slab' | ((canvas: OffscreenCanvas, textureIndex: number) => ITextureAtlasAllocator);
 
-export class TextureAtlasPage extends Disposable implements IReadableTextureAtlasPage {
+export type GpuAllocatorType = 'shelf' | 'slab' | ((canvas: HTMLCanvasElement, textureIndex: number) => IGpuTextureAtlasAllocator);
+
+export class TextureAtlasPage extends Disposable implements IGpuReadableTextureAtlasPage {
 	public static readonly maximumGlyphCount = 2_500;
 	public readonly source: HTMLCanvasElement;
-	public readonly glyphs = new Set<Readonly<ITextureAtlasPageGlyph>>();
-	private readonly allocator: ITextureAtlasAllocator;
-	private readonly glyphMap = new NKeyMap<Readonly<ITextureAtlasPageGlyph>, [string, string, string]>();
+	public readonly glyphs = new Set<Readonly<IGpuTextureAtlasPageGlyph>>();
+	private readonly allocator: IGpuTextureAtlasAllocator;
+	private readonly glyphMap = new NKeyMap<Readonly<IGpuTextureAtlasPageGlyph>, [string, string, string]>();
 	private currentVersion = 0;
 	private mutableUsedArea = { left: 0, top: 0, right: 0, bottom: 0 };
 
-	constructor(host: HTMLElement, public readonly index: number, pageSize: number, allocatorType: AllocatorType = 'slab') {
+	constructor(host: HTMLElement, public readonly index: number, pageSize: number, allocatorType: GpuAllocatorType = 'slab') {
 		super();
 		this.source = h(host.ownerDocument, 'canvas');
 		this.source.width = pageSize;
@@ -41,7 +43,7 @@ export class TextureAtlasPage extends Disposable implements IReadableTextureAtla
 		return this.mutableUsedArea;
 	}
 
-	public getGlyph(rasterizer: IGlyphRasterizer, chars: string, styleKey: string, rasterize: () => IRasterizedGlyph): Readonly<ITextureAtlasPageGlyph> | undefined {
+	public getGlyph(rasterizer: IStyledGlyphRasterizer, chars: string, styleKey: string, rasterize: () => IStyledRasterizedGlyph): Readonly<IGpuTextureAtlasPageGlyph> | undefined {
 		const existing = this.glyphMap.get(rasterizer.cacheKey, styleKey, chars);
 		if (existing) return existing;
 		if (this.glyphs.size >= TextureAtlasPage.maximumGlyphCount) return undefined;

@@ -22,7 +22,7 @@ import {
 } from "../../../../../../workbench/common/contributions.js";
 import {
 	DialogService,
-} from "../../../../../../workbench/services/dialogs/common/dialogService.js";
+} from "../../../../../../workbench/services/dialogs/common/dialog.js";
 
 class TestDialogHandler implements IDialogHandler {
 	readonly calls: Array<{

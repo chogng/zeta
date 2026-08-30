@@ -1,6 +1,6 @@
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
-import type { IDimension } from '../../../../base/browser/geometry.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';

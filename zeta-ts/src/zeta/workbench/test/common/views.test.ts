@@ -5,7 +5,7 @@ import {
 	ContextKeyService,
 } from "../../../platform/contextkey/common/contextkey.js";
 import {
-	SyncDescriptor,
+	ServiceConstructionDescriptor,
 } from "../../../platform/instantiation/common/instantiation.js";
 import {
 	type IView,
@@ -147,7 +147,7 @@ function testView(
 	return {
 		id,
 		title,
-		ctorDescriptor: new SyncDescriptor(TestView, {
+		ctorDescriptor: new ServiceConstructionDescriptor(TestView, {
 			staticArguments: [id],
 		}),
 		...options,

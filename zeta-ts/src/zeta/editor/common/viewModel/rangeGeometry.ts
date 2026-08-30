@@ -1,6 +1,6 @@
 import { type Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
-import { type EditorLineRange } from "../viewModel.js";
+import { type EditorLineRange } from "./editorViewportContracts.js";
 import { type TextMeasurer } from "./textMeasurer.js";
 
 export interface RangeGeometryEntry<T> {

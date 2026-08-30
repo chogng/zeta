@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { CodeEditorContributionInstantiation } = await import("../../../browser/widget/codeEditor/codeEditorContributions.js");
-const { createServiceIdentifier, IInstantiationService, ServiceContainer, SyncDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { createServiceIdentifier, IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
 
@@ -70,7 +70,7 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 
 	editor.layout({ width: 320, height: 40 });
 
-	assert.equal(editor.element.querySelector(".stanza-editor-line.active"), null);
+	assert.equal(editor.element.querySelector(".view-line.active"), null);
 	assert.ok(editor.element.querySelector(".stanza-editor-caret"));
 	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-lines").style.top, "20px");
 	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-lines").style.transform, "");
@@ -143,12 +143,12 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 			{
 				id: "test.eager",
 				instantiation: CodeEditorContributionInstantiation.Eager,
-				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId, IInstantiationService] }),
+				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId, IInstantiationService] }),
 			},
 			{
 				id: "test.lazy",
 				instantiation: CodeEditorContributionInstantiation.Lazy,
-				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId, IInstantiationService] }),
+				descriptor: new ServiceConstructionDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId, IInstantiationService] }),
 			},
 		],
 	});
