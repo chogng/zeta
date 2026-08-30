@@ -60,14 +60,14 @@ flowchart TD
     C -->|"disconnected"| D["Catalog discovery：Connect"]
     PM -->|"standalone activation"| M["MCP runtime：session / list_tools / call_tool"]
     PM --> B
-    U["User / Workspace MCP configuration"] --> M
+    U["User / Directory MCP configuration"] --> M
     B --> M
     M --> T["Tool Registry / Core / Agent"]
     PO --> O["Corresponding contribution consumer"]
 ```
 
 图中的连线表示合法的声明与运行时组合，不表示安装 Plugin 后会自动执行后续阶段。Plugin 可以没有
-Connector；Plugin 或 User/Workspace 也可以独立声明 MCP server。只有“该 MCP server 需要一个已连接的
+Connector；Plugin 或 User/Directory 也可以独立声明 MCP server。只有“该 MCP server 需要一个已连接的
 外部账号”时，才经过 Connector 路径；该路径只有在 connected 状态下才能发布 ready binding。
 当前 binding 使用 MCP server declaration，但 Connector domain 不拥有 MCP transport/session。
 

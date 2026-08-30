@@ -2,7 +2,7 @@
 
 > 本 README 是低层 LSP 客户端运行时的 crate-level canonical contract。跨 crate 的产品语义、
 > 宿主职责和演进阶段见 [`docs/lsp.md`](../../docs/lsp.md)；Desktop 编辑器展示契约见
-> [`zeta-editor`](../editor/README.md)，产品级启停与路由见
+> [`zeta-editor`](../../app/editor/README.md)，产品级启停与路由见
 > [`zeta-lsp-manager`](../lsp-manager/README.md)，server 发现与 resolved command 见
 > [`zeta-lsp-server-provider`](../lsp-server-provider/README.md)。
 
@@ -100,7 +100,7 @@ Transport 使用 LSP stdio 的 `Content-Length` framing。Header 最多 16 KiB�
 
 宿主必须：
 
-- 在启动前决定 executable trust、workspace root、environment 与 sandbox；执行包内 JavaScript
+- 在启动前决定 executable identity、目录 Grant、Environment 与 sandbox；执行包内 JavaScript
   server 时应清空环境后只恢复明确 allowlist，不得继承 `NODE_OPTIONS` 或 `NODE_PATH`；
 - 让 `LanguageServerHost::on_event` 快速返回，把 UI 工作排入自己的 event loop；
 - 为 `workspace_configuration` 返回与请求项数量和顺序完全一致的结果；

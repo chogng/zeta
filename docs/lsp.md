@@ -29,7 +29,7 @@ route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执�
 | 请求取消与冷暖延迟观测 | ✅ in-flight task cancellation；按 request kind/server incarnation/config/service generation 记录 content-free outcome | `zeta-lsp-manager` + App Server metrics sink |
 | Semantic Tokens 与文档特性 | ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 已适配现有 Editor contract | `zeta-lsp-manager` + Desktop |
 | push / document pull diagnostics | ✅ 共用 freshness 校验和 Problems 数据入口；pull full report 替换当前快照，unchanged report 保留已有结果 | `zeta-lsp-manager` + App Server + Desktop |
-| workspace diagnostics | ✅ 调用 `workspace/diagnostic`，App Server 通过 Workspace authority 读取未打开文件并转换范围，Desktop 将完整结果写入同一 Problems repository | `zeta-lsp-manager` + App Server + Desktop |
+| workspace diagnostics | ✅ 调用标准 `workspace/diagnostic`，App Server 通过目录 Grant 读取未打开文件并转换范围，Desktop 将完整结果写入同一 Problems repository | `zeta-lsp-manager` + App Server + Desktop |
 | 日志、show message 与 work-done progress | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output | App Server + Desktop Workbench |
 | 显式替换服务器并恢复文档 | ✅ 新实例重放成功后切换 route/incarnation | 宿主需暂存 replacement 早期事件 |
 | 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、resolver 校验与热重配 | 扩展安装 provider/UI |
@@ -106,7 +106,7 @@ Git object identity 或 durable product sequence。
 `zeta-editor` 保持纯 presentation，不依赖 provider、`zeta-lsp` 或 manager。Desktop host 组合 provider、
 editor 和 `zeta-lsp-manager`，只在 adapter 中转换文档与事件；其他 editor runtime host 可以消费相同系统语义，
 但不需要复用 Desktop paint types。
-App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC boundary；它只组合 provider、配置、
+App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary；Editor 仍拥有当前 document text 和 revision。App Server 只组合 provider、配置、
 `zeta-lsp-manager` 和协议 DTO，不复制 LSP framing、process supervisor 或 Editor presentation。
 
 ## 3. 可靠性与失败语义
@@ -183,8 +183,8 @@ App Server 已经是 Desktop 的 workspace/document authority 与 LSP IPC bounda
 
 ### 潜在方向
 
-远程 workspace 或共享 daemon 出现后，可以把 server execution 放到 App Server 后方；前置条件是
-定义 workspace authority、document content transport、cancellation、incarnation、privacy 和
+远程 Environment 或共享 daemon 出现后，可以把 server execution 放到 App Server 后方；前置条件是
+定义 `Dir` Grant、document content transport、cancellation、incarnation、privacy 和
 disconnect recovery。当前本地 editor request 不承担这套远程成本。
 
 长期不变量是：协议运行时不拥有编辑器文档，编辑器组件不解析 LSP，宿主不把旧文档版本的结果

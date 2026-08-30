@@ -174,5 +174,5 @@ env dir remove <env-id> <dir-id>
 - 每个 Grant 都有明确主体、目录范围、Permission、来源和撤销生命周期；
 - `AuthorizationDecision` 是一次检查结果，不保存为 Grant；
 - 来源配置不能给自身扩权；
-- Rust 后端中的 Workspace 只保留在 Cargo、LSP、编辑器或外部标准确实这样命名的地方；
-- TypeScript 消费方的命名整改按当前决定暂停，不在本文承诺完成。
+- Workspace 只表示编辑器窗口、多根 folder 集合、配置作用域、Cargo 或外部标准中的同名概念；
+- 后端执行位置使用 Environment，执行范围使用 `cwd`、`dirs` 和 `grants`，不能再借用 Workspace 表达。

@@ -32,8 +32,8 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 
 | 客户端需求 | 使用方式 | 关键保证 |
 | --- | --- | --- |
-| 创建一次工作 | 创建 Session，再创建 Thread 并启动 Turn | 产品身份与持久化语义来自统一协议 |
-| 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 持久化停止 Session，并中断其所有活动子 Turn；仅断开连接不会停止 Session |
+| 创建一次工作 | `session/create` 创建根 Thread 并返回按 `session_id` 聚合的 Session 视图，随后在该 Thread 上启动 Turn | 持久化身份与顺序始终属于 Thread |
+| 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 枚举同一 `session_id` 的 Thread，持久化各 Thread 的停止事实并中断活动 Turn；不创建 Session 状态 |
 | 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
 | 同步 Marketplace 安装状态 | 同一 profile daemon 写入，收到 generation 失效提示后重新 list | Desktop、Zeta Code 与 app 不建立第二份安装 authority |
@@ -52,13 +52,13 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | Desktop、CLI、TUI 和其他客户端 | 版本化 App Server 协议 → 分发器 | 直接链接 Core、Store、Provider 或读取私有运行时接口 |
 | 进程内宿主 | 类型化客户端 → 同一个 App Server 分发器 | 为性能增加隐藏的进程内业务方法 |
 | App Server | 校验、路由、订阅、DTO 编解码和事件投影 → Core | 复制领域归约器（reducer）、直接写 Store 或消费 Provider 内部流 |
-| Core | 持有 Session/Thread/Turn/Item 权威状态并调用内部端口 | 依赖 App Server wire、客户端状态或 UI 生命周期 |
+| Core | 持有 Thread/Turn/Item 的权威状态，按 `session_id` 得出 Session 树视图，并调用内部端口 | 依赖 App Server wire、客户端状态或 UI 生命周期 |
 
 ```mermaid
 flowchart LR
     client["Desktop / CLI / TUI / other client"] --> request["versioned App Server request"]
     request --> dispatcher["App Server dispatcher"]
-    dispatcher --> core["Core Session/Thread/Turn runtime"]
+    dispatcher --> core["Core Thread/Turn runtime<br/>Session tree view"]
     core --> provider["Provider / tools / stores"]
     core --> dispatcher
     dispatcher --> events["App Server result + update stream"]
@@ -229,8 +229,8 @@ App Server deadline 为 30 秒。Turn 取消或 deadline 到达时，Server 发�
 创建 connection-owned Resource。
 
 该契约从不接受任意 CDP method、JavaScript source、localhost 调试端口或 Node sidecar 配置。
-完整 Browser Tool generation 同时要求可信工作区和至少一个同时声明 `observe + input` 的 live
-version 1 宿主；Restricted、信任撤销或最后一个完整宿主断开都会移除该工具 port。恢复条件后
+完整 Browser Tool generation 要求当前 Environment tool composition 已建立，并且至少一个 live
+version 1 宿主同时声明 `observe + input`；最后一个完整宿主断开会移除该工具 port，Environment runtime 切换则重建对应 Tool generation。恢复条件后
 只影响后续 Tool generation，不恢复或重放旧调用。
 Desktop 当前实现和 Playwright 后续边界见
 [`zeta-desktop-architecture.md#7-浏览器能力`](zeta-desktop-architecture.md#7-浏览器能力)。
@@ -239,13 +239,12 @@ Desktop 当前实现和 Playwright 后续边界见
 
 | Method | Aggregate | Effect |
 | --- | --- | --- |
-| `session/create` | new Session | 创建任务 |
-| `session/read` | Session | 读取 canonical snapshot |
-| `session/list` | global | 列出 Session |
-| `session/subscribe` | connection | Session snapshot + `afterSequence` 之后的 durable gap + child Thread projections |
-| `session/request` | Session | canonical typed mutation request；覆盖 Session、child Thread 与 Turn 操作 |
+| `session/create` | new root Thread | 创建根 Thread，返回由其 `session_id` 得出的 Session 视图 |
+| `session/read` | session tree view | 按 `session_id` 读取当前树视图 |
+| `session/list` | global | 列出按 `session_id` 聚合的 Session 视图 |
+| `session/subscribe` | connection + session tree | Session 视图 + 每个 child Thread 的 snapshot 和 durable gap；Session 没有 `afterSequence` |
+| `session/request` | `session_id` grouping boundary | tagged request；树级动作枚举 Thread，Thread/Turn 写入绑定具体 Thread |
 | `session/unsubscribe` | connection | 删除订阅 |
-| `session/request` | Session | 通过 tagged request 完成 Session、child Thread 和 Turn mutation |
 | `model/list` | global model catalog | 返回 Zeta 模型 identity、display name、access、完整/可用 context capacity、capabilities 与 defaults；不探测 provider 或 ChatGPT 账户 |
 | `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
@@ -287,18 +286,19 @@ Desktop 当前实现和 Playwright 后续边界见
 | `fs/writeFile` | directory | 原子替换或新建不超过 10 MiB 的 UTF-8 文件 |
 | `syntax/analyze` | stateless syntax | 返回同一 revision 的 bounded token/fold/symbol/diagnostic facts |
 | `syntax/selectionRanges` | stateless syntax | 只沿当前 UTF-16 selections 返回 bounded parser ancestor scopes |
-| `git/status` | directory | 读取 HEAD、upstream 和 index/worktree change snapshot |
-| `git/textDiff` | directory | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
-| `git/graph` | directory | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
-| `git/branch/list` | directory | 列出现有本地分支及 current/upstream 信息 |
-| `git/branch/switch` | directory | 切换到 host 重新解析确认存在的本地分支 |
-| `git/stage` | directory | stage 一组 directory-relative path |
-| `git/unstage` | directory | 从 index 移除一组 path 的 staged change |
-| `git/discardWorktree` | directory | 恢复 tracked working-tree change，不删除 untracked 文件 |
-| `git/commit` | directory | 使用有界非空 message 创建 commit |
-| `git/fetch` | directory | non-interactive fetch all remotes 并 prune |
-| `git/pull` | directory | non-interactive fast-forward-only pull |
-| `git/push` | directory | 按当前 Git upstream/default 配置 push |
+| `git/repositories` | authorized dirs | 列出从已授权 `Dir` 中发现的稳定 repository identity |
+| `git/status` | repository | 按可选 `repositoryId` 读取 HEAD、upstream 和 index/worktree change snapshot |
+| `git/textDiff` | repository | 读取 status 及有界 UTF-8 HEAD/worktree text diff projection |
+| `git/graph` | repository | 以 `limit`/`cursor` 读取一页 history、local/remote-tracking refs 和 credential-free remote identity，并返回 `hasMore`/`nextCursor` |
+| `git/branch/list` | repository | 列出现有本地分支及 current/upstream 信息 |
+| `git/branch/switch` | repository | 切换到 host 重新解析确认存在的本地分支 |
+| `git/stage` | repository | stage 一组 repository-relative path |
+| `git/unstage` | repository | 从 index 移除一组 repository-relative path 的 staged change |
+| `git/discardWorktree` | repository | 恢复 tracked working-tree change，不删除 untracked 文件 |
+| `git/commit` | repository | 使用有界非空 message 创建 commit |
+| `git/fetch` | repository | non-interactive fetch all remotes 并 prune |
+| `git/pull` | repository | non-interactive fast-forward-only pull |
+| `git/push` | repository | 按当前 Git upstream/default 配置 push |
 | `content/search/start` | connection + directory | 启动有界内容搜索 |
 | `content/search/read` | connection + search job | 按游标读取最多 200 条结果 |
 | `content/search/cancel` | connection + search job | 取消并释放搜索 |
@@ -314,7 +314,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `codebase/cloud/sync` | directory | 按 grant 复核 source revision 后调用 provider publication |
 | `codebase/cloud/revoke` | directory | 先持久化 Revoking，再请求 provider 幂等删除 |
 | `terminal/profile/list` | directory | 列出 App Server 冻结的可信 Shell Profile |
-| `terminal/create` | connection + directory | 在可信 directory root 启动 PTY |
+| `terminal/create` | connection + directory | 取得 `ExecuteCommands` Authorization 后在选定 `Dir` 内启动 PTY |
 | `terminal/write` | connection + Terminal | 写入有界 UTF-8 输入 batch |
 | `terminal/resize` | connection + Terminal | 修改 PTY rows/cols |
 | `terminal/read` | connection + Terminal | 按 sequence 拉取有界 Base64 输出 |
@@ -369,7 +369,7 @@ Plugin request 是 config intent；legacy Plugin lifecycle authority 是另一�
 
 同一 profile 的 App Server daemon 是 Marketplace mutation 的 single writer。成功的
 install/update/uninstall 在 consumer reconcile 后推进共享 generation，并向该 profile 的全部
-Directory connection 广播 `marketplace/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
+App Server connection 广播 `marketplace/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
 过期”；客户端必须重新调用 `marketplace/listInstalled`，并以返回的 instanceId + generation + packages 为事实。
 `whenUnused` 卸载会先广播 pending-removal 状态；最后一个 capability lease 被释放或随连接关闭清理、删除
 真正提交时再广播一次，避免其他端长期保留已经消失的 Skill、Connector 或 Extension 投影。
@@ -385,7 +385,7 @@ Zeta account control plane 另见[第 11 节](#11-account-与登录)。其 Rust 
 
 ### 文件系统
 
-Filesystem method 的 `path` 是配置 directory root 下的相对路径；空字符串表示 root。
+Filesystem method 的 `path` 是选定 `Dir` 下的相对路径；空字符串表示该 `Dir` 的 root。
 绝对路径、父目录逃逸和解析后越过 root 的 symlink 会在可信 Rust 边界被拒绝。Desktop 的
 IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
 
@@ -393,12 +393,12 @@ IPC 层会先做同形状校验以便快速失败，但不承担最终授权。
 用于单根 Folder 的 Explorer、文本文件打开和后端保存。读写均限制为不超过 10 MiB 的 UTF-8；
 写入在目标同目录完成有界临时写、flush 和原子替换，保留现有文件权限，不隐式创建父目录。
 
-App Server 对整个 directory root 建立递归 watcher。普通变化经 75ms debounce 后发布
+App Server 对整个 `Dir` 建立递归 watcher。普通变化经 75ms debounce 后发布
 `fs/changed { type: "pathsChanged", paths }`，其中 path 全部是 directory-relative；backend
 可能丢失事件时发布 `fs/changed { type: "rescanRequired" }`。两种通知都是失效 hint，不是
 durable event 或文件内容事实，客户端收到后必须重新读取自己拥有的视图。
 
-Filesystem contract 仍不包含重命名、删除、多根 Directory 或跨请求 snapshot 一致性。当前
+Filesystem contract 仍不包含重命名、删除、一次请求跨多个 `Dir` 或跨请求 snapshot 一致性。当前
 Desktop 尚未调用 `fs/writeFile` 或消费 `fs/changed`；这些属于独立的前端接入阶段。
 
 ### 语法事实
@@ -415,15 +415,17 @@ projection，不建立 App Server-owned editor document，也不返回 Tree-sitt
 
 ### Git SCM
 
-`initialize.capabilities.git` 表示 server 已冻结可信 directory root 并安装 Git backend。
-`git/status` 不接受路径参数，返回 `GitStatusResult`：标识当前 Git runtime incarnation 的
-`streamInstanceId`、在该实例内单调递增的 directory status revision、
+`initialize.capabilities.git` 表示 server 已从获得 `InspectRepository` Authorization 的 `Dir`
+中发现至少一个仓库并安装 Git backend。`git/repositories` 返回稳定的 repository identity。
+`git/status` 不接受路径参数，但可携带 `repositoryId`；省略时选择排序后的首个仓库。
+它返回 `GitStatusResult`：标识当前 Git runtime incarnation 的
+`streamInstanceId`、在该实例内单调递增的 repository status revision、
 HEAD 的 branch/detached/unborn
 状态、可选 upstream ahead/behind，以及每个 directory-relative path 的 index/worktree status、
 rename original path、conflict 和 submodule flags。Revision 表示 App Server 观察到的投影版本，
 不是 durable CAS token，客户端不能把一次 snapshot 当作后续 mutation 的 compare-and-swap 前提。
-当 directory 是更大 repository 的子目录时，server 会过滤 directory 外 change，并将保留路径
-重新映射为 directory-relative。
+当授权 `Dir` 是更大 repository 的子目录时，server 会过滤 `Dir` 外 change，并将保留路径
+重新映射为 `Dir`-relative；写操作再把已校验路径映射为 repository-relative。
 
 App Server 通过 `zeta-file-watcher` 接收 directory、Git metadata 和相关 ancestor `.gitignore`
 invalidation hint，100ms debounce 后重新读取 authoritative Git status。投影内容变化时 revision
@@ -514,9 +516,9 @@ runtime 自动维护，不应在每次查询前调用。该能力不创建 embed
 文字/正则搜索。完整 chunking、持久化、stale gate 与隐私边界见
 [`codebase.md`](codebase.md)。
 
-`initialize.capabilities.cloudCodebase` 表示 host 已注入非空 provider registry；未激活或受限
-Directory 即使支持该方法，也没有 active cloud controller，调用会返回
-`CloudCodebaseUnavailable`。云端只有一种 publication contract：上传 Directory 已切块并复核的
+`initialize.capabilities.cloudCodebase` 表示 host 已注入非空 provider registry；当前 `Dir`
+没有 active cloud controller 时，即使 server 支持该方法，调用也会返回
+`CloudCodebaseUnavailable`。云端只有一种 publication contract：上传本地 Codebase 已切块并复核的
 exact chunks；provider 不得读取完整 source 后重新切块。客户端必须先用
 `codebase/cloud/preview` 展示 file/chunk/unit/byte shape，再用 authorize 固定
 provider、tenant、collection、path scope 和 `maxEgressBytes`；该 ceiling 计算 source-content bytes，
@@ -526,13 +528,13 @@ provider、tenant、collection、path scope 和 `maxEgressBytes`；该 ceiling �
 同一 root 同时只允许一个 grant。destination、scope 或 byte ceiling 变化必须先 revoke；
 每次 sync 都重检 byte ceiling 和 source revision。状态为
 `localOnly/granted/syncing/ready/stale/revoking/failed`。revoke 在 provider call 前持久化
-`revoking`，删除失败保留 pending grant供幂等重试；Directory 信任撤销也会自动触发删除并移除
+`revoking`，删除失败保留 pending grant，供幂等重试；目录访问被撤销也会自动触发删除并移除
 cloud runtime。默认 local composition 没有 concrete provider，所以示例 capability 为 false，当前
 不会发起云网络请求。
 
 ### 集成终端
 
-`initialize.capabilities.terminal` 表示 local composition 已提供可信 directory root 和 PTY
+`initialize.capabilities.terminal` 表示 local composition 已提供具备 `ExecuteCommands` 的 `Dir` 和 PTY
 runtime。`terminal/profile/list` 只返回稳定 `profileId`、显示标题与 default 标记，不暴露
 program、args 或 environment。`terminal/create` 接受 rows/cols 和 `default | profileId`
 tagged selection；Rust owner 把 ID 解析到冻结的本机 Shell Profile，并以显式 environment
@@ -741,8 +743,8 @@ Thread 的 operation 在 request 分支中携带该 Thread 的 `expectedSequence
 Session subscription 和显式 `session/thread/subscribe` 都使用同一个 `session/thread/update`
 notification；通知 payload 始终带有 Session/Thread scope。
 
-`session/subscribe` 原子建立 Session subscription，并返回当前 Session snapshot、Session 的
-committed update gap，以及每个 child Thread 的 `SessionThreadProjection` snapshot/gap；同一
+`session/subscribe` 原子建立 Session subscription，并返回当前 Session 视图，以及每个 child Thread 的
+`SessionThreadProjection` snapshot/gap；Session 自身没有 sequence 或 committed gap。同一
 connection 会接收这些 child Thread 的实时 update。产品宿主应先应用 aggregate snapshot/gap，再
 接收实时 notification；发现 durable 空洞时重新执行 `session/subscribe`。
 需要单独读取一个 Thread 的客户端使用 `session/thread/read` 和
@@ -778,7 +780,7 @@ Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 run
 `toolSearch/configure` 的 `hybridEmbedding` 必须携带 exact `embeddingModel`。App Server 在 durable
 commit 前从 Provider Config 解析模型并发送固定 readiness probe；失败返回
 `ToolSearchUnavailable`，不会把混合模式写入配置。默认 `lexical` 完全本地运行。Tool Search 的模型
-选择与 semantic Codebase 的模型和 Directory source-egress grant 相互独立。外部配置或启动恢复的
+选择与 semantic Codebase 的模型和 `CloudCodebaseGrant` 相互独立。外部配置或启动恢复的
 hybrid 模型不可用时，`embeddingStatus` 为 `unavailable`，自然语言搜索明确失败而不回退 BM25；
 显式 Regex 仍保持本地运行。
 

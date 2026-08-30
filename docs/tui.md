@@ -9,7 +9,7 @@
 > 聊天输入区当前架构：[`tui-chat-input-area.md`](tui-chat-input-area.md)
 > 产品接口基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > App Server 启动与连接基线：[`app-server-client.md`](app-server-client.md)  
-> Workspace 边界基线：[`zeta-rs-architecture.md`](zeta-rs-architecture.md)
+> Rust 后端边界基线：[`zeta-rs-architecture.md`](zeta-rs-architecture.md)
 > 产品线归属基线：[`product-lines.md`](product-lines.md)
 
 ## 快速理解
@@ -516,7 +516,7 @@ owner 的公开 typed interface，`pane.rs` 组装打开 Pane 需要的 `PaneSpe
 | `config` | typed config read/update UI |
 | `skills` | typed catalog、enablement intent 和 selection row model |
 | `dirs` | 当前 Session 的目录列表、添加、移除和逐目录能力修改意图 |
-| `workspace_files` | `zeta-file-search` mention completion |
+| `file_search` | `zeta-file-search` mention completion |
 | `status_line` | 汇集既有接口结果并执行 item 排列、降级与渲染 |
 
 resources 等已经有 typed contract、但尚无 `zeta code` 用户场景的能力不提前出现在
@@ -896,7 +896,7 @@ lib.rs + lib_tests.rs
 - `Ctrl-V` 产生独立 `AppCommand::ReadClipboardImage`，由 `host/clipboard.rs` 读取文件列表
   或 RGBA 位图、编码 PNG，并复用 `Attachments` 的校验、占位符与结构化提交；
 - event loop 持有的 `FileSearchManager` 通过 `zeta-file-search::PathSearchHandle` 在后台增量
-  遍历 workspace，并使用完整 `nucleo` engine 更新 `@token` File fuzzy results；snapshot 作为
+  遍历选定目录，并使用完整 `nucleo` engine 更新 `@token` File fuzzy results；snapshot 作为
   `AppEvent` 回到单写者。`Mentions` 把这些文件与 `plugin/list` 的 effective package 组成单个 File/Plugin 候选列表，并拥有 token/popup 状态、高亮、keyboard/mouse selection 和原子补全。旧 File query snapshot 会在 manager 和 popup 边界被丢弃；组件不读候选文件或 Plugin 文件系统；
 - crate root `lib.rs` 只保留 public startup contract 与错误类型；事件循环、bootstrap、
   built-in dispatch、Thread request 和 frame coordination 都有明确的 private owner；
@@ -1009,7 +1009,7 @@ connection close 和 runtime 切换都有确定结果；当前 local authority c
 ### 阶段四：垂直功能
 
 按已接受的 App Server contract 逐个添加 config、resources、approval 等 feature。config、MCP、
-Skill、workspace file mention、Git status、approval 与 user input 已按该规则接入；每个后续 feature
+Skill、directory file mention、Git status、approval 与 user input 已按该规则接入；每个后续 feature
 同时交付 state、typed command、view、错误/恢复行为和测试，不采用先建一个全局
 `services/` 再逐步塞逻辑的方式。
 

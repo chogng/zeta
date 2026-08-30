@@ -102,13 +102,13 @@ enable + grant 后才进入静态 catalog，disable、grant revoke、package rev
 下一次 catalog refresh 移除旧 exact package。Workbench 监听 Plugin activation generation 并自动刷新。
 生产第三方执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
 termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
-`TrustedDevelopmentLauncher` 降级。该 v1 是 Zeta-native executable RPC，不是 VS Code/Node Extension
+`TrustedDevelopmentLauncher` 降级。该 v1 是 Zeta executable RPC，不是 VS Code/Node Extension
 Host。
 
 安装、启用、授权和调用是四个不同动作：
 
 1. **Install**：包进入本地 content store；
-2. **Enable**：某个 user/workspace profile 允许其贡献参与解析；
+2. **Enable**：某个 user/directory profile 允许其贡献参与解析；
 3. **Grant**：允许所需 process/network/root/credential capability；
 4. **Invoke**：Agent 的某次 tool/script 操作仍经过 runtime approval 与 sandbox。
 
@@ -118,7 +118,7 @@ Host。
 
 当前 `zeta-plugins` 实现 legacy strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验、确定性 digest、只读 local-development discovery，以及“稳定 staging snapshot—内容寻址 object—原子 activation generation”的 local store。实现细节、limits 与 failure semantics 由 crate [`README`](../zeta-rs/plugins/README.md) 维护。
 
-User/Workspace TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
+User/Directory TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
 Package store 安全保存既有 local-development immutable object，
 并把 exact installed package 解析为 generation-bound activation snapshot；App Server 可据此自动构造
 Skill source、Connector catalog、durable authority 和 package-rooted MCP provider。Plugin authority
@@ -157,7 +157,7 @@ Plugin v1 contributions = Skills + Connectors + MCP server declarations
 - Plugin package layout 和 manifest schema；
 - stable Plugin identity、version、digest 和 origin；
 - package staging、validation、atomic install、side-by-side update 和 recoverable remove；
-- user/workspace enablement 和 version pin；
+- user/directory enablement 和 version pin；
 - contribution discovery、path containment、compatibility 和 conflict validation；
 - requested permissions、credential slots 与 user grants 的差异计算；
 - immutable `PluginActivationSnapshot` 和 generation；
@@ -283,7 +283,7 @@ slash-separated path；绝对路径、`..`、空 segment、NUL、平台 device p
   "permissions": [
     { "type": "process", "executable": "bin/review-server" },
     { "type": "process", "executable": "bin/review-extension-host" },
-    { "type": "workspace", "access": "read" },
+    { "type": "directory", "access": "read" },
     { "type": "network", "hosts": ["api.example.com"] }
   ],
   "credentialSlots": [
@@ -301,7 +301,7 @@ Manifest 必须 strict-parse：
 - 同一 Plugin version 的内容 digest 必须唯一；registry 不得让相同
   `(PluginId, version)` 指向不同内容；
 - manifest 只声明 credential slot，不包含 secret value；
-- permission 使用 tagged enum，不使用 `network: true`、`workspace: "all"` 一类含糊开关。
+- permission 使用 tagged enum，不使用 `network: true`、`directory: "all"` 一类含糊开关。
 
 `editorExtensions[]` 是 strict typed control-plane declaration：ID 与 entrypoint 各自唯一；entrypoint
 必须是包内 regular file，并有完全相同路径的 `process` permission；`runtimeApiVersion` 仅接受数值
@@ -460,18 +460,18 @@ health 不改变 package authority，MCP crash 也不能让 Plugin 变成“未�
 Activation profile 至少区分：
 
 ```text
-BuiltInProfile
-UserProfile
-WorkspaceProfile { workspaceId }
+BuiltIn
+User
+Dir { dirId }
 ```
 
-Workspace 声明可以请求某 Plugin/version，但不能静默下载、启用或授予权限。首次进入 workspace
+Directory 声明可以请求某 Plugin/version，但不能静默下载、启用或授予权限。首次加入目录
 时必须展示 package origin、digest、permissions 和 credential slots。
 
 解析规则：
 
 - exact `PluginId` 在一个 profile resolution 中只能有一个 active version；
-- workspace pin 可以覆盖 user 的版本选择，但必须产生可见的 `VersionPinOverride`；
+- directory pin 可以覆盖 user 的版本选择，但必须产生可见的 `VersionPinOverride`；
 - 两个不同 Plugin 的 contribution 同名不能按 source priority 静默覆盖；
 - Skill/Connector/MCP consumer 使用 namespaced identity；
 - manifest-local duplicate ID 使整个 package validation 失败；
@@ -504,8 +504,8 @@ Grant 只限定最大能力，不能预先批准任意未来 side effect。MCP t
 
 ```text
 ProcessLaunch { packageRelativeExecutable }
-WorkspaceRead { rootSelector }
-WorkspaceWrite { rootSelector }
+Directory { access: Read, rootSelector }
+Directory { access: Write, rootSelector }
 NetworkConnect { scheme, hostPattern, portPolicy }
 CredentialUse { slot }
 HostCapability { capabilityKind }
@@ -600,7 +600,7 @@ Uninstall：
 - object 只有在无任何 version/profile/rollback 引用时才进入垃圾回收；
 - credential value 不随 Plugin package 删除；只解除 slot binding，是否删除 secret 由 credential
   owner 决定；
-- workspace 中的声明保留为 unresolved request，不能静默重装。
+- directory 中的声明保留为 unresolved request，不能静默重装。
 
 ## 13. Skill、Connector 与 MCP 的明确关系
 
@@ -669,7 +669,7 @@ Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信
 `zeta-resources/product-services/{product-services.json,marketplace-root.json}`。Desktop/server、
 `zeta code`/TUI 与 app 通过共享 App Server client + `zeta-install-context` 边界发现该资源，默认注册 `https://chogng.github.io/marketplace/` 的 `zeta`
 Marketplace；`ZETA_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
-显式覆盖入口。远端 metadata、Plugin、用户配置和 Workspace 都不能更换这份 root。发行源仓库仍为
+显式覆盖入口。远端 metadata、Plugin、用户配置和 Directory 都不能更换这份 root。发行源仓库仍为
 private，Pages 只暴露经过 Marketplace 自身独立 validator 和 TUF verifier 复核的 `metadata/` 与
 `targets/` 静态产物。Marketplace 不依赖 Zeta 源码或发布状态；Zeta 只是通过 pinned root 和 consumer
 adapter 选择性消费它。
@@ -796,7 +796,7 @@ zeta-rs/plugins/src/
 - ✅ Plugin Skill contribution 的 exact immutable source projection 与 live catalog refresh；
 - ✅ declarative Extension contribution 的 exact immutable source projection、precedence 与 live refresh；
 - ✅ Connector contribution 的 normalized projection；
-- ✅ legacy user-profile exact package reconcile；Workspace request 保持只读、不能自动 grant；
+- ✅ legacy user-profile exact package reconcile；Directory request 保持只读、不能自动 grant；
 - ✅ startup transient staging recovery；未引用 object 的全局配额与垃圾回收仍未完成。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
@@ -836,7 +836,7 @@ zeta-rs/plugins/src/
 - provider adapter；
 - 静态 UI contribution。
 
-禁止直接加入 native dynamic library 或任意 Renderer JavaScript。
+禁止直接加入 dynamic library 或任意 Renderer JavaScript。
 
 ## 19. 验证门
 
@@ -849,7 +849,7 @@ zeta-rs/plugins/src/
 - digest/signature/revocation；
 - install 每个 durable boundary 的 crash recovery；
 - enable/grant `CommandId` replay 和 payload conflict；
-- workspace/user pin conflict；
+- directory/user pin conflict；
 - permission/credential diff；
 - activation prepare 失败、publish race、generation drain；
 - update/rollback/uninstall 的 reference safety；

@@ -59,7 +59,7 @@ corepack pnpm dev:web:full
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
 桥接器；桥接器当前仍为每个浏览器连接启动 direct `zeta-server app-server --listen stdio://`
 子进程，浏览器连接关闭时对应子进程也会被回收。Electron 产品改用 `app-server connect`，与
-TUI、app 连接同一 profile/Workspace authority。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
+TUI、app 连接同一 profile-scoped local App Server。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
 `.build/desktop/dev/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
@@ -115,7 +115,7 @@ corepack pnpm --dir zeta-ts start -- --folder C:\path\to\project
 corepack pnpm --dir zeta-ts start -- --workspace C:\path\to\team.zeta-workspace
 ```
 
-单目录启动时，当前版本会把目录作为 App Server 的受限 workspace root，并通过
+单目录启动时，当前版本会把目录作为 App Server 的 canonical `Dir`，并通过
 `fs/getMetadata`、`fs/readDirectory` 为 Renderer 的 Explorer 提供按需目录枚举，并通过
 `fs/readFile` 把不超过 10 MiB 的 UTF-8 文件打开到已注册的文本编辑器。编辑目前只保留在
 内存模型中；保存、写入/重命名、文件监听与自动刷新、多根 Workspace 配置解析尚未实现。

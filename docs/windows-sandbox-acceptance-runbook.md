@@ -33,11 +33,11 @@
 | --- | --- |
 | Package | Windows 包必须包含 command runner、sandbox setup 和 `rg.exe` |
 | Helper discovery protocol | 两个 helper 返回精确 probe 字符串 |
-| ReadOnly | 可以读取 Workspace，不能写入 |
-| WorkspaceWrite | 可以写 Workspace，但不能写 protected metadata |
-| Profile isolation | Workspace 与 ro/rw mode 不累积 authority |
-| Filesystem boundary | 不能读写 Workspace 外的用户文件 |
-| NetworkDenied | 不能访问 host loopback HTTP server |
+| ReadOnly | 可以读取 Dir，不能写入 |
+| DirectoryWrite | 可以写 Dir，但不能写 protected metadata |
+| Profile isolation | Dir 与 ro/rw mode 不累积 authority |
+| Filesystem boundary | 不能读写 Dir 外的用户文件 |
+| `Denied` network access | 不能访问 host loopback HTTP server |
 | Process containment | sandboxed program 不能创建子进程 |
 | Denial evidence | setup/pre-launch failure 使用保留 exit code `125` |
 | Exit-code authenticity | inner process 的 `125` 被重映射为 `124` |
@@ -49,19 +49,19 @@
 - shell/PTY 产品能力；
 - managed network proxy；
 - installer/uninstaller 对历史 AppContainer profile 和 ACL 的清理；
-- 性能与大规模 Workspace benchmark。
+- 性能与大规模目录 benchmark。
 
 ## 3. 安全要求
 
 必须满足：
 
 1. 使用 Windows 10/11 x64 或 ARM64 的普通、非 elevated PowerShell；
-2. 使用本文创建的临时 Workspace；
+2. 使用本文创建的临时目录；
 3. **不要在真实代码仓库、用户文档目录或生产机器目录上执行 ACL 测试**；
 4. 测试目录在结果交付前不要删除；
-5. 不要使用公司 secret、token 或真实敏感文件作为 outside-workspace fixture。
+5. 不要使用公司 secret、token 或真实敏感文件作为 outside-dir fixture。
 
-原因：AppContainer profile 和 Workspace ACL 是持久 Windows 状态，不会随测试进程退出自动撤销。
+原因：AppContainer profile 和目录 ACL 是持久 Windows 状态，不会随测试进程退出自动撤销。
 
 ## 4. 环境与证据目录
 
@@ -75,16 +75,16 @@ $Repo = (Resolve-Path ".").Path
 $Target = "x86_64-pc-windows-msvc" # ARM64 改为 aarch64-pc-windows-msvc
 $RunRoot = Join-Path $env:TEMP ("zeta-windows-sandbox-acceptance-" + [guid]::NewGuid())
 $Package = Join-Path $RunRoot "package"
-$WorkspaceA = Join-Path $RunRoot "workspace-a"
-$WorkspaceB = Join-Path $RunRoot "workspace-b"
+$DirA = Join-Path $RunRoot "dir-a"
+$DirB = Join-Path $RunRoot "dir-b"
 $Outside = Join-Path $RunRoot "outside"
 $Transcript = Join-Path $RunRoot "acceptance-transcript.txt"
 
 New-Item -ItemType Directory -Path $RunRoot | Out-Null
-New-Item -ItemType Directory -Path $WorkspaceA | Out-Null
-New-Item -ItemType Directory -Path $WorkspaceB | Out-Null
+New-Item -ItemType Directory -Path $DirA | Out-Null
+New-Item -ItemType Directory -Path $DirB | Out-Null
 New-Item -ItemType Directory -Path $Outside | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $WorkspaceA ".git") | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $DirA ".git") | Out-Null
 
 Start-Transcript -Path $Transcript
 
@@ -106,7 +106,7 @@ Golden expectation：
 
 - `Elevated=False`；
 - Windows、Rust、Cargo、Python 信息完整写入 transcript；
-- `$RunRoot`、两个 Workspace 和 outside fixture 是全新临时目录。
+- `$RunRoot`、两个 Dir 和 outside fixture 是全新临时目录。
 
 如果 `Elevated=True`，停止测试并重新打开非管理员 PowerShell。
 
@@ -200,9 +200,9 @@ SetupProbe  = zeta-windows-sandbox-setup-v1
 
 ```powershell
 $Sentinel = "ZETA_WINDOWS_SANDBOX_SENTINEL_7F3A"
-$Needle = Join-Path $WorkspaceA "needle.txt"
+$Needle = Join-Path $DirA "needle.txt"
 $Secret = Join-Path $Outside "outside-secret.txt"
-$WorkspaceBFile = Join-Path $WorkspaceB "workspace-b.txt"
+$DirBFile = Join-Path $DirB "dir-b.txt"
 $FsProbeSource = Join-Path $Outside "fs-probe.rs"
 $FsProbe = Join-Path $Outside "fs-probe.exe"
 $Cmd = Join-Path $env:SystemRoot "System32\cmd.exe"
@@ -210,7 +210,7 @@ $Curl = Join-Path $env:SystemRoot "System32\curl.exe"
 
 Set-Content -Path $Needle -Value $Sentinel -NoNewline
 Set-Content -Path $Secret -Value $Sentinel -NoNewline
-Set-Content -Path $WorkspaceBFile -Value "workspace-b" -NoNewline
+Set-Content -Path $DirBFile -Value "dir-b" -NoNewline
 
 @'
 use std::process::exit;
@@ -271,8 +271,8 @@ $RgOutput = (
   & $Runner `
     --setup-helper $Setup `
     --access read-only `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --dir $DirA `
+    --cwd $DirA `
     -- $Rg --no-heading --line-number $Sentinel . 2>&1 |
   Out-String
 )
@@ -293,18 +293,18 @@ Golden expectation：
 - `ContainsSentinel=True`；
 - output 不含 `zeta-windows-sandbox:`。
 
-## 10. WRT-02：ReadOnly 拒绝 Workspace 写入
+## 10. WRT-02：ReadOnly 拒绝 Dir 写入
 
 执行：
 
 ```powershell
-$ReadOnlyMarker = Join-Path $WorkspaceA "read-only-write.txt"
+$ReadOnlyMarker = Join-Path $DirA "read-only-write.txt"
 $ReadOnlyOutput = (
   & $Runner `
     --setup-helper $Setup `
     --access read-only `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --dir $DirA `
+    --cwd $DirA `
     -- $FsProbe write $ReadOnlyMarker "blocked" 2>&1 |
   Out-String
 )
@@ -324,19 +324,19 @@ Golden expectation：
 
 Windows 本地化后的 access-denied 文案不作为 golden string；文件不存在才是 authoritative result。
 
-## 11. WRT-03：WorkspaceWrite 允许普通 Workspace 写入
+## 11. WRT-03：DirectoryWrite 允许普通 Dir 写入
 
 执行：
 
 ```powershell
-$WriteMarker = Join-Path $WorkspaceA "workspace-write.txt"
+$WriteMarker = Join-Path $DirA "dir-write.txt"
 $WriteOutput = (
   & $Runner `
     --setup-helper $Setup `
-    --access workspace-write `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
-    -- $FsProbe write $WriteMarker "workspace-write-ok" 2>&1 |
+    --access dir-write `
+    --dir $DirA `
+    --cwd $DirA `
+    -- $FsProbe write $WriteMarker "dir-write-ok" 2>&1 |
   Out-String
 )
 $WriteCode = $LASTEXITCODE
@@ -357,20 +357,20 @@ Golden expectation：
 
 - `ExitCode=0`；
 - `MarkerExists=True`；
-- `MarkerContent=workspace-write-ok`。
+- `MarkerContent=dir-write-ok`。
 
-## 12. WRT-04：rw 配置档案不得污染同一 Workspace 的 ro 配置档案
+## 12. WRT-04：rw 配置档案不得污染同一 Dir 的 ro 配置档案
 
-WRT-03 已经创建过 WorkspaceWrite profile。现在再次以 ReadOnly 执行：
+WRT-03 已经创建过 DirectoryWrite profile。现在再次以 ReadOnly 执行：
 
 ```powershell
-$ReadAfterWriteMarker = Join-Path $WorkspaceA "ro-after-rw.txt"
+$ReadAfterWriteMarker = Join-Path $DirA "ro-after-rw.txt"
 $ReadAfterWriteOutput = (
   & $Runner `
     --setup-helper $Setup `
     --access read-only `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --dir $DirA `
+    --cwd $DirA `
     -- $FsProbe write $ReadAfterWriteMarker "blocked" 2>&1 |
   Out-String
 )
@@ -390,18 +390,18 @@ Golden expectation：
 
 如果文件被创建，说明 ro/rw profile authority 发生累积，必须判定失败。
 
-## 13. WRT-05：WorkspaceWrite 拒绝 protected 元数据
+## 13. WRT-05：DirectoryWrite 拒绝 protected 元数据
 
 执行：
 
 ```powershell
-$GitMarker = Join-Path $WorkspaceA ".git\zeta-write-probe.txt"
+$GitMarker = Join-Path $DirA ".git\zeta-write-probe.txt"
 $GitOutput = (
   & $Runner `
     --setup-helper $Setup `
-    --access workspace-write `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --access dir-write `
+    --dir $DirA `
+    --cwd $DirA `
     -- $FsProbe write $GitMarker "blocked" 2>&1 |
   Out-String
 )
@@ -419,7 +419,7 @@ Golden expectation：
 - `ExitCode=32`；
 - `MarkerExists=False`。
 
-## 14. WRT-06：拒绝读取与写入 Workspace 外文件
+## 14. WRT-06：拒绝读取与写入 Dir 外文件
 
 执行读取测试：
 
@@ -427,9 +427,9 @@ Golden expectation：
 $OutsideReadOutput = (
   & $Runner `
     --setup-helper $Setup `
-    --access workspace-write `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --access dir-write `
+    --dir $DirA `
+    --cwd $DirA `
     -- $FsProbe read $Secret 2>&1 |
   Out-String
 )
@@ -449,9 +449,9 @@ $OutsideWriteMarker = Join-Path $Outside "outside-write.txt"
 $OutsideWriteOutput = (
   & $Runner `
     --setup-helper $Setup `
-    --access workspace-write `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --access dir-write `
+    --dir $DirA `
+    --cwd $DirA `
     -- $FsProbe write $OutsideWriteMarker "blocked" 2>&1 |
   Out-String
 )
@@ -471,26 +471,26 @@ Golden expectation：
 - `SecretLeaked=False`；
 - `MarkerExists=False`。
 
-## 15. WRT-07：不同 Workspace 不得共享配置档案权威
+## 15. WRT-07：不同 Dir 不得共享配置档案权威
 
-Workspace A 已经获得 ro 和 rw ACL。以 Workspace B 的 ReadOnly profile 尝试读取 A：
+Dir A 已经获得 ro 和 rw ACL。以 Dir B 的 ReadOnly profile 尝试读取 A：
 
 ```powershell
-$CrossWorkspaceOutput = (
+$CrossDirOutput = (
   & $Runner `
     --setup-helper $Setup `
     --access read-only `
-    --workspace $WorkspaceB `
-    --cwd $WorkspaceB `
+    --dir $DirB `
+    --cwd $DirB `
     -- $FsProbe read $WriteMarker 2>&1 |
   Out-String
 )
-$CrossWorkspaceCode = $LASTEXITCODE
+$CrossDirCode = $LASTEXITCODE
 
 [pscustomobject]@{
-  ExitCode = $CrossWorkspaceCode
-  ContentLeaked = $CrossWorkspaceOutput.Contains("workspace-write-ok")
-  Output = $CrossWorkspaceOutput.Trim()
+  ExitCode = $CrossDirCode
+  ContentLeaked = $CrossDirOutput.Contains("dir-write-ok")
+  Output = $CrossDirOutput.Trim()
 } | Format-List
 ```
 
@@ -499,7 +499,7 @@ Golden expectation：
 - `ExitCode=31`；
 - `ContentLeaked=False`。
 
-## 16. WRT-08：NetworkDenied 拒绝宿主回环
+## 16. WRT-08：`Denied` 网络策略拒绝宿主回环
 
 先证明 host server 正常：
 
@@ -507,7 +507,7 @@ Golden expectation：
 $Server = Start-Process `
   -FilePath "python" `
   -ArgumentList "-m", "http.server", "8765", "--bind", "127.0.0.1" `
-  -WorkingDirectory $WorkspaceA `
+  -WorkingDirectory $DirA `
   -WindowStyle Hidden `
   -PassThru
 
@@ -536,8 +536,8 @@ try {
     & $Runner `
       --setup-helper $Setup `
       --access read-only `
-      --workspace $WorkspaceA `
-      --cwd $WorkspaceA `
+      --dir $DirA `
+      --cwd $DirA `
       -- $Curl --silent --show-error --max-time 5 `
         "http://127.0.0.1:8765/needle.txt" 2>&1 |
     Out-String
@@ -569,7 +569,7 @@ Golden expectation：
 ```powershell
 $SpawnProbeSource = Join-Path $Outside "spawn-probe.rs"
 $SpawnProbe = Join-Path $Outside "spawn-probe.exe"
-$NestedMarker = Join-Path $WorkspaceA "nested-child.txt"
+$NestedMarker = Join-Path $DirA "nested-child.txt"
 
 @'
 use std::process::{Command, exit};
@@ -604,9 +604,9 @@ if ($LASTEXITCODE -ne 0) {
 $SpawnOutput = (
   & $Runner `
     --setup-helper $Setup `
-    --access workspace-write `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --access dir-write `
+    --dir $DirA `
+    --cwd $DirA `
     -- $SpawnProbe $NestedMarker $Cmd 2>&1 |
   Out-String
 )
@@ -636,8 +636,8 @@ $ReservedOutput = (
   & $Runner `
     --setup-helper $Setup `
     --access read-only `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceA `
+    --dir $DirA `
+    --cwd $DirA `
     -- $FsProbe exit 125 2>&1 |
   Out-String
 )
@@ -659,15 +659,15 @@ Golden expectation：
 
 ## 19. WRT-11：真实 pre-launch 失败使用保留状态
 
-故意把 cwd 指向 Workspace 外：
+故意把 cwd 指向 Dir 外：
 
 ```powershell
 $PrelaunchOutput = (
   & $Runner `
     --setup-helper $Setup `
     --access read-only `
-    --workspace $WorkspaceA `
-    --cwd $WorkspaceB `
+    --dir $DirA `
+    --cwd $DirB `
     -- $Rg --files 2>&1 |
   Out-String
 )
@@ -676,8 +676,8 @@ $PrelaunchCode = $LASTEXITCODE
 [pscustomobject]@{
   ExitCode = $PrelaunchCode
   HasEnforcementMarker = $PrelaunchOutput.Contains("zeta-windows-sandbox:")
-  MentionsOutsideWorkspace = $PrelaunchOutput.Contains(
-    "working directory resolves outside workspace"
+  MentionsOutsideDir = $PrelaunchOutput.Contains(
+    "working directory resolves outside dir"
   )
   Output = $PrelaunchOutput.Trim()
 } | Format-List
@@ -687,7 +687,7 @@ Golden expectation：
 
 - `ExitCode=125`；
 - `HasEnforcementMarker=True`；
-- `MentionsOutsideWorkspace=True`；
+- `MentionsOutsideDir=True`；
 - inner `rg` 没有启动。
 
 ## 20. WRT-12：staged executable 被清理
@@ -718,8 +718,8 @@ Golden expectation：
 执行：
 
 ```powershell
-icacls $WorkspaceA
-icacls (Join-Path $WorkspaceA ".git")
+icacls $DirA
+icacls (Join-Path $DirA ".git")
 Stop-Transcript
 
 "Evidence root: $RunRoot"
@@ -751,11 +751,11 @@ Remove-Item -Recurse -Force $RunRoot
 | WPR-01 | 两个 probe code=0 且字符串精确匹配 |  | PASS/FAIL |  |
 | WRT-01 | sandboxed rg code=0，读取到 sentinel |  | PASS/FAIL |  |
 | WRT-02 | ReadOnly 写入 code=32，marker 不存在 |  | PASS/FAIL |  |
-| WRT-03 | WorkspaceWrite 写入成功 |  | PASS/FAIL |  |
+| WRT-03 | DirectoryWrite 写入成功 |  | PASS/FAIL |  |
 | WRT-04 | rw profile 未污染 ro；write code=32 |  | PASS/FAIL |  |
 | WRT-05 | `.git` 写入 code=32，marker 不存在 |  | PASS/FAIL |  |
-| WRT-06 | Workspace 外 read=31、write=32，无泄漏 |  | PASS/FAIL |  |
-| WRT-07 | Workspace B read A code=31，无泄漏 |  | PASS/FAIL |  |
+| WRT-06 | Dir 外 read=31、write=32，无泄漏 |  | PASS/FAIL |  |
+| WRT-07 | Dir B read A code=31，无泄漏 |  | PASS/FAIL |  |
 | WRT-08 | host loopback 可用；sandbox loopback 被拒绝 |  | PASS/FAIL/BLOCKED |  |
 | WRT-09 | nested process 被拒绝，marker 不存在 |  | PASS/FAIL |  |
 | WRT-10 | child 125 被映射为 124，无 enforcement marker |  | PASS/FAIL |  |
@@ -774,10 +774,10 @@ Remove-Item -Recurse -Force $RunRoot
 
 以下任一结果必须直接 `REJECTED`：
 
-- ReadOnly 或 outside-workspace 写入成功；
+- ReadOnly 或 outside-dir 写入成功；
 - outside secret 出现在 sandbox output；
 - `.git` marker 被创建；
-- Workspace/profile authority 串用；
+- Dir/profile authority 串用；
 - loopback response 泄漏；
 - nested child marker 被创建；
 - child 自己能够让 runner 返回可信 denial code `125`；

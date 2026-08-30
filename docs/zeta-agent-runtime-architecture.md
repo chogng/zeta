@@ -1,7 +1,7 @@
 # Zeta Agent 执行架构总体设计
 
 > 状态：Accepted（2026-08-03 整体重审修订，替代此前 Proposed 版本）
-> 审查基线：`0df46ca9ff870489b58ebe6a3cbd0b1b8192928a` 加当前工作区改动
+> 审查基线：`0df46ca9ff870489b58ebe6a3cbd0b1b8192928a` 加当前工作树改动
 > 最后状态核对：2026-08-23
 > 适用范围：Session、Thread 执行控制、Agent loop、工具执行、上下文、流式、Provider
 > 切换和多 Agent 演进
@@ -357,7 +357,7 @@ serialize / deserialize / 拒绝非法值；不引入任何 Core 运行时依赖
 ### 阶段 E｜MultiAgentCoordinator（核心纵向切片已完成）
 
 当前已完成 Fresh/Selected/ForkedPrefix spawn saga、outbox/inbox delivery、durable join、向下
-cancellation tree、结构性 Agent tree budget、恢复、Desktop tree projection 与可信 Workspace
+cancellation tree、结构性 Agent tree budget、恢复、Desktop tree projection 与目录 Grant
 的模型工具接线。后续范围是 Agent definition 自动选择、跨产品 projection 与更完整的故障注入
 矩阵；gate 条件见 §4.4。
 

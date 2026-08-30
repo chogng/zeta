@@ -28,7 +28,7 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 | --- | --- | --- |
 | 启动或刷新 Skill 目录 | 只读取名称、描述和来源等元数据 | 不把全部正文塞入上下文 |
 | 用户输入 `$commit` 等 Skill 选择 | 接受 Turn 时完整读取对应 `SKILL.md` | `$` 候选只持有元数据和精确 `SkillRef` |
-| Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文 | 歧义、低置信、user/Workspace/Plugin/Marketplace 来源都不自动激活 |
+| Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文 | 歧义、低置信、user/Directory/Plugin/Marketplace 来源都不自动激活 |
 | 用户打开 `/skills` | 浏览、启用、禁用和查看诊断 | 不从管理面板直接执行 Skill |
 | 模型按需选择 Skill | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文 | 后端不做关键词分类，也不暴露本地路径 |
 | 正文引用参考资料 | 只在当前任务确实需要时读取 | 路径必须受来源目录约束 |
@@ -61,7 +61,7 @@ Skill 内容是带来源的外部 instruction：
 
 ## 2. 当前仓库状态
 
-当前 `zeta-skills` 已实现 S0 format/catalog：built-in/user/Workspace controlled root、bounded
+当前 `zeta-skills` 已实现 S0 format/catalog：built-in/user/Directory controlled root、bounded
 frontmatter parse、metadata-only scan、完整 `SKILL.md` digest、isolated diagnostic 和 immutable
 catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release staging 将其复制到
 `zeta-resources/skills/`，`zeta-install-context` 提供 directory candidate，host 再构造
@@ -70,7 +70,7 @@ catalog generation。内置内容由 `zeta-rs/skills/assets/` 拥有，release s
 [`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md) 维护。
 
 `zeta-skills-extension` 当前拥有 catalog runtime：它组合 release built-in root、user config 中
-明确 enabled 的绝对 source root 和 active Workspace 的 `.zeta/skills`，叠加 durable per-Skill
+明确 enabled 的绝对 source root 和 active Directory 的 `.zeta/skills`，叠加 durable per-Skill
 enablement，缓存 immutable projection，并通过通用 contributor 提供 Turn activation 与 context
 fragment。App Server 提供 `skills/list`、`skill/enablement/set`、digest-pinned
 `skill/resource/open` 与 `skills/changed` 协议投影。
@@ -106,11 +106,11 @@ source 仍能提供 exact bytes。已经开始的 Turn 即使随后被 catalog d
 App Server 先按 durable command receipt 校验输入并返回原 Turn 结果，不重新读取当前 catalog 或
 Skill 文件；因此源文件删除不会破坏已完成命令的幂等重放。
 
-当前 runtime source composition 包含 built-in、user、active Workspace 的原生 `.zeta/skills` source、
+当前 runtime source composition 包含 built-in、user、active Directory 的 `.zeta/skills` source、
 Marketplace Manager 安装的 exact Skill capability，以及 effective legacy Plugin manifest 声明的 exact
 Skill directory。Manager installation generation 或 Plugin activation generation 变化都会触发 catalog
 refresh，未声明的同包 sibling directory 不会进入 catalog。Marketplace provenance 作为独立
-`SkillSourceKind::Marketplace` 保留，不伪装成 built-in 或 Plugin。Workspace config 中额外声明的独立
+`SkillSourceKind::Marketplace` 保留，不伪装成 built-in 或 Plugin。Directory config 中额外声明的独立
 Skill source intent 与 script execution adapter 尚未接入；正文读取、通用 package resource resolver、有界 UTF-8 模型
 读取、binary asset Resource materialization、compatibility gate、显式激活和模型按需读取已接入。
 
@@ -191,7 +191,7 @@ Plugin manifest/config。独立 Skill 需要额外能力时只能产生明确 co
 ## 5. 目标依赖与组合
 
 ```text
-config / Workspace / built-in roots
+config / Directory / built-in roots
 Marketplace Manager / legacy Plugin authority
                 │
                 ▼
@@ -267,7 +267,7 @@ pub enum SkillVersionSelector {
 ```text
 BuiltIn { release }
 User { configuredRoot }
-Workspace { workspaceId, configuredRoot }
+Directory { sourceId, configuredRoot }
 Plugin { pluginId, version, packageDigest }
 Marketplace { packageId, version, packageDigest, capabilityId }
 LocalDevelopment { canonicalRoot }
@@ -281,7 +281,7 @@ Precedence 只用于候选排序，不用于静默覆盖：
 
 ```text
 用户在当前 Turn 显式选择
-> workspace enabled
+> directory enabled
 > user enabled
 > Marketplace enabled
 > Plugin enabled
@@ -347,7 +347,7 @@ availability 或 diagnostic 变化才递增 generation。
 由 [`zeta-rs/file-watcher/README.md`](../zeta-rs/file-watcher/README.md) 维护。
 
 Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots、active
-Workspace 的 `.zeta` metadata root 与 user config authority path；收到普通 change、backend error
+Directory 的 `.zeta` metadata root 与 user config authority path；收到普通 change、backend error
 或 overflow 后都调用
 `SkillCatalog::refresh` 重新扫描/校验，再按可见 projection 决定是否发布 `skills/changed`。
 Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可用
@@ -395,13 +395,13 @@ compatibility、exact identity 与文件安全。它与下一节的受信任 pre
 
 `zeta-extension-api::ReadOnlyToolContributor` 是通用接入面，`SkillReadTool` 属于
 `zeta-skills-extension`，App Server 只把 executor 适配到已有 Extension ToolPort 与策略管线。
-因此该能力不依赖受信任 Workspace 的 shell/file tool，也不要求产品端了解 Skill 读取协议。
+因此该能力不依赖目录 shell/file tool，也不要求产品端了解 Skill 读取协议。
 
 ### 8.3 后端自动 selector（已实现，严格受信任）
 
 当前 selector 在 host 内只接收最多 16 KiB 的当前 Turn 文本和 immutable catalog metadata，不把
 catalog 或候选正文写进 prompt。它只考虑 enabled、compatible 且 trust 为 `BuiltInVerified` 的
-Skill；user、Workspace、Plugin、Marketplace 等来源即使描述匹配也不会自动激活：
+Skill；user、Directory、Plugin、Marketplace 等来源即使描述匹配也不会自动激活：
 
 ```text
 enabled catalog
@@ -471,7 +471,7 @@ Core ContextAssembler 使用明确层级：
 ```text
 1. system safety / platform policy
 2. Zeta developer/product instructions
-3. workspace policy and active Turn constraints
+3. directory policy and active Turn constraints
 4. Skill instructions（带 source + digest 边界）
 5. user input
 6. retrieved references/resources/tool results（不可信数据）
@@ -556,8 +556,8 @@ Skill instruction suggests script
 → durable Tool Call/Result
 ```
 
-独立 user/workspace Skill 默认没有 Plugin activation grant。用户可以显式通过普通 exec tool 运行
-已审阅脚本，但仍遵守 workspace sandbox。`allowed-tools` 是 Agent Skills experimental field，
+独立 user/directory Skill 默认没有 Plugin activation grant。用户可以显式通过普通 exec tool 运行
+已审阅脚本，但仍遵守 directory sandbox。`allowed-tools` 是 Agent Skills experimental field，
 只能作为作者意图/兼容性提示，不能跳过 Zeta approval。
 
 Skill manager 绝不自动执行：
@@ -574,7 +574,7 @@ Assets 是模板、图片或静态数据：
 
 - 不自动加入 context；
 - 按 MIME/size/digest 读取；
-- 写入工作区时必须通过对应 tool 和 approval；
+- 写入目录时必须通过对应 tool 和 approval；
 - 模板展开后的结果是新 artifact，不反向修改 immutable Skill；
 - HTML/SVG 等 active content 在 UI preview 中必须 sanitize/sandbox。
 
@@ -625,7 +625,7 @@ BuiltInVerified
 SignedPlugin { publisher, digest }
 UnsignedLocalDevelopment
 UserManaged
-WorkspaceManaged
+DirectoryManaged
 ```
 
 trust label 不改变 instruction precedence。即使 BuiltIn Skill 也不能绕过 platform safety。
@@ -638,7 +638,7 @@ trust label 不改变 instruction precedence。即使 BuiltIn Skill 也不能绕
 - reference cycle 和 recursive expansion；
 - oversized body/file/tree；
 - Skill 名称 Unicode/confusable collision；
-- workspace repository 提交 Skill 后自动执行；
+- directory repository 提交 Skill 后自动执行；
 - 指令要求读取或发送 credential；
 - 指令伪造 system/developer message；
 - 更新后同 ID 内容改变但 historical/pinned invocation 无提示；
@@ -653,7 +653,7 @@ Skill catalog 是可重建 projection，不是 authority。Authority 分布为�
 
 - BuiltIn Skill：Zeta release；
 - Plugin Skill：Plugin installed/activation authority；
-- User/workspace Skill：显式 configured source；
+- User/directory Skill：显式 configured source；
 - current Turn selection：typed UserInput/command。
 
 Thread history 当前在 `TurnAccepted.activated_skills` 保留显式和 host automatic activation 的 stable
@@ -688,7 +688,7 @@ stored identity/digest；重新执行必须重新授权/解析，不能假定旧
 Skill install/remove 不属于 Skill manager：
 
 - Plugin Skill 通过 Plugin methods 管理；
-- user/workspace standalone Skill 通过明确的 source/config 或将来 artifact import 管理；
+- user/directory standalone Skill 通过明确的 source/config 或将来 artifact import 管理；
 - 客户端不能向 `skill/read` 传 arbitrary filesystem path。
 
 客户端 `$` 候选展示 name 和 description，并在独立管理界面展示 source、version/digest 摘要、compatibility、availability 和 trust。同名 Skill 不静默合并；名称有歧义时不提供无来源限定的 `$name`。Skill 与 `/name` 命令不共享命名空间。自动激活结果在 Turn/status 中可解释，但 UI 不需要显示 Skill 正文。
@@ -714,7 +714,7 @@ Desktop 导入，其 Skill 可以与其他来源一起出现在 TUI catalog 中�
 - 不读取或导入认证文件、凭据、日志与历史记录，`~/.codex/auth.json` 明确排除；
 - Claude 的 `~/.claude.json` 同时包含 OAuth session、MCP、per-project state 和 cache，当前
   整体排除；
-- 保留外部 Agent 类型、规范化来源根和内容摘要，不能把外部 Skill 冒充 built-in 或 workspace
+- 保留外部 Agent 类型、规范化来源根和内容摘要，不能把外部 Skill 冒充 built-in 或 directory
   来源；
 - 导入来源必须可查询、禁用和移除，移除后不能继续激活其中的 Skill；
 - 导入只建立只读内容来源，不授予脚本执行、网络、凭据或沙箱绕过能力。
@@ -809,7 +809,7 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 ### 阶段 S0：format、目录与运行时 browser（当前状态）
 
 - Agent Skills frontmatter/parser/validator；
-- BuiltIn + controlled user + native Workspace source；
+- BuiltIn + controlled user + Directory source；
 - metadata-only scan、digest 和 immutable catalog；
 - path/size/cycle security fixtures；
 - App Server `skills/list`、`skills/changed` 与 watcher refresh；
@@ -888,7 +888,7 @@ description 获得自动 activation。
 
 ## 20. 验证门
 
-除常规 workspace 检查外，必须覆盖：
+除常规 working-tree 检查外，必须覆盖：
 
 - Agent Skills name/description/frontmatter contract；
 - YAML/parser resource exhaustion；

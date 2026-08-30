@@ -92,7 +92,7 @@ effective context = Thread defaults + Turn overrides
 | `Environment` / `Env` | 本机、远端或隔离环境的执行与文件系统位置 | 项目组织、会话树身份 |
 | working scope | 某次执行的 `cwd`、可访问目录和有效授权 | 独立身份与持久生命周期 |
 | `cwd` | 相对路径解析起点 | 权限、项目根、主目录 |
-| `Dir` | `EnvId + canonical path` 的目录身份与边界 | 是否获权、是否可信 |
+| `Dir` | `EnvId + canonical path` 的目录身份与边界 | 是否获权、具备哪些 Permission |
 | `Path` | 在环境中定位资源 | 跨环境身份与授权 |
 | `Repo` / `Worktree` | Git 仓库与检出关系 | 会话或目录权限 |
 

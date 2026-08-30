@@ -3,9 +3,9 @@
 > 本 README 是代码编辑器与差异编辑器 presentation 的 crate-level canonical contract。
 > 跨 crate 的依赖与产品宿主边界见
 > [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md)；`zeta-diff` 算法契约见
-> [`diff/README.md`](../diff/README.md)；异步结构分析与 revision binding 见
+> [`zeta-diff`](../../zeta-rs/diff/README.md)；异步结构分析与 revision binding 见
 > [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md)；文件保存基线与冲突状态由
-> [`zeta-text-file`](../text-file/README.md) 独立拥有。共享 Rust document core 与跨运行时迁移边界见
+> [`zeta-text-file`](../../zeta-rs/text-file/README.md) 独立拥有。共享 Rust document core 与跨运行时迁移边界见
 > [`docs/editor-core.md`](../../docs/editor-core.md)。
 
 `zeta-editor` 拥有 Native UI 使用的多行代码编辑模型、caret/selection、键盘命令、有界

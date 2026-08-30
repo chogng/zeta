@@ -227,7 +227,7 @@ Main 必须：
 
 1. 从应用包内确定的绝对路径启动 `zeta-server app-server connect`；`server-host` 调用
    `zeta-app-server-daemon` crate 串行化 start、连接或选举 profile-scoped local authority，以
-   connection prelude 选择 Workspace runtime，并在交付 stdio 前完成真实 initialize/schema
+   connection prelude 用 `dir_root`、`dir_grant_source` 与产品服务身份选择隔离的 App Server 组合，并在交付 stdio 前完成真实 initialize/schema
    readiness probe；显式诊断和恢复使用 `app-server daemon start|restart|stop|version` 的单行 JSON
    控制面；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
@@ -709,10 +709,9 @@ Desktop connection。后续观察、动作和关闭只路由给这一 owner；�
 `browser_type`、`browser_scroll`、`browser_back`、`browser_reload`、`browser_screenshot` 和
 `browser_close`。Rust 重新执行 URL、目标与 node ID 校验，并把每次动作建模为
 `BrowserInteraction` + `UserInterface` capability；当前策略要求一次性用户批准，Electron Main
-不能自行放宽。完整浏览器工具面只有在工作区可信且至少一个 version 1 connection 同时声明
-`observe + input` 时才进入当前 Tool generation；工作区进入 Restricted 状态、信任被撤销或最后
-一个完整宿主断开时会原子移除。
-反向 RPC handler 可以继续注册，但 Agent 无法从没有上述双重授权的工作区发起动作。
+不能自行放宽。完整浏览器工具面只有在当前 Environment tool composition 已建立，并且至少一个 version 1 connection 同时声明
+`observe + input` 时才进入当前 Tool generation；最后一个完整宿主断开时会原子移除，Environment runtime 切换则重建对应 Tool generation。
+反向 RPC handler 可以继续注册，但 Agent 无法在没有 live browser host 与动作批准时发起操作。
 
 ### 7.2 当前限制与计划演进
 

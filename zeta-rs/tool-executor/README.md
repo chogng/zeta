@@ -5,7 +5,7 @@
 > [`docs/sandboxing.md`](../../docs/sandboxing.md)。完整 Agent 的无界面运行由
 > [`zeta-exec`](../exec/README.md) 拥有。
 
-本 crate 在 approval、WorkspaceRoot、sandbox backend、timeout、cancellation 和 output budget
+本 crate 在 approval、目录边界、sandbox backend、timeout、cancellation 和 output budget
 都已固定后启动一个显式进程。它不解析 shell，不决定 Core policy，也不把普通 non-zero exit
 自动分类为 sandbox denial。
 

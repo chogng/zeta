@@ -3,7 +3,7 @@
 > 本文是 Zeta 原生 Agent 自定义对象、物理命名空间、加载语义和外部生态导入边界的跨系统
 > canonical owner。
 >
-> 状态：架构边界已接受（2026-08-12）；Workspace 原生 catalog slice 已实现：Global
+> 状态：架构边界已接受（2026-08-12）；Directory catalog slice 已实现：Global
 > Instructions 会进入后续 model invocation，Skills 已有 metadata catalog、显式 activation 和通用
 > context injection，可信 built-in Skill 自动 selector 与 Agent delegation definition 选择已经接通。
 > Contextual/OnDemand Instruction 的通用选择、Agent definition list/picker API 和完整 import apply
@@ -16,7 +16,7 @@
 ## 快速理解
 
 Zeta 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象。Prompt 是运行时送入模型的
-信息形式，Slash Command 是调用入口；两者都不是第四种可持久化自定义对象。项目级原生对象统一
+信息形式，Slash Command 是调用入口；两者都不是第四种可持久化自定义对象。目录级 Zeta 对象统一
 位于小写 `.zeta/`，其他产品的目录和格式必须经过 `zeta-agent-import`，不能由原生 loader
 顺便扫描。
 
@@ -57,13 +57,13 @@ Zeta 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 | 轴 | 典型取值 | 决定什么 |
 | --- | --- | --- |
 | Artifact kind | Instructions / Skills / Agents | 对象结构、authority 与 runtime contribution |
-| Scope/source | Built-in / User / Workspace / Plugin | 生命周期、优先级、可写位置与失效方式 |
+| Scope/source | Built-in / User / Directory / Plugin | 生命周期、优先级、可写位置与失效方式 |
 | Provenance | Zeta native / imported from external ecosystem | 审计、冲突解释和重新导入来源 |
 | Activation policy | 按对象类型定义的 named enum | 自动加载、上下文匹配、用户调用或模型选择 |
 
-“Imported”不是 User/Workspace 的替代 scope。导入后的对象仍属于明确的 User 或 Workspace
+“Imported”不是 User/Directory 的替代 scope。导入后的对象仍属于明确的 User 或 Directory
 authority，同时保留外部生态、来源位置 identity 和 digest 等 provenance。Plugin 贡献继续由
-Plugin package 拥有，不能复制成普通 Workspace 文件后丢失 package/version 身份。
+Plugin package 拥有，不能复制成普通目录文件后丢失 package/version 身份。
 
 ### 2.1 Instruction 加载策略
 
@@ -101,21 +101,21 @@ pub enum SkillInvocationPolicy {
 保存的 review、fix-tests、create-component 等重复任务属于 `UserOnly` 或 `UserOrModel` Skill。
 当 `UserOnly` Skill 被投影为 `/review` 时，Skill 仍是领域对象，`/review` 只是调用它的入口。
 
-## 3. `.zeta` 是 Workspace 原生命名空间
+## 3. `.zeta` 是目录级 Zeta 命名空间
 
-项目级 Zeta 原生对象统一规划到小写 `.zeta/`。大写 `.ZETA` 不作为第二个兼容名称，避免在
+目录级 Zeta 对象统一规划到小写 `.zeta/`。大写 `.ZETA` 不作为第二个兼容名称，避免在
 大小写敏感文件系统上形成两个 authority。
 
 ```text
-<workspace_root>/.zeta/
-├── config.toml       # Current：严格只读 Workspace intent
+<dir_root>/.zeta/
+├── config.toml       # Current：严格只读 Directory intent
 ├── instructions/     # Current：有界发现；Global 自动注入
-├── skills/           # Current：metadata-only Workspace Skill source
+├── skills/           # Current：metadata-only Directory Skill source
 └── agents/           # Current：有界 definition catalog；尚不执行
 ```
 
 三个 artifact root 都使用固定原生布局：Instructions 和 Agents 是直接 `.md` 文件，Skills 是
-`<name>/SKILL.md` 目录。Workspace 激活时，App Server 只把可信 root 交给对应 runtime；
+`<name>/SKILL.md` 目录。目录加入 Environment 且具备相应 Grant 时，App Server 才把 root 交给对应 runtime；
 `zeta-skills-extension` 拥有 Skill catalog 与 watcher refresh。模型调用不在 Core context assembly
 中扫描 catalog：Global Instructions 使用冻结的 `HarnessInstructions` snapshot；已激活 Skill 由
 extension 按 durable digest 精确加载正文。读取 catalog 本身仍不会激活 Skill 或执行 Agent definition。
@@ -124,12 +124,12 @@ extension 按 durable digest 精确加载正文。读取 catalog 本身仍不会
 | --- | --- | --- |
 | Built-in | release/package resources | ❌ 原生 authority 直接加载 |
 | User | `<profile_root>` 下的 Zeta-owned artifact root（Proposed） | ❌ 原生 authority 直接加载 |
-| Workspace | `<workspace_root>/.zeta/{instructions,skills,agents}`（Current catalog slice） | ❌ 原生 authority 直接加载 |
+| Directory | `<dir_root>/.zeta/{instructions,skills,agents}`（Current catalog slice） | ❌ 原生 authority 直接加载 |
 | Plugin | Plugin package contribution | ❌ 由 Plugin snapshot 交给目标 authority |
 | External ecosystem | `.codex`、`.agents`、`.claude` 等已知布局 | ✅ 只经 `zeta-agent-import` |
 
 `<profile_root>` 本身已经是 Zeta 的用户级命名空间，因此不再嵌套一个 `~/.zeta` 兼容目录。
-Workspace `.zeta` 继续作为受保护 metadata；普通文件搜索、Agent 工具写入和外部 source
+Directory `.zeta` 继续作为受保护 metadata；普通文件搜索、Agent 工具写入和外部 source
 registration 不能把它当作任意内容目录。
 
 原生 loader 只读取自己的 canonical roots。它不得自动扫描 `AGENTS.md`、`.codex/`、`.agents/`、
@@ -212,22 +212,22 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 
 | 能力 | 状态 | 实现证据或前置条件 |
 | --- | --- | --- |
-| `.zeta/config.toml` Workspace intent | 已实现 | `zeta-config` / App Server local composition |
-| Skill built-in/user/Workspace catalog 与 enablement | 已实现 | `zeta-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md) |
+| `.zeta/config.toml` Directory intent | 已实现 | `zeta-config` / App Server local composition |
+| Skill built-in/user/Directory catalog 与 enablement | 已实现 | `zeta-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md) |
 | Skill activation snapshot 与通用 context injection | 已实现 | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors |
 | Skill metadata 自动 selector | 已实现 | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文 |
 | Codex/Claude known-path inspection | 已实现 | `zeta-agent-import::inspect_agent_paths` |
-| Workspace Instructions authority | 部分具备 | `zeta-instructions` + `WorkspaceCustomizations`；Global 注入已实现，其他选择策略未实现 |
-| Workspace Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
-| `.zeta/{instructions,skills,agents}` loader | 已实现 | 固定原生 roots、有界校验、Workspace activation 与 watcher refresh |
+| Directory Instructions authority | 部分具备 | `zeta-instructions` + `DirContributions`；Global 注入已实现，其他选择策略未实现 |
+| Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
+| `.zeta/{instructions,skills,agents}` loader | 已实现 | 固定 roots、有界校验、Directory activation 与 watcher refresh |
 | External parser、preview 与 apply | 尚未完成 | typed fragments、digest、wire contract、transaction/receipt |
 | `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
 
 实施顺序：
 
 1. 固定本文的三类对象、命名空间和 import boundary，代码与文档不再新增 Prompt/Task artifact。
-2. 已完成 Workspace 三类 catalog、Global Instruction safe-point injection 与 watcher refresh。
-3. 已完成 Skill 显式 activation、可信 built-in 自动 selector、Workspace source、用户可调用投影
+2. 已完成 Directory 三类 catalog、Global Instruction safe-point injection 与 watcher refresh。
+3. 已完成 Skill 显式 activation、可信 built-in 自动 selector、Directory source、用户可调用投影
    和通用 context injection；下一步是通用 Contextual/OnDemand Instruction 解析。
 4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；下一步补 list/picker API，
    cross-authority reference 在具备明确 authority contract 前继续拒绝。
@@ -238,7 +238,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 
 - Zeta 原生 Agent customization 只有 Instructions、Skills、Agents 三类领域对象。
 - Prompt、Task、Preset 和 Slash Command 不成为第四种 artifact；重复任务使用 Skill。
-- Workspace 原生目录只使用小写 `.zeta`，不维护 `.ZETA` alias。
+- Directory 的 Zeta-owned 目录只使用小写 `.zeta`，不维护 `.ZETA` alias。
 - 外部生态格式只由 `zeta-agent-import` 理解；原生 authority 不扫描兼容目录。
 - 类型、scope/source、provenance 与 activation policy 分开建模。
 - 导入成功不授予工具、脚本、网络、凭据、沙箱绕过或长期执行批准。

@@ -1,6 +1,6 @@
 # 构建系统、仓库脚本与输出目录
 
-> 本文拥有 Zeta 构建入口、开发者脚本、受版本控制的构建逻辑与本地可删除产物之间的目录边界。Desktop 产品版本选择仍由 [`product-editions.md`](product-editions.md) 维护。
+> 本文拥有 Zeta 构建入口、开发者脚本、受版本控制的构建逻辑与本地可删除产物之间的目录边界。产品线与宿主选择由 [`product-lines.md`](product-lines.md) 维护。
 
 ## 快速理解
 
@@ -14,7 +14,7 @@ Zeta 使用 `build/` 保存构建系统实现，使用 `scripts/` 保存开发�
 | `zeta-ts/generated/` | 协议和图标生成后参与编译的源码 | 部分文件按生成规则管理 | 否，必须由对应同步命令更新 |
 | `zeta-ts/docs/`、`zeta-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
 | `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树；内容寻址 store 使用用户级默认缓存 | 否 | 可通过 `corepack pnpm install` 重新安装 |
-| `.zeta/` | 当前工作区的 Zeta 配置或运行状态 | 按工作区用途决定 | 不应由构建清理 |
+| `.zeta/` | 当前目录的 Zeta 配置或运行状态 | 按目录用途决定 | 不应由构建清理 |
 
 ## 构建入口
 
@@ -32,7 +32,7 @@ Zeta 使用 `build/` 保存构建系统实现，使用 `scripts/` 保存开发�
 | `corepack pnpm test:desktop:smoke` | 通过 `scripts/test-smoke.ts` 运行 Electron Desktop smoke tests |
 | `corepack pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |
 | `corepack pnpm typecheck:scripts` | 严格检查整个 `scripts/` 中的 TypeScript 仓库脚本 |
-| `corepack pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、工作区状态或源码生成物 |
+| `corepack pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、目录状态或源码生成物 |
 
 Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构建；`ZETA_PRODUCT` 只选择矩阵项，不创建另一套命令。
 

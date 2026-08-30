@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | 模型调用失败怎么办？ | 运行时按错误类别重试、压缩或稳定失败；终态错误在对话内提供重试、换模型、新对话或改方案动作 | [§7](#7-turn-内循环与失败策略) |
 | Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，再从最新 snapshot 重规划 | [§8](#8-引导与并发输入) |
-| 提示词怎么做？ | 分域拥有：模型基础 instructions 归 models-manager，工具描述归工具 owner，Workspace/Goal/Skill 各自贡献 fragment，Core 统一组装 | [§4](#4-提示词) |
+| 提示词怎么做？ | 分域拥有：模型基础 instructions 归 models-manager，工具描述归工具 owner，Directory/Goal/Skill 各自贡献 fragment，Core 统一组装 | [§4](#4-提示词) |
 | 工具选哪些？ | 统一八件套；`apply_patch` 是默认代码变更协议，`edit` 是唯一字符串微编辑和降级工具；逐工具规格见 tools-spec | [§5](#5-工具集) |
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
 | 上下文怎么裁剪/压缩？ | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit` | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
@@ -31,7 +31,7 @@
 | 环节 | 可用 harness 需要 | Zeta 现状 |
 | --- | --- | --- |
 | Model instructions | 每次调用注入身份、策略和通用工作行为 | ✅ `zeta-models-manager::BASE_INSTRUCTIONS` 在普通 Turn 创建时冻结并持久化，Core 通过 `ContextPlan` 注入 |
-| 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
+| 环境上下文 | cwd、平台、日期、git 状态、目录指令 | ✅ Local Environment host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
 | Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop 与本地重规划均已接通 |
@@ -51,7 +51,7 @@ ModelRequest
 │  ├─ 模型基础 instructions                 （models-manager，按冻结模型选择）
 │  └─ Product fragments                    （Goal、Agent 与 system/product extension）
 ├─ input
-│  ├─ [0] Workspace/Skill fragments        （`.zeta/instructions`、Skill 与对应 extension）
+│  ├─ [0] Directory/Skill fragments        （`.zeta/instructions`、Skill 与对应 extension）
 │  ├─ [1..] durable history                （append-only，语义单元完整，
 │  │                                        可含 checkpoint summary 替代更早历史）
 │  ├─ 当前 Turn 输入 / steering 消息        （+ append-only reminder 块）
@@ -101,7 +101,7 @@ loop:
 
 `zeta-prompts` 只拥有公共设施和共享产品提示词。目前 context compaction 与通用代码 review 在这里；模型基础 instructions 留在 `zeta-models-manager`，Goal 与动态 context fragment 留在 Core，动作授权审查提示词留在 `zeta-auto-review`。
 
-外部产品如何组织项目指令只是参照系；Zeta 的原生 artifact、目录和加载策略由
+外部产品如何组织目录指令只是参照系；Zeta 的 artifact、目录和加载策略由
 [`agent-customizations.md`](agent-customizations.md) 定义。共同点是**静态与动态严格分离**——
 这决定缓存命中率，比放 system 还是首条消息更重要。
 
@@ -144,7 +144,7 @@ user-role context 放在 durable Thread history 之后，因此目录变化只�
 - 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；
 - `load: contextual` / `on-demand`：catalog 已保留类型化策略，但资源匹配和显式选择尚未实现；
 - 目录不存在或没有合法 Global 条目：省略 `input[0]`，不放占位符；
-- 文件变化：Workspace watcher 触发 catalog refresh；已经组装的 model request 不变，后续
+- 文件变化：Directory watcher 触发 catalog refresh；已经组装的 model request 不变，后续
   model invocation 从 `HarnessContextProvider` 读取新 snapshot。
 
 ### 4.4 动态注入：append-only reminder
@@ -164,7 +164,7 @@ reminder 声明自己是背景信息而非用户指令。这是 Skill 激活、h
 4. **工具描述就是提示词**：进入每次调用的 tools 前缀，与 system prompt 同级打磨。
 5. **少而精**：v1 ≤ 10 个。
 
-`apply_patch` 能把多文件变更表达为一个逻辑请求，但这不等于存储层事务。执行器应在第一次写入前完成全部解析、读取和上下文校验；在事务提交或回滚能力落地前，提交阶段若可能已写入部分文件，必须返回 unknown outcome、禁止自动重放，并要求重新检查工作区状态。
+`apply_patch` 能把多文件变更表达为一个逻辑请求，但这不等于存储层事务。执行器应在第一次写入前完成全部解析、读取和上下文校验；在事务提交或回滚能力落地前，提交阶段若可能已写入部分文件，必须返回 unknown outcome、禁止自动重放，并要求重新检查工作树状态。
 
 外部 harness 的具体工具形式只能作为 schema 和交互设计参考，不能证明某个模型家族必须绑定某种编辑工具。Zeta 只有在版本控制的评测或明确启用、去内容化且达到最小样本门槛的用户聚合数据支持时，才考虑新增按模型细分的候选 profile。
 
@@ -347,13 +347,13 @@ terminal Turn 和完整 Tool Call/Result 组组成的最老前缀。可选保留
 对话 Item。订阅模型的无提示压缩委托给 upstream `thread/compact/start`，远端 Thread 拥有其压缩状态；
 由于 upstream 方法没有保留提示字段，订阅路径收到带提示请求时明确失败，不静默丢弃提示。
 
-热文件重注入属于 Proposed，当前不会在压缩过程中重新读取 Workspace 文件。
+热文件重注入属于 Proposed，当前不会在压缩过程中重新读取 Directory 文件。
 
 ### 10.3 窗口重建
 
 ```text
 instructions（下一个 model safe point 重新冻结）
-+ 工作区指令（mandatory fragment）
++ 目录指令（mandatory fragment）
 + checkpoint summary
 + tail 原文
 ```
@@ -442,7 +442,7 @@ authoring 规则以最严格交集为准：
 - **模型行为 benchmark（可选）**：只有在有受控测试凭据和明确产品目标时，才运行版本化任务集 × 主力 provider/model × 候选 profile；没有 benchmark 时继续使用统一 profile；
 - M0–M6 每个里程碑的验收优先使用对应的确定性测试；模型指标只在 benchmark 启动后作为补充。
 
-当前 PR 只运行现有 Rust/TS 测试和项目既有 smoke 入口，不依赖网络或真实模型凭据。未来模型 benchmark 若启用，只记录明确允许的去内容化指标；workspace、日志和任务输出不得进入聚合。
+当前 PR 只运行现有 Rust/TS 测试和项目既有 smoke 入口，不依赖网络或真实模型凭据。未来模型 benchmark 若启用，只记录明确允许的去内容化指标；目录内容、日志和任务输出不得进入聚合。
 
 ## 15. 落地顺序
 
@@ -450,7 +450,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
-| M0（完成）提示词接线 | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.zeta/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入 | `zeta-models-manager`、`zeta-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
+| M0（完成）提示词接线 | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.zeta/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入 | `zeta-models-manager`、`zeta-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`DirContributions` | 无 |
 | M1（实现完成）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖 | 本地工具组合、executor contributions、profile 声明层 | 现有行为测试 |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化 | 现有行为测试 |
