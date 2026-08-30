@@ -11,8 +11,9 @@ use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
 use crate::features::theme::ThemePreviewPalette;
+use crate::render::SyntaxPalette;
+use crate::render::highlight_code;
 use ratatui::style::Style;
-use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::text::Span;
 
@@ -117,59 +118,36 @@ fn theme_item(
 }
 
 fn diff_preview(palette: ThemePreviewPalette) -> Vec<Line<'static>> {
-    vec![
-        Line::from(vec![
-            Span::styled("1   ", Style::default().fg(palette.muted)),
-            Span::styled("fn", Style::default().fg(palette.keyword).bold()),
-            Span::raw(" "),
-            Span::styled("greet", Style::default().fg(palette.function)),
-            Span::styled("(zeta: &", Style::default().fg(palette.foreground)),
-            Span::styled("str", Style::default().fg(palette.r#type)),
-            Span::styled(") -> ", Style::default().fg(palette.foreground)),
-            Span::styled("String", Style::default().fg(palette.r#type)),
-            Span::styled(" {", Style::default().fg(palette.foreground)),
-        ])
-        .style(
-            Style::default()
-                .fg(palette.foreground)
-                .bg(palette.background),
+    let syntax = SyntaxPalette {
+        foreground: palette.foreground,
+        function: palette.function,
+        keyword: palette.keyword,
+        muted: palette.muted,
+        string: palette.string,
+        r#type: palette.r#type,
+        variable: palette.variable,
+    };
+    let mut lines = highlight_code(
+        "fn greet(zeta: &str) -> String {\n  format!(\"Hello, {}!\", zeta)\n  format!(\"Hello, {zeta}!\")\n}",
+        "rust",
+        syntax,
+    );
+    let prefixes = [
+        ("1   ", palette.muted, palette.background),
+        ("2  -  ", palette.removed_marker, palette.removed_background),
+        (
+            "2  +  ",
+            palette.inserted_marker,
+            palette.inserted_background,
         ),
-        Line::from(vec![
-            Span::styled("2  -  ", Style::default().fg(palette.removed_marker)),
-            Span::styled("  format!", Style::default().fg(palette.function)),
-            Span::styled("(", Style::default().fg(palette.foreground)),
-            Span::styled("\"Hello, {}!\"", Style::default().fg(palette.string)),
-            Span::styled(", ", Style::default().fg(palette.foreground)),
-            Span::styled("zeta", Style::default().fg(palette.variable)),
-            Span::styled(")", Style::default().fg(palette.foreground)),
-        ])
-        .style(
-            Style::default()
-                .fg(palette.foreground)
-                .bg(palette.removed_background),
-        ),
-        Line::from(vec![
-            Span::styled("2  +  ", Style::default().fg(palette.inserted_marker)),
-            Span::styled("  format!", Style::default().fg(palette.function)),
-            Span::styled("(", Style::default().fg(palette.foreground)),
-            Span::styled("\"Hello, {zeta}!\"", Style::default().fg(palette.string)),
-            Span::styled(")", Style::default().fg(palette.foreground)),
-        ])
-        .style(
-            Style::default()
-                .fg(palette.foreground)
-                .bg(palette.inserted_background),
-        ),
-        Line::from(vec![
-            Span::styled("3   ", Style::default().fg(palette.muted)),
-            Span::styled("}", Style::default().fg(palette.foreground)),
-        ])
-        .style(
-            Style::default()
-                .fg(palette.foreground)
-                .bg(palette.background),
-        ),
-    ]
+        ("3   ", palette.muted, palette.background),
+    ];
+    for (line, (prefix, marker, background)) in lines.iter_mut().zip(prefixes) {
+        line.spans
+            .insert(0, Span::styled(prefix, Style::default().fg(marker)));
+        line.style = Style::default().fg(palette.foreground).bg(background);
+    }
+    lines
 }
 
 #[cfg(test)]

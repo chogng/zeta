@@ -93,7 +93,10 @@ Tool、approval policy 或 persistence。
   不启用搜索，Enter 原子保存、立即重绘并关闭整个 Theme flow 返回主界面，失败时保留 Pane；成功时以状态圆点、`/theme <id>` 和以 `└─` 归属且与命令文字对齐的 `Theme set to …` transcript 记录执行结果，`/theme <id>` 保留直接切换；
   Auto 在 terminal raw mode 建立后查询一次 OSC 11 实际背景 RGB，据此选择 Light/Dark；查询超时
   后依次回退 `COLORFGBG` 和 Dark。结果在会话内缓存，后续打开 Theme Pane 不重复查询；
-- basic Unicode-aware wrapped-row estimation、显式 transcript scroll 和默认 follow-latest。
+- transcript 的行生成、首行/续行前缀、Ratatui 实际折行高度、scroll 与鼠标命中共用同一套
+  `render::text` 结果；显式 transcript scroll 默认 follow-latest。`render::highlight` 使用 bundled
+  syntax 定义和当前 Zeta syntax token 生成代码行，未知语言、解析失败或超限源码保持可见原文；
+  Theme Pane 的 Rust diff preview 已使用该入口。
 
 ## 产品支持边界
 
@@ -208,7 +211,9 @@ src/
 │   └── terminal_probe.rs          # bounded OSC query before the crossterm event reader starts
 ├── render.rs                      # Renderable measurement/draw contract and module root
 └── render/
-    ├── layout.rs                  # shared pure geometry
+    ├── highlight.rs               # bounded syntax highlighting with Zeta theme tokens
+    ├── layout.rs                  # shared inset and pure geometry
+    ├── text.rs                    # line ownership, prefixing and wrapped height
     └── theme.rs                   # immutable RenderTheme and terminal color-level mapping
 ```
 
@@ -228,6 +233,8 @@ src/
 | `zeta_ansi_escape::ansi_text` | dependency public API | 把 Tool stdout/stderr 的 ANSI SGR 和 tab 转为 Ratatui-owned styled text | 实现归 [`zeta-ansi-escape`](../ansi-escape/README.md)；TUI 不复制 parser、不修改 protocol/Thread 原始输出 |
 | `render::{Renderable,RenderContext}` | private | 统一 surface 的宽度测量、绘制入口与只读主题传递 | 不读取 App/feature、不调用 terminal 或 RPC |
 | `render::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
+| `render::text` | private module | 行的借用/持有转换、批量复制、首行/续行前缀和 Ratatui 实际折行高度 | 不解释 transcript role、代码语言或滚动状态 |
+| `render::highlight` | private module | 在 512 KiB、10,000 行、单行 4 KiB 上限内把明确语言的源码映射为主题 syntax span | 不解析 Markdown、不选择或保存主题、不修改源文本 |
 | `render::theme::RenderTheme` | private | 将 `zeta-theme::ThemeSnapshot` 的明确颜色子集映射到终端能力 | 不读取或保存用户配置、不定义产品状态 |
 | `features::theme::ThemeResource` | private | 加载主题目录、生成预览、选择并保存用户主题 | 只在事件循环和命令执行路径使用；draw path 不执行文件 I/O |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |

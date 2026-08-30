@@ -2,12 +2,14 @@ use super::ChatHistoryScroll;
 use super::CommandStatus;
 use super::Message;
 use super::MessageRole;
-use super::row::estimated_wrapped_rows;
 use crate::components::welcome;
 use crate::components::welcome::WelcomeModel;
 use crate::render::RenderContext;
 use crate::render::Renderable;
 use crate::render::horizontal_margin;
+use crate::render::prefix_lines;
+use crate::render::styled_text_lines;
+use crate::render::wrapped_height;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -27,14 +29,14 @@ pub(crate) struct ChatHistoryView<'a> {
 }
 
 impl Renderable for ChatHistoryView<'_> {
-    fn desired_height(&self, width: u16) -> u16 {
+    fn desired_height(&self, width: u16, context: RenderContext<'_>) -> u16 {
         if self.messages.is_empty() {
             return welcome::desired_height(width);
         }
         let content_width = horizontal_margin(Rect::new(0, 0, width, u16::MAX), 2).width;
         self.messages
             .iter()
-            .map(|message| message_rows(message, usize::from(content_width)))
+            .map(|message| message_height(message, content_width, context))
             .sum::<usize>()
             .min(u16::MAX as usize) as u16
     }
@@ -52,14 +54,9 @@ impl Renderable for ChatHistoryView<'_> {
             return;
         }
 
-        let history_width = content_area.width as usize;
         let history_height = content_area.height as usize;
-        let history_rows = self
-            .messages
-            .iter()
-            .map(|message| message_rows(message, history_width))
-            .sum::<usize>();
         let lines = message_lines(self.messages, context);
+        let history_rows = wrapped_height(&lines, content_area.width);
         let history = Paragraph::new(lines).wrap(Wrap { trim: false });
         let bottom_offset = history_rows.saturating_sub(history_height);
         frame.render_widget(
@@ -79,6 +76,7 @@ pub(crate) fn pointer_target_at(
     area: Rect,
     messages: &[Message],
     scroll: &ChatHistoryScroll,
+    context: RenderContext<'_>,
     column: u16,
     row: u16,
 ) -> Option<ChatHistoryPointerTarget> {
@@ -90,17 +88,16 @@ pub(crate) fn pointer_target_at(
     {
         return None;
     }
-    let width = content_area.width as usize;
     let total_rows = messages
         .iter()
-        .map(|message| message_rows(message, width))
+        .map(|message| message_height(message, content_area.width, context))
         .sum::<usize>();
     let bottom_offset = total_rows.saturating_sub(content_area.height as usize);
     let visible_offset = usize::from(scroll.paragraph_offset(bottom_offset));
     let target_row = visible_offset.saturating_add(usize::from(row - content_area.y));
     let mut start = 0usize;
     for message in messages {
-        let rows = message_rows(message, width);
+        let rows = message_height(message, content_area.width, context);
         let Some(cell_id) = message.cell_id.as_ref() else {
             start = start.saturating_add(rows);
             continue;
@@ -130,13 +127,15 @@ fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec
                 None => (context.muted(), "●"),
             };
             let marker = expansion_marker(message).unwrap_or(status_marker);
-            lines.push(Line::from(vec![
+            let command_lines = styled_text_lines(&message.text, selected_style(message, context));
+            lines.extend(prefix_lines(
+                command_lines,
                 Span::styled(
                     format!("{marker}  "),
                     Style::default().fg(color).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(&message.text, selected_style(message, context)),
-            ]));
+                Span::raw("   "),
+            ));
             if let Some(detail) = &message.detail {
                 push_detail_lines(&mut lines, message.role, detail, context);
             }
@@ -155,13 +154,14 @@ fn message_lines<'a>(messages: &'a [Message], context: RenderContext<'_>) -> Vec
             MessageRole::Command => unreachable!("command messages render as a grouped surface"),
         };
         let marker = expansion_marker(message).unwrap_or(role_marker);
-        lines.push(Line::from(vec![
+        lines.extend(prefix_lines(
+            styled_text_lines(&message.text, selected_style(message, context)),
             Span::styled(
                 format!("{marker}  "),
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(&message.text, selected_style(message, context)),
-        ]));
+            Span::raw("   "),
+        ));
         if let Some(detail) = &message.detail {
             push_detail_lines(&mut lines, message.role, detail, context);
         }
@@ -209,10 +209,11 @@ fn push_detail_lines<'a>(
     context: RenderContext<'_>,
 ) {
     if role != MessageRole::Command {
-        lines.push(Line::from(vec![
+        lines.extend(prefix_lines(
+            styled_text_lines(detail, Style::default().fg(context.muted())),
             Span::styled("└─ ", Style::default().fg(context.muted())),
-            Span::styled(detail, Style::default().fg(context.muted())),
-        ]));
+            Span::raw("   "),
+        ));
         return;
     }
 
@@ -227,23 +228,18 @@ fn push_detail_lines<'a>(
             }
         }
     }
-    output[0]
-        .spans
-        .insert(0, Span::styled("└─ ", Style::default().fg(context.muted())));
-    lines.extend(output);
+    lines.extend(prefix_lines(
+        output,
+        Span::styled("└─ ", Style::default().fg(context.muted())),
+        Span::raw("   "),
+    ));
 }
 
-fn message_rows(message: &Message, available_width: usize) -> usize {
-    let detail_rows = message
-        .detail
-        .as_deref()
-        .map(|detail| estimated_wrapped_rows(3, detail, available_width))
-        .unwrap_or_default();
-    let details_rows = usize::from(message.expanded && message.has_details);
-    estimated_wrapped_rows(3, &message.text, available_width)
-        .saturating_add(detail_rows)
-        .saturating_add(details_rows)
-        .saturating_add(1)
+fn message_height(message: &Message, width: u16, context: RenderContext<'_>) -> usize {
+    wrapped_height(
+        &message_lines(std::slice::from_ref(message), context),
+        width,
+    )
 }
 
 #[cfg(test)]

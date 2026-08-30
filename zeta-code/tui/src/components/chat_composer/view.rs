@@ -38,7 +38,7 @@ pub(crate) struct ChatComposerSurface<'a, 'view> {
 }
 
 impl Renderable for ChatComposerSurface<'_, '_> {
-    fn desired_height(&self, width: u16) -> u16 {
+    fn desired_height(&self, width: u16, _context: RenderContext<'_>) -> u16 {
         let input_height = self.view.input_desired_height(width);
         desired_height(input_height, &pane_sizes(self.view, width))
     }

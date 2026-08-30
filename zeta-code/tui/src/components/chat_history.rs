@@ -1,6 +1,5 @@
 mod markdown;
 mod model;
-mod row;
 mod state;
 mod view;
 

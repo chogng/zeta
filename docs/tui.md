@@ -461,8 +461,9 @@ component 可以依赖 `render/` 原语和必要的 canonical value type，但�
 `render/` 是 `zeta-tui` 内部共享的渲染底座，不是三端共享 crate，也不是全局 UI 状态 owner。它统一 component 已经重复使用的 Ratatui 机械能力：
 
 - `Renderable` 当前统一宽度测量与绘制 contract；滚动和光标仍由拥有局部交互状态的 component 处理，出现第二个相同需求后再扩展 contract；
-- area、inset、column/flex、clip 与 scroll viewport 等纯布局；
-- owned line、prefix、Unicode 宽度与折行等文本机械操作；
+- area、inset 与 bottom anchor 等当前已复用的纯布局；column/flex、clip 与 scroll viewport 只有出现真实重复调用方后再加入；
+- line 的借用/持有转换、批量复制、首行/续行 prefix，以及直接复用 Ratatui wrapping 的高度计算；
+- 有资源上限、使用当前 `RenderTheme` syntax token 且不保存第二套主题状态的代码高亮；
 - 不可变 `RenderTheme`、color 与 spacing 的 Ratatui 映射；
 - 后续由稳定 identity、content revision、width、theme revision 与 render mode 定位的有界派生缓存。
 
@@ -477,7 +478,7 @@ component 可以依赖 `render/` 原语和必要的 canonical value type，但�
 
 通用横向 tab 交互放在 `components/tab_list.rs`，过滤和选择状态放在 `components/list_selection/`；“恢复哪个 Session”的 row model、typed ID 和 action 属于 `features/sessions/`。`render/` 只提供这些上层模块共同需要的纯布局、绘制与缓存机制。
 
-当前实现已经把纯 geometry 迁入 `render/layout.rs`，并按职责拆开旧主题模块：颜色合成、终端色阶映射与不可变 `RenderTheme` 位于 `render/theme.rs`，主题目录读取、预览、选择和保存位于 `features/theme/resource.rs`。活动主题由 `App` presentation state 持有，并通过只读 `RenderContext` 从根 Frame 传给所有 renderer；draw path 不再读取全局锁。`ui.rs` 与 `ui/` 已删除且没有转发层。`app/frame.rs` 继续拥有整页 surface 装配，component 继续拥有自己的 view model 与具体 renderer；`render/` 不接管页面结构或 feature 文案。
+当前实现已经把 inset、bottom anchor 等纯 geometry 迁入 `render/layout.rs`；`render/text.rs` 统一行的借用/持有转换、复制、前缀和实际折行高度；`render/highlight.rs` 使用 bundled syntax 定义与 Zeta syntax token 完成有界高亮。颜色合成、终端色阶映射与不可变 `RenderTheme` 位于 `render/theme.rs`，主题目录读取、预览、选择和保存位于 `features/theme/resource.rs`。活动主题由 `App` presentation state 持有，并通过只读 `RenderContext` 从根 Frame 传给所有 renderer；draw path 不再读取全局锁，也没有独立 syntax-theme 全局状态。`ui.rs` 与 `ui/` 已删除且没有转发层。`app/frame.rs` 继续拥有整页 surface 装配，component 继续拥有自己的 view model 与具体 renderer；`render/` 不接管页面结构或 feature 文案。
 
 依赖方向固定为：
 
@@ -488,7 +489,7 @@ render primitives → ratatui
 terminal/session → ratatui backend draw
 ```
 
-`ChatHistoryView` 与 `ChatComposerSurface` 已是 `Renderable` 的首批真实消费者，同一实现同时提供宽度测量与绘制。其他 component 只有在需要同一测量 contract 时再迁入，不能为了统一外形一次性包装全部 `draw` function。后续 cache instance 由使用它的 component/runtime 持有；`render/` 只定义 key、容量和失效规则，不建立全局 cache service。
+`ChatHistoryView` 与 `ChatComposerSurface` 已是 `Renderable` 的首批真实消费者，同一实现同时提供宽度测量与绘制。`ChatHistoryView` 的多行正文、ANSI detail、首行/续行前缀、总高度、scroll 和 pointer row 现在都从同一组 `Line` 及 `Paragraph::wrap` 结果得出，不再保留另一套 Unicode 行数估算。Theme Pane 的 Rust diff preview 是高亮入口的首个真实调用方。其他 component 只有在需要同一测量 contract 时再迁入，不能为了统一外形一次性包装全部 `draw` function。后续 cache instance 由使用它的 component/runtime 持有；`render/` 只定义 key、容量和失效规则，不建立全局 cache service。
 
 ## 10. `terminal/`：真实终端基础设施
 
@@ -764,13 +765,13 @@ streaming 会持续改变正文高度、可见尾部和滚动锚点。如果没�
 
 | 层 | 负责 | 不负责 |
 | --- | --- | --- |
-| `render/` | 当前拥有 `Renderable`、`RenderContext`、纯布局和不可变主题映射；下一步增加文本行操作、cache key 与有界缓存 | event、deadline、主题文件读写、RPC、feature state |
+| `render/` | 当前拥有 `Renderable`、`RenderContext`、纯布局、行操作、实际折行高度、有界代码高亮和不可变主题映射；下一步增加 cache key 与有界缓存 | event、deadline、主题文件读写、RPC、feature state |
 | component renderer | 把自己的只读 view model 转成 renderable，并定义局部命中区域 | 修改 feature state、读取文件、调度 task |
 | `app/frame.rs` | 装配整页 surface、overlay 顺序与最终 screen selection | 保存 component 内部缓存、解释 streaming delta |
 | `app/redraw.rs` | dirty revision、frame deadline、请求合并与速率限制 | 测量文本、保存正文、丢弃控制事件 |
 | `terminal/session.rs` | 执行 Ratatui draw、保存最后完成的 buffer、恢复终端 | 决定何时需要新 frame |
 
-第一步已经完成：没有建立通用 Markdown renderer 或空 cache，而是让 `ChatHistoryView` 和 `ChatComposerSurface` 使用同一个 `Renderable` contract，并完成布局、主题资源拆分和旧目录删除。下一步为 transcript cell 引入 revision-bound cache，并让 `app/redraw.rs` 合并帧请求。
+第一步已经完成：没有建立通用 Markdown renderer 或空 cache，而是让 `ChatHistoryView` 和 `ChatComposerSurface` 使用同一个 `Renderable` contract，补齐行操作、实际折行高度和主题驱动的有界代码高亮，并完成布局、主题资源拆分和旧目录删除。下一步为 transcript cell 引入 revision-bound cache，并让 `app/redraw.rs` 合并帧请求。
 
 #### 13.2.3 Codex TUI 的 streaming/render 经验与 Zeta 取舍
 

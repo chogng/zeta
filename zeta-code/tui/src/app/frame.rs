@@ -133,6 +133,7 @@ pub(crate) fn input_pointer_target_at(
             areas.session.transcript,
             &messages,
             app.transcript_scroll(),
+            app.render_context(),
             column,
             row,
         ) {
@@ -172,7 +173,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
         view: &input_view,
         cursor: chat_input::ChatInputCursor::Hidden,
     }
-    .desired_height(terminal_area.width);
+    .desired_height(terminal_area.width, app.render_context());
     let approval_rows = app
         .approval_view()
         .map(approval::desired_height)

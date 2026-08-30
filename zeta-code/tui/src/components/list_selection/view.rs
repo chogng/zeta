@@ -3,8 +3,10 @@ use super::state::ListSelectionItem;
 use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::tab_list;
+use crate::render::Insets;
+use crate::render::RectExt;
 use crate::render::RenderContext;
-use crate::render::horizontal_margin;
+use crate::render::line_to_borrowed;
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -150,14 +152,14 @@ pub(crate) fn draw(
                 1,
             );
             frame.render_widget(Block::default().style(line.style), row);
-            frame.render_widget(Paragraph::new(line.clone()), row);
+            frame.render_widget(Paragraph::new(line_to_borrowed(line)), row);
         }
         frame.render_widget(
             Paragraph::new(dashed_rule(preview_areas[3].width, None, separator_color)),
             preview_areas[3],
         );
         if let Some(caption) = preview.caption() {
-            frame.render_widget(Paragraph::new(caption.clone()), preview_areas[4]);
+            frame.render_widget(Paragraph::new(line_to_borrowed(caption)), preview_areas[4]);
         }
     }
 }
@@ -203,14 +205,7 @@ impl ListSelectionState {
 }
 
 fn content_area(area: Rect) -> Rect {
-    horizontal_margin(
-        Rect {
-            y: area.y.saturating_add(1),
-            height: area.height.saturating_sub(1),
-            ..area
-        },
-        2,
-    )
+    area.inset(Insets::tlbr(1, 2, 0, 2))
 }
 
 fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) -> Rc<[Rect]> {

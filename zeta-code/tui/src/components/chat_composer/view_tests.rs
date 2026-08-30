@@ -6,6 +6,7 @@ use crate::app::App;
 use crate::components::chat_composer::ChatComposerPaneKind;
 use crate::components::chat_input::ChatInputCursor;
 use crate::render::Renderable;
+use crate::render::test_context;
 use ratatui::layout::Rect;
 
 #[test]
@@ -37,7 +38,7 @@ fn renderable_measurement_matches_the_composer_area_allocation() {
         cursor: ChatInputCursor::Hidden,
     };
 
-    let height = surface.desired_height(80);
+    let height = surface.desired_height(80, test_context());
     let allocated = view_areas(Rect::new(0, 0, 80, height), &view);
 
     assert_eq!(allocated.input.bottom(), height);

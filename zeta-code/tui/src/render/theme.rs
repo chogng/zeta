@@ -175,14 +175,29 @@ impl<'a> RenderContext<'a> {
     pub(crate) const fn foreground(self) -> Color {
         self.theme.foreground()
     }
+    pub(crate) const fn function(self) -> Color {
+        self.theme.function()
+    }
     pub(crate) const fn highlight(self) -> Color {
         self.theme.highlight()
     }
     pub(crate) const fn muted(self) -> Color {
         self.theme.muted()
     }
+    pub(crate) const fn keyword(self) -> Color {
+        self.theme.keyword()
+    }
+    pub(crate) const fn string(self) -> Color {
+        self.theme.string()
+    }
     pub(crate) const fn success(self) -> Color {
         self.theme.success()
+    }
+    pub(crate) const fn r#type(self) -> Color {
+        self.theme.r#type()
+    }
+    pub(crate) const fn variable(self) -> Color {
+        self.theme.variable()
     }
     pub(crate) const fn warning(self) -> Color {
         self.theme.warning()
