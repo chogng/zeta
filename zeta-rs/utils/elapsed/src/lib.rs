@@ -20,8 +20,8 @@ pub fn format_duration(duration: Duration) -> String {
 
 /// Converts a duration into the compact whole-second form used by long-running status surfaces.
 ///
-/// The result uses seconds below one minute, minutes and seconds below one hour, and hours,
-/// minutes, and seconds for longer durations.
+/// The result uses seconds below one minute, minutes and seconds below one hour, hours, minutes,
+/// and seconds below one day, and days and hours for longer durations.
 #[must_use]
 pub fn format_compact_duration(duration: Duration) -> String {
     let seconds = duration.as_secs();
@@ -33,10 +33,15 @@ pub fn format_compact_duration(duration: Duration) -> String {
         let seconds = seconds % 60;
         return format!("{minutes}m {seconds:02}s");
     }
-    let hours = seconds / 3_600;
-    let minutes = seconds % 3_600 / 60;
-    let seconds = seconds % 60;
-    format!("{hours}h {minutes:02}m {seconds:02}s")
+    if seconds < 86_400 {
+        let hours = seconds / 3_600;
+        let minutes = seconds % 3_600 / 60;
+        let seconds = seconds % 60;
+        return format!("{hours}h {minutes:02}m {seconds:02}s");
+    }
+    let days = seconds / 86_400;
+    let hours = seconds % 86_400 / 3_600;
+    format!("{days}d {hours:02}h")
 }
 
 #[cfg(test)]

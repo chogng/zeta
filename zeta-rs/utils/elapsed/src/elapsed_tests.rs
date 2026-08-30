@@ -35,4 +35,16 @@ fn formats_long_running_status_durations_as_compact_whole_seconds() {
         format_compact_duration(Duration::from_secs(3_789)),
         "1h 03m 09s"
     );
+    assert_eq!(
+        format_compact_duration(Duration::from_secs(86_399)),
+        "23h 59m 59s"
+    );
+    assert_eq!(
+        format_compact_duration(Duration::from_secs(86_400)),
+        "1d 00h"
+    );
+    assert_eq!(
+        format_compact_duration(Duration::from_secs(258_987)),
+        "2d 23h"
+    );
 }
