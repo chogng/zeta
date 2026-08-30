@@ -43,7 +43,7 @@ pub(super) fn with_shell_presentation_model<R>(
         theme_scheme,
         theme_follows_system,
         cursor_position,
-        keybindings_resource,
+        keybinding_diagnostics,
         text_layout,
         ..
     } = app;
@@ -158,7 +158,7 @@ pub(super) fn with_shell_presentation_model<R>(
             keybindings,
             quick_access,
             settings,
-            keybinding_diagnostics: keybindings_resource.diagnostics(),
+            keybinding_diagnostics,
             theme_scheme: *theme_scheme,
             theme_follows_system: *theme_follows_system,
             window_control_insets,

@@ -265,14 +265,14 @@ fn plain_character_prefix_cannot_intercept_chat_input_text() {
 #[test]
 fn user_rules_override_or_block_builtins_and_evaluate_context() {
     let rules = compile_app_user_bindings(
-        br#"[
+        &serde_json::json!([
             {
                 "key":"ctrl+o",
                 "command":"zetaCode.action.cycleApprovalMode",
                 "when":"inputFocus && !selectionVisible"
             },
-            {"key":"ctrl+c","command":null}
-        ]"#,
+            {"key":"ctrl+c","block":true}
+        ]),
         HostPlatform::Linux,
     )
     .unwrap();
@@ -299,10 +299,10 @@ fn user_rules_override_or_block_builtins_and_evaluate_context() {
 #[test]
 fn user_chords_use_the_existing_pending_state_machine() {
     let rules = compile_app_user_bindings(
-        br#"[{
+        &serde_json::json!([{
             "key":"ctrl+k ctrl+y",
             "command":"zetaCode.action.copyLastResponse"
-        }]"#,
+        }]),
         HostPlatform::Linux,
     )
     .unwrap();
@@ -325,18 +325,18 @@ fn user_chords_use_the_existing_pending_state_machine() {
 }
 
 #[test]
-fn user_resource_rejects_unknown_commands_and_context_keys() {
+fn user_config_rejects_unknown_commands_and_context_keys() {
     let unknown_command = compile_app_user_bindings(
-        br#"[{"key":"ctrl+y","command":"zetaCode.action.missing"}]"#,
+        &serde_json::json!([{"key":"ctrl+y","command":"zetaCode.action.missing"}]),
         HostPlatform::Linux,
     )
     .unwrap_err();
     let unknown_context = compile_app_user_bindings(
-        br#"[{
+        &serde_json::json!([{
             "key":"ctrl+y",
             "command":"zetaCode.action.copyLastResponse",
             "when":"desktopFocus"
-        }]"#,
+        }]),
         HostPlatform::Linux,
     )
     .unwrap_err();
@@ -348,7 +348,7 @@ fn user_resource_rejects_unknown_commands_and_context_keys() {
 #[test]
 fn setup_snapshot_separates_default_and_user_bindings() {
     let rules = compile_app_user_bindings(
-        br#"[{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]"#,
+        &serde_json::json!([{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]),
         HostPlatform::Linux,
     )
     .unwrap();

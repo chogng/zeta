@@ -1,8 +1,11 @@
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use crate::PaneBinding;
 use anyhow::Result;
 use anyhow::anyhow;
+use zeta_app_server_protocol::protocol::config::ConfigUpdateParams;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataResult;
@@ -14,6 +17,8 @@ use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
 use zeta_files::DirectoryEntry;
+use zeta_protocol::CommandId;
+use zeta_protocol::Patch;
 use zeta_protocol::Session;
 use zeta_scm::ScmDiff;
 use zeta_text_file::TextFileAccess;
@@ -412,6 +417,41 @@ impl WorkbenchApplication {
         Ok(())
     }
 
+    pub(crate) fn save_keybinding(
+        &mut self,
+        command: zeta_commands::AppCommandId,
+        keybinding: &zeta_keybinding::KeySequence,
+    ) -> Result<()> {
+        {
+            let client = self
+                .app_server_client
+                .as_mut()
+                .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
+            let config = client.read_config().map_err(client_error)?;
+            let gui = crate::keybindings::edited_gui_config(
+                config.gui,
+                command,
+                keybinding,
+                zeta_keybinding::HostPlatform::current(),
+            )
+            .map_err(anyhow::Error::msg)?;
+            client
+                .update_config(ConfigUpdateParams {
+                    command_id: next_gui_config_command_id(),
+                    expected_revision: config.revision,
+                    preferred_model: Patch::Missing,
+                    approval_review_model: Patch::Missing,
+                    commit_message_model: Patch::Missing,
+                    tool_mode: Patch::Missing,
+                    agent_grep_backend: Patch::Missing,
+                    gui: Patch::Value(gui),
+                    tui: Patch::Missing,
+                })
+                .map_err(client_error)?;
+        }
+        self.refresh_configuration_from_app_server()
+    }
+
     pub(crate) fn refresh_git_from_app_server(&mut self) -> Result<()> {
         let client = self
             .app_server_client
@@ -550,6 +590,13 @@ fn git_is_unavailable(error: &ClientError) -> bool {
 
 fn client_error(error: ClientError) -> anyhow::Error {
     anyhow!(error.to_string())
+}
+
+fn next_gui_config_command_id() -> CommandId {
+    static NEXT_COMMAND: AtomicU64 = AtomicU64::new(1);
+    let sequence = NEXT_COMMAND.fetch_add(1, Ordering::Relaxed);
+    CommandId::new(format!("gui-config-{}-{sequence}", std::process::id()))
+        .expect("generated GUI config command ID is non-empty")
 }
 
 fn directory_entries(entries: Vec<FsReadDirectoryEntry>) -> Vec<DirectoryEntry> {

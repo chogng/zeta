@@ -311,11 +311,11 @@ impl AppKeymap {
 }
 
 pub(crate) fn compile_app_user_bindings(
-    contents: &[u8],
+    value: &serde_json::Value,
     platform: HostPlatform,
 ) -> Result<Vec<AppUserBinding>, String> {
     compile_user_bindings(
-        contents,
+        value,
         platform,
         AppKeymapAction::from_command_id,
         parse_user_condition,

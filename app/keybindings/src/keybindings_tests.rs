@@ -1,9 +1,7 @@
-use std::fs;
 use std::time::Duration;
 use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
+use serde_json::json;
 use zeta_keybinding::BindingPriority;
 use zeta_keybinding::BindingSet;
 use zeta_keybinding::BindingSource;
@@ -16,10 +14,10 @@ use zeta_keybinding::Modifiers;
 use super::KeybindingCatalog;
 use super::KeybindingResolution;
 use super::Keybindings;
-use super::KeybindingsResource;
-use super::KeybindingsResourcePoll;
 use super::UserBinding;
 use super::UserBindingTarget;
+use super::compile_user_bindings;
+use super::edited_user_bindings;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
@@ -119,33 +117,46 @@ fn resolves_builtin_and_user_chord_rules() {
 }
 
 #[test]
-fn rejected_resource_does_not_replace_the_previous_rule_set() {
-    let root = temporary_root();
-    fs::create_dir_all(&root).expect("temporary root");
-    let path = root.join("keybindings.json");
-    fs::write(&path, br#"[{"key":"ctrl+x","command":"test.toggle"}]"#).expect("valid resource");
+fn rejected_config_does_not_replace_the_previous_rule_set() {
     let now = Instant::now();
-    let mut resource = KeybindingsResource::<Catalog>::new(path.clone(), HostPlatform::Linux, now);
     let mut keybindings = Keybindings::<Catalog>::default();
-    assert_eq!(
-        resource.poll(now, &mut keybindings),
-        KeybindingsResourcePoll::Updated
-    );
-    fs::write(&path, b"{").expect("invalid resource");
-    assert!(matches!(
-        resource.poll(now + Duration::from_secs(1), &mut keybindings),
-        KeybindingsResourcePoll::Rejected(_)
-    ));
+    let rules = compile_user_bindings::<Catalog>(
+        Some(&json!([{"key":"ctrl+x","command":"test.toggle"}])),
+        HostPlatform::Linux,
+    )
+    .expect("valid config");
+    keybindings.replace_user_bindings(rules);
+    assert!(compile_user_bindings::<Catalog>(Some(&json!({})), HostPlatform::Linux).is_err());
     let context = Context;
     assert_eq!(
         keybindings.resolve_stroke_at(
             &stroke("x", Modifiers::none().with_control()),
             &context,
-            now + Duration::from_secs(2),
+            now + Duration::from_secs(1),
         ),
         KeybindingResolution::Command(Command::Toggle)
     );
-    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn recorder_edit_replaces_only_the_commands_rules() {
+    let existing = json!([
+        {"key":"ctrl+b","command":"test.toggle"},
+        {"key":"ctrl+x","block":true}
+    ]);
+    let sequence = zeta_keybinding::parse_key_sequence("primary+k primary+b").unwrap();
+
+    let edited = edited_user_bindings::<Catalog>(
+        Some(&existing),
+        Command::Toggle,
+        &sequence,
+        HostPlatform::Linux,
+    )
+    .expect("valid edit");
+
+    assert_eq!(edited.as_array().unwrap().len(), 2);
+    assert_eq!(edited[0], json!({"key":"ctrl+x","block":true}));
+    assert_eq!(edited[1]["key"], "primary+k primary+b");
 }
 
 fn stroke(key: &str, modifiers: Modifiers) -> KeyStroke {
@@ -154,15 +165,4 @@ fn stroke(key: &str, modifiers: Modifiers) -> KeyStroke {
         None,
         modifiers,
     )
-}
-
-fn temporary_root() -> std::path::PathBuf {
-    std::env::temp_dir().join(format!(
-        "zeta-keybindings-host-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos()
-    ))
 }

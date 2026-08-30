@@ -89,20 +89,17 @@ fn shortcut_edit_preserves_unrelated_rules() {
 
 #[test]
 fn invalid_keybinding_root_and_rules_are_rejected() {
-    for keybindings in [
-        json!({}),
-        json!([{"key": "ctrl+k escape", "command": null}]),
-    ] {
+    for keybindings in [json!({}), json!([{"key": "ctrl+k escape", "block": true}])] {
         let section = FrontendConfigDto(BTreeMap::from([("keybindings".into(), keybindings)]));
         assert!(settings_from_tui(&section).is_err());
     }
 }
 
 #[test]
-fn false_command_represents_a_toml_blocker() {
+fn explicit_block_represents_a_toml_blocker() {
     let section = FrontendConfigDto(BTreeMap::from([(
         "keybindings".into(),
-        json!([{"key": "ctrl+o", "command": false}]),
+        json!([{"key": "ctrl+o", "block": true}]),
     )]));
 
     assert!(settings_from_tui(&section).is_ok());

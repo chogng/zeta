@@ -99,7 +99,7 @@ fn keymap_pane_spec_lists_keys_before_responsibilities() {
 #[test]
 fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
     let rules = crate::keymap::compile_app_user_bindings(
-        br#"[{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]"#,
+        &serde_json::json!([{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]),
         HostPlatform::Linux,
     )
     .unwrap();

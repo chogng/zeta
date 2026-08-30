@@ -110,6 +110,8 @@ impl WorkbenchApplication {
     }
 
     pub(super) fn apply_gui_config(&mut self, section: FrontendConfigDto) {
+        self.apply_gui_keybindings(&section);
+
         let gui = match GuiConfig::from_section(&section) {
             Ok(gui) => gui,
             Err(error) => {
@@ -133,6 +135,22 @@ impl WorkbenchApplication {
         )) {
             eprintln!("could not apply configured GUI theme: {error}");
         }
+    }
+
+    fn apply_gui_keybindings(&mut self, section: &FrontendConfigDto) {
+        let platform = zeta_keybinding::HostPlatform::current();
+        let rules = match keybindings::compile_user_bindings(section.0.get("keybindings"), platform)
+        {
+            Ok(rules) => rules,
+            Err(error) => {
+                let diagnostic = format!("invalid [gui].keybindings: {error}");
+                eprintln!("{diagnostic}");
+                self.keybinding_diagnostics = vec![diagnostic];
+                return;
+            }
+        };
+        self.keybinding_diagnostics = keybindings::binding_diagnostics(&rules, platform);
+        self.keybindings.replace_user_bindings(rules);
     }
 
     pub(super) fn show_files_pane(&mut self) {

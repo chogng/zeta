@@ -1,4 +1,4 @@
-//! Product-neutral compilation of user-authored keybinding resources.
+//! Product-neutral compilation of user-authored keybinding configuration.
 
 use std::fmt;
 
@@ -10,7 +10,7 @@ use crate::KeySequence;
 use crate::format_key_sequence;
 use crate::parse_key_sequence;
 
-/// Maximum number of entries accepted from one user keybinding resource.
+/// Maximum number of entries accepted from one user keybinding value.
 pub const MAX_USER_BINDINGS: usize = 1_024;
 
 /// A validated user-provided command or blocker rule.
@@ -29,16 +29,16 @@ pub enum UserBindingTarget<Command> {
     Block,
 }
 
-/// A malformed or unsupported entry in a user keybinding resource.
+/// A malformed or unsupported entry in user keybinding configuration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UserBindingsError {
-    InvalidJson(String),
     ExpectedArray,
     TooManyBindings { maximum: usize, actual: usize },
     ExpectedObject { index: usize },
     UnknownField { index: usize, field: String },
     MissingField { index: usize, field: &'static str },
     InvalidField { index: usize, field: &'static str },
+    InvalidTarget { index: usize },
     InvalidKey { index: usize, message: String },
     UnknownCommand { index: usize, command: String },
     UnknownCondition { index: usize, condition: String },
@@ -47,7 +47,6 @@ pub enum UserBindingsError {
 impl fmt::Display for UserBindingsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidJson(message) => write!(formatter, "invalid JSON: {message}"),
             Self::ExpectedArray => formatter.write_str("the root value must be an array"),
             Self::TooManyBindings { maximum, actual } => {
                 write!(
@@ -70,6 +69,10 @@ impl fmt::Display for UserBindingsError {
             Self::InvalidField { index, field } => {
                 write!(formatter, "binding {index} has an invalid `{field}`")
             }
+            Self::InvalidTarget { index } => write!(
+                formatter,
+                "binding {index} must contain either a string `command` or `block = true`"
+            ),
             Self::InvalidKey { index, message } => {
                 write!(formatter, "binding {index} has an invalid key: {message}")
             }
@@ -91,15 +94,13 @@ impl fmt::Display for UserBindingsError {
 
 impl std::error::Error for UserBindingsError {}
 
-/// Compiles a complete JSON resource without performing file I/O or mutating an active resolver.
+/// Compiles a complete configuration value without performing I/O or mutating an active resolver.
 pub fn compile_user_bindings<Command, Condition>(
-    contents: &[u8],
+    value: &Value,
     platform: HostPlatform,
     mut command_from_id: impl FnMut(&str) -> Option<Command>,
     mut parse_condition: impl FnMut(Option<&str>) -> Result<Condition, String>,
 ) -> Result<Vec<UserBinding<Command, Condition>>, UserBindingsError> {
-    let value: Value = serde_json::from_slice(contents)
-        .map_err(|error| UserBindingsError::InvalidJson(error.to_string()))?;
     let values = value.as_array().ok_or(UserBindingsError::ExpectedArray)?;
     if values.len() > MAX_USER_BINDINGS {
         return Err(UserBindingsError::TooManyBindings {
@@ -168,25 +169,21 @@ fn compile_user_binding<Command, Condition>(
         index,
         message: error.to_string(),
     })?;
-    let command = object
-        .get("command")
-        .ok_or(UserBindingsError::MissingField {
-            index,
-            field: "command",
-        })?;
-    let target = if command.is_null() {
-        UserBindingTarget::Block
-    } else {
-        let command = command.as_str().ok_or(UserBindingsError::InvalidField {
-            index,
-            field: "command",
-        })?;
-        command_from_id(command)
-            .map(UserBindingTarget::Command)
-            .ok_or_else(|| UserBindingsError::UnknownCommand {
+    let target = match (object.get("command"), object.get("block")) {
+        (Some(command), None) => {
+            let command = command.as_str().ok_or(UserBindingsError::InvalidField {
                 index,
-                command: command.to_owned(),
-            })?
+                field: "command",
+            })?;
+            command_from_id(command)
+                .map(UserBindingTarget::Command)
+                .ok_or_else(|| UserBindingsError::UnknownCommand {
+                    index,
+                    command: command.to_owned(),
+                })?
+        }
+        (None, Some(Value::Bool(true))) => UserBindingTarget::Block,
+        _ => return Err(UserBindingsError::InvalidTarget { index }),
     };
     if object.get("when").is_some_and(|value| !value.is_string()) {
         return Err(UserBindingsError::InvalidField {
@@ -237,7 +234,7 @@ fn selected_key(
     let Some(value) = object.get(field) else {
         return Ok(Some(key));
     };
-    if value.is_null() {
+    if value == &Value::Bool(false) {
         return Ok(None);
     }
     value
@@ -253,7 +250,7 @@ fn reject_unknown_fields(
     for field in object.keys() {
         if !matches!(
             field.as_str(),
-            "key" | "command" | "when" | "mac" | "linux" | "win"
+            "key" | "command" | "block" | "when" | "mac" | "linux" | "win"
         ) {
             return Err(UserBindingsError::UnknownField {
                 index,
@@ -270,7 +267,7 @@ fn validate_platform_overrides(
 ) -> Result<(), UserBindingsError> {
     for field in ["mac", "linux", "win"] {
         if let Some(value) = object.get(field)
-            && !value.is_null()
+            && value != &Value::Bool(false)
             && !value.is_string()
         {
             return Err(UserBindingsError::InvalidField { index, field });

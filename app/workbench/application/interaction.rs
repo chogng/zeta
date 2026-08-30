@@ -470,7 +470,7 @@ impl WorkbenchApplication {
         Some(zeta_settings::SettingsKeybindingsViewport::new(
             bounds,
             zeta_commands::AppCommandId::BINDABLE.len(),
-            self.keybindings_resource.diagnostics().len(),
+            self.keybinding_diagnostics.len(),
             zeta_settings::SettingsSectionStyle::from_theme(self.palette).scroll_view,
         ))
     }

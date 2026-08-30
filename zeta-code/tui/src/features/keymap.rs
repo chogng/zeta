@@ -147,21 +147,8 @@ where
 }
 
 fn compile_settings(document: &Value) -> Result<KeymapSettings, String> {
-    let mut compiler_document = document.clone();
-    for entry in compiler_document
-        .as_array_mut()
-        .expect("keybinding root was checked before compilation")
-    {
-        if entry.get("command") == Some(&Value::Bool(false))
-            && let Some(entry) = entry.as_object_mut()
-        {
-            entry.insert("command".into(), Value::Null);
-        }
-    }
-    let contents = serde_json::to_vec(&compiler_document)
-        .map_err(|error| format!("could not encode [tui].keybindings: {error}"))?;
     let platform = HostPlatform::current();
-    let rules = compile_app_user_bindings(&contents, platform)
+    let rules = compile_app_user_bindings(document, platform)
         .map_err(|error| format!("invalid [tui].keybindings: {error}"))?;
     let diagnostics = user_binding_diagnostics(&rules, platform);
     let mut keymap = AppKeymap::default();

@@ -278,28 +278,14 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
         let now = Instant::now();
         self.keybindings.advance_chord(now);
         if let Some(commit) = self.settings.advance_keyboard_shortcuts(now) {
-            match self.keybindings_resource.update_command_binding(
-                commit.command,
-                &commit.keybinding,
-                now,
-            ) {
-                Ok(()) => match self.keybindings_resource.poll(now, &mut self.keybindings) {
-                    KeybindingsResourcePoll::Rejected(error) => {
-                        self.settings.keyboard_shortcuts_save_failed(error);
-                    }
-                    KeybindingsResourcePoll::Unchanged | KeybindingsResourcePoll::Updated => {
-                        self.settings.keyboard_shortcuts_saved(commit.command);
-                    }
-                },
-                Err(error) => self.settings.keyboard_shortcuts_save_failed(error),
+            match self.save_keybinding(commit.command, &commit.keybinding) {
+                Ok(()) => self.settings.keyboard_shortcuts_saved(commit.command),
+                Err(error) => self
+                    .settings
+                    .keyboard_shortcuts_save_failed(error.to_string()),
             }
             self.rebuild_presentation();
             self.request_redraw();
-        }
-        if let KeybindingsResourcePoll::Rejected(error) =
-            self.keybindings_resource.poll(now, &mut self.keybindings)
-        {
-            eprintln!("{error}");
         }
         let caret_changed = matches!(
             self.caret_blink.advance(now),
@@ -341,7 +327,6 @@ impl App<WorkbenchEvent> for WorkbenchApplication {
             self.workbench.inspector_sash_deadline(),
             self.keybindings.chord_deadline(),
             self.settings.keyboard_shortcuts_deadline(),
-            Some(self.keybindings_resource.next_deadline()),
             self.file_editor_input.auto_scroll_deadline(),
         ]
         .into_iter()

@@ -4,6 +4,7 @@ use super::compile_user_bindings;
 use super::user_binding_diagnostics;
 use crate::ContextExpression;
 use crate::HostPlatform;
+use serde_json::json;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
@@ -11,10 +12,10 @@ enum Command {
 }
 
 fn compile(
-    contents: &[u8],
+    value: &serde_json::Value,
 ) -> Result<Vec<super::UserBinding<Command, ContextExpression>>, UserBindingsError> {
     compile_user_bindings(
-        contents,
+        value,
         HostPlatform::Linux,
         |id| (id == "copy").then_some(Command::Copy),
         |source| {
@@ -29,12 +30,10 @@ fn compile(
 
 #[test]
 fn compiles_commands_blockers_conditions_and_platform_overrides() {
-    let rules = compile(
-        br#"[
-            {"key":"primary+c","linux":"ctrl+c","command":"copy","when":"inputFocus"},
-            {"key":"ctrl+x","command":null}
-        ]"#,
-    )
+    let rules = compile(&json!([
+        {"key":"primary+c","linux":"ctrl+c","command":"copy","when":"inputFocus"},
+        {"key":"ctrl+x","block":true}
+    ]))
     .unwrap();
 
     assert_eq!(rules.len(), 2);
@@ -44,8 +43,8 @@ fn compiles_commands_blockers_conditions_and_platform_overrides() {
 }
 
 #[test]
-fn rejects_unknown_commands_without_partially_compiling_the_resource() {
-    let error = compile(br#"[{"key":"ctrl+x","command":"missing"}]"#).unwrap_err();
+fn rejects_unknown_commands_without_partially_compiling_the_config() {
+    let error = compile(&json!([{"key":"ctrl+x","command":"missing"}])).unwrap_err();
 
     assert_eq!(
         error,
@@ -58,15 +57,25 @@ fn rejects_unknown_commands_without_partially_compiling_the_resource() {
 
 #[test]
 fn duplicate_diagnostics_preserve_later_rule_precedence() {
-    let rules = compile(
-        br#"[
-            {"key":"ctrl+c","command":"copy"},
-            {"key":"ctrl+c","command":null}
-        ]"#,
-    )
+    let rules = compile(&json!([
+        {"key":"ctrl+c","command":"copy"},
+        {"key":"ctrl+c","block":true}
+    ]))
     .unwrap();
 
     let diagnostics = user_binding_diagnostics(&rules, HostPlatform::Linux);
     assert_eq!(diagnostics.len(), 1);
     assert!(diagnostics[0].contains("later rule wins"));
+}
+
+#[test]
+fn rejects_ambiguous_or_missing_targets_and_null_platform_overrides() {
+    for value in [
+        json!([{"key":"ctrl+x"}]),
+        json!([{"key":"ctrl+x","command":"copy","block":true}]),
+        json!([{"key":"ctrl+x","block":false}]),
+        json!([{"key":"ctrl+x","command":"copy","mac":null}]),
+    ] {
+        assert!(compile(&value).is_err());
+    }
 }

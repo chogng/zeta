@@ -1,5 +1,7 @@
 use std::sync::OnceLock;
 
+use serde_json::Value;
+use zeta_app_server_protocol::protocol::config::FrontendConfigDto;
 use zeta_keybinding::BindingPriority;
 use zeta_keybinding::BindingSet;
 use zeta_keybinding::BindingSource;
@@ -12,7 +14,6 @@ use zeta_keybinding::ShortcutModifiers;
 use zeta_keybindings_host::KeybindingCatalog;
 use zeta_keybindings_host::KeybindingResolution;
 use zeta_keybindings_host::Keybindings;
-#[cfg(test)]
 use zeta_keybindings_host::UserBinding;
 #[cfg(test)]
 use zeta_keybindings_host::UserBindingTarget;
@@ -21,14 +22,9 @@ use zeta_commands::AppCommandId;
 
 pub(crate) type WorkbenchKeybindings = Keybindings<WorkbenchKeybindingCatalog>;
 pub(crate) type WorkbenchKeybindingResolution = KeybindingResolution<AppCommandId>;
-#[cfg(test)]
 pub(crate) type WorkbenchUserBinding = UserBinding<WorkbenchKeybindingCatalog>;
 #[cfg(test)]
 pub(crate) type WorkbenchUserBindingTarget = UserBindingTarget<AppCommandId>;
-pub(crate) type KeybindingsResource =
-    zeta_keybindings_host::KeybindingsResource<WorkbenchKeybindingCatalog>;
-
-pub(crate) use zeta_keybindings_host::KeybindingsResourcePoll;
 
 /// Application context facts projected into the generic keybinding catalog.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -365,15 +361,13 @@ fn register(
     );
 }
 
-#[cfg(test)]
 pub(crate) fn compile_user_bindings(
-    contents: &[u8],
+    value: Option<&Value>,
     platform: HostPlatform,
-) -> Result<Vec<WorkbenchUserBinding>, zeta_keybindings_host::KeybindingsResourceError> {
-    zeta_keybindings_host::compile_user_bindings::<WorkbenchKeybindingCatalog>(contents, platform)
+) -> Result<Vec<WorkbenchUserBinding>, zeta_keybindings_host::KeybindingsConfigError> {
+    zeta_keybindings_host::compile_user_bindings::<WorkbenchKeybindingCatalog>(value, platform)
 }
 
-#[cfg(test)]
 pub(crate) fn binding_diagnostics(
     rules: &[WorkbenchUserBinding],
     platform: HostPlatform,
@@ -381,10 +375,26 @@ pub(crate) fn binding_diagnostics(
     zeta_keybindings_host::binding_diagnostics::<WorkbenchKeybindingCatalog>(rules, platform)
 }
 
+pub(crate) fn edited_gui_config(
+    mut section: FrontendConfigDto,
+    command: AppCommandId,
+    keybinding: &KeySequence,
+    platform: HostPlatform,
+) -> Result<FrontendConfigDto, String> {
+    let bindings = zeta_keybindings_host::edited_user_bindings::<WorkbenchKeybindingCatalog>(
+        section.0.get("keybindings"),
+        command,
+        keybinding,
+        platform,
+    )?;
+    section.0.insert("keybindings".into(), bindings);
+    Ok(section)
+}
+
 #[cfg(test)]
 #[path = "keybindings_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "keybindings_resource_tests.rs"]
-mod resource_tests;
+#[path = "keybindings_config_tests.rs"]
+mod config_tests;

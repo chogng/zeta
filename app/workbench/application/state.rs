@@ -39,7 +39,7 @@ pub(crate) struct WorkbenchApplication {
     pub(super) clipboard: ClipboardHandle,
     pub(super) cursor_position: Option<Point>,
     pub(super) keybindings: keybindings::WorkbenchKeybindings,
-    pub(super) keybindings_resource: KeybindingsResource,
+    pub(super) keybinding_diagnostics: Vec<String>,
     pub(super) quick_access: QuickAccess,
     pub(super) settings: SettingsState,
     pub(super) modifiers: ModifiersState,
@@ -76,17 +76,7 @@ impl WorkbenchApplication {
         scm.replace_diffs(env.diffs().iter().map(|diff| {
             ScmDiff::new(diff.path(), diff.document().clone()).with_staging(diff.staging())
         }));
-        let mut keybindings = keybindings::WorkbenchKeybindings::default();
-        let mut keybindings_resource = KeybindingsResource::new(
-            local_profile_root().join("keybindings.json"),
-            zeta_keybinding::HostPlatform::current(),
-            Instant::now(),
-        );
-        if let KeybindingsResourcePoll::Rejected(error) =
-            keybindings_resource.poll(Instant::now(), &mut keybindings)
-        {
-            eprintln!("{error}");
-        }
+        let keybindings = keybindings::WorkbenchKeybindings::default();
         let session_pane = SessionPaneState::for_working_directory(env.working_directory());
         let language_events = Arc::new(language_service_adapter::WorkbenchLanguageEventSink::new(
             event_proxy.clone(),
@@ -156,7 +146,7 @@ impl WorkbenchApplication {
             clipboard,
             cursor_position: None,
             keybindings,
-            keybindings_resource,
+            keybinding_diagnostics: Vec::new(),
             quick_access: QuickAccess::default(),
             settings: SettingsState::default(),
             modifiers: ModifiersState::default(),

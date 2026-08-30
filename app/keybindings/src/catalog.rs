@@ -5,7 +5,7 @@ use zeta_keybinding::KeySequence;
 /// Supplies host commands, builtin rules, conditions, and context matching.
 ///
 /// Implementations keep command vocabulary in the host while allowing the keybinding engine and
-/// user-resource lifecycle to remain independent of Workbench state and transports.
+/// user-config compiler to remain independent of Workbench state and transports.
 pub trait KeybindingCatalog {
     type Command: Copy + Eq;
     type Condition: Clone + Eq;

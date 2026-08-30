@@ -2,7 +2,7 @@
 
 > 文档所有权：本文是 Zeta、App 与 Zeta Code 共享快捷键语义、端侧输入边界和演进顺序的 canonical 架构文档。
 > 实现细节分别由 [`zeta-keybinding`](../zeta-rs/keybinding/README.md)、[`zeta-keybindings-host`](../app/keybindings/README.md)、[`zeta-code` TUI](../zeta-code/tui/README.md) 和 [Zeta 浏览器基础](../zeta-ts/docs/browser-foundation.md)维护。
-> 状态：共享 Rust 核心与用户资源编译器、Zeta Code `AppKeymap`/Keymap 设置界面（入口为 `/shortcuts`）、App、Zeta TypeScript 输入链路和跨语言 conformance 向量均为 Current。
+> 状态：共享 Rust 核心与用户配置编译器、Zeta Code `AppKeymap`/Keymap 设置界面（入口为 `/shortcuts`）、App、Zeta TypeScript 输入链路和跨语言 conformance 向量均为 Current。
 
 ## 快速理解
 
@@ -11,10 +11,10 @@
 | 用户场景 | Zeta | App | Zeta Code |
 | --- | --- | --- | --- |
 | 输入普通文字 | 浏览器、IME 与编辑器处理 | 窗口输入法或终端面板处理 | 终端与 Crossterm 处理 |
-| 触发快捷键 | TypeScript Resolver 根据焦点和 ContextKey 解析 | Rust Resolver 根据 Native context 解析 | 精简 Rust Keymap 根据 TUI 焦点解析 |
+| 触发快捷键 | TypeScript Resolver 根据焦点和 ContextKey 解析 | Rust Resolver 根据窗口 context 解析 | 精简 Rust Keymap 根据 TUI 焦点解析 |
 | 系统键盘布局变化 | 重新加载系统布局和 Mapper | `winit` 提供标准化逻辑键与物理键 | 不检测；终端已经完成布局转换 |
-| 修改快捷键 | profile `keybindings.json` | profile `keybindings.json` 和设置浮层 | `/shortcuts` 录制并通过 App Server 保存到 `config.toml` 的 `[tui].keybindings`；手工修改配置后由 `config/changed` 刷新 |
-| 执行命令 | Renderer 内执行命令或产生编辑意图 | Native host 执行 `AppCommandId` | TUI 主循环执行 `AppCommand` 或局部 component intent |
+| 修改快捷键 | profile `keybindings.json` | 设置浮层写入 `config.toml` 的 `[gui].keybindings`；配置变化后重读 `[gui]` | `/shortcuts` 写入 `config.toml` 的 `[tui].keybindings`；配置变化后重读 `[tui]` |
+| 执行命令 | Renderer 内执行命令或产生编辑意图 | App host 执行 `AppCommandId` | TUI 主循环执行 `AppCommand` 或局部 component intent |
 
 后续章节依次说明[一次按键的流程](#2-端到端流程)、[所有权](#3-所有权与依赖方向)、[一致性边界](#5-跨语言一致性)和[当前状态与演进](#8-当前状态与演进)。
 
@@ -26,15 +26,15 @@
 - **快捷键绑定（keybinding）**：一个按键序列、条件、来源、优先级和目标命令组成的规则。
 - **键位表（keymap）**：某个产品注册的完整快捷键集合及其当前上下文，不跨产品共享命令身份。
 
-`zeta-keybinding` 是没有 UI、I/O、平台事件和产品命令依赖的 Rust 语义核心。App 与 Zeta Code 直接依赖它；Zeta 的 Renderer 保留同步 TypeScript 实现，并通过共享规范和测试向量保持行为一致。
+`zeta-keybinding` 是没有 UI、I/O、平台事件和产品命令依赖的 Rust 语义核心。App 与 Zeta Code 直接依赖它；Zeta 的 Renderer 保留 TypeScript 实现，并通过共享规范和测试向量保持行为一致。
 
-不把 Rust Resolver 放入 App Server，也不让 Zeta Renderer 经 IPC、N-API 或 WASM 解析每个按键。`preventDefault()`、焦点、IME 和 Chord 状态都要求端侧同步决定。
+不把 Rust Resolver 放入 App Server，也不让 Zeta Renderer 经 IPC、N-API 或 WASM 解析每个按键。`preventDefault()`、焦点、IME 和 Chord 状态都要求端侧即时决定。
 
 ## 2. 端到端流程
 
 ```mermaid
 flowchart LR
-    OS[操作系统或终端输入] --> ZA[Zeta DOM / native-keymap adapter]
+    OS[操作系统或终端输入] --> ZA[Zeta DOM / 系统键盘布局 adapter]
     OS --> ZTA[App winit adapter]
     OS --> ZCA[Zeta Code Crossterm adapter]
     ZA --> ZTS[TypeScript Keybinding Resolver]
@@ -61,14 +61,14 @@ flowchart LR
 | 组件 | 拥有 | 明确不拥有 |
 | --- | --- | --- |
 | `zeta-keybinding` | `KeyStroke`、Chord、Parser、Context expression、来源、优先级、冲突和 Resolver | `winit`、Crossterm、DOM、UI、定时器、文件、产品命令 |
-| `zeta-keybinding::user` | 严格 JSON shape、平台覆盖、命令/条件回调编译和重复规则诊断 | profile 路径、文件轮询、产品命令 catalog、设置 UI |
+| `zeta-keybinding::user` | 严格配置 shape、平台覆盖、命令/条件回调编译和重复规则诊断 | profile 路径、文件轮询、产品命令 catalog、设置 UI |
 | Zeta Keyboard Layout | ScanCode、KeyCode、AltGr、死键、系统布局、浏览器映射 | Rust Keymap、后台命令执行 |
 | Zeta Keybinding Service | ContextKey、Chord lifecycle、浏览器事件阻止和命令执行 | 系统布局采集、App Server 状态 |
-| `zeta-keybindings-host` | `winit` 适配、Native Chord timeout、用户资源校验和热更新 | App UI、产品命令副作用 |
-| App Keymap | `AppCommandId`、内建规则和 Native context | 通用 Parser、设置组件绘制 |
-| App 快捷键 UI | 录制生命周期、设置浮层、诊断展示 | Resolver、用户文件 authority、命令执行 |
+| `zeta-keybindings-host` | `zui` 输入适配、Chord timeout、用户配置校验 | App UI、配置读写、产品命令副作用 |
+| App Keymap | `AppCommandId`、内建规则和窗口 context | 通用 Parser、设置组件绘制 |
+| App 快捷键 UI | 录制生命周期、设置浮层、诊断展示、`[gui].keybindings` 解释与写入 | Resolver、App Server 持久化实现、命令执行 |
 | Zeta Code `AppKeymap` | Crossterm 适配、应用级 action、Chord lifecycle 和局部 context | component 编辑/导航、键盘布局、物理 ScanCode、App Server authority |
-| App Server | 快捷键触发后的类型化产品请求 | 原始按键、焦点、IME、Chord 和快捷键配置 |
+| App Server | 按 revision 持久化前端传入的 `[gui]`、`[tui]` 值，发送配置变化通知 | 快捷键字段含义、命令表、原始按键、焦点、IME 和 Chord |
 
 依赖方向固定为：
 
@@ -122,23 +122,23 @@ Rust 与 TypeScript 都显式按“来源、同来源内优先级、注册顺序
 
 ## 6. 配置与持久化
 
-用户自定义快捷键是三端的正式产品能力，不再是 Potential。三端各自保存自己的命令规则，不共享命令表，也不把原始按键发送到后台。Zeta Code 的规则属于 TUI 配置，由 App Server 只按不透明值持久化，具体结构和校验仍由 TUI 负责。
+用户自定义快捷键是三端的正式产品能力。每个产品拥有自己的命令规则和字段解释，也不把原始按键发送到后台。App Server 只按不透明值持久化 `[gui]` 与 `[tui]`，具体结构分别由 App 和 Zeta Code 解释。
 
 ### 6.1 资源位置
 
 | 产品 | Current 资源 | 原因 |
 | --- | --- | --- |
 | Zeta | `<profile>/keybindings.json` | Workbench command catalog 与 Renderer settings UI 的 authority |
-| App | `<profile>/keybindings.json` | 当前复用 Workbench 风格稳定 command ID，并提供设置浮层 |
-| Zeta Code | `<profile>/config.toml` 的 `[tui].keybindings` | 与其他 TUI 配置共用 revision 和写入通道，规则结构仍由 TUI 独立解释 |
+| App | 当前连接对应 `config.toml` 的 `[gui].keybindings` | App 拥有命令表和设置浮层；App Server 只保存 `[gui]` |
+| Zeta Code | 当前连接对应 `config.toml` 的 `[tui].keybindings` | TUI 拥有命令表和 `/shortcuts`；App Server 只保存 `[tui]` |
 
-`ZETA_PROFILE_ROOT` 仍是显式 profile authority；没有设置时使用默认 Zeta profile root。Zeta Code 无论连接本地还是 Remote App Server，都通过同一套 `config/read`、`config/update` 与 `config/changed` 契约访问当前连接对应的配置，不读取 Workspace 内的键位文件。
+`ZETA_PROFILE_ROOT` 是 Zeta 自己的 profile authority。App 和 Zeta Code 都通过 `config/read`、`config/update` 与 `config/changed` 访问当前连接对应的配置；连接远端时读写远端 `config.toml`，不会回头读取本机的 App/TUI 键位文件。
 
-长期目标不是强行把三端命令塞进一个文件，而是共享语法、优先级和可移植 command ID。只有确认 Zeta 与 App 的 command catalog 完全兼容后，才继续共享根级资源；新增产品专属命令必须放入产品作用域资源，或先设计带明确产品 scope 的兼容格式。
+`[gui]` 与 `[tui]` 是独立产品配置。它们可以采用同一套 Rust 规则格式，但不能互相解释、复制或改写；两端 command catalog 不兼容也不构成问题。
 
 ### 6.2 规则契约
 
-规则是最多 1024 项的严格数组。Zeta 与 App 的 JSON 文件直接保存该数组；Zeta Code 在 TOML 中写成数组表：
+App 与 Zeta Code 的 Rust 规则是最多 1024 项的严格数组，分别写成 TOML 数组表。下面以 TUI 为例；App 只需把前缀换成 `gui`：
 
 ```toml
 [[tui.keybindings]]
@@ -151,15 +151,15 @@ win = "ctrl+k ctrl+c"
 
 [[tui.keybindings]]
 key = "ctrl+o"
-command = false # 阻止这个默认规则
+block = true # 阻止这个默认规则
 ```
 
 - `key` 必填，使用共享的一至四段 portable 语法。
-- `command` 必填；字符串绑定本端稳定命令。JSON 资源用 `null` 阻止同一按键的默认规则，Zeta Code TOML 用 `false` 表达同一含义。
+- 每项必须二选一：`command` 字符串绑定本端稳定命令，`block = true` 阻止同一按键的默认规则。
 - `when` 可选；省略表示本产品所有上下文，不能称为 `GlobalKeymap`。
-- `mac`、`linux`、`win` 可选；`null` 表示该平台不注册此项。
+- `mac`、`linux`、`win` 可选；字符串覆盖该平台键位，`false` 表示该平台不注册此项。
 - User 高于 Workbench/Builtin；同来源比较显式 priority，最后由后声明规则获胜。
-- Rust TUI/Native 当前不支持命令 `args`；Zeta Renderer 的 `args` 是明确的宿主扩展。
+- Rust App/TUI 当前不支持命令 `args`；Zeta Renderer 的 `keybindings.json` 保留自己的 JSON 契约和 `args` 扩展。
 
 Zeta Code 当前可配置 command ID：
 
@@ -176,11 +176,11 @@ Zeta Code 当前 ContextKey 为 `inputFocus`、`composerEmpty`、`selectionVisib
 
 ### 6.3 生命周期与故障处理
 
-TUI 启动时通过 `config/read` 读取 `[tui].keybindings`，收到 `config/changed` 后重新读取。编译发生在临时规则集：完整数组、command、condition 和 TUI Chord 安全约束全部通过后，才以一次替换安装 User rules 并取消旧 pending Chord。坏更新保留上一份有效规则并产生可见诊断；缺少该键时恢复纯内建规则。
+App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].keybindings`，收到 `config/changed` 后重新读取自己负责的表。编译发生在临时规则集：完整数组、command、condition 和产品 Chord 约束全部通过后，才以一次替换安装 User rules 并取消旧 pending Chord。坏更新保留上一份有效规则并产生可见诊断；缺少该键时恢复纯内建规则。
 
-共享 `zeta-keybinding` 只编译规则，不读配置、不知道 profile 路径；TUI 拥有字段解释、诊断呈现和编辑，App Server 只校验配置 revision 并持久化完整 `[tui]` 表。
+共享 `zeta-keybinding` 只编译规则，不读配置、不知道 profile 路径；App 与 TUI 分别拥有字段解释、诊断呈现和编辑，App Server 只校验配置 revision 并持久化前端传入的完整表。
 
-`/shortcuts` 只新增、替换或清除目标 command 的 User 字符串规则；固定操作项只读。“替换 User 项”不会删除 default 键位，也不会改写 `command: null` blocker。需要禁用 default 键位、添加 `when` 或设置平台覆盖时直接编辑 TOML。录制结果写入 portable `key`，因此适用于所有平台；单键和两段 Chord 可在 Pane 中录制，三至四段 Chord 继续直接配置。
+`/shortcuts` 只新增、替换或清除目标 command 的 User 字符串规则；固定操作项只读。“替换 User 项”不会删除 default 键位，也不会改写 `block = true` 规则。需要禁用 default 键位、添加 `when` 或设置平台覆盖时直接编辑 TOML。录制结果写入 portable `key`，因此适用于所有平台；单键和两段 Chord 可在 Pane 中录制，三至四段 Chord 继续直接配置。App 设置浮层同样只编辑 `[gui].keybindings` 中目标 command 的规则。
 
 ### 6.4 设置界面与后续边界
 
@@ -190,11 +190,11 @@ TUI 启动时通过 `config/read` 读取 `[tui].keybindings`，收到 `config/ch
 | Zeta Code 可搜索的 Keymap Pane | Current | `/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列汇总 default 与 User 键位，不展示内部 command ID；诊断和配置位置可见，可配置项只消费 `AppKeymap` snapshot |
 | Zeta Code 录制与保存 | Current | 单键/两段 Chord 录制只在临时 Pane 中截获输入；配置 revision 过期时拒绝保存，完整编译成功后才更新配置和运行时规则 |
 | 目录提供的键位 | Not accepted | `DirConfigDocument` 不接受键位声明；如需支持必须先定义独立来源 capability 与显式启用 |
-| OS `systemWide` 热键 | Not accepted | 只可能由有窗口/native shortcut authority 的 Zeta/App 实现；TUI 不支持 |
+| OS `systemWide` 热键 | Not accepted | 只可能由拥有窗口快捷键能力的 Zeta/App 实现；TUI 不支持 |
 
 ## 7. 可靠性、隐私和兼容性
 
-- 快捷键解析必须同步且在端侧完成，不能等待网络或后台进程。
+- 快捷键解析必须在端侧立即完成，不能等待网络或后台进程。
 - Troubleshooting 默认关闭；开启时只能记录按键元数据、匹配阶段和命令 ID，不能记录 composer 文本、密码或剪贴板内容。
 - 终端通常只能提供逻辑键和修饰键；Zeta Code 不伪造不存在的 ScanCode，也不承诺区分终端无法区分的组合。
 - AltGr、死键和 IME 由拥有原始图形窗口事件的 Zeta/App adapter 处理；TUI 消费终端已经解释后的结果。
@@ -205,7 +205,7 @@ TUI 启动时通过 `config/read` 读取 `[tui].keybindings`，收到 `config/ch
 | 阶段 | 状态 | 退出条件 |
 | --- | --- | --- |
 | Zeta TypeScript layout、Mapper、Resolver 和 profile resource | Current | 浏览器与 Electron 测试持续覆盖布局和快捷键 |
-| App Rust Resolver、Native adapter、用户资源与设置 UI | Current | 迁移共享 core 后行为和资源测试不变 |
+| App Rust Resolver、输入 adapter、`[gui].keybindings` 与设置 UI | Current | 配置通知、完整替换、坏更新保留旧规则和录制写入持续通过测试 |
 | 提升无 UI 的 `zeta-keybinding` 到 `zeta-rs/keybinding` | Current | crate 不含产品/UI/platform 依赖，App 继续通过测试 |
 | Zeta Code 应用级固定 Keymap 与 Chord lifecycle | Current | 现有 Ctrl/BackTab/Esc 行为由共享 Resolver 驱动；pending/超时/取消/提示完整，局部 component key 不上移 |
 | TS/Rust parser conformance fixtures | Current | 两个实现读取同一 fixture 并通过 |
@@ -213,7 +213,7 @@ TUI 启动时通过 `config/read` 读取 `[tui].keybindings`，收到 `config/ch
 | Zeta Code 用户可配置 Keymap | Current | `[tui].keybindings`、User precedence/blocker、`when`、平台覆盖、Chord、配置刷新和坏更新恢复持续通过测试 |
 | Zeta Code Keymap Pane 与录制保存 | Current | 可搜索、来源/诊断可见；保存后直接安装同一份已校验规则，不建立第二套 Resolver |
 
-迁移已经按一个 source of truth 原则完成首个纵切：纯 core 已移动，App 的快捷键设置页面已归入 `zeta-settings`，工作界面的组合键提示由 `zeta-workbench` 管，Zeta Code 根级 Keymap 已接入，旧 `app/keybinding` 模块已删除。adapter 只能单向转换，不保留两套 Resolver。
+当前 Rust 路径只有一套纯 core：App 的快捷键设置页面由 `zeta-settings` 管，工作界面的组合键提示由 `zeta-workbench` 管，Zeta Code 根级 Keymap 直接接入共享 Resolver。adapter 只做单向转换，不保留第二套 Resolver。
 
 共享 core 可用 `bazel test //zeta-rs/keybinding:keybinding-unit-tests` 在三端平台验证。App 的运行时规则、设置页面和工作界面提示分别由 `//app/keybindings:keybindings-unit-tests`、`//app/settings:settings-unit-tests` 和 `//app/workbench:workbench-unit-tests` 验证。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；这些目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
 
@@ -222,6 +222,6 @@ TUI 启动时通过 `config/read` 读取 `[tui].keybindings`，收到 `config/ch
 - 原始键盘事件不离开当前客户端。
 - App Server 不解析快捷键，也不拥有客户端焦点和 Keymap。
 - Rust 共享 core 没有 UI、I/O、平台事件和产品命令依赖。
-- 三端共享语法和冲突语义，但各自拥有命令 catalog 与默认 Keymap。
-- Zeta Renderer 的按键决定保持同步，不因跨语言复用引入 IPC/WASM 热路径。
+- App 与 TUI 共享 Rust 规则格式；Zeta 保留自己的 JSON 契约。三端各自拥有命令 catalog 与默认 Keymap。
+- Zeta Renderer 的按键决定保持即时，不因跨语言复用引入 IPC/WASM 热路径。
 - 局部文本编辑和导航留在拥有状态的 component，不为形式统一全部提升到全局命令总线。
